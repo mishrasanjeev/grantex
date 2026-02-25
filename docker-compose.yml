@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: grantex
+      POSTGRES_USER: grantex
+      POSTGRES_PASSWORD: grantex
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grantex"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  auth-service:
+    build: ./apps/auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgres://grantex:grantex@postgres:5432/grantex
+      REDIS_URL: redis://redis:6379
+      AUTO_GENERATE_KEYS: "true"
+      SEED_API_KEY: dev-api-key-local
+      PORT: "3001"
+      HOST: "0.0.0.0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
