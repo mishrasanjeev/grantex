@@ -103,9 +103,9 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return reply.status(201).send({
-      accessToken: jwt,
-      tokenType: 'Bearer',
-      expiresIn: expiresSeconds,
+      grantToken: jwt,
+      expiresAt: expiresAt.toISOString(),
+      scopes: authReq['scopes'] as string[],
       refreshToken: refreshId,
       grantId,
     });

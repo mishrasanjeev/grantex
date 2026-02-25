@@ -54,7 +54,7 @@ export interface AuthorizeParams {
 }
 
 export interface AuthorizationRequest {
-  requestId: string;
+  authRequestId: string;
   consentUrl: string;
   agentId: string;
   principalId: string;
@@ -116,21 +116,13 @@ export interface VerifiedGrant {
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
-export interface IntrospectTokenResponse {
-  active: boolean;
-  tokenId?: string;
+export interface VerifyTokenResponse {
+  valid: boolean;
   grantId?: string;
-  principalId?: string;
-  agentDid?: string;
-  developerId?: string;
   scopes?: string[];
-  issuedAt?: number;
-  expiresAt?: number;
-}
-
-export interface RevokeTokenResponse {
-  revoked: boolean;
-  tokenId: string;
+  principal?: string;
+  agent?: string;
+  expiresAt?: string;
 }
 
 // ─── Audit ────────────────────────────────────────────────────────────────────

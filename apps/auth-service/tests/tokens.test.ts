@@ -22,8 +22,8 @@ beforeAll(async () => {
   });
 });
 
-describe('POST /v1/tokens/introspect', () => {
-  it('returns active:true for a valid token', async () => {
+describe('POST /v1/tokens/verify', () => {
+  it('returns valid:true for a valid token', async () => {
     seedAuth();
     // Redis: not revoked
     mockRedis.get.mockResolvedValue(null);
@@ -36,42 +36,42 @@ describe('POST /v1/tokens/introspect', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: '/v1/tokens/introspect',
+      url: '/v1/tokens/verify',
       headers: authHeader(),
       payload: { token: validToken },
     });
 
     expect(res.statusCode).toBe(200);
     const body = res.json<{
-      active: boolean;
-      sub: string;
-      jti: string;
-      scp: string[];
+      valid: boolean;
+      principal: string;
+      scopes: string[];
+      expiresAt: string;
     }>();
-    expect(body.active).toBe(true);
-    expect(body.sub).toBe('user_123');
-    expect(body.jti).toBe('tok_INTROSPECT01');
-    expect(body.scp).toEqual(['read']);
+    expect(body.valid).toBe(true);
+    expect(body.principal).toBe('user_123');
+    expect(Array.isArray(body.scopes)).toBe(true);
+    expect(body.expiresAt).toBeDefined();
   });
 
-  it('returns active:false when token is revoked in Redis', async () => {
+  it('returns valid:false when token is revoked in Redis', async () => {
     seedAuth();
     // Redis: revoked
     mockRedis.get.mockResolvedValueOnce('1');
 
     const res = await app.inject({
       method: 'POST',
-      url: '/v1/tokens/introspect',
+      url: '/v1/tokens/verify',
       headers: authHeader(),
       payload: { token: validToken },
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ active: boolean }>();
-    expect(body.active).toBe(false);
+    const body = res.json<{ valid: boolean }>();
+    expect(body.valid).toBe(false);
   });
 
-  it('returns active:false when token is revoked in DB', async () => {
+  it('returns valid:false when token is revoked in DB', async () => {
     seedAuth();
     mockRedis.get.mockResolvedValue(null);
     sqlMock.mockResolvedValueOnce([{
@@ -82,33 +82,33 @@ describe('POST /v1/tokens/introspect', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: '/v1/tokens/introspect',
+      url: '/v1/tokens/verify',
       headers: authHeader(),
       payload: { token: validToken },
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ active: boolean }>();
-    expect(body.active).toBe(false);
+    const body = res.json<{ valid: boolean }>();
+    expect(body.valid).toBe(false);
   });
 
-  it('returns active:false for malformed token', async () => {
+  it('returns valid:false for malformed token', async () => {
     seedAuth();
 
     const res = await app.inject({
       method: 'POST',
-      url: '/v1/tokens/introspect',
+      url: '/v1/tokens/verify',
       headers: authHeader(),
       payload: { token: 'not.a.jwt' },
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ active: boolean }>();
-    expect(body.active).toBe(false);
+    const body = res.json<{ valid: boolean }>();
+    expect(body.valid).toBe(false);
   });
 });
 
-describe('DELETE /v1/tokens/:jti', () => {
+describe('POST /v1/tokens/revoke', () => {
   it('revokes a token and sets Redis key', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{
@@ -117,9 +117,10 @@ describe('DELETE /v1/tokens/:jti', () => {
     }]);
 
     const res = await app.inject({
-      method: 'DELETE',
-      url: '/v1/tokens/tok_INTROSPECT01',
+      method: 'POST',
+      url: '/v1/tokens/revoke',
       headers: authHeader(),
+      payload: { jti: 'tok_INTROSPECT01' },
     });
 
     expect(res.statusCode).toBe(204);
@@ -136,9 +137,10 @@ describe('DELETE /v1/tokens/:jti', () => {
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
-      method: 'DELETE',
-      url: '/v1/tokens/tok_nonexistent',
+      method: 'POST',
+      url: '/v1/tokens/revoke',
       headers: authHeader(),
+      payload: { jti: 'tok_nonexistent' },
     });
 
     expect(res.statusCode).toBe(404);

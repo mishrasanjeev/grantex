@@ -54,7 +54,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     const consentUrl = `${config.jwtIssuer}/consent?req=${id}`;
 
     return reply.status(201).send({
-      requestId: id,
+      authRequestId: id,
       consentUrl,
       expiresAt: expiresAt.toISOString(),
     });

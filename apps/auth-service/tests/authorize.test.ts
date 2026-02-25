@@ -29,8 +29,8 @@ describe('POST /v1/authorize', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    const body = res.json<{ requestId: string; consentUrl: string; expiresAt: string }>();
-    expect(body.requestId).toBeDefined();
+    const body = res.json<{ authRequestId: string; consentUrl: string; expiresAt: string }>();
+    expect(body.authRequestId).toBeDefined();
     expect(body.consentUrl).toContain('/consent?req=');
     expect(body.expiresAt).toBeDefined();
   });

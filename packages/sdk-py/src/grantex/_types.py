@@ -90,7 +90,7 @@ class AuthorizationRequest:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuthorizationRequest:
         return cls(
-            request_id=data["requestId"],
+            request_id=data["authRequestId"],
             consent_url=data["consentUrl"],
             agent_id=data["agentId"],
             principal_id=data["principalId"],
@@ -190,41 +190,25 @@ class VerifiedGrant:
 
 
 @dataclass(frozen=True)
-class IntrospectTokenResponse:
-    active: bool
-    token_id: str | None
+class VerifyTokenResponse:
+    valid: bool
     grant_id: str | None
-    principal_id: str | None
-    agent_did: str | None
-    developer_id: str | None
     scopes: tuple[str, ...] | None
-    issued_at: int | None
-    expires_at: int | None
+    principal: str | None
+    agent: str | None
+    expires_at: str | None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> IntrospectTokenResponse:
+    def from_dict(cls, data: dict[str, Any]) -> VerifyTokenResponse:
         raw_scopes = data.get("scopes")
         return cls(
-            active=data["active"],
-            token_id=data.get("tokenId"),
+            valid=data["valid"],
             grant_id=data.get("grantId"),
-            principal_id=data.get("principalId"),
-            agent_did=data.get("agentDid"),
-            developer_id=data.get("developerId"),
             scopes=tuple(raw_scopes) if raw_scopes is not None else None,
-            issued_at=data.get("issuedAt"),
+            principal=data.get("principal"),
+            agent=data.get("agent"),
             expires_at=data.get("expiresAt"),
         )
-
-
-@dataclass(frozen=True)
-class RevokeTokenResponse:
-    revoked: bool
-    token_id: str
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> RevokeTokenResponse:
-        return cls(revoked=data["revoked"], token_id=data["tokenId"])
 
 
 # ─── Audit ────────────────────────────────────────────────────────────────────

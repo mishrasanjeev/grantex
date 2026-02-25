@@ -23,7 +23,7 @@ const auditEntry = {
   timestamp: new Date().toISOString(),
 };
 
-describe('POST /v1/audit', () => {
+describe('POST /v1/audit/log', () => {
   it('creates an audit entry with hash', async () => {
     seedAuth();
     // Previous hash query
@@ -33,7 +33,7 @@ describe('POST /v1/audit', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: '/v1/audit',
+      url: '/v1/audit/log',
       headers: authHeader(),
       payload: {
         agentId: TEST_AGENT.id,
@@ -66,7 +66,7 @@ describe('POST /v1/audit', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: '/v1/audit',
+      url: '/v1/audit/log',
       headers: authHeader(),
       payload: {
         agentId: TEST_AGENT.id,
@@ -87,7 +87,7 @@ describe('POST /v1/audit', () => {
 
     const res = await app.inject({
       method: 'POST',
-      url: '/v1/audit',
+      url: '/v1/audit/log',
       headers: authHeader(),
       payload: { agentId: TEST_AGENT.id }, // missing other required fields
     });
@@ -96,14 +96,14 @@ describe('POST /v1/audit', () => {
   });
 });
 
-describe('GET /v1/audit', () => {
+describe('GET /v1/audit/entries', () => {
   it('returns audit entries', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([auditEntry]);
 
     const res = await app.inject({
       method: 'GET',
-      url: '/v1/audit',
+      url: '/v1/audit/entries',
       headers: authHeader(),
     });
 
@@ -119,7 +119,7 @@ describe('GET /v1/audit', () => {
 
     const res = await app.inject({
       method: 'GET',
-      url: `/v1/audit?agentId=${TEST_AGENT.id}&action=invoke`,
+      url: `/v1/audit/entries?agentId=${TEST_AGENT.id}&action=invoke`,
       headers: authHeader(),
     });
 
