@@ -1,0 +1,38 @@
+import { createHash } from 'node:crypto';
+
+export function sha256hex(input: string): string {
+  return createHash('sha256').update(input).digest('hex');
+}
+
+export function hashApiKey(key: string): string {
+  return sha256hex(key);
+}
+
+export interface AuditHashFields {
+  id: string;
+  agentId: string;
+  agentDid: string;
+  grantId: string;
+  principalId: string;
+  developerId: string;
+  action: string;
+  metadata: Record<string, unknown>;
+  timestamp: string;
+  previousHash: string | null;
+}
+
+export function computeAuditHash(fields: AuditHashFields): string {
+  const canonical = JSON.stringify({
+    id: fields.id,
+    agentId: fields.agentId,
+    agentDid: fields.agentDid,
+    grantId: fields.grantId,
+    principalId: fields.principalId,
+    developerId: fields.developerId,
+    action: fields.action,
+    metadata: fields.metadata,
+    timestamp: fields.timestamp,
+    previousHash: fields.previousHash,
+  });
+  return sha256hex(canonical);
+}
