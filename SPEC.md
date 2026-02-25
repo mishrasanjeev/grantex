@@ -440,7 +440,7 @@ The following are open for community discussion:
 4. **Delegation depth** — Should the protocol mandate a maximum delegation depth?
 5. **Consent UI requirements** — What minimum disclosures must a compliant consent UI show?
 
-→ Join the discussion: [github.com/grantex-dev/grantex/discussions](https://github.com/grantex-dev/grantex/discussions)
+→ Join the discussion: [github.com/mishrasanjeev/grantex/discussions](https://github.com/mishrasanjeev/grantex/discussions)
 
 ---
 
@@ -452,4 +452,4 @@ The following are open for community discussion:
 
 ---
 
-*Grantex Protocol Specification is licensed under [Apache 2.0](../LICENSE)*
+*Grantex Protocol Specification is licensed under [Apache 2.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)*

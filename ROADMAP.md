@@ -1,6 +1,6 @@
 # Grantex Roadmap
 
-> Public and honest. Updated every sprint. Vote on features via [GitHub Discussions](https://github.com/grantex-dev/grantex/discussions).
+> Public and honest. Updated every sprint. Vote on features via [GitHub Discussions](https://github.com/mishrasanjeev/grantex/discussions).
 
 ---
 
@@ -72,7 +72,7 @@ Protocol finalization and ecosystem maturity.
 ## How to Influence the Roadmap
 
 - 👍 React to issues with +1 to signal demand
-- 💬 Open a [Discussion](https://github.com/grantex-dev/grantex/discussions) for feature proposals
+- 💬 Open a [Discussion](https://github.com/mishrasanjeev/grantex/discussions) for feature proposals
 - 📧 [design@grantex.dev](mailto:design@grantex.dev) for enterprise design partner conversations
 - 🛠️ Submit a PR — contributions move things up the roadmap faster than anything
 

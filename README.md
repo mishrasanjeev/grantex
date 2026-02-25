@@ -1,29 +1,25 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://grantex.dev/logo-dark.svg">
-  <img alt="Grantex" src="https://grantex.dev/logo-light.svg" height="80">
-</picture>
-
 # Grantex
 
 ### Delegated Authorization Protocol for AI Agents
 
-**The open standard for granting, scoping, revoking, and auditing AI agent permissions —**  
+**The open standard for granting, scoping, revoking, and auditing AI agent permissions —**
 **what OAuth 2.0 is to humans, Grantex is to agents.**
 
 <br/>
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Spec Version](https://img.shields.io/badge/spec-v0.1--draft-orange)](https://grantex.dev/spec)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Community-5865F2?logo=discord&logoColor=white)](https://discord.gg/grantex)
-[![GitHub Stars](https://img.shields.io/github/stars/grantex-dev/grantex?style=social)](https://github.com/grantex-dev/grantex)
+[![Spec Version](https://img.shields.io/badge/spec-v0.1--draft-orange)](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
+[![GitHub Stars](https://img.shields.io/github/stars/mishrasanjeev/grantex?style=social)](https://github.com/mishrasanjeev/grantex)
 
 <br/>
 
+> **Status:** Protocol spec and SDK skeleton are published. Core services (token issuance, consent UI, audit chain) are in active development. Not yet production-ready.
+
 ```bash
-npm install @grantex/sdk        # TypeScript / Node.js
-pip install grantex             # Python
+npm install @grantex/sdk        # TypeScript / Node.js  (skeleton)
+pip install grantex             # Python               (skeleton)
 ```
 
 </div>
@@ -323,7 +319,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 - [ ] Security audit
 - [ ] SOC2 Type I
 
-See [ROADMAP.md](./ROADMAP.md) for full details and RFC discussions.
+See [ROADMAP.md](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md) for full details and RFC discussions.
 
 ---
 
@@ -331,12 +327,12 @@ See [ROADMAP.md](./ROADMAP.md) for full details and RFC discussions.
 
 Grantex is in active early development. The best way to contribute right now:
 
-1. **Join the discussion** — open a [GitHub Discussion](https://github.com/grantex-dev/grantex/discussions) with your use case or feedback
-2. **Review the spec** — see [SPEC.md](./SPEC.md) and open issues for gaps or disagreements
+1. **Join the discussion** — open a [GitHub Discussion](https://github.com/mishrasanjeev/grantex/discussions) with your use case or feedback
+2. **Review the spec** — see [SPEC.md](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) and open issues for gaps or disagreements
 3. **Build an integration** — framework integrations are the highest-leverage contribution
 4. **Spread the word** — star the repo, share with developers building agents
 
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before submitting a PR.
+Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRIBUTING.md) before submitting a PR.
 
 ---
 
@@ -367,19 +363,19 @@ MCP solves tool connectivity — how agents access data and call functions. Gran
 The protocol spec is open (Apache 2.0). Grantex Inc. maintains a hosted reference implementation. Our goal is to contribute the spec to a neutral standards body (W3C, IETF, or CNCF) once it stabilizes.
 
 **Can I self-host?**  
-Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See [docs/self-hosting.md](./docs/self-hosting.md).
+Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See [docs/self-hosting.md](https://github.com/mishrasanjeev/grantex/blob/main/docs/self-hosting.md).
 
 ---
 
 ## License
 
-Protocol specification and SDKs: [Apache 2.0](./LICENSE)
+Protocol specification and SDKs: [Apache 2.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 
 ---
 
 <div align="center">
 
-**[Website](https://grantex.dev)** · **[Docs](https://docs.grantex.dev)** · **[Spec](./SPEC.md)** · **[Discord](https://discord.gg/grantex)** · **[Twitter / X](https://x.com/grantexdev)**
+**[Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)** · **[Roadmap](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md)** · **[Contributing](https://github.com/mishrasanjeev/grantex/blob/main/CONTRIBUTING.md)** · **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 <br/>
 

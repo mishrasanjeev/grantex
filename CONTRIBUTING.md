@@ -19,7 +19,7 @@ Thanks for your interest in contributing. Grantex is an early-stage open protoco
 
 ### Good first issues
 
-Look for issues tagged [`good first issue`](https://github.com/grantex-dev/grantex/issues?q=is%3Aissue+label%3A%22good+first+issue%22).
+Look for issues tagged [`good first issue`](https://github.com/mishrasanjeev/grantex/issues?q=is%3Aissue+label%3A%22good+first+issue%22).
 
 ---
 
@@ -28,7 +28,7 @@ Look for issues tagged [`good first issue`](https://github.com/grantex-dev/grant
 ```bash
 # Prerequisites: Node.js 20+, Python 3.11+, pnpm
 
-git clone https://github.com/grantex-dev/grantex
+git clone https://github.com/mishrasanjeev/grantex
 cd grantex
 pnpm install
 
@@ -98,7 +98,7 @@ Changes to `SPEC.md` follow a lightweight RFC process:
 
 Be excellent to each other. Technical disagreements are fine; personal attacks are not.
 
-Full CoC: [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
+Full CoC: [CODE_OF_CONDUCT.md](https://github.com/mishrasanjeev/grantex/blob/main/CODE_OF_CONDUCT.md)
 
 ---
 
