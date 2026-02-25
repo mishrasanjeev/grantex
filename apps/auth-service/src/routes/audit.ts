@@ -13,8 +13,8 @@ interface AuditLogBody {
 }
 
 export async function auditRoutes(app: FastifyInstance): Promise<void> {
-  // POST /v1/audit
-  app.post<{ Body: AuditLogBody }>('/v1/audit', async (request, reply) => {
+  // POST /v1/audit/log
+  app.post<{ Body: AuditLogBody }>('/v1/audit/log', async (request, reply) => {
     const { agentId, agentDid, grantId, principalId, action, metadata = {} } = request.body;
 
     if (!agentId || !agentDid || !grantId || !principalId || !action) {
@@ -66,8 +66,8 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(201).send(toAuditResponse(rows[0]!));
   });
 
-  // GET /v1/audit
-  app.get('/v1/audit', async (request, reply) => {
+  // GET /v1/audit/entries
+  app.get('/v1/audit/entries', async (request, reply) => {
     const sql = getSql();
     const query = request.query as Record<string, string>;
     const developerId = request.developer.id;

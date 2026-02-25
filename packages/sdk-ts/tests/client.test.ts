@@ -41,7 +41,7 @@ describe('Grantex client', () => {
   describe('authorize()', () => {
     it('maps userId → principalId in request body', async () => {
       const mockFetch = makeFetch(200, {
-        requestId: 'req_1',
+        authRequestId: 'req_1',
         consentUrl: 'https://consent.grantex.dev/authorize?req=abc',
         agentId: 'ag_1',
         principalId: 'principal_abc',

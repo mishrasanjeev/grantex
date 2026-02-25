@@ -44,21 +44,21 @@ describe('POST /v1/token', () => {
 
     expect(res.statusCode).toBe(201);
     const body = res.json<{
-      accessToken: string;
-      tokenType: string;
-      expiresIn: number;
+      grantToken: string;
+      expiresAt: string;
+      scopes: string[];
       refreshToken: string;
       grantId: string;
     }>();
 
-    expect(body.tokenType).toBe('Bearer');
-    expect(body.expiresIn).toBe(86400);
-    expect(typeof body.accessToken).toBe('string');
+    expect(typeof body.grantToken).toBe('string');
+    expect(body.expiresAt).toBeDefined();
+    expect(body.scopes).toEqual(['read', 'write']);
     expect(typeof body.refreshToken).toBe('string');
     expect(typeof body.grantId).toBe('string');
 
     // Verify JWT structure
-    const claims = decodeJwt(body.accessToken);
+    const claims = decodeJwt(body.grantToken);
     expect(claims.sub).toBe('user_123');
     expect(claims['agt']).toBe(TEST_AGENT.did);
     expect(claims['dev']).toBe(TEST_DEVELOPER.id);

@@ -1,5 +1,5 @@
 import type { HttpClient } from '../http.js';
-import type { IntrospectTokenResponse, RevokeTokenResponse } from '../types.js';
+import type { VerifyTokenResponse } from '../types.js';
 
 export class TokensClient {
   readonly #http: HttpClient;
@@ -8,13 +8,13 @@ export class TokensClient {
     this.#http = http;
   }
 
-  introspect(token: string): Promise<IntrospectTokenResponse> {
-    return this.#http.post<IntrospectTokenResponse>('/v1/tokens/introspect', {
+  verify(token: string): Promise<VerifyTokenResponse> {
+    return this.#http.post<VerifyTokenResponse>('/v1/tokens/verify', {
       token,
     });
   }
 
-  revoke(tokenId: string): Promise<RevokeTokenResponse> {
-    return this.#http.delete<RevokeTokenResponse>(`/v1/tokens/${tokenId}`);
+  revoke(tokenId: string): Promise<void> {
+    return this.#http.post<void>('/v1/tokens/revoke', { jti: tokenId });
   }
 }

@@ -30,8 +30,7 @@ export type {
   ListGrantsResponse,
   VerifiedGrant,
   // Tokens
-  IntrospectTokenResponse,
-  RevokeTokenResponse,
+  VerifyTokenResponse,
   // Audit
   LogAuditParams,
   AuditEntry,

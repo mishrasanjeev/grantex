@@ -17,16 +17,15 @@ from ._types import (
     AuthorizeParams,
     Grant,
     GrantTokenPayload,
-    IntrospectTokenResponse,
     ListAgentsResponse,
     ListAuditParams,
     ListAuditResponse,
     ListGrantsParams,
     ListGrantsResponse,
     LogAuditParams,
-    RevokeTokenResponse,
     VerifiedGrant,
     VerifyGrantTokenOptions,
+    VerifyTokenResponse,
 )
 from ._verify import verify_grant_token
 
@@ -50,16 +49,15 @@ __all__ = [
     "AuthorizeParams",
     "Grant",
     "GrantTokenPayload",
-    "IntrospectTokenResponse",
     "ListAgentsResponse",
     "ListAuditParams",
     "ListAuditResponse",
     "ListGrantsParams",
     "ListGrantsResponse",
     "LogAuditParams",
-    "RevokeTokenResponse",
     "VerifiedGrant",
     "VerifyGrantTokenOptions",
+    "VerifyTokenResponse",
     # Version
     "__version__",
 ]

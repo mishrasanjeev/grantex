@@ -55,7 +55,7 @@ MOCK_JWT_PAYLOAD: dict = {
 }
 
 MOCK_AUTHORIZATION_REQUEST: dict = {
-    "requestId": "req_01HXYZ",
+    "authRequestId": "req_01HXYZ",
     "consentUrl": "https://consent.grantex.dev/authorize?req=eyJ",
     "agentId": "ag_01HXYZ123abc",
     "principalId": "user_abc123",
