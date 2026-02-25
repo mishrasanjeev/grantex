@@ -10,6 +10,7 @@ import { tokenRoutes } from './routes/token.js';
 import { grantsRoutes } from './routes/grants.js';
 import { tokensRoutes } from './routes/tokens.js';
 import { auditRoutes } from './routes/audit.js';
+import { consentRoutes } from './routes/consent.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -30,6 +31,7 @@ export async function buildApp(opts: AppOptions = {}) {
 
   // Public routes (no auth required)
   await app.register(jwksRoutes);
+  await app.register(consentRoutes);
 
   // Protected routes
   await app.register(agentsRoutes);
