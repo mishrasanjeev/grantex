@@ -44,7 +44,7 @@ Making Grantex native to every major agent framework.
 Compliance features that make Grantex a must-have for regulated environments.
 
 - [x] CrewAI integration (`grantex-crewai`)
-- [ ] Vercel AI SDK integration
+- [x] Vercel AI SDK integration
 - [ ] Enterprise compliance dashboard (org-wide view, exports)
 - [ ] SOC2/GDPR evidence pack export
 - [ ] Policy engine (auto-approve / auto-deny rules)
