@@ -19,6 +19,16 @@ export const mockRedis = {
   quit: vi.fn().mockResolvedValue(undefined),
 };
 
+export const mockStripe = {
+  checkout: {
+    sessions: { create: vi.fn().mockResolvedValue({ url: 'https://checkout.stripe.com/test' }) },
+  },
+  billingPortal: {
+    sessions: { create: vi.fn().mockResolvedValue({ url: 'https://billing.stripe.com/test' }) },
+  },
+  webhooks: { constructEvent: vi.fn() },
+};
+
 // ------------------------------------------------------------------
 // Module mocks — hoisted by Vitest to top of this file
 // ------------------------------------------------------------------
@@ -39,6 +49,11 @@ vi.mock('../src/lib/webhook.js', () => ({
   signWebhookPayload: vi.fn().mockReturnValue('sha256=mock'),
 }));
 
+// Mock Stripe — prevents real HTTP calls and avoids needing STRIPE_SECRET_KEY.
+vi.mock('../src/lib/stripe.js', () => ({
+  getStripe: () => mockStripe,
+}));
+
 // ------------------------------------------------------------------
 // Reset all mocks before each test
 // ------------------------------------------------------------------
@@ -48,4 +63,7 @@ beforeEach(() => {
   mockRedis.get.mockReset().mockResolvedValue(null);
   mockRedis.set.mockReset().mockResolvedValue('OK');
   mockRedis.del.mockReset().mockResolvedValue(1);
+  mockStripe.checkout.sessions.create.mockReset().mockResolvedValue({ url: 'https://checkout.stripe.com/test' });
+  mockStripe.billingPortal.sessions.create.mockReset().mockResolvedValue({ url: 'https://billing.stripe.com/test' });
+  mockStripe.webhooks.constructEvent.mockReset();
 });

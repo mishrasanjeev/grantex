@@ -19,7 +19,9 @@ const MOCK_WEBHOOK_ROW = {
 describe('POST /v1/webhooks', () => {
   it('creates a webhook and returns secret', async () => {
     seedAuth();
-    sqlMock.mockResolvedValueOnce([]); // INSERT
+    sqlMock.mockResolvedValueOnce([]);              // subscription lookup → free plan
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]); // webhook count → 0
+    sqlMock.mockResolvedValueOnce([]);               // INSERT
 
     const res = await app.inject({
       method: 'POST',
@@ -45,6 +47,22 @@ describe('POST /v1/webhooks', () => {
     expect(typeof body.secret).toBe('string');
     expect(body.secret.length).toBeGreaterThan(0);
     expect(body.createdAt).toBeDefined();
+  });
+
+  it('returns 402 when plan webhook limit is reached', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ plan: 'free' }]); // subscription → free plan
+    sqlMock.mockResolvedValueOnce([{ count: '1' }]);    // 1 webhook already (free limit)
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webhooks',
+      headers: authHeader(),
+      payload: { url: 'https://example.com/hooks2', events: ['grant.created'] },
+    });
+
+    expect(res.statusCode).toBe(402);
+    expect(res.json<{ code: string }>().code).toBe('PLAN_LIMIT_EXCEEDED');
   });
 
   it('returns 400 when url is missing', async () => {

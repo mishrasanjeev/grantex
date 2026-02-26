@@ -48,4 +48,10 @@ export type {
   WebhookEndpoint,
   WebhookEndpointWithSecret,
   ListWebhooksResponse,
+  // Billing
+  SubscriptionStatus,
+  CreateCheckoutParams,
+  CheckoutResponse,
+  CreatePortalParams,
+  PortalResponse,
 } from './types.js';

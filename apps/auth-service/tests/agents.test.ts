@@ -11,7 +11,9 @@ beforeAll(async () => {
 describe('POST /v1/agents', () => {
   it('registers an agent and returns 201', async () => {
     seedAuth();
-    sqlMock.mockResolvedValueOnce([TEST_AGENT]);
+    sqlMock.mockResolvedValueOnce([]);              // subscription lookup → free plan
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]); // agent count → 0
+    sqlMock.mockResolvedValueOnce([TEST_AGENT]);     // INSERT
 
     const res = await app.inject({
       method: 'POST',
@@ -25,6 +27,22 @@ describe('POST /v1/agents', () => {
     expect(body.agentId).toBe(TEST_AGENT.id);
     expect(body.did).toBe(TEST_AGENT.did);
     expect(body.name).toBe(TEST_AGENT.name);
+  });
+
+  it('returns 402 when plan agent limit is reached', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ plan: 'free' }]); // subscription → free plan
+    sqlMock.mockResolvedValueOnce([{ count: '3' }]);    // 3 agents already (free limit)
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/agents',
+      headers: authHeader(),
+      payload: { name: 'One Too Many', scopes: [] },
+    });
+
+    expect(res.statusCode).toBe(402);
+    expect(res.json<{ code: string }>().code).toBe('PLAN_LIMIT_EXCEEDED');
   });
 
   it('returns 400 when name is missing', async () => {

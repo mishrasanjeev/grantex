@@ -231,3 +231,29 @@ export interface GrantTokenPayload {
   parentGrnt?: string;
   delegationDepth?: number;
 }
+
+// ─── Billing ──────────────────────────────────────────────────────────────────
+
+export interface SubscriptionStatus {
+  plan: 'free' | 'pro' | 'enterprise';
+  status: 'active' | 'past_due' | 'canceled';
+  currentPeriodEnd: string | null;
+}
+
+export interface CreateCheckoutParams {
+  plan: 'pro' | 'enterprise';
+  successUrl: string;
+  cancelUrl: string;
+}
+
+export interface CheckoutResponse {
+  checkoutUrl: string;
+}
+
+export interface CreatePortalParams {
+  returnUrl: string;
+}
+
+export interface PortalResponse {
+  portalUrl: string;
+}
