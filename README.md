@@ -15,7 +15,7 @@
 
 <br/>
 
-> **Status:** Protocol spec, auth service (token issuance + consent UI + audit chain), and both SDKs are fully implemented. Multi-agent delegation is live. Not yet production-ready — hosted cloud and framework integrations are next.
+> **Status:** v0.1 complete — protocol spec, auth service, both SDKs, multi-agent delegation, sandbox mode, and developer dashboard are all shipped. Not yet production-ready — hosted cloud and framework integrations are next.
 
 ```bash
 npm install @grantex/sdk        # TypeScript / Node.js
@@ -262,6 +262,46 @@ delegated = grantex.grants.delegate(
 
 ---
 
+## Local Development
+
+Start the full stack with one command:
+
+```bash
+git clone https://github.com/mishrasanjeev/grantex.git
+cd grantex
+docker compose up --build
+```
+
+Two API keys are seeded automatically:
+
+| Key | Mode | Use for |
+|-----|------|---------|
+| `dev-api-key-local` | live | full consent flow with redirect |
+| `sandbox-api-key-local` | sandbox | skip consent UI — get a `code` immediately |
+
+**Sandbox mode** is designed for testing. With a sandbox key, `POST /v1/authorize` returns a `code` in the response body — no redirect required:
+
+```bash
+# Authorize + get code in one step
+curl -s -X POST http://localhost:3001/v1/authorize \
+  -H "Authorization: Bearer sandbox-api-key-local" \
+  -H "Content-Type: application/json" \
+  -d '{"agentId":"<id>","principalId":"test-user","scopes":["calendar:read"]}'
+# → { ..., "sandbox": true, "code": "01J..." }
+
+# Exchange immediately for a grant token
+curl -s -X POST http://localhost:3001/v1/token \
+  -H "Authorization: Bearer sandbox-api-key-local" \
+  -H "Content-Type: application/json" \
+  -d '{"code":"<code>","agentId":"<id>"}'
+```
+
+**Developer dashboard** is available at [`http://localhost:3001/dashboard`](http://localhost:3001/dashboard) — enter either API key to browse your agents, grants, and audit log, and revoke grants directly from the UI.
+
+See [docs/self-hosting.md](https://github.com/mishrasanjeev/grantex/blob/main/docs/self-hosting.md) for production deployment guidance.
+
+---
+
 ## Why an Open Standard?
 
 Grantex is built as an **open protocol**, not a closed SaaS product. Here's why that matters:
@@ -341,7 +381,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 ## Roadmap
 
-**v0.1 — Foundation** *(current)*
+**v0.1 — Foundation** ✅ *Complete*
 - [x] Protocol specification draft
 - [x] TypeScript SDK
 - [x] Python SDK
@@ -350,9 +390,10 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 - [x] Hosted consent UI
 - [x] Audit trail (hash-chained append-only log)
 - [x] Multi-agent delegation (scope-subset enforcement + cascade revocation)
-- [ ] Developer dashboard
+- [x] Sandbox mode (auto-approve consent for testing)
+- [x] Developer dashboard (agents, grants, audit log, revoke)
 
-**v0.2 — Integrations**
+**v0.2 — Integrations** *(current)*
 - [ ] LangChain integration
 - [ ] AutoGen integration
 - [ ] End-user permission dashboard
