@@ -220,12 +220,14 @@ class LogAuditParams:
     grant_id: str
     action: str
     metadata: dict[str, Any] | None = None
+    status: str = "success"
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {
             "agentId": self.agent_id,
             "grantId": self.grant_id,
             "action": self.action,
+            "status": self.status,
         }
         if self.metadata is not None:
             body["metadata"] = self.metadata
@@ -234,7 +236,7 @@ class LogAuditParams:
 
 @dataclass(frozen=True)
 class AuditEntry:
-    id: str
+    entry_id: str
     agent_id: str
     agent_did: str
     grant_id: str
@@ -242,13 +244,14 @@ class AuditEntry:
     action: str
     metadata: dict[str, Any]
     hash: str
-    previous_hash: str | None
+    prev_hash: str | None
     timestamp: str
+    status: str
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuditEntry:
         return cls(
-            id=data["id"],
+            entry_id=data["entryId"],
             agent_id=data["agentId"],
             agent_did=data["agentDid"],
             grant_id=data["grantId"],
@@ -256,8 +259,9 @@ class AuditEntry:
             action=data["action"],
             metadata=data.get("metadata", {}),
             hash=data["hash"],
-            previous_hash=data.get("previousHash"),
+            prev_hash=data.get("prevHash"),
             timestamp=data["timestamp"],
+            status=data.get("status", "success"),
         )
 
 

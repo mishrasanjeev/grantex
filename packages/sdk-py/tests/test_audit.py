@@ -19,7 +19,7 @@ def client() -> Grantex:
 
 @respx.mock
 def test_log_body_fields(client: Grantex) -> None:
-    route = respx.post("https://api.grantex.dev/v1/audit").mock(
+    route = respx.post("https://api.grantex.dev/v1/audit/log").mock(
         return_value=httpx.Response(200, json=MOCK_AUDIT_ENTRY)
     )
     entry = client.audit.log(
@@ -27,21 +27,25 @@ def test_log_body_fields(client: Grantex) -> None:
         grant_id="grant_01HXYZ",
         action="payment.initiated",
         metadata={"amount": 420, "currency": "USD"},
+        status="success",
     )
-    assert entry.id == "audit_01HXYZ"
+    assert entry.entry_id == "audit_01HXYZ"
     assert entry.action == "payment.initiated"
     assert entry.metadata == {"amount": 420, "currency": "USD"}
+    assert entry.status == "success"
+    assert entry.prev_hash is None
 
     body = json.loads(route.calls[0].request.content)
     assert body["agentId"] == "ag_01HXYZ123abc"
     assert body["grantId"] == "grant_01HXYZ"
     assert body["action"] == "payment.initiated"
     assert body["metadata"] == {"amount": 420, "currency": "USD"}
+    assert body["status"] == "success"
 
 
 @respx.mock
 def test_log_without_metadata(client: Grantex) -> None:
-    route = respx.post("https://api.grantex.dev/v1/audit").mock(
+    route = respx.post("https://api.grantex.dev/v1/audit/log").mock(
         return_value=httpx.Response(200, json=MOCK_AUDIT_ENTRY)
     )
     client.audit.log(
@@ -61,7 +65,7 @@ def test_list_and_query_params(client: Grantex) -> None:
         "page": 1,
         "pageSize": 20,
     }
-    route = respx.get("https://api.grantex.dev/v1/audit").mock(
+    route = respx.get("https://api.grantex.dev/v1/audit/entries").mock(
         return_value=httpx.Response(200, json=payload)
     )
     params = ListAuditParams(agent_id="ag_01HXYZ123abc", action="payment.initiated")
@@ -78,12 +82,12 @@ def test_list_and_query_params(client: Grantex) -> None:
 @respx.mock
 def test_list_no_params(client: Grantex) -> None:
     payload = {"entries": [], "total": 0, "page": 1, "pageSize": 20}
-    route = respx.get("https://api.grantex.dev/v1/audit").mock(
+    route = respx.get("https://api.grantex.dev/v1/audit/entries").mock(
         return_value=httpx.Response(200, json=payload)
     )
     client.audit.list()
     url = str(route.calls[0].request.url)
-    assert url == "https://api.grantex.dev/v1/audit"
+    assert url == "https://api.grantex.dev/v1/audit/entries"
 
 
 @respx.mock
@@ -92,5 +96,6 @@ def test_get_by_id(client: Grantex) -> None:
         return_value=httpx.Response(200, json=MOCK_AUDIT_ENTRY)
     )
     entry = client.audit.get("audit_01HXYZ")
-    assert entry.id == "audit_01HXYZ"
-    assert entry.previous_hash is None
+    assert entry.entry_id == "audit_01HXYZ"
+    assert entry.prev_hash is None
+    assert entry.status == "success"

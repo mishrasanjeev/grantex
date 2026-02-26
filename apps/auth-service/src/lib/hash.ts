@@ -18,7 +18,8 @@ export interface AuditHashFields {
   action: string;
   metadata: Record<string, unknown>;
   timestamp: string;
-  previousHash: string | null;
+  prevHash: string | null;
+  status: string;
 }
 
 export function computeAuditHash(fields: AuditHashFields): string {
@@ -32,7 +33,8 @@ export function computeAuditHash(fields: AuditHashFields): string {
     action: fields.action,
     metadata: fields.metadata,
     timestamp: fields.timestamp,
-    previousHash: fields.previousHash,
+    prevHash: fields.prevHash,
+    status: fields.status,
   });
   return sha256hex(canonical);
 }

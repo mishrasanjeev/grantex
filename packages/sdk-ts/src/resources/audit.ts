@@ -14,12 +14,12 @@ export class AuditClient {
   }
 
   log(params: LogAuditParams): Promise<AuditEntry> {
-    return this.#http.post<AuditEntry>('/v1/audit', params);
+    return this.#http.post<AuditEntry>('/v1/audit/log', params);
   }
 
   list(params?: ListAuditParams): Promise<ListAuditResponse> {
     const query = buildQuery(params);
-    const path = query ? `/v1/audit?${query}` : '/v1/audit';
+    const path = query ? `/v1/audit/entries?${query}` : '/v1/audit/entries';
     return this.#http.get<ListAuditResponse>(path);
   }
 

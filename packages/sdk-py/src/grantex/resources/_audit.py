@@ -18,19 +18,21 @@ class AuditClient:
         grant_id: str,
         action: str,
         metadata: dict[str, Any] | None = None,
+        status: str = "success",
     ) -> AuditEntry:
         params = LogAuditParams(
             agent_id=agent_id,
             grant_id=grant_id,
             action=action,
             metadata=metadata,
+            status=status,
         )
-        data = self._http.post("/v1/audit", params.to_dict())
+        data = self._http.post("/v1/audit/log", params.to_dict())
         return AuditEntry.from_dict(data)
 
     def list(self, params: ListAuditParams | None = None) -> ListAuditResponse:
         qs = _build_query(params.to_dict() if params else {})
-        path = f"/v1/audit?{qs}" if qs else "/v1/audit"
+        path = f"/v1/audit/entries?{qs}" if qs else "/v1/audit/entries"
         data = self._http.get(path)
         return ListAuditResponse.from_dict(data)
 

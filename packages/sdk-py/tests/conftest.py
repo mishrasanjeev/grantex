@@ -30,7 +30,7 @@ MOCK_GRANT: dict = {
 }
 
 MOCK_AUDIT_ENTRY: dict = {
-    "id": "audit_01HXYZ",
+    "entryId": "audit_01HXYZ",
     "agentId": "ag_01HXYZ123abc",
     "agentDid": "did:grantex:ag_01HXYZ123abc",
     "grantId": "grant_01HXYZ",
@@ -38,8 +38,9 @@ MOCK_AUDIT_ENTRY: dict = {
     "action": "payment.initiated",
     "metadata": {"amount": 420, "currency": "USD"},
     "hash": "abc123hash",
-    "previousHash": None,
+    "prevHash": None,
     "timestamp": "2024-01-01T00:01:00Z",
+    "status": "success",
 }
 
 MOCK_JWT_PAYLOAD: dict = {
