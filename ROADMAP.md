@@ -30,7 +30,7 @@ Making Grantex native to every major agent framework.
 
 - [ ] LangChain integration (`@grantex/langchain`)
 - [ ] AutoGen integration (`@grantex/autogen`)
-- [ ] End-user permission dashboard (view + revoke grants)
+- [x] End-user permission dashboard (view + revoke grants)
 - [ ] Webhook event delivery (grant created, revoked, token issued)
 - [ ] Stripe billing integration (Free / Pro / Enterprise tiers)
 - [ ] `grantex` CLI tool for local development
