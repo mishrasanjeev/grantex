@@ -5,6 +5,7 @@ import type {
   ListGrantsParams,
   ListGrantsResponse,
   VerifiedGrant,
+  DelegateParams,
 } from '../types.js';
 
 export class GrantsClient {
@@ -26,6 +27,13 @@ export class GrantsClient {
 
   revoke(grantId: string): Promise<void> {
     return this.#http.delete<void>(`/v1/grants/${grantId}`);
+  }
+
+  /**
+   * Create a delegated sub-agent grant (SPEC §9).
+   */
+  delegate(params: DelegateParams): Promise<{ grantToken: string; expiresAt: string; scopes: string[]; grantId: string }> {
+    return this.#http.post('/v1/grants/delegate', params);
   }
 
   /**

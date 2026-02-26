@@ -138,6 +138,7 @@ def _build_payload(data: dict[str, Any]) -> GrantTokenPayload:
             raise GrantexTokenError(
                 f"Grant token is missing required claims ({', '.join(required)})"
             )
+    raw_depth = data.get("delegationDepth")
     return GrantTokenPayload(
         iss=data.get("iss", ""),
         sub=str(data["sub"]),
@@ -148,6 +149,9 @@ def _build_payload(data: dict[str, Any]) -> GrantTokenPayload:
         exp=int(data["exp"]),
         jti=str(data["jti"]),
         grnt=data.get("grnt"),
+        parent_agt=data.get("parentAgt"),
+        parent_grnt=data.get("parentGrnt"),
+        delegation_depth=int(raw_depth) if raw_depth is not None else None,
     )
 
 
@@ -161,4 +165,7 @@ def _payload_to_verified_grant(payload: GrantTokenPayload) -> VerifiedGrant:
         scopes=payload.scp,
         issued_at=payload.iat,
         expires_at=payload.exp,
+        parent_agent_did=payload.parent_agt,
+        parent_grant_id=payload.parent_grnt,
+        delegation_depth=payload.delegation_depth,
     )

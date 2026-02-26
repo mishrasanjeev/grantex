@@ -1,6 +1,7 @@
 """Tests for GrantsClient."""
 from __future__ import annotations
 
+import json
 import pytest
 import respx
 import httpx
@@ -108,3 +109,32 @@ def _build_verified_grant():
         issued_at=1709000000,
         expires_at=9999999999,
     )
+
+
+@respx.mock
+def test_delegate_posts_to_endpoint(client: Grantex) -> None:
+    delegate_response = {
+        "grantToken": "delegated.jwt.token",
+        "expiresAt": "2026-03-01T00:00:00Z",
+        "scopes": ["calendar:read"],
+        "grantId": "grnt_DELEGATED01",
+    }
+    route = respx.post("https://api.grantex.dev/v1/grants/delegate").mock(
+        return_value=httpx.Response(201, json=delegate_response)
+    )
+    result = client.grants.delegate(
+        parent_grant_token="parent.jwt.token",
+        sub_agent_id="ag_sub01",
+        scopes=["calendar:read"],
+        expires_in="1h",
+    )
+
+    assert result["grantToken"] == "delegated.jwt.token"
+    assert result["scopes"] == ["calendar:read"]
+    assert result["grantId"] == "grnt_DELEGATED01"
+
+    body = json.loads(route.calls[0].request.content)
+    assert body["parentGrantToken"] == "parent.jwt.token"
+    assert body["subAgentId"] == "ag_sub01"
+    assert body["scopes"] == ["calendar:read"]
+    assert body["expiresIn"] == "1h"

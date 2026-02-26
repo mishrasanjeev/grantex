@@ -76,6 +76,8 @@ describe('DELETE /v1/grants/:id (revoke)', () => {
   it('revokes grant and sets Redis key', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([TEST_GRANT]);
+    // Cascade revocation — no descendants
+    sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'DELETE',

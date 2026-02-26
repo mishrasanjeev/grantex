@@ -29,6 +29,7 @@ export type {
   ListGrantsParams,
   ListGrantsResponse,
   VerifiedGrant,
+  DelegateParams,
   // Tokens
   VerifyTokenResponse,
   // Audit

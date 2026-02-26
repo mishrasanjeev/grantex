@@ -11,6 +11,7 @@ import { grantsRoutes } from './routes/grants.js';
 import { tokensRoutes } from './routes/tokens.js';
 import { auditRoutes } from './routes/audit.js';
 import { consentRoutes } from './routes/consent.js';
+import { delegateRoutes } from './routes/delegate.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -38,6 +39,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(authorizeRoutes);
   await app.register(tokenRoutes);
   await app.register(grantsRoutes);
+  await app.register(delegateRoutes);
   await app.register(tokensRoutes);
   await app.register(auditRoutes);
 
