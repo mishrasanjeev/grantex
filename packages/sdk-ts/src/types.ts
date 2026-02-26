@@ -112,6 +112,19 @@ export interface VerifiedGrant {
   issuedAt: number;
   /** Token expiry timestamp (seconds since epoch) */
   expiresAt: number;
+  /** Parent agent DID (delegated grants only) */
+  parentAgentDid?: string;
+  /** Parent grant ID (delegated grants only) */
+  parentGrantId?: string;
+  /** Delegation depth (0 = root, n = nth-level delegation) */
+  delegationDepth?: number;
+}
+
+export interface DelegateParams {
+  parentGrantToken: string;
+  subAgentId: string;
+  scopes: string[];
+  expiresIn?: string;
 }
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
@@ -190,4 +203,7 @@ export interface GrantTokenPayload {
   jti: string;
   /** Grant record ID embedded as a custom claim */
   grnt?: string;
+  parentAgt?: string;
+  parentGrnt?: string;
+  delegationDepth?: number;
 }

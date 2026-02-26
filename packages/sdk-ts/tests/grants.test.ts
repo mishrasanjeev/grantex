@@ -106,4 +106,34 @@ describe('GrantsClient', () => {
     expect(result.scopes).toEqual(['calendar:read']);
     expect(result.grantId).toBe('grant_01');
   });
+
+  it('delegate() POSTs to /v1/grants/delegate and returns grant token', async () => {
+    const delegateResponse = {
+      grantToken: 'delegated.jwt.token',
+      expiresAt: '2026-03-01T00:00:00Z',
+      scopes: ['calendar:read'],
+      grantId: 'grnt_delegated',
+    };
+    const mockFetch = makeFetch(201, delegateResponse);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    const result = await grantex.grants.delegate({
+      parentGrantToken: 'parent.jwt.token',
+      subAgentId: 'ag_sub01',
+      scopes: ['calendar:read'],
+      expiresIn: '1h',
+    });
+
+    expect(result.grantToken).toBe('delegated.jwt.token');
+    expect(result.scopes).toEqual(['calendar:read']);
+    expect(result.grantId).toBe('grnt_delegated');
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/v1\/grants\/delegate$/);
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body['subAgentId']).toBe('ag_sub01');
+    expect(body['scopes']).toEqual(['calendar:read']);
+  });
 });

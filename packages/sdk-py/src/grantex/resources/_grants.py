@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from typing import Any, List
 from urllib.parse import urlencode
 
 from .._http import HttpClient
-from .._types import Grant, ListGrantsParams, ListGrantsResponse, VerifiedGrant
+from .._types import Grant, ListGrantsParams, ListGrantsResponse, VerifiedGrant, DelegateParams
 from .._verify import _map_online_verify_to_verified_grant
 
 
@@ -23,6 +24,22 @@ class GrantsClient:
 
     def revoke(self, grant_id: str) -> None:
         self._http.delete(f"/v1/grants/{grant_id}")
+
+    def delegate(
+        self,
+        *,
+        parent_grant_token: str,
+        sub_agent_id: str,
+        scopes: List[str],
+        expires_in: str | None = None,
+    ) -> Any:
+        params = DelegateParams(
+            parent_grant_token=parent_grant_token,
+            sub_agent_id=sub_agent_id,
+            scopes=scopes,
+            expires_in=expires_in,
+        )
+        return self._http.post("/v1/grants/delegate", params.to_dict())
 
     def verify(self, token: str) -> VerifiedGrant:
         response = self._http.post("/v1/grants/verify", {"token": token})

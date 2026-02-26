@@ -65,6 +65,25 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
     const ttlSeconds = Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
     await redis.set(`revoked:grant:${request.params.id}`, '1', 'EX', ttlSeconds);
 
+    // Cascade-revoke all descendant grants via recursive CTE
+    const descendantRows = await sql`
+      WITH RECURSIVE descendants AS (
+        SELECT id, expires_at FROM grants WHERE parent_grant_id = ${request.params.id} AND status = 'active'
+        UNION ALL
+        SELECT g.id, g.expires_at FROM grants g
+        JOIN descendants d ON g.parent_grant_id = d.id WHERE g.status = 'active'
+      )
+      UPDATE grants SET status = 'revoked', revoked_at = NOW()
+      WHERE id IN (SELECT id FROM descendants)
+      RETURNING id, expires_at
+    `;
+
+    for (const row of descendantRows) {
+      const descExpiresAt = new Date(row['expires_at'] as string);
+      const descTtl = Math.max(1, Math.floor((descExpiresAt.getTime() - Date.now()) / 1000));
+      await redis.set(`revoked:grant:${row['id'] as string}`, '1', 'EX', descTtl);
+    }
+
     return reply.status(204).send();
   });
 
@@ -133,5 +152,9 @@ function toGrantResponse(row: Record<string, unknown>) {
     ...(row['revoked_at'] !== null && row['revoked_at'] !== undefined
       ? { revokedAt: row['revoked_at'] }
       : {}),
+    ...(row['parent_grant_id'] !== null && row['parent_grant_id'] !== undefined
+      ? { parentGrantId: row['parent_grant_id'] }
+      : {}),
+    delegationDepth: (row['delegation_depth'] as number | undefined) ?? 0,
   };
 }

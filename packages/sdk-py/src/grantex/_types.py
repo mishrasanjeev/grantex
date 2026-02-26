@@ -184,6 +184,9 @@ class VerifiedGrant:
     scopes: tuple[str, ...]
     issued_at: int
     expires_at: int
+    parent_agent_did: str | None = None
+    parent_grant_id: str | None = None
+    delegation_depth: int | None = None
 
 
 # ─── Tokens ───────────────────────────────────────────────────────────────────
@@ -339,3 +342,24 @@ class GrantTokenPayload:
     exp: int
     jti: str
     grnt: str | None = None
+    parent_agt: str | None = None
+    parent_grnt: str | None = None
+    delegation_depth: int | None = None
+
+
+@dataclass
+class DelegateParams:
+    parent_grant_token: str
+    sub_agent_id: str
+    scopes: list[str]
+    expires_in: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "parentGrantToken": self.parent_grant_token,
+            "subAgentId": self.sub_agent_id,
+            "scopes": self.scopes,
+        }
+        if self.expires_in is not None:
+            body["expiresIn"] = self.expires_in
+        return body
