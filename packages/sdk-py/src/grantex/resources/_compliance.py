@@ -9,6 +9,8 @@ from .._types import (
     ComplianceExportGrantsParams,
     ComplianceGrantsExport,
     ComplianceSummary,
+    EvidencePack,
+    EvidencePackParams,
 )
 
 
@@ -52,3 +54,13 @@ class ComplianceClient:
         path = f"/v1/compliance/export/audit?{qs}" if qs else "/v1/compliance/export/audit"
         data = self._http.get(path)
         return ComplianceAuditExport.from_dict(data)
+
+    def evidence_pack(
+        self,
+        params: EvidencePackParams | None = None,
+    ) -> EvidencePack:
+        """Generate a full SOC2/GDPR evidence pack with chain integrity verification."""
+        qs = urlencode(params.to_dict()) if params else ""
+        path = f"/v1/compliance/evidence-pack?{qs}" if qs else "/v1/compliance/evidence-pack"
+        data = self._http.get(path)
+        return EvidencePack.from_dict(data)

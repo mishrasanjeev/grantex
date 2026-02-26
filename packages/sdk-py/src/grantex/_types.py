@@ -685,3 +685,75 @@ class ComplianceAuditExport:
             total=data["total"],
             entries=tuple(AuditEntry.from_dict(e) for e in data.get("entries", [])),
         )
+
+
+@dataclass
+class EvidencePackParams:
+    since: str | None = None
+    until: str | None = None
+    framework: str | None = None  # 'soc2' | 'gdpr' | 'all'
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        if self.since is not None:
+            result["since"] = self.since
+        if self.until is not None:
+            result["until"] = self.until
+        if self.framework is not None:
+            result["framework"] = self.framework
+        return result
+
+
+@dataclass(frozen=True)
+class ChainIntegrity:
+    valid: bool
+    checked_entries: int
+    first_broken_at: str | None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ChainIntegrity":
+        return cls(
+            valid=data["valid"],
+            checked_entries=data["checkedEntries"],
+            first_broken_at=data.get("firstBrokenAt"),
+        )
+
+
+@dataclass(frozen=True)
+class EvidencePackMeta:
+    schema_version: str
+    generated_at: str
+    framework: str
+    since: str | None = None
+    until: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EvidencePackMeta":
+        return cls(
+            schema_version=data["schemaVersion"],
+            generated_at=data["generatedAt"],
+            framework=data["framework"],
+            since=data.get("since"),
+            until=data.get("until"),
+        )
+
+
+@dataclass(frozen=True)
+class EvidencePack:
+    meta: EvidencePackMeta
+    summary: dict[str, Any]
+    grants: tuple[Grant, ...]
+    audit_entries: tuple[AuditEntry, ...]
+    policies: tuple[Policy, ...]
+    chain_integrity: ChainIntegrity
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EvidencePack":
+        return cls(
+            meta=EvidencePackMeta.from_dict(data["meta"]),
+            summary=data["summary"],
+            grants=tuple(Grant.from_dict(g) for g in data.get("grants", [])),
+            audit_entries=tuple(AuditEntry.from_dict(e) for e in data.get("auditEntries", [])),
+            policies=tuple(Policy.from_dict(p) for p in data.get("policies", [])),
+            chain_integrity=ChainIntegrity.from_dict(data["chainIntegrity"]),
+        )

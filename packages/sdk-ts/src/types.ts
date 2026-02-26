@@ -338,3 +338,36 @@ export interface ComplianceAuditExport {
   total: number;
   entries: AuditEntry[];
 }
+
+export interface EvidencePackParams {
+  since?: string;
+  until?: string;
+  framework?: 'soc2' | 'gdpr' | 'all';
+}
+
+export interface ChainIntegrity {
+  valid: boolean;
+  checkedEntries: number;
+  firstBrokenAt: string | null;
+}
+
+export interface EvidencePack {
+  meta: {
+    schemaVersion: '1.0';
+    generatedAt: string;
+    since?: string;
+    until?: string;
+    framework: 'soc2' | 'gdpr' | 'all';
+  };
+  summary: {
+    agents: { total: number; active: number; suspended: number; revoked: number };
+    grants: { total: number; active: number; revoked: number; expired: number };
+    auditEntries: { total: number; success: number; failure: number; blocked: number };
+    policies: { total: number };
+    plan: string;
+  };
+  grants: Grant[];
+  auditEntries: AuditEntry[];
+  policies: Policy[];
+  chainIntegrity: ChainIntegrity;
+}

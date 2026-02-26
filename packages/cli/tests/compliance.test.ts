@@ -63,4 +63,20 @@ describe('complianceCommand()', () => {
     expect(optNames).toContain('--format');
     expect(optNames).toContain('--output');
   });
+
+  it('has an "evidence-pack" subcommand', () => {
+    const cmd = complianceCommand();
+    const epCmd = cmd.commands.find((c) => c.name() === 'evidence-pack');
+    expect(epCmd).toBeDefined();
+  });
+
+  it('"evidence-pack" has --framework, --since, --until, --output options', () => {
+    const cmd = complianceCommand();
+    const epCmd = cmd.commands.find((c) => c.name() === 'evidence-pack')!;
+    const optNames = epCmd.options.map((o) => o.long);
+    expect(optNames).toContain('--framework');
+    expect(optNames).toContain('--since');
+    expect(optNames).toContain('--until');
+    expect(optNames).toContain('--output');
+  });
 });

@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { writeFileSync } from 'fs';
 import { requireClient } from '../client.js';
-import { printRecord, printTable, shortDate } from '../format.js';
+import { printRecord, shortDate } from '../format.js';
 import type { Grant, AuditEntry } from '@grantex/sdk';
 
 export function complianceCommand(): Command {
@@ -94,6 +94,43 @@ export function complianceCommand(): Command {
     );
 
   cmd.addCommand(exportCmd);
+
+  cmd
+    .command('evidence-pack')
+    .description('Generate a SOC2/GDPR evidence pack with chain integrity verification')
+    .option('--since <iso>', 'Start of reporting window (ISO date)')
+    .option('--until <iso>', 'End of reporting window (ISO date)')
+    .option('--framework <fw>', 'Framework: soc2, gdpr, or all (default: all)', 'all')
+    .option('--output <file>', 'Write JSON output to a file (default: evidence-pack-<date>.json)')
+    .action(
+      async (opts: { since?: string; until?: string; framework: string; output?: string }) => {
+        const client = await requireClient();
+        const pack = await client.compliance.evidencePack({
+          framework: opts.framework as 'soc2' | 'gdpr' | 'all',
+          ...(opts.since ? { since: opts.since } : {}),
+          ...(opts.until ? { until: opts.until } : {}),
+        });
+
+        const defaultFile = `evidence-pack-${new Date().toISOString().slice(0, 10)}.json`;
+        const outFile = opts.output ?? defaultFile;
+        writeFileSync(outFile, JSON.stringify(pack, null, 2) + '\n', 'utf8');
+
+        // Print a summary to stdout
+        const ci = pack.chainIntegrity;
+        printRecord({
+          'Framework':       pack.meta.framework,
+          'Generated at':    shortDate(pack.meta.generatedAt),
+          'Grants':          String(pack.grants.length),
+          'Audit entries':   String(pack.auditEntries.length),
+          'Policies':        String(pack.policies.length),
+          'Chain integrity': ci.valid
+            ? `✓ valid (${ci.checkedEntries} entries checked)`
+            : `✗ BROKEN at entry ${ci.firstBrokenAt ?? 'unknown'}`,
+          'Output file':     outFile,
+        });
+      },
+    );
+
   return cmd;
 }
 
