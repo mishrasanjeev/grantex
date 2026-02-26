@@ -480,3 +480,113 @@ class PortalResponse:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PortalResponse":
         return cls(portal_url=data["portalUrl"])
+
+
+# ─── Policies ─────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class Policy:
+    id: str
+    name: str
+    effect: str  # 'allow' | 'deny'
+    priority: int
+    agent_id: str | None
+    principal_id: str | None
+    scopes: tuple[str, ...] | None
+    time_of_day_start: str | None
+    time_of_day_end: str | None
+    created_at: str
+    updated_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Policy":
+        raw_scopes = data.get("scopes")
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            effect=data["effect"],
+            priority=data.get("priority", 0),
+            agent_id=data.get("agentId"),
+            principal_id=data.get("principalId"),
+            scopes=tuple(raw_scopes) if raw_scopes is not None else None,
+            time_of_day_start=data.get("timeOfDayStart"),
+            time_of_day_end=data.get("timeOfDayEnd"),
+            created_at=data["createdAt"],
+            updated_at=data["updatedAt"],
+        )
+
+
+@dataclass
+class CreatePolicyParams:
+    name: str
+    effect: str  # 'allow' | 'deny'
+    priority: int = 0
+    agent_id: str | None = None
+    principal_id: str | None = None
+    scopes: list[str] | None = None
+    time_of_day_start: str | None = None
+    time_of_day_end: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "name": self.name,
+            "effect": self.effect,
+            "priority": self.priority,
+        }
+        if self.agent_id is not None:
+            body["agentId"] = self.agent_id
+        if self.principal_id is not None:
+            body["principalId"] = self.principal_id
+        if self.scopes is not None:
+            body["scopes"] = self.scopes
+        if self.time_of_day_start is not None:
+            body["timeOfDayStart"] = self.time_of_day_start
+        if self.time_of_day_end is not None:
+            body["timeOfDayEnd"] = self.time_of_day_end
+        return body
+
+
+@dataclass
+class UpdatePolicyParams:
+    name: str | None = None
+    effect: str | None = None
+    priority: int | None = None
+    agent_id: str | None = None
+    principal_id: str | None = None
+    scopes: list[str] | None = None
+    time_of_day_start: str | None = None
+    time_of_day_end: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {}
+        if self.name is not None:
+            body["name"] = self.name
+        if self.effect is not None:
+            body["effect"] = self.effect
+        if self.priority is not None:
+            body["priority"] = self.priority
+        if self.agent_id is not None:
+            body["agentId"] = self.agent_id
+        if self.principal_id is not None:
+            body["principalId"] = self.principal_id
+        if self.scopes is not None:
+            body["scopes"] = self.scopes
+        if self.time_of_day_start is not None:
+            body["timeOfDayStart"] = self.time_of_day_start
+        if self.time_of_day_end is not None:
+            body["timeOfDayEnd"] = self.time_of_day_end
+        return body
+
+
+@dataclass(frozen=True)
+class ListPoliciesResponse:
+    policies: tuple[Policy, ...]
+    total: int
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ListPoliciesResponse":
+        return cls(
+            policies=tuple(Policy.from_dict(p) for p in data.get("policies", [])),
+            total=data.get("total", 0),
+        )

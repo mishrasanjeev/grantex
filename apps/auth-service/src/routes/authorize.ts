@@ -3,6 +3,7 @@ import { getSql } from '../db/client.js';
 import { newAuthRequestId } from '../lib/ids.js';
 import { config } from '../config.js';
 import { ulid } from 'ulid';
+import { evaluatePolicies, type PolicyRow } from '../lib/policy.js';
 
 interface AuthorizeBody {
   agentId: string;
@@ -38,6 +39,25 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
     }
 
+    // Evaluate policies — query ordered by priority DESC, then created_at ASC
+    const policyRows = await sql<PolicyRow[]>`
+      SELECT id, effect, priority, agent_id, principal_id, scopes,
+             time_of_day_start, time_of_day_end
+      FROM policies
+      WHERE developer_id = ${developerId}
+      ORDER BY priority DESC, created_at ASC
+    `;
+
+    const policyEffect = evaluatePolicies(policyRows, { agentId, principalId, scopes });
+
+    if (policyEffect === 'deny') {
+      return reply.status(403).send({
+        message: 'Authorization denied by policy',
+        code: 'POLICY_DENIED',
+        requestId: request.id,
+      });
+    }
+
     // Parse expiresIn to compute expires_at
     const expiresSeconds = parseExpiresIn(expiresIn);
     const expiresAt = new Date(Date.now() + expiresSeconds * 1000);
@@ -45,7 +65,9 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     const id = newAuthRequestId();
 
     const isSandbox = request.developer.mode === 'sandbox';
-    const sandboxCode = isSandbox ? ulid() : null;
+    const isPolicyAllow = policyEffect === 'allow';
+    const autoApprove = isSandbox || isPolicyAllow;
+    const autoCode = autoApprove ? ulid() : null;
 
     await sql`
       INSERT INTO auth_requests (id, agent_id, principal_id, developer_id, scopes, redirect_uri, state, expires_in, expires_at, audience, status, code)
@@ -53,8 +75,8 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
         ${id}, ${agentId}, ${principalId}, ${developerId}, ${scopes},
         ${redirectUri ?? null}, ${state ?? null}, ${expiresIn}, ${expiresAt},
         ${audience ?? null},
-        ${isSandbox ? 'approved' : 'pending'},
-        ${sandboxCode}
+        ${autoApprove ? 'approved' : 'pending'},
+        ${autoCode}
       )
     `;
 
@@ -68,7 +90,11 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
 
     if (isSandbox) {
       responseBody['sandbox'] = true;
-      responseBody['code'] = sandboxCode;
+      responseBody['code'] = autoCode;
+    } else if (isPolicyAllow) {
+      responseBody['policyEnforced'] = true;
+      responseBody['effect'] = 'allow';
+      responseBody['code'] = autoCode;
     }
 
     return reply.status(201).send(responseBody);
