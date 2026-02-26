@@ -4,6 +4,11 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get('/dashboard', { config: { skipAuth: true } }, async (_request, reply) => {
     await reply.type('text/html').send(dashboardHtml());
   });
+
+  app.get('/dashboard/principal', { config: { skipAuth: true } }, async (request, reply) => {
+    const principalId = (request.query as Record<string, string>)['id'] ?? '';
+    await reply.type('text/html').send(principalDashboardHtml(principalId));
+  });
 }
 
 function dashboardHtml(): string {
@@ -311,6 +316,246 @@ function dashboardHtml(): string {
     }).catch(function(e) {
       alert('Failed to revoke: ' + e.message);
     });
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>`;
+}
+
+function principalDashboardHtml(prefillId: string): string {
+  const safeId = prefillId.replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manage App Permissions</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #f8f9fa; color: #111827; min-height: 100vh; }
+
+    .header { background: #1a1a2e; color: white; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+    .header h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+    .header .pill { background: rgba(255,255,255,0.15); font-size: 11px; padding: 2px 9px; border-radius: 12px; font-weight: 500; }
+
+    .connect-bar { background: white; border-bottom: 1px solid #e5e7eb; padding: 10px 24px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .connect-bar label { font-size: 13px; font-weight: 500; color: #4b5563; white-space: nowrap; }
+    .connect-bar input { padding: 6px 11px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; outline: none; }
+    .connect-bar input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+    .connect-bar input.key { font-family: monospace; width: 260px; }
+    .connect-bar input.pid { width: 200px; }
+    .connect-bar button { padding: 6px 16px; background: #6366f1; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; }
+    .connect-bar button:hover { background: #4f46e5; }
+    #conn-status { font-size: 13px; color: #6b7280; }
+
+    .page { max-width: 900px; margin: 0 auto; padding: 32px 24px; }
+
+    .section-title { font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 4px; }
+    .section-sub { font-size: 14px; color: #6b7280; margin-bottom: 20px; }
+
+    .grant-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 40px; }
+    .grant-card { background: white; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px 20px; display: flex; align-items: flex-start; gap: 16px; }
+    .grant-card.revoked { opacity: .55; }
+    .agent-icon { width: 40px; height: 40px; border-radius: 10px; background: #ede9fe; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+    .grant-body { flex: 1; min-width: 0; }
+    .grant-name { font-size: 15px; font-weight: 600; color: #111827; }
+    .grant-did { font-family: monospace; font-size: 11px; color: #9ca3af; margin-top: 1px; }
+    .grant-scopes { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .scope { background: #ede9fe; color: #5b21b6; font-size: 11px; padding: 2px 7px; border-radius: 4px; font-family: monospace; }
+    .grant-meta { margin-top: 8px; font-size: 12px; color: #9ca3af; display: flex; gap: 16px; flex-wrap: wrap; }
+    .grant-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+    .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 10px; }
+    .b-active  { background: #d1fae5; color: #065f46; }
+    .b-revoked { background: #fee2e2; color: #991b1b; }
+    .b-expired { background: #fef3c7; color: #92400e; }
+    .depth-badge { background: #e0e7ff; color: #3730a3; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+    .btn-revoke { padding: 6px 14px; background: #fff; border: 1px solid #fca5a5; color: #dc2626; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    .btn-revoke:hover { background: #fee2e2; }
+
+    .audit-wrap { background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { background: #f9fafb; padding: 9px 14px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; border-bottom: 1px solid #e5e7eb; white-space: nowrap; }
+    tbody td { padding: 11px 14px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: #fafafa; }
+    .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+    .b-success { background: #d1fae5; color: #065f46; }
+    .b-failure { background: #fee2e2; color: #991b1b; }
+    .b-blocked { background: #fef3c7; color: #92400e; }
+
+    .empty { padding: 44px; text-align: center; color: #9ca3af; font-size: 14px; }
+    #err { background: #fee2e2; border: 1px solid #fca5a5; color: #b91c1c; padding: 10px 16px; border-radius: 6px; font-size: 13px; margin-bottom: 20px; display: none; }
+    #hint { padding: 72px 24px; text-align: center; color: #9ca3af; font-size: 14px; line-height: 2; }
+    #hint code { font-family: monospace; background: #f3f4f6; padding: 2px 6px; border-radius: 4px; color: #374151; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Grantex</h1>
+  <span class="pill">Manage Permissions</span>
+</div>
+
+<div class="connect-bar">
+  <label>API Key</label>
+  <input class="key" id="api-key" type="password" placeholder="developer api key" autocomplete="off">
+  <label>Your ID</label>
+  <input class="pid" id="principal-id" type="text" placeholder="user_abc123" value="${safeId}">
+  <button onclick="connectKey()">Load</button>
+  <span id="conn-status"></span>
+</div>
+
+<div id="main" style="display:none">
+  <div class="page">
+    <div id="err"></div>
+
+    <div class="section-title">Apps with access</div>
+    <div class="section-sub">These agents are authorized to act on your behalf. You can revoke access at any time.</div>
+    <div id="grant-list" class="grant-list"></div>
+
+    <div class="section-title">Recent activity</div>
+    <div class="section-sub" style="margin-bottom:12px">Actions taken by agents on your behalf.</div>
+    <div class="audit-wrap">
+      <table>
+        <thead><tr><th>Action</th><th>Result</th><th>Agent</th><th>Metadata</th><th>When</th></tr></thead>
+        <tbody id="audit-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="hint">
+  Enter your API key and user ID above, then click <strong>Load</strong>.<br>
+  Your ID is the <code>principalId</code> used when you authorized agents.
+</div>
+
+<script>
+  var apiKey = sessionStorage.getItem('grantex_key') || '';
+  var principalId = '${safeId}';
+
+  if (apiKey) document.getElementById('api-key').value = apiKey;
+  if (apiKey && principalId) loadData();
+
+  document.getElementById('api-key').addEventListener('keydown', function(e) { if (e.key === 'Enter') connectKey(); });
+  document.getElementById('principal-id').addEventListener('keydown', function(e) { if (e.key === 'Enter') connectKey(); });
+
+  function connectKey() {
+    apiKey = document.getElementById('api-key').value.trim();
+    principalId = document.getElementById('principal-id').value.trim();
+    if (!apiKey || !principalId) return;
+    sessionStorage.setItem('grantex_key', apiKey);
+    document.getElementById('conn-status').textContent = '';
+    loadData();
+  }
+
+  function apiFetch(path) {
+    return fetch(path, { headers: { Authorization: 'Bearer ' + apiKey } }).then(function(res) {
+      if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+      return res.json();
+    });
+  }
+
+  function loadData() {
+    var err = document.getElementById('err');
+    err.style.display = 'none';
+    var pid = encodeURIComponent(principalId);
+    Promise.all([
+      apiFetch('/v1/grants?principalId=' + pid),
+      apiFetch('/v1/audit/entries?principalId=' + pid),
+    ]).then(function(results) {
+      document.getElementById('main').style.display = '';
+      document.getElementById('hint').style.display = 'none';
+      document.getElementById('conn-status').textContent = '✓ Loaded';
+      renderGrants(results[0].grants || []);
+      renderAudit(results[1].entries || []);
+    }).catch(function(e) {
+      err.textContent = 'Error: ' + e.message;
+      err.style.display = 'block';
+      document.getElementById('conn-status').textContent = '';
+    });
+  }
+
+  function renderGrants(grants) {
+    var el = document.getElementById('grant-list');
+    if (!grants.length) {
+      el.innerHTML = '<div style="color:#9ca3af;font-size:14px;padding:20px 0">No grants found for this principal.</div>';
+      return;
+    }
+    el.innerHTML = grants.map(function(g) {
+      var isActive = g.status === 'active';
+      var statusBadge = isActive
+        ? '<span class="badge b-active">active</span>'
+        : g.status === 'revoked'
+          ? '<span class="badge b-revoked">revoked</span>'
+          : '<span class="badge b-expired">' + g.status + '</span>';
+      var depthBadge = g.delegationDepth > 0
+        ? '<span class="depth-badge">sub-agent depth ' + g.delegationDepth + '</span>'
+        : '';
+      var revokeBtn = isActive
+        ? '<button class="btn-revoke" onclick="revokeGrant(\'' + g.grantId + '\')">Revoke access</button>'
+        : '';
+      var scopes = (g.scopes || []).map(function(s) {
+        return '<span class="scope">' + esc(s) + '</span>';
+      }).join('');
+      var issued = fmtTime(g.issuedAt);
+      var expires = fmtTime(g.expiresAt);
+      return '<div class="grant-card' + (isActive ? '' : ' revoked') + '">'
+        + '<div class="agent-icon">&#129302;</div>'
+        + '<div class="grant-body">'
+        + '<div class="grant-name">' + esc(g.agentId) + '</div>'
+        + '<div class="grant-did" title="' + esc(g.agentId) + '">' + esc(g.agentId) + '</div>'
+        + '<div class="grant-scopes">' + scopes + '</div>'
+        + '<div class="grant-meta">'
+        + '<span>Granted ' + issued + '</span>'
+        + '<span>Expires ' + expires + '</span>'
+        + (g.grantId ? '<span class="mono" style="font-size:11px">' + g.grantId.slice(0,20) + '</span>' : '')
+        + '</div>'
+        + '</div>'
+        + '<div class="grant-actions">' + statusBadge + depthBadge + revokeBtn + '</div>'
+        + '</div>';
+    }).join('');
+  }
+
+  function renderAudit(entries) {
+    var tbody = document.getElementById('audit-body');
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">No activity yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = entries.map(function(e) {
+      var s = e.status || 'success';
+      var meta = e.metadata && Object.keys(e.metadata).length
+        ? JSON.stringify(e.metadata).slice(0, 80)
+        : '—';
+      return '<tr>'
+        + '<td class="mono">' + esc(e.action || '—') + '</td>'
+        + '<td><span class="badge b-' + s + '">' + s + '</span></td>'
+        + '<td style="font-size:12px;color:#6b7280">' + esc((e.agentId || '').slice(0, 22)) + '</td>'
+        + '<td><span class="mono" style="font-size:11px;color:#6b7280">' + esc(meta) + '</span></td>'
+        + '<td style="font-size:12px;color:#9ca3af;white-space:nowrap">' + fmtTime(e.timestamp) + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function revokeGrant(grantId) {
+    if (!confirm('Revoke this access?\\n\\nThe agent will no longer be able to act on your behalf. This cannot be undone.')) return;
+    fetch('/v1/grants/' + grantId, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + apiKey },
+    }).then(function(res) {
+      if (!res.ok && res.status !== 204) throw new Error(res.statusText);
+      loadData();
+    }).catch(function(e) { alert('Failed to revoke: ' + e.message); });
+  }
+
+  function fmtTime(ts) {
+    if (!ts) return '—';
+    var d = new Date(ts);
+    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
   function esc(str) {
