@@ -20,6 +20,11 @@ export const config = {
   jwtIssuer: optional('JWT_ISSUER', 'https://grantex.dev'),
   seedApiKey: process.env['SEED_API_KEY'] ?? null,
   seedSandboxKey: process.env['SEED_SANDBOX_KEY'] ?? null,
+  // Stripe billing (optional — billing endpoints return 503 when not configured)
+  stripeSecretKey: process.env['STRIPE_SECRET_KEY'] ?? null,
+  stripeWebhookSecret: process.env['STRIPE_WEBHOOK_SECRET'] ?? null,
+  stripePricePro: process.env['STRIPE_PRICE_PRO'] ?? null,
+  stripePriceEnterprise: process.env['STRIPE_PRICE_ENTERPRISE'] ?? null,
 } as const;
 
 if (!config.rsaPrivateKey && !config.autoGenerateKeys) {

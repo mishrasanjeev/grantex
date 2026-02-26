@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { newWebhookId } from '../lib/ids.js';
+import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 
 const VALID_EVENTS = new Set(['grant.created', 'grant.revoked', 'token.issued']);
 
@@ -32,10 +33,32 @@ export async function webhooksRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const id = newWebhookId();
-    const secret = randomBytes(24).toString('hex');
     const developerId = request.developer.id;
     const sql = getSql();
+
+    // Enforce plan webhook limit
+    const subRows = await sql<{ plan: string }[]>`
+      SELECT plan FROM subscriptions WHERE developer_id = ${developerId}
+    `;
+    const planName = subRows[0]?.plan ?? 'free';
+    const plan = isPlanName(planName) ? planName : 'free';
+    const webhookLimit = PLAN_LIMITS[plan].webhooks;
+
+    const countRows = await sql<{ count: string }[]>`
+      SELECT COUNT(*) AS count FROM webhooks WHERE developer_id = ${developerId}
+    `;
+    const webhookCount = parseInt(countRows[0]?.count ?? '0', 10);
+
+    if (webhookCount >= webhookLimit) {
+      return reply.status(402).send({
+        message: `Plan limit reached: ${plan} plan allows ${webhookLimit} webhook(s). Upgrade at /v1/billing/checkout`,
+        code: 'PLAN_LIMIT_EXCEEDED',
+        requestId: request.id,
+      });
+    }
+
+    const id = newWebhookId();
+    const secret = randomBytes(24).toString('hex');
 
     await sql`
       INSERT INTO webhooks (id, developer_id, url, events, secret)

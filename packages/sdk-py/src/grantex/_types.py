@@ -422,3 +422,61 @@ class ListWebhooksResponse:
         return cls(
             webhooks=tuple(WebhookEndpoint.from_dict(w) for w in data.get("webhooks", [])),
         )
+
+
+# ─── Billing ──────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class SubscriptionStatus:
+    plan: str  # 'free' | 'pro' | 'enterprise'
+    status: str  # 'active' | 'past_due' | 'canceled'
+    current_period_end: str | None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SubscriptionStatus":
+        return cls(
+            plan=data.get("plan", "free"),
+            status=data.get("status", "active"),
+            current_period_end=data.get("currentPeriodEnd"),
+        )
+
+
+@dataclass
+class CreateCheckoutParams:
+    plan: str  # 'pro' | 'enterprise'
+    success_url: str
+    cancel_url: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "plan": self.plan,
+            "successUrl": self.success_url,
+            "cancelUrl": self.cancel_url,
+        }
+
+
+@dataclass
+class CreatePortalParams:
+    return_url: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"returnUrl": self.return_url}
+
+
+@dataclass(frozen=True)
+class CheckoutResponse:
+    checkout_url: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "CheckoutResponse":
+        return cls(checkout_url=data["checkoutUrl"])
+
+
+@dataclass(frozen=True)
+class PortalResponse:
+    portal_url: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "PortalResponse":
+        return cls(portal_url=data["portalUrl"])

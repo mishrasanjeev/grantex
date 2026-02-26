@@ -13,6 +13,7 @@ services:
       - ./apps/auth-service/src/db/migrations/002_spec_compliance.sql:/docker-entrypoint-initdb.d/002_spec_compliance.sql:ro
       - ./apps/auth-service/src/db/migrations/003_sandbox.sql:/docker-entrypoint-initdb.d/003_sandbox.sql:ro
       - ./apps/auth-service/src/db/migrations/004_webhooks.sql:/docker-entrypoint-initdb.d/004_webhooks.sql:ro
+      - ./apps/auth-service/src/db/migrations/005_billing.sql:/docker-entrypoint-initdb.d/005_billing.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U grantex"]
       interval: 5s
@@ -41,6 +42,11 @@ services:
       SEED_SANDBOX_KEY: sandbox-api-key-local
       PORT: "3001"
       HOST: "0.0.0.0"
+      # Stripe billing (optional — set these to enable billing endpoints)
+      # STRIPE_SECRET_KEY: sk_test_...
+      # STRIPE_WEBHOOK_SECRET: whsec_...
+      # STRIPE_PRICE_PRO: price_...
+      # STRIPE_PRICE_ENTERPRISE: price_...
     depends_on:
       postgres:
         condition: service_healthy

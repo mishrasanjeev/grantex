@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { newAgentId } from '../lib/ids.js';
+import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 
 interface RegisterAgentBody {
   name: string;
@@ -25,6 +26,28 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
 
     const sql = getSql();
     const developerId = request.developer.id;
+
+    // Enforce plan agent limit
+    const subRows = await sql<{ plan: string }[]>`
+      SELECT plan FROM subscriptions WHERE developer_id = ${developerId}
+    `;
+    const planName = subRows[0]?.plan ?? 'free';
+    const plan = isPlanName(planName) ? planName : 'free';
+    const agentLimit = PLAN_LIMITS[plan].agents;
+
+    const countRows = await sql<{ count: string }[]>`
+      SELECT COUNT(*) AS count FROM agents WHERE developer_id = ${developerId}
+    `;
+    const agentCount = parseInt(countRows[0]?.count ?? '0', 10);
+
+    if (agentCount >= agentLimit) {
+      return reply.status(402).send({
+        message: `Plan limit reached: ${plan} plan allows ${agentLimit} agent(s). Upgrade at /v1/billing/checkout`,
+        code: 'PLAN_LIMIT_EXCEEDED',
+        requestId: request.id,
+      });
+    }
+
     const id = newAgentId();
     const did = `did:grantex:${id}`;
 
