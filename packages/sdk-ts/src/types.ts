@@ -300,3 +300,41 @@ export interface ListPoliciesResponse {
   policies: Policy[];
   total: number;
 }
+
+// ─── Compliance ───────────────────────────────────────────────────────────────
+
+export interface ComplianceSummary {
+  generatedAt: string;
+  since?: string;
+  until?: string;
+  agents: { total: number; active: number; suspended: number; revoked: number };
+  grants: { total: number; active: number; revoked: number; expired: number };
+  auditEntries: { total: number; success: number; failure: number; blocked: number };
+  policies: { total: number };
+  plan: string;
+}
+
+export interface ComplianceExportGrantsParams {
+  since?: string;
+  until?: string;
+  status?: 'active' | 'revoked' | 'expired';
+}
+
+export interface ComplianceExportAuditParams {
+  since?: string;
+  until?: string;
+  agentId?: string;
+  status?: 'success' | 'failure' | 'blocked';
+}
+
+export interface ComplianceGrantsExport {
+  generatedAt: string;
+  total: number;
+  grants: Grant[];
+}
+
+export interface ComplianceAuditExport {
+  generatedAt: string;
+  total: number;
+  entries: AuditEntry[];
+}

@@ -6,6 +6,7 @@ import { TokensClient } from './resources/tokens.js';
 import { WebhooksClient } from './resources/webhooks.js';
 import { BillingClient } from './resources/billing.js';
 import { PoliciesClient } from './resources/policies.js';
+import { ComplianceClient } from './resources/compliance.js';
 import type {
   AuthorizationRequest,
   AuthorizeParams,
@@ -24,6 +25,7 @@ export class Grantex {
   readonly webhooks: WebhooksClient;
   readonly billing: BillingClient;
   readonly policies: PoliciesClient;
+  readonly compliance: ComplianceClient;
 
   constructor(options: GrantexClientOptions = {}) {
     const apiKey =
@@ -48,6 +50,7 @@ export class Grantex {
     this.webhooks = new WebhooksClient(this.#http);
     this.billing = new BillingClient(this.#http);
     this.policies = new PoliciesClient(this.#http);
+    this.compliance = new ComplianceClient(this.#http);
   }
 
   /**
