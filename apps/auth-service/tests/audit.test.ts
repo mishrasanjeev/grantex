@@ -21,6 +21,7 @@ const auditEntry = {
   hash: 'abc123hash',
   previous_hash: null,
   timestamp: new Date().toISOString(),
+  status: 'success',
 };
 
 describe('POST /v1/audit/log', () => {
@@ -47,14 +48,17 @@ describe('POST /v1/audit/log', () => {
 
     expect(res.statusCode).toBe(201);
     const body = res.json<{
-      id: string;
+      entryId: string;
       agentId: string;
       action: string;
       hash: string;
+      status: string;
     }>();
     expect(body.agentId).toBe(TEST_AGENT.id);
     expect(body.action).toBe('invoke');
     expect(typeof body.hash).toBe('string');
+    expect(body.status).toBe('success');
+    expect(body.entryId).toBe(auditEntry.id);
   });
 
   it('includes previousHash in chain when prior entry exists', async () => {
@@ -78,8 +82,8 @@ describe('POST /v1/audit/log', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    const body = res.json<{ previousHash: string | null }>();
-    expect(body.previousHash).toBe('previous_hash_value');
+    const body = res.json<{ prevHash: string | null }>();
+    expect(body.prevHash).toBe('previous_hash_value');
   });
 
   it('returns 400 when required fields are missing', async () => {
@@ -108,9 +112,9 @@ describe('GET /v1/audit/entries', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ entries: Array<{ id: string }> }>();
+    const body = res.json<{ entries: Array<{ entryId: string }> }>();
     expect(body.entries).toHaveLength(1);
-    expect(body.entries[0]!.id).toBe(auditEntry.id);
+    expect(body.entries[0]!.entryId).toBe(auditEntry.id);
   });
 
   it('accepts filter query params', async () => {
@@ -139,8 +143,8 @@ describe('GET /v1/audit/:id', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ id: string; hash: string }>();
-    expect(body.id).toBe(auditEntry.id);
+    const body = res.json<{ entryId: string; hash: string }>();
+    expect(body.entryId).toBe(auditEntry.id);
   });
 
   it('returns 404 for unknown entry', async () => {
@@ -169,7 +173,8 @@ describe('computeAuditHash', () => {
       action: 'invoke',
       metadata: {},
       timestamp: '2026-01-01T00:00:00.000Z',
-      previousHash: null,
+      prevHash: null,
+      status: 'success',
     };
     const hash1 = computeAuditHash(fields);
     const hash2 = computeAuditHash(fields);

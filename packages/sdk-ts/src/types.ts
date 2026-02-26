@@ -132,10 +132,11 @@ export interface LogAuditParams {
   grantId: string;
   action: string;
   metadata?: Record<string, unknown>;
+  status?: 'success' | 'failure' | 'blocked';
 }
 
 export interface AuditEntry {
-  id: string;
+  entryId: string;
   agentId: string;
   agentDid: string;
   grantId: string;
@@ -143,8 +144,9 @@ export interface AuditEntry {
   action: string;
   metadata: Record<string, unknown>;
   hash: string;
-  previousHash: string | null;
+  prevHash: string | null;
   timestamp: string;
+  status: 'success' | 'failure' | 'blocked';
 }
 
 export interface ListAuditParams {

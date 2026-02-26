@@ -10,12 +10,13 @@ interface AuditLogBody {
   principalId: string;
   action: string;
   metadata?: Record<string, unknown>;
+  status?: 'success' | 'failure' | 'blocked';
 }
 
 export async function auditRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/audit/log
   app.post<{ Body: AuditLogBody }>('/v1/audit/log', async (request, reply) => {
-    const { agentId, agentDid, grantId, principalId, action, metadata = {} } = request.body;
+    const { agentId, agentDid, grantId, principalId, action, metadata = {}, status = 'success' } = request.body;
 
     if (!agentId || !agentDid || !grantId || !principalId || !action) {
       return reply.status(400).send({
@@ -35,7 +36,7 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
       ORDER BY timestamp DESC
       LIMIT 1
     `;
-    const previousHash = lastRows[0] ? (lastRows[0]['hash'] as string) : null;
+    const prevHash = lastRows[0] ? (lastRows[0]['hash'] as string) : null;
 
     const id = newAuditEntryId();
     const timestamp = new Date().toISOString();
@@ -50,17 +51,18 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
       action,
       metadata,
       timestamp,
-      previousHash,
+      prevHash,
+      status,
     });
 
     const rows = await sql`
-      INSERT INTO audit_entries (id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp)
+      INSERT INTO audit_entries (id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status)
       VALUES (
         ${id}, ${agentId}, ${agentDid}, ${grantId}, ${principalId},
         ${developerId}, ${action}, ${JSON.stringify(metadata)}, ${hash},
-        ${previousHash}, ${timestamp}
+        ${prevHash}, ${timestamp}, ${status}
       )
-      RETURNING id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp
+      RETURNING id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status
     `;
 
     return reply.status(201).send(toAuditResponse(rows[0]!));
@@ -78,7 +80,7 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
     const action = query['action'] ?? null;
 
     const rows = await sql`
-      SELECT id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp
+      SELECT id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status
       FROM audit_entries
       WHERE developer_id = ${developerId}
         AND (${agentId}::text IS NULL OR agent_id = ${agentId ?? ''})
@@ -95,7 +97,7 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { id: string } }>('/v1/audit/:id', async (request, reply) => {
     const sql = getSql();
     const rows = await sql`
-      SELECT id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp
+      SELECT id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status
       FROM audit_entries
       WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
     `;
@@ -109,7 +111,7 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
 
 function toAuditResponse(row: Record<string, unknown>) {
   return {
-    id: row['id'],
+    entryId: row['id'],
     agentId: row['agent_id'],
     agentDid: row['agent_did'],
     grantId: row['grant_id'],
@@ -118,7 +120,8 @@ function toAuditResponse(row: Record<string, unknown>) {
     action: row['action'],
     metadata: row['metadata'],
     hash: row['hash'],
-    previousHash: row['previous_hash'],
+    prevHash: row['previous_hash'],
     timestamp: row['timestamp'],
+    status: row['status'] ?? 'success',
   };
 }
