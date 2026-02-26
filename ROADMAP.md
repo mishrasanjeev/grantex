@@ -33,7 +33,7 @@ Making Grantex native to every major agent framework.
 - [x] End-user permission dashboard (view + revoke grants)
 - [x] Webhook event delivery (grant created, revoked, token issued)
 - [ ] Stripe billing integration (Free / Pro / Enterprise tiers)
-- [ ] `grantex` CLI tool for local development
+- [x] `grantex` CLI tool for local development
 
 **Target: End of May 2026**
 
