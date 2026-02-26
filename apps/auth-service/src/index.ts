@@ -17,18 +17,33 @@ async function main() {
   const redis = getRedis();
   await redis.connect();
 
-  // Seed a developer API key if configured (dev only)
+  // Seed a live developer API key if configured (dev only)
   if (config.seedApiKey) {
     const seedKeyHash = hashApiKey(config.seedApiKey);
     const existing = await sql`SELECT id FROM developers WHERE api_key_hash = ${seedKeyHash}`;
     if (!existing[0]) {
       const devId = newDeveloperId();
       await sql`
-        INSERT INTO developers (id, api_key_hash, name)
-        VALUES (${devId}, ${seedKeyHash}, 'Seed Developer')
+        INSERT INTO developers (id, api_key_hash, name, mode)
+        VALUES (${devId}, ${seedKeyHash}, 'Seed Developer', 'live')
         ON CONFLICT (api_key_hash) DO NOTHING
       `;
-      console.log(`Seeded developer: id=${devId}`);
+      console.log(`Seeded live developer: id=${devId}`);
+    }
+  }
+
+  // Seed a sandbox developer API key if configured (dev only)
+  if (config.seedSandboxKey) {
+    const sandboxKeyHash = hashApiKey(config.seedSandboxKey);
+    const existing = await sql`SELECT id FROM developers WHERE api_key_hash = ${sandboxKeyHash}`;
+    if (!existing[0]) {
+      const devId = newDeveloperId();
+      await sql`
+        INSERT INTO developers (id, api_key_hash, name, mode)
+        VALUES (${devId}, ${sandboxKeyHash}, 'Seed Sandbox Developer', 'sandbox')
+        ON CONFLICT (api_key_hash) DO NOTHING
+      `;
+      console.log(`Seeded sandbox developer: id=${devId}`);
     }
   }
 

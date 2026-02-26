@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { buildTestApp, authHeader, seedAuth, sqlMock, TEST_AGENT, TEST_DEVELOPER } from './helpers.js';
+import { buildTestApp, authHeader, seedAuth, seedSandboxAuth, sqlMock, TEST_AGENT } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
@@ -64,6 +64,54 @@ describe('POST /v1/authorize', () => {
     });
 
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('POST /v1/authorize — sandbox mode', () => {
+  it('auto-approves and returns code immediately for sandbox developer', async () => {
+    seedSandboxAuth();
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // agent lookup
+    sqlMock.mockResolvedValueOnce([]);                       // insert
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        principalId: 'user_123',
+        scopes: ['read'],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ authRequestId: string; sandbox: boolean; code: string }>();
+    expect(body.sandbox).toBe(true);
+    expect(body.code).toBeDefined();
+    expect(typeof body.code).toBe('string');
+    expect(body.authRequestId).toBeDefined();
+  });
+
+  it('does not return code for live developer', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        principalId: 'user_123',
+        scopes: ['read'],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<Record<string, unknown>>();
+    expect(body['sandbox']).toBeUndefined();
+    expect(body['code']).toBeUndefined();
   });
 });
 

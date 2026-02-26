@@ -19,6 +19,7 @@ export const config = {
   autoGenerateKeys: process.env['AUTO_GENERATE_KEYS'] === 'true',
   jwtIssuer: optional('JWT_ISSUER', 'https://grantex.dev'),
   seedApiKey: process.env['SEED_API_KEY'] ?? null,
+  seedSandboxKey: process.env['SEED_SANDBOX_KEY'] ?? null,
 } as const;
 
 if (!config.rsaPrivateKey && !config.autoGenerateKeys) {

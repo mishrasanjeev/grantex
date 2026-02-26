@@ -13,7 +13,8 @@ export { sqlMock, mockRedis };
 // Seed data
 // ------------------------------------------------------------------
 export const TEST_API_KEY = 'test-api-key-1234';
-export const TEST_DEVELOPER = { id: 'dev_TEST', name: 'Test Developer' };
+export const TEST_DEVELOPER = { id: 'dev_TEST', name: 'Test Developer', mode: 'live' };
+export const TEST_SANDBOX_DEVELOPER = { ...TEST_DEVELOPER, mode: 'sandbox' };
 
 export const TEST_AGENT = {
   id: 'ag_TEST01AGENTID',
@@ -65,4 +66,8 @@ export function authHeader(): Record<string, string> {
 // ------------------------------------------------------------------
 export function seedAuth() {
   sqlMock.mockResolvedValueOnce([TEST_DEVELOPER]);
+}
+
+export function seedSandboxAuth() {
+  sqlMock.mockResolvedValueOnce([TEST_SANDBOX_DEVELOPER]);
 }

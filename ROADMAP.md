@@ -17,7 +17,7 @@ Getting the core protocol working end-to-end.
 - [x] Audit trail — append-only, hash-chained, queryable
 - [x] Multi-agent delegation — scope-subset enforcement, cascade revocation
 - [ ] Developer dashboard — agent registration, API keys, usage metrics
-- [ ] Sandbox mode — test integrations without real credentials
+- [x] Sandbox mode — auto-approves consent flow, returns code immediately
 - [x] Docker Compose self-hosting setup (config and docs)
 
 **Target: End of March 2026**

@@ -9,6 +9,7 @@ import { hashApiKey } from '../lib/hash.js';
 export interface Developer {
   id: string;
   name: string;
+  mode: 'live' | 'sandbox';
 }
 
 declare module 'fastify' {
@@ -35,8 +36,8 @@ async function authenticateRequest(
   const keyHash = hashApiKey(apiKey);
 
   const sql = getSql();
-  const rows = await sql<{ id: string; name: string }[]>`
-    SELECT id, name FROM developers WHERE api_key_hash = ${keyHash} LIMIT 1
+  const rows = await sql<{ id: string; name: string; mode: string }[]>`
+    SELECT id, name, mode FROM developers WHERE api_key_hash = ${keyHash} LIMIT 1
   `;
 
   const dev = rows[0];
@@ -49,7 +50,11 @@ async function authenticateRequest(
     return;
   }
 
-  request.developer = { id: dev.id, name: dev.name };
+  request.developer = {
+    id: dev.id,
+    name: dev.name,
+    mode: dev.mode === 'sandbox' ? 'sandbox' : 'live',
+  };
 }
 
 export async function authPlugin(app: FastifyInstance): Promise<void> {

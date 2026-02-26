@@ -44,22 +44,34 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
 
     const id = newAuthRequestId();
 
+    const isSandbox = request.developer.mode === 'sandbox';
+    const sandboxCode = isSandbox ? ulid() : null;
+
     await sql`
-      INSERT INTO auth_requests (id, agent_id, principal_id, developer_id, scopes, redirect_uri, state, expires_in, expires_at, audience)
+      INSERT INTO auth_requests (id, agent_id, principal_id, developer_id, scopes, redirect_uri, state, expires_in, expires_at, audience, status, code)
       VALUES (
         ${id}, ${agentId}, ${principalId}, ${developerId}, ${scopes},
         ${redirectUri ?? null}, ${state ?? null}, ${expiresIn}, ${expiresAt},
-        ${audience ?? null}
+        ${audience ?? null},
+        ${isSandbox ? 'approved' : 'pending'},
+        ${sandboxCode}
       )
     `;
 
     const consentUrl = `${config.jwtIssuer}/consent?req=${id}`;
 
-    return reply.status(201).send({
+    const responseBody: Record<string, unknown> = {
       authRequestId: id,
       consentUrl,
       expiresAt: expiresAt.toISOString(),
-    });
+    };
+
+    if (isSandbox) {
+      responseBody['sandbox'] = true;
+      responseBody['code'] = sandboxCode;
+    }
+
+    return reply.status(201).send(responseBody);
   });
 
   // POST /v1/authorize/:id/approve (internal/test endpoint)

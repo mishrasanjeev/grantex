@@ -43,14 +43,14 @@ curl http://localhost:3001/.well-known/jwks.json
 
 ## Default Dev Credentials
 
-The compose file seeds a developer account on first start:
+The compose file seeds two developer accounts on first start:
 
-| Setting | Value |
-|---------|-------|
-| API key | `dev-api-key-local` |
-| Authorization header | `Bearer dev-api-key-local` |
+| Account | API key | Mode |
+|---------|---------|------|
+| Live developer | `dev-api-key-local` | `live` — normal consent flow |
+| Sandbox developer | `sandbox-api-key-local` | `sandbox` — auto-approves grants |
 
-Use this key for all authenticated API calls during local development:
+Use the live key for testing the full consent flow, and the sandbox key when you want to skip the consent UI entirely:
 
 ```bash
 curl -X POST http://localhost:3001/v1/agents \
@@ -58,6 +58,46 @@ curl -X POST http://localhost:3001/v1/agents \
   -H "Content-Type: application/json" \
   -d '{"name":"my-agent","scopes":["calendar:read"]}'
 ```
+
+---
+
+## Sandbox Mode
+
+When you call `POST /v1/authorize` with a **sandbox API key**, the consent UI step is bypassed entirely. The response includes an auto-generated `code` you can pass directly to `POST /v1/token`:
+
+```bash
+# Step 1 — authorize (returns code immediately, no redirect needed)
+curl -s -X POST http://localhost:3001/v1/authorize \
+  -H "Authorization: Bearer sandbox-api-key-local" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agentId": "<your-agent-id>",
+    "principalId": "test-user-1",
+    "scopes": ["calendar:read"]
+  }'
+# → { "authRequestId": "...", "consentUrl": "...", "expiresAt": "...", "sandbox": true, "code": "01J..." }
+
+# Step 2 — exchange code for grant token
+curl -s -X POST http://localhost:3001/v1/token \
+  -H "Authorization: Bearer sandbox-api-key-local" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "<code from above>",
+    "agentId": "<your-agent-id>"
+  }'
+# → { "grantToken": "eyJ...", "refreshToken": "...", "grantId": "grnt_...", ... }
+```
+
+**Sandbox vs live behaviour:**
+
+| | Live | Sandbox |
+|---|---|---|
+| `POST /v1/authorize` response | `{ authRequestId, consentUrl, expiresAt }` | `{ authRequestId, consentUrl, expiresAt, sandbox: true, code }` |
+| Consent UI redirect required | Yes | No — use `code` directly |
+| Tokens issued | Real RS256 JWTs | Real RS256 JWTs (indistinguishable from live) |
+| Grant data stored | Yes | Yes |
+
+Sandbox tokens are real, verifiable JWTs — they just skip the human consent step. Do not use sandbox keys in production.
 
 ---
 
@@ -71,7 +111,8 @@ All variables are set in the `auth-service` block of `docker-compose.yml`.
 | `REDIS_URL` | Yes | Redis connection string |
 | `RSA_PRIVATE_KEY` | One of these | PEM-encoded RS256 private key |
 | `AUTO_GENERATE_KEYS` | One of these | Set `"true"` to generate keys on startup (dev only) |
-| `SEED_API_KEY` | No | If set, creates a developer account with this key on first start |
+| `SEED_API_KEY` | No | If set, creates a **live** developer account with this key on first start |
+| `SEED_SANDBOX_KEY` | No | If set, creates a **sandbox** developer account with this key on first start |
 | `PORT` | No | HTTP port (default: `3001`) |
 | `HOST` | No | Bind address (default: `0.0.0.0`) |
 | `JWT_ISSUER` | No | `iss` claim in issued tokens (default: `https://grantex.dev`) |
@@ -159,6 +200,7 @@ docker compose exec postgres psql -U grantex -d grantex \
 # Or directly against a remote database
 psql "$DATABASE_URL" -f apps/auth-service/src/db/migrations/001_initial.sql
 psql "$DATABASE_URL" -f apps/auth-service/src/db/migrations/002_spec_compliance.sql
+psql "$DATABASE_URL" -f apps/auth-service/src/db/migrations/003_sandbox.sql
 ```
 
 ---
