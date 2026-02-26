@@ -50,7 +50,7 @@ describe('signGrantToken / decodeTokenClaims', () => {
       dev: 'dev_001',
       scp: ['read', 'write'],
       jti: 'tok_001',
-      gid: 'grnt_001',
+      grnt: 'grnt_001',
       exp,
     });
 
@@ -66,7 +66,7 @@ describe('signGrantToken / decodeTokenClaims', () => {
     expect(claims['dev']).toBe('dev_001');
     expect(claims['scp']).toEqual(['read', 'write']);
     expect(claims.jti).toBe('tok_001');
-    expect(claims['gid']).toBe('grnt_001');
+    expect(claims['grnt']).toBe('grnt_001');
     expect(claims.exp).toBe(exp);
   });
 
@@ -86,7 +86,7 @@ describe('signGrantToken / decodeTokenClaims', () => {
     expect(claims['jti']).toBe('tok_abc');
   });
 
-  it('omits gid when not provided', async () => {
+  it('omits grnt when not provided', async () => {
     const exp = Math.floor(Date.now() / 1000) + 3600;
     const jwt = await signGrantToken({
       sub: 'user_x',
@@ -97,7 +97,7 @@ describe('signGrantToken / decodeTokenClaims', () => {
       exp,
     });
     const claims = decodeJwt(jwt);
-    expect(claims['gid']).toBeUndefined();
+    expect(claims['grnt']).toBeUndefined();
   });
 });
 

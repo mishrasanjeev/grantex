@@ -19,7 +19,7 @@ export async function tokensRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const jti = claims['jti'] as string | undefined;
-    const gid = (claims['gid'] ?? claims['jti']) as string | undefined;
+    const gid = (claims['grnt'] ?? claims['jti']) as string | undefined;
 
     if (!jti) return reply.send({ valid: false });
 

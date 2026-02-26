@@ -28,7 +28,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     const authRows = await sql`
       SELECT ar.id, ar.agent_id, ar.principal_id, ar.developer_id,
              ar.scopes, ar.expires_in, ar.expires_at, ar.status,
-             a.did AS agent_did
+             ar.audience, a.did AS agent_did
       FROM auth_requests ar
       JOIN agents a ON a.id = ar.agent_id
       WHERE ar.code = ${code}
@@ -92,13 +92,15 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     `;
 
     // Sign JWT
+    const audience = authReq['audience'] as string | null | undefined;
     const jwt = await signGrantToken({
       sub: authReq['principal_id'] as string,
       agt: authReq['agent_did'] as string,
       dev: authReq['developer_id'] as string,
       scp: authReq['scopes'] as string[],
       jti,
-      gid: grantId,
+      grnt: grantId,
+      ...(audience ? { aud: audience } : {}),
       exp: expTimestamp,
     });
 

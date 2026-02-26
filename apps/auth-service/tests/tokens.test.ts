@@ -17,7 +17,7 @@ beforeAll(async () => {
     dev: TEST_GRANT.developer_id,
     scp: TEST_GRANT.scopes,
     jti: 'tok_INTROSPECT01',
-    gid: TEST_GRANT.id,
+    grnt: TEST_GRANT.id,
     exp,
   });
 });

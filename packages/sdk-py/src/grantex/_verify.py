@@ -37,12 +37,20 @@ def verify_grant_token(
 
     signing_key = _fetch_signing_key(options.jwks_uri, header.get("kid"))
 
+    decode_kwargs: dict[str, Any] = {
+        "algorithms": ["RS256"],
+        "leeway": options.clock_tolerance,
+    }
+    if options.audience is not None:
+        decode_kwargs["audience"] = options.audience
+    else:
+        decode_kwargs["options"] = {"verify_aud": False}
+
     try:
         payload_data: dict[str, Any] = jwt.decode(
             token,
             signing_key,
-            algorithms=["RS256"],
-            leeway=options.clock_tolerance,
+            **decode_kwargs,
         )
     except jwt.PyJWTError as exc:
         raise GrantexTokenError(
@@ -70,7 +78,7 @@ def _map_online_verify_to_verified_grant(token: str) -> VerifiedGrant:
     try:
         payload_data: dict[str, Any] = jwt.decode(
             token,
-            options={"verify_signature": False},
+            options={"verify_signature": False, "verify_aud": False},
             algorithms=["RS256"],
         )
     except jwt.PyJWTError as exc:
@@ -139,14 +147,14 @@ def _build_payload(data: dict[str, Any]) -> GrantTokenPayload:
         iat=int(data["iat"]),
         exp=int(data["exp"]),
         jti=str(data["jti"]),
-        gid=data.get("gid"),
+        grnt=data.get("grnt"),
     )
 
 
 def _payload_to_verified_grant(payload: GrantTokenPayload) -> VerifiedGrant:
     return VerifiedGrant(
         token_id=payload.jti,
-        grant_id=payload.gid if payload.gid is not None else payload.jti,
+        grant_id=payload.grnt if payload.grnt is not None else payload.jti,
         principal_id=payload.sub,
         agent_did=payload.agt,
         developer_id=payload.dev,

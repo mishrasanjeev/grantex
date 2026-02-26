@@ -26,7 +26,7 @@ def _fake_jwt(payload: dict, alg: str = "RS256") -> str:
 def _make_verified_grant() -> VerifiedGrant:
     return VerifiedGrant(
         token_id=MOCK_JWT_PAYLOAD["jti"],
-        grant_id=MOCK_JWT_PAYLOAD["gid"],
+        grant_id=MOCK_JWT_PAYLOAD["grnt"],
         principal_id=MOCK_JWT_PAYLOAD["sub"],
         agent_did=MOCK_JWT_PAYLOAD["agt"],
         developer_id=MOCK_JWT_PAYLOAD["dev"],
@@ -106,16 +106,16 @@ def test_subset_scopes_pass(mocker: pytest.FixtureRequest) -> None:
     assert "calendar:read" in result.scopes
 
 
-def test_gid_fallback_to_jti(mocker: pytest.FixtureRequest) -> None:
-    payload_no_gid = {**MOCK_JWT_PAYLOAD}
-    del payload_no_gid["gid"]
-    token = _fake_jwt(payload_no_gid)
+def test_grnt_fallback_to_jti(mocker: pytest.FixtureRequest) -> None:
+    payload_no_grnt = {**MOCK_JWT_PAYLOAD}
+    del payload_no_grnt["grnt"]
+    token = _fake_jwt(payload_no_grnt)
 
     mocker.patch(  # type: ignore[attr-defined]
         "grantex._verify._fetch_signing_key", return_value="mock-key"
     )
     mocker.patch(  # type: ignore[attr-defined]
-        "jwt.decode", return_value=payload_no_gid
+        "jwt.decode", return_value=payload_no_grnt
     )
     options = VerifyGrantTokenOptions(jwks_uri="https://grantex.dev/.well-known/jwks.json")
     result = verify_grant_token(token, options)
@@ -161,7 +161,7 @@ def test_decode_without_verify_path(mocker: pytest.FixtureRequest) -> None:
     )
     result = _map_online_verify_to_verified_grant(token)
     assert result.token_id == MOCK_JWT_PAYLOAD["jti"]
-    assert result.grant_id == MOCK_JWT_PAYLOAD["gid"]
+    assert result.grant_id == MOCK_JWT_PAYLOAD["grnt"]
 
 
 def test_decode_error_raises_token_error(mocker: pytest.FixtureRequest) -> None:

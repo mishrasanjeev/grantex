@@ -83,7 +83,7 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const jti = claims['jti'] as string;
-    const gid = (claims['gid'] ?? claims['jti']) as string;
+    const gid = (claims['grnt'] ?? claims['jti']) as string;
 
     // Check Redis first
     const redis = getRedis();

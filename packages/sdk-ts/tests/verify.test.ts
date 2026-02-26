@@ -27,7 +27,7 @@ const VALID_PAYLOAD = {
   iat: 1700000000,
   exp: 1700086400,
   jti: 'tok_01HXYZ987xyz',
-  gid: 'grant_01',
+  grnt: 'grant_01',
 };
 
 describe('verifyGrantToken', () => {
@@ -95,12 +95,12 @@ describe('verifyGrantToken', () => {
     ).resolves.toBeDefined();
   });
 
-  it('falls back to jti for grantId when gid claim is absent', async () => {
-    const payloadNoGid = { ...VALID_PAYLOAD };
-    delete (payloadNoGid as Partial<typeof VALID_PAYLOAD>).gid;
+  it('falls back to jti for grantId when grnt claim is absent', async () => {
+    const payloadNoGrnt = { ...VALID_PAYLOAD };
+    delete (payloadNoGrnt as Partial<typeof VALID_PAYLOAD>).grnt;
 
     vi.mocked(jose.jwtVerify).mockResolvedValue({
-      payload: payloadNoGid,
+      payload: payloadNoGrnt,
       protectedHeader: { alg: 'RS256' },
     } as never);
 

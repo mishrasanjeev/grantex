@@ -11,12 +11,13 @@ interface AuthorizeBody {
   redirectUri?: string;
   state?: string;
   expiresIn?: string;
+  audience?: string;
 }
 
 export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/authorize
   app.post<{ Body: AuthorizeBody }>('/v1/authorize', async (request, reply) => {
-    const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h' } = request.body;
+    const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h', audience } = request.body;
 
     if (!agentId || !principalId || !scopes?.length) {
       return reply.status(400).send({
@@ -44,10 +45,11 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     const id = newAuthRequestId();
 
     await sql`
-      INSERT INTO auth_requests (id, agent_id, principal_id, developer_id, scopes, redirect_uri, state, expires_in, expires_at)
+      INSERT INTO auth_requests (id, agent_id, principal_id, developer_id, scopes, redirect_uri, state, expires_in, expires_at, audience)
       VALUES (
         ${id}, ${agentId}, ${principalId}, ${developerId}, ${scopes},
-        ${redirectUri ?? null}, ${state ?? null}, ${expiresIn}, ${expiresAt}
+        ${redirectUri ?? null}, ${state ?? null}, ${expiresIn}, ${expiresAt},
+        ${audience ?? null}
       )
     `;
 
