@@ -363,3 +363,62 @@ class DelegateParams:
         if self.expires_in is not None:
             body["expiresIn"] = self.expires_in
         return body
+
+
+# ─── Webhooks ──────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class CreateWebhookParams:
+    url: str
+    events: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"url": self.url, "events": self.events}
+
+
+@dataclass(frozen=True)
+class WebhookEndpoint:
+    id: str
+    url: str
+    events: tuple[str, ...]
+    created_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "WebhookEndpoint":
+        return cls(
+            id=data["id"],
+            url=data["url"],
+            events=tuple(data.get("events", [])),
+            created_at=data["createdAt"],
+        )
+
+
+@dataclass(frozen=True)
+class WebhookEndpointWithSecret:
+    id: str
+    url: str
+    events: tuple[str, ...]
+    created_at: str
+    secret: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "WebhookEndpointWithSecret":
+        return cls(
+            id=data["id"],
+            url=data["url"],
+            events=tuple(data.get("events", [])),
+            created_at=data["createdAt"],
+            secret=data.get("secret", ""),
+        )
+
+
+@dataclass(frozen=True)
+class ListWebhooksResponse:
+    webhooks: tuple[WebhookEndpoint, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ListWebhooksResponse":
+        return cls(
+            webhooks=tuple(WebhookEndpoint.from_dict(w) for w in data.get("webhooks", [])),
+        )

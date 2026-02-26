@@ -7,3 +7,4 @@ export const newRefreshTokenId = (): string => `ref_${ulid()}`;
 export const newAuthRequestId = (): string => `areq_${ulid()}`;
 export const newAuditEntryId = (): string => `alog_${ulid()}`;
 export const newDeveloperId = (): string => `dev_${ulid()}`;
+export const newWebhookId = (): string => `wh_${ulid()}`;
