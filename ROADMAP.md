@@ -29,7 +29,7 @@ Getting the core protocol working end-to-end.
 Making Grantex native to every major agent framework.
 
 - [x] LangChain integration (`@grantex/langchain`)
-- [ ] AutoGen integration (`@grantex/autogen`)
+- [x] AutoGen integration (`@grantex/autogen`)
 - [x] End-user permission dashboard (view + revoke grants)
 - [x] Webhook event delivery (grant created, revoked, token issued)
 - [ ] Stripe billing integration (Free / Pro / Enterprise tiers)
