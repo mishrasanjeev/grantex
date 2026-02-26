@@ -170,6 +170,7 @@ export interface ListAuditResponse {
 export interface VerifyGrantTokenOptions {
   jwksUri: string;
   requiredScopes?: string[];
+  audience?: string;
   /** @internal override clock for testing */
   clockTolerance?: number;
 }
@@ -186,5 +187,5 @@ export interface GrantTokenPayload {
   exp: number;
   jti: string;
   /** Grant record ID embedded as a custom claim */
-  gid?: string;
+  grnt?: string;
 }

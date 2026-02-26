@@ -31,7 +31,7 @@ const MOCK_PAYLOAD = {
   iat: 1700000000,
   exp: 1700086400,
   jti: 'tok_01',
-  gid: 'grant_01',
+  grnt: 'grant_01',
 };
 
 function makeFetch(status: number, body: unknown) {

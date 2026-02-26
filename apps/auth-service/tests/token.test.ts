@@ -63,7 +63,7 @@ describe('POST /v1/token', () => {
     expect(claims['agt']).toBe(TEST_AGENT.did);
     expect(claims['dev']).toBe(TEST_DEVELOPER.id);
     expect(claims['scp']).toEqual(['read', 'write']);
-    expect(claims['gid']).toBeDefined();
+    expect(claims['grnt']).toBeDefined();
   });
 
   it('returns 400 for invalid (not found) code', async () => {

@@ -51,7 +51,7 @@ MOCK_JWT_PAYLOAD: dict = {
     "iat": 1709000000,
     "exp": 9999999999,
     "jti": "tok_01HXYZ987xyz",
-    "gid": "grant_01HXYZ",
+    "grnt": "grant_01HXYZ",
 }
 
 MOCK_AUTHORIZATION_REQUEST: dict = {

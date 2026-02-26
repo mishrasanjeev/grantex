@@ -121,7 +121,7 @@ describe('POST /v1/grants/verify', () => {
       dev: TEST_GRANT.developer_id,
       scp: TEST_GRANT.scopes,
       jti: 'tok_revoked',
-      gid: TEST_GRANT.id,
+      grnt: TEST_GRANT.id,
       exp,
     });
 
@@ -150,7 +150,7 @@ describe('POST /v1/grants/verify', () => {
       dev: TEST_GRANT.developer_id,
       scp: TEST_GRANT.scopes,
       jti: 'tok_valid',
-      gid: TEST_GRANT.id,
+      grnt: TEST_GRANT.id,
       exp,
     });
 

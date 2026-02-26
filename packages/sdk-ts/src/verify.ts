@@ -21,6 +21,9 @@ export async function verifyGrantToken(
       ...(options.clockTolerance !== undefined
         ? { clockTolerance: options.clockTolerance }
         : {}),
+      ...(options.audience !== undefined
+        ? { audience: options.audience }
+        : {}),
     };
     const result = await jwtVerify(token, jwks, jwtOptions);
     payload = result.payload as unknown as GrantTokenPayload;
@@ -78,7 +81,7 @@ function payloadToVerifiedGrant(payload: GrantTokenPayload): VerifiedGrant {
 
   return {
     tokenId: payload.jti,
-    grantId: payload.gid ?? payload.jti,
+    grantId: payload.grnt ?? payload.jti,
     principalId: payload.sub,
     agentDid: payload.agt,
     developerId: payload.dev,

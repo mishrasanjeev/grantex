@@ -21,7 +21,8 @@ export interface GrantTokenPayload {
   dev: string;
   scp: string[];
   jti: string;
-  gid?: string;
+  grnt?: string;
+  aud?: string;
   exp: number;
 }
 
@@ -82,7 +83,7 @@ export async function signGrantToken(
     agt: payload.agt,
     dev: payload.dev,
     scp: payload.scp,
-    ...(payload.gid !== undefined ? { gid: payload.gid } : {}),
+    ...(payload.grnt !== undefined ? { grnt: payload.grnt } : {}),
   })
     .setProtectedHeader({ alg: 'RS256', kid })
     .setIssuer(config.jwtIssuer)
@@ -90,6 +91,10 @@ export async function signGrantToken(
     .setJti(payload.jti)
     .setIssuedAt()
     .setExpirationTime(payload.exp);
+
+  if (payload.aud !== undefined) {
+    builder.setAudience(payload.aud);
+  }
 
   return builder.sign(privateKey);
 }

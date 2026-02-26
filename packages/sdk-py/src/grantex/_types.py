@@ -318,6 +318,7 @@ class VerifyGrantTokenOptions:
     jwks_uri: str
     required_scopes: list[str] | None = None
     clock_tolerance: int = 0
+    audience: str | None = None
 
 
 # ─── Raw JWT payload shape ────────────────────────────────────────────────────
@@ -333,4 +334,4 @@ class GrantTokenPayload:
     iat: int
     exp: int
     jti: str
-    gid: str | None = None
+    grnt: str | None = None
