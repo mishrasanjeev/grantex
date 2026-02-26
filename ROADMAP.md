@@ -16,11 +16,11 @@ Getting the core protocol working end-to-end.
 - [x] Hosted consent UI — plain-language, mobile-first, white-label ready
 - [x] Audit trail — append-only, hash-chained, queryable
 - [x] Multi-agent delegation — scope-subset enforcement, cascade revocation
-- [ ] Developer dashboard — agent registration, API keys, usage metrics
+- [x] Developer dashboard — agents, grants, audit log, revoke grants
 - [x] Sandbox mode — auto-approves consent flow, returns code immediately
 - [x] Docker Compose self-hosting setup (config and docs)
 
-**Target: End of March 2026**
+**Target: End of March 2026** ✅ Complete
 
 ---
 
