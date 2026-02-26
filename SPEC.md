@@ -1,8 +1,8 @@
 # Grantex Protocol Specification
 
-**Version:** 0.1-draft  
-**Status:** Draft — seeking community feedback  
-**Last updated:** February 2026
+**Version:** 0.1-draft
+**Status:** Draft — seeking community feedback
+**Last updated:** February 2026 (rev 2)
 
 > This is a living document. Open an issue or Discussion to propose changes.
 
@@ -175,9 +175,12 @@ Content-Type: application/json
   "scopes": ["calendar:read", "payments:initiate:max_500"],
   "expiresIn": "24h",
   "redirectUri": "https://yourapp.com/auth/callback",
-  "state": "<csrf_token>"
+  "state": "<csrf_token>",
+  "audience": "https://api.targetservice.com"
 }
 ```
+
+`audience` is optional. When provided, it is embedded as the `aud` claim in the issued Grant Token (see §6.2). Services that accept tokens MUST reject tokens whose `aud` does not match their own identifier (§6.4).
 
 Response:
 
@@ -357,10 +360,10 @@ Refresh tokens are single-use and rotated on every refresh.
 Each entry's `hash` is computed as:
 
 ```
-SHA-256(entryId + agentId + grantId + action + timestamp + metadata_canonical + prevHash)
+SHA-256(entryId + agentId + grantId + action + status + timestamp + metadata_canonical + prevHash)
 ```
 
-This makes any retrospective tampering detectable.
+Fields are serialized as a canonical JSON object with keys sorted alphabetically. `prevHash` is `null` for the first entry in a chain. This makes any retrospective tampering detectable.
 
 ### 8.3 Log Action SDK Method
 
@@ -397,6 +400,45 @@ Rules:
 - Services MAY set a maximum delegation depth policy (recommended: 3)
 - The original Principal can revoke the root Grant to invalidate the entire chain
 
+### 9.1 Delegation Endpoint
+
+```http
+POST /v1/grants/delegate
+Authorization: Bearer <api_key>
+Content-Type: application/json
+
+{
+  "parentGrantToken": "eyJhbGciOiJSUzI1NiJ9...",
+  "subAgentId": "ag_01HXYZ_sub",
+  "scopes": ["email:read"],
+  "expiresIn": "1h"
+}
+```
+
+The server MUST:
+1. Decode and validate the `parentGrantToken` (signature and expiry are not re-verified server-side; revocation state is checked via Redis)
+2. Reject with `400` if the parent grant has been revoked
+3. Reject with `400` if any requested scope is not present in the parent token's `scp` claim
+4. Reject with `404` if `subAgentId` does not belong to the authenticated developer
+5. Compute expiry as `min(parent token exp, now + expiresIn)`
+
+Response `201`:
+
+```json
+{
+  "grantToken": "eyJhbGciOiJSUzI1NiJ9...",
+  "grantId": "grnt_01HXYZ_sub",
+  "scopes": ["email:read"],
+  "expiresAt": "2026-02-01T01:00:00Z"
+}
+```
+
+The issued `grantToken` carries `parentAgt`, `parentGrnt`, and `delegationDepth = parentDepth + 1`.
+
+### 9.2 Cascade Revocation
+
+Revoking a Grant via `DELETE /v1/grants/:id` MUST atomically revoke all descendant grants (grants whose `parent_grant_id` traces back to the revoked grant, at any depth). Implementations SHOULD use a recursive CTE or equivalent to traverse the delegation tree in a single database transaction.
+
 ---
 
 ## 10. Self-Hosting
@@ -411,9 +453,12 @@ Grantex-compatible implementations MUST expose:
 | `POST /v1/tokens/verify` | Verify token online |
 | `POST /v1/tokens/revoke` | Revoke token |
 | `GET /v1/grants` | List principal's grants |
-| `DELETE /v1/grants/:id` | Revoke grant |
+| `GET /v1/grants/:id` | Get a single grant |
+| `DELETE /v1/grants/:id` | Revoke grant (cascades to all descendants) |
+| `POST /v1/grants/delegate` | Issue a delegated sub-agent grant |
 | `POST /v1/audit/log` | Write audit entry |
 | `GET /v1/audit/entries` | Query audit log |
+| `GET /v1/audit/:id` | Get a single audit entry |
 | `GET /.well-known/jwks.json` | Public keys for offline verification |
 
 ---
@@ -448,6 +493,7 @@ The following are open for community discussion:
 
 | Version | Date | Notes |
 |---------|------|-------|
+| 0.1-draft rev 2 | Feb 2026 | Add `audience` to §5.2; add `status` to §8.2 hash formula; add §9.1 delegation endpoint and §9.2 cascade revocation; expand §10 endpoint table |
 | 0.1-draft | Feb 2026 | Initial draft — seeking community feedback |
 
 ---
