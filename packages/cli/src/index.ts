@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import { agentsCommand } from './commands/agents.js';
 import { auditCommand } from './commands/audit.js';
+import { complianceCommand } from './commands/compliance.js';
 import { configCommand } from './commands/config.js';
 import { grantsCommand } from './commands/grants.js';
 import { tokensCommand } from './commands/tokens.js';
@@ -20,6 +21,7 @@ program.addCommand(grantsCommand());
 program.addCommand(tokensCommand());
 program.addCommand(auditCommand());
 program.addCommand(webhooksCommand());
+program.addCommand(complianceCommand());
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.error((err instanceof Error ? err.message : String(err)));

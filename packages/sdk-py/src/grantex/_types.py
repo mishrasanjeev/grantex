@@ -590,3 +590,98 @@ class ListPoliciesResponse:
             policies=tuple(Policy.from_dict(p) for p in data.get("policies", [])),
             total=data.get("total", 0),
         )
+
+
+# ─── Compliance ────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class ComplianceSummary:
+    generated_at: str
+    agents: dict[str, int]
+    grants: dict[str, int]
+    audit_entries: dict[str, int]
+    policies: dict[str, int]
+    plan: str
+    since: str | None = None
+    until: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ComplianceSummary":
+        return cls(
+            generated_at=data["generatedAt"],
+            agents=data["agents"],
+            grants=data["grants"],
+            audit_entries=data["auditEntries"],
+            policies=data["policies"],
+            plan=data["plan"],
+            since=data.get("since"),
+            until=data.get("until"),
+        )
+
+
+@dataclass
+class ComplianceExportGrantsParams:
+    since: str | None = None
+    until: str | None = None
+    status: str | None = None  # 'active' | 'revoked' | 'expired'
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        if self.since is not None:
+            result["since"] = self.since
+        if self.until is not None:
+            result["until"] = self.until
+        if self.status is not None:
+            result["status"] = self.status
+        return result
+
+
+@dataclass
+class ComplianceExportAuditParams:
+    since: str | None = None
+    until: str | None = None
+    agent_id: str | None = None
+    status: str | None = None  # 'success' | 'failure' | 'blocked'
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        if self.since is not None:
+            result["since"] = self.since
+        if self.until is not None:
+            result["until"] = self.until
+        if self.agent_id is not None:
+            result["agentId"] = self.agent_id
+        if self.status is not None:
+            result["status"] = self.status
+        return result
+
+
+@dataclass(frozen=True)
+class ComplianceGrantsExport:
+    generated_at: str
+    total: int
+    grants: tuple[Grant, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ComplianceGrantsExport":
+        return cls(
+            generated_at=data["generatedAt"],
+            total=data["total"],
+            grants=tuple(Grant.from_dict(g) for g in data.get("grants", [])),
+        )
+
+
+@dataclass(frozen=True)
+class ComplianceAuditExport:
+    generated_at: str
+    total: int
+    entries: tuple[AuditEntry, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ComplianceAuditExport":
+        return cls(
+            generated_at=data["generatedAt"],
+            total=data["total"],
+            entries=tuple(AuditEntry.from_dict(e) for e in data.get("entries", [])),
+        )

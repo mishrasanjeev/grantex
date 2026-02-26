@@ -6,6 +6,7 @@ from ._http import HttpClient
 from ._types import AuthorizationRequest, AuthorizeParams
 from .resources._agents import AgentsClient
 from .resources._audit import AuditClient
+from .resources._compliance import ComplianceClient
 from .resources._grants import GrantsClient
 from .resources._tokens import TokensClient
 from .resources._webhooks import WebhooksClient
@@ -25,6 +26,7 @@ class Grantex:
     webhooks: WebhooksClient
     billing: BillingClient
     policies: PoliciesClient
+    compliance: ComplianceClient
 
     def __init__(
         self,
@@ -53,6 +55,7 @@ class Grantex:
         self.webhooks = WebhooksClient(self._http)
         self.billing = BillingClient(self._http)
         self.policies = PoliciesClient(self._http)
+        self.compliance = ComplianceClient(self._http)
 
     def authorize(self, params: AuthorizeParams) -> AuthorizationRequest:
         """Initiate the delegated authorization flow for a user.

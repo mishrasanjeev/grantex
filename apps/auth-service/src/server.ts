@@ -16,6 +16,7 @@ import { dashboardRoutes } from './routes/dashboard.js';
 import { webhooksRoutes } from './routes/webhooks.js';
 import { billingRoutes } from './routes/billing.js';
 import { policiesRoutes } from './routes/policies.js';
+import { complianceRoutes } from './routes/compliance.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -50,6 +51,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(webhooksRoutes);
   await app.register(billingRoutes);
   await app.register(policiesRoutes);
+  await app.register(complianceRoutes);
 
   return app;
 }

@@ -59,4 +59,10 @@ export type {
   CreatePolicyParams,
   UpdatePolicyParams,
   ListPoliciesResponse,
+  // Compliance
+  ComplianceSummary,
+  ComplianceExportGrantsParams,
+  ComplianceExportAuditParams,
+  ComplianceGrantsExport,
+  ComplianceAuditExport,
 } from './types.js';
