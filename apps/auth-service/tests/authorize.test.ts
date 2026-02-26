@@ -13,6 +13,8 @@ describe('POST /v1/authorize', () => {
     seedAuth();
     // Agent lookup
     sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]);
+    // Policy lookup — no policies
+    sqlMock.mockResolvedValueOnce([]);
     // Insert
     sqlMock.mockResolvedValueOnce([]);
 
@@ -71,6 +73,7 @@ describe('POST /v1/authorize — sandbox mode', () => {
   it('auto-approves and returns code immediately for sandbox developer', async () => {
     seedSandboxAuth();
     sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // agent lookup
+    sqlMock.mockResolvedValueOnce([]);                       // policy lookup
     sqlMock.mockResolvedValueOnce([]);                       // insert
 
     const res = await app.inject({
@@ -95,6 +98,7 @@ describe('POST /v1/authorize — sandbox mode', () => {
   it('does not return code for live developer', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]);
+    sqlMock.mockResolvedValueOnce([]); // policy lookup
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
@@ -147,6 +151,67 @@ describe('POST /v1/authorize/:id/approve', () => {
     });
 
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('POST /v1/authorize — policy engine', () => {
+  const DENY_POLICY = {
+    id: 'pol_TEST',
+    effect: 'deny',
+    priority: 10,
+    agent_id: null,
+    principal_id: null,
+    scopes: null,
+    time_of_day_start: null,
+    time_of_day_end: null,
+  };
+
+  const ALLOW_POLICY = {
+    id: 'pol_ALLOW',
+    effect: 'allow',
+    priority: 10,
+    agent_id: null,
+    principal_id: null,
+    scopes: null,
+    time_of_day_start: null,
+    time_of_day_end: null,
+  };
+
+  it('returns 403 when a deny policy matches', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // agent lookup
+    sqlMock.mockResolvedValueOnce([DENY_POLICY]);            // policy lookup → deny
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: { agentId: TEST_AGENT.id, principalId: 'user_123', scopes: ['read'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    const body = res.json<{ code: string }>();
+    expect(body.code).toBe('POLICY_DENIED');
+  });
+
+  it('auto-approves and returns code when an allow policy matches', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // agent lookup
+    sqlMock.mockResolvedValueOnce([ALLOW_POLICY]);           // policy lookup → allow
+    sqlMock.mockResolvedValueOnce([]);                       // insert
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: { agentId: TEST_AGENT.id, principalId: 'user_123', scopes: ['read'] },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ policyEnforced: boolean; effect: string; code: string }>();
+    expect(body.policyEnforced).toBe(true);
+    expect(body.effect).toBe('allow');
+    expect(body.code).toBeDefined();
   });
 });
 

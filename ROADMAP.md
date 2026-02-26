@@ -47,7 +47,7 @@ Compliance features that make Grantex a must-have for regulated environments.
 - [x] Vercel AI SDK integration
 - [ ] Enterprise compliance dashboard (org-wide view, exports)
 - [ ] SOC2/GDPR evidence pack export
-- [ ] Policy engine (auto-approve / auto-deny rules)
+- [x] Policy engine (auto-approve / auto-deny rules)
 - [ ] SCIM / SSO for enterprise developer orgs
 - [ ] Anomaly detection (unusual agent behavior alerts)
 

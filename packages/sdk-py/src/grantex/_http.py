@@ -35,6 +35,9 @@ class HttpClient:
     def post(self, path: str, body: Any = None) -> Any:
         return self._request("POST", path, body=body)
 
+    def patch(self, path: str, body: Any = None) -> Any:
+        return self._request("PATCH", path, body=body)
+
     def delete(self, path: str) -> Any:
         return self._request("DELETE", path)
 

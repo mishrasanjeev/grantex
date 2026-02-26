@@ -257,3 +257,46 @@ export interface CreatePortalParams {
 export interface PortalResponse {
   portalUrl: string;
 }
+
+// ─── Policies ─────────────────────────────────────────────────────────────────
+
+export interface Policy {
+  id: string;
+  name: string;
+  effect: 'allow' | 'deny';
+  priority: number;
+  agentId: string | null;
+  principalId: string | null;
+  scopes: string[] | null;
+  timeOfDayStart: string | null;
+  timeOfDayEnd: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreatePolicyParams {
+  name: string;
+  effect: 'allow' | 'deny';
+  priority?: number;
+  agentId?: string;
+  principalId?: string;
+  scopes?: string[];
+  timeOfDayStart?: string;
+  timeOfDayEnd?: string;
+}
+
+export interface UpdatePolicyParams {
+  name?: string;
+  effect?: 'allow' | 'deny';
+  priority?: number;
+  agentId?: string | null;
+  principalId?: string | null;
+  scopes?: string[] | null;
+  timeOfDayStart?: string | null;
+  timeOfDayEnd?: string | null;
+}
+
+export interface ListPoliciesResponse {
+  policies: Policy[];
+  total: number;
+}

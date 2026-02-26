@@ -54,4 +54,9 @@ export type {
   CheckoutResponse,
   CreatePortalParams,
   PortalResponse,
+  // Policies
+  Policy,
+  CreatePolicyParams,
+  UpdatePolicyParams,
+  ListPoliciesResponse,
 } from './types.js';
