@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "grantex-crewai"
+version = "0.1.0"
+description = "Grantex integration for CrewAI — scope-enforced, audited agent tools"
+requires-python = ">=3.9"
+dependencies = [
+    "grantex>=0.1.0",
+]
+
+[project.optional-dependencies]
+crewai = ["crewai>=0.28.0"]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+]
+
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/grantex_crewai"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+strict = true
+python_version = "3.9"
