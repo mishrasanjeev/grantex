@@ -15,11 +15,11 @@
 
 <br/>
 
-> **Status:** Protocol spec and SDK skeleton are published. Core services (token issuance, consent UI, audit chain) are in active development. Not yet production-ready.
+> **Status:** Protocol spec, auth service (token issuance + consent UI + audit chain), and both SDKs are fully implemented. Multi-agent delegation is live. Not yet production-ready — hosted cloud and framework integrations are next.
 
 ```bash
-npm install @grantex/sdk        # TypeScript / Node.js  (skeleton)
-pip install grantex             # Python               (skeleton)
+npm install @grantex/sdk        # TypeScript / Node.js
+pip install grantex             # Python
 ```
 
 </div>
@@ -138,8 +138,9 @@ await travelAgent.run({ grantToken, task: 'Book cheapest flight to Delhi on Marc
 // Inside your agent — one line, zero overhead
 await grantex.audit.log({
   agentId: agent.id,
-  grantId: grant.id,
+  grantId: grant.grantId,
   action: 'payment.initiated',
+  status: 'success',
   metadata: { amount: 420, currency: 'USD', merchant: 'Air India' },
 });
 ```
@@ -178,8 +179,9 @@ grant = grantex.grants.verify(token)
 # Log an action
 grantex.audit.log(
     agent_id=agent.id,
-    grant_id=grant.id,
+    grant_id=grant.grant_id,
     action="transaction.read",
+    status="success",
     metadata={"account_last4": "4242"},
 )
 ```
@@ -199,7 +201,8 @@ Grantex tokens are standard JWTs (RS256) extended with agent-specific claims. An
   "scp": ["calendar:read", "payments:initiate:max_500"],
   "iat": 1709000000,
   "exp": 1709086400,
-  "jti": "tok_01HXYZ987xyz"
+  "jti": "tok_01HXYZ987xyz",
+  "grnt": "grnt_01HXYZ456def"
 }
 ```
 
@@ -210,6 +213,52 @@ Grantex tokens are standard JWTs (RS256) extended with agent-specific claims. An
 | `dev` | The developer org that built the agent |
 | `scp` | Exact scopes granted — services should check these |
 | `jti` | Unique token ID — used for real-time revocation |
+| `grnt` | Grant record ID — links token to the persisted grant |
+| `aud` | Intended audience (optional) — services should reject tokens with a mismatched `aud` |
+
+**Delegation claims** (present on sub-agent tokens):
+
+| Claim | Meaning |
+|-------|---------|
+| `parentAgt` | DID of the parent agent that spawned this sub-agent |
+| `parentGrnt` | Grant ID of the parent grant — full delegation chain is traceable |
+| `delegationDepth` | How many hops from the root grant (root = 0) |
+
+---
+
+## Multi-Agent Delegation
+
+Grantex supports multi-agent pipelines where a root agent spawns sub-agents with narrower scopes. Sub-agent tokens carry a full delegation chain that any service can inspect.
+
+```typescript
+// Root agent has a grant for ['calendar:read', 'calendar:write', 'email:send']
+// It spawns a sub-agent that only needs calendar read access
+
+const delegated = await grantex.grants.delegate({
+  parentGrantToken: rootGrantToken,   // root agent's token
+  subAgentId: subAgent.id,            // sub-agent to authorize
+  scopes: ['calendar:read'],          // must be ⊆ parent scopes
+  expiresIn: '1h',                    // capped at parent token's expiry
+});
+
+// delegated.grantToken is a fully signed JWT with:
+//   parentAgt, parentGrnt, delegationDepth = 1
+```
+
+```python
+# Python equivalent
+delegated = grantex.grants.delegate(
+    parent_grant_token=root_grant_token,
+    sub_agent_id=sub_agent.id,
+    scopes=["calendar:read"],
+    expires_in="1h",
+)
+```
+
+**Constraints enforced by the protocol:**
+- Sub-agent scopes must be a strict subset of the parent's scopes — scope escalation is rejected with 400
+- Sub-agent token expiry is `min(parent expiry, requested expiry)` — sub-agents can never outlive their parent
+- Revoking a root grant cascades to all descendant grants atomically
 
 ---
 
@@ -294,12 +343,13 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 **v0.1 — Foundation** *(current)*
 - [x] Protocol specification draft
-- [x] TypeScript SDK skeleton
-- [x] Python SDK skeleton
-- [ ] Auth service (token issuance + verification)
-- [ ] Identity service (DID generation + JWKS)
-- [ ] Hosted consent UI
-- [ ] Audit trail (hash-chained append-only log)
+- [x] TypeScript SDK
+- [x] Python SDK
+- [x] Auth service (token issuance + verification + revocation)
+- [x] Identity service (DID generation + JWKS)
+- [x] Hosted consent UI
+- [x] Audit trail (hash-chained append-only log)
+- [x] Multi-agent delegation (scope-subset enforcement + cascade revocation)
 - [ ] Developer dashboard
 
 **v0.2 — Integrations**
@@ -311,7 +361,6 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 **v0.3 — Enterprise**
 - [ ] CrewAI integration
 - [ ] Enterprise compliance dashboard + exports
-- [ ] Multi-agent chain-of-trust
 - [ ] Policy engine (auto-approve / auto-deny rules)
 
 **v1.0 — Stable Protocol**
