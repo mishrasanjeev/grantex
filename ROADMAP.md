@@ -4,20 +4,21 @@
 
 ---
 
-## Now — v0.1 Foundation *(Active)*
+## Now — v0.1 Foundation *(Wrapping up)*
 
 Getting the core protocol working end-to-end.
 
 - [x] Protocol specification draft (SPEC.md)
-- [x] TypeScript SDK skeleton (`@grantex/sdk`)
-- [x] Python SDK skeleton (`grantex`)
-- [ ] Auth service — token issuance, verification, refresh, revocation
-- [ ] Identity service — DID generation, JWKS endpoint, key rotation
-- [ ] Hosted consent UI — plain-language, mobile-first, white-label ready
-- [ ] Audit trail — append-only, hash-chained, queryable
+- [x] TypeScript SDK (`@grantex/sdk`)
+- [x] Python SDK (`grantex`)
+- [x] Auth service — token issuance, verification, refresh, revocation
+- [x] Identity service — DID generation, JWKS endpoint, key rotation
+- [x] Hosted consent UI — plain-language, mobile-first, white-label ready
+- [x] Audit trail — append-only, hash-chained, queryable
+- [x] Multi-agent delegation — scope-subset enforcement, cascade revocation
 - [ ] Developer dashboard — agent registration, API keys, usage metrics
 - [ ] Sandbox mode — test integrations without real credentials
-- [ ] Docker Compose self-hosting setup
+- [ ] Docker Compose self-hosting setup (config and docs)
 
 **Target: End of March 2026**
 
@@ -58,7 +59,6 @@ Compliance features that make Grantex a must-have for regulated environments.
 
 Protocol finalization and ecosystem maturity.
 
-- [ ] Multi-agent chain-of-trust (sub-agent authorization)
 - [ ] Protocol specification finalized and frozen
 - [ ] Independent security audit
 - [ ] SOC2 Type I certification
