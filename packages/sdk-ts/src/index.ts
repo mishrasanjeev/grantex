@@ -65,4 +65,7 @@ export type {
   ComplianceExportAuditParams,
   ComplianceGrantsExport,
   ComplianceAuditExport,
+  EvidencePackParams,
+  EvidencePack,
+  ChainIntegrity,
 } from './types.js';

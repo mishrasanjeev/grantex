@@ -5,6 +5,8 @@ import type {
   ComplianceExportGrantsParams,
   ComplianceGrantsExport,
   ComplianceSummary,
+  EvidencePack,
+  EvidencePackParams,
 } from '../types.js';
 
 export class ComplianceClient {
@@ -37,6 +39,15 @@ export class ComplianceClient {
       ? `/v1/compliance/export/audit?${query}`
       : '/v1/compliance/export/audit';
     return this.#http.get<ComplianceAuditExport>(path);
+  }
+
+  /** Generate a full SOC2/GDPR evidence pack with chain integrity verification. */
+  evidencePack(params?: EvidencePackParams): Promise<EvidencePack> {
+    const query = buildQuery(params);
+    const path = query
+      ? `/v1/compliance/evidence-pack?${query}`
+      : '/v1/compliance/evidence-pack';
+    return this.#http.get<EvidencePack>(path);
   }
 }
 
