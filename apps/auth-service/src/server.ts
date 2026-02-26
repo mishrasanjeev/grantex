@@ -13,6 +13,7 @@ import { auditRoutes } from './routes/audit.js';
 import { consentRoutes } from './routes/consent.js';
 import { delegateRoutes } from './routes/delegate.js';
 import { dashboardRoutes } from './routes/dashboard.js';
+import { webhooksRoutes } from './routes/webhooks.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -44,6 +45,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(delegateRoutes);
   await app.register(tokensRoutes);
   await app.register(auditRoutes);
+  await app.register(webhooksRoutes);
 
   return app;
 }

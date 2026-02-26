@@ -32,6 +32,13 @@ vi.mock('../src/redis/client.js', () => ({
   closeRedis: vi.fn(),
 }));
 
+// Mock webhook delivery — prevents fireWebhooks from consuming SQL mock slots
+// in route tests. The actual webhook routes are tested in webhooks.test.ts.
+vi.mock('../src/lib/webhook.js', () => ({
+  fireWebhooks: vi.fn().mockResolvedValue(undefined),
+  signWebhookPayload: vi.fn().mockReturnValue('sha256=mock'),
+}));
+
 // ------------------------------------------------------------------
 // Reset all mocks before each test
 // ------------------------------------------------------------------

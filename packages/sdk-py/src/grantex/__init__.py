@@ -15,6 +15,7 @@ from ._types import (
     AuditEntry,
     AuthorizationRequest,
     AuthorizeParams,
+    CreateWebhookParams,
     DelegateParams,
     Grant,
     GrantTokenPayload,
@@ -23,12 +24,16 @@ from ._types import (
     ListAuditResponse,
     ListGrantsParams,
     ListGrantsResponse,
+    ListWebhooksResponse,
     LogAuditParams,
     VerifiedGrant,
     VerifyGrantTokenOptions,
     VerifyTokenResponse,
+    WebhookEndpoint,
+    WebhookEndpointWithSecret,
 )
 from ._verify import verify_grant_token
+from ._webhook import verify_webhook_signature
 
 __version__ = "0.1.0"
 
@@ -37,6 +42,8 @@ __all__ = [
     "Grantex",
     # Standalone verify
     "verify_grant_token",
+    # Webhook signature verification
+    "verify_webhook_signature",
     # Errors
     "GrantexError",
     "GrantexApiError",
@@ -48,6 +55,7 @@ __all__ = [
     "AuditEntry",
     "AuthorizationRequest",
     "AuthorizeParams",
+    "CreateWebhookParams",
     "DelegateParams",
     "Grant",
     "GrantTokenPayload",
@@ -56,10 +64,13 @@ __all__ = [
     "ListAuditResponse",
     "ListGrantsParams",
     "ListGrantsResponse",
+    "ListWebhooksResponse",
     "LogAuditParams",
     "VerifiedGrant",
     "VerifyGrantTokenOptions",
     "VerifyTokenResponse",
+    "WebhookEndpoint",
+    "WebhookEndpointWithSecret",
     # Version
     "__version__",
 ]

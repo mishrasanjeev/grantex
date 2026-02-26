@@ -180,6 +180,30 @@ export interface ListAuditResponse {
   pageSize: number;
 }
 
+// ─── Webhooks ─────────────────────────────────────────────────────────────────
+
+export type WebhookEventType = 'grant.created' | 'grant.revoked' | 'token.issued';
+
+export interface CreateWebhookParams {
+  url: string;
+  events: WebhookEventType[];
+}
+
+export interface WebhookEndpoint {
+  id: string;
+  url: string;
+  events: WebhookEventType[];
+  createdAt: string;
+}
+
+export interface WebhookEndpointWithSecret extends WebhookEndpoint {
+  secret: string;
+}
+
+export interface ListWebhooksResponse {
+  webhooks: WebhookEndpoint[];
+}
+
 // ─── Verify ───────────────────────────────────────────────────────────────────
 
 export interface VerifyGrantTokenOptions {

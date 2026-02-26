@@ -4,6 +4,9 @@ export { Grantex } from './client.js';
 // Standalone token verification (no Grantex account needed)
 export { verifyGrantToken } from './verify.js';
 
+// Webhook signature verification
+export { verifyWebhookSignature } from './webhook.js';
+
 // Error classes
 export {
   GrantexError,
@@ -39,4 +42,10 @@ export type {
   ListAuditResponse,
   // Verify
   VerifyGrantTokenOptions,
+  // Webhooks
+  WebhookEventType,
+  CreateWebhookParams,
+  WebhookEndpoint,
+  WebhookEndpointWithSecret,
+  ListWebhooksResponse,
 } from './types.js';

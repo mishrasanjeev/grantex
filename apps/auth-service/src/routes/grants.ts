@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
 import { decodeTokenClaims } from '../lib/crypto.js';
+import { fireWebhooks } from '../lib/webhook.js';
 
 export async function grantsRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/grants
@@ -83,6 +84,12 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
       const descTtl = Math.max(1, Math.floor((descExpiresAt.getTime() - Date.now()) / 1000));
       await redis.set(`revoked:grant:${row['id'] as string}`, '1', 'EX', descTtl);
     }
+
+    // Fire webhook event (best-effort, non-blocking)
+    fireWebhooks(request.developer.id, 'grant.revoked', {
+      grantId: request.params.id,
+      cascade: descendantRows.length > 0,
+    }).catch(() => {});
 
     return reply.status(204).send();
   });

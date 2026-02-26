@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
+import { fireWebhooks } from '../lib/webhook.js';
 
 interface TokenBody {
   code: string;
@@ -103,6 +104,17 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       ...(audience ? { aud: audience } : {}),
       exp: expTimestamp,
     });
+
+    // Fire webhook events (best-effort, non-blocking)
+    const webhookData = {
+      grantId,
+      agentId: authReq['agent_id'] as string,
+      principalId: authReq['principal_id'] as string,
+      scopes: authReq['scopes'] as string[],
+      expiresAt: expiresAt.toISOString(),
+    };
+    fireWebhooks(developerId, 'grant.created', webhookData).catch(() => {});
+    fireWebhooks(developerId, 'token.issued', { tokenId: jti, ...webhookData }).catch(() => {});
 
     return reply.status(201).send({
       grantToken: jwt,

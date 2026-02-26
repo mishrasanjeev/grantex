@@ -8,6 +8,7 @@ from .resources._agents import AgentsClient
 from .resources._audit import AuditClient
 from .resources._grants import GrantsClient
 from .resources._tokens import TokensClient
+from .resources._webhooks import WebhooksClient
 
 _DEFAULT_BASE_URL = "https://api.grantex.dev"
 
@@ -19,6 +20,7 @@ class Grantex:
     grants: GrantsClient
     tokens: TokensClient
     audit: AuditClient
+    webhooks: WebhooksClient
 
     def __init__(
         self,
@@ -44,6 +46,7 @@ class Grantex:
         self.grants = GrantsClient(self._http)
         self.tokens = TokensClient(self._http)
         self.audit = AuditClient(self._http)
+        self.webhooks = WebhooksClient(self._http)
 
     def authorize(self, params: AuthorizeParams) -> AuthorizationRequest:
         """Initiate the delegated authorization flow for a user.
