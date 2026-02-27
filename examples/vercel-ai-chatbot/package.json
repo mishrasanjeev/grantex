@@ -1,0 +1,20 @@
+{
+  "name": "grantex-vercel-ai-chatbot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npx tsx src/index.ts"
+  },
+  "dependencies": {
+    "@grantex/sdk": "^0.1.1",
+    "@grantex/vercel-ai": "^0.1.1",
+    "ai": "^6.0.0",
+    "@ai-sdk/openai": "^3.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}
