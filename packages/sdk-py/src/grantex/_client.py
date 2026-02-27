@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import os
 
+import httpx
+
 from ._http import HttpClient
-from ._types import AuthorizationRequest, AuthorizeParams
+from ._types import AuthorizationRequest, AuthorizeParams, RotateKeyResponse, SignupParams, SignupResponse
 from .resources._agents import AgentsClient
 from .resources._audit import AuditClient
 from .resources._anomalies import AnomaliesClient
@@ -65,6 +67,41 @@ class Grantex:
         self.anomalies = AnomaliesClient(self._http)
         self.scim = ScimClient(self._http)
         self.sso = SsoClient(self._http)
+
+    @staticmethod
+    def signup(
+        params: SignupParams,
+        *,
+        base_url: str = _DEFAULT_BASE_URL,
+    ) -> SignupResponse:
+        """Create a new developer account without an API key.
+
+        Returns the developer ID and a one-time API key.
+        """
+        url = f"{base_url.rstrip('/')}/v1/signup"
+        response = httpx.post(
+            url,
+            json=params.to_dict(),
+            headers={"Accept": "application/json"},
+        )
+        if not response.is_success:
+            body = None
+            try:
+                body = response.json()
+            except Exception:
+                pass
+            message = (
+                body["message"]
+                if isinstance(body, dict) and isinstance(body.get("message"), str)
+                else f"HTTP {response.status_code}"
+            )
+            raise ValueError(message)
+        return SignupResponse.from_dict(response.json())
+
+    def rotate_key(self) -> RotateKeyResponse:
+        """Rotate the current API key. Returns a new key; the old key is invalidated."""
+        data = self._http.post("/v1/keys/rotate")
+        return RotateKeyResponse.from_dict(data)
 
     def authorize(self, params: AuthorizeParams) -> AuthorizationRequest:
         """Initiate the delegated authorization flow for a user.
