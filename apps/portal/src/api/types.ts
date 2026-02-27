@@ -24,7 +24,7 @@ export interface RotateKeyResponse {
 
 // ── Agents ───────────────────────────────────────────────────────────────
 export interface Agent {
-  id: string;
+  agentId: string;
   did: string;
   developerId: string;
   name: string;
@@ -43,7 +43,7 @@ export interface CreateAgentRequest {
 
 // ── Grants ───────────────────────────────────────────────────────────────
 export interface Grant {
-  id: string;
+  grantId: string;
   agentId: string;
   principalId: string;
   developerId: string;
@@ -51,9 +51,9 @@ export interface Grant {
   status: 'active' | 'revoked' | 'expired';
   issuedAt: string;
   expiresAt: string;
-  revokedAt: string | null;
+  revokedAt?: string;
   parentGrantId?: string;
-  delegationDepth?: number;
+  delegationDepth: number;
 }
 
 // ── Audit ────────────────────────────────────────────────────────────────
