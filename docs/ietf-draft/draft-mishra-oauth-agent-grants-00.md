@@ -19,9 +19,9 @@ stand_alone: yes
 pi: [toc, sortrefs, symrefs]
 
 author:
-  - fullname: Sanjeev Mishra
+  - fullname: Sanjeev Kumar
     organization: Grantex
-    email: spec@grantex.dev
+    email: mishra.sanjeev@gmail.com
     uri: https://grantex.dev
 
 normative:

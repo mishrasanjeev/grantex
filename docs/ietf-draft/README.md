@@ -48,7 +48,7 @@ Alternatively, paste the XML into the [IETF Author Tools](https://author-tools.i
 1. Render the XML as above, or use `kdrfc` to produce the `.xml` file directly.
 2. Go to **https://datatracker.ietf.org/submit/**.
 3. Upload `draft-mishra-oauth-agent-grants-00.xml` (or `.txt`).
-4. The Datatracker will validate the document, assign a submission ID, and send a confirmation email to the address listed in the author block (`spec@grantex.dev`).
+4. The Datatracker will validate the document, assign a submission ID, and send a confirmation email to the address listed in the author block (`mishra.sanjeev@gmail.com`).
 5. Confirm the submission via the email link.
 
 The draft will appear at:
