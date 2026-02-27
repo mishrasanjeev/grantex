@@ -1,6 +1,7 @@
 import { config } from './config.js';
 import { initKeys } from './lib/crypto.js';
 import { getSql } from './db/client.js';
+import { runMigrations } from './db/migrate.js';
 import { getRedis } from './redis/client.js';
 import { buildApp } from './server.js';
 import { hashApiKey } from './lib/hash.js';
@@ -12,6 +13,9 @@ async function main() {
 
   // Initialize DB connection
   const sql = getSql();
+
+  // Run migrations (idempotent — safe to re-run on every startup)
+  await runMigrations(sql);
 
   // Initialize Redis connection
   const redis = getRedis();
