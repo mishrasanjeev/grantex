@@ -1,11 +1,15 @@
 import type { HttpClient } from '../http.js';
-import type { VerifyTokenResponse } from '../types.js';
+import type { ExchangeTokenParams, ExchangeTokenResponse, VerifyTokenResponse } from '../types.js';
 
 export class TokensClient {
   readonly #http: HttpClient;
 
   constructor(http: HttpClient) {
     this.#http = http;
+  }
+
+  exchange(params: ExchangeTokenParams): Promise<ExchangeTokenResponse> {
+    return this.#http.post<ExchangeTokenResponse>('/v1/token', params);
   }
 
   verify(token: string): Promise<VerifyTokenResponse> {

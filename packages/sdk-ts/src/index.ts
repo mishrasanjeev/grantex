@@ -38,6 +38,8 @@ export type {
   VerifiedGrant,
   DelegateParams,
   // Tokens
+  ExchangeTokenParams,
+  ExchangeTokenResponse,
   VerifyTokenResponse,
   // Audit
   LogAuditParams,

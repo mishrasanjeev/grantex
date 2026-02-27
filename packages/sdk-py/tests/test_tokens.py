@@ -50,6 +50,37 @@ def test_revoke(client: Grantex) -> None:
 
 
 @respx.mock
+def test_exchange(client: Grantex) -> None:
+    payload = {
+        "grantToken": "eyJ...",
+        "expiresAt": "2026-03-01T00:00:00Z",
+        "scopes": ["calendar:read"],
+        "refreshToken": "rt_abc",
+        "grantId": "grnt_01HXYZ",
+    }
+    import json
+
+    route = respx.post("https://api.grantex.dev/v1/token").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+
+    from grantex import ExchangeTokenParams
+
+    response = client.tokens.exchange(
+        ExchangeTokenParams(code="auth_code_123", agent_id="ag_01")
+    )
+
+    assert response.grant_token == "eyJ..."
+    assert response.grant_id == "grnt_01HXYZ"
+    assert response.scopes == ("calendar:read",)
+    assert response.refresh_token == "rt_abc"
+
+    body = json.loads(route.calls[0].request.content)
+    assert body["code"] == "auth_code_123"
+    assert body["agentId"] == "ag_01"
+
+
+@respx.mock
 def test_verify_inactive_token(client: Grantex) -> None:
     respx.post("https://api.grantex.dev/v1/tokens/verify").mock(
         return_value=httpx.Response(200, json={"valid": False})

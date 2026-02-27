@@ -42,16 +42,7 @@ async function getGrantToken(
   const code = (authRequest as unknown as Record<string, unknown>)['code'] as string;
   if (!code) throw new Error('No code returned — use the sandbox API key.');
 
-  const res = await fetch(`${BASE_URL}/v1/token`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ code, agentId }),
-  });
-  if (!res.ok) throw new Error(`Token exchange failed: ${await res.text()}`);
-  return res.json() as Promise<{ grantToken: string; grantId: string }>;
+  return grantex.tokens.exchange({ code, agentId });
 }
 
 async function main(): Promise<void> {

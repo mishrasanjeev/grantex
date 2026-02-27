@@ -263,6 +263,34 @@ class VerifyTokenResponse:
         )
 
 
+@dataclass
+class ExchangeTokenParams:
+    code: str
+    agent_id: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"code": self.code, "agentId": self.agent_id}
+
+
+@dataclass(frozen=True)
+class ExchangeTokenResponse:
+    grant_token: str
+    expires_at: str
+    scopes: tuple[str, ...]
+    refresh_token: str
+    grant_id: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ExchangeTokenResponse:
+        return cls(
+            grant_token=data["grantToken"],
+            expires_at=data["expiresAt"],
+            scopes=tuple(data.get("scopes", [])),
+            refresh_token=data["refreshToken"],
+            grant_id=data["grantId"],
+        )
+
+
 # ─── Audit ────────────────────────────────────────────────────────────────────
 
 
