@@ -60,6 +60,7 @@ async function authenticateRequest(
 export async function authPlugin(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', async (request, reply) => {
     if (request.url.startsWith('/.well-known/')) return;
+    if (request.url.startsWith('/scim/')) return;  // SCIM uses its own bearer token auth
     if ((request.routeOptions.config as { skipAuth?: boolean } | undefined)?.skipAuth) return;
     await authenticateRequest(request, reply);
   });

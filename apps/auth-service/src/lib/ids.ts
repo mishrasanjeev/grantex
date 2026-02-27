@@ -11,3 +11,5 @@ export const newWebhookId = (): string => `wh_${ulid()}`;
 export const newSubscriptionId = (): string => `sub_${ulid()}`;
 export const newPolicyId = (): string => `pol_${ulid()}`;
 export const newAnomalyId = (): string => `anm_${ulid()}`;
+export const newScimTokenId = (): string => `scimtok_${ulid()}`;
+export const newScimUserId = (): string => `scimuser_${ulid()}`;

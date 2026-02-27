@@ -399,3 +399,95 @@ export interface ListAnomaliesResponse {
   anomalies: Anomaly[];
   total: number;
 }
+
+// ─── SCIM ─────────────────────────────────────────────────────────────────────
+
+export interface ScimEmail {
+  value: string;
+  primary?: boolean;
+}
+
+export interface ScimUserMeta {
+  resourceType: string;
+  created: string;
+  lastModified: string;
+}
+
+export interface ScimUser {
+  id: string;
+  externalId?: string;
+  userName: string;
+  displayName?: string;
+  active: boolean;
+  emails: ScimEmail[];
+  meta: ScimUserMeta;
+}
+
+export interface ScimListResponse {
+  totalResults: number;
+  startIndex: number;
+  itemsPerPage: number;
+  Resources: ScimUser[];
+}
+
+export interface CreateScimUserParams {
+  userName: string;
+  displayName?: string;
+  externalId?: string;
+  emails?: ScimEmail[];
+  active?: boolean;
+}
+
+export interface UpdateScimUserParams {
+  userName?: string;
+  displayName?: string;
+  active?: boolean;
+  emails?: ScimEmail[];
+}
+
+export interface ScimToken {
+  id: string;
+  label: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface ScimTokenWithSecret extends ScimToken {
+  token: string;
+}
+
+export interface CreateScimTokenParams {
+  label: string;
+}
+
+export interface ListScimTokensResponse {
+  tokens: ScimToken[];
+}
+
+// ─── SSO ──────────────────────────────────────────────────────────────────────
+
+export interface SsoConfig {
+  issuerUrl: string;
+  clientId: string;
+  redirectUri: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSsoConfigParams {
+  issuerUrl: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+}
+
+export interface SsoLoginResponse {
+  authorizeUrl: string;
+}
+
+export interface SsoCallbackResponse {
+  email: string | null;
+  name: string | null;
+  sub: string | null;
+  developerId: string;
+}

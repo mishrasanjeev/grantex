@@ -8,6 +8,8 @@ import { BillingClient } from './resources/billing.js';
 import { PoliciesClient } from './resources/policies.js';
 import { ComplianceClient } from './resources/compliance.js';
 import { AnomaliesClient } from './resources/anomalies.js';
+import { ScimClient } from './resources/scim.js';
+import { SsoClient } from './resources/sso.js';
 import type {
   AuthorizationRequest,
   AuthorizeParams,
@@ -28,6 +30,8 @@ export class Grantex {
   readonly policies: PoliciesClient;
   readonly compliance: ComplianceClient;
   readonly anomalies: AnomaliesClient;
+  readonly scim: ScimClient;
+  readonly sso: SsoClient;
 
   constructor(options: GrantexClientOptions = {}) {
     const apiKey =
@@ -54,6 +58,8 @@ export class Grantex {
     this.policies = new PoliciesClient(this.#http);
     this.compliance = new ComplianceClient(this.#http);
     this.anomalies = new AnomaliesClient(this.#http);
+    this.scim = new ScimClient(this.#http);
+    this.sso = new SsoClient(this.#http);
   }
 
   /**
