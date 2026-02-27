@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { cn } from '../../lib/cn';
 
 const links = [
@@ -13,36 +14,72 @@ const links = [
   { to: '/dashboard/settings', label: 'Settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export function Sidebar({ open, onClose }: SidebarProps) {
+  const location = useLocation();
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    onClose();
+  }, [location.pathname, onClose]);
+
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-56 bg-gx-surface border-r border-gx-border flex flex-col">
-      <div className="h-14 flex items-center px-5 border-b border-gx-border">
-        <a href="/" className="font-mono text-base font-bold text-gx-accent no-underline">
-          grant<span className="text-gx-text">ex</span>
-        </a>
-      </div>
-      <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto">
-        {links.map((link) => (
-          <NavLink
-            key={link.to}
-            to={link.to}
-            end={link.to === '/dashboard'}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
-                isActive
-                  ? 'bg-gx-accent/10 text-gx-accent'
-                  : 'text-gx-muted hover:text-gx-text hover:bg-gx-bg',
-              )
-            }
+    <>
+      {/* Overlay (mobile only) */}
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          'fixed left-0 top-0 bottom-0 w-56 bg-gx-surface border-r border-gx-border flex flex-col z-50 transition-transform duration-200 lg:translate-x-0',
+          open ? 'translate-x-0' : '-translate-x-full',
+        )}
+      >
+        <div className="h-14 flex items-center justify-between px-5 border-b border-gx-border">
+          <a href="/" className="font-mono text-base font-bold text-gx-accent no-underline">
+            grant<span className="text-gx-text">ex</span>
+          </a>
+          <button
+            onClick={onClose}
+            className="lg:hidden text-gx-muted hover:text-gx-text transition-colors"
           >
-            <svg className="w-4.5 h-4.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d={link.icon} />
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
-            {link.label}
-          </NavLink>
-        ))}
-      </nav>
-    </aside>
+          </button>
+        </div>
+        <nav className="flex-1 py-3 px-3 space-y-0.5 overflow-y-auto">
+          {links.map((link) => (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              end={link.to === '/dashboard'}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors',
+                  isActive
+                    ? 'bg-gx-accent/10 text-gx-accent'
+                    : 'text-gx-muted hover:text-gx-text hover:bg-gx-bg',
+                )
+              }
+            >
+              <svg className="w-4.5 h-4.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d={link.icon} />
+              </svg>
+              {link.label}
+            </NavLink>
+          ))}
+        </nav>
+      </aside>
+    </>
   );
 }
