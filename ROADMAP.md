@@ -48,8 +48,8 @@ Compliance features that make Grantex a must-have for regulated environments.
 - [x] Enterprise compliance dashboard (org-wide view, exports)
 - [x] SOC2/GDPR evidence pack export
 - [x] Policy engine (auto-approve / auto-deny rules)
-- [ ] SCIM / SSO for enterprise developer orgs
-- [ ] Anomaly detection (unusual agent behavior alerts)
+- [x] SCIM / SSO for enterprise developer orgs
+- [x] Anomaly detection (unusual agent behavior alerts)
 
 **Target: End of August 2026**
 

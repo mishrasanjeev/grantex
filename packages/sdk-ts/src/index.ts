@@ -65,6 +65,22 @@ export type {
   Anomaly,
   DetectAnomaliesResponse,
   ListAnomaliesResponse,
+  // SCIM
+  ScimEmail,
+  ScimUserMeta,
+  ScimUser,
+  ScimListResponse,
+  CreateScimUserParams,
+  UpdateScimUserParams,
+  ScimToken,
+  ScimTokenWithSecret,
+  CreateScimTokenParams,
+  ListScimTokensResponse,
+  // SSO
+  SsoConfig,
+  CreateSsoConfigParams,
+  SsoLoginResponse,
+  SsoCallbackResponse,
   // Compliance
   ComplianceSummary,
   ComplianceExportGrantsParams,

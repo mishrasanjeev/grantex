@@ -7,6 +7,8 @@ from ._types import AuthorizationRequest, AuthorizeParams
 from .resources._agents import AgentsClient
 from .resources._audit import AuditClient
 from .resources._anomalies import AnomaliesClient
+from .resources._scim import ScimClient
+from .resources._sso import SsoClient
 from .resources._compliance import ComplianceClient
 from .resources._grants import GrantsClient
 from .resources._tokens import TokensClient
@@ -29,6 +31,8 @@ class Grantex:
     policies: PoliciesClient
     compliance: ComplianceClient
     anomalies: AnomaliesClient
+    scim: ScimClient
+    sso: SsoClient
 
     def __init__(
         self,
@@ -59,6 +63,8 @@ class Grantex:
         self.policies = PoliciesClient(self._http)
         self.compliance = ComplianceClient(self._http)
         self.anomalies = AnomaliesClient(self._http)
+        self.scim = ScimClient(self._http)
+        self.sso = SsoClient(self._http)
 
     def authorize(self, params: AuthorizeParams) -> AuthorizationRequest:
         """Initiate the delegated authorization flow for a user.

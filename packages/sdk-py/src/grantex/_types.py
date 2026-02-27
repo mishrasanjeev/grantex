@@ -818,3 +818,198 @@ class EvidencePack:
             policies=tuple(Policy.from_dict(p) for p in data.get("policies", [])),
             chain_integrity=ChainIntegrity.from_dict(data["chainIntegrity"]),
         )
+
+
+# ─── SCIM ──────────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class ScimEmail:
+    value: str
+    primary: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ScimEmail":
+        return cls(value=data["value"], primary=data.get("primary", False))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"value": self.value, "primary": self.primary}
+
+
+@dataclass(frozen=True)
+class ScimUserMeta:
+    resource_type: str
+    created: str
+    last_modified: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ScimUserMeta":
+        return cls(
+            resource_type=data["resourceType"],
+            created=data["created"],
+            last_modified=data["lastModified"],
+        )
+
+
+@dataclass(frozen=True)
+class ScimUser:
+    id: str
+    user_name: str
+    active: bool
+    emails: tuple[ScimEmail, ...]
+    meta: ScimUserMeta
+    external_id: str | None = None
+    display_name: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ScimUser":
+        return cls(
+            id=data["id"],
+            user_name=data["userName"],
+            active=data.get("active", True),
+            emails=tuple(ScimEmail.from_dict(e) for e in data.get("emails", [])),
+            meta=ScimUserMeta.from_dict(data["meta"]),
+            external_id=data.get("externalId"),
+            display_name=data.get("displayName"),
+        )
+
+
+@dataclass(frozen=True)
+class ScimListResponse:
+    total_results: int
+    start_index: int
+    items_per_page: int
+    resources: tuple[ScimUser, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ScimListResponse":
+        return cls(
+            total_results=data["totalResults"],
+            start_index=data["startIndex"],
+            items_per_page=data["itemsPerPage"],
+            resources=tuple(ScimUser.from_dict(u) for u in data.get("Resources", [])),
+        )
+
+
+@dataclass
+class CreateScimUserParams:
+    user_name: str
+    display_name: str | None = None
+    external_id: str | None = None
+    emails: list[dict[str, Any]] | None = None
+    active: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {"userName": self.user_name, "active": self.active}
+        if self.display_name is not None:
+            body["displayName"] = self.display_name
+        if self.external_id is not None:
+            body["externalId"] = self.external_id
+        if self.emails is not None:
+            body["emails"] = self.emails
+        return body
+
+
+@dataclass(frozen=True)
+class ScimToken:
+    id: str
+    label: str
+    created_at: str
+    last_used_at: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ScimToken":
+        return cls(
+            id=data["id"],
+            label=data["label"],
+            created_at=data["createdAt"],
+            last_used_at=data.get("lastUsedAt"),
+        )
+
+
+@dataclass(frozen=True)
+class ScimTokenWithSecret(ScimToken):
+    token: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ScimTokenWithSecret":
+        return cls(
+            id=data["id"],
+            label=data["label"],
+            created_at=data["createdAt"],
+            last_used_at=data.get("lastUsedAt"),
+            token=data.get("token", ""),
+        )
+
+
+@dataclass(frozen=True)
+class ListScimTokensResponse:
+    tokens: tuple[ScimToken, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ListScimTokensResponse":
+        return cls(tokens=tuple(ScimToken.from_dict(t) for t in data.get("tokens", [])))
+
+
+# ─── SSO ───────────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class SsoConfig:
+    issuer_url: str
+    client_id: str
+    redirect_uri: str
+    created_at: str
+    updated_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SsoConfig":
+        return cls(
+            issuer_url=data["issuerUrl"],
+            client_id=data["clientId"],
+            redirect_uri=data["redirectUri"],
+            created_at=data["createdAt"],
+            updated_at=data["updatedAt"],
+        )
+
+
+@dataclass
+class CreateSsoConfigParams:
+    issuer_url: str
+    client_id: str
+    client_secret: str
+    redirect_uri: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "issuerUrl": self.issuer_url,
+            "clientId": self.client_id,
+            "clientSecret": self.client_secret,
+            "redirectUri": self.redirect_uri,
+        }
+
+
+@dataclass(frozen=True)
+class SsoLoginResponse:
+    authorize_url: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SsoLoginResponse":
+        return cls(authorize_url=data["authorizeUrl"])
+
+
+@dataclass(frozen=True)
+class SsoCallbackResponse:
+    developer_id: str
+    email: str | None = None
+    name: str | None = None
+    sub: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SsoCallbackResponse":
+        return cls(
+            developer_id=data["developerId"],
+            email=data.get("email"),
+            name=data.get("name"),
+            sub=data.get("sub"),
+        )

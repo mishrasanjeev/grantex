@@ -52,6 +52,20 @@ from ._types import (
     VerifyTokenResponse,
     WebhookEndpoint,
     WebhookEndpointWithSecret,
+    # SCIM
+    ScimEmail,
+    ScimUserMeta,
+    ScimUser,
+    ScimListResponse,
+    CreateScimUserParams,
+    ScimToken,
+    ScimTokenWithSecret,
+    ListScimTokensResponse,
+    # SSO
+    SsoConfig,
+    CreateSsoConfigParams,
+    SsoLoginResponse,
+    SsoCallbackResponse,
 )
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook_signature
@@ -113,6 +127,20 @@ __all__ = [
     "VerifyTokenResponse",
     "WebhookEndpoint",
     "WebhookEndpointWithSecret",
+    # SCIM
+    "ScimEmail",
+    "ScimUserMeta",
+    "ScimUser",
+    "ScimListResponse",
+    "CreateScimUserParams",
+    "ScimToken",
+    "ScimTokenWithSecret",
+    "ListScimTokensResponse",
+    # SSO
+    "SsoConfig",
+    "CreateSsoConfigParams",
+    "SsoLoginResponse",
+    "SsoCallbackResponse",
     # Version
     "__version__",
 ]
