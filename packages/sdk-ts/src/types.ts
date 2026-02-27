@@ -150,6 +150,19 @@ export interface DelegateParams {
 
 // ─── Tokens ───────────────────────────────────────────────────────────────────
 
+export interface ExchangeTokenParams {
+  code: string;
+  agentId: string;
+}
+
+export interface ExchangeTokenResponse {
+  grantToken: string;
+  expiresAt: string;
+  scopes: string[];
+  refreshToken: string;
+  grantId: string;
+}
+
 export interface VerifyTokenResponse {
   valid: boolean;
   grantId?: string;

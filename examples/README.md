@@ -4,7 +4,8 @@ Runnable examples showing how to use the Grantex SDK and framework integrations.
 
 ## Prerequisites
 
-- **Node.js 18+**
+- **Node.js 18+** (TypeScript examples)
+- **Python 3.9+** (Python examples)
 - **Docker** (for the local Grantex stack)
 
 ## Start the local stack
@@ -31,13 +32,23 @@ All examples use the sandbox key by default.
 | [`quickstart-ts`](./quickstart-ts/) | Core authorization flow — register, authorize, token, verify, audit, revoke | `@grantex/sdk` |
 | [`langchain-agent`](./langchain-agent/) | LangChain agent with scoped tools and audit callbacks | `@grantex/sdk`, `@grantex/langchain` |
 | [`vercel-ai-chatbot`](./vercel-ai-chatbot/) | Vercel AI SDK tools with scope enforcement and audit logging | `@grantex/sdk`, `@grantex/vercel-ai` |
+| [`quickstart-py`](./quickstart-py/) | Core authorization flow in Python — register, authorize, token, verify, audit, revoke | `grantex` |
+| [`crewai-agent`](./crewai-agent/) | CrewAI agent with scoped tools and audit logging | `grantex`, `grantex-crewai` |
 
 ## Running an example
 
+**TypeScript examples:**
 ```bash
 cd examples/<example-name>
 npm install
 npm start
+```
+
+**Python examples:**
+```bash
+cd examples/<example-name>
+pip install -r requirements.txt
+python main.py
 ```
 
 Each example has its own README with expected output and environment variable options.

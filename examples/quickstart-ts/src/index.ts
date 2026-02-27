@@ -49,25 +49,7 @@ async function main(): Promise<void> {
   console.log('Sandbox auto-approved, code:', code);
 
   // ── 3. Exchange code for a grant token ─────────────────────────────
-  // POST /v1/token is not part of the SDK surface, so we use fetch directly.
-  const tokenRes = await fetch(`${BASE_URL}/v1/token`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ code, agentId: agent.id }),
-  });
-  if (!tokenRes.ok) {
-    console.error('Token exchange failed:', await tokenRes.text());
-    process.exit(1);
-  }
-  const token = (await tokenRes.json()) as {
-    grantToken: string;
-    expiresAt: string;
-    scopes: string[];
-    grantId: string;
-  };
+  const token = await grantex.tokens.exchange({ code, agentId: agent.id });
   console.log('Grant token received, grantId:', token.grantId);
   console.log('Scopes:', token.scopes.join(', '));
 
