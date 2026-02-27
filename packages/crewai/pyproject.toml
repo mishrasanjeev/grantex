@@ -4,13 +4,33 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grantex-crewai"
-version = "0.1.0"
-description = "Grantex integration for CrewAI — scope-enforced, audited agent tools"
+version = "0.1.1"
+description = "CrewAI integration for the Grantex delegated authorization protocol — scope-enforced, audited agent tools"
+readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.9"
+keywords = ["grantex", "crewai", "ai-agents", "authorization", "oauth", "tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries",
+]
 dependencies = [
     "grantex>=0.1.0",
 ]
+
+[project.urls]
+Homepage = "https://grantex.dev"
+Documentation = "https://github.com/mishrasanjeev/grantex"
+Repository = "https://github.com/mishrasanjeev/grantex"
+Issues = "https://github.com/mishrasanjeev/grantex/issues"
 
 [project.optional-dependencies]
 crewai = ["crewai>=0.28.0"]
