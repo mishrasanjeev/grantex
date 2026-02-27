@@ -13,17 +13,10 @@ import { AuditDetail } from './pages/audit/AuditDetail';
 import { PolicyList } from './pages/policies/PolicyList';
 import { PolicyForm } from './pages/policies/PolicyForm';
 import { AnomalyList } from './pages/anomalies/AnomalyList';
+import { ComplianceDashboard } from './pages/compliance/ComplianceDashboard';
+import { BillingPage } from './pages/billing/BillingPage';
+import { SettingsPage } from './pages/settings/SettingsPage';
 import { RequireAuth } from './RequireAuth';
-
-// Placeholder pages for future PRs
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div className="py-8">
-      <h1 className="text-xl font-semibold text-gx-text mb-2">{title}</h1>
-      <p className="text-sm text-gx-muted">Coming soon.</p>
-    </div>
-  );
-}
 
 export const routes: RouteObject[] = [
   { path: '/dashboard/login', element: <Login /> },
@@ -48,9 +41,9 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/policies/new', element: <PolicyForm /> },
       { path: '/dashboard/policies/:id/edit', element: <PolicyForm /> },
       { path: '/dashboard/anomalies', element: <AnomalyList /> },
-      { path: '/dashboard/compliance', element: <Placeholder title="Compliance" /> },
-      { path: '/dashboard/billing', element: <Placeholder title="Billing" /> },
-      { path: '/dashboard/settings', element: <Placeholder title="Settings" /> },
+      { path: '/dashboard/compliance', element: <ComplianceDashboard /> },
+      { path: '/dashboard/billing', element: <BillingPage /> },
+      { path: '/dashboard/settings', element: <SettingsPage /> },
     ],
   },
   { path: '*', element: <Navigate to="/dashboard/login" replace /> },
