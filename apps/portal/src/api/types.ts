@@ -75,12 +75,14 @@ export interface AuditEntry {
 // ── Policies ─────────────────────────────────────────────────────────────
 export interface Policy {
   id: string;
-  developerId: string;
   name: string;
   effect: 'allow' | 'deny';
-  scopes: string[];
-  conditions: Record<string, unknown>;
   priority: number;
+  agentId: string | null;
+  principalId: string | null;
+  scopes: string[] | null;
+  timeOfDayStart: string | null;
+  timeOfDayEnd: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -88,23 +90,25 @@ export interface Policy {
 export interface CreatePolicyRequest {
   name: string;
   effect: 'allow' | 'deny';
-  scopes: string[];
-  conditions?: Record<string, unknown>;
   priority?: number;
+  agentId?: string;
+  principalId?: string;
+  scopes?: string[];
+  timeOfDayStart?: string;
+  timeOfDayEnd?: string;
 }
 
 // ── Anomalies ────────────────────────────────────────────────────────────
 export interface Anomaly {
   id: string;
-  developerId: string;
-  type: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  type: 'rate_spike' | 'high_failure_rate' | 'new_principal' | 'off_hours_activity';
+  severity: 'low' | 'medium' | 'high';
+  agentId: string | null;
+  principalId: string | null;
   description: string;
-  resourceType: string;
-  resourceId: string;
   metadata: Record<string, unknown>;
-  acknowledged: boolean;
-  createdAt: string;
+  detectedAt: string;
+  acknowledgedAt: string | null;
 }
 
 // ── Compliance ───────────────────────────────────────────────────────────
