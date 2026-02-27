@@ -1,6 +1,6 @@
 {
   "name": "@grantex/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "TypeScript SDK for the Grantex delegated authorization protocol",
   "type": "module",
   "exports": {
@@ -12,7 +12,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
