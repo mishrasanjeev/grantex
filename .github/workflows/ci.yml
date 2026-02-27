@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'apps/auth-service/**'
+      - 'apps/portal/**'
       - 'packages/sdk-ts/**'
       - 'packages/sdk-py/**'
       - '.github/workflows/ci.yml'
@@ -85,3 +86,29 @@ jobs:
 
       - name: Test
         run: pytest
+
+  portal:
+    name: Developer Portal
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/portal
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/portal/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
