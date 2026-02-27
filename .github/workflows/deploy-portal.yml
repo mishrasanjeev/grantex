@@ -1,0 +1,48 @@
+name: Deploy Portal
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/portal/**'
+      - 'web/**'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/deploy-portal.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy to Firebase
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/portal/package-lock.json
+
+      - name: Install portal dependencies
+        working-directory: apps/portal
+        run: npm ci
+
+      - name: Build portal
+        working-directory: apps/portal
+        run: npm run build
+
+      - name: Copy portal build to web/dashboard
+        run: |
+          mkdir -p web/dashboard
+          cp -r apps/portal/dist/* web/dashboard/
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live

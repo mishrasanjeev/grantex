@@ -1,4 +1,4 @@
-import { Navigate, type RouteObject } from 'react-router-dom';
+import { type RouteObject } from 'react-router-dom';
 import { Shell } from './components/layout/Shell';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
@@ -16,6 +16,7 @@ import { AnomalyList } from './pages/anomalies/AnomalyList';
 import { ComplianceDashboard } from './pages/compliance/ComplianceDashboard';
 import { BillingPage } from './pages/billing/BillingPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
+import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './RequireAuth';
 
 export const routes: RouteObject[] = [
@@ -44,7 +45,8 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/compliance', element: <ComplianceDashboard /> },
       { path: '/dashboard/billing', element: <BillingPage /> },
       { path: '/dashboard/settings', element: <SettingsPage /> },
+      { path: '/dashboard/*', element: <NotFound /> },
     ],
   },
-  { path: '*', element: <Navigate to="/dashboard/login" replace /> },
+  { path: '*', element: <NotFound /> },
 ];
