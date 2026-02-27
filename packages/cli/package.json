@@ -21,6 +21,9 @@
     "chalk": "^5.3.0",
     "commander": "^12.0.0"
   },
+  "overrides": {
+    "esbuild": ">=0.25.0"
+  },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "typescript": "^5.3.3",

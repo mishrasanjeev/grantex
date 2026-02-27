@@ -24,6 +24,10 @@
     "@grantex/sdk": ">=0.1.0",
     "@langchain/core": ">=0.3.0"
   },
+  "overrides": {
+    "esbuild": ">=0.25.0",
+    "langsmith": ">=0.4.6"
+  },
   "devDependencies": {
     "@grantex/sdk": "file:../sdk-ts",
     "@langchain/core": "^0.3.0",
