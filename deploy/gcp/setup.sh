@@ -86,6 +86,7 @@ echo "==> [5/17] Creating Cloud SQL instance (postgres16, private VPC only)..."
 echo "    This can take 5-10 minutes..."
 gcloud sql instances create "${SQL_INSTANCE}" \
   --database-version=POSTGRES_16 \
+  --edition=ENTERPRISE \
   --tier=db-g1-small \
   --region="${REGION}" \
   --no-assign-ip \
