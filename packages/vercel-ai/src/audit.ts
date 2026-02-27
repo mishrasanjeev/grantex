@@ -34,7 +34,7 @@ export function withAuditLogging<PARAMETERS extends z.ZodTypeAny, RESULT>(
   const action = `tool:${toolName}`;
   const originalExecute = grantexTool.execute;
 
-  const wrappedExecute: typeof originalExecute = async (args, execOptions) => {
+  const wrappedExecute = (async (args: z.infer<PARAMETERS>, execOptions: import('@ai-sdk/provider-utils').ToolCallOptions) => {
     try {
       const result = await originalExecute(args, execOptions);
       await client.audit.log({
@@ -58,7 +58,7 @@ export function withAuditLogging<PARAMETERS extends z.ZodTypeAny, RESULT>(
       });
       throw err;
     }
-  };
+  }) as GrantexTool<PARAMETERS, RESULT>['execute'];
 
   return Object.defineProperty(
     { ...grantexTool, execute: wrappedExecute },

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Grantex } from '@grantex/sdk';
 
 vi.mock('ai', () => ({
-  tool: (t: unknown) => t,
+  zodSchema: (schema: unknown) => schema,
 }));
 
 import { createGrantexTool } from '../src/tool.js';
@@ -113,7 +113,7 @@ describe('withAuditLogging', () => {
     });
 
     expect(wrapped.description).toBe(original.description);
-    expect(wrapped.parameters).toBe(original.parameters);
+    expect(wrapped.inputSchema).toBe(original.inputSchema);
   });
 
   it('does not log when scope check fails at construction', () => {

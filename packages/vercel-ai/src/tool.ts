@@ -1,6 +1,7 @@
-import { tool } from 'ai';
-import type { z } from 'zod';
 import type { Tool } from 'ai';
+import type { z } from 'zod';
+import type { ToolCallOptions } from '@ai-sdk/provider-utils';
+import { zodSchema } from 'ai';
 import { decodeJwtPayload } from './_jwt.js';
 import { GrantexScopeError, type CreateGrantexToolOptions } from './types.js';
 
@@ -16,8 +17,8 @@ export type GrantexTool<PARAMETERS extends z.ZodTypeAny, RESULT> = Tool<
 > & {
   execute: (
     args: z.infer<PARAMETERS>,
-    options: import('ai').ToolExecutionOptions,
-  ) => Promise<RESULT>;
+    options: ToolCallOptions,
+  ) => PromiseLike<RESULT>;
   readonly [TOOL_NAME_KEY]: string;
 };
 
@@ -79,7 +80,11 @@ export function createGrantexTool<PARAMETERS extends z.ZodTypeAny, RESULT>(
     throw new GrantexScopeError(requiredScope, scopes);
   }
 
-  const vercelTool = tool({ description, parameters, execute });
+  const vercelTool = {
+    description,
+    inputSchema: zodSchema(parameters),
+    execute,
+  } as unknown as Tool<PARAMETERS, RESULT>;
 
   return Object.defineProperty(vercelTool, TOOL_NAME_KEY, {
     value: name,
