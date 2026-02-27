@@ -28,19 +28,20 @@ request = client.authorize(AuthorizeParams(
     scopes=["files:read", "email:send"],
 ))
 
-# Redirect the user to the consent page
+# Redirect the user to the consent page — they approve in plain language
 print(request.consent_url)
 
-# 2. Exchange for a grant token (after user approves)
-token = client.tokens.create(auth_request_id=request.auth_request_id)
-print(token.grant_token)  # RS256-signed JWT
+# 2. Verify the grant token (offline, no network call)
+from grantex import verify_grant_token
 
-# 3. Verify a token (online)
-result = client.tokens.verify(token.grant_token)
-print(result.scopes)  # ['files:read', 'email:send']
+grant = verify_grant_token(
+    token=grant_token,  # RS256-signed JWT received after user approves
+    jwks_url="https://api.grantex.dev/.well-known/jwks.json",
+)
+print(grant.scopes)  # ['files:read', 'email:send']
 
-# 4. Revoke when done
-client.tokens.revoke(token.grant_token)
+# 3. Revoke when done
+client.tokens.revoke(grant.token_id)
 ```
 
 ## Offline verification
