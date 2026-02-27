@@ -1,16 +1,16 @@
 # Grantex Protocol Specification
 
-**Version:** 0.1-draft
-**Status:** Draft — seeking community feedback
-**Last updated:** February 2026 (rev 2)
+**Version:** 1.0
+**Status:** Final
+**Last updated:** February 2026 (rev 3)
 
-> This is a living document. Open an issue or Discussion to propose changes.
+> Specification is now frozen. Changes require a new version.
 
 ---
 
 ## Abstract
 
-Grantex defines an open protocol for delegated authorization of AI agents acting on behalf of human users. It specifies: cryptographic agent identity, a human-consent-based grant flow, a signed token format, a revocation model, and an append-only audit trail schema.
+Grantex defines an open protocol for delegated authorization of AI agents acting on behalf of human users. It specifies: cryptographic agent identity, a human-consent-based grant flow, a signed token format, a revocation model, an append-only audit trail schema, a policy engine for automated authorization decisions, enterprise identity federation, and anomaly detection for runtime behavioral monitoring.
 
 ---
 
@@ -39,6 +39,8 @@ Grantex fills this gap as an open, model-neutral, framework-agnostic protocol.
 | **Grant Token** | A signed JWT representing a valid, non-revoked Grant |
 | **Scope** | A named permission following the format `resource:action[:constraint]` |
 | **DID** | Decentralized Identifier — the Agent's cryptographic identity |
+| **Policy** | A rule that auto-approves or auto-denies an authorization before the consent UI is shown, evaluated by the Policy Engine |
+| **Anomaly** | A detected behavioral deviation from an agent's established activity baseline |
 
 ---
 
@@ -125,7 +127,11 @@ com.stripe.charges:create:max_5000
 io.github.issues:create
 ```
 
-### 4.4 Scope Display
+### 4.4 Scope Governance
+
+Grantex maintains the canonical scope registry in §4.2 as normative. Implementations MUST support all standard scopes. Custom scopes MUST use reverse-domain notation. The Grantex working group governs additions to the standard registry.
+
+### 4.5 Scope Display
 
 Identity Services MUST maintain a human-readable description for each scope. Consent UIs MUST display human-readable descriptions, never raw scope strings.
 
@@ -329,6 +335,8 @@ Response:
 
 Refresh tokens are single-use and rotated on every refresh.
 
+Implementations caching revocation state MUST NOT cache for longer than **5 minutes**. High-stakes scopes (`payments:initiate`, `email:send`, `files:write`) SHOULD always use online verification.
+
 ---
 
 ## 8. Audit Trail
@@ -397,7 +405,7 @@ When Agent A spawns Agent B, B's Grant Token must chain back to the original Pri
 Rules:
 - Sub-agent scopes MUST be a subset of the parent's scopes
 - `delegationDepth` is incremented at each hop
-- Services MAY set a maximum delegation depth policy (recommended: 3)
+- Implementations MUST enforce a developer-configurable delegation depth limit. The default RECOMMENDED limit is **3**. Implementations MUST enforce a hard cap of **10**.
 - The original Principal can revoke the root Grant to invalidate the entire chain
 
 ### 9.1 Delegation Endpoint
@@ -443,7 +451,9 @@ Revoking a Grant via `DELETE /v1/grants/:id` MUST atomically revoke all descenda
 
 ## 10. Self-Hosting
 
-Grantex-compatible implementations MUST expose:
+### 10.1 Core Endpoints
+
+All compliant Grantex implementations MUST expose the following endpoints:
 
 | Endpoint | Description |
 |----------|-------------|
@@ -460,32 +470,260 @@ Grantex-compatible implementations MUST expose:
 | `GET /v1/audit/entries` | Query audit log |
 | `GET /v1/audit/:id` | Get a single audit entry |
 | `GET /.well-known/jwks.json` | Public keys for offline verification |
+| `GET /health` | Health check |
+
+### 10.2 Optional Extensions
+
+Minimal implementations MAY omit the following endpoints. Implementations that choose to support an extension MUST implement it as specified.
+
+**Policy Engine**
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /v1/policies` | Create a policy rule |
+| `GET /v1/policies` | List policy rules |
+| `GET /v1/policies/:id` | Get a single policy rule |
+| `PATCH /v1/policies/:id` | Update a policy rule |
+| `DELETE /v1/policies/:id` | Delete a policy rule |
+
+**Webhooks**
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /v1/webhooks` | Register a webhook |
+| `GET /v1/webhooks` | List webhooks |
+| `DELETE /v1/webhooks/:id` | Delete a webhook |
+
+**SCIM Tokens**
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /v1/scim/tokens` | Create a SCIM Bearer token |
+| `GET /v1/scim/tokens` | List SCIM tokens |
+| `DELETE /v1/scim/tokens/:id` | Delete a SCIM token |
+
+**SCIM 2.0**
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /scim/v2/ServiceProviderConfig` | SCIM capability discovery |
+| `GET /scim/v2/Users` | List provisioned users |
+| `POST /scim/v2/Users` | Provision a user |
+| `GET /scim/v2/Users/:id` | Get a provisioned user |
+| `PUT /scim/v2/Users/:id` | Replace a provisioned user |
+| `PATCH /scim/v2/Users/:id` | Partially update a provisioned user |
+| `DELETE /scim/v2/Users/:id` | Deprovision a user |
+
+**SSO (OIDC)**
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /v1/sso/config` | Configure SSO provider |
+| `GET /v1/sso/config` | Get SSO configuration |
+| `DELETE /v1/sso/config` | Remove SSO configuration |
+| `GET /sso/login` | Initiate SSO login (redirects to IdP) |
+| `GET /sso/callback` | OIDC callback handler |
+
+**Anomaly Detection**
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /v1/anomalies/detect` | Submit anomaly signal |
+| `GET /v1/anomalies` | List detected anomalies |
+| `PATCH /v1/anomalies/:id/acknowledge` | Acknowledge an anomaly |
+
+**Compliance**
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /v1/compliance/summary` | Compliance posture summary |
+| `GET /v1/compliance/evidence-pack` | Generate SOC2/GDPR evidence pack |
+| `GET /v1/compliance/export/grants` | Export grant data |
+| `GET /v1/compliance/export/audit` | Export audit log |
+
+**Billing**
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /v1/billing/subscription` | Get current subscription |
+| `POST /v1/billing/checkout` | Create a checkout session |
+| `POST /v1/billing/portal` | Create a billing portal session |
 
 ---
 
-## 11. Security Considerations
+## 11. Policy Engine
+
+### 11.1 Purpose
+
+The Policy Engine evaluates rules against each authorization request before the consent UI is displayed. Policies enable developers to auto-approve routine, low-risk requests and auto-deny requests that violate organizational rules — reducing friction for Principals while maintaining control.
+
+### 11.2 Effects
+
+| Effect | Description |
+|--------|-------------|
+| `auto_approve` | Grant is issued immediately without showing the consent UI |
+| `auto_deny` | Authorization request is rejected immediately with a `403` response |
+
+### 11.3 Condition Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `scopes` | string[] | Matches when the requested scopes are a subset of this list |
+| `principalId` | string | Matches a specific Principal |
+| `agentId` | string | Matches a specific Agent |
+| `timeWindow` | object | Time-based constraint: `{ startHour, endHour, days[] }` where `days` is an array of ISO weekday integers (1=Monday, 7=Sunday) |
+
+### 11.4 Evaluation Order
+
+1. Deny rules are evaluated first. The first matching `auto_deny` rule wins.
+2. Allow rules are evaluated next. The first matching `auto_approve` rule issues the grant.
+3. If no rule matches, the consent UI is shown to the Principal.
+
+### 11.5 Example Policy
+
+Auto-deny payment requests outside business hours:
+
+```json
+{
+  "name": "block-off-hours-payments",
+  "effect": "auto_deny",
+  "conditions": {
+    "scopes": ["payments:initiate"],
+    "timeWindow": {
+      "startHour": 18,
+      "endHour": 9,
+      "days": [1, 2, 3, 4, 5]
+    }
+  }
+}
+```
+
+### 11.6 CRUD API
+
+```http
+POST   /v1/policies         — Create a policy rule
+GET    /v1/policies         — List all policy rules
+GET    /v1/policies/:id     — Get a single policy rule
+PATCH  /v1/policies/:id     — Update a policy rule
+DELETE /v1/policies/:id     — Delete a policy rule
+```
+
+---
+
+## 12. Enterprise Identity — SCIM & SSO
+
+### 12.1 SCIM 2.0 User Provisioning
+
+Enterprises may sync users from their Identity Provider (Okta, Azure AD, etc.) into Grantex as Principals using the SCIM 2.0 protocol. The SCIM base path is `/scim/v2/`.
+
+SCIM endpoints authenticate via a dedicated SCIM Bearer token, separate from developer API keys. This ensures that IdP provisioning credentials are isolated from application credentials.
+
+**SCIM token lifecycle:**
+
+```http
+POST /v1/scim/tokens
+Authorization: Bearer <api_key>
+```
+
+Response:
+
+```json
+{
+  "token": "scim_...",
+  "tokenId": "scimtok_01HXYZ...",
+  "createdAt": "2026-02-01T00:00:00Z"
+}
+```
+
+The `token` value is passed as `Authorization: Bearer <scim_token>` on all `/scim/v2/*` requests.
+
+### 12.2 SSO (OIDC)
+
+Developers may configure an OIDC-compliant Identity Provider to enable single sign-on.
+
+**Configure an IdP:**
+
+```http
+POST /v1/sso/config
+Authorization: Bearer <api_key>
+Content-Type: application/json
+
+{
+  "provider": "okta",
+  "clientId": "...",
+  "clientSecret": "...",
+  "discoveryUrl": "https://dev-123.okta.com/.well-known/openid-configuration"
+}
+```
+
+**Login flow:**
+
+1. Direct users to `GET /sso/login` — the auth service redirects to the IdP with a generated `state` and `nonce`.
+2. The IdP authenticates the user and redirects to `GET /sso/callback`.
+3. The callback validates the `state` (CSRF protection) and `nonce` (replay protection), then creates or updates the Principal record.
+
+---
+
+## 13. Anomaly Detection
+
+### 13.1 Purpose
+
+The Anomaly Detection system monitors agent behavior at runtime against each agent's established activity baseline. It identifies requests that deviate from normal patterns and surfaces them to developers for review.
+
+### 13.2 Detection Trigger
+
+After token issuance, the auth service emits an anomaly signal asynchronously. Anomaly detection MUST NOT block token issuance; it operates as an advisory layer only.
+
+### 13.3 Anomaly Types
+
+| Type | Description |
+|------|-------------|
+| `unusual_scope_access` | Agent requested scopes outside its typical pattern |
+| `high_frequency` | Token issuance rate significantly exceeds the agent's baseline |
+| `off_hours_activity` | Agent activity detected outside the Principal's normal active hours |
+| `new_principal` | Agent is requesting access for a Principal it has never served before |
+| `cascade_delegation` | Delegation chain depth approaching or exceeding configured limits |
+
+### 13.4 Severity Levels
+
+`low` | `medium` | `high` | `critical`
+
+### 13.5 Acknowledge Workflow
+
+Developers review and acknowledge anomalies to update the baseline and suppress repeat alerts:
+
+```http
+PATCH /v1/anomalies/:id/acknowledge
+Authorization: Bearer <api_key>
+Content-Type: application/json
+
+{
+  "notes": "Authorized off-hours run for scheduled maintenance"
+}
+```
+
+---
+
+## 14. Security Considerations
 
 - Tokens MUST be signed with RS256. Symmetric algorithms (HS256) are NOT permitted.
-- The `alg: none` attack MUST be rejected by all verifiers.
+- Implementations MUST explicitly reject JWTs with `alg: none`. Both `alg: none` and HS256 MUST be rejected by all verifiers.
 - Token replay MUST be detectable via `jti` tracking.
 - Consent UIs MUST validate `state` parameter to prevent CSRF.
 - Redirect URIs MUST be pre-registered and exactly matched.
 - Services SHOULD implement online revocation checks for high-stakes operations.
 - Audit logs MUST be append-only at the API level (no update or delete endpoints).
+- SCIM endpoints MUST authenticate with a dedicated SCIM Bearer token, separate from developer API keys.
+- SSO callbacks MUST validate OIDC `state` and `nonce` parameters to prevent CSRF and replay attacks.
+- Policy engine MUST evaluate deny rules before allow rules to ensure restrictive policies are not bypassed.
+- Anomaly signals MUST NOT be used to synchronously block token issuance; the detection pipeline is advisory and asynchronous.
+- Consent UIs MUST display: agent name, developer name, all requested scopes with human-readable descriptions, token expiry, and a prominent deny/cancel action.
 
 ---
 
-## Open Questions (RFC)
+## Protocol Design Decisions
 
-The following are open for community discussion:
-
-1. **Scope standardization** — Should Grantex maintain a canonical scope registry, or leave it to service providers?
-2. **Cross-chain identity** — Should agent DIDs be portable across Grantex-compatible implementations?
-3. **Offline revocation** — What is an acceptable staleness window for cached revocation state?
-4. **Delegation depth** — Should the protocol mandate a maximum delegation depth?
-5. **Consent UI requirements** — What minimum disclosures must a compliant consent UI show?
-
-→ Join the discussion: [github.com/mishrasanjeev/grantex/discussions](https://github.com/mishrasanjeev/grantex/discussions)
+The following design questions that were open in v0.1-draft have been resolved for v1.0: **Scope standardization** — Grantex maintains a normative canonical scope registry (§4.2), governed by the Grantex working group; custom scopes must use reverse-domain notation. **Cross-chain identity** — Agent DIDs are scoped to the issuing Grantex-compatible implementation and are not required to be portable across implementations in v1.0. **Offline revocation** — Implementations caching revocation state MUST NOT cache for longer than 5 minutes (§7.4). **Delegation depth** — The protocol mandates a developer-configurable limit with a recommended default of 3 and a hard cap of 10 (§9). **Consent UI requirements** — Compliant consent UIs MUST display agent name, developer name, all requested scopes with human-readable descriptions, token expiry, and a prominent deny/cancel action (§14).
 
 ---
 
@@ -493,6 +731,7 @@ The following are open for community discussion:
 
 | Version | Date | Notes |
 |---------|------|-------|
+| 1.0 | Feb 2026 | Final. §11 Policy Engine, §12 Enterprise Identity (SCIM/SSO), §13 Anomaly Detection; expanded §10 endpoint table with Core vs. Optional Extensions; resolved all open design questions; specification frozen. |
 | 0.1-draft rev 2 | Feb 2026 | Add `audience` to §5.2; add `status` to §8.2 hash formula; add §9.1 delegation endpoint and §9.2 cascade revocation; expand §10 endpoint table |
 | 0.1-draft | Feb 2026 | Initial draft — seeking community feedback |
 
