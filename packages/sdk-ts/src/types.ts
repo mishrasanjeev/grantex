@@ -371,3 +371,31 @@ export interface EvidencePack {
   policies: Policy[];
   chainIntegrity: ChainIntegrity;
 }
+
+// ─── Anomalies ────────────────────────────────────────────────────────────────
+
+export type AnomalyType = 'rate_spike' | 'high_failure_rate' | 'new_principal' | 'off_hours_activity';
+export type AnomalySeverity = 'low' | 'medium' | 'high';
+
+export interface Anomaly {
+  id: string;
+  type: AnomalyType;
+  severity: AnomalySeverity;
+  agentId: string | null;
+  principalId: string | null;
+  description: string;
+  metadata: Record<string, unknown>;
+  detectedAt: string;
+  acknowledgedAt: string | null;
+}
+
+export interface DetectAnomaliesResponse {
+  detectedAt: string;
+  total: number;
+  anomalies: Anomaly[];
+}
+
+export interface ListAnomaliesResponse {
+  anomalies: Anomaly[];
+  total: number;
+}

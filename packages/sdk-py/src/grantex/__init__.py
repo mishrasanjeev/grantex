@@ -12,10 +12,13 @@ from ._errors import (
 )
 from ._types import (
     Agent,
+    Anomaly,
     AuditEntry,
     AuthorizationRequest,
     AuthorizeParams,
     ChainIntegrity,
+    DetectAnomaliesResponse,
+    ListAnomaliesResponse,
     CheckoutResponse,
     ComplianceAuditExport,
     ComplianceExportAuditParams,
@@ -70,7 +73,10 @@ __all__ = [
     "GrantexNetworkError",
     # Types
     "Agent",
+    "Anomaly",
     "AuditEntry",
+    "DetectAnomaliesResponse",
+    "ListAnomaliesResponse",
     "AuthorizationRequest",
     "AuthorizeParams",
     "ChainIntegrity",
