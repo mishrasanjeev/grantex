@@ -413,6 +413,51 @@
     .integration-pill:hover { border-color: var(--accent2); color: var(--text); }
     .integration-icon { font-size: 20px; }
 
+    /* ── Examples ──────────────────────────────────────────────────────────── */
+    .examples-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .example-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.2s;
+      text-decoration: none;
+      color: inherit;
+    }
+    .example-card:hover { border-color: var(--accent2); text-decoration: none; }
+    .example-lang {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+    .example-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .example-card p { color: var(--muted); font-size: 14px; line-height: 1.65; flex: 1; }
+    .example-packages {
+      margin-top: 14px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .example-pkg {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
     /* ── Trust signals ─────────────────────────────────────────────────────── */
     .trust-cards {
       display: grid;
@@ -533,6 +578,7 @@
                onclick="gtag('event','docs_click',{event_category:'nav'})">Docs</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex"
                onclick="gtag('event','github_click',{event_category:'nav'})">GitHub</a></li>
+        <li><a href="#examples">Examples</a></li>
         <li><a href="https://www.npmjs.com/package/@grantex/sdk">npm</a></li>
         <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
         <li><a href="/dashboard" style="color:var(--accent);font-weight:600;">Dashboard</a></li>
@@ -626,7 +672,7 @@
     <div class="section-label">How it works</div>
     <h2 class="section-title">Delegated authorization, done right</h2>
     <p class="section-sub">
-      Four steps from consent to revocation, all enforced by cryptography.
+      Five steps from consent to revocation, all enforced by cryptography.
     </p>
     <div class="flow">
       <div class="flow-step">
@@ -646,13 +692,24 @@
           <h3>Human approves in plain language</h3>
           <p>
             The user sees exactly what the agent wants to do, described in plain
-            English. One click — approved. The auth service issues a signed JWT
-            grant token (RS256, JTI-tracked).
+            English. One click — approved. Your redirect callback receives an
+            authorization code.
           </p>
         </div>
       </div>
       <div class="flow-step">
         <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Exchange code for a grant token</h3>
+          <p>
+            Call <code style="font-family:var(--mono);color:var(--accent2)">grantex.tokens.exchange({ code, agentId })</code>
+            to swap the authorization code for a signed RS256 JWT grant token
+            (JTI-tracked, scoped, time-limited).
+          </p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">4</div>
         <div class="step-body">
           <h3>Any service verifies offline</h3>
           <p>
@@ -664,7 +721,7 @@
         </div>
       </div>
       <div class="flow-step">
-        <div class="step-num">4</div>
+        <div class="step-num">5</div>
         <div class="step-body">
           <h3>Revoke any time, instantly</h3>
           <p>
@@ -711,38 +768,50 @@
         <div class="code-block">
           <button class="copy-btn" onclick="copyCode('code-node', this, 'npm_install_copy')">Copy</button>
           <pre id="code-node"><span class="cm">// npm install @grantex/sdk</span>
-<span class="kw">import</span> <span class="op">{ </span><span class="id">Grantex</span><span class="op"> }</span> <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
+<span class="kw">import</span> <span class="op">{ </span><span class="id">Grantex</span><span class="op">,</span> <span class="id">verifyGrantToken</span><span class="op"> }</span> <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
 
 <span class="kw">const</span> <span class="id">grantex</span> <span class="op">=</span> <span class="kw">new</span> <span class="fn">Grantex</span><span class="op">({</span> <span class="id">apiKey</span><span class="op">:</span> <span class="str">'YOUR_API_KEY'</span> <span class="op">});</span>
 
+<span class="cm">// 1. Request authorization — redirect user to consentUrl</span>
 <span class="kw">const</span> <span class="op">{</span> <span class="id">consentUrl</span> <span class="op">}</span> <span class="op">=</span> <span class="kw">await</span> <span class="id">grantex</span><span class="op">.</span><span class="fn">authorize</span><span class="op">({</span>
   <span class="id">agentId</span><span class="op">:</span>  <span class="str">'ag_01J...'</span><span class="op">,</span>
   <span class="id">userId</span><span class="op">:</span>   <span class="str">'usr_01J...'</span><span class="op">,</span>
   <span class="id">scopes</span><span class="op">:</span>  <span class="op">[</span><span class="str">'files:read'</span><span class="op">,</span> <span class="str">'email:send'</span><span class="op">],</span>
 <span class="op">});</span>
 
-<span class="cm">// Redirect user to consentUrl — they approve in plain language</span>
-<span class="id">console</span><span class="op">.</span><span class="fn">log</span><span class="op">(</span><span class="id">consentUrl</span><span class="op">);</span></pre>
+<span class="cm">// 2. Exchange the authorization code for a grant token</span>
+<span class="kw">const</span> <span class="id">token</span> <span class="op">=</span> <span class="kw">await</span> <span class="id">grantex</span><span class="op">.</span><span class="id">tokens</span><span class="op">.</span><span class="fn">exchange</span><span class="op">({</span> <span class="id">code</span><span class="op">,</span> <span class="id">agentId</span><span class="op">:</span> <span class="str">'ag_01J...'</span> <span class="op">});</span>
+
+<span class="cm">// 3. Verify offline — no network call needed</span>
+<span class="kw">const</span> <span class="id">grant</span> <span class="op">=</span> <span class="kw">await</span> <span class="fn">verifyGrantToken</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">grantToken</span><span class="op">,</span> <span class="op">{</span>
+  <span class="id">jwksUri</span><span class="op">:</span> <span class="str">'https://api.grantex.dev/.well-known/jwks.json'</span><span class="op">,</span>
+<span class="op">});</span>
+<span class="id">console</span><span class="op">.</span><span class="fn">log</span><span class="op">(</span><span class="id">grant</span><span class="op">.</span><span class="id">scopes</span><span class="op">);</span> <span class="cm">// ['files:read', 'email:send']</span></pre>
         </div>
       </div>
 
       <!-- Python -->
       <div class="tab-panel" id="tab-python">
         <div class="code-block">
-          <button class="copy-btn" onclick="copyCode('code-python', this, 'npm_install_copy')">Copy</button>
+          <button class="copy-btn" onclick="copyCode('code-python', this, 'pip_install_copy')">Copy</button>
           <pre id="code-python"><span class="cm"># pip install grantex</span>
-<span class="kw">from</span> <span class="id">grantex</span> <span class="kw">import</span> <span class="id">Grantex</span>
+<span class="kw">from</span> <span class="id">grantex</span> <span class="kw">import</span> <span class="id">Grantex</span><span class="op">,</span> <span class="id">ExchangeTokenParams</span>
 
 <span class="id">client</span> <span class="op">=</span> <span class="fn">Grantex</span><span class="op">(</span><span class="id">api_key</span><span class="op">=</span><span class="str">"YOUR_API_KEY"</span><span class="op">)</span>
 
-<span class="id">result</span> <span class="op">=</span> <span class="id">client</span><span class="op">.</span><span class="fn">authorize</span><span class="op">(</span>
+<span class="cm"># 1. Request authorization — redirect user to consent_url</span>
+<span class="id">auth</span> <span class="op">=</span> <span class="id">client</span><span class="op">.</span><span class="fn">authorize</span><span class="op">(</span>
     <span class="id">agent_id</span><span class="op">=</span><span class="str">"ag_01J..."</span><span class="op">,</span>
     <span class="id">user_id</span><span class="op">=</span><span class="str">"usr_01J..."</span><span class="op">,</span>
     <span class="id">scopes</span><span class="op">=[</span><span class="str">"files:read"</span><span class="op">,</span> <span class="str">"email:send"</span><span class="op">],</span>
 <span class="op">)</span>
 
-<span class="cm"># Redirect user to result.consent_url</span>
-<span class="fn">print</span><span class="op">(</span><span class="id">result</span><span class="op">.</span><span class="id">consent_url</span><span class="op">)</span></pre>
+<span class="cm"># 2. Exchange the authorization code for a grant token</span>
+<span class="id">token</span> <span class="op">=</span> <span class="id">client</span><span class="op">.</span><span class="id">tokens</span><span class="op">.</span><span class="fn">exchange</span><span class="op">(</span><span class="fn">ExchangeTokenParams</span><span class="op">(</span><span class="id">code</span><span class="op">=</span><span class="id">code</span><span class="op">,</span> <span class="id">agent_id</span><span class="op">=</span><span class="str">"ag_01J..."</span><span class="op">))</span>
+
+<span class="cm"># 3. Use the token — scopes, grantId, and JWT are all available</span>
+<span class="fn">print</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">scopes</span><span class="op">)</span>      <span class="cm"># ('files:read', 'email:send')</span>
+<span class="fn">print</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">grant_token</span><span class="op">)</span> <span class="cm"># RS256-signed JWT</span></pre>
         </div>
       </div>
     </div>
@@ -781,6 +850,85 @@
       <a href="https://pypi.org/project/grantex/" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">Py</span>
         Python
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Examples ──────────────────────────────────────────────────────────── -->
+<section id="examples">
+  <div class="container">
+    <div class="section-label">Examples</div>
+    <h2 class="section-title">Runnable code you can copy</h2>
+    <p class="section-sub">
+      End-to-end examples for every SDK and framework integration.
+      Clone the repo, start the local stack, and run.
+    </p>
+    <div class="examples-grid">
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/quickstart-ts"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">TypeScript</div>
+        <h3>Quickstart</h3>
+        <p>
+          Core authorization lifecycle &mdash; register agent, authorize, exchange code,
+          verify token offline, log audit entry, revoke.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">@grantex/sdk</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/quickstart-py"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">Python</div>
+        <h3>Quickstart</h3>
+        <p>
+          Same core flow in Python &mdash; register, authorize, exchange, verify offline,
+          audit, and revoke using the Python SDK.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">grantex</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/langchain-agent"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">TypeScript</div>
+        <h3>LangChain Agent</h3>
+        <p>
+          Scoped tools with automatic audit callbacks. Create tools via
+          <code style="font-family:var(--mono);font-size:12px;">createGrantexTool</code>,
+          attach audit handler, invoke.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">@grantex/sdk</span>
+          <span class="example-pkg">@grantex/langchain</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/vercel-ai-chatbot"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">TypeScript</div>
+        <h3>Vercel AI Chatbot</h3>
+        <p>
+          Vercel AI SDK tools with Zod schemas, scope enforcement, and
+          <code style="font-family:var(--mono);font-size:12px;">withAuditLogging</code>
+          wrapper. Works with generateText.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">@grantex/sdk</span>
+          <span class="example-pkg">@grantex/vercel-ai</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/crewai-agent"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">Python</div>
+        <h3>CrewAI Agent</h3>
+        <p>
+          CrewAI tools with offline scope enforcement and audit logging.
+          Demonstrates PermissionError on unauthorized scopes.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">grantex</span>
+          <span class="example-pkg">grantex-crewai</span>
+        </div>
       </a>
     </div>
   </div>
