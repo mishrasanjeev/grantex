@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3fb950"/>
+      <stop offset="100%" stop-color="#2ea043"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#3fb950" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Dark background circle -->
+  <circle cx="256" cy="256" r="248" fill="#0d1117"/>
+  <circle cx="256" cy="256" r="248" fill="none" stroke="#1e2733" stroke-width="4"/>
+
+  <!-- Shield outline — green with glow -->
+  <path d="M256 72 L416 160 L416 304 C416 380 340 440 256 468 C172 440 96 380 96 304 L96 160 Z"
+        fill="none" stroke="url(#glow)" stroke-width="16" stroke-linejoin="round"
+        filter="url(#shadow)"/>
+
+  <!-- Checkmark inside shield -->
+  <polyline points="188,256 236,312 332,200"
+            fill="none" stroke="#3fb950" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"
+            filter="url(#shadow)"/>
+</svg>
