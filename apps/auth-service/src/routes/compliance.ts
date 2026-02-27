@@ -42,8 +42,8 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
           COUNT(*) FILTER (WHERE status = 'revoked')    AS revoked,
           COUNT(*) FILTER (WHERE status = 'expired')    AS expired
         FROM grants WHERE developer_id = ${developerId}
-          AND (${since}::timestamptz IS NULL OR issued_at >= ${since ?? ''}::timestamptz)
-          AND (${until}::timestamptz IS NULL OR issued_at <= ${until ?? ''}::timestamptz)
+          AND (${since}::timestamptz IS NULL OR issued_at >= ${since}::timestamptz)
+          AND (${until}::timestamptz IS NULL OR issued_at <= ${until}::timestamptz)
       `,
       sql`
         SELECT
@@ -52,8 +52,8 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
           COUNT(*) FILTER (WHERE status = 'failure')     AS failure,
           COUNT(*) FILTER (WHERE status = 'blocked')     AS blocked
         FROM audit_entries WHERE developer_id = ${developerId}
-          AND (${since}::timestamptz IS NULL OR timestamp >= ${since ?? ''}::timestamptz)
-          AND (${until}::timestamptz IS NULL OR timestamp <= ${until ?? ''}::timestamptz)
+          AND (${since}::timestamptz IS NULL OR timestamp >= ${since}::timestamptz)
+          AND (${until}::timestamptz IS NULL OR timestamp <= ${until}::timestamptz)
       `,
       sql`
         SELECT COUNT(*) AS total FROM policies WHERE developer_id = ${developerId}
@@ -112,8 +112,8 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
              issued_at, expires_at, revoked_at, delegation_depth
       FROM grants
       WHERE developer_id = ${developerId}
-        AND (${since}::timestamptz IS NULL OR issued_at >= ${since ?? ''}::timestamptz)
-        AND (${until}::timestamptz IS NULL OR issued_at <= ${until ?? ''}::timestamptz)
+        AND (${since}::timestamptz IS NULL OR issued_at >= ${since}::timestamptz)
+        AND (${until}::timestamptz IS NULL OR issued_at <= ${until}::timestamptz)
         AND (${status}::text IS NULL OR status = ${status ?? ''})
       ORDER BY issued_at DESC
     `;
@@ -167,8 +167,8 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
           COUNT(*) FILTER (WHERE status = 'revoked')    AS revoked,
           COUNT(*) FILTER (WHERE status = 'expired')    AS expired
         FROM grants WHERE developer_id = ${developerId}
-          AND (${since}::timestamptz IS NULL OR issued_at >= ${since ?? ''}::timestamptz)
-          AND (${until}::timestamptz IS NULL OR issued_at <= ${until ?? ''}::timestamptz)
+          AND (${since}::timestamptz IS NULL OR issued_at >= ${since}::timestamptz)
+          AND (${until}::timestamptz IS NULL OR issued_at <= ${until}::timestamptz)
       `,
       sql`
         SELECT
@@ -177,8 +177,8 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
           COUNT(*) FILTER (WHERE status = 'failure')     AS failure,
           COUNT(*) FILTER (WHERE status = 'blocked')     AS blocked
         FROM audit_entries WHERE developer_id = ${developerId}
-          AND (${since}::timestamptz IS NULL OR timestamp >= ${since ?? ''}::timestamptz)
-          AND (${until}::timestamptz IS NULL OR timestamp <= ${until ?? ''}::timestamptz)
+          AND (${since}::timestamptz IS NULL OR timestamp >= ${since}::timestamptz)
+          AND (${until}::timestamptz IS NULL OR timestamp <= ${until}::timestamptz)
       `,
       sql`SELECT COUNT(*) AS total FROM policies WHERE developer_id = ${developerId}`,
       sql`SELECT plan FROM subscriptions WHERE developer_id = ${developerId}`,
@@ -188,8 +188,8 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
                issued_at, expires_at, revoked_at, delegation_depth
         FROM grants
         WHERE developer_id = ${developerId}
-          AND (${since}::timestamptz IS NULL OR issued_at >= ${since ?? ''}::timestamptz)
-          AND (${until}::timestamptz IS NULL OR issued_at <= ${until ?? ''}::timestamptz)
+          AND (${since}::timestamptz IS NULL OR issued_at >= ${since}::timestamptz)
+          AND (${until}::timestamptz IS NULL OR issued_at <= ${until}::timestamptz)
         ORDER BY issued_at DESC
       `,
       sql`
@@ -197,8 +197,8 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
                action, metadata, hash, previous_hash, timestamp, status
         FROM audit_entries
         WHERE developer_id = ${developerId}
-          AND (${since}::timestamptz IS NULL OR timestamp >= ${since ?? ''}::timestamptz)
-          AND (${until}::timestamptz IS NULL OR timestamp <= ${until ?? ''}::timestamptz)
+          AND (${since}::timestamptz IS NULL OR timestamp >= ${since}::timestamptz)
+          AND (${until}::timestamptz IS NULL OR timestamp <= ${until}::timestamptz)
         ORDER BY timestamp ASC
       `,
       sql`
@@ -312,8 +312,8 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
              action, metadata, hash, previous_hash, timestamp, status
       FROM audit_entries
       WHERE developer_id = ${developerId}
-        AND (${since}::timestamptz IS NULL OR timestamp >= ${since ?? ''}::timestamptz)
-        AND (${until}::timestamptz IS NULL OR timestamp <= ${until ?? ''}::timestamptz)
+        AND (${since}::timestamptz IS NULL OR timestamp >= ${since}::timestamptz)
+        AND (${until}::timestamptz IS NULL OR timestamp <= ${until}::timestamptz)
         AND (${agentId}::text IS NULL OR agent_id = ${agentId ?? ''})
         AND (${status}::text IS NULL OR status = ${status ?? ''})
       ORDER BY timestamp ASC
