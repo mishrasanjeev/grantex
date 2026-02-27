@@ -61,7 +61,7 @@ Protocol finalization and ecosystem maturity.
 
 - [x] Protocol specification finalized and frozen
 - [x] Independent security audit
-- [ ] SOC2 Type I certification
+- [x] SOC2 Type I certification
 - [x] On-premise enterprise deployment option
 - [x] Submit protocol spec to W3C / IETF / CNCF for standardization
 
