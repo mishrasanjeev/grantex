@@ -14,7 +14,7 @@ npm install @grantex/sdk
 ## Quick Start
 
 ```typescript
-import { Grantex } from '@grantex/sdk';
+import { Grantex, verifyGrantToken } from '@grantex/sdk';
 
 const grantex = new Grantex({ apiKey: 'YOUR_API_KEY' });
 
@@ -33,16 +33,20 @@ const { consentUrl } = await grantex.authorize({
 });
 // Redirect the user to consentUrl — they approve in plain language
 
-// 3. Verify a grant token (offline, no network call)
-import { verifyGrantToken } from '@grantex/sdk';
+// 3. Exchange authorization code for a grant token
+// (your redirect callback receives the `code` after user approves)
+const token = await grantex.tokens.exchange({ code, agentId: agent.id });
+console.log(token.grantToken);  // RS256-signed JWT
+console.log(token.scopes);     // ['email:read', 'email:send']
+console.log(token.grantId);    // 'grnt_01J...'
 
-const grant = await verifyGrantToken(token, {
+// 4. Verify the grant token offline (no network call)
+const grant = await verifyGrantToken(token.grantToken, {
   jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
 });
-console.log(grant.scopes);       // ['email:read', 'email:send']
 console.log(grant.principalId);  // 'usr_01J...'
 
-// 4. Revoke when done
+// 5. Revoke when done
 await grantex.tokens.revoke(grant.tokenId);
 ```
 
@@ -196,6 +200,35 @@ console.log(verified.scopes);
 ---
 
 ### Tokens
+
+#### `grantex.tokens.exchange(params)`
+
+Exchange an authorization code for a grant token. This is the standard way to obtain a grant token after the user approves the consent request.
+
+```typescript
+const token = await grantex.tokens.exchange({
+  code: 'auth_code_from_redirect',  // from your redirect callback
+  agentId: 'ag_01J...',
+});
+
+console.log(token.grantToken);   // RS256-signed JWT — pass this to your agent
+console.log(token.grantId);      // grant record ID
+console.log(token.scopes);       // granted scopes
+console.log(token.expiresAt);    // ISO 8601 expiry
+console.log(token.refreshToken); // for token refresh
+```
+
+**Returns**: `ExchangeTokenResponse`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `grantToken` | `string` | Signed RS256 JWT — the agent's bearer credential |
+| `grantId` | `string` | Grant record ID |
+| `scopes` | `string[]` | Scopes the user approved |
+| `expiresAt` | `string` | Token expiry (ISO 8601) |
+| `refreshToken` | `string` | Refresh token for obtaining new grant tokens |
+
+---
 
 #### `grantex.tokens.verify(token)`
 

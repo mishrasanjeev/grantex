@@ -17,30 +17,36 @@ pip install grantex
 ## Quick start
 
 ```python
-from grantex import Grantex, AuthorizeParams
+from grantex import Grantex, ExchangeTokenParams, verify_grant_token, VerifyGrantTokenOptions
 
 client = Grantex(api_key="YOUR_API_KEY")
 
 # 1. Start the authorization flow
-request = client.authorize(AuthorizeParams(
+request = client.authorize(
     agent_id="ag_01HXYZ...",
     user_id="usr_01HXYZ...",
     scopes=["files:read", "email:send"],
-))
+)
 
 # Redirect the user to the consent page — they approve in plain language
 print(request.consent_url)
 
-# 2. Verify the grant token (offline, no network call)
-from grantex import verify_grant_token
+# 2. Exchange the authorization code for a grant token
+# (your redirect callback receives the `code` after user approves)
+token = client.tokens.exchange(ExchangeTokenParams(code=code, agent_id="ag_01HXYZ..."))
+print(token.grant_token)  # RS256-signed JWT
+print(token.scopes)       # ('files:read', 'email:send')
 
+# 3. Verify the grant token offline (no network call)
 grant = verify_grant_token(
-    token=grant_token,  # RS256-signed JWT received after user approves
-    jwks_url="https://api.grantex.dev/.well-known/jwks.json",
+    token=token.grant_token,
+    options=VerifyGrantTokenOptions(
+        jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+    ),
 )
-print(grant.scopes)  # ['files:read', 'email:send']
+print(grant.principal_id)  # 'usr_01HXYZ...'
 
-# 3. Revoke when done
+# 4. Revoke when done
 client.tokens.revoke(grant.token_id)
 ```
 
@@ -66,6 +72,7 @@ print(verified.agent_did)    # 'did:web:...'
 | Feature | Description |
 |---|---|
 | **Authorization flow** | `client.authorize()` — initiate consent, get grant tokens |
+| **Token exchange** | `client.tokens.exchange()` — exchange an authorization code for a grant token |
 | **Token management** | `client.tokens.verify()`, `.revoke()` — online verification and revocation |
 | **Offline verification** | `verify_grant_token()` — RS256 signature check against JWKS |
 | **Agent management** | `client.agents.create()`, `.get()`, `.list()`, `.update()`, `.delete()` |

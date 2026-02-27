@@ -118,35 +118,52 @@ console.log(authRequest.consentUrl);
 // → https://consent.grantex.dev/authorize?req=eyJ...
 ```
 
-### 3. Use the grant token
+### 3. Exchange the authorization code for a grant token
 
 ```typescript
-// After user approves, Grantex calls your redirectUri with a grant token
-const { grantToken } = req.query;
+// After user approves, your redirectUri receives a `code`.
+// Exchange it for a signed grant token (RS256 JWT):
+const token = await grantex.tokens.exchange({
+  code,                  // from the redirect callback
+  agentId: agent.id,
+});
 
-// Verify it locally — no network call needed
-const grant = await grantex.grants.verify(grantToken);
-console.log(grant.scopes);
-// → ['calendar:read', 'payments:initiate:max_500']
-
-// Pass to your agent — it's now authorized
-await travelAgent.run({ grantToken, task: 'Book cheapest flight to Delhi on March 1' });
+console.log(token.grantToken);  // RS256 JWT — pass this to your agent
+console.log(token.scopes);      // ['calendar:read', 'payments:initiate:max_500']
+console.log(token.grantId);     // 'grnt_01HXYZ...'
 ```
 
-### 4. Log every action
+### 4. Verify the token and use it
+
+```typescript
+// Verify offline — no network call needed (uses published JWKS)
+import { verifyGrantToken } from '@grantex/sdk';
+
+const grant = await verifyGrantToken(token.grantToken, {
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+  requiredScopes: ['calendar:read'],
+});
+console.log(grant.principalId); // 'user_abc123'
+console.log(grant.scopes);     // ['calendar:read', 'payments:initiate:max_500']
+
+// Pass to your agent — it's now authorized
+await travelAgent.run({ grantToken: token.grantToken, task: 'Book cheapest flight to Delhi on March 1' });
+```
+
+### 5. Log every action
 
 ```typescript
 // Inside your agent — one line, zero overhead
 await grantex.audit.log({
   agentId: agent.id,
-  grantId: grant.grantId,
+  grantId: token.grantId,
   action: 'payment.initiated',
   status: 'success',
   metadata: { amount: 420, currency: 'USD', merchant: 'Air India' },
 });
 ```
 
-### 5. Verify a token (service-side)
+### 6. Verify a token (service-side)
 
 ```typescript
 // In any service that receives agent requests — no Grantex account needed
@@ -164,23 +181,39 @@ const grant = await verifyGrantToken(token, {
 ## Python SDK
 
 ```python
-from grantex import Grantex
+from grantex import Grantex, ExchangeTokenParams
 
-grantex = Grantex(api_key=os.environ["GRANTEX_API_KEY"])
+client = Grantex(api_key=os.environ["GRANTEX_API_KEY"])
 
 # Register agent
-agent = grantex.agents.register(
+agent = client.agents.register(
     name="finance-agent",
     scopes=["transactions:read", "payments:initiate:max_100"],
 )
 
-# Verify incoming grant token
-grant = grantex.grants.verify(token)
+# Authorize a user
+auth = client.authorize(
+    agent_id=agent.id,
+    user_id="user_abc123",
+    scopes=["transactions:read", "payments:initiate:max_100"],
+)
+# Redirect user to auth.consent_url — they approve in plain language
+
+# Exchange the authorization code for a grant token
+token = client.tokens.exchange(ExchangeTokenParams(code=code, agent_id=agent.id))
+
+# Verify the token offline — no network call needed
+from grantex import verify_grant_token, VerifyGrantTokenOptions
+
+grant = verify_grant_token(token.grant_token, VerifyGrantTokenOptions(
+    jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+))
+print(grant.scopes)  # ('transactions:read', 'payments:initiate:max_100')
 
 # Log an action
-grantex.audit.log(
+client.audit.log(
     agent_id=agent.id,
-    grant_id=grant.grant_id,
+    grant_id=token.grant_id,
     action="transaction.read",
     status="success",
     metadata={"account_last4": "4242"},

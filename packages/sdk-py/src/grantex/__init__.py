@@ -75,7 +75,7 @@ from ._types import (
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook_signature
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 __all__ = [
     # Main client
