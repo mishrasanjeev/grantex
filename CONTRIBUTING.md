@@ -1,6 +1,6 @@
 # Contributing to Grantex
 
-Thanks for your interest in contributing. Grantex is an early-stage open protocol — contributions at this stage have outsized impact on the final shape of the standard.
+Thanks for your interest in contributing. Grantex is an open protocol for delegated AI agent authorization — contributions help shape a safer agentic internet.
 
 ---
 
@@ -10,12 +10,11 @@ Thanks for your interest in contributing. Grantex is an early-stage open protoco
 
 | Area | What's needed | Skill |
 |------|--------------|-------|
+| New integrations | Add Grantex support to more frameworks | TypeScript / Python |
+| Examples & tutorials | End-to-end walkthroughs for common use cases | Writing |
+| Bug reports | Found a bug? Open an issue with reproduction steps | Any |
 | Protocol feedback | Review SPEC.md, open issues for gaps | Any |
-| TypeScript SDK | Implement core methods in `packages/sdk-ts` | TypeScript |
-| Python SDK | Implement core methods in `packages/sdk-py` | Python |
-| LangChain integration | Adapter in `packages/integrations/langchain` | TypeScript / Python |
-| Consent UI | Next.js OAuth-style consent screen | React / Next.js |
-| Docs | Improve quickstart, add examples | Writing |
+| Docs | Improve quickstart, add translations | Writing |
 
 ### Good first issues
 
@@ -26,20 +25,41 @@ Look for issues tagged [`good first issue`](https://github.com/mishrasanjeev/gra
 ## Development Setup
 
 ```bash
-# Prerequisites: Node.js 20+, Python 3.11+, pnpm
+# Prerequisites: Node.js 18+, Python 3.9+, Docker (for local stack)
 
 git clone https://github.com/mishrasanjeev/grantex
 cd grantex
-pnpm install
 
-# Run all tests
-pnpm test
+# Start the full local stack (PostgreSQL + Redis + auth service)
+docker compose up --build
 
-# Run TypeScript SDK tests
-pnpm --filter @grantex/sdk test
+# TypeScript SDK
+cd packages/sdk-ts
+npm install
+npm run typecheck   # tsc --noEmit
+npm test            # vitest
 
-# Run Python SDK tests
-cd packages/sdk-py && pip install -e ".[dev]" && pytest
+# Python SDK
+cd packages/sdk-py
+pip install -e ".[dev]"
+pytest
+
+# Auth service
+cd apps/auth-service
+npm install
+npm run typecheck
+npm test            # vitest — 174 tests
+
+# CLI
+cd packages/cli
+npm install
+npm run typecheck
+
+# Integration packages (langchain, autogen, vercel-ai)
+cd packages/<package>
+npm install
+npm run typecheck
+npm test
 ```
 
 ---
@@ -48,19 +68,27 @@ cd packages/sdk-py && pip install -e ".[dev]" && pytest
 
 ```
 grantex/
-├── SPEC.md                    ← Protocol specification (start here)
-├── ROADMAP.md                 ← What's being built
+├── SPEC.md                       ← Protocol specification (v1.0 final)
+├── ROADMAP.md                    ← What's been built and what's next
 ├── packages/
-│   ├── sdk-ts/                ← TypeScript SDK (@grantex/sdk)
-│   ├── sdk-py/                ← Python SDK (grantex)
-│   └── integrations/
-│       ├── langchain/         ← LangChain adapter
-│       └── autogen/           ← AutoGen adapter
+│   ├── sdk-ts/                   ← TypeScript SDK (@grantex/sdk)
+│   ├── sdk-py/                   ← Python SDK (grantex)
+│   ├── langchain/                ← LangChain integration (@grantex/langchain)
+│   ├── autogen/                  ← AutoGen / OpenAI integration (@grantex/autogen)
+│   ├── vercel-ai/                ← Vercel AI SDK integration (@grantex/vercel-ai)
+│   ├── crewai/                   ← CrewAI integration (grantex-crewai)
+│   └── cli/                      ← CLI tool (@grantex/cli)
 ├── apps/
-│   ├── api/                   ← Grantex backend (Fastify)
-│   ├── consent/               ← Hosted consent UI (Next.js)
-│   └── dashboard/             ← Developer dashboard (Next.js)
-└── infra/                     ← Docker / deployment configs
+│   ├── auth-service/             ← Fastify auth service (REST API)
+│   └── portal/                   ← Developer portal (React SPA)
+├── web/                          ← Landing page (Firebase Hosting)
+├── deploy/                       ← Docker, Helm, Nginx deployment configs
+│   ├── helm/grantex/             ← Helm chart
+│   └── nginx/                    ← Nginx reverse proxy config
+├── docs/                         ← Extended documentation
+│   ├── self-hosting.md           ← Self-hosting guide
+│   └── webhooks.md               ← Webhook integration guide
+└── docker-compose.yml            ← Local development stack
 ```
 
 ---

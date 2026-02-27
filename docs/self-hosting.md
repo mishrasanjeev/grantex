@@ -222,29 +222,37 @@ helm rollback grantex 1   # roll back to revision 1
 
 ## 6. Database Migrations
 
-Migrations run automatically via PostgreSQL's `docker-entrypoint-initdb.d/` mechanism — SQL
-files are only executed on a **fresh database volume**. On subsequent starts the named volume
-already exists, so init scripts are skipped.
+Migrations run **automatically on every startup**. The auth service includes a built-in migration
+runner (`src/db/migrate.ts`) that reads all `*.sql` files from the `migrations/` directory in
+alphabetical order and executes each one. All statements use idempotent DDL (`CREATE TABLE IF NOT EXISTS`,
+`ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`), so re-running is safe.
 
-**Upgrade procedure** (existing install):
+There are currently **9 migration files** covering:
+
+| File | Tables / Changes |
+|------|-----------------|
+| `001_core.sql` | `developers`, `agents`, `grants`, `tokens`, `audit_log` |
+| `002_webhooks.sql` | `webhooks`, `webhook_deliveries` |
+| `003_consent.sql` | `consent_requests` |
+| `004_delegation.sql` | Delegation columns on `grants` and `tokens` |
+| `005_compliance.sql` | Compliance views and indexes |
+| `006_policies.sql` | `policies` table |
+| `007_anomalies.sql` | `anomalies` table |
+| `008_scim_sso.sql` | `scim_tokens`, `scim_users`, `sso_connections` |
+| `009_developer_email.sql` | `email` column on `developers` |
+
+**Upgrade procedure** — just restart the service:
 
 ```bash
-# Pull the new image
+# Docker Compose
 docker compose -f docker-compose.prod.yml pull auth-service
-
-# Restart the service
 docker compose -f docker-compose.prod.yml up -d auth-service
+
+# Kubernetes
+kubectl rollout restart deployment/grantex -n grantex
 ```
 
-Apply new migration files manually to an existing database:
-
-```bash
-docker compose -f docker-compose.prod.yml exec postgres \
-  psql -U "$POSTGRES_USER" -d grantex \
-  -f /docker-entrypoint-initdb.d/006_policies.sql
-```
-
-Migration files are idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`).
+New migration files are applied automatically on startup. No manual SQL execution required.
 
 ---
 

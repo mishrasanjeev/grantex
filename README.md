@@ -10,16 +10,17 @@
 <br/>
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Spec Version](https://img.shields.io/badge/spec-v0.1--draft-orange)](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
+[![Spec Version](https://img.shields.io/badge/spec-v1.0--final-green)](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
 [![GitHub Stars](https://img.shields.io/github/stars/mishrasanjeev/grantex?style=social)](https://github.com/mishrasanjeev/grantex)
 
 <br/>
 
-> **Status:** v0.1 complete — protocol spec, auth service, both SDKs, multi-agent delegation, sandbox mode, and developer dashboard are all shipped. Not yet production-ready — hosted cloud and framework integrations are next.
+> **Status:** Production-ready. Protocol spec finalized (v1.0), auth service, TypeScript & Python SDKs, framework integrations (LangChain, AutoGen, CrewAI, Vercel AI), CLI, developer portal, and enterprise features (policies, anomaly detection, compliance exports) — all shipped.
 
 ```bash
 npm install @grantex/sdk        # TypeScript / Node.js
 pip install grantex             # Python
+npm install -g @grantex/cli     # CLI
 ```
 
 </div>
@@ -296,7 +297,9 @@ curl -s -X POST http://localhost:3001/v1/token \
   -d '{"code":"<code>","agentId":"<id>"}'
 ```
 
-**Developer dashboard** is available at [`http://localhost:3001/dashboard`](http://localhost:3001/dashboard) — enter either API key to browse your agents, grants, and audit log, and revoke grants directly from the UI.
+**Developer portal** is available at [grantex.dev/dashboard](https://grantex.dev/dashboard) — sign up or enter an API key to manage agents, grants, policies, anomalies, compliance exports, and billing from the browser.
+
+For local development, the auth service also serves a lightweight dashboard at `http://localhost:3001/dashboard`.
 
 See [docs/self-hosting.md](https://github.com/mishrasanjeev/grantex/blob/main/docs/self-hosting.md) for production deployment guidance.
 
@@ -335,14 +338,92 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 ## Integrations
 
-| Framework | Package | Status |
-|-----------|---------|--------|
-| LangChain | `@grantex/langchain` | 🚧 In progress |
-| AutoGen | `@grantex/autogen` | 🚧 In progress |
-| CrewAI | `grantex-crewai` | 📋 Planned |
-| Vercel AI SDK | `@grantex/vercel-ai` | 📋 Planned |
-| Plain TypeScript | `@grantex/sdk` | ✅ Available |
-| Plain Python | `grantex` | ✅ Available |
+| Framework | Package | Install | Status |
+|-----------|---------|---------|--------|
+| **LangChain** | `@grantex/langchain` | `npm install @grantex/langchain` | ✅ Shipped |
+| **AutoGen / OpenAI** | `@grantex/autogen` | `npm install @grantex/autogen` | ✅ Shipped |
+| **CrewAI** | `grantex-crewai` | `pip install grantex-crewai` | ✅ Shipped |
+| **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | ✅ Shipped |
+| **TypeScript SDK** | `@grantex/sdk` | `npm install @grantex/sdk` | ✅ Shipped |
+| **Python SDK** | `grantex` | `pip install grantex` | ✅ Shipped |
+| **CLI** | `@grantex/cli` | `npm install -g @grantex/cli` | ✅ Shipped |
+
+### Framework Quick Examples
+
+**LangChain** — scope-enforced tools + audit callbacks:
+
+```typescript
+import { createGrantexTool } from '@grantex/langchain';
+
+const tool = createGrantexTool({
+  name: 'read_calendar',
+  description: 'Read upcoming calendar events',
+  grantToken,
+  requiredScope: 'calendar:read',
+  func: async (input) => JSON.stringify(await getCalendarEvents(input)),
+});
+// Use with any LangChain agent — scope checked offline from JWT
+```
+
+**Vercel AI SDK** — scope checked at construction time:
+
+```typescript
+import { createGrantexTool } from '@grantex/vercel-ai';
+import { z } from 'zod';
+
+const tool = createGrantexTool({
+  name: 'read_calendar',
+  description: 'Read upcoming calendar events',
+  parameters: z.object({ date: z.string() }),
+  grantToken,
+  requiredScope: 'calendar:read',
+  execute: async (args) => await getCalendarEvents(args.date),
+});
+// Use with generateText, streamText, etc.
+```
+
+**AutoGen / OpenAI function calling**:
+
+```typescript
+import { createGrantexFunction, GrantexFunctionRegistry } from '@grantex/autogen';
+
+const fn = createGrantexFunction({
+  name: 'read_calendar',
+  description: 'Read upcoming calendar events',
+  parameters: { type: 'object', properties: { date: { type: 'string' } }, required: ['date'] },
+  grantToken,
+  requiredScope: 'calendar:read',
+  func: async (args) => await getCalendarEvents(args.date),
+});
+
+// Pass fn.definition to OpenAI, call fn.execute() when selected
+```
+
+**CrewAI** (Python):
+
+```python
+from grantex_crewai import GrantexTool
+
+tool = GrantexTool(
+    name="read_calendar",
+    description="Read upcoming calendar events",
+    grant_token=grant_token,
+    required_scope="calendar:read",
+    func=get_calendar_events,
+)
+# Use with any CrewAI agent
+```
+
+**CLI**:
+
+```bash
+grantex config set --url https://grantex-auth-dd4mtrt2gq-uc.a.run.app --key YOUR_API_KEY
+grantex agents list
+grantex grants list --status active
+grantex audit list --since 2026-01-01
+grantex anomalies detect
+grantex compliance summary
+```
 
 ---
 
@@ -381,60 +462,27 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 ## Roadmap
 
-**v0.1 — Foundation** ✅ *Complete*
-- [x] Protocol specification draft
-- [x] TypeScript SDK
-- [x] Python SDK
-- [x] Auth service (token issuance + verification + revocation)
-- [x] Identity service (DID generation + JWKS)
-- [x] Hosted consent UI
-- [x] Audit trail (hash-chained append-only log)
-- [x] Multi-agent delegation (scope-subset enforcement + cascade revocation)
-- [x] Sandbox mode (auto-approve consent for testing)
-- [x] Developer dashboard (agents, grants, audit log, revoke)
+All milestones through v1.0 are complete. See [ROADMAP.md](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md) for full details.
 
-**v0.2 — Integrations** *(current)*
-- [ ] LangChain integration
-- [ ] AutoGen integration
-- [ ] End-user permission dashboard
-- [ ] Webhook event delivery
-
-**v0.3 — Enterprise**
-- [ ] CrewAI integration
-- [ ] Enterprise compliance dashboard + exports
-- [ ] Policy engine (auto-approve / auto-deny rules)
-
-**v1.0 — Stable Protocol**
-- [ ] Protocol specification finalized
-- [ ] Security audit
-- [ ] SOC2 Type I
-
-See [ROADMAP.md](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md) for full details and RFC discussions.
+| Milestone | Highlights | Status |
+|-----------|-----------|--------|
+| **v0.1 — Foundation** | Protocol spec, TypeScript & Python SDKs, auth service, consent UI, audit trail, multi-agent delegation, sandbox mode | ✅ Complete |
+| **v0.2 — Integrations** | LangChain, AutoGen, webhooks, Stripe billing, CLI | ✅ Complete |
+| **v0.3 — Enterprise** | CrewAI, Vercel AI, compliance exports, policy engine, SCIM/SSO, anomaly detection | ✅ Complete |
+| **v1.0 — Stable Protocol** | Protocol spec finalized (v1.0), security audit, SOC2, standards submission | ✅ Complete |
 
 ---
 
 ## Contributing
 
-Grantex is in active early development. The best way to contribute right now:
+Grantex is open-source and welcomes contributions:
 
-1. **Join the discussion** — open a [GitHub Discussion](https://github.com/mishrasanjeev/grantex/discussions) with your use case or feedback
-2. **Review the spec** — see [SPEC.md](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) and open issues for gaps or disagreements
-3. **Build an integration** — framework integrations are the highest-leverage contribution
-4. **Spread the word** — star the repo, share with developers building agents
+1. **Report bugs** — open a [GitHub Issue](https://github.com/mishrasanjeev/grantex/issues) with reproduction steps
+2. **Propose features** — open a [GitHub Discussion](https://github.com/mishrasanjeev/grantex/discussions) with your use case
+3. **Build new integrations** — add Grantex support to your favorite framework
+4. **Improve docs** — better examples, tutorials, and translations
 
 Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRIBUTING.md) before submitting a PR.
-
----
-
-## Design Partners
-
-We're looking for **3–5 companies actively deploying AI agents** to shape the v0.2 roadmap as design partners. You get:
-
-- Direct influence on protocol design
-- Early access to hosted Grantex cloud
-- 12 months free on any paid tier
-
-→ **[Apply to be a design partner](mailto:design@grantex.dev)**
 
 ---
 
@@ -465,7 +513,7 @@ Protocol specification and SDKs: [Apache 2.0](https://github.com/mishrasanjeev/g
 
 <div align="center">
 
-**[Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)** · **[Roadmap](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md)** · **[Contributing](https://github.com/mishrasanjeev/grantex/blob/main/CONTRIBUTING.md)** · **[GitHub](https://github.com/mishrasanjeev/grantex)**
+**[Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)** · **[Dashboard](https://grantex.dev/dashboard)** · **[Self-Hosting](https://github.com/mishrasanjeev/grantex/blob/main/docs/self-hosting.md)** · **[Roadmap](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md)** · **[Contributing](https://github.com/mishrasanjeev/grantex/blob/main/CONTRIBUTING.md)** · **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 <br/>
 

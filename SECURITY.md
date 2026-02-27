@@ -4,10 +4,16 @@
 
 Only the following versions of Grantex components receive security patches:
 
-| Version     | Supported |
-|-------------|-----------|
-| 1.0.x       | ✅ Yes     |
-| 0.1-draft   | ❌ No      |
+| Component | Version | Supported |
+|-----------|---------|-----------|
+| Protocol spec | v1.0 | ✅ Yes |
+| `@grantex/sdk` | 0.1.x | ✅ Yes |
+| `grantex` (Python) | 0.1.x | ✅ Yes |
+| `@grantex/langchain` | 0.1.x | ✅ Yes |
+| `@grantex/autogen` | 0.1.x | ✅ Yes |
+| `@grantex/vercel-ai` | 0.1.x | ✅ Yes |
+| `grantex-crewai` | 0.1.x | ✅ Yes |
+| `@grantex/cli` | 0.1.x | ✅ Yes |
 
 If you are running a version not listed above, please upgrade before reporting.
 
@@ -63,7 +69,12 @@ We will not pursue legal action against researchers who act in good faith and fo
 | `auth-service`      | Token issuance, verification, revocation, delegation      |
 | `sdk-ts`            | `@grantex/sdk` — client-side token handling, JWT verify   |
 | `sdk-py`            | `grantex` package — same surface as sdk-ts                |
-| `cli`               | `grantex` CLI tool                                        |
+| `langchain`         | `@grantex/langchain` — scope enforcement, audit callbacks |
+| `autogen`           | `@grantex/autogen` — function registry, scope enforcement |
+| `vercel-ai`         | `@grantex/vercel-ai` — tool scope checks, audit logging  |
+| `crewai`            | `grantex-crewai` — tool scope enforcement                 |
+| `cli`               | `@grantex/cli` — CLI tool, credential handling            |
+| `portal`            | Developer portal — auth flow, API key handling            |
 | `SPEC.md`           | Protocol design flaws (e.g. cryptographic weaknesses)     |
 
 ### Out of scope
