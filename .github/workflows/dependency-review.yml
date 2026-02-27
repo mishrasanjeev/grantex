@@ -32,10 +32,4 @@ jobs:
             BSD-3-Clause,
             BlueOak-1.0.0,
             0BSD
-          deny-licenses: >-
-            GPL-2.0,
-            GPL-3.0,
-            LGPL-2.0,
-            LGPL-2.1,
-            LGPL-3.0
           comment-summary-in-pr: always
