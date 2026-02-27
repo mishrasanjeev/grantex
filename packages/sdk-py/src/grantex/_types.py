@@ -4,6 +4,55 @@ from dataclasses import dataclass
 from typing import Any
 
 
+# ─── Signup ───────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class SignupParams:
+    name: str
+    email: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {"name": self.name}
+        if self.email is not None:
+            body["email"] = self.email
+        return body
+
+
+@dataclass(frozen=True)
+class SignupResponse:
+    developer_id: str
+    api_key: str
+    name: str
+    email: str | None
+    mode: str
+    created_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SignupResponse:
+        return cls(
+            developer_id=data["developerId"],
+            api_key=data["apiKey"],
+            name=data["name"],
+            email=data.get("email"),
+            mode=data["mode"],
+            created_at=data["createdAt"],
+        )
+
+
+@dataclass(frozen=True)
+class RotateKeyResponse:
+    api_key: str
+    rotated_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> RotateKeyResponse:
+        return cls(
+            api_key=data["apiKey"],
+            rotated_at=data["rotatedAt"],
+        )
+
+
 # ─── Agent ────────────────────────────────────────────────────────────────────
 
 

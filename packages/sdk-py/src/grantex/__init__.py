@@ -12,6 +12,9 @@ from ._errors import (
 )
 from ._types import (
     Agent,
+    RotateKeyResponse,
+    SignupParams,
+    SignupResponse,
     Anomaly,
     AuditEntry,
     AuthorizationRequest,
@@ -75,6 +78,10 @@ __version__ = "0.1.1"
 __all__ = [
     # Main client
     "Grantex",
+    # Signup
+    "SignupParams",
+    "SignupResponse",
+    "RotateKeyResponse",
     # Standalone verify
     "verify_grant_token",
     # Webhook signature verification

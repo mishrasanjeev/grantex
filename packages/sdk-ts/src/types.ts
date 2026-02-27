@@ -9,6 +9,27 @@ export interface GrantexClientOptions {
   timeout?: number;
 }
 
+// ─── Signup ─────────────────────────────────────────────────────────────────
+
+export interface SignupParams {
+  name: string;
+  email?: string;
+}
+
+export interface SignupResponse {
+  developerId: string;
+  apiKey: string;
+  name: string;
+  email: string | null;
+  mode: 'live' | 'sandbox';
+  createdAt: string;
+}
+
+export interface RotateKeyResponse {
+  apiKey: string;
+  rotatedAt: string;
+}
+
 // ─── Agents ──────────────────────────────────────────────────────────────────
 
 export interface RegisterAgentParams {

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 export function sha256hex(input: string): string {
   return createHash('sha256').update(input).digest('hex');
@@ -6,6 +6,11 @@ export function sha256hex(input: string): string {
 
 export function hashApiKey(key: string): string {
   return sha256hex(key);
+}
+
+export function generateApiKey(mode: 'live' | 'sandbox' = 'live'): string {
+  const prefix = mode === 'sandbox' ? 'gx_test_' : 'gx_live_';
+  return prefix + randomBytes(32).toString('base64url');
 }
 
 export interface AuditHashFields {

@@ -19,6 +19,10 @@ export {
 // Types
 export type {
   GrantexClientOptions,
+  // Signup
+  SignupParams,
+  SignupResponse,
+  RotateKeyResponse,
   // Agents
   Agent,
   RegisterAgentParams,

@@ -14,6 +14,9 @@ import type {
   AuthorizationRequest,
   AuthorizeParams,
   GrantexClientOptions,
+  RotateKeyResponse,
+  SignupParams,
+  SignupResponse,
 } from './types.js';
 
 const DEFAULT_BASE_URL = 'https://api.grantex.dev';
@@ -63,6 +66,36 @@ export class Grantex {
   }
 
   /**
+   * Create a new developer account without an API key.
+   * Returns the developer ID and a one-time API key.
+   */
+  static async signup(
+    params: SignupParams,
+    options: { baseUrl?: string } = {},
+  ): Promise<SignupResponse> {
+    const baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
+    const response = await fetch(`${baseUrl}/v1/signup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      const message =
+        body && typeof body === 'object' && 'message' in body
+          ? String((body as Record<string, unknown>)['message'])
+          : `HTTP ${response.status}`;
+      throw new Error(message);
+    }
+
+    return response.json() as Promise<SignupResponse>;
+  }
+
+  /**
    * Initiate the delegated authorization flow for a user.
    * `userId` is transparently mapped to `principalId` in the request body.
    */
@@ -72,5 +105,12 @@ export class Grantex {
       ...rest,
       principalId: userId,
     });
+  }
+
+  /**
+   * Rotate the current API key. Returns a new key; the old key is invalidated.
+   */
+  rotateKey(): Promise<RotateKeyResponse> {
+    return this.#http.post<RotateKeyResponse>('/v1/keys/rotate');
   }
 }
