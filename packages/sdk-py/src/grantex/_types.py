@@ -687,6 +687,67 @@ class ComplianceAuditExport:
         )
 
 
+# ─── Anomalies ────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class Anomaly:
+    id: str
+    type: str  # 'rate_spike' | 'high_failure_rate' | 'new_principal' | 'off_hours_activity'
+    severity: str  # 'low' | 'medium' | 'high'
+    agent_id: str | None
+    principal_id: str | None
+    description: str
+    metadata: dict[str, Any]
+    detected_at: str
+    acknowledged_at: str | None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Anomaly":
+        return cls(
+            id=data["id"],
+            type=data["type"],
+            severity=data["severity"],
+            agent_id=data.get("agentId"),
+            principal_id=data.get("principalId"),
+            description=data["description"],
+            metadata=data.get("metadata", {}),
+            detected_at=data["detectedAt"],
+            acknowledged_at=data.get("acknowledgedAt"),
+        )
+
+
+@dataclass(frozen=True)
+class DetectAnomaliesResponse:
+    detected_at: str
+    total: int
+    anomalies: tuple[Anomaly, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "DetectAnomaliesResponse":
+        return cls(
+            detected_at=data["detectedAt"],
+            total=data["total"],
+            anomalies=tuple(Anomaly.from_dict(a) for a in data.get("anomalies", [])),
+        )
+
+
+@dataclass(frozen=True)
+class ListAnomaliesResponse:
+    anomalies: tuple[Anomaly, ...]
+    total: int
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ListAnomaliesResponse":
+        return cls(
+            anomalies=tuple(Anomaly.from_dict(a) for a in data.get("anomalies", [])),
+            total=data.get("total", 0),
+        )
+
+
+# ─── Evidence pack ─────────────────────────────────────────────────────────────
+
+
 @dataclass
 class EvidencePackParams:
     since: str | None = None

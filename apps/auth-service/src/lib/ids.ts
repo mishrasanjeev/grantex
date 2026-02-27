@@ -10,3 +10,4 @@ export const newDeveloperId = (): string => `dev_${ulid()}`;
 export const newWebhookId = (): string => `wh_${ulid()}`;
 export const newSubscriptionId = (): string => `sub_${ulid()}`;
 export const newPolicyId = (): string => `pol_${ulid()}`;
+export const newAnomalyId = (): string => `anm_${ulid()}`;

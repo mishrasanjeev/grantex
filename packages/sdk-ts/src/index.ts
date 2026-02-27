@@ -59,6 +59,12 @@ export type {
   CreatePolicyParams,
   UpdatePolicyParams,
   ListPoliciesResponse,
+  // Anomalies
+  AnomalyType,
+  AnomalySeverity,
+  Anomaly,
+  DetectAnomaliesResponse,
+  ListAnomaliesResponse,
   // Compliance
   ComplianceSummary,
   ComplianceExportGrantsParams,

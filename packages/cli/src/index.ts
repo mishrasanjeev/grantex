@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { agentsCommand } from './commands/agents.js';
+import { anomaliesCommand } from './commands/anomalies.js';
 import { auditCommand } from './commands/audit.js';
 import { complianceCommand } from './commands/compliance.js';
 import { configCommand } from './commands/config.js';
@@ -22,6 +23,7 @@ program.addCommand(tokensCommand());
 program.addCommand(auditCommand());
 program.addCommand(webhooksCommand());
 program.addCommand(complianceCommand());
+program.addCommand(anomaliesCommand());
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.error((err instanceof Error ? err.message : String(err)));
