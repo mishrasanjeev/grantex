@@ -59,7 +59,7 @@ Compliance features that make Grantex a must-have for regulated environments.
 
 Protocol finalization and ecosystem maturity.
 
-- [ ] Protocol specification finalized and frozen
+- [x] Protocol specification finalized and frozen
 - [ ] Independent security audit
 - [ ] SOC2 Type I certification
 - [x] On-premise enterprise deployment option
