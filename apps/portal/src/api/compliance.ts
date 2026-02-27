@@ -5,6 +5,14 @@ export function getComplianceSummary(): Promise<ComplianceSummary> {
   return api.get<ComplianceSummary>('/v1/compliance/summary');
 }
 
-export function exportComplianceReport(framework: string): Promise<Blob> {
-  return api.get<Blob>(`/v1/compliance/export?framework=${encodeURIComponent(framework)}`);
+export function exportGrants(): Promise<{ generatedAt: string; total: number; grants: unknown[] }> {
+  return api.get('/v1/compliance/export/grants');
+}
+
+export function exportAudit(): Promise<{ generatedAt: string; total: number; entries: unknown[] }> {
+  return api.get('/v1/compliance/export/audit');
+}
+
+export function exportEvidencePack(framework: string): Promise<Record<string, unknown>> {
+  return api.get(`/v1/compliance/evidence-pack?framework=${encodeURIComponent(framework)}`);
 }

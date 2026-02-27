@@ -113,13 +113,12 @@ export interface Anomaly {
 
 // ── Compliance ───────────────────────────────────────────────────────────
 export interface ComplianceSummary {
-  totalGrants: number;
-  activeGrants: number;
-  revokedGrants: number;
-  totalAgents: number;
-  auditEntries: number;
-  anomalies: number;
-  complianceScore: number;
+  generatedAt: string;
+  agents: { total: number; active: number; suspended: number; revoked: number };
+  grants: { total: number; active: number; revoked: number; expired: number };
+  auditEntries: { total: number; success: number; failure: number; blocked: number };
+  policies: { total: number };
+  plan: string;
 }
 
 // ── Billing ──────────────────────────────────────────────────────────────
