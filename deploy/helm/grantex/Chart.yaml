@@ -1,0 +1,6 @@
+apiVersion: v2
+name: grantex
+description: Grantex — open delegated authorization protocol for AI agents
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

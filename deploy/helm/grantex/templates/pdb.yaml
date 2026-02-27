@@ -1,0 +1,14 @@
+{{- if .Values.pdb.enabled -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "grantex.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "grantex.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "grantex.selectorLabels" . | nindent 6 }}
+{{- end }}

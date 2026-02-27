@@ -62,7 +62,7 @@ Protocol finalization and ecosystem maturity.
 - [ ] Protocol specification finalized and frozen
 - [ ] Independent security audit
 - [ ] SOC2 Type I certification
-- [ ] On-premise enterprise deployment option
+- [x] On-premise enterprise deployment option
 - [ ] Submit protocol spec to W3C / IETF / CNCF for standardization
 
 **Target: End of 2026**

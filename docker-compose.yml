@@ -14,6 +14,9 @@ services:
       - ./apps/auth-service/src/db/migrations/003_sandbox.sql:/docker-entrypoint-initdb.d/003_sandbox.sql:ro
       - ./apps/auth-service/src/db/migrations/004_webhooks.sql:/docker-entrypoint-initdb.d/004_webhooks.sql:ro
       - ./apps/auth-service/src/db/migrations/005_billing.sql:/docker-entrypoint-initdb.d/005_billing.sql:ro
+      - ./apps/auth-service/src/db/migrations/006_policies.sql:/docker-entrypoint-initdb.d/006_policies.sql:ro
+      - ./apps/auth-service/src/db/migrations/007_anomalies.sql:/docker-entrypoint-initdb.d/007_anomalies.sql:ro
+      - ./apps/auth-service/src/db/migrations/008_scim_sso.sql:/docker-entrypoint-initdb.d/008_scim_sso.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U grantex"]
       interval: 5s

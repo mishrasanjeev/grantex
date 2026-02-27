@@ -1,0 +1,35 @@
+Grantex has been deployed!
+
+1. Get the service URL:
+
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  https://{{ .host }}
+{{- end }}
+{{- else if eq .Values.service.type "LoadBalancer" }}
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "grantex.fullname" . }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+  echo "http://$SERVICE_IP:{{ .Values.service.port }}"
+{{- else }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "{{ include "grantex.selectorLabels" . }}" -o jsonpath='{.items[0].metadata.name}')
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 3001:3001
+  echo "http://localhost:3001"
+{{- end }}
+
+2. Verify the service is healthy:
+
+  curl http://<SERVICE_URL>/health
+
+  Expected response: { "status": "ok" }
+
+3. Point your Grantex SDK at the deployed service:
+
+  TypeScript:
+    import { Grantex } from '@grantex/sdk';
+    const client = new Grantex({ apiKey: '...', baseUrl: 'https://<SERVICE_URL>' });
+
+  Python:
+    from grantex import Grantex
+    client = Grantex(api_key='...', base_url='https://<SERVICE_URL>')
+
+4. See the self-hosting docs for key rotation, backups, and monitoring:
+   docs/self-hosting.md

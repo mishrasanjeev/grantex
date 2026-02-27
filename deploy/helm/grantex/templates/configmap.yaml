@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "grantex.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "grantex.labels" . | nindent 4 }}
+data:
+  PORT: {{ .Values.config.port | quote }}
+  HOST: {{ .Values.config.host | quote }}
+  JWT_ISSUER: {{ .Values.config.jwtIssuer | quote }}
+  DATABASE_URL: {{ .Values.externalDatabase.url | quote }}
+  REDIS_URL: {{ .Values.externalRedis.url | quote }}
