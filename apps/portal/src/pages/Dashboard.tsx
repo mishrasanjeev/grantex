@@ -28,7 +28,7 @@ export function Dashboard() {
         const [agents, grants, audit, anomalies] = await Promise.all([
           listAgents().catch(() => []),
           listGrants({ status: 'active' }).catch(() => []),
-          listAuditEntries({ limit: 10 }).catch(() => []),
+          listAuditEntries().catch(() => []),
           listAnomalies().catch(() => []),
         ]);
         setStats({
@@ -37,7 +37,7 @@ export function Dashboard() {
           auditEntries: audit.length,
           anomalies: anomalies.length,
         });
-        setRecent(audit);
+        setRecent(audit.slice(-10).reverse());
       } finally {
         setLoading(false);
       }
@@ -82,23 +82,31 @@ export function Dashboard() {
               <thead>
                 <tr className="border-b border-gx-border">
                   <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">Action</th>
-                  <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">Resource</th>
-                  <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">ID</th>
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">Agent</th>
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">Grant</th>
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">Status</th>
                   <th className="text-right py-2 text-xs font-medium text-gx-muted">Time</th>
                 </tr>
               </thead>
               <tbody>
                 {recent.map((entry) => (
-                  <tr key={entry.id} className="border-b border-gx-border/50 last:border-0">
+                  <tr key={entry.entryId} className="border-b border-gx-border/50 last:border-0">
                     <td className="py-2.5 pr-4">
                       <Badge>{entry.action}</Badge>
                     </td>
-                    <td className="py-2.5 pr-4 text-gx-muted">{entry.resourceType}</td>
+                    <td className="py-2.5 pr-4 font-mono text-xs text-gx-muted">
+                      {truncateId(entry.agentId)}
+                    </td>
                     <td className="py-2.5 pr-4 font-mono text-xs text-gx-accent2">
-                      {truncateId(entry.resourceId)}
+                      {truncateId(entry.grantId)}
+                    </td>
+                    <td className="py-2.5 pr-4">
+                      <Badge variant={entry.status === 'success' ? 'success' : entry.status === 'blocked' ? 'warning' : 'danger'}>
+                        {entry.status}
+                      </Badge>
                     </td>
                     <td className="py-2.5 text-right text-gx-muted text-xs">
-                      {timeAgo(entry.createdAt)}
+                      {timeAgo(entry.timestamp)}
                     </td>
                   </tr>
                 ))}

@@ -58,15 +58,18 @@ export interface Grant {
 
 // ── Audit ────────────────────────────────────────────────────────────────
 export interface AuditEntry {
-  id: string;
+  entryId: string;
+  agentId: string;
+  agentDid: string;
+  grantId: string;
+  principalId: string;
   developerId: string;
   action: string;
-  resourceType: string;
-  resourceId: string;
   metadata: Record<string, unknown>;
   hash: string;
-  previousHash: string | null;
-  createdAt: string;
+  prevHash: string | null;
+  timestamp: string;
+  status: 'success' | 'failure' | 'blocked';
 }
 
 // ── Policies ─────────────────────────────────────────────────────────────

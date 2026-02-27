@@ -6,6 +6,10 @@ import { Dashboard } from './pages/Dashboard';
 import { AgentList } from './pages/agents/AgentList';
 import { AgentForm } from './pages/agents/AgentForm';
 import { AgentDetail } from './pages/agents/AgentDetail';
+import { GrantList } from './pages/grants/GrantList';
+import { GrantDetail } from './pages/grants/GrantDetail';
+import { AuditLog } from './pages/audit/AuditLog';
+import { AuditDetail } from './pages/audit/AuditDetail';
 import { RequireAuth } from './RequireAuth';
 
 // Placeholder pages for future PRs
@@ -33,10 +37,10 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/agents/new', element: <AgentForm /> },
       { path: '/dashboard/agents/:id', element: <AgentDetail /> },
       { path: '/dashboard/agents/:id/edit', element: <AgentForm /> },
-      { path: '/dashboard/grants', element: <Placeholder title="Grants" /> },
-      { path: '/dashboard/grants/:id', element: <Placeholder title="Grant Detail" /> },
-      { path: '/dashboard/audit', element: <Placeholder title="Audit Log" /> },
-      { path: '/dashboard/audit/:id', element: <Placeholder title="Audit Detail" /> },
+      { path: '/dashboard/grants', element: <GrantList /> },
+      { path: '/dashboard/grants/:id', element: <GrantDetail /> },
+      { path: '/dashboard/audit', element: <AuditLog /> },
+      { path: '/dashboard/audit/:id', element: <AuditDetail /> },
       { path: '/dashboard/policies', element: <Placeholder title="Policies" /> },
       { path: '/dashboard/policies/new', element: <Placeholder title="Create Policy" /> },
       { path: '/dashboard/policies/:id/edit', element: <Placeholder title="Edit Policy" /> },
