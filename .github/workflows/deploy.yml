@@ -1,0 +1,81 @@
+# .github/workflows/deploy.yml
+# Deploys auth-service to GCP Cloud Run on push to main.
+#
+# Prerequisites (one-time setup):
+#   bash deploy/gcp/setup-wif.sh
+#   Add GitHub secrets:
+#     GCP_WORKLOAD_IDENTITY_PROVIDER  — WIF provider resource name
+#     GCP_SERVICE_ACCOUNT             — grantex-auth-sa@grantex-prod.iam.gserviceaccount.com
+#
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/auth-service/**'
+      - '.github/workflows/deploy.yml'
+
+permissions:
+  contents: read
+  id-token: write  # Required for Workload Identity Federation
+
+env:
+  PROJECT_ID: grantex-prod
+  REGION: us-central1
+  AR_REPO: grantex-images
+  CR_SERVICE: grantex-auth
+  IMAGE_BASE: us-central1-docker.pkg.dev/grantex-prod/grantex-images/auth-service
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP (Workload Identity Federation)
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: apps/auth-service
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_BASE }}:${{ github.sha }}
+            ${{ env.IMAGE_BASE }}:latest
+          cache-from: type=registry,ref=${{ env.IMAGE_BASE }}:latest
+          cache-to: type=inline
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.CR_SERVICE }}
+          image: ${{ env.IMAGE_BASE }}:${{ github.sha }}
+          region: ${{ env.REGION }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Print deployed URL
+        run: |
+          echo "Deployed to: ${{ steps.deploy.outputs.url }}"
+          echo "Image: ${{ env.IMAGE_BASE }}:${{ github.sha }}"

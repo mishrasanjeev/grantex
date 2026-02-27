@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#0d1117"/>
+
+  <!-- Subtle grid lines -->
+  <line x1="0" y1="315" x2="1200" y2="315" stroke="#161b22" stroke-width="1"/>
+  <line x1="600" y1="0" x2="600" y2="630" stroke="#161b22" stroke-width="1"/>
+
+  <!-- Border -->
+  <rect x="2" y="2" width="1196" height="626" rx="8" fill="none"
+        stroke="#30363d" stroke-width="2"/>
+
+  <!-- Logo wordmark -->
+  <text x="100" y="230"
+        font-family="'JetBrains Mono', 'Fira Code', monospace"
+        font-size="88"
+        font-weight="700"
+        letter-spacing="-3"
+        fill="#3fb950">grant</text>
+  <text x="441" y="230"
+        font-family="'JetBrains Mono', 'Fira Code', monospace"
+        font-size="88"
+        font-weight="700"
+        letter-spacing="-3"
+        fill="#e6edf3">ex</text>
+
+  <!-- Tagline -->
+  <text x="100" y="310"
+        font-family="'Inter', system-ui, sans-serif"
+        font-size="32"
+        fill="#8b949e"
+        letter-spacing="-0.5">OAuth 2.0 for AI Agents</text>
+
+  <!-- Description -->
+  <text x="100" y="368"
+        font-family="'Inter', system-ui, sans-serif"
+        font-size="20"
+        fill="#8b949e">Verifiable, revocable, audited grants built on JWT and OAuth 2.0.</text>
+
+  <!-- Separator line -->
+  <line x1="100" y1="408" x2="1100" y2="408" stroke="#30363d" stroke-width="1"/>
+
+  <!-- Badges -->
+  <!-- IETF I-D -->
+  <rect x="100" y="436" width="140" height="34" rx="17" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <circle cx="123" cy="453" r="5" fill="#3fb950"/>
+  <text x="136" y="458" font-family="'JetBrains Mono', monospace" font-size="13" fill="#8b949e">IETF I-D</text>
+
+  <!-- SOC 2 Type I -->
+  <rect x="256" y="436" width="152" height="34" rx="17" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <circle cx="279" cy="453" r="5" fill="#3fb950"/>
+  <text x="292" y="458" font-family="'JetBrains Mono', monospace" font-size="13" fill="#8b949e">SOC 2 Type I</text>
+
+  <!-- Apache 2.0 -->
+  <rect x="424" y="436" width="146" height="34" rx="17" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <circle cx="447" cy="453" r="5" fill="#3fb950"/>
+  <text x="460" y="458" font-family="'JetBrains Mono', monospace" font-size="13" fill="#8b949e">Apache 2.0</text>
+
+  <!-- v1.0 -->
+  <rect x="586" y="436" width="84" height="34" rx="17" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <circle cx="609" cy="453" r="5" fill="#3fb950"/>
+  <text x="622" y="458" font-family="'JetBrains Mono', monospace" font-size="13" fill="#8b949e">v1.0</text>
+
+  <!-- URL hint -->
+  <text x="100" y="580"
+        font-family="'JetBrains Mono', monospace"
+        font-size="18"
+        fill="#30363d">grantex.dev</text>
+</svg>
