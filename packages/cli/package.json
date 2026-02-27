@@ -1,13 +1,14 @@
 {
   "name": "@grantex/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI tool for local Grantex development",
   "type": "module",
   "bin": {
     "grantex": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

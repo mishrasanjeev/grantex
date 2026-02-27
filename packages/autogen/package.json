@@ -1,6 +1,6 @@
 {
   "name": "@grantex/autogen",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AutoGen / OpenAI function-calling integration for the Grantex delegated authorization protocol",
   "type": "module",
   "exports": {
@@ -12,7 +12,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
