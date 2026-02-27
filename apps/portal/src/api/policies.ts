@@ -1,8 +1,9 @@
 import { api } from './client';
 import type { Policy, CreatePolicyRequest } from './types';
 
-export function listPolicies(): Promise<Policy[]> {
-  return api.get<Policy[]>('/v1/policies');
+export async function listPolicies(): Promise<Policy[]> {
+  const res = await api.get<{ policies: Policy[]; total: number }>('/v1/policies');
+  return res.policies;
 }
 
 export function getPolicy(id: string): Promise<Policy> {

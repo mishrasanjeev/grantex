@@ -1,14 +1,15 @@
 import { api } from './client';
 import type { Anomaly } from './types';
 
-export function listAnomalies(): Promise<Anomaly[]> {
-  return api.get<Anomaly[]>('/v1/anomalies');
+export async function listAnomalies(): Promise<Anomaly[]> {
+  const res = await api.get<{ anomalies: Anomaly[]; total: number }>('/v1/anomalies');
+  return res.anomalies;
 }
 
-export function detectAnomalies(): Promise<{ detected: number }> {
-  return api.post<{ detected: number }>('/v1/anomalies/detect');
+export function detectAnomalies(): Promise<{ detectedAt: string; total: number; anomalies: Anomaly[] }> {
+  return api.post<{ detectedAt: string; total: number; anomalies: Anomaly[] }>('/v1/anomalies/detect');
 }
 
-export function acknowledgeAnomaly(id: string): Promise<void> {
-  return api.post<void>(`/v1/anomalies/${encodeURIComponent(id)}/acknowledge`);
+export function acknowledgeAnomaly(id: string): Promise<Anomaly> {
+  return api.patch<Anomaly>(`/v1/anomalies/${encodeURIComponent(id)}/acknowledge`);
 }

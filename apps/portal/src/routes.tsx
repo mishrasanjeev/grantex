@@ -10,6 +10,9 @@ import { GrantList } from './pages/grants/GrantList';
 import { GrantDetail } from './pages/grants/GrantDetail';
 import { AuditLog } from './pages/audit/AuditLog';
 import { AuditDetail } from './pages/audit/AuditDetail';
+import { PolicyList } from './pages/policies/PolicyList';
+import { PolicyForm } from './pages/policies/PolicyForm';
+import { AnomalyList } from './pages/anomalies/AnomalyList';
 import { RequireAuth } from './RequireAuth';
 
 // Placeholder pages for future PRs
@@ -41,10 +44,10 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/grants/:id', element: <GrantDetail /> },
       { path: '/dashboard/audit', element: <AuditLog /> },
       { path: '/dashboard/audit/:id', element: <AuditDetail /> },
-      { path: '/dashboard/policies', element: <Placeholder title="Policies" /> },
-      { path: '/dashboard/policies/new', element: <Placeholder title="Create Policy" /> },
-      { path: '/dashboard/policies/:id/edit', element: <Placeholder title="Edit Policy" /> },
-      { path: '/dashboard/anomalies', element: <Placeholder title="Anomalies" /> },
+      { path: '/dashboard/policies', element: <PolicyList /> },
+      { path: '/dashboard/policies/new', element: <PolicyForm /> },
+      { path: '/dashboard/policies/:id/edit', element: <PolicyForm /> },
+      { path: '/dashboard/anomalies', element: <AnomalyList /> },
       { path: '/dashboard/compliance', element: <Placeholder title="Compliance" /> },
       { path: '/dashboard/billing', element: <Placeholder title="Billing" /> },
       { path: '/dashboard/settings', element: <Placeholder title="Settings" /> },
