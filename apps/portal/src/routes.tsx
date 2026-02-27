@@ -3,6 +3,9 @@ import { Shell } from './components/layout/Shell';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { Dashboard } from './pages/Dashboard';
+import { AgentList } from './pages/agents/AgentList';
+import { AgentForm } from './pages/agents/AgentForm';
+import { AgentDetail } from './pages/agents/AgentDetail';
 import { RequireAuth } from './RequireAuth';
 
 // Placeholder pages for future PRs
@@ -26,9 +29,10 @@ export const routes: RouteObject[] = [
     ),
     children: [
       { path: '/dashboard', element: <Dashboard /> },
-      { path: '/dashboard/agents', element: <Placeholder title="Agents" /> },
-      { path: '/dashboard/agents/new', element: <Placeholder title="Create Agent" /> },
-      { path: '/dashboard/agents/:id', element: <Placeholder title="Agent Detail" /> },
+      { path: '/dashboard/agents', element: <AgentList /> },
+      { path: '/dashboard/agents/new', element: <AgentForm /> },
+      { path: '/dashboard/agents/:id', element: <AgentDetail /> },
+      { path: '/dashboard/agents/:id/edit', element: <AgentForm /> },
       { path: '/dashboard/grants', element: <Placeholder title="Grants" /> },
       { path: '/dashboard/grants/:id', element: <Placeholder title="Grant Detail" /> },
       { path: '/dashboard/audit', element: <Placeholder title="Audit Log" /> },

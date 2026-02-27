@@ -1,12 +1,13 @@
 import { api } from './client';
 import type { Grant } from './types';
 
-export function listGrants(params?: { agentId?: string; status?: string }): Promise<Grant[]> {
+export async function listGrants(params?: { agentId?: string; status?: string }): Promise<Grant[]> {
   const q = new URLSearchParams();
   if (params?.agentId) q.set('agentId', params.agentId);
   if (params?.status) q.set('status', params.status);
   const qs = q.toString();
-  return api.get<Grant[]>(`/v1/grants${qs ? `?${qs}` : ''}`);
+  const res = await api.get<{ grants: Grant[] }>(`/v1/grants${qs ? `?${qs}` : ''}`);
+  return res.grants;
 }
 
 export function getGrant(id: string): Promise<Grant> {
@@ -14,5 +15,5 @@ export function getGrant(id: string): Promise<Grant> {
 }
 
 export function revokeGrant(id: string): Promise<void> {
-  return api.post<void>(`/v1/grants/${encodeURIComponent(id)}/revoke`);
+  return api.del(`/v1/grants/${encodeURIComponent(id)}`);
 }
