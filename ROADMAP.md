@@ -35,7 +35,7 @@ Making Grantex native to every major agent framework.
 - [x] Stripe billing integration (Free / Pro / Enterprise tiers)
 - [x] `grantex` CLI tool for local development
 
-**Target: End of May 2026**
+**Target: End of May 2026** ✅ Complete
 
 ---
 
@@ -51,7 +51,7 @@ Compliance features that make Grantex a must-have for regulated environments.
 - [x] SCIM / SSO for enterprise developer orgs
 - [x] Anomaly detection (unusual agent behavior alerts)
 
-**Target: End of August 2026**
+**Target: End of August 2026** ✅ Complete
 
 ---
 
@@ -65,7 +65,7 @@ Protocol finalization and ecosystem maturity.
 - [x] On-premise enterprise deployment option
 - [x] Submit protocol spec to W3C / IETF / CNCF for standardization
 
-**Target: End of 2026**
+**Target: End of 2026** ✅ Complete
 
 ---
 
@@ -78,4 +78,4 @@ Protocol finalization and ecosystem maturity.
 
 ---
 
-*Last updated: February 2026*
+*Last updated: February 2026 — v1.0 roadmap complete.*
