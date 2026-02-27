@@ -28,6 +28,9 @@ __pycache__/
 dist/
 build/
 
+# Firebase
+.firebase/
+
 # Coverage & caches
 coverage/
 .cache/
