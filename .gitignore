@@ -30,6 +30,7 @@ build/
 
 # Firebase
 .firebase/
+web/dashboard/
 
 # Coverage & caches
 coverage/
