@@ -87,7 +87,7 @@ echo "    This can take 5-10 minutes..."
 gcloud sql instances create "${SQL_INSTANCE}" \
   --database-version=POSTGRES_16 \
   --edition=ENTERPRISE \
-  --tier=db-g1-small \
+  --tier=db-f1-micro \
   --region="${REGION}" \
   --no-assign-ip \
   --network="projects/${PROJECT_ID}/global/networks/${VPC_NAME}" \
@@ -199,25 +199,22 @@ echo ""
 echo "==> [14/17] Deploying initial Cloud Run service (placeholder image)..."
 echo "    Note: First deploy uses :latest tag. GitHub Actions will update on push."
 
-# Retrieve secret resource names
-DB_SECRET_VERSION="projects/${PROJECT_ID}/secrets/grantex-db-password/versions/latest"
-RSA_SECRET_VERSION="projects/${PROJECT_ID}/secrets/grantex-rsa-private-key/versions/latest"
-STRIPE_SECRET_VERSION="projects/${PROJECT_ID}/secrets/grantex-stripe-secret-key/versions/latest"
-
+# Cloud Run sets PORT automatically — do not include it in env vars.
+# Secrets use short name:version format (not full resource path).
 gcloud run deploy "${CR_SERVICE}" \
   --image="${IMAGE}" \
   --region="${REGION}" \
   --port=3001 \
   --cpu=1 \
-  --memory=512Mi \
-  --min-instances=1 \
+  --memory=256Mi \
+  --min-instances=0 \
   --max-instances=10 \
   --concurrency=80 \
   --service-account="${SA_EMAIL}" \
   --vpc-connector="${CONNECTOR_NAME}" \
   --vpc-egress=all-traffic \
-  --set-env-vars="PORT=3001,HOST=0.0.0.0,JWT_ISSUER=https://grantex.dev,AUTO_GENERATE_KEYS=false,REDIS_URL=redis://${REDIS_HOST}:6379" \
-  --set-secrets="DATABASE_URL=${DB_SECRET_VERSION},RSA_PRIVATE_KEY=${RSA_SECRET_VERSION},STRIPE_SECRET_KEY=${STRIPE_SECRET_VERSION}" \
+  --set-env-vars="HOST=0.0.0.0,JWT_ISSUER=https://grantex.dev,AUTO_GENERATE_KEYS=false,REDIS_URL=redis://${REDIS_HOST}:6379" \
+  --set-secrets="DATABASE_URL=grantex-db-password:latest,RSA_PRIVATE_KEY=grantex-rsa-private-key:latest,STRIPE_SECRET_KEY=grantex-stripe-secret-key:latest" \
   --allow-unauthenticated \
   --project="${PROJECT_ID}" || echo "Cloud Run deploy failed — image may not exist yet. Push a build via GitHub Actions first."
 
