@@ -1,1 +1,7 @@
-{ "projects": { "default": "grantex-prod" } }
+{
+  "projects": { "default": "grantex-prod" },
+  "targets": {},
+  "hosting": {
+    "site": "grantex-prod"
+  }
+}

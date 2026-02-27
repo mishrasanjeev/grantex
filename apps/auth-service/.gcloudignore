@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.git
+tests/
+*.test.ts
+*.spec.ts
+vitest.config.ts
+.env
+.env.*
+coverage/
