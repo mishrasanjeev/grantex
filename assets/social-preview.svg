@@ -1,0 +1,8 @@
+<svg width="1280" height="640" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="640" fill="#0d1117"/>
+  <rect x="0" y="0" width="1280" height="4" fill="#3fb950"/>
+  <text x="640" y="260" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="96" font-weight="700" fill="#e6edf3">Grantex</text>
+  <text x="640" y="340" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="32" fill="#8b949e">Delegated authorization for AI agents</text>
+  <text x="640" y="420" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="22" fill="#3fb950">OAuth 2.0 for agents  ·  Offline-verifiable JWTs  ·  Tamper-proof audit trails</text>
+  <text x="640" y="560" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="20" fill="#484f58">grantex.dev</text>
+</svg>
