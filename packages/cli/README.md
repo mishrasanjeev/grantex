@@ -38,6 +38,7 @@ grantex config show
 grantex agents list
 grantex agents register --name travel-booker --scopes calendar:read,payments:initiate
 grantex agents get ag_01ABC...
+grantex agents update ag_01ABC... --name new-name --scopes calendar:read,email:send
 grantex agents delete ag_01ABC...
 ```
 
