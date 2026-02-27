@@ -343,6 +343,53 @@
     .id  { color: #79c0ff; }  /* identifier */
     .op  { color: #e6edf3; }  /* operator   */
 
+    /* ── Install commands ──────────────────────────────────────────────────── */
+    .install-commands {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+      max-width: 680px;
+    }
+    .install-cmd {
+      flex: 1;
+      min-width: 260px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .install-cmd:hover { border-color: var(--accent2); }
+    .install-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--accent);
+      flex-shrink: 0;
+      width: 32px;
+    }
+    .install-cmd code {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--text);
+      flex: 1;
+    }
+    .install-copy {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    .install-cmd:hover .install-copy { color: var(--text); }
+
     /* ── Integrations ──────────────────────────────────────────────────────── */
     .integrations-grid {
       display: flex;
@@ -486,6 +533,7 @@
         <li><a href="https://github.com/mishrasanjeev/grantex"
                onclick="gtag('event','github_click',{event_category:'nav'})">GitHub</a></li>
         <li><a href="https://www.npmjs.com/package/@grantex/sdk">npm</a></li>
+        <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
       </ul>
     </div>
   </div>
@@ -637,6 +685,19 @@
       Install the SDK and authorize your first agent in under 10 lines.
     </p>
 
+    <div class="install-commands">
+      <div class="install-cmd" onclick="copyInstall('npm install @grantex/sdk', this)">
+        <span class="install-label">npm</span>
+        <code>npm install @grantex/sdk</code>
+        <span class="install-copy">Copy</span>
+      </div>
+      <div class="install-cmd" onclick="copyInstall('pip install grantex', this)">
+        <span class="install-label">PyPI</span>
+        <code>pip install grantex</code>
+        <span class="install-copy">Copy</span>
+      </div>
+    </div>
+
     <div style="max-width:680px;">
       <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('node', this)">Node.js</button>
@@ -695,30 +756,30 @@
       Drop Grantex into any AI framework or language runtime.
     </p>
     <div class="integrations-grid">
-      <div class="integration-pill">
+      <a href="https://www.npmjs.com/package/@grantex/langchain" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x1F997;</span>
         LangChain
-      </div>
-      <div class="integration-pill">
+      </a>
+      <a href="https://www.npmjs.com/package/@grantex/autogen" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x1F916;</span>
         AutoGen
-      </div>
-      <div class="integration-pill">
+      </a>
+      <a href="https://pypi.org/project/grantex-crewai/" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x1F6A2;</span>
         CrewAI
-      </div>
-      <div class="integration-pill">
+      </a>
+      <a href="https://www.npmjs.com/package/@grantex/vercel-ai" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x25B2;</span>
         Vercel AI SDK
-      </div>
-      <div class="integration-pill">
+      </a>
+      <a href="https://www.npmjs.com/package/@grantex/sdk" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">TS</span>
         TypeScript
-      </div>
-      <div class="integration-pill">
+      </a>
+      <a href="https://pypi.org/project/grantex/" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">Py</span>
         Python
-      </div>
+      </a>
     </div>
   </div>
 </section>
@@ -868,6 +929,18 @@
     });
     if (typeof gtag !== 'undefined') {
       gtag('event', gaEvent, { event_category: 'quickstart' });
+    }
+  }
+
+  /* Install command copy */
+  function copyInstall(text, el) {
+    navigator.clipboard.writeText(text).then(() => {
+      var copyEl = el.querySelector('.install-copy');
+      copyEl.textContent = 'Copied!';
+      setTimeout(() => { copyEl.textContent = 'Copy'; }, 2000);
+    });
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'install_copy', { event_category: 'quickstart', event_label: text });
     }
   }
 </script>
