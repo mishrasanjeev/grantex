@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { z } from 'zod';
 
-// Mock `ai` so tool() is a simple identity function — no real LLM deps
+// Mock `ai` so zodSchema() is an identity function — no real LLM deps
 vi.mock('ai', () => ({
-  tool: (t: unknown) => t,
+  zodSchema: (schema: unknown) => schema,
 }));
 
 import { createGrantexTool, getGrantScopes } from '../src/tool.js';
@@ -52,7 +52,7 @@ describe('createGrantexTool', () => {
     });
 
     expect(t.description).toBe('Fetches a URL.');
-    expect(t.parameters).toBe(PARAMS);
+    expect(t.inputSchema).toBe(PARAMS);
     expect(typeof t.execute).toBe('function');
     expect(t[TOOL_NAME_KEY]).toBe('fetch_data');
   });

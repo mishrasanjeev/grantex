@@ -17,7 +17,7 @@
     "dev": "node --loader ts-node/esm src/index.ts"
   },
   "dependencies": {
-    "@grantex/sdk": "file:../sdk-ts",
+    "@grantex/sdk": "^0.1.1",
     "chalk": "^5.3.0",
     "commander": "^12.0.0"
   },

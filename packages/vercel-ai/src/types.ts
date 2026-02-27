@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { ToolExecutionOptions } from 'ai';
+import type { ToolCallOptions } from '@ai-sdk/provider-utils';
 
 // ─── createGrantexTool options ────────────────────────────────────────────────
 
@@ -28,8 +28,8 @@ export interface CreateGrantexToolOptions<
   /** The tool implementation — receives the validated Zod-parsed args. */
   execute: (
     args: z.infer<PARAMETERS>,
-    options: ToolExecutionOptions,
-  ) => Promise<RESULT>;
+    options: ToolCallOptions,
+  ) => PromiseLike<RESULT>;
 }
 
 // ─── withAuditLogging options ─────────────────────────────────────────────────
