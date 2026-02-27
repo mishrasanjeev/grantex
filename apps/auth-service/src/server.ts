@@ -21,6 +21,7 @@ import { anomaliesRoutes } from './routes/anomalies.js';
 import { scimRoutes } from './routes/scim.js';
 import { ssoRoutes } from './routes/sso.js';
 import { signupRoutes } from './routes/signup.js';
+import { meRoutes } from './routes/me.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -60,6 +61,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(scimRoutes);
   await app.register(ssoRoutes);
   await app.register(signupRoutes);
+  await app.register(meRoutes);
 
   return app;
 }

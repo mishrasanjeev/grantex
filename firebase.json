@@ -3,6 +3,7 @@
     "public": "web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
+      { "source": "/dashboard/**", "destination": "/dashboard/index.html" },
       { "source": "**", "destination": "/index.html" }
     ],
     "headers": [
