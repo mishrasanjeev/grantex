@@ -16,6 +16,7 @@ import { AnomalyList } from './pages/anomalies/AnomalyList';
 import { ComplianceDashboard } from './pages/compliance/ComplianceDashboard';
 import { BillingPage } from './pages/billing/BillingPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
+import { WebhookList } from './pages/webhooks/WebhookList';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './RequireAuth';
 
@@ -38,6 +39,7 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/grants/:id', element: <GrantDetail /> },
       { path: '/dashboard/audit', element: <AuditLog /> },
       { path: '/dashboard/audit/:id', element: <AuditDetail /> },
+      { path: '/dashboard/webhooks', element: <WebhookList /> },
       { path: '/dashboard/policies', element: <PolicyList /> },
       { path: '/dashboard/policies/new', element: <PolicyForm /> },
       { path: '/dashboard/policies/:id/edit', element: <PolicyForm /> },
