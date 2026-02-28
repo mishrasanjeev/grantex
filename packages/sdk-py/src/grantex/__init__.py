@@ -72,6 +72,7 @@ from ._types import (
     SsoLoginResponse,
     SsoCallbackResponse,
 )
+from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook_signature
 
@@ -84,6 +85,9 @@ __all__ = [
     "SignupParams",
     "SignupResponse",
     "RotateKeyResponse",
+    # PKCE
+    "PkceChallenge",
+    "generate_pkce",
     # Standalone verify
     "verify_grant_token",
     # Webhook signature verification

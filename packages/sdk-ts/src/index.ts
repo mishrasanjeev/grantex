@@ -7,6 +7,9 @@ export { verifyGrantToken } from './verify.js';
 // Webhook signature verification
 export { verifyWebhookSignature } from './webhook.js';
 
+// PKCE helper
+export { generatePkce, type PkceChallenge } from './pkce.js';
+
 // Error classes
 export {
   GrantexError,

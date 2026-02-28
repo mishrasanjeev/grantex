@@ -3,16 +3,18 @@ import { getSql } from '../db/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
 import { fireWebhooks } from '../lib/webhook.js';
+import { verifyPkceChallenge } from '../lib/pkce.js';
 
 interface TokenBody {
   code: string;
   agentId: string;
+  codeVerifier?: string;
 }
 
 export async function tokenRoutes(app: FastifyInstance): Promise<void> {
-  // POST /v1/token
-  app.post<{ Body: TokenBody }>('/v1/token', async (request, reply) => {
-    const { code, agentId } = request.body;
+  // POST /v1/token — stricter rate limit: 20/min
+  app.post<{ Body: TokenBody }>('/v1/token', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
+    const { code, agentId, codeVerifier } = request.body;
 
     if (!code || !agentId) {
       return reply.status(400).send({
@@ -29,7 +31,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     const authRows = await sql`
       SELECT ar.id, ar.agent_id, ar.principal_id, ar.developer_id,
              ar.scopes, ar.expires_in, ar.expires_at, ar.status,
-             ar.audience, a.did AS agent_did
+             ar.audience, ar.code_challenge, a.did AS agent_did
       FROM auth_requests ar
       JOIN agents a ON a.id = ar.agent_id
       WHERE ar.code = ${code}
@@ -48,6 +50,17 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
 
     if (new Date(authReq['expires_at'] as string) < new Date()) {
       return reply.status(400).send({ message: 'Auth request expired', code: 'BAD_REQUEST', requestId: request.id });
+    }
+
+    // PKCE verification
+    const storedChallenge = authReq['code_challenge'] as string | null;
+    if (storedChallenge) {
+      if (!codeVerifier) {
+        return reply.status(400).send({ message: 'codeVerifier is required for PKCE', code: 'BAD_REQUEST', requestId: request.id });
+      }
+      if (!verifyPkceChallenge(codeVerifier, storedChallenge)) {
+        return reply.status(400).send({ message: 'Invalid codeVerifier', code: 'BAD_REQUEST', requestId: request.id });
+      }
     }
 
     // Parse expiry

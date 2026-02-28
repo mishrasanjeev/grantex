@@ -13,16 +13,27 @@ interface AuthorizeBody {
   state?: string;
   expiresIn?: string;
   audience?: string;
+  codeChallenge?: string;
+  codeChallengeMethod?: string;
 }
 
 export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
-  // POST /v1/authorize
-  app.post<{ Body: AuthorizeBody }>('/v1/authorize', async (request, reply) => {
-    const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h', audience } = request.body;
+  // POST /v1/authorize — stricter rate limit: 10/min
+  app.post<{ Body: AuthorizeBody }>('/v1/authorize', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
+    const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h', audience, codeChallenge, codeChallengeMethod } = request.body;
 
     if (!agentId || !principalId || !scopes?.length) {
       return reply.status(400).send({
         message: 'agentId, principalId, and scopes are required',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
+    // Validate PKCE params — only S256 is supported
+    if (codeChallenge && codeChallengeMethod !== 'S256') {
+      return reply.status(400).send({
+        message: 'codeChallengeMethod must be S256',
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
@@ -70,13 +81,15 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     const autoCode = autoApprove ? ulid() : null;
 
     await sql`
-      INSERT INTO auth_requests (id, agent_id, principal_id, developer_id, scopes, redirect_uri, state, expires_in, expires_at, audience, status, code)
+      INSERT INTO auth_requests (id, agent_id, principal_id, developer_id, scopes, redirect_uri, state, expires_in, expires_at, audience, status, code, code_challenge, code_challenge_method)
       VALUES (
         ${id}, ${agentId}, ${principalId}, ${developerId}, ${scopes},
         ${redirectUri ?? null}, ${state ?? null}, ${expiresIn}, ${expiresAt},
         ${audience ?? null},
         ${autoApprove ? 'approved' : 'pending'},
-        ${autoCode}
+        ${autoCode},
+        ${codeChallenge ?? null},
+        ${codeChallengeMethod ?? null}
       )
     `;
 
