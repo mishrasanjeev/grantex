@@ -496,6 +496,21 @@ grantex compliance summary
 
 ---
 
+## Examples
+
+| Example | Description | Run |
+|---------|-------------|-----|
+| [`quickstart-ts`](examples/quickstart-ts) | Core authorization flow — register, authorize, exchange, verify, audit, revoke | `npm start` |
+| [`quickstart-py`](examples/quickstart-py) | Same flow in Python | `python main.py` |
+| [`nextjs-starter`](examples/nextjs-starter) | **Interactive Next.js app** — full consent UI flow in the browser | `npm run dev` |
+| [`langchain-agent`](examples/langchain-agent) | LangChain agent with scope-enforced tools | `npm start` |
+| [`vercel-ai-chatbot`](examples/vercel-ai-chatbot) | Vercel AI SDK chatbot with Grantex tools | `npm start` |
+| [`crewai-agent`](examples/crewai-agent) | CrewAI agent with Grantex authorization | `python main.py` |
+| [`openai-agents`](examples/openai-agents) | OpenAI Agents SDK integration | `python main.py` |
+| [`google-adk`](examples/google-adk) | Google ADK agent with Grantex tools | `python main.py` |
+
+---
+
 ## Architecture
 
 ```
