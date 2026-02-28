@@ -392,6 +392,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | Framework | Package | Install | Status |
 |-----------|---------|---------|--------|
 | **Express.js** | `@grantex/express` | `npm install @grantex/express` | ✅ Shipped |
+| **FastAPI** | `grantex-fastapi` | `pip install grantex-fastapi` | ✅ Shipped |
 | **LangChain** | `@grantex/langchain` | `npm install @grantex/langchain` | ✅ Shipped |
 | **AutoGen / OpenAI** | `@grantex/autogen` | `npm install @grantex/autogen` | ✅ Shipped |
 | **CrewAI** | `grantex-crewai` | `pip install grantex-crewai` | ✅ Shipped |
@@ -417,6 +418,22 @@ app.use('/api', requireGrantToken({ jwksUri: JWKS_URI }));
 app.get('/api/calendar', requireScopes('calendar:read'), (req, res) => {
   res.json({ principalId: req.grant.principalId, scopes: req.grant.scopes });
 });
+```
+
+**FastAPI** — dependency injection with scope enforcement:
+
+```python
+from fastapi import Depends, FastAPI
+from grantex import VerifiedGrant
+from grantex_fastapi import GrantexAuth, GrantexFastAPIError, grantex_exception_handler
+
+app = FastAPI()
+app.add_exception_handler(GrantexFastAPIError, grantex_exception_handler)
+grantex = GrantexAuth(jwks_uri="https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json")
+
+@app.get("/api/calendar")
+async def calendar(grant: VerifiedGrant = Depends(grantex.scopes("calendar:read"))):
+    return {"principalId": grant.principal_id}
 ```
 
 **LangChain** — scope-enforced tools + audit callbacks:
