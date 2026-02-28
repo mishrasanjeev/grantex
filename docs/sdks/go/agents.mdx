@@ -1,0 +1,60 @@
+---
+title: "Agents"
+description: "Register and manage AI agents"
+---
+
+## Register
+
+```go
+agent, err := client.Agents.Register(ctx, grantex.RegisterAgentParams{
+    Name:        "Email Assistant",
+    Description: "Reads and sends emails",
+    Scopes:      []string{"read:email", "send:email"},
+})
+```
+
+## Get
+
+```go
+agent, err := client.Agents.Get(ctx, "agent-id")
+```
+
+## List
+
+```go
+result, err := client.Agents.List(ctx)
+for _, agent := range result.Agents {
+    fmt.Printf("%s: %s (%s)\n", agent.ID, agent.Name, agent.Status)
+}
+```
+
+## Update
+
+```go
+name := "Updated Name"
+agent, err := client.Agents.Update(ctx, "agent-id", grantex.UpdateAgentParams{
+    Name: &name,
+})
+```
+
+## Delete
+
+```go
+err := client.Agents.Delete(ctx, "agent-id")
+```
+
+## Types
+
+### `Agent`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | `string` | Agent ID |
+| `DID` | `string` | Decentralized identifier |
+| `Name` | `string` | Display name |
+| `Description` | `string` | Agent description |
+| `Scopes` | `[]string` | Registered scopes |
+| `Status` | `string` | `"active"`, `"suspended"`, `"revoked"` |
+| `DeveloperID` | `string` | Owner developer |
+| `CreatedAt` | `string` | ISO 8601 timestamp |
+| `UpdatedAt` | `string` | ISO 8601 timestamp |

@@ -1,0 +1,72 @@
+---
+title: "Authorization"
+description: "Create authorization requests and manage the consent flow"
+---
+
+## Overview
+
+The authorization flow starts when your agent needs permissions from a user (principal). You create an authorization request, redirect the user to the consent URL, and receive a callback with an authorization code.
+
+```go
+authReq, err := client.Authorize(ctx, grantex.AuthorizeParams{
+    AgentID:     "agent-id",
+    PrincipalID: "user-123",
+    Scopes:      []string{"read:email", "send:email"},
+})
+```
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `AgentID` | `string` | Yes | The agent requesting authorization |
+| `PrincipalID` | `string` | Yes | The user granting authorization |
+| `Scopes` | `[]string` | Yes | Permissions being requested |
+| `ExpiresIn` | `string` | No | Grant duration (e.g. `"24h"`, `"7d"`) |
+| `RedirectURI` | `string` | No | Where to redirect after consent |
+| `CodeChallenge` | `string` | No | PKCE S256 code challenge |
+| `CodeChallengeMethod` | `string` | No | Must be `"S256"` when using PKCE |
+
+## Response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `AuthRequestID` | `string` | Unique request identifier |
+| `ConsentURL` | `string` | URL to redirect user for consent |
+| `AgentID` | `string` | Agent ID |
+| `PrincipalID` | `string` | Principal (user) ID |
+| `Scopes` | `[]string` | Requested scopes |
+| `ExpiresIn` | `string` | Requested duration |
+| `ExpiresAt` | `string` | ISO 8601 expiry timestamp |
+| `Status` | `string` | `"pending"`, `"approved"`, `"denied"`, `"expired"` |
+| `CreatedAt` | `string` | ISO 8601 creation timestamp |
+
+## With PKCE
+
+```go
+// Generate PKCE challenge
+pkce, err := grantex.GeneratePKCE()
+if err != nil {
+    log.Fatal(err)
+}
+
+// Include challenge in authorization request
+authReq, err := client.Authorize(ctx, grantex.AuthorizeParams{
+    AgentID:             "agent-id",
+    PrincipalID:         "user-123",
+    Scopes:              []string{"read:email"},
+    CodeChallenge:       pkce.CodeChallenge,
+    CodeChallengeMethod: pkce.CodeChallengeMethod,
+})
+
+// Later, include verifier when exchanging code
+tokenResp, err := client.Tokens.Exchange(ctx, grantex.ExchangeTokenParams{
+    Code:         "auth-code",
+    AgentID:      "agent-id",
+    CodeVerifier: pkce.CodeVerifier,
+})
+```
+
+## Next Steps
+
+After the user approves the consent, exchange the authorization code for a grant token using [tokens.Exchange()](/sdks/go/tokens).

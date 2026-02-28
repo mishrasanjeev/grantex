@@ -19,6 +19,7 @@
         { "tab": "Documentation", "href": "/introduction" },
         { "tab": "TypeScript SDK", "href": "/sdks/typescript/overview" },
         { "tab": "Python SDK", "href": "/sdks/python/overview" },
+        { "tab": "Go SDK", "href": "/sdks/go/overview" },
         { "tab": "Integrations", "href": "/integrations/overview" },
         { "tab": "API Reference", "href": "/api-reference" }
       ]
@@ -152,6 +153,48 @@
             "group": "Reference",
             "pages": [
               "sdks/python/errors"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Go SDK",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "sdks/go/overview"
+            ]
+          },
+          {
+            "group": "Authorization",
+            "pages": [
+              "sdks/go/authorization",
+              "sdks/go/tokens",
+              "sdks/go/offline-verification",
+              "sdks/go/pkce"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "sdks/go/agents",
+              "sdks/go/grants",
+              "sdks/go/audit",
+              "sdks/go/webhooks",
+              "sdks/go/policies",
+              "sdks/go/compliance",
+              "sdks/go/anomalies",
+              "sdks/go/billing",
+              "sdks/go/scim",
+              "sdks/go/sso",
+              "sdks/go/principal-sessions"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "sdks/go/errors"
             ]
           }
         ]

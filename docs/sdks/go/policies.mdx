@@ -1,0 +1,63 @@
+---
+title: "Policies"
+description: "Create and manage access policies"
+---
+
+## Create
+
+```go
+pol, err := client.Policies.Create(ctx, grantex.CreatePolicyParams{
+    Name:           "Block after hours",
+    Effect:         "deny",
+    TimeOfDayStart: "18:00",
+    TimeOfDayEnd:   "08:00",
+    Scopes:         []string{"write:data"},
+})
+```
+
+## List
+
+```go
+result, err := client.Policies.List(ctx)
+```
+
+## Get
+
+```go
+pol, err := client.Policies.Get(ctx, "policy-id")
+```
+
+## Update
+
+```go
+name := "Updated Policy"
+effect := "allow"
+pol, err := client.Policies.Update(ctx, "policy-id", grantex.UpdatePolicyParams{
+    Name:   &name,
+    Effect: &effect,
+})
+```
+
+## Delete
+
+```go
+err := client.Policies.Delete(ctx, "policy-id")
+```
+
+## Types
+
+### `Policy`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | `string` | Policy ID |
+| `Name` | `string` | Policy name |
+| `Effect` | `string` | `"allow"` or `"deny"` |
+| `Priority` | `int` | Evaluation priority |
+| `AgentID` | `*string` | Scope to specific agent |
+| `PrincipalID` | `*string` | Scope to specific user |
+| `Scopes` | `[]string` | Affected scopes |
+| `TimeOfDayStart` | `*string` | Start time (HH:MM) |
+| `TimeOfDayEnd` | `*string` | End time (HH:MM) |
+| `CreatedAt` | `string` | ISO 8601 timestamp |
+| `UpdatedAt` | `string` | ISO 8601 timestamp |

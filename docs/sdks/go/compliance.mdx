@@ -1,0 +1,55 @@
+---
+title: "Compliance"
+description: "Generate compliance reports and evidence packs"
+---
+
+## Get Summary
+
+```go
+summary, err := client.Compliance.GetSummary(ctx, &grantex.ComplianceSummaryParams{
+    Since: "2026-01-01T00:00:00Z",
+    Until: "2026-03-01T00:00:00Z",
+})
+fmt.Printf("Agents: %d active, Grants: %d active\n",
+    summary.Agents.Active, summary.Grants.Active)
+```
+
+Pass `nil` for defaults.
+
+## Export Grants
+
+```go
+export, err := client.Compliance.ExportGrants(ctx, &grantex.ComplianceExportGrantsParams{
+    Status: "active",
+})
+fmt.Printf("Exported %d grants\n", export.Total)
+```
+
+## Export Audit
+
+```go
+export, err := client.Compliance.ExportAudit(ctx, &grantex.ComplianceExportAuditParams{
+    Since: "2026-01-01T00:00:00Z",
+})
+fmt.Printf("Exported %d audit entries\n", export.Total)
+```
+
+## Evidence Pack
+
+Generate a compliance evidence package for SOC 2 or GDPR audits.
+
+```go
+pack, err := client.Compliance.EvidencePack(ctx, &grantex.EvidencePackParams{
+    Framework: "soc2",
+})
+fmt.Printf("Chain integrity: %v (%d entries checked)\n",
+    pack.ChainIntegrity.Valid, pack.ChainIntegrity.CheckedEntries)
+```
+
+### Frameworks
+
+| Value | Description |
+|-------|-------------|
+| `"soc2"` | SOC 2 Type II evidence |
+| `"gdpr"` | GDPR compliance evidence |
+| `"all"` | All frameworks |

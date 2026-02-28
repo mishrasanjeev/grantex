@@ -1,0 +1,45 @@
+---
+title: "Billing"
+description: "Manage subscriptions and billing"
+---
+
+## Get Subscription
+
+```go
+sub, err := client.Billing.GetSubscription(ctx)
+fmt.Printf("Plan: %s, Status: %s\n", sub.Plan, sub.Status)
+```
+
+## Create Checkout
+
+Create a Stripe checkout session to upgrade.
+
+```go
+checkout, err := client.Billing.CreateCheckout(ctx, grantex.CreateCheckoutParams{
+    Plan:       "pro",
+    SuccessURL: "https://myapp.com/billing/success",
+    CancelURL:  "https://myapp.com/billing/cancel",
+})
+// Redirect user to checkout.CheckoutURL
+```
+
+## Create Portal
+
+Create a Stripe billing portal session for managing subscriptions.
+
+```go
+portal, err := client.Billing.CreatePortal(ctx, grantex.CreatePortalParams{
+    ReturnURL: "https://myapp.com/dashboard",
+})
+// Redirect user to portal.PortalURL
+```
+
+## Types
+
+### `SubscriptionStatus`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Plan` | `string` | `"free"`, `"pro"`, `"enterprise"` |
+| `Status` | `string` | `"active"`, `"past_due"`, `"canceled"` |
+| `CurrentPeriodEnd` | `*string` | ISO 8601 period end |

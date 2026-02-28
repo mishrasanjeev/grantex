@@ -1,0 +1,138 @@
+---
+title: "Go SDK"
+description: "Official Go SDK for the Grantex delegated authorization protocol"
+---
+
+## Installation
+
+```bash
+go get github.com/mishrasanjeev/grantex-go
+```
+
+## Requirements
+
+- Go 1.21+
+
+## Configuration
+
+```go
+import grantex "github.com/mishrasanjeev/grantex-go"
+
+// Default configuration (reads GRANTEX_API_KEY is not used here — pass key directly)
+client := grantex.NewClient("your-api-key")
+
+// With options
+client := grantex.NewClient("your-api-key",
+    grantex.WithBaseURL("https://your-instance.example.com"),
+    grantex.WithTimeout(60 * time.Second),
+    grantex.WithHTTPClient(customHTTPClient),
+)
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `WithBaseURL(url)` | `https://api.grantex.dev` | API base URL |
+| `WithTimeout(d)` | `30s` | HTTP request timeout |
+| `WithHTTPClient(c)` | `http.DefaultClient` | Custom `*http.Client` |
+
+## Quick Start
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    grantex "github.com/mishrasanjeev/grantex-go"
+)
+
+func main() {
+    ctx := context.Background()
+    client := grantex.NewClient("your-api-key")
+
+    // 1. Register an agent
+    agent, err := client.Agents.Register(ctx, grantex.RegisterAgentParams{
+        Name:        "Email Assistant",
+        Description: "Reads and sends emails on behalf of users",
+        Scopes:      []string{"read:email", "send:email"},
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Agent registered: %s (DID: %s)\n", agent.ID, agent.DID)
+
+    // 2. Create authorization request
+    authReq, err := client.Authorize(ctx, grantex.AuthorizeParams{
+        AgentID:     agent.ID,
+        PrincipalID: "user-123",
+        Scopes:      []string{"read:email", "send:email"},
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Consent URL: %s\n", authReq.ConsentURL)
+
+    // 3. Exchange authorization code for token (after user consents)
+    tokenResp, err := client.Tokens.Exchange(ctx, grantex.ExchangeTokenParams{
+        Code:    "authorization-code-from-callback",
+        AgentID: agent.ID,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Grant token: %s\n", tokenResp.GrantToken)
+
+    // 4. Verify the token
+    verified, err := client.Tokens.Verify(ctx, tokenResp.GrantToken)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Token valid: %v, scopes: %v\n", verified.Valid, verified.Scopes)
+}
+```
+
+## Available Resources
+
+| Service | Description |
+|---------|-------------|
+| `client.Agents` | Register, list, update, delete agents |
+| `client.Tokens` | Exchange, refresh, verify, revoke tokens |
+| `client.Grants` | List, revoke, delegate grants |
+| `client.Audit` | Log and query audit entries |
+| `client.Webhooks` | Manage webhook endpoints |
+| `client.Billing` | Subscription and checkout management |
+| `client.Policies` | Access policy CRUD |
+| `client.Compliance` | Compliance reports and evidence packs |
+| `client.Anomalies` | Anomaly detection and management |
+| `client.SCIM` | SCIM 2.0 user provisioning |
+| `client.SSO` | SSO configuration |
+| `client.PrincipalSessions` | End-user dashboard sessions |
+
+## Standalone Functions
+
+| Function | Description |
+|----------|-------------|
+| `grantex.VerifyGrantToken()` | Offline JWT verification via JWKS |
+| `grantex.GeneratePKCE()` | Generate PKCE S256 challenge pair |
+| `grantex.VerifyWebhookSignature()` | Verify HMAC-SHA256 webhook signatures |
+| `grantex.Signup()` | Register a new developer (no API key needed) |
+
+## Error Handling
+
+```go
+agent, err := client.Agents.Get(ctx, "agent-id")
+if err != nil {
+    switch e := err.(type) {
+    case *grantex.AuthError:
+        fmt.Printf("Authentication failed: %d\n", e.StatusCode)
+    case *grantex.APIError:
+        fmt.Printf("API error %d: %s (code: %s)\n", e.StatusCode, e.Message, e.Code)
+    case *grantex.NetworkError:
+        fmt.Printf("Network error: %s\n", e.Message)
+    default:
+        fmt.Printf("Unexpected error: %v\n", err)
+    }
+}
+```

@@ -1,0 +1,57 @@
+---
+title: "Audit"
+description: "Log and query tamper-evident audit entries"
+---
+
+## Log
+
+```go
+entry, err := client.Audit.Log(ctx, grantex.LogAuditParams{
+    AgentID: "agent-id",
+    GrantID: "grant-id",
+    Action:  "email:read",
+    Status:  "success",
+    Metadata: map[string]interface{}{
+        "messageId": "msg-123",
+    },
+})
+```
+
+## List
+
+```go
+result, err := client.Audit.List(ctx, &grantex.ListAuditParams{
+    AgentID: "agent-id",
+    Action:  "email:read",
+    Since:   "2026-01-01T00:00:00Z",
+})
+for _, e := range result.Entries {
+    fmt.Printf("[%s] %s: %s\n", e.Timestamp, e.Action, e.Status)
+}
+```
+
+Pass `nil` for no filters.
+
+## Get
+
+```go
+entry, err := client.Audit.Get(ctx, "entry-id")
+```
+
+## Types
+
+### `AuditEntry`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `EntryID` | `string` | Entry ID |
+| `AgentID` | `string` | Agent ID |
+| `AgentDID` | `string` | Agent DID |
+| `GrantID` | `string` | Grant ID |
+| `PrincipalID` | `string` | User ID |
+| `Action` | `string` | Action performed |
+| `Metadata` | `map[string]interface{}` | Custom metadata |
+| `Hash` | `string` | Entry hash (chain integrity) |
+| `PrevHash` | `*string` | Previous entry hash |
+| `Timestamp` | `string` | ISO 8601 timestamp |
+| `Status` | `string` | `"success"`, `"failure"`, `"blocked"` |

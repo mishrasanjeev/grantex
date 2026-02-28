@@ -1,0 +1,44 @@
+---
+title: "Principal Sessions"
+description: "Create end-user dashboard sessions"
+---
+
+## Overview
+
+Principal sessions allow end-users to view and manage their grants through a dashboard. Create a session to generate a short-lived JWT and dashboard URL.
+
+## Create
+
+```go
+session, err := client.PrincipalSessions.Create(ctx, grantex.CreatePrincipalSessionParams{
+    PrincipalID: "user-123",
+    ExpiresIn:   "1h",
+})
+fmt.Printf("Dashboard: %s\n", session.DashboardURL)
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `PrincipalID` | `string` | Yes | The user to create a session for |
+| `ExpiresIn` | `string` | No | Session duration (default: `"1h"`) |
+
+### Response (`PrincipalSessionResponse`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `SessionToken` | `string` | Short-lived JWT for API access |
+| `DashboardURL` | `string` | URL to the permissions dashboard |
+| `ExpiresAt` | `string` | ISO 8601 session expiry |
+
+## Usage
+
+Embed the dashboard URL in your application to let users manage their granted permissions:
+
+```go
+session, _ := client.PrincipalSessions.Create(ctx, grantex.CreatePrincipalSessionParams{
+    PrincipalID: currentUser.ID,
+})
+// Redirect or embed session.DashboardURL in an iframe
+```

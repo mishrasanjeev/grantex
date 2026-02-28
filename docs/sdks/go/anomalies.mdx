@@ -1,0 +1,53 @@
+---
+title: "Anomalies"
+description: "Detect and manage security anomalies"
+---
+
+## Detect
+
+Trigger anomaly detection and get results.
+
+```go
+result, err := client.Anomalies.Detect(ctx)
+fmt.Printf("Found %d anomalies\n", result.Total)
+for _, a := range result.Anomalies {
+    fmt.Printf("[%s] %s: %s\n", a.Severity, a.Type, a.Description)
+}
+```
+
+## List
+
+```go
+// All anomalies
+result, err := client.Anomalies.List(ctx, nil)
+
+// Only unacknowledged
+unack := true
+result, err := client.Anomalies.List(ctx, &grantex.ListAnomaliesParams{
+    Unacknowledged: &unack,
+})
+```
+
+## Acknowledge
+
+```go
+anomaly, err := client.Anomalies.Acknowledge(ctx, "anomaly-id")
+fmt.Printf("Acknowledged at: %s\n", *anomaly.AcknowledgedAt)
+```
+
+## Anomaly Types
+
+| Type | Description |
+|------|-------------|
+| `rate_spike` | Unusual request rate |
+| `high_failure_rate` | High action failure rate |
+| `new_principal` | Activity from new user |
+| `off_hours_activity` | Activity outside business hours |
+
+## Severity Levels
+
+| Level | Description |
+|-------|-------------|
+| `low` | Informational |
+| `medium` | Requires attention |
+| `high` | Requires immediate action |

@@ -24,6 +24,7 @@
 ```bash
 npm install @grantex/sdk        # TypeScript / Node.js
 pip install grantex             # Python
+go get github.com/mishrasanjeev/grantex-go  # Go
 npm install -g @grantex/cli     # CLI
 ```
 
@@ -401,6 +402,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | ✅ Shipped |
 | **TypeScript SDK** | `@grantex/sdk` | `npm install @grantex/sdk` | ✅ Shipped |
 | **Python SDK** | `grantex` | `pip install grantex` | ✅ Shipped |
+| **Go SDK** | `grantex-go` | `go get github.com/mishrasanjeev/grantex-go` | ✅ Shipped |
 | **CLI** | `@grantex/cli` | `npm install -g @grantex/cli` | ✅ Shipped |
 | **Conformance Suite** | `@grantex/conformance` | `npm install -g @grantex/conformance` | ✅ Shipped |
 

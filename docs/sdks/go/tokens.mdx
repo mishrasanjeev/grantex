@@ -1,0 +1,99 @@
+---
+title: "Tokens"
+description: "Exchange, refresh, verify, and revoke grant tokens"
+---
+
+## Overview
+
+The `Tokens` service handles the complete token lifecycle: exchanging authorization codes, refreshing tokens, online verification, and revocation.
+
+## Exchange
+
+Exchange an authorization code for a grant token after the user consents.
+
+```go
+tokenResp, err := client.Tokens.Exchange(ctx, grantex.ExchangeTokenParams{
+    Code:    "authorization-code",
+    AgentID: "agent-id",
+})
+```
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `Code` | `string` | Yes | Authorization code from callback |
+| `AgentID` | `string` | Yes | Agent that requested authorization |
+| `CodeVerifier` | `string` | No | PKCE code verifier (required if code challenge was sent) |
+
+### Response (`ExchangeTokenResponse`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `GrantToken` | `string` | JWT grant token |
+| `ExpiresAt` | `string` | ISO 8601 token expiry |
+| `Scopes` | `[]string` | Granted scopes |
+| `RefreshToken` | `string` | Refresh token for rotation |
+| `GrantID` | `string` | Grant record ID |
+
+## Refresh
+
+Exchange a refresh token for a new grant token. Refresh tokens are single-use — each refresh returns a new refresh token.
+
+```go
+tokenResp, err := client.Tokens.Refresh(ctx, grantex.RefreshTokenParams{
+    RefreshToken: "current-refresh-token",
+    AgentID:      "agent-id",
+})
+// tokenResp.RefreshToken is a NEW refresh token — store it
+```
+
+<Warning>
+Refresh tokens are single-use. Each call returns a new `RefreshToken` that you must store. The old refresh token is invalidated immediately.
+</Warning>
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `RefreshToken` | `string` | Yes | Current refresh token |
+| `AgentID` | `string` | Yes | Agent ID |
+
+### Response
+
+Same `ExchangeTokenResponse` as Exchange — includes a new `GrantToken` and `RefreshToken`.
+
+## Verify
+
+Perform online token verification against the Grantex API.
+
+```go
+result, err := client.Tokens.Verify(ctx, "grant-token-jwt")
+if err != nil {
+    log.Fatal(err)
+}
+if result.Valid {
+    fmt.Printf("Grant ID: %s, Scopes: %v\n", *result.GrantID, result.Scopes)
+}
+```
+
+### Response (`VerifyTokenResponse`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Valid` | `bool` | Whether the token is valid |
+| `GrantID` | `*string` | Grant ID (if valid) |
+| `Scopes` | `[]string` | Token scopes (if valid) |
+| `Principal` | `*string` | Principal ID (if valid) |
+| `Agent` | `*string` | Agent DID (if valid) |
+| `ExpiresAt` | `*string` | Token expiry (if valid) |
+
+## Revoke
+
+Revoke a token by its JTI (token ID).
+
+```go
+err := client.Tokens.Revoke(ctx, "token-jti")
+```
+
+Returns `nil` on success (HTTP 204).

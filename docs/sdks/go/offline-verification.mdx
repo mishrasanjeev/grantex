@@ -1,0 +1,62 @@
+---
+title: "Offline Verification"
+description: "Verify grant tokens locally using JWKS without API calls"
+---
+
+## Overview
+
+`VerifyGrantToken` verifies a grant token JWT locally using the Grantex JWKS endpoint. This avoids an API call per request and is ideal for high-throughput services.
+
+```go
+grant, err := grantex.VerifyGrantToken(ctx, tokenString, grantex.VerifyOptions{
+    JwksURI: "https://api.grantex.dev/.well-known/jwks.json",
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Principal: %s, Scopes: %v\n", grant.PrincipalID, grant.Scopes)
+```
+
+## Options
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `JwksURI` | `string` | Yes | URL to fetch the JWKS from |
+| `RequiredScopes` | `[]string` | No | Scopes the token must contain |
+| `Audience` | `string` | No | Expected `aud` claim |
+| `ClockTolerance` | `time.Duration` | No | Tolerance for clock skew |
+
+## Response (`VerifiedGrant`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `TokenID` | `string` | JWT `jti` claim |
+| `GrantID` | `string` | Grant ID (`grnt` claim, falls back to `jti`) |
+| `PrincipalID` | `string` | End-user (`sub` claim) |
+| `AgentDID` | `string` | Agent DID (`agt` claim) |
+| `DeveloperID` | `string` | Developer (`dev` claim) |
+| `Scopes` | `[]string` | Granted scopes (`scp` claim) |
+| `IssuedAt` | `int64` | Unix timestamp |
+| `ExpiresAt` | `int64` | Unix timestamp |
+| `ParentAgentDID` | `*string` | Parent agent for delegated grants |
+| `ParentGrantID` | `*string` | Parent grant for delegated grants |
+| `DelegationDepth` | `*int` | Delegation depth (0 = root) |
+
+## Scope Checking
+
+```go
+grant, err := grantex.VerifyGrantToken(ctx, token, grantex.VerifyOptions{
+    JwksURI:        "https://api.grantex.dev/.well-known/jwks.json",
+    RequiredScopes: []string{"read:email", "send:email"},
+})
+// Returns *TokenError if any required scope is missing
+```
+
+## Error Handling
+
+Returns `*grantex.TokenError` for:
+- Missing or invalid JWKS URI
+- Expired tokens
+- Invalid signatures
+- Missing required scopes
+- Malformed JWTs
