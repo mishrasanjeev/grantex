@@ -17,6 +17,7 @@ import { ComplianceDashboard } from './pages/compliance/ComplianceDashboard';
 import { BillingPage } from './pages/billing/BillingPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { WebhookList } from './pages/webhooks/WebhookList';
+import { AdminPage } from './pages/admin/AdminPage';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './RequireAuth';
 
@@ -47,6 +48,7 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/compliance', element: <ComplianceDashboard /> },
       { path: '/dashboard/billing', element: <BillingPage /> },
       { path: '/dashboard/settings', element: <SettingsPage /> },
+      { path: '/dashboard/admin', element: <AdminPage /> },
       { path: '/dashboard/*', element: <NotFound /> },
     ],
   },

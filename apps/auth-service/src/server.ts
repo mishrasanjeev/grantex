@@ -24,6 +24,7 @@ import { ssoRoutes } from './routes/sso.js';
 import { signupRoutes } from './routes/signup.js';
 import { meRoutes } from './routes/me.js';
 import { healthRoutes } from './routes/health.js';
+import { adminRoutes } from './routes/admin.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -75,6 +76,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(ssoRoutes);
   await app.register(signupRoutes);
   await app.register(meRoutes);
+  await app.register(adminRoutes);
 
   return app;
 }
