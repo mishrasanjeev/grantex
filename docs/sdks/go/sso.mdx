@@ -1,0 +1,54 @@
+---
+title: "SSO"
+description: "Configure and manage OpenID Connect SSO"
+---
+
+## Create Config
+
+```go
+config, err := client.SSO.CreateConfig(ctx, grantex.CreateSsoConfigParams{
+    IssuerURL:    "https://accounts.google.com",
+    ClientID:     "your-client-id",
+    ClientSecret: "your-client-secret",
+    RedirectURI:  "https://myapp.com/sso/callback",
+})
+```
+
+## Get Config
+
+```go
+config, err := client.SSO.GetConfig(ctx)
+fmt.Printf("Issuer: %s\n", config.IssuerURL)
+```
+
+## Delete Config
+
+```go
+err := client.SSO.DeleteConfig(ctx)
+```
+
+## Get Login URL
+
+```go
+result, err := client.SSO.GetLoginURL(ctx, "acme-corp")
+// Redirect user to result.AuthorizeURL
+```
+
+## Handle Callback
+
+```go
+result, err := client.SSO.HandleCallback(ctx, authCode, state)
+fmt.Printf("User: %s (%s)\n", *result.Name, *result.Email)
+```
+
+## Types
+
+### `SsoConfig`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `IssuerURL` | `string` | OIDC issuer URL |
+| `ClientID` | `string` | OAuth client ID |
+| `RedirectURI` | `string` | Callback URL |
+| `CreatedAt` | `string` | ISO 8601 timestamp |
+| `UpdatedAt` | `string` | ISO 8601 timestamp |

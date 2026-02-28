@@ -1,0 +1,78 @@
+---
+title: "SCIM"
+description: "SCIM 2.0 user provisioning"
+---
+
+## Token Management
+
+### Create Token
+
+```go
+token, err := client.SCIM.CreateToken(ctx, "Production IdP")
+fmt.Printf("Token: %s\n", token.Token) // Only shown once
+```
+
+### List Tokens
+
+```go
+result, err := client.SCIM.ListTokens(ctx)
+```
+
+### Revoke Token
+
+```go
+err := client.SCIM.RevokeToken(ctx, "token-id")
+```
+
+## User Operations
+
+### List Users
+
+```go
+result, err := client.SCIM.ListUsers(ctx, &grantex.ListScimUsersParams{
+    StartIndex: 1,
+    Count:      20,
+})
+for _, user := range result.Resources {
+    fmt.Printf("%s: %s (active: %v)\n", user.ID, user.UserName, user.Active)
+}
+```
+
+### Get User
+
+```go
+user, err := client.SCIM.GetUser(ctx, "user-id")
+```
+
+### Create User
+
+```go
+user, err := client.SCIM.CreateUser(ctx, grantex.CreateScimUserParams{
+    UserName:    "alice@example.com",
+    DisplayName: "Alice Smith",
+    Emails:      []grantex.ScimEmail{{Value: "alice@example.com", Primary: true}},
+})
+```
+
+### Replace User
+
+```go
+user, err := client.SCIM.ReplaceUser(ctx, "user-id", grantex.CreateScimUserParams{
+    UserName:    "alice-new@example.com",
+    DisplayName: "Alice Johnson",
+})
+```
+
+### Update User (PATCH)
+
+```go
+user, err := client.SCIM.UpdateUser(ctx, "user-id", []grantex.ScimOperation{
+    {Op: "replace", Path: "active", Value: false},
+})
+```
+
+### Delete User
+
+```go
+err := client.SCIM.DeleteUser(ctx, "user-id")
+```

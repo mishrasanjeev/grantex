@@ -1,0 +1,94 @@
+---
+title: "Error Handling"
+description: "Error types and handling patterns"
+---
+
+## Error Types
+
+The Go SDK uses typed errors that implement the `error` interface. Use type assertions to handle specific error types.
+
+### `APIError`
+
+Returned for any non-2xx HTTP response (except 401/403).
+
+```go
+type APIError struct {
+    StatusCode int
+    Body       json.RawMessage
+    Code       string    // "BAD_REQUEST", "NOT_FOUND", etc.
+    RequestID  string
+    Message    string
+}
+```
+
+### `AuthError`
+
+Returned for 401 (Unauthorized) and 403 (Forbidden) responses. Embeds `*APIError`.
+
+```go
+type AuthError struct {
+    *APIError
+}
+```
+
+### `TokenError`
+
+Returned from `VerifyGrantToken()` for token verification failures.
+
+```go
+type TokenError struct {
+    Message string
+    Cause   error    // Underlying error (implements Unwrap)
+}
+```
+
+### `NetworkError`
+
+Returned for network-level failures (DNS, timeout, connection refused).
+
+```go
+type NetworkError struct {
+    Message string
+    Cause   error    // Underlying error (implements Unwrap)
+}
+```
+
+## Handling Pattern
+
+```go
+agent, err := client.Agents.Get(ctx, "agent-id")
+if err != nil {
+    switch e := err.(type) {
+    case *grantex.AuthError:
+        // 401 or 403 — invalid or expired API key
+        log.Printf("Auth failed (%d): %s", e.StatusCode, e.Message)
+    case *grantex.APIError:
+        // Other API errors (400, 404, 422, 500, etc.)
+        log.Printf("API error %d [%s]: %s", e.StatusCode, e.Code, e.Message)
+    case *grantex.NetworkError:
+        // Network issues — retry or fail gracefully
+        log.Printf("Network error: %s (cause: %v)", e.Message, e.Cause)
+    default:
+        log.Printf("Unexpected: %v", err)
+    }
+}
+```
+
+## Unwrap Support
+
+`TokenError` and `NetworkError` implement `Unwrap()` for use with `errors.Is()` and `errors.As()`:
+
+```go
+import "errors"
+
+_, err := grantex.VerifyGrantToken(ctx, token, opts)
+if err != nil {
+    var tokenErr *grantex.TokenError
+    if errors.As(err, &tokenErr) {
+        fmt.Printf("Token error: %s\n", tokenErr.Message)
+        if tokenErr.Cause != nil {
+            fmt.Printf("Caused by: %v\n", tokenErr.Cause)
+        }
+    }
+}
+```

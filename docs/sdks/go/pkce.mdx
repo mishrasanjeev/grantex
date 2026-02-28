@@ -1,0 +1,55 @@
+---
+title: "PKCE"
+description: "Proof Key for Code Exchange (S256) for enhanced security"
+---
+
+## Overview
+
+PKCE (Proof Key for Code Exchange) prevents authorization code interception attacks. Grantex supports S256 method only.
+
+## Generate Challenge
+
+```go
+pkce, err := grantex.GeneratePKCE()
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(pkce.CodeVerifier)        // Random 43-char string
+fmt.Println(pkce.CodeChallenge)       // SHA-256 hash, base64url-encoded
+fmt.Println(pkce.CodeChallengeMethod) // Always "S256"
+```
+
+## Full Flow
+
+```go
+// 1. Generate PKCE pair
+pkce, _ := grantex.GeneratePKCE()
+
+// 2. Include challenge in authorization request
+authReq, _ := client.Authorize(ctx, grantex.AuthorizeParams{
+    AgentID:             "agent-id",
+    PrincipalID:         "user-123",
+    Scopes:              []string{"read:email"},
+    CodeChallenge:       pkce.CodeChallenge,
+    CodeChallengeMethod: pkce.CodeChallengeMethod,
+})
+
+// 3. Store verifier securely (session, database, etc.)
+// ...
+
+// 4. Include verifier when exchanging the code
+tokenResp, _ := client.Tokens.Exchange(ctx, grantex.ExchangeTokenParams{
+    Code:         "auth-code-from-callback",
+    AgentID:      "agent-id",
+    CodeVerifier: pkce.CodeVerifier,
+})
+```
+
+## PKCEChallenge Type
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `CodeVerifier` | `string` | 43-character random string (base64url) |
+| `CodeChallenge` | `string` | SHA-256 of verifier (base64url) |
+| `CodeChallengeMethod` | `string` | Always `"S256"` |

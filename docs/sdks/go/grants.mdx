@@ -1,0 +1,70 @@
+---
+title: "Grants"
+description: "Manage authorization grants and delegation"
+---
+
+## Get
+
+```go
+grant, err := client.Grants.Get(ctx, "grant-id")
+```
+
+## List
+
+```go
+result, err := client.Grants.List(ctx, &grantex.ListGrantsParams{
+    AgentID: "agent-id",
+    Status:  "active",
+})
+for _, g := range result.Grants {
+    fmt.Printf("%s: %v\n", g.ID, g.Scopes)
+}
+```
+
+Pass `nil` for no filters.
+
+## Revoke
+
+```go
+err := client.Grants.Revoke(ctx, "grant-id")
+```
+
+## Delegate
+
+Create a delegated grant for a sub-agent with a subset of the parent grant's scopes.
+
+```go
+resp, err := client.Grants.Delegate(ctx, grantex.DelegateParams{
+    ParentGrantToken: "parent-jwt-token",
+    SubAgentID:       "sub-agent-id",
+    Scopes:           []string{"read:email"},
+    ExpiresIn:        "1h",
+})
+fmt.Printf("Delegated token: %s\n", resp.GrantToken)
+```
+
+## Types
+
+### `Grant`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | `string` | Grant ID |
+| `AgentID` | `string` | Agent ID |
+| `AgentDID` | `string` | Agent DID |
+| `PrincipalID` | `string` | User ID |
+| `DeveloperID` | `string` | Developer ID |
+| `Scopes` | `[]string` | Granted scopes |
+| `Status` | `string` | `"active"`, `"revoked"`, `"expired"` |
+| `IssuedAt` | `string` | ISO 8601 timestamp |
+| `ExpiresAt` | `string` | ISO 8601 timestamp |
+| `RevokedAt` | `*string` | ISO 8601 timestamp (if revoked) |
+
+### `DelegateResponse`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `GrantToken` | `string` | Delegated JWT |
+| `ExpiresAt` | `string` | ISO 8601 expiry |
+| `Scopes` | `[]string` | Delegated scopes |
+| `GrantID` | `string` | New grant ID |

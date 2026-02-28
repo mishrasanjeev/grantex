@@ -1,0 +1,60 @@
+---
+title: "Webhooks"
+description: "Manage webhook endpoints and verify signatures"
+---
+
+## Create
+
+```go
+wh, err := client.Webhooks.Create(ctx, grantex.CreateWebhookParams{
+    URL:    "https://example.com/webhooks/grantex",
+    Events: []string{"grant.created", "grant.revoked", "token.issued"},
+})
+fmt.Printf("Webhook ID: %s, Secret: %s\n", wh.ID, wh.Secret)
+```
+
+## List
+
+```go
+result, err := client.Webhooks.List(ctx)
+for _, wh := range result.Webhooks {
+    fmt.Printf("%s: %s (%v)\n", wh.ID, wh.URL, wh.Events)
+}
+```
+
+## Delete
+
+```go
+err := client.Webhooks.Delete(ctx, "webhook-id")
+```
+
+## Verify Signature
+
+Verify incoming webhook payloads using HMAC-SHA256.
+
+```go
+func webhookHandler(w http.ResponseWriter, r *http.Request) {
+    body, _ := io.ReadAll(r.Body)
+    signature := r.Header.Get("X-Grantex-Signature")
+    secret := "whsec_your_webhook_secret"
+
+    if !grantex.VerifyWebhookSignature(body, signature, secret) {
+        http.Error(w, "invalid signature", http.StatusUnauthorized)
+        return
+    }
+
+    // Process the webhook payload
+    fmt.Println("Webhook verified!")
+    w.WriteHeader(http.StatusOK)
+}
+```
+
+The signature format is `sha256=<hex-encoded HMAC>`.
+
+## Event Types
+
+| Event | Description |
+|-------|-------------|
+| `grant.created` | A new grant was issued |
+| `grant.revoked` | A grant was revoked |
+| `token.issued` | A grant token was issued |
