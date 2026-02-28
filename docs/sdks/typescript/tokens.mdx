@@ -1,0 +1,170 @@
+---
+title: "Tokens"
+sidebarTitle: "Tokens"
+description: "Exchange authorization codes for grant tokens, verify tokens online, and revoke them."
+---
+
+## Overview
+
+The `tokens` sub-client handles the token lifecycle: exchanging authorization codes for grant tokens, verifying tokens via the API, and revoking tokens.
+
+```typescript
+// Exchange, verify, revoke
+const token = await grantex.tokens.exchange({ code, agentId: agent.id });
+const result = await grantex.tokens.verify(token.grantToken);
+await grantex.tokens.revoke(result.grantId);
+```
+
+## tokens.exchange()
+
+Exchange an authorization code for a signed grant token (RS256 JWT).
+
+```typescript
+const token = await grantex.tokens.exchange({
+  code: 'auth_code_from_callback',
+  agentId: agent.id,
+});
+
+console.log(token.grantToken);   // RS256 JWT string
+console.log(token.grantId);      // 'grnt_01HXYZ...'
+console.log(token.scopes);       // ['calendar:read', 'payments:initiate:max_500']
+console.log(token.expiresAt);    // '2026-03-02T12:00:00Z'
+console.log(token.refreshToken); // 'rt_01HXYZ...'
+```
+
+### Parameters
+
+<ParamField body="code" type="string" required>
+  The authorization code received at your `redirectUri` after user consent.
+</ParamField>
+
+<ParamField body="agentId" type="string" required>
+  The ID of the agent that initiated the authorization request.
+</ParamField>
+
+<ParamField body="codeVerifier" type="string">
+  The PKCE code verifier. Required if `codeChallenge` was provided in the authorize step. See [PKCE](/sdks/typescript/pkce).
+</ParamField>
+
+### Response: `ExchangeTokenResponse`
+
+<ResponseField name="grantToken" type="string">
+  The signed RS256 JWT grant token. Pass this to your agent for use in API calls.
+</ResponseField>
+
+<ResponseField name="grantId" type="string">
+  The unique grant record ID.
+</ResponseField>
+
+<ResponseField name="scopes" type="string[]">
+  The scopes granted by the user.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO 8601 timestamp when the grant token expires.
+</ResponseField>
+
+<ResponseField name="refreshToken" type="string">
+  A refresh token for obtaining new grant tokens without re-authorization.
+</ResponseField>
+
+---
+
+## tokens.verify()
+
+Verify a grant token online via the Grantex API. This is useful when you want server-side validation without managing JWKS yourself.
+
+```typescript
+const result = await grantex.tokens.verify(token.grantToken);
+
+if (result.valid) {
+  console.log(result.grantId);   // 'grnt_01HXYZ...'
+  console.log(result.scopes);    // ['calendar:read']
+  console.log(result.principal);  // 'user_abc123'
+  console.log(result.agent);      // 'did:grantex:ag_01HXYZ...'
+  console.log(result.expiresAt);  // '2026-03-02T12:00:00Z'
+}
+```
+
+### Parameters
+
+<ParamField body="token" type="string" required>
+  The grant token JWT string to verify.
+</ParamField>
+
+### Response: `VerifyTokenResponse`
+
+<ResponseField name="valid" type="boolean">
+  Whether the token is valid and not expired/revoked.
+</ResponseField>
+
+<ResponseField name="grantId" type="string">
+  The grant record ID (present when `valid` is `true`).
+</ResponseField>
+
+<ResponseField name="scopes" type="string[]">
+  The granted scopes.
+</ResponseField>
+
+<ResponseField name="principal" type="string">
+  The user (principal) who authorized the grant.
+</ResponseField>
+
+<ResponseField name="agent" type="string">
+  The agent DID that holds the grant.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO 8601 timestamp when the token expires.
+</ResponseField>
+
+<Note>
+  For zero-latency, offline verification without calling the Grantex API, use [verifyGrantToken()](/sdks/typescript/offline-verification) instead.
+</Note>
+
+---
+
+## tokens.revoke()
+
+Revoke a token by its token ID (the `jti` claim). The API responds with `204 No Content`.
+
+```typescript
+await grantex.tokens.revoke('tok_01HXYZ...');
+// Returns void — the token is now invalid
+```
+
+### Parameters
+
+<ParamField body="tokenId" type="string" required>
+  The token ID (`jti` claim from the JWT) to revoke.
+</ParamField>
+
+### Response
+
+Returns `void`. The token is immediately invalidated.
+
+## Full example
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// Exchange the code from the OAuth callback
+const token = await grantex.tokens.exchange({
+  code: req.query.code,
+  agentId: 'ag_01HXYZ...',
+});
+
+// Hand the grant token to your agent
+const grantToken = token.grantToken;
+
+// Later: verify the token is still valid
+const check = await grantex.tokens.verify(grantToken);
+if (!check.valid) {
+  throw new Error('Token has been revoked or expired');
+}
+
+// When the task is complete, revoke the token
+await grantex.tokens.revoke(check.grantId);
+```

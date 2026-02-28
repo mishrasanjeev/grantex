@@ -1,0 +1,194 @@
+---
+title: "Compliance"
+sidebarTitle: "Compliance"
+description: "Generate compliance summaries, export grants and audit data, and produce SOC 2/GDPR evidence packs with the Grantex Python SDK."
+---
+
+## Overview
+
+The `compliance` client provides tools for regulatory compliance reporting. Generate org-wide summaries, export grants and audit entries, and produce evidence packs with built-in chain integrity verification for SOC 2 and GDPR audits.
+
+Access the compliance client via `client.compliance`.
+
+## Get Summary
+
+Generate an org-wide compliance summary with counts of agents, grants, audit entries, and policies:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    summary = client.compliance.get_summary(
+        since="2026-01-01T00:00:00Z",
+        until="2026-02-01T00:00:00Z",
+    )
+
+    print(f"Generated at: {summary.generated_at}")
+    print(f"Plan: {summary.plan}")
+    print(f"Agents: {summary.agents}")
+    print(f"Grants: {summary.grants}")
+    print(f"Audit entries: {summary.audit_entries}")
+    print(f"Policies: {summary.policies}")
+```
+
+### Parameters
+
+| Parameter | Type          | Required | Description                                |
+|-----------|---------------|----------|--------------------------------------------|
+| `since`   | `str \| None` | No       | ISO 8601 start timestamp for the report.   |
+| `until`   | `str \| None` | No       | ISO 8601 end timestamp for the report.     |
+
+Both parameters are keyword-only.
+
+### ComplianceSummary
+
+| Field           | Type             | Description                              |
+|-----------------|------------------|------------------------------------------|
+| `generated_at`  | `str`            | ISO 8601 timestamp when the report was generated. |
+| `agents`        | `dict[str, int]` | Agent counts (e.g. `{"total": 5, "active": 4}`). |
+| `grants`        | `dict[str, int]` | Grant counts by status.                  |
+| `audit_entries` | `dict[str, int]` | Audit entry counts.                      |
+| `policies`      | `dict[str, int]` | Policy counts.                           |
+| `plan`          | `str`            | Current billing plan.                    |
+| `since`         | `str \| None`    | Report start timestamp (if filtered).    |
+| `until`         | `str \| None`    | Report end timestamp (if filtered).      |
+
+## Export Grants
+
+Export all grants with optional filters for compliance reporting:
+
+```python
+from grantex import Grantex, ComplianceExportGrantsParams
+
+with Grantex(api_key="gx_live_...") as client:
+    export = client.compliance.export_grants(
+        ComplianceExportGrantsParams(
+            since="2026-01-01T00:00:00Z",
+            status="active",
+        )
+    )
+
+    print(f"Generated at: {export.generated_at}")
+    print(f"Total grants: {export.total}")
+    for grant in export.grants:
+        print(f"  {grant.id}: {grant.scopes} ({grant.status})")
+```
+
+### ComplianceExportGrantsParams
+
+| Field    | Type          | Required | Description                                          |
+|----------|---------------|----------|------------------------------------------------------|
+| `since`  | `str \| None` | No       | ISO 8601 start timestamp.                            |
+| `until`  | `str \| None` | No       | ISO 8601 end timestamp.                              |
+| `status` | `str \| None` | No       | Filter by status (`"active"`, `"revoked"`, `"expired"`). |
+
+### ComplianceGrantsExport
+
+| Field          | Type               | Description                      |
+|----------------|--------------------|----------------------------------|
+| `generated_at` | `str`              | ISO 8601 generation timestamp.   |
+| `total`        | `int`              | Total number of exported grants. |
+| `grants`       | `tuple[Grant, ...]`| The exported grant records.      |
+
+## Export Audit
+
+Export all audit entries with optional filters:
+
+```python
+from grantex import Grantex, ComplianceExportAuditParams
+
+with Grantex(api_key="gx_live_...") as client:
+    export = client.compliance.export_audit(
+        ComplianceExportAuditParams(
+            since="2026-01-01T00:00:00Z",
+            agent_id="agt_abc123",
+            status="success",
+        )
+    )
+
+    print(f"Generated at: {export.generated_at}")
+    print(f"Total entries: {export.total}")
+    for entry in export.entries:
+        print(f"  [{entry.timestamp}] {entry.action} - {entry.status}")
+```
+
+### ComplianceExportAuditParams
+
+| Field      | Type          | Required | Description                                                   |
+|------------|---------------|----------|---------------------------------------------------------------|
+| `since`    | `str \| None` | No       | ISO 8601 start timestamp.                                    |
+| `until`    | `str \| None` | No       | ISO 8601 end timestamp.                                      |
+| `agent_id` | `str \| None` | No       | Filter by agent ID.                                          |
+| `status`   | `str \| None` | No       | Filter by status (`"success"`, `"failure"`, `"blocked"`).     |
+
+### ComplianceAuditExport
+
+| Field          | Type                     | Description                        |
+|----------------|--------------------------|------------------------------------|
+| `generated_at` | `str`                    | ISO 8601 generation timestamp.     |
+| `total`        | `int`                    | Total number of exported entries.  |
+| `entries`      | `tuple[AuditEntry, ...]` | The exported audit entries.        |
+
+## Evidence Pack
+
+Generate a full compliance evidence pack with chain integrity verification. Evidence packs are designed for SOC 2 and GDPR audits:
+
+```python
+from grantex import Grantex, EvidencePackParams
+
+with Grantex(api_key="gx_live_...") as client:
+    pack = client.compliance.evidence_pack(
+        EvidencePackParams(
+            since="2026-01-01T00:00:00Z",
+            until="2026-02-01T00:00:00Z",
+            framework="soc2",
+        )
+    )
+
+    print(f"Framework: {pack.meta.framework}")
+    print(f"Schema version: {pack.meta.schema_version}")
+    print(f"Generated at: {pack.meta.generated_at}")
+    print(f"Summary: {pack.summary}")
+    print(f"Grants: {len(pack.grants)}")
+    print(f"Audit entries: {len(pack.audit_entries)}")
+    print(f"Policies: {len(pack.policies)}")
+    print(f"Chain integrity valid: {pack.chain_integrity.valid}")
+    print(f"Entries checked: {pack.chain_integrity.checked_entries}")
+```
+
+### EvidencePackParams
+
+| Field       | Type          | Required | Description                                       |
+|-------------|---------------|----------|---------------------------------------------------|
+| `since`     | `str \| None` | No       | ISO 8601 start timestamp.                         |
+| `until`     | `str \| None` | No       | ISO 8601 end timestamp.                           |
+| `framework` | `str \| None` | No       | Compliance framework (`"soc2"`, `"gdpr"`, `"all"`). |
+
+### EvidencePack
+
+| Field              | Type                     | Description                            |
+|--------------------|--------------------------|----------------------------------------|
+| `meta`             | `EvidencePackMeta`       | Pack metadata (schema, framework, timestamps). |
+| `summary`          | `dict[str, Any]`         | Aggregate statistics.                  |
+| `grants`           | `tuple[Grant, ...]`      | All grants in the time window.         |
+| `audit_entries`    | `tuple[AuditEntry, ...]` | All audit entries in the time window.  |
+| `policies`         | `tuple[Policy, ...]`     | All active policies.                   |
+| `chain_integrity`  | `ChainIntegrity`         | Result of chain integrity verification.|
+
+### EvidencePackMeta
+
+| Field            | Type          | Description                              |
+|------------------|---------------|------------------------------------------|
+| `schema_version` | `str`         | Evidence pack schema version.            |
+| `generated_at`   | `str`         | ISO 8601 generation timestamp.           |
+| `framework`      | `str`         | Compliance framework used.               |
+| `since`          | `str \| None` | Report start timestamp (if filtered).    |
+| `until`          | `str \| None` | Report end timestamp (if filtered).      |
+
+### ChainIntegrity
+
+| Field              | Type          | Description                                       |
+|--------------------|---------------|---------------------------------------------------|
+| `valid`            | `bool`        | Whether the audit chain is intact.                |
+| `checked_entries`  | `int`         | Number of entries verified.                       |
+| `first_broken_at`  | `str \| None` | ISO 8601 timestamp of the first broken link (if any). |

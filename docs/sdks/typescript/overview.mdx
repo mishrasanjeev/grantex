@@ -1,0 +1,121 @@
+---
+title: "TypeScript SDK"
+sidebarTitle: "Overview"
+description: "Install, configure, and get started with the @grantex/sdk TypeScript SDK."
+---
+
+## Installation
+
+```bash
+npm install @grantex/sdk
+```
+
+## Requirements
+
+- **Node.js 18+** (uses native `fetch` and `crypto`)
+- **ESM only** -- the package ships as `"type": "module"` with TypeScript `NodeNext` resolution
+
+## Configuration
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({
+  apiKey: process.env.GRANTEX_API_KEY,  // required (or set GRANTEX_API_KEY env var)
+  baseUrl: 'https://api.grantex.dev',   // optional, defaults to production
+  timeout: 30_000,                       // optional, request timeout in ms
+});
+```
+
+### Options
+
+<ParamField body="apiKey" type="string" required>
+  Your Grantex API key. Falls back to the `GRANTEX_API_KEY` environment variable if omitted.
+</ParamField>
+
+<ParamField body="baseUrl" type="string" default="https://api.grantex.dev">
+  Base URL for the Grantex API. Override for self-hosted or local development.
+</ParamField>
+
+<ParamField body="timeout" type="number" default="30000">
+  Request timeout in milliseconds. The SDK uses `AbortController` to enforce the deadline.
+</ParamField>
+
+## Quick start
+
+The complete authorization flow in one script:
+
+```typescript
+import { Grantex, verifyGrantToken } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// 1. Register an agent
+const agent = await grantex.agents.register({
+  name: 'travel-booker',
+  description: 'Books flights and hotels on behalf of users',
+  scopes: ['calendar:read', 'payments:initiate:max_500', 'email:send'],
+});
+console.log(agent.did);
+// → did:grantex:ag_01HXYZ123abc...
+
+// 2. Request user authorization
+const authRequest = await grantex.authorize({
+  agentId: agent.id,
+  userId: 'user_abc123',
+  scopes: ['calendar:read', 'payments:initiate:max_500'],
+  expiresIn: '24h',
+  redirectUri: 'https://yourapp.com/auth/callback',
+});
+// Redirect the user to authRequest.consentUrl
+
+// 3. Exchange the authorization code for a grant token
+const token = await grantex.tokens.exchange({
+  code,                  // from the redirect callback
+  agentId: agent.id,
+});
+console.log(token.grantToken);  // RS256 JWT
+console.log(token.scopes);      // ['calendar:read', 'payments:initiate:max_500']
+
+// 4. Verify the token offline (no Grantex dependency at runtime)
+const grant = await verifyGrantToken(token.grantToken, {
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+  requiredScopes: ['calendar:read'],
+});
+console.log(grant.principalId); // 'user_abc123'
+
+// 5. Revoke the token when done
+await grantex.tokens.revoke(grant.tokenId);
+```
+
+## Available resources
+
+The `Grantex` client exposes the following sub-clients:
+
+| Property | Description | Reference |
+|---|---|---|
+| `grantex.agents` | Register, list, update, and delete agents | [Agents](/sdks/typescript/agents) |
+| `grantex.tokens` | Exchange, verify, and revoke tokens | [Tokens](/sdks/typescript/tokens) |
+| `grantex.grants` | Manage grants, delegate to sub-agents | [Grants](/sdks/typescript/grants) |
+| `grantex.audit` | Log and query the tamper-evident audit trail | [Audit](/sdks/typescript/audit) |
+| `grantex.webhooks` | Create and manage webhook endpoints | [Webhooks](/sdks/typescript/webhooks) |
+| `grantex.policies` | Define authorization policies | [Policies](/sdks/typescript/policies) |
+| `grantex.compliance` | Compliance summaries, exports, evidence packs | [Compliance](/sdks/typescript/compliance) |
+| `grantex.anomalies` | Detect and acknowledge anomalies | [Anomalies](/sdks/typescript/anomalies) |
+| `grantex.billing` | Subscription management via Stripe | [Billing](/sdks/typescript/billing) |
+| `grantex.scim` | SCIM 2.0 user provisioning | [SCIM](/sdks/typescript/scim) |
+| `grantex.sso` | OIDC single sign-on | [SSO](/sdks/typescript/sso) |
+
+## Standalone exports
+
+These functions can be used without instantiating a `Grantex` client:
+
+| Export | Description | Reference |
+|---|---|---|
+| `verifyGrantToken()` | Offline JWT verification via JWKS | [Offline Verification](/sdks/typescript/offline-verification) |
+| `generatePkce()` | Generate PKCE S256 challenge pairs | [PKCE](/sdks/typescript/pkce) |
+| `verifyWebhookSignature()` | Verify webhook payload signatures | [Webhooks](/sdks/typescript/webhooks) |
+
+## Error handling
+
+All errors extend `GrantexError`. See the [Error Handling](/sdks/typescript/errors) reference for the full hierarchy and usage patterns.

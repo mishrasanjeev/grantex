@@ -1,0 +1,189 @@
+---
+title: "Policies"
+sidebarTitle: "Policies"
+description: "Create, manage, and enforce authorization policies for fine-grained access control with the Grantex Python SDK."
+---
+
+## Overview
+
+Policies provide fine-grained access control rules that are evaluated during authorization. Each policy has an effect (`allow` or `deny`), a priority, and optional filters for agent, principal, scopes, and time-of-day restrictions.
+
+Access the policies client via `client.policies`.
+
+## Create
+
+Create a new authorization policy:
+
+```python
+from grantex import Grantex, CreatePolicyParams
+
+with Grantex(api_key="gx_live_...") as client:
+    policy = client.policies.create(CreatePolicyParams(
+        name="business-hours-only",
+        effect="deny",
+        priority=10,
+        agent_id="agt_abc123",
+        time_of_day_start="18:00",
+        time_of_day_end="08:00",
+    ))
+
+    print(f"Policy ID: {policy.id}")
+    print(f"Effect: {policy.effect}")
+    print(f"Priority: {policy.priority}")
+```
+
+### CreatePolicyParams
+
+| Field                | Type              | Required | Default | Description                                    |
+|----------------------|-------------------|----------|---------|------------------------------------------------|
+| `name`               | `str`             | Yes      | --      | Human-readable name for the policy.            |
+| `effect`             | `str`             | Yes      | --      | `"allow"` or `"deny"`.                         |
+| `priority`           | `int`             | No       | `0`     | Higher priority policies are evaluated first.  |
+| `agent_id`           | `str \| None`     | No       | `None`  | Restrict to a specific agent.                  |
+| `principal_id`       | `str \| None`     | No       | `None`  | Restrict to a specific principal (user).       |
+| `scopes`             | `list[str] \| None` | No     | `None`  | Restrict to specific scopes.                   |
+| `time_of_day_start`  | `str \| None`     | No       | `None`  | Start of allowed/denied time window (`HH:MM`). |
+| `time_of_day_end`    | `str \| None`     | No       | `None`  | End of allowed/denied time window (`HH:MM`).   |
+
+## List
+
+List all policies for your developer account:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.policies.list()
+
+    print(f"Total policies: {result.total}")
+    for policy in result.policies:
+        print(f"  {policy.name}: {policy.effect} (priority {policy.priority})")
+```
+
+### ListPoliciesResponse
+
+| Field      | Type                | Description                    |
+|------------|---------------------|--------------------------------|
+| `policies` | `tuple[Policy, ...]`| The list of policies.          |
+| `total`    | `int`               | Total number of policies.      |
+
+## Get
+
+Retrieve a single policy by its ID:
+
+```python
+policy = client.policies.get("pol_abc123")
+
+print(f"Name: {policy.name}")
+print(f"Effect: {policy.effect}")
+print(f"Agent: {policy.agent_id}")
+print(f"Scopes: {policy.scopes}")
+print(f"Time window: {policy.time_of_day_start} - {policy.time_of_day_end}")
+```
+
+## Update
+
+Update an existing policy. Only fields you provide will be modified:
+
+```python
+from grantex import Grantex, UpdatePolicyParams
+
+with Grantex(api_key="gx_live_...") as client:
+    updated = client.policies.update(
+        "pol_abc123",
+        UpdatePolicyParams(
+            name="business-hours-only-v2",
+            priority=20,
+            time_of_day_start="19:00",
+            time_of_day_end="07:00",
+        ),
+    )
+
+    print(f"Updated at: {updated.updated_at}")
+```
+
+### UpdatePolicyParams
+
+| Field                | Type              | Required | Description                                    |
+|----------------------|-------------------|----------|------------------------------------------------|
+| `name`               | `str \| None`     | No       | New name for the policy.                       |
+| `effect`             | `str \| None`     | No       | New effect (`"allow"` or `"deny"`).            |
+| `priority`           | `int \| None`     | No       | New priority value.                            |
+| `agent_id`           | `str \| None`     | No       | New agent filter.                              |
+| `principal_id`       | `str \| None`     | No       | New principal filter.                          |
+| `scopes`             | `list[str] \| None` | No     | New scope filter.                              |
+| `time_of_day_start`  | `str \| None`     | No       | New time window start (`HH:MM`).               |
+| `time_of_day_end`    | `str \| None`     | No       | New time window end (`HH:MM`).                  |
+
+## Delete
+
+Delete a policy by its ID:
+
+```python
+client.policies.delete("pol_abc123")
+# Returns None on success
+```
+
+## Policy Type
+
+The `Policy` frozen dataclass has the following fields:
+
+| Field                | Type                   | Description                              |
+|----------------------|------------------------|------------------------------------------|
+| `id`                 | `str`                  | Unique policy identifier.                |
+| `name`               | `str`                  | Human-readable policy name.              |
+| `effect`             | `str`                  | `"allow"` or `"deny"`.                   |
+| `priority`           | `int`                  | Evaluation priority (higher = first).    |
+| `agent_id`           | `str \| None`          | Agent filter (if set).                   |
+| `principal_id`       | `str \| None`          | Principal filter (if set).               |
+| `scopes`             | `tuple[str, ...] \| None` | Scope filter (if set).                |
+| `time_of_day_start`  | `str \| None`          | Time window start.                       |
+| `time_of_day_end`    | `str \| None`          | Time window end.                         |
+| `created_at`         | `str`                  | ISO 8601 creation timestamp.             |
+| `updated_at`         | `str`                  | ISO 8601 last-updated timestamp.         |
+
+## Example: Common Policy Patterns
+
+### Deny After Hours
+
+```python
+from grantex import Grantex, CreatePolicyParams
+
+with Grantex(api_key="gx_live_...") as client:
+    client.policies.create(CreatePolicyParams(
+        name="deny-after-hours",
+        effect="deny",
+        priority=100,
+        time_of_day_start="20:00",
+        time_of_day_end="06:00",
+    ))
+```
+
+### Allow Specific Scopes for an Agent
+
+```python
+from grantex import Grantex, CreatePolicyParams
+
+with Grantex(api_key="gx_live_...") as client:
+    client.policies.create(CreatePolicyParams(
+        name="read-only-for-assistant",
+        effect="allow",
+        priority=50,
+        agent_id="agt_abc123",
+        scopes=["files:read", "calendar:read"],
+    ))
+```
+
+### Deny a Specific User
+
+```python
+from grantex import Grantex, CreatePolicyParams
+
+with Grantex(api_key="gx_live_...") as client:
+    client.policies.create(CreatePolicyParams(
+        name="block-suspended-user",
+        effect="deny",
+        priority=200,
+        principal_id="user_suspended_xyz",
+    ))
+```

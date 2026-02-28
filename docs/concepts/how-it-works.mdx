@@ -1,0 +1,78 @@
+---
+title: "How It Works"
+sidebarTitle: "How It Works"
+description: "The three primitives that make up the Grantex protocol."
+---
+
+## Three Primitives
+
+Grantex introduces three primitives for agent authorization:
+
+```
+┌───────────────────┬─────────────────────┬───────────────────────┐
+│   Agent Identity  │   Delegated Grant   │     Audit Trail       │
+│                   │                     │                       │
+│  Cryptographic    │  Human-approved,    │  Append-only,         │
+│  DID / JWT for    │  scoped, revocable  │  hash-chained log     │
+│  every agent      │  permission tokens  │  of every action      │
+└───────────────────┴─────────────────────┴───────────────────────┘
+```
+
+### Agent Identity
+
+Every agent registered with Grantex receives a cryptographic DID (Decentralized Identifier). This identity is embedded in every grant token the agent receives, allowing any service to verify which agent is acting.
+
+### Delegated Grant
+
+A delegated grant is a human-approved, scoped, time-limited permission token. The user sees a plain-language consent UI describing exactly what the agent can do. Once approved, Grantex issues an RS256-signed JWT — the **grant token** — that the agent presents to services.
+
+### Audit Trail
+
+Every action taken by an authorized agent is logged to an append-only, hash-chained audit trail. Each entry references the previous entry's hash, creating a tamper-evident chain that can be verified independently.
+
+## The Authorization Flow
+
+```
+  Developer registers agent → declares required scopes
+          │
+          ▼
+  Agent requests authorization from end-user
+          │
+          ▼
+  User approves via Grantex consent UI (scoped, time-limited)
+          │
+          ▼
+  Grantex issues signed Grant Token (RS256 JWT + custom claims)
+          │
+          ▼
+  Agent presents token to any service → service verifies locally via JWKS
+          │
+          ▼
+  Every action logged to immutable audit trail
+          │
+          ▼
+  User can revoke any grant at any time → effective in < 1 second
+```
+
+### Step by step
+
+1. **Register** — The developer registers their agent with Grantex, declaring a name, description, and the scopes (permissions) the agent needs.
+
+2. **Authorize** — When the agent needs to act on behalf of a user, it initiates an authorization request. The user is redirected to a consent UI showing exactly what permissions are being requested.
+
+3. **Approve** — The user reviews the scopes in plain language and approves (or denies). On approval, Grantex returns an authorization code to your redirect URI.
+
+4. **Exchange** — Your application exchanges the authorization code for a signed grant token (RS256 JWT). This token contains the user's identity, the agent's DID, granted scopes, and expiry.
+
+5. **Verify** — Any service receiving the grant token can verify it offline using the published JWKS endpoint. No Grantex account or API call needed — just fetch the public keys.
+
+6. **Audit** — As the agent takes actions, each one is logged to the audit trail with the agent ID, grant ID, action name, and outcome.
+
+7. **Revoke** — The user can revoke any grant at any time. Revocation is effective immediately — the token is blocklisted in Redis and subsequent verification calls reject it.
+
+## Why an Open Standard?
+
+- **Model-neutral** — Works with OpenAI, Anthropic, Google, Llama, Mistral. No single AI provider can credibly own the authorization layer for their competitors' agents.
+- **Framework-native** — First-class integrations for LangChain, AutoGen, CrewAI, Vercel AI, and more.
+- **Offline-verifiable** — Services verify tokens using published JWKS. Zero runtime dependency on Grantex infrastructure.
+- **Compliance-ready** — The EU AI Act, GDPR, and emerging US AI regulations will mandate auditable agent actions. Grantex provides this on day one.

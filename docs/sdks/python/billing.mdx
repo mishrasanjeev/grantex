@@ -1,0 +1,117 @@
+---
+title: "Billing"
+sidebarTitle: "Billing"
+description: "Manage subscriptions, create checkout sessions, and access the billing portal with the Grantex Python SDK."
+---
+
+## Overview
+
+The `billing` client provides access to subscription management, Stripe Checkout session creation, and the Stripe Billing Portal.
+
+Access the billing client via `client.billing`.
+
+## Get Subscription
+
+Retrieve the current subscription status for the authenticated developer:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    sub = client.billing.get_subscription()
+
+    print(f"Plan: {sub.plan}")
+    print(f"Status: {sub.status}")
+    print(f"Current period ends: {sub.current_period_end}")
+```
+
+### SubscriptionStatus
+
+| Field                | Type          | Description                                        |
+|----------------------|---------------|----------------------------------------------------|
+| `plan`               | `str`         | Current plan (`"free"`, `"pro"`, or `"enterprise"`). |
+| `status`             | `str`         | Subscription status (`"active"`, `"past_due"`, `"canceled"`). |
+| `current_period_end` | `str \| None` | ISO 8601 timestamp when the current billing period ends. |
+
+## Create Checkout
+
+Create a Stripe Checkout session for upgrading to a paid plan. Returns a URL to redirect the user to:
+
+```python
+from grantex import Grantex, CreateCheckoutParams
+
+with Grantex(api_key="gx_live_...") as client:
+    checkout = client.billing.create_checkout(CreateCheckoutParams(
+        plan="pro",
+        success_url="https://myapp.com/billing/success",
+        cancel_url="https://myapp.com/billing/cancel",
+    ))
+
+    print(f"Redirect to: {checkout.checkout_url}")
+```
+
+### CreateCheckoutParams
+
+| Parameter     | Type  | Required | Description                                           |
+|---------------|-------|----------|-------------------------------------------------------|
+| `plan`        | `str` | Yes      | The plan to subscribe to (`"pro"` or `"enterprise"`). |
+| `success_url` | `str` | Yes      | URL to redirect to after successful payment.          |
+| `cancel_url`  | `str` | Yes      | URL to redirect to if the user cancels.               |
+
+### CheckoutResponse
+
+| Field          | Type  | Description                              |
+|----------------|-------|------------------------------------------|
+| `checkout_url` | `str` | The Stripe Checkout session URL.         |
+
+## Create Portal
+
+Create a Stripe Billing Portal session for managing an existing subscription. Returns a URL to redirect the user to:
+
+```python
+from grantex import Grantex, CreatePortalParams
+
+with Grantex(api_key="gx_live_...") as client:
+    portal = client.billing.create_portal(CreatePortalParams(
+        return_url="https://myapp.com/settings",
+    ))
+
+    print(f"Redirect to: {portal.portal_url}")
+```
+
+### CreatePortalParams
+
+| Parameter    | Type  | Required | Description                                   |
+|--------------|-------|----------|-----------------------------------------------|
+| `return_url` | `str` | Yes      | URL to redirect to when the user exits the portal. |
+
+### PortalResponse
+
+| Field        | Type  | Description                              |
+|--------------|-------|------------------------------------------|
+| `portal_url` | `str` | The Stripe Billing Portal session URL.   |
+
+## Example: Billing Flow
+
+```python
+from grantex import Grantex, CreateCheckoutParams, CreatePortalParams
+
+with Grantex(api_key="gx_live_...") as client:
+    # Check current plan
+    sub = client.billing.get_subscription()
+
+    if sub.plan == "free":
+        # Upgrade to pro
+        checkout = client.billing.create_checkout(CreateCheckoutParams(
+            plan="pro",
+            success_url="https://myapp.com/billing/success",
+            cancel_url="https://myapp.com/billing/cancel",
+        ))
+        print(f"Upgrade: {checkout.checkout_url}")
+    else:
+        # Manage existing subscription
+        portal = client.billing.create_portal(CreatePortalParams(
+            return_url="https://myapp.com/settings",
+        ))
+        print(f"Manage: {portal.portal_url}")
+```

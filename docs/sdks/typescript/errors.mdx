@@ -1,0 +1,208 @@
+---
+title: "Error Handling"
+sidebarTitle: "Errors"
+description: "Understand the error hierarchy and handle API, authentication, token, and network errors."
+---
+
+## Overview
+
+All errors thrown by the SDK extend from `GrantexError`. The hierarchy is designed so you can catch errors at different levels of specificity.
+
+```typescript
+import {
+  GrantexError,
+  GrantexApiError,
+  GrantexAuthError,
+  GrantexTokenError,
+  GrantexNetworkError,
+} from '@grantex/sdk';
+```
+
+## Error hierarchy
+
+```
+GrantexError (base)
+├── GrantexApiError (HTTP 4xx/5xx)
+│   └── GrantexAuthError (HTTP 401/403)
+├── GrantexTokenError (JWT verification failures)
+└── GrantexNetworkError (timeout, DNS, connection)
+```
+
+---
+
+## GrantexError
+
+The base error class. All SDK errors are instances of `GrantexError`.
+
+```typescript
+try {
+  await grantex.agents.get('ag_nonexistent');
+} catch (err) {
+  if (err instanceof GrantexError) {
+    console.error('Grantex SDK error:', err.message);
+  }
+}
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `message` | `string` | Human-readable error message |
+| `name` | `string` | `'GrantexError'` |
+
+---
+
+## GrantexApiError
+
+Thrown when the Grantex API returns an HTTP error response (4xx or 5xx). Extends `GrantexError`.
+
+```typescript
+try {
+  await grantex.agents.get('ag_nonexistent');
+} catch (err) {
+  if (err instanceof GrantexApiError) {
+    console.error('Status:', err.statusCode);   // 404
+    console.error('Body:', err.body);            // { message: 'Agent not found' }
+    console.error('Request ID:', err.requestId); // 'req_01HXYZ...'
+  }
+}
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `message` | `string` | Error message extracted from the response body |
+| `statusCode` | `number` | HTTP status code |
+| `body` | `unknown` | The raw response body |
+| `requestId` | `string \| undefined` | The `X-Request-Id` header value, if present |
+
+---
+
+## GrantexAuthError
+
+Thrown for authentication and authorization failures (HTTP 401 or 403). Extends `GrantexApiError`.
+
+```typescript
+try {
+  const grantex = new Grantex({ apiKey: 'invalid-key' });
+  await grantex.agents.list();
+} catch (err) {
+  if (err instanceof GrantexAuthError) {
+    console.error('Auth failed:', err.statusCode); // 401 or 403
+    console.error('Message:', err.message);         // 'Invalid API key'
+  }
+}
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `statusCode` | `401 \| 403` | Always 401 (unauthorized) or 403 (forbidden) |
+
+Inherits all properties from `GrantexApiError`.
+
+---
+
+## GrantexTokenError
+
+Thrown when offline token verification fails. This error is raised by `verifyGrantToken()` and `grants.verify()`. Extends `GrantexError`.
+
+```typescript
+import { verifyGrantToken, GrantexTokenError } from '@grantex/sdk';
+
+try {
+  await verifyGrantToken('invalid.jwt.token', {
+    jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+  });
+} catch (err) {
+  if (err instanceof GrantexTokenError) {
+    console.error('Token error:', err.message);
+    // "Grant token verification failed: ..."
+    // "Grant token is missing required scopes: payments:initiate"
+    // "Grant token is missing required claims (jti, sub, agt, dev, scp, iat, exp)"
+  }
+}
+```
+
+Common scenarios:
+- Invalid JWT signature
+- Expired token
+- Missing required JWT claims
+- Missing required scopes (when `requiredScopes` is specified)
+- Audience mismatch (when `audience` is specified)
+
+---
+
+## GrantexNetworkError
+
+Thrown when a network error occurs (timeout, DNS resolution failure, connection refused). Extends `GrantexError`.
+
+```typescript
+try {
+  const grantex = new Grantex({
+    apiKey: 'gx_...',
+    baseUrl: 'https://unreachable.example.com',
+    timeout: 5000,
+  });
+  await grantex.agents.list();
+} catch (err) {
+  if (err instanceof GrantexNetworkError) {
+    console.error('Network error:', err.message);
+    // "Request timed out after 5000ms"
+    // "Network error: getaddrinfo ENOTFOUND unreachable.example.com"
+    console.error('Cause:', err.cause); // The underlying error
+  }
+}
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `message` | `string` | Human-readable network error description |
+| `cause` | `unknown` | The underlying error (e.g. the `AbortError` for timeouts) |
+
+---
+
+## Recommended error handling pattern
+
+```typescript
+import {
+  Grantex,
+  GrantexAuthError,
+  GrantexApiError,
+  GrantexTokenError,
+  GrantexNetworkError,
+  GrantexError,
+} from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+try {
+  const agent = await grantex.agents.get('ag_01HXYZ...');
+  console.log(agent.name);
+} catch (err) {
+  if (err instanceof GrantexAuthError) {
+    // 401/403 -- API key is invalid or lacks permission
+    console.error(`Authentication failed (${err.statusCode}): ${err.message}`);
+    // Prompt user to re-authenticate or check API key
+  } else if (err instanceof GrantexApiError) {
+    // Other HTTP errors (404, 422, 429, 500, etc.)
+    console.error(`API error (${err.statusCode}): ${err.message}`);
+    if (err.requestId) {
+      console.error(`Request ID: ${err.requestId} -- include this in support tickets`);
+    }
+  } else if (err instanceof GrantexNetworkError) {
+    // Timeout, DNS, connection refused
+    console.error(`Network error: ${err.message}`);
+    // Retry with exponential backoff
+  } else if (err instanceof GrantexTokenError) {
+    // Token verification failure
+    console.error(`Token error: ${err.message}`);
+  } else if (err instanceof GrantexError) {
+    // Catch-all for any other SDK error
+    console.error(`Grantex error: ${err.message}`);
+  } else {
+    throw err; // Unexpected error -- rethrow
+  }
+}
+```
+
+<Tip>
+  Always include `err.requestId` (from `GrantexApiError`) in support tickets. It helps the Grantex team trace the exact request in server logs.
+</Tip>

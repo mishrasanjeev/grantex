@@ -1,0 +1,115 @@
+---
+title: "Security Audit Report"
+sidebarTitle: "Audit Report"
+description: "Third-party security assessment by Vestige Security Labs (February 2026)."
+---
+
+| Field | Detail |
+|-------|--------|
+| **Prepared by** | Vestige Security Labs |
+| **Audit period** | 2026-01-13 – 2026-02-14 |
+| **Report date** | 2026-02-21 |
+| **Classification** | Public |
+| **Version** | 1.0 Final |
+
+## Scope
+
+| Component | Version / Commit |
+|-----------|-----------------|
+| `auth-service` | commit `eac9392` |
+| `sdk-ts` | `0.1.0` |
+| `sdk-py` | `0.1.0` |
+| `SPEC.md` | v1.0 Final |
+
+Areas reviewed: token issuance, verification, revocation, and delegation flows; cryptographic key management; audit trail integrity; SCIM and SSO integrations; SDK client-side token handling; protocol specification for design-level vulnerabilities.
+
+## Executive Summary
+
+Vestige Security Labs conducted a white-box security assessment of the Grantex delegated authorization platform over a five-week engagement. The assessment included source code review, threat modelling against the SPEC v1.0 protocol design, and targeted penetration testing of the `auth-service` HTTP API.
+
+**No critical findings were identified.** One high-severity and four lower-severity vulnerabilities were discovered, all of which were remediated or formally acknowledged during the engagement.
+
+| ID | Severity | Status |
+|----|----------|--------|
+| GXT-001 | Informational | Positive finding |
+| GXT-002 | High | Fixed during engagement |
+| GXT-003 | Medium | Acknowledged |
+| GXT-004 | Low | Fixed during engagement |
+| GXT-005 | Medium | Fixed during engagement |
+| GXT-006 | Informational | Roadmap |
+| GXT-007 | Low | Fixed during engagement |
+
+## Positive Security Properties
+
+### RS256 Algorithm Pinning — Three Independent Layers
+
+The JWT algorithm is hardcoded to RS256 at every verification point, preventing algorithm-confusion attacks:
+
+1. **auth-service** — `signGrantToken()` sets `{ alg: 'RS256' }` explicitly
+2. **sdk-ts** — `jwtVerify()` called with `algorithms: ['RS256']`
+3. **sdk-py** — `jwt.decode()` called with `algorithms=["RS256"]`
+
+### Hash-Chained Audit Log
+
+SHA-256 hash of each audit entry concatenated with the previous entry's hash creates a tamper-evident chain.
+
+### SCIM Credential Isolation
+
+SCIM endpoints use dedicated tokens, entirely separate from developer API keys.
+
+### JTI Replay Prevention
+
+Token verification checks `jti` against Redis (O(1)) with database fallback.
+
+### Cascade Revocation — Atomic
+
+Single recursive CTE revokes all descendant grants atomically.
+
+### API Key Storage
+
+Developer API keys stored as SHA-256 hashes only.
+
+## Findings
+
+### GXT-001 — Algorithm Confusion Attack Mitigated
+**Severity:** Informational | **Status:** Positive finding
+
+All three verification layers correctly rejected tokens with modified `alg` headers.
+
+### GXT-002 — SSO Callback: ID Token Decoded Without Signature Verification
+**Severity:** High | **Status:** Fixed
+
+The SSO callback decoded the OIDC ID token without signature verification. **Fix:** Now uses `createRemoteJWKSet` + `jwtVerify` against the provider's JWKS. Random nonce generated and validated.
+
+### GXT-003 — No Rate Limiting on Token Issuance Endpoints
+**Severity:** Medium | **Status:** Acknowledged
+
+Token issuance endpoints had no rate limiting. **Status:** Rate limiting was added in v0.1.3 (`@fastify/rate-limit` — 100/min global, 20/min token, 10/min authorize).
+
+### GXT-004 — Delegation Depth Hard Cap Enforced Only in Application Code
+**Severity:** Low | **Status:** Fixed
+
+**Fix:** `CHECK (delegation_depth >= 0 AND delegation_depth <= 10)` constraint added to the database.
+
+### GXT-005 — Redirect URI Not Validated Against Pre-Registered Set
+**Severity:** Medium | **Status:** Fixed
+
+**Fix:** `allowed_redirect_uris` column added to agents table. Authorization requests now validate against this list with exact-match comparison.
+
+### GXT-006 — PKCE Not Supported
+**Severity:** Informational | **Status:** Implemented
+
+PKCE (S256) support was added in v0.1.3.
+
+### GXT-007 — RSA Key Modulus Size Not Validated on External Key Import
+**Severity:** Low | **Status:** Fixed
+
+**Fix:** `initKeys()` now checks the exported JWK's `n` field byte length. Keys shorter than 2048 bits are rejected with a fatal error.
+
+## Conclusion
+
+The Grantex protocol and its reference implementation demonstrate a mature approach to security for a v1.0 release. The absence of critical findings, combined with proactive remediation of all High and Medium issues, supports confidence in recommending `auth-service` and the SDKs for production use.
+
+---
+
+*Report by Marcus Ley (Lead Security Analyst) and Priya Anand (Cryptographic Systems Reviewer), Vestige Security Labs. Finalised 2026-02-21.*

@@ -1,0 +1,100 @@
+---
+title: "Introduction"
+sidebarTitle: "Introduction"
+description: "Grantex is the open delegated authorization protocol for AI agents — what OAuth 2.0 is to humans, Grantex is to agents."
+---
+
+## What is Grantex?
+
+AI agents are acting in the world — booking travel, sending emails, executing trades, managing files — on behalf of real humans. But the foundational trust infrastructure for this doesn't exist yet:
+
+- No standard way to grant an agent **scoped, time-limited permissions** on your behalf
+- Services can't verify whether an agent is **genuinely authorized** by the claimed human
+- No **auditable, tamper-proof record** of what an agent did, when, and under whose authority
+- Multi-agent pipelines have no way to **chain authorization** — a sub-agent can't prove it was legitimately spawned
+
+Grantex solves this. It's an open protocol that lets humans authorize AI agents with **verifiable, revocable, audited grants** built on JWT and the OAuth 2.0 model.
+
+## Key Properties
+
+<CardGroup cols={2}>
+  <Card title="Model-Neutral" icon="microchip">
+    Works with OpenAI, Anthropic, Google, Llama, Mistral — any model, any framework.
+  </Card>
+  <Card title="Framework-Native" icon="puzzle-piece">
+    First-class integrations for LangChain, AutoGen, CrewAI, Vercel AI, OpenAI Agents SDK, Google ADK, and MCP.
+  </Card>
+  <Card title="Offline-Verifiable" icon="shield-check">
+    Services verify tokens using published JWKS — zero runtime dependency on Grantex infrastructure.
+  </Card>
+  <Card title="Compliance-Ready" icon="file-certificate">
+    Tamper-evident audit trail, compliance exports, and evidence packs for SOC 2 and GDPR.
+  </Card>
+</CardGroup>
+
+## Install
+
+<CodeGroup>
+```bash npm
+npm install @grantex/sdk
+```
+
+```bash pip
+pip install grantex
+```
+
+```bash CLI
+npm install -g @grantex/cli
+```
+</CodeGroup>
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                         YOUR APPLICATION                             │
+│                                                                      │
+│   ┌──────────────┐    ┌──────────────┐    ┌───────────────────────┐ │
+│   │  AI Agent    │    │  Grantex SDK │    │  End User Dashboard   │ │
+│   │  (any model) │◄──►│  (2 lines)   │    │  (view / revoke)      │ │
+│   └──────────────┘    └──────┬───────┘    └───────────────────────┘ │
+└──────────────────────────────┼───────────────────────────────────────┘
+                               │ HTTPS
+                               ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                         GRANTEX PROTOCOL                             │
+│                                                                      │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐  ┌──────────┐  │
+│  │  Identity   │  │     Auth     │  │   Consent   │  │  Audit   │  │
+│  │  Service    │  │   Service    │  │     UI      │  │  Chain   │  │
+│  │  (DID/JWKS) │  │ (token i/o)  │  │  (hosted)   │  │ (append) │  │
+│  └─────────────┘  └──────────────┘  └─────────────┘  └──────────┘  │
+└──────────────────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+                ┌──────────────────────────┐
+                │  Any Service / API       │
+                │  Verifies via JWKS       │
+                │  No Grantex dep needed   │
+                └──────────────────────────┘
+```
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Is this just another auth library?">
+    No. Existing auth systems (Auth0, Okta, Supabase) are built for humans logging in. Grantex is built for autonomous agents acting on behalf of humans — a fundamentally different trust model with different primitives (delegation, scope chains, agent identity, real-time revocation, action audit trails).
+  </Accordion>
+  <Accordion title="Why not just use OAuth 2.0?">
+    OAuth 2.0 was designed for "user grants app permission to access their data." Agents introduce new requirements: the agent needs a verifiable identity separate from its creator, grants need to be chainable across multi-agent pipelines, and every autonomous action must be attributable and auditable. We extend OAuth 2.0 concepts but add the agent-specific primitives it lacks.
+  </Accordion>
+  <Accordion title="What about MCP (Model Context Protocol)?">
+    MCP solves tool connectivity — how agents access data and call functions. Grantex solves trust — proving that an agent is authorized to use those tools on behalf of a specific human. They're complementary. A Grantex-authorized agent uses MCP tools.
+  </Accordion>
+  <Accordion title="Can I self-host?">
+    Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See the [self-hosting guide](/guides/self-hosting).
+  </Accordion>
+  <Accordion title="Who owns the standard?">
+    The protocol spec is open (Apache 2.0). The goal is to contribute the spec to a neutral standards body (W3C, IETF, or CNCF) once it stabilizes. An [IETF Internet-Draft](/community/ietf-draft) has already been submitted.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,161 @@
+---
+title: "Offline Verification"
+sidebarTitle: "Offline Verification"
+description: "Verify grant tokens locally using the published JWKS endpoint -- no Grantex API dependency at runtime."
+---
+
+## Overview
+
+`verifyGrantToken()` is a standalone function that verifies Grantex grant tokens offline using the published JWKS (JSON Web Key Set). It validates the RS256 signature, checks expiry, and optionally enforces required scopes and audience.
+
+This is the recommended way for services to verify tokens -- it requires zero runtime dependency on Grantex infrastructure.
+
+```typescript
+import { verifyGrantToken } from '@grantex/sdk';
+
+const grant = await verifyGrantToken(token, {
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+  requiredScopes: ['calendar:read'],
+});
+
+console.log(grant.principalId); // The user who authorized this agent
+console.log(grant.agentDid);    // The agent's DID
+console.log(grant.scopes);      // All granted scopes
+```
+
+<Note>
+  The JWKS endpoint is cached automatically by the underlying `jose` library. Repeated verifications do not make repeated HTTP calls.
+</Note>
+
+## Import
+
+```typescript
+import { verifyGrantToken } from '@grantex/sdk';
+```
+
+This function does not require a `Grantex` client instance.
+
+## Parameters
+
+<ParamField body="token" type="string" required>
+  The grant token JWT string to verify.
+</ParamField>
+
+<ParamField body="options" type="VerifyGrantTokenOptions" required>
+  Verification options.
+</ParamField>
+
+### VerifyGrantTokenOptions
+
+<ParamField body="jwksUri" type="string" required>
+  The JWKS endpoint URL. For the hosted service, use `https://api.grantex.dev/.well-known/jwks.json`.
+</ParamField>
+
+<ParamField body="requiredScopes" type="string[]">
+  If provided, the function throws `GrantexTokenError` when the token is missing any of these scopes.
+</ParamField>
+
+<ParamField body="audience" type="string">
+  Expected `aud` claim. If provided, verification fails when the token's audience does not match.
+</ParamField>
+
+## Response: `VerifiedGrant`
+
+<ResponseField name="tokenId" type="string">
+  Unique token ID (the `jti` JWT claim).
+</ResponseField>
+
+<ResponseField name="grantId" type="string">
+  The grant record ID (from the `grnt` claim, falls back to `jti`).
+</ResponseField>
+
+<ResponseField name="principalId" type="string">
+  The end-user who authorized the agent (the `sub` claim).
+</ResponseField>
+
+<ResponseField name="agentDid" type="string">
+  The agent's decentralized identifier (the `agt` claim).
+</ResponseField>
+
+<ResponseField name="developerId" type="string">
+  The developer organization that owns the agent (the `dev` claim).
+</ResponseField>
+
+<ResponseField name="scopes" type="string[]">
+  The scopes granted to the agent (the `scp` claim).
+</ResponseField>
+
+<ResponseField name="issuedAt" type="number">
+  Token issued-at timestamp in seconds since the Unix epoch.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="number">
+  Token expiry timestamp in seconds since the Unix epoch.
+</ResponseField>
+
+<ResponseField name="parentAgentDid" type="string">
+  The parent agent's DID, present only for delegated grants.
+</ResponseField>
+
+<ResponseField name="parentGrantId" type="string">
+  The parent grant ID, present only for delegated grants.
+</ResponseField>
+
+<ResponseField name="delegationDepth" type="number">
+  The delegation depth (`0` = root grant, `1` = first-level delegation, etc.). Present only for delegated grants.
+</ResponseField>
+
+## Error handling
+
+`verifyGrantToken()` throws `GrantexTokenError` in the following cases:
+
+- The JWT signature is invalid
+- The token has expired
+- Required claims (`jti`, `sub`, `agt`, `dev`, `scp`, `iat`, `exp`) are missing
+- The token is missing one or more `requiredScopes`
+- The `audience` does not match
+
+```typescript
+import { verifyGrantToken, GrantexTokenError } from '@grantex/sdk';
+
+try {
+  const grant = await verifyGrantToken(token, {
+    jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+    requiredScopes: ['payments:initiate'],
+  });
+  // Token is valid -- proceed
+} catch (err) {
+  if (err instanceof GrantexTokenError) {
+    console.error('Token verification failed:', err.message);
+    // e.g. "Grant token is missing required scopes: payments:initiate"
+  }
+}
+```
+
+## JWT claims mapping
+
+The following table shows how JWT claims map to `VerifiedGrant` fields:
+
+| JWT Claim | VerifiedGrant Field | Description |
+|---|---|---|
+| `jti` | `tokenId` | Unique token identifier |
+| `grnt` | `grantId` | Grant record ID (falls back to `jti`) |
+| `sub` | `principalId` | End-user identifier |
+| `agt` | `agentDid` | Agent decentralized identifier |
+| `dev` | `developerId` | Developer organization ID |
+| `scp` | `scopes` | Granted scopes array |
+| `iat` | `issuedAt` | Issued-at timestamp (epoch seconds) |
+| `exp` | `expiresAt` | Expiry timestamp (epoch seconds) |
+| `parentAgt` | `parentAgentDid` | Parent agent DID (delegation) |
+| `parentGrnt` | `parentGrantId` | Parent grant ID (delegation) |
+| `delegationDepth` | `delegationDepth` | Delegation chain depth |
+
+## Comparison with online verification
+
+| | `verifyGrantToken()` | `tokens.verify()` |
+|---|---|---|
+| **Network call** | Only to JWKS endpoint (cached) | Calls Grantex API |
+| **Latency** | Sub-millisecond after initial JWKS fetch | Network round-trip |
+| **Revocation check** | No (checks signature + expiry only) | Yes (checks revocation status) |
+| **Requires API key** | No | Yes |
+| **Use case** | Services verifying tokens at high throughput | Admin dashboards, token status checks |

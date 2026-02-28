@@ -1,0 +1,246 @@
+---
+title: "Grants"
+sidebarTitle: "Grants"
+description: "Manage grants, delegate authorization to sub-agents, and verify tokens via the API."
+---
+
+## Overview
+
+The `grants` sub-client provides operations on grant records: retrieving, listing, revoking, delegating to sub-agents, and verifying grant tokens online.
+
+```typescript
+const grant = await grantex.grants.get('grnt_01HXYZ...');
+console.log(grant.scopes);  // ['calendar:read', 'payments:initiate:max_500']
+console.log(grant.status);  // 'active'
+```
+
+---
+
+## grants.get()
+
+Retrieve a single grant by its ID.
+
+```typescript
+const grant = await grantex.grants.get('grnt_01HXYZ...');
+
+console.log(grant.id);          // 'grnt_01HXYZ...'
+console.log(grant.agentId);     // 'ag_01HXYZ...'
+console.log(grant.principalId); // 'user_abc123'
+console.log(grant.scopes);      // ['calendar:read']
+console.log(grant.status);      // 'active'
+console.log(grant.expiresAt);   // '2026-03-02T12:00:00Z'
+```
+
+### Parameters
+
+<ParamField body="grantId" type="string" required>
+  The grant ID to retrieve.
+</ParamField>
+
+### Response: `Grant`
+
+<ResponseField name="id" type="string">
+  Unique grant identifier.
+</ResponseField>
+
+<ResponseField name="agentId" type="string">
+  The agent that holds this grant.
+</ResponseField>
+
+<ResponseField name="agentDid" type="string">
+  The agent's decentralized identifier.
+</ResponseField>
+
+<ResponseField name="principalId" type="string">
+  The user who authorized the grant.
+</ResponseField>
+
+<ResponseField name="developerId" type="string">
+  The developer organization.
+</ResponseField>
+
+<ResponseField name="scopes" type="string[]">
+  Granted scopes.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Grant status: `'active'`, `'revoked'`, or `'expired'`.
+</ResponseField>
+
+<ResponseField name="issuedAt" type="string">
+  ISO 8601 timestamp when the grant was issued.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO 8601 timestamp when the grant expires.
+</ResponseField>
+
+<ResponseField name="revokedAt" type="string">
+  ISO 8601 timestamp when the grant was revoked (only present if `status` is `'revoked'`).
+</ResponseField>
+
+---
+
+## grants.list()
+
+List grants with optional filters.
+
+```typescript
+const result = await grantex.grants.list({
+  agentId: 'ag_01HXYZ...',
+  status: 'active',
+  page: 1,
+  pageSize: 25,
+});
+
+console.log(result.total);  // 42
+for (const grant of result.grants) {
+  console.log(`${grant.id}: ${grant.scopes.join(', ')}`);
+}
+```
+
+### Parameters
+
+<ParamField body="agentId" type="string">
+  Filter by agent ID.
+</ParamField>
+
+<ParamField body="principalId" type="string">
+  Filter by principal (user) ID.
+</ParamField>
+
+<ParamField body="status" type="string">
+  Filter by status: `'active'`, `'revoked'`, or `'expired'`.
+</ParamField>
+
+<ParamField body="page" type="number">
+  Page number (1-indexed).
+</ParamField>
+
+<ParamField body="pageSize" type="number">
+  Number of grants per page.
+</ParamField>
+
+### Response: `ListGrantsResponse`
+
+<ResponseField name="grants" type="Grant[]">
+  Array of grant objects.
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total number of grants matching the filters.
+</ResponseField>
+
+<ResponseField name="page" type="number">
+  Current page number.
+</ResponseField>
+
+<ResponseField name="pageSize" type="number">
+  Number of grants per page.
+</ResponseField>
+
+---
+
+## grants.revoke()
+
+Revoke a grant by its ID. This immediately invalidates the grant and any associated tokens.
+
+```typescript
+await grantex.grants.revoke('grnt_01HXYZ...');
+// Returns void -- the grant is now revoked
+```
+
+### Parameters
+
+<ParamField body="grantId" type="string" required>
+  The grant ID to revoke.
+</ParamField>
+
+### Response
+
+Returns `void`.
+
+---
+
+## grants.delegate()
+
+Create a delegated grant for a sub-agent. This implements the delegation chain described in [SPEC section 9](/protocol/specification).
+
+The parent agent passes its grant token, and the sub-agent receives a new grant token with scopes that are a subset of the parent's.
+
+```typescript
+const delegated = await grantex.grants.delegate({
+  parentGrantToken: parentToken,
+  subAgentId: 'ag_sub_01HXYZ...',
+  scopes: ['calendar:read'],      // must be subset of parent's scopes
+  expiresIn: '1h',
+});
+
+console.log(delegated.grantToken); // New RS256 JWT for the sub-agent
+console.log(delegated.grantId);    // 'grnt_delegated_01HXYZ...'
+console.log(delegated.scopes);     // ['calendar:read']
+console.log(delegated.expiresAt);  // '2026-02-28T13:00:00Z'
+```
+
+### Parameters
+
+<ParamField body="parentGrantToken" type="string" required>
+  The parent agent's grant token JWT.
+</ParamField>
+
+<ParamField body="subAgentId" type="string" required>
+  The ID of the sub-agent to delegate to.
+</ParamField>
+
+<ParamField body="scopes" type="string[]" required>
+  The scopes to delegate. Must be a subset of the parent grant's scopes.
+</ParamField>
+
+<ParamField body="expiresIn" type="string">
+  Duration for the delegated grant (e.g. `'1h'`, `'30m'`). Cannot exceed the parent grant's remaining lifetime.
+</ParamField>
+
+### Response
+
+<ResponseField name="grantToken" type="string">
+  The delegated grant token (RS256 JWT) for the sub-agent.
+</ResponseField>
+
+<ResponseField name="grantId" type="string">
+  The delegated grant's record ID.
+</ResponseField>
+
+<ResponseField name="scopes" type="string[]">
+  The delegated scopes.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO 8601 expiry timestamp.
+</ResponseField>
+
+---
+
+## grants.verify()
+
+Verify a grant token online and return a `VerifiedGrant` with full claim details. The SDK decodes the token returned by the API to populate all fields.
+
+```typescript
+const verified = await grantex.grants.verify(grantToken);
+
+console.log(verified.tokenId);       // 'tok_01HXYZ...'
+console.log(verified.grantId);       // 'grnt_01HXYZ...'
+console.log(verified.principalId);   // 'user_abc123'
+console.log(verified.agentDid);      // 'did:grantex:ag_01HXYZ...'
+console.log(verified.scopes);        // ['calendar:read']
+console.log(verified.delegationDepth); // 0 (root grant) or 1+ (delegated)
+```
+
+### Parameters
+
+<ParamField body="token" type="string" required>
+  The grant token JWT to verify.
+</ParamField>
+
+### Response: `VerifiedGrant`
+
+Returns a `VerifiedGrant` object with all decoded claims. See [Offline Verification](/sdks/typescript/offline-verification) for the full field reference.

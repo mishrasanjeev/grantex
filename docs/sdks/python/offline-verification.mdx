@@ -1,0 +1,165 @@
+---
+title: "Offline Verification"
+sidebarTitle: "Offline Verification"
+description: "Verify Grantex grant tokens offline using published JWKS without calling the Grantex API."
+---
+
+## Overview
+
+The `verify_grant_token()` function verifies a Grantex grant token locally using the published JSON Web Key Set (JWKS). This approach has zero runtime dependency on Grantex infrastructure -- the only network call is to fetch the JWKS from the issuer.
+
+This is ideal for service-side verification where latency matters and you want to avoid an API round-trip for every request.
+
+## Usage
+
+```python
+from grantex import verify_grant_token, VerifyGrantTokenOptions
+
+grant = verify_grant_token(
+    "eyJhbGciOiJSUzI1NiIs...",
+    VerifyGrantTokenOptions(
+        jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+    ),
+)
+
+print(f"Principal: {grant.principal_id}")
+print(f"Agent DID: {grant.agent_did}")
+print(f"Scopes: {grant.scopes}")
+print(f"Grant ID: {grant.grant_id}")
+```
+
+## Import
+
+```python
+from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenError
+```
+
+## Options
+
+`VerifyGrantTokenOptions` configures how the token is verified:
+
+| Field              | Type             | Required | Default | Description                                                        |
+|--------------------|------------------|----------|---------|--------------------------------------------------------------------|
+| `jwks_uri`         | `str`            | Yes      | --      | URL of the JWKS endpoint (e.g. `https://api.grantex.dev/.well-known/jwks.json`). |
+| `required_scopes`  | `list[str] \| None` | No    | `None`  | If set, verification fails if the token is missing any of these scopes. |
+| `clock_tolerance`  | `int`            | No       | `0`     | Seconds of leeway for `exp` and `iat` clock skew.                  |
+| `audience`         | `str \| None`    | No       | `None`  | Expected `aud` claim. If `None`, audience is not validated.        |
+
+## Response
+
+`verify_grant_token()` returns a `VerifiedGrant` frozen dataclass:
+
+| Field               | Type              | Description                                           |
+|---------------------|-------------------|-------------------------------------------------------|
+| `token_id`          | `str`             | The JWT `jti` claim (unique token identifier).        |
+| `grant_id`          | `str`             | The grant identifier (`grnt` claim, falls back to `jti`). |
+| `principal_id`      | `str`             | The user/principal who authorized the grant (`sub`).  |
+| `agent_did`         | `str`             | The agent's DID (`agt` claim).                        |
+| `developer_id`      | `str`             | The developer who owns the agent (`dev` claim).       |
+| `scopes`            | `tuple[str, ...]` | The granted permission scopes.                        |
+| `issued_at`         | `int`             | Unix timestamp when the token was issued.             |
+| `expires_at`        | `int`             | Unix timestamp when the token expires.                |
+| `parent_agent_did`  | `str \| None`     | Parent agent DID (delegation chains only).            |
+| `parent_grant_id`   | `str \| None`     | Parent grant ID (delegation chains only).             |
+| `delegation_depth`  | `int \| None`     | Delegation depth (0 = root grant).                    |
+
+## Algorithm
+
+The algorithm is fixed to **RS256** per SPEC section 11. Tokens signed with any other algorithm are rejected. This cannot be overridden.
+
+## Examples
+
+### Basic Verification
+
+```python
+from grantex import verify_grant_token, VerifyGrantTokenOptions
+
+grant = verify_grant_token(
+    token,
+    VerifyGrantTokenOptions(
+        jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+    ),
+)
+
+print(f"Token ID: {grant.token_id}")
+print(f"Grant ID: {grant.grant_id}")
+print(f"Authorized by: {grant.principal_id}")
+print(f"Agent: {grant.agent_did}")
+print(f"Scopes: {grant.scopes}")
+```
+
+### Require Specific Scopes
+
+```python
+from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenError
+
+try:
+    grant = verify_grant_token(
+        token,
+        VerifyGrantTokenOptions(
+            jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+            required_scopes=["files:read", "files:write"],
+        ),
+    )
+except GrantexTokenError as e:
+    print(f"Verification failed: {e}")
+    # e.g. "Grant token is missing required scopes: files:write"
+```
+
+### With Audience and Clock Tolerance
+
+```python
+from grantex import verify_grant_token, VerifyGrantTokenOptions
+
+grant = verify_grant_token(
+    token,
+    VerifyGrantTokenOptions(
+        jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+        audience="https://api.myservice.com",
+        clock_tolerance=30,  # allow 30 seconds of clock skew
+    ),
+)
+```
+
+### Verifying Delegated Tokens
+
+Delegated tokens include additional claims for the delegation chain:
+
+```python
+from grantex import verify_grant_token, VerifyGrantTokenOptions
+
+grant = verify_grant_token(
+    delegated_token,
+    VerifyGrantTokenOptions(
+        jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+    ),
+)
+
+if grant.delegation_depth is not None:
+    print(f"This is a delegated token (depth: {grant.delegation_depth})")
+    print(f"Parent agent: {grant.parent_agent_did}")
+    print(f"Parent grant: {grant.parent_grant_id}")
+else:
+    print("This is a root grant token")
+```
+
+## Error Handling
+
+`verify_grant_token()` raises `GrantexTokenError` in the following cases:
+
+- The token header uses an algorithm other than RS256
+- The JWKS endpoint is unreachable or returns invalid data
+- No matching RSA key is found in the JWKS
+- The token signature is invalid
+- The token is expired
+- Required claims (`jti`, `sub`, `agt`, `dev`, `scp`, `iat`, `exp`) are missing
+- Required scopes are not present in the token
+
+```python
+from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenError
+
+try:
+    grant = verify_grant_token(token, options)
+except GrantexTokenError as e:
+    print(f"Token verification failed: {e}")
+```

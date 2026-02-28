@@ -1,0 +1,128 @@
+---
+title: "Authorization"
+sidebarTitle: "Authorization"
+description: "Initiate the delegated authorization flow to request user consent for your agent."
+---
+
+## Overview
+
+The `authorize()` method starts the Grantex authorization flow. It creates an authorization request and returns a consent URL where the user can approve or deny the requested scopes.
+
+```typescript
+const authRequest = await grantex.authorize({
+  agentId: agent.id,
+  userId: 'user_abc123',
+  scopes: ['calendar:read', 'payments:initiate:max_500'],
+  expiresIn: '24h',
+  redirectUri: 'https://yourapp.com/auth/callback',
+});
+
+// Redirect the user to the consent page
+console.log(authRequest.consentUrl);
+```
+
+<Note>
+  The `userId` parameter is mapped to `principalId` in the API request body. This is the identifier for the human user in your system.
+</Note>
+
+## Parameters
+
+<ParamField body="agentId" type="string" required>
+  The ID of the agent requesting authorization (from `agents.register()`).
+</ParamField>
+
+<ParamField body="userId" type="string" required>
+  Your application's user identifier. Mapped to `principalId` in the protocol.
+</ParamField>
+
+<ParamField body="scopes" type="string[]" required>
+  The scopes the agent is requesting. Must be a subset of the agent's registered scopes.
+</ParamField>
+
+<ParamField body="expiresIn" type="string">
+  How long the grant should last (e.g. `'1h'`, `'24h'`, `'7d'`). Defaults to the server-configured maximum.
+</ParamField>
+
+<ParamField body="redirectUri" type="string">
+  The URL to redirect the user to after they approve or deny the request. The authorization `code` will be appended as a query parameter.
+</ParamField>
+
+<ParamField body="codeChallenge" type="string">
+  PKCE S256 code challenge. Use `generatePkce()` to create this value. See [PKCE](/sdks/typescript/pkce).
+</ParamField>
+
+<ParamField body="codeChallengeMethod" type="string">
+  Must be `'S256'` when `codeChallenge` is provided.
+</ParamField>
+
+## Response
+
+The method returns an `AuthorizationRequest` object:
+
+<ResponseField name="authRequestId" type="string">
+  Unique identifier for this authorization request.
+</ResponseField>
+
+<ResponseField name="consentUrl" type="string">
+  URL to redirect the user to for consent approval.
+</ResponseField>
+
+<ResponseField name="agentId" type="string">
+  The agent that initiated the request.
+</ResponseField>
+
+<ResponseField name="principalId" type="string">
+  The user identifier (mapped from `userId`).
+</ResponseField>
+
+<ResponseField name="scopes" type="string[]">
+  The scopes requested in this authorization.
+</ResponseField>
+
+<ResponseField name="expiresIn" type="string">
+  The requested grant duration.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO 8601 timestamp when the authorization request expires.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Current status: `'pending'`, `'approved'`, `'denied'`, or `'expired'`.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the request was created.
+</ResponseField>
+
+## Full example
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// Register the agent first
+const agent = await grantex.agents.register({
+  name: 'email-assistant',
+  description: 'Reads and drafts emails on behalf of the user',
+  scopes: ['email:read', 'email:send', 'contacts:read'],
+});
+
+// Start the authorization flow
+const authRequest = await grantex.authorize({
+  agentId: agent.id,
+  userId: 'user_abc123',
+  scopes: ['email:read', 'email:send'],
+  expiresIn: '7d',
+  redirectUri: 'https://myapp.com/auth/callback',
+});
+
+console.log(authRequest.authRequestId); // 'areq_01HXYZ...'
+console.log(authRequest.consentUrl);    // 'https://consent.grantex.dev/authorize?req=eyJ...'
+console.log(authRequest.status);        // 'pending'
+```
+
+## Next steps
+
+After the user approves the request at the `consentUrl`, your `redirectUri` receives an authorization `code`. Exchange it for a grant token using [tokens.exchange()](/sdks/typescript/tokens).

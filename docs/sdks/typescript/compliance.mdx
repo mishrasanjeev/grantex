@@ -1,0 +1,249 @@
+---
+title: "Compliance"
+sidebarTitle: "Compliance"
+description: "Generate compliance summaries, export grants and audit data, and produce evidence packs for SOC 2 and GDPR."
+---
+
+## Overview
+
+The `compliance` sub-client provides tools for regulatory compliance: organization-wide summaries, bulk exports of grants and audit entries, and full evidence packs with chain integrity verification.
+
+```typescript
+const summary = await grantex.compliance.getSummary();
+console.log(summary.agents.active);       // 12
+console.log(summary.grants.active);       // 1024
+console.log(summary.auditEntries.total);  // 50432
+```
+
+---
+
+## compliance.getSummary()
+
+Get an organization-wide compliance summary with aggregate counts for agents, grants, audit entries, and policies.
+
+```typescript
+const summary = await grantex.compliance.getSummary({
+  since: '2026-01-01T00:00:00Z',
+  until: '2026-02-28T23:59:59Z',
+});
+
+console.log(summary.generatedAt);           // '2026-02-28T12:00:00Z'
+console.log(summary.agents.total);           // 15
+console.log(summary.agents.active);          // 12
+console.log(summary.agents.suspended);       // 2
+console.log(summary.agents.revoked);         // 1
+console.log(summary.grants.total);           // 2048
+console.log(summary.grants.active);          // 1024
+console.log(summary.grants.revoked);         // 512
+console.log(summary.grants.expired);         // 512
+console.log(summary.auditEntries.total);     // 50432
+console.log(summary.auditEntries.success);   // 49000
+console.log(summary.auditEntries.failure);   // 1200
+console.log(summary.auditEntries.blocked);   // 232
+console.log(summary.policies.total);         // 8
+console.log(summary.plan);                   // 'pro'
+```
+
+### Parameters
+
+<ParamField body="since" type="string">
+  ISO 8601 start date for the summary window.
+</ParamField>
+
+<ParamField body="until" type="string">
+  ISO 8601 end date for the summary window.
+</ParamField>
+
+### Response: `ComplianceSummary`
+
+<ResponseField name="generatedAt" type="string">
+  ISO 8601 timestamp when the summary was generated.
+</ResponseField>
+
+<ResponseField name="agents" type="object">
+  Agent counts: `{ total, active, suspended, revoked }`.
+</ResponseField>
+
+<ResponseField name="grants" type="object">
+  Grant counts: `{ total, active, revoked, expired }`.
+</ResponseField>
+
+<ResponseField name="auditEntries" type="object">
+  Audit entry counts: `{ total, success, failure, blocked }`.
+</ResponseField>
+
+<ResponseField name="policies" type="object">
+  Policy counts: `{ total }`.
+</ResponseField>
+
+<ResponseField name="plan" type="string">
+  The organization's current plan.
+</ResponseField>
+
+---
+
+## compliance.exportGrants()
+
+Export all grants, optionally filtered by status and date range.
+
+```typescript
+const exported = await grantex.compliance.exportGrants({
+  status: 'active',
+});
+
+console.log(exported.generatedAt); // '2026-02-28T12:00:00Z'
+console.log(exported.total);       // 1024
+console.log(exported.grants);      // Grant[]
+```
+
+### Parameters
+
+<ParamField body="since" type="string">
+  ISO 8601 start date filter.
+</ParamField>
+
+<ParamField body="until" type="string">
+  ISO 8601 end date filter.
+</ParamField>
+
+<ParamField body="status" type="'active' | 'revoked' | 'expired'">
+  Filter by grant status.
+</ParamField>
+
+### Response: `ComplianceGrantsExport`
+
+<ResponseField name="generatedAt" type="string">
+  ISO 8601 timestamp when the export was generated.
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total number of exported grants.
+</ResponseField>
+
+<ResponseField name="grants" type="Grant[]">
+  Array of grant objects.
+</ResponseField>
+
+---
+
+## compliance.exportAudit()
+
+Export all audit entries, optionally filtered by date range, agent, or status.
+
+```typescript
+const exported = await grantex.compliance.exportAudit({
+  since: '2026-02-01T00:00:00Z',
+  agentId: 'ag_01HXYZ...',
+});
+
+console.log(exported.total);    // 5432
+console.log(exported.entries);  // AuditEntry[]
+```
+
+### Parameters
+
+<ParamField body="since" type="string">
+  ISO 8601 start date filter.
+</ParamField>
+
+<ParamField body="until" type="string">
+  ISO 8601 end date filter.
+</ParamField>
+
+<ParamField body="agentId" type="string">
+  Filter by agent ID.
+</ParamField>
+
+<ParamField body="status" type="'success' | 'failure' | 'blocked'">
+  Filter by action status.
+</ParamField>
+
+### Response: `ComplianceAuditExport`
+
+<ResponseField name="generatedAt" type="string">
+  ISO 8601 timestamp when the export was generated.
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total number of exported entries.
+</ResponseField>
+
+<ResponseField name="entries" type="AuditEntry[]">
+  Array of audit entry objects.
+</ResponseField>
+
+---
+
+## compliance.evidencePack()
+
+Generate a full evidence pack for compliance frameworks (SOC 2, GDPR, or both). Includes a summary, all grants, audit entries, policies, and chain integrity verification.
+
+```typescript
+const pack = await grantex.compliance.evidencePack({
+  framework: 'soc2',
+  since: '2026-01-01T00:00:00Z',
+});
+
+console.log(pack.meta.schemaVersion);       // '1.0'
+console.log(pack.meta.framework);            // 'soc2'
+console.log(pack.summary.agents.total);      // 15
+console.log(pack.grants.length);             // 2048
+console.log(pack.auditEntries.length);       // 50432
+console.log(pack.policies.length);           // 8
+console.log(pack.chainIntegrity.valid);      // true
+console.log(pack.chainIntegrity.checkedEntries); // 50432
+```
+
+### Parameters
+
+<ParamField body="framework" type="'soc2' | 'gdpr' | 'all'">
+  The compliance framework to generate evidence for. Defaults to `'all'`.
+</ParamField>
+
+<ParamField body="since" type="string">
+  ISO 8601 start date for the evidence window.
+</ParamField>
+
+<ParamField body="until" type="string">
+  ISO 8601 end date for the evidence window.
+</ParamField>
+
+### Response: `EvidencePack`
+
+<ResponseField name="meta" type="object">
+  Metadata: `{ schemaVersion, generatedAt, since?, until?, framework }`.
+</ResponseField>
+
+<ResponseField name="summary" type="object">
+  Aggregate counts for agents, grants, audit entries, policies, and plan.
+</ResponseField>
+
+<ResponseField name="grants" type="Grant[]">
+  All grants in the evidence window.
+</ResponseField>
+
+<ResponseField name="auditEntries" type="AuditEntry[]">
+  All audit entries in the evidence window.
+</ResponseField>
+
+<ResponseField name="policies" type="Policy[]">
+  All active policies.
+</ResponseField>
+
+<ResponseField name="chainIntegrity" type="ChainIntegrity">
+  Chain integrity verification result.
+</ResponseField>
+
+### ChainIntegrity
+
+<ResponseField name="valid" type="boolean">
+  Whether the hash chain is intact.
+</ResponseField>
+
+<ResponseField name="checkedEntries" type="number">
+  Number of entries verified.
+</ResponseField>
+
+<ResponseField name="firstBrokenAt" type="string | null">
+  ISO 8601 timestamp of the first broken link, or `null` if the chain is intact.
+</ResponseField>

@@ -1,0 +1,164 @@
+---
+title: "Anomaly Detection"
+sidebarTitle: "Anomalies"
+description: "Detect, list, and acknowledge anomalous agent behavior patterns."
+---
+
+## Overview
+
+The `anomalies` sub-client provides automated anomaly detection for agent activity. It identifies unusual patterns such as rate spikes, high failure rates, new principals, and off-hours activity.
+
+```typescript
+const result = await grantex.anomalies.detect();
+console.log(result.total);     // 3
+for (const anomaly of result.anomalies) {
+  console.log(`[${anomaly.severity}] ${anomaly.type}: ${anomaly.description}`);
+}
+```
+
+---
+
+## anomalies.detect()
+
+Run anomaly detection across all agents and return any newly detected anomalies.
+
+```typescript
+const result = await grantex.anomalies.detect();
+
+console.log(result.detectedAt);  // '2026-02-28T12:00:00Z'
+console.log(result.total);       // 2
+for (const anomaly of result.anomalies) {
+  console.log(anomaly.id);          // 'anom_01HXYZ...'
+  console.log(anomaly.type);        // 'rate_spike'
+  console.log(anomaly.severity);    // 'high'
+  console.log(anomaly.description); // 'Agent ag_01HXYZ... had 500% more requests than usual'
+  console.log(anomaly.agentId);     // 'ag_01HXYZ...'
+  console.log(anomaly.metadata);    // { normalRate: 10, currentRate: 60 }
+}
+```
+
+### Response: `DetectAnomaliesResponse`
+
+<ResponseField name="detectedAt" type="string">
+  ISO 8601 timestamp when detection was run.
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Number of anomalies detected.
+</ResponseField>
+
+<ResponseField name="anomalies" type="Anomaly[]">
+  Array of detected anomalies.
+</ResponseField>
+
+### Anomaly types
+
+| Type | Description |
+|---|---|
+| `rate_spike` | Abnormally high request volume for an agent |
+| `high_failure_rate` | Unusually high proportion of failed actions |
+| `new_principal` | An agent is acting on behalf of a previously unseen user |
+| `off_hours_activity` | Agent activity outside normal business hours |
+
+### Anomaly severity levels
+
+| Severity | Description |
+|---|---|
+| `low` | Informational, may not require action |
+| `medium` | Worth investigating |
+| `high` | Likely requires immediate attention |
+
+---
+
+## anomalies.list()
+
+List stored anomalies. Optionally filter to only unacknowledged anomalies.
+
+```typescript
+// List all anomalies
+const all = await grantex.anomalies.list();
+
+// List only unacknowledged anomalies
+const open = await grantex.anomalies.list({ unacknowledged: true });
+
+console.log(open.total); // 5
+for (const anomaly of open.anomalies) {
+  console.log(`${anomaly.type} (${anomaly.severity}) - ${anomaly.detectedAt}`);
+}
+```
+
+### Parameters
+
+<ParamField body="unacknowledged" type="boolean">
+  When `true`, only return anomalies that have not been acknowledged.
+</ParamField>
+
+### Response: `ListAnomaliesResponse`
+
+<ResponseField name="anomalies" type="Anomaly[]">
+  Array of anomaly objects.
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total number of anomalies matching the filter.
+</ResponseField>
+
+---
+
+## anomalies.acknowledge()
+
+Acknowledge an anomaly by ID. This marks it as reviewed so it no longer appears in the unacknowledged list.
+
+```typescript
+const anomaly = await grantex.anomalies.acknowledge('anom_01HXYZ...');
+
+console.log(anomaly.acknowledgedAt); // '2026-02-28T12:30:00Z'
+```
+
+### Parameters
+
+<ParamField body="anomalyId" type="string" required>
+  The anomaly ID to acknowledge.
+</ParamField>
+
+### Response: `Anomaly`
+
+Returns the updated anomaly object with the `acknowledgedAt` timestamp set.
+
+### Anomaly object
+
+<ResponseField name="id" type="string">
+  Unique anomaly identifier.
+</ResponseField>
+
+<ResponseField name="type" type="AnomalyType">
+  The anomaly type: `'rate_spike'`, `'high_failure_rate'`, `'new_principal'`, or `'off_hours_activity'`.
+</ResponseField>
+
+<ResponseField name="severity" type="AnomalySeverity">
+  Severity level: `'low'`, `'medium'`, or `'high'`.
+</ResponseField>
+
+<ResponseField name="agentId" type="string | null">
+  The agent associated with the anomaly, if applicable.
+</ResponseField>
+
+<ResponseField name="principalId" type="string | null">
+  The user associated with the anomaly, if applicable.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Human-readable description of the anomaly.
+</ResponseField>
+
+<ResponseField name="metadata" type="Record<string, unknown>">
+  Additional context about the anomaly (e.g. request rates, thresholds).
+</ResponseField>
+
+<ResponseField name="detectedAt" type="string">
+  ISO 8601 timestamp when the anomaly was detected.
+</ResponseField>
+
+<ResponseField name="acknowledgedAt" type="string | null">
+  ISO 8601 timestamp when the anomaly was acknowledged, or `null`.
+</ResponseField>

@@ -1,0 +1,81 @@
+---
+title: "Vercel AI Chatbot"
+sidebarTitle: "Vercel AI"
+description: "Scope-enforced tools with audit logging using Vercel AI SDK."
+---
+
+## What it does
+
+This example demonstrates the `@grantex/vercel-ai` integration by building scope-enforced tools with the Vercel AI SDK:
+
+1. **Register an agent** and obtain a grant token via the sandbox flow
+2. **Create scoped tools** using `createGrantexTool` with Zod schemas for typed parameters (`calendar:read`, `email:send`)
+3. **Wrap tools with `withAuditLogging`** to automatically log every execution to the Grantex audit trail
+4. **Invoke tools** via `generateText` (if `OPENAI_API_KEY` is set) or directly
+5. **Demonstrate `GrantexScopeError`** -- attempting to create a tool with `storage:delete` (a scope not in the grant) throws a `GrantexScopeError` with `requiredScope` and `grantedScopes` properties
+6. **Inspect the audit trail** to see the logged actions
+
+## Prerequisites
+
+- **Node.js 18+**
+- **Docker** (Docker Desktop or Docker Engine with Compose)
+
+## Run
+
+Start the local Grantex stack from the repository root:
+
+```bash
+docker compose up --build
+```
+
+In a separate terminal, run the example:
+
+```bash
+cd examples/vercel-ai-chatbot
+npm install
+npm start
+```
+
+To use a real LLM with `generateText` instead of direct tool invocation, set `OPENAI_API_KEY`:
+
+```bash
+OPENAI_API_KEY=sk-... npm start
+```
+
+## Expected output
+
+Without `OPENAI_API_KEY` (direct invocation):
+
+```text
+Agent registered: ag_01HXYZ...
+Grant token received, grantId: grnt_01HXYZ...
+Tools created: read_calendar, send_email
+Audit logging attached
+
+--- Invoking tools directly (no OPENAI_API_KEY set) ---
+Calendar result: {"date":"today","events":[{"title":"Team standup","time":"9:00 AM"},{"title":"Design review","time":"2:00 PM"}]}
+Email result: {"sent":true,"to":"alice@example.com","subject":"Today's events","bodyLength":49}
+
+--- Testing scope enforcement ---
+GrantexScopeError caught:
+  Required scope:  storage:delete
+  Granted scopes:  calendar:read, email:send
+
+--- Audit trail ---
+  [success] read_calendar — 2026-02-28T12:00:00.000Z
+  [success] send_email — 2026-02-28T12:00:01.000Z
+
+Done! Vercel AI integration demo complete.
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GRANTEX_URL` | `http://localhost:3001` | Base URL of the Grantex auth service |
+| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key. Use a sandbox key for auto-approval |
+| `OPENAI_API_KEY` | _(none)_ | Optional. Set to use `generateText` with a real LLM |
+
+## Source code
+
+The full source is in [`examples/vercel-ai-chatbot/src/index.ts`](https://github.com/mishrasanjeev/grantex/tree/main/examples/vercel-ai-chatbot).

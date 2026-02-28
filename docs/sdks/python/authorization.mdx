@@ -1,0 +1,124 @@
+---
+title: "Authorization"
+sidebarTitle: "Authorization"
+description: "Initiate the delegated authorization flow to request permissions from a user on behalf of an AI agent."
+---
+
+## Overview
+
+The `authorize()` method on the `Grantex` client initiates the delegated authorization flow. It creates an authorization request and returns a consent URL that the user must visit to approve the requested scopes.
+
+## Usage
+
+```python
+from grantex import Grantex, AuthorizeParams
+
+client = Grantex(api_key="gx_live_...")
+
+auth = client.authorize(AuthorizeParams(
+    agent_id="agt_abc123",
+    user_id="user_xyz",
+    scopes=["files:read", "files:write"],
+))
+
+# Redirect the user to the consent page
+print(auth.consent_url)
+```
+
+The `user_id` parameter is transparently mapped to `principalId` in the API request body.
+
+## Parameters
+
+`AuthorizeParams` is a dataclass with the following fields:
+
+| Field                    | Type             | Required | Description                                                   |
+|--------------------------|------------------|----------|---------------------------------------------------------------|
+| `agent_id`               | `str`            | Yes      | The ID of the agent requesting authorization.                 |
+| `user_id`                | `str`            | Yes      | The user (principal) being asked to grant permissions.        |
+| `scopes`                 | `list[str]`      | Yes      | The permission scopes being requested.                        |
+| `expires_in`             | `str \| None`    | No       | How long the authorization request remains valid (e.g. `"1h"`). |
+| `redirect_uri`           | `str \| None`    | No       | URL to redirect the user after consent.                       |
+| `code_challenge`         | `str \| None`    | No       | PKCE code challenge (S256). See [PKCE](/sdks/python/pkce).    |
+| `code_challenge_method`  | `str \| None`    | No       | Must be `"S256"` when using PKCE.                             |
+
+## Response
+
+`authorize()` returns an `AuthorizationRequest` frozen dataclass:
+
+| Field           | Type              | Description                                              |
+|-----------------|-------------------|----------------------------------------------------------|
+| `request_id`    | `str`             | The authorization request ID (`authRequestId`).          |
+| `consent_url`   | `str`             | URL to redirect the user for consent approval.           |
+| `agent_id`      | `str`             | The agent ID from the request.                           |
+| `principal_id`  | `str`             | The user/principal ID.                                   |
+| `scopes`        | `tuple[str, ...]` | The requested scopes.                                    |
+| `expires_in`    | `str`             | The TTL of the authorization request.                    |
+| `expires_at`    | `str`             | ISO 8601 timestamp when the request expires.             |
+| `status`        | `str`             | Current status (e.g. `"pending"`).                       |
+| `created_at`    | `str`             | ISO 8601 timestamp when the request was created.         |
+
+## Example with Redirect URI
+
+```python
+from grantex import Grantex, AuthorizeParams
+
+with Grantex(api_key="gx_live_...") as client:
+    auth = client.authorize(AuthorizeParams(
+        agent_id="agt_abc123",
+        user_id="user_xyz",
+        scopes=["calendar:read", "calendar:write"],
+        redirect_uri="https://myapp.com/callback",
+        expires_in="30m",
+    ))
+
+    print(f"Request ID: {auth.request_id}")
+    print(f"Consent URL: {auth.consent_url}")
+    print(f"Status: {auth.status}")
+    print(f"Expires at: {auth.expires_at}")
+```
+
+## Example with PKCE
+
+For public clients or enhanced security, use PKCE to bind the authorization request to the token exchange:
+
+```python
+from grantex import Grantex, AuthorizeParams, generate_pkce
+
+pkce = generate_pkce()
+
+with Grantex(api_key="gx_live_...") as client:
+    auth = client.authorize(AuthorizeParams(
+        agent_id="agt_abc123",
+        user_id="user_xyz",
+        scopes=["files:read"],
+        redirect_uri="https://myapp.com/callback",
+        code_challenge=pkce.code_challenge,
+        code_challenge_method=pkce.code_challenge_method,
+    ))
+
+    # After the user approves and you receive the code at your redirect_uri:
+    # token = client.tokens.exchange(ExchangeTokenParams(
+    #     code=received_code,
+    #     agent_id="agt_abc123",
+    #     code_verifier=pkce.code_verifier,
+    # ))
+```
+
+See the [PKCE guide](/sdks/python/pkce) for the complete flow.
+
+## Error Handling
+
+```python
+from grantex import Grantex, AuthorizeParams, GrantexApiError
+
+with Grantex(api_key="gx_live_...") as client:
+    try:
+        auth = client.authorize(AuthorizeParams(
+            agent_id="agt_nonexistent",
+            user_id="user_xyz",
+            scopes=["files:read"],
+        ))
+    except GrantexApiError as e:
+        print(f"Status: {e.status_code}")
+        print(f"Message: {e}")
+```

@@ -1,0 +1,106 @@
+---
+title: "Grant Token"
+sidebarTitle: "Grant Token"
+description: "Grantex grant tokens are RS256-signed JWTs with agent-specific claims."
+---
+
+## Overview
+
+Grantex tokens are standard JWTs (RS256) extended with agent-specific claims. Any service can verify them offline using the published JWKS — no dependency on Grantex at runtime.
+
+## Decoded Example
+
+```json
+{
+  "iss": "https://grantex.dev",
+  "sub": "user_abc123",
+  "agt": "did:grantex:ag_01HXYZ123abc",
+  "dev": "org_yourcompany",
+  "scp": ["calendar:read", "payments:initiate:max_500"],
+  "iat": 1709000000,
+  "exp": 1709086400,
+  "jti": "tok_01HXYZ987xyz",
+  "grnt": "grnt_01HXYZ456def"
+}
+```
+
+## Standard Claims
+
+| Claim | Type | Description |
+|-------|------|-------------|
+| `iss` | `string` | Issuer — the Grantex server that signed the token |
+| `sub` | `string` | The end-user (principal) who authorized this agent |
+| `iat` | `number` | Issued-at timestamp (seconds since epoch) |
+| `exp` | `number` | Expiry timestamp (seconds since epoch) |
+| `jti` | `string` | Unique token ID — used for real-time revocation |
+
+## Grantex-Specific Claims
+
+| Claim | Type | Description |
+|-------|------|-------------|
+| `agt` | `string` | The agent's DID — cryptographically verifiable identity |
+| `dev` | `string` | The developer org that built the agent |
+| `scp` | `string[]` | Exact scopes granted — services should check these |
+| `grnt` | `string` | Grant record ID — links token to the persisted grant |
+| `aud` | `string?` | Intended audience (optional) — services should reject tokens with a mismatched `aud` |
+
+## Delegation Claims
+
+Present on tokens issued to sub-agents via `grants.delegate()`:
+
+| Claim | Type | Description |
+|-------|------|-------------|
+| `parentAgt` | `string` | DID of the parent agent that spawned this sub-agent |
+| `parentGrnt` | `string` | Grant ID of the parent grant — full delegation chain is traceable |
+| `delegationDepth` | `number` | How many hops from the root grant (root = 0) |
+
+## Verification
+
+Grant tokens can be verified two ways:
+
+### Offline (recommended)
+
+Verify the RS256 signature locally using the published JWKS. No network call to Grantex is needed — just fetch the public keys once and cache them.
+
+<CodeGroup>
+```typescript TypeScript
+import { verifyGrantToken } from '@grantex/sdk';
+
+const grant = await verifyGrantToken(token, {
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+  requiredScopes: ['calendar:read'],
+});
+```
+
+```python Python
+from grantex import verify_grant_token, VerifyGrantTokenOptions
+
+grant = verify_grant_token(token, VerifyGrantTokenOptions(
+    jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+))
+```
+</CodeGroup>
+
+### Online
+
+Call the Grantex API for real-time revocation status:
+
+<CodeGroup>
+```typescript TypeScript
+const result = await grantex.tokens.verify(token);
+console.log(result.valid);   // true or false
+console.log(result.scopes);
+```
+
+```python Python
+result = client.tokens.verify(token)
+print(result.valid)
+print(result.scopes)
+```
+</CodeGroup>
+
+## Security
+
+- **Algorithm pinning**: RS256 is hardcoded in all three verification layers (auth service, TypeScript SDK, Python SDK). The `alg` header in the token cannot override this.
+- **Replay prevention**: Every token's `jti` is tracked. Presenting a previously-seen `jti` returns `valid: false`.
+- **Minimum key size**: The auth service enforces a minimum 2048-bit RSA modulus on all signing keys.

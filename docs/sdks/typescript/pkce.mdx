@@ -1,0 +1,96 @@
+---
+title: "PKCE"
+sidebarTitle: "PKCE"
+description: "Protect the authorization flow with Proof Key for Code Exchange (PKCE) using S256 challenges."
+---
+
+## Overview
+
+PKCE (Proof Key for Code Exchange) prevents authorization code interception attacks. Grantex supports the S256 challenge method as defined in [RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636).
+
+The SDK provides a `generatePkce()` helper that generates a cryptographically secure code verifier and its corresponding S256 challenge.
+
+## Import
+
+```typescript
+import { generatePkce } from '@grantex/sdk';
+```
+
+This function does not require a `Grantex` client instance. It uses Node.js `crypto` under the hood.
+
+## generatePkce()
+
+```typescript
+const pkce = generatePkce();
+
+console.log(pkce.codeVerifier);         // Random 43-character base64url string
+console.log(pkce.codeChallenge);        // SHA-256 hash of the verifier, base64url-encoded
+console.log(pkce.codeChallengeMethod);  // 'S256'
+```
+
+### Response: `PkceChallenge`
+
+<ResponseField name="codeVerifier" type="string">
+  A 32-byte random value encoded as base64url. Keep this secret -- it is used in the token exchange step.
+</ResponseField>
+
+<ResponseField name="codeChallenge" type="string">
+  The SHA-256 hash of `codeVerifier`, encoded as base64url. This is sent in the authorize request.
+</ResponseField>
+
+<ResponseField name="codeChallengeMethod" type="'S256'">
+  Always `'S256'`.
+</ResponseField>
+
+## Full PKCE flow
+
+### Step 1: Generate the PKCE pair
+
+```typescript
+import { Grantex, generatePkce } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+const pkce = generatePkce();
+
+// Store codeVerifier securely (e.g. in a session)
+session.codeVerifier = pkce.codeVerifier;
+```
+
+### Step 2: Authorize with the code challenge
+
+```typescript
+const authRequest = await grantex.authorize({
+  agentId: agent.id,
+  userId: 'user_abc123',
+  scopes: ['calendar:read', 'payments:initiate:max_500'],
+  expiresIn: '24h',
+  redirectUri: 'https://yourapp.com/auth/callback',
+  codeChallenge: pkce.codeChallenge,
+  codeChallengeMethod: pkce.codeChallengeMethod,
+});
+
+// Redirect the user to authRequest.consentUrl
+```
+
+### Step 3: Exchange with the code verifier
+
+```typescript
+// In your /auth/callback handler:
+const token = await grantex.tokens.exchange({
+  code: req.query.code,
+  agentId: agent.id,
+  codeVerifier: session.codeVerifier,  // proves possession of the original challenge
+});
+
+console.log(token.grantToken);
+```
+
+<Warning>
+  If a `codeChallenge` was provided in the authorize step, the `codeVerifier` is **required** in the exchange step. The server will reject the request if the verifier does not match the original challenge.
+</Warning>
+
+## Security considerations
+
+- The `codeVerifier` must be stored server-side (e.g. in a session or encrypted cookie). Never expose it to the client.
+- Each PKCE pair is single-use. Generate a new pair for every authorization flow.
+- The S256 method is mandatory -- plain challenge methods are not supported.

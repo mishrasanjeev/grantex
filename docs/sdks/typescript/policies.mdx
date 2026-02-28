@@ -1,0 +1,250 @@
+---
+title: "Policies"
+sidebarTitle: "Policies"
+description: "Define allow/deny authorization policies to control agent access."
+---
+
+## Overview
+
+The `policies` sub-client lets you create declarative authorization policies that control when and how agents can use their grants. Policies support scope-based rules, time-of-day restrictions, and priority-based evaluation.
+
+```typescript
+const policy = await grantex.policies.create({
+  name: 'business-hours-only',
+  effect: 'deny',
+  priority: 10,
+  timeOfDayStart: '18:00',
+  timeOfDayEnd: '09:00',
+});
+```
+
+---
+
+## policies.create()
+
+Create a new authorization policy.
+
+```typescript
+const policy = await grantex.policies.create({
+  name: 'deny-payments-after-hours',
+  effect: 'deny',
+  priority: 10,
+  scopes: ['payments:initiate'],
+  timeOfDayStart: '18:00',
+  timeOfDayEnd: '06:00',
+});
+
+console.log(policy.id);       // 'pol_01HXYZ...'
+console.log(policy.name);     // 'deny-payments-after-hours'
+console.log(policy.effect);   // 'deny'
+console.log(policy.priority); // 10
+```
+
+### Parameters
+
+<ParamField body="name" type="string" required>
+  Human-readable name for the policy.
+</ParamField>
+
+<ParamField body="effect" type="'allow' | 'deny'" required>
+  Whether this policy allows or denies matching requests.
+</ParamField>
+
+<ParamField body="priority" type="number">
+  Evaluation priority. Higher-priority policies are evaluated first. Defaults to server-assigned value.
+</ParamField>
+
+<ParamField body="agentId" type="string">
+  Restrict the policy to a specific agent.
+</ParamField>
+
+<ParamField body="principalId" type="string">
+  Restrict the policy to a specific user.
+</ParamField>
+
+<ParamField body="scopes" type="string[]">
+  The scopes this policy applies to. If omitted, the policy applies to all scopes.
+</ParamField>
+
+<ParamField body="timeOfDayStart" type="string">
+  Start time for a time-of-day restriction (24h format, e.g. `'09:00'`).
+</ParamField>
+
+<ParamField body="timeOfDayEnd" type="string">
+  End time for a time-of-day restriction (24h format, e.g. `'18:00'`).
+</ParamField>
+
+### Response: `Policy`
+
+<ResponseField name="id" type="string">
+  Unique policy identifier.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Policy name.
+</ResponseField>
+
+<ResponseField name="effect" type="string">
+  `'allow'` or `'deny'`.
+</ResponseField>
+
+<ResponseField name="priority" type="number">
+  Evaluation priority.
+</ResponseField>
+
+<ResponseField name="agentId" type="string | null">
+  Restricted agent ID, or `null` for all agents.
+</ResponseField>
+
+<ResponseField name="principalId" type="string | null">
+  Restricted user ID, or `null` for all users.
+</ResponseField>
+
+<ResponseField name="scopes" type="string[] | null">
+  Restricted scopes, or `null` for all scopes.
+</ResponseField>
+
+<ResponseField name="timeOfDayStart" type="string | null">
+  Time-of-day restriction start (24h format).
+</ResponseField>
+
+<ResponseField name="timeOfDayEnd" type="string | null">
+  Time-of-day restriction end (24h format).
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 creation timestamp.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 last-updated timestamp.
+</ResponseField>
+
+---
+
+## policies.list()
+
+List all policies for your organization.
+
+```typescript
+const result = await grantex.policies.list();
+
+console.log(result.total); // 5
+for (const policy of result.policies) {
+  console.log(`${policy.name}: ${policy.effect} (priority ${policy.priority})`);
+}
+```
+
+### Response: `ListPoliciesResponse`
+
+<ResponseField name="policies" type="Policy[]">
+  Array of policy objects.
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total number of policies.
+</ResponseField>
+
+---
+
+## policies.get()
+
+Retrieve a single policy by its ID.
+
+```typescript
+const policy = await grantex.policies.get('pol_01HXYZ...');
+
+console.log(policy.name);           // 'deny-payments-after-hours'
+console.log(policy.timeOfDayStart); // '18:00'
+console.log(policy.timeOfDayEnd);   // '06:00'
+```
+
+### Parameters
+
+<ParamField body="policyId" type="string" required>
+  The policy ID to retrieve.
+</ParamField>
+
+### Response
+
+Returns a `Policy` object.
+
+---
+
+## policies.update()
+
+Update an existing policy. Only the provided fields are modified.
+
+```typescript
+const updated = await grantex.policies.update('pol_01HXYZ...', {
+  name: 'deny-payments-overnight',
+  timeOfDayStart: '22:00',
+  timeOfDayEnd: '06:00',
+});
+
+console.log(updated.name);           // 'deny-payments-overnight'
+console.log(updated.timeOfDayStart); // '22:00'
+```
+
+### Parameters
+
+<ParamField body="policyId" type="string" required>
+  The policy ID to update.
+</ParamField>
+
+<ParamField body="name" type="string">
+  New policy name.
+</ParamField>
+
+<ParamField body="effect" type="'allow' | 'deny'">
+  New effect.
+</ParamField>
+
+<ParamField body="priority" type="number">
+  New priority.
+</ParamField>
+
+<ParamField body="agentId" type="string | null">
+  New agent restriction. Pass `null` to clear.
+</ParamField>
+
+<ParamField body="principalId" type="string | null">
+  New user restriction. Pass `null` to clear.
+</ParamField>
+
+<ParamField body="scopes" type="string[] | null">
+  New scope restriction. Pass `null` to clear.
+</ParamField>
+
+<ParamField body="timeOfDayStart" type="string | null">
+  New time-of-day start. Pass `null` to clear.
+</ParamField>
+
+<ParamField body="timeOfDayEnd" type="string | null">
+  New time-of-day end. Pass `null` to clear.
+</ParamField>
+
+### Response
+
+Returns the updated `Policy` object.
+
+---
+
+## policies.delete()
+
+Delete a policy.
+
+```typescript
+await grantex.policies.delete('pol_01HXYZ...');
+// Returns void -- the policy is removed
+```
+
+### Parameters
+
+<ParamField body="policyId" type="string" required>
+  The policy ID to delete.
+</ParamField>
+
+### Response
+
+Returns `void`.

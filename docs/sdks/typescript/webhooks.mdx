@@ -1,0 +1,179 @@
+---
+title: "Webhooks"
+sidebarTitle: "Webhooks"
+description: "Receive real-time notifications for grant and token lifecycle events."
+---
+
+## Overview
+
+The `webhooks` sub-client lets you create, list, and delete webhook endpoints. When events occur (e.g. a grant is created or revoked), Grantex sends an HTTP POST to your registered URLs with a signed payload.
+
+```typescript
+const webhook = await grantex.webhooks.create({
+  url: 'https://yourapp.com/webhooks/grantex',
+  events: ['grant.created', 'grant.revoked', 'token.issued'],
+});
+
+// Store the secret for verifying payloads
+console.log(webhook.secret);
+```
+
+---
+
+## webhooks.create()
+
+Create a new webhook endpoint. The response includes a `secret` for verifying payload signatures -- store it securely, as it is only returned once.
+
+```typescript
+const webhook = await grantex.webhooks.create({
+  url: 'https://yourapp.com/webhooks/grantex',
+  events: ['grant.created', 'grant.revoked'],
+});
+
+console.log(webhook.id);        // 'wh_01HXYZ...'
+console.log(webhook.url);       // 'https://yourapp.com/webhooks/grantex'
+console.log(webhook.events);    // ['grant.created', 'grant.revoked']
+console.log(webhook.secret);    // 'whsec_01HXYZ...' -- store securely!
+console.log(webhook.createdAt); // '2026-02-28T12:00:00Z'
+```
+
+### Parameters
+
+<ParamField body="url" type="string" required>
+  The HTTPS URL to receive webhook events.
+</ParamField>
+
+<ParamField body="events" type="WebhookEventType[]" required>
+  The events to subscribe to.
+</ParamField>
+
+### Event types
+
+| Event | Description |
+|---|---|
+| `grant.created` | A new grant has been issued |
+| `grant.revoked` | A grant has been revoked |
+| `token.issued` | A grant token has been issued |
+
+### Response: `WebhookEndpointWithSecret`
+
+<ResponseField name="id" type="string">
+  Unique webhook endpoint identifier.
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  The registered URL.
+</ResponseField>
+
+<ResponseField name="events" type="WebhookEventType[]">
+  The subscribed event types.
+</ResponseField>
+
+<ResponseField name="secret" type="string">
+  The HMAC signing secret. Only returned on creation.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 creation timestamp.
+</ResponseField>
+
+---
+
+## webhooks.list()
+
+List all webhook endpoints for your organization.
+
+```typescript
+const result = await grantex.webhooks.list();
+
+for (const webhook of result.webhooks) {
+  console.log(`${webhook.id}: ${webhook.url} (${webhook.events.join(', ')})`);
+}
+```
+
+### Response: `ListWebhooksResponse`
+
+<ResponseField name="webhooks" type="WebhookEndpoint[]">
+  Array of webhook endpoint objects (without secrets).
+</ResponseField>
+
+---
+
+## webhooks.delete()
+
+Delete a webhook endpoint.
+
+```typescript
+await grantex.webhooks.delete('wh_01HXYZ...');
+// Returns void -- the endpoint is removed
+```
+
+### Parameters
+
+<ParamField body="webhookId" type="string" required>
+  The webhook endpoint ID to delete.
+</ParamField>
+
+### Response
+
+Returns `void`.
+
+---
+
+## Verifying webhook signatures
+
+The SDK exports a `verifyWebhookSignature()` function to verify that incoming webhook payloads were sent by Grantex. The function uses HMAC-SHA256 with timing-safe comparison.
+
+### Import
+
+```typescript
+import { verifyWebhookSignature } from '@grantex/sdk';
+```
+
+### Usage
+
+```typescript
+import { verifyWebhookSignature } from '@grantex/sdk';
+import express from 'express';
+
+const app = express();
+
+app.post('/webhooks/grantex', express.raw({ type: 'application/json' }), (req, res) => {
+  const signature = req.headers['x-grantex-signature'] as string;
+  const secret = process.env.GRANTEX_WEBHOOK_SECRET;
+
+  const isValid = verifyWebhookSignature(req.body, signature, secret);
+
+  if (!isValid) {
+    return res.status(401).send('Invalid signature');
+  }
+
+  const event = JSON.parse(req.body.toString());
+  console.log(`Received event: ${event.type}`);
+
+  // Handle the event...
+  res.status(200).send('OK');
+});
+```
+
+### Parameters
+
+<ParamField body="payload" type="string | Buffer" required>
+  The raw request body as received from Grantex.
+</ParamField>
+
+<ParamField body="signature" type="string" required>
+  The value of the `X-Grantex-Signature` header.
+</ParamField>
+
+<ParamField body="secret" type="string" required>
+  The webhook secret returned when the endpoint was created.
+</ParamField>
+
+### Response
+
+Returns `true` if the signature is valid, `false` otherwise.
+
+<Warning>
+  Always use the raw request body for verification. Parsing the JSON before verifying will change the byte representation and cause signature mismatches.
+</Warning>

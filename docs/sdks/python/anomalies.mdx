@@ -1,0 +1,138 @@
+---
+title: "Anomaly Detection"
+sidebarTitle: "Anomalies"
+description: "Detect, list, and acknowledge authorization anomalies using the Grantex Python SDK."
+---
+
+## Overview
+
+The `anomalies` client provides automated anomaly detection for your authorization system. It identifies unusual patterns such as rate spikes, high failure rates, new principals, and off-hours activity.
+
+Access the anomalies client via `client.anomalies`.
+
+## Detect
+
+Run anomaly detection across all agents and return any detected anomalies:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.anomalies.detect()
+
+    print(f"Detected at: {result.detected_at}")
+    print(f"Total anomalies: {result.total}")
+    for anomaly in result.anomalies:
+        print(f"  [{anomaly.severity}] {anomaly.type}: {anomaly.description}")
+```
+
+### DetectAnomaliesResponse
+
+| Field         | Type                 | Description                             |
+|---------------|----------------------|-----------------------------------------|
+| `detected_at` | `str`                | ISO 8601 timestamp of the detection run.|
+| `total`       | `int`                | Number of anomalies detected.           |
+| `anomalies`   | `tuple[Anomaly, ...]`| The detected anomalies.                 |
+
+## List
+
+List stored anomalies. Optionally filter to show only unacknowledged anomalies:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    # List all anomalies
+    result = client.anomalies.list()
+    print(f"Total: {result.total}")
+
+    # List only unacknowledged anomalies
+    result = client.anomalies.list(unacknowledged=True)
+    for anomaly in result.anomalies:
+        print(f"  {anomaly.id}: [{anomaly.severity}] {anomaly.type}")
+        print(f"    {anomaly.description}")
+        print(f"    Detected: {anomaly.detected_at}")
+```
+
+### Parameters
+
+| Parameter        | Type   | Required | Default | Description                              |
+|------------------|--------|----------|---------|------------------------------------------|
+| `unacknowledged` | `bool` | No       | `False` | If `True`, only return unacknowledged anomalies. |
+
+The parameter is keyword-only.
+
+### ListAnomaliesResponse
+
+| Field       | Type                 | Description                   |
+|-------------|----------------------|-------------------------------|
+| `anomalies` | `tuple[Anomaly, ...]`| The list of anomalies.        |
+| `total`     | `int`                | Total number of anomalies.    |
+
+## Acknowledge
+
+Acknowledge an anomaly to mark it as reviewed:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    anomaly = client.anomalies.acknowledge("anom_abc123")
+
+    print(f"Acknowledged at: {anomaly.acknowledged_at}")
+```
+
+Returns the updated `Anomaly` with the `acknowledged_at` timestamp set.
+
+## Anomaly Type
+
+The `Anomaly` frozen dataclass has the following fields:
+
+| Field             | Type              | Description                                |
+|-------------------|-------------------|--------------------------------------------|
+| `id`              | `str`             | Unique anomaly identifier.                 |
+| `type`            | `str`             | The anomaly type (see table below).        |
+| `severity`        | `str`             | `"low"`, `"medium"`, or `"high"`.          |
+| `agent_id`        | `str \| None`     | The agent involved (if applicable).        |
+| `principal_id`    | `str \| None`     | The principal involved (if applicable).    |
+| `description`     | `str`             | Human-readable description of the anomaly. |
+| `metadata`        | `dict[str, Any]`  | Additional data about the anomaly.         |
+| `detected_at`     | `str`             | ISO 8601 timestamp when the anomaly was detected. |
+| `acknowledged_at` | `str \| None`     | ISO 8601 timestamp when the anomaly was acknowledged (or `None`). |
+
+### Anomaly Types
+
+| Type                  | Description                                       |
+|-----------------------|---------------------------------------------------|
+| `rate_spike`          | Unusual spike in authorization or token requests. |
+| `high_failure_rate`   | Abnormally high rate of failed actions.           |
+| `new_principal`       | A previously unseen principal is being used.      |
+| `off_hours_activity`  | Authorization activity outside normal hours.      |
+
+## Example: Monitor and Acknowledge
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    # Run detection
+    detection = client.anomalies.detect()
+
+    if detection.total > 0:
+        print(f"Found {detection.total} anomalies!")
+
+        for anomaly in detection.anomalies:
+            print(f"\n[{anomaly.severity.upper()}] {anomaly.type}")
+            print(f"  {anomaly.description}")
+
+            if anomaly.agent_id:
+                print(f"  Agent: {anomaly.agent_id}")
+            if anomaly.principal_id:
+                print(f"  Principal: {anomaly.principal_id}")
+
+            # Acknowledge after review
+            client.anomalies.acknowledge(anomaly.id)
+            print(f"  -> Acknowledged")
+    else:
+        print("No anomalies detected")
+```

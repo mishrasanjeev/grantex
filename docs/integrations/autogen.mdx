@@ -1,0 +1,123 @@
+---
+title: "AutoGen / OpenAI"
+sidebarTitle: "AutoGen"
+description: "Scope-enforced function calling and registry for OpenAI-style agents."
+---
+
+## Install
+
+```bash
+npm install @grantex/autogen @grantex/sdk
+```
+
+## Scope-Enforced Functions
+
+Create OpenAI function-calling tool definitions with built-in Grantex scope checks:
+
+```typescript
+import { createGrantexFunction } from '@grantex/autogen';
+
+const readCalendar = createGrantexFunction({
+  name: 'read_calendar',
+  description: 'Read upcoming calendar events',
+  parameters: {
+    type: 'object',
+    properties: {
+      date: { type: 'string', description: 'Date in YYYY-MM-DD format' },
+    },
+    required: ['date'],
+  },
+  grantToken,                     // JWT from Grantex token exchange
+  requiredScope: 'calendar:read', // must be in token's scp claim
+  func: async (args) => {
+    return await getCalendarEvents(args.date);
+  },
+});
+
+// Pass definition to the LLM
+const response = await openai.chat.completions.create({
+  model: 'gpt-4',
+  tools: [readCalendar.definition],
+  messages,
+});
+
+// Execute when the LLM selects the tool
+const result = await readCalendar.execute({ date: '2026-03-01' });
+```
+
+## Function Registry
+
+Use `GrantexFunctionRegistry` to manage multiple functions and dispatch tool calls by name:
+
+```typescript
+import { createGrantexFunction, GrantexFunctionRegistry } from '@grantex/autogen';
+
+const registry = new GrantexFunctionRegistry();
+registry.register(readCalendar);
+registry.register(sendEmail);
+
+// Pass all definitions to the LLM
+const response = await openai.chat.completions.create({
+  tools: registry.definitions,
+  messages,
+});
+
+// Dispatch the tool call
+const toolCall = response.choices[0].message.tool_calls[0];
+const result = await registry.execute(
+  toolCall.function.name,
+  JSON.parse(toolCall.function.arguments),
+);
+```
+
+## Audit Logging
+
+Wrap any function with `withAuditLogging`:
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+import { withAuditLogging } from '@grantex/autogen';
+
+const client = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+const audited = withAuditLogging(readCalendar, client, {
+  agentId: 'ag_01ABC...',
+  grantId: 'grnt_01XYZ...',
+});
+// Use audited.execute() — logs success/failure automatically
+```
+
+## API Reference
+
+### `createGrantexFunction(options)`
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `name` | `string` | Function name (matches `^[a-zA-Z0-9_-]+$`) |
+| `description` | `string` | Description shown to the LLM |
+| `parameters` | `JsonSchema` | JSON Schema for function arguments |
+| `grantToken` | `string` | Grantex JWT from token exchange |
+| `requiredScope` | `string` | Scope required to invoke this function |
+| `func` | `(args: T) => Promise<unknown>` | Function implementation |
+
+Returns `{ definition, execute }`.
+
+### `GrantexFunctionRegistry`
+
+| Method | Description |
+|--------|-------------|
+| `register(fn)` | Register a function (chainable) |
+| `definitions` | All registered OpenAI tool definitions |
+| `execute(name, args)` | Execute a function by name |
+
+### `withAuditLogging(fn, client, options)`
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `agentId` | `string` | Agent ID for audit attribution |
+| `grantId` | `string` | Grant ID for the session |
+
+## Requirements
+
+- Node.js 18+
+- `@grantex/sdk` >= 0.1.0

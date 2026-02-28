@@ -1,0 +1,151 @@
+---
+title: "Python SDK"
+sidebarTitle: "Overview"
+description: "Install and configure the Grantex Python SDK for delegated authorization of AI agents."
+---
+
+## Installation
+
+```bash
+pip install grantex
+```
+
+### Requirements
+
+- Python 3.9 or higher
+- [httpx](https://www.python-httpx.org/) (sync HTTP client)
+- [PyJWT](https://pyjwt.readthedocs.io/) >= 2.8 with [cryptography](https://cryptography.io/) (for offline token verification)
+
+All dependencies are installed automatically with `pip install grantex`.
+
+## Quick Start
+
+```python
+from grantex import Grantex, AuthorizeParams
+
+client = Grantex(api_key="gx_live_...")
+
+# Register an agent
+agent = client.agents.register(
+    name="travel-assistant",
+    scopes=["booking:read", "booking:write"],
+    description="Books flights and hotels on behalf of users",
+)
+
+# Start the authorization flow
+auth = client.authorize(AuthorizeParams(
+    agent_id=agent.id,
+    user_id="user_abc123",
+    scopes=["booking:read", "booking:write"],
+))
+
+# Redirect the user to the consent URL
+print(auth.consent_url)
+
+client.close()
+```
+
+## Configuration
+
+The `Grantex` client accepts three keyword-only arguments:
+
+| Parameter  | Type    | Default                      | Description                                    |
+|-----------|---------|------------------------------|------------------------------------------------|
+| `api_key`  | `str`   | `GRANTEX_API_KEY` env var    | Your Grantex API key. Required.                |
+| `base_url` | `str`   | `https://api.grantex.dev`    | Override the API base URL (e.g. for self-hosted). |
+| `timeout`  | `float` | `30.0`                       | Request timeout in seconds.                    |
+
+### API Key Resolution
+
+The client resolves the API key in this order:
+
+1. The `api_key` keyword argument passed to the constructor.
+2. The `GRANTEX_API_KEY` environment variable.
+
+If neither is set, a `ValueError` is raised.
+
+```python
+import os
+
+# Option 1: Pass directly
+client = Grantex(api_key="gx_live_...")
+
+# Option 2: Set environment variable
+os.environ["GRANTEX_API_KEY"] = "gx_live_..."
+client = Grantex()
+
+# Option 3: Custom base URL for self-hosted deployments
+client = Grantex(
+    api_key="gx_live_...",
+    base_url="https://grantex.internal.example.com",
+    timeout=60.0,
+)
+```
+
+## Context Manager
+
+The `Grantex` client implements the context manager protocol. Using `with` ensures the underlying HTTP connection pool is properly closed when you are done:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    agents = client.agents.list()
+    print(f"Total agents: {agents.total}")
+# Connection pool is closed automatically
+```
+
+This is equivalent to calling `client.close()` manually:
+
+```python
+client = Grantex(api_key="gx_live_...")
+try:
+    agents = client.agents.list()
+finally:
+    client.close()
+```
+
+## Resource Clients
+
+The `Grantex` client exposes the following resource clients as attributes:
+
+| Attribute     | Type               | Description                              |
+|---------------|--------------------|------------------------------------------|
+| `agents`      | `AgentsClient`     | Register, list, update, and delete agents |
+| `grants`      | `GrantsClient`     | Get, list, revoke, delegate, and verify grants |
+| `tokens`      | `TokensClient`     | Exchange, verify, and revoke tokens      |
+| `audit`       | `AuditClient`      | Log, list, and retrieve audit entries    |
+| `webhooks`    | `WebhooksClient`   | Create, list, and delete webhook endpoints |
+| `billing`     | `BillingClient`    | Subscription status, checkout, and portal |
+| `policies`    | `PoliciesClient`   | Create, list, update, and delete policies |
+| `compliance`  | `ComplianceClient` | Summaries, exports, and evidence packs   |
+| `anomalies`   | `AnomaliesClient`  | Detect, list, and acknowledge anomalies  |
+| `scim`        | `ScimClient`       | SCIM 2.0 user provisioning and tokens    |
+| `sso`         | `SsoClient`        | OIDC SSO configuration and login         |
+
+## Standalone Functions
+
+In addition to the client, the SDK exports standalone utility functions:
+
+```python
+from grantex import (
+    verify_grant_token,      # Offline JWT verification via JWKS
+    generate_pkce,           # Generate PKCE code_verifier + code_challenge
+    verify_webhook_signature, # Verify webhook payload signatures
+)
+```
+
+## Data Model Conventions
+
+All response types are frozen dataclasses with `snake_case` field names. Lists are returned as Python `tuple` objects for immutability.
+
+```python
+agent = client.agents.get("agt_abc123")
+
+# Fields use snake_case
+print(agent.developer_id)
+print(agent.created_at)
+
+# Scopes are a tuple
+print(agent.scopes)  # ('booking:read', 'booking:write')
+```
