@@ -11,9 +11,6 @@
     "primary": "#3fb950",
     "light": "#58a6ff",
     "dark": "#2ea043",
-    "background": {
-      "dark": "#0d1117"
-    }
   },
   "navigation": {
     "global": {
@@ -210,12 +207,8 @@
   "navbar": {
     "links": [
       {
-        "label": "Dashboard",
-        "url": "https://grantex.dev/dashboard"
-      },
-      {
-        "label": "GitHub",
-        "url": "https://github.com/mishrasanjeev/grantex"
+        "type": "github",
+        "href": "https://github.com/mishrasanjeev/grantex"
       }
     ]
   },
