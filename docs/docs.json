@@ -21,7 +21,8 @@
         { "tab": "Python SDK", "href": "/sdks/python/overview" },
         { "tab": "Integrations", "href": "/integrations/overview" },
         { "tab": "API Reference", "href": "/api-reference" },
-        { "tab": "Protocol", "href": "/protocol/specification" }
+        { "tab": "Protocol", "href": "/protocol/specification" },
+        { "tab": "Blog", "href": "/blog" }
       ]
     },
     "tabs": [
@@ -355,6 +356,10 @@
         ]
       }
     ]
+  },
+  "blog": {
+    "enabled": true,
+    "path": "blog"
   },
   "navbar": {
     "links": [

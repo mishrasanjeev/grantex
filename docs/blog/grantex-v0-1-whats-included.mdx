@@ -1,0 +1,107 @@
+---
+title: "Grantex v0.1: What's Included"
+description: "A complete tour of everything shipping in the Grantex v0.1 release -- SDKs, integrations, CLI, enterprise features, and more."
+date: "2026-02-28"
+authors:
+  - name: "Sanjeev Mishra"
+---
+
+Grantex v0.1 is our first public release, and we wanted it to be comprehensive. Whether you are building a single-agent prototype or deploying a multi-agent system in production, the tooling is here. Let's walk through everything that ships today.
+
+## SDKs
+
+### TypeScript (`@grantex/sdk`)
+
+The TypeScript SDK is the primary client library. It covers the full API surface: agent registration, authorization, token exchange, offline and online verification, grants management, audit logging, and every enterprise endpoint. It uses native `fetch`, ships as ESM, and requires Node 18+.
+
+```bash
+npm install @grantex/sdk
+```
+
+[TypeScript SDK docs](/sdks/typescript/overview)
+
+### Python (`grantex`)
+
+The Python SDK mirrors the TypeScript API with idiomatic Python conventions -- snake_case methods, dataclass responses, and `httpx` under the hood. It supports Python 3.9+ and includes full type annotations for editor autocomplete.
+
+```bash
+pip install grantex
+```
+
+[Python SDK docs](/sdks/python/overview)
+
+## Framework Integrations
+
+We built integrations for every major agent framework so you can add Grantex authorization to your existing stack without rewriting your agent logic.
+
+| Integration | Package | What It Does |
+|---|---|---|
+| **LangChain** | `@grantex/langchain` | LangChain tools that wrap Grantex operations -- use them as agent tools in any LangChain pipeline. |
+| **Vercel AI** | `@grantex/vercel-ai` | Vercel AI SDK tools for building authorized AI chatbots and assistants. |
+| **AutoGen** | `@grantex/autogen` | AutoGen function tools for multi-agent conversations with scoped authorization. |
+| **CrewAI** | `grantex-crewai` | CrewAI tools that let crew agents request and verify grants. |
+| **OpenAI Agents SDK** | `grantex-openai-agents` | Python tools for the OpenAI Agents SDK with built-in authorization. |
+| **Google ADK** | `grantex-adk` | Google Agent Development Kit tools for authorized agent actions. |
+
+Each integration ships with its own documentation page and a runnable example in the `examples/` directory.
+
+[Integrations overview](/integrations/overview)
+
+## MCP Server (`@grantex/mcp`)
+
+The MCP server exposes 13 Grantex tools as an MCP (Model Context Protocol) service. Point Claude Desktop, Cursor, Windsurf, or any MCP-compatible client at it and your AI assistant can manage agents, grants, and tokens through natural language.
+
+```bash
+npx @grantex/mcp
+```
+
+[MCP server docs](/integrations/mcp)
+
+## CLI (`@grantex/cli`)
+
+The Grantex CLI gives you full control from your terminal. Register agents, initiate authorization flows, exchange tokens, query audit logs, manage policies -- everything the SDKs can do, the CLI can do.
+
+```bash
+npx @grantex/cli agents list
+npx @grantex/cli tokens verify <token>
+npx @grantex/cli audit entries --agentId <id>
+```
+
+[CLI docs](/integrations/cli)
+
+## Developer Portal
+
+The developer portal at [grantex.dev/dashboard](https://grantex.dev/dashboard) provides a web UI for managing your Grantex account. View registered agents, browse active grants, inspect audit logs, and configure policies -- all without writing code.
+
+## Enterprise Features
+
+Grantex v0.1 includes a full suite of enterprise capabilities, available out of the box:
+
+- **Policy Engine** -- define JSON-based authorization policies that are evaluated on every grant request. Restrict by scope, time window, IP range, or custom attributes. ([Policies docs](/sdks/typescript/policies))
+
+- **Anomaly Detection** -- automated analysis of agent behavior patterns. Flags unusual activity like scope escalation, off-hours access, or velocity spikes. ([Anomalies docs](/sdks/typescript/anomalies))
+
+- **SCIM Provisioning** -- sync users and groups from your identity provider (Okta, Azure AD, OneLogin) to Grantex. ([SCIM docs](/sdks/typescript/scim))
+
+- **SSO** -- SAML and OIDC single sign-on for the developer portal. ([SSO docs](/sdks/typescript/sso))
+
+- **Compliance Exports** -- generate audit reports in formats that satisfy SOC 2, ISO 27001, and EU AI Act requirements. ([Compliance docs](/sdks/typescript/compliance))
+
+- **Billing** -- Stripe-backed usage metering and plan management with automatic enforcement of plan limits. ([Billing docs](/sdks/typescript/billing))
+
+## Auth Service
+
+The auth service is a production-ready Fastify server backed by PostgreSQL and Redis. It handles authorization flows, token issuance and verification, webhook delivery with retry, rate limiting, and PKCE (S256). It deploys to Cloud Run and is the reference implementation of the Grantex protocol.
+
+[Self-hosting guide](/guides/self-hosting)
+
+## What's Next
+
+This is v0.1, not v1.0. We are actively working on:
+
+- Additional framework integrations based on community demand
+- Expanded policy engine with OPA (Open Policy Agent) support
+- SDK support for more languages (Go, Java, Rust)
+- Hosted multi-tenant service for teams that do not want to self-host
+
+Star the repo, try the [quickstart](/quickstart), and let us know what you would like to see next on [GitHub](https://github.com/mishrasanjeev/grantex).

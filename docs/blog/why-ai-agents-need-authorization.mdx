@@ -1,0 +1,64 @@
+---
+title: "Why AI Agents Need Their Own Authorization Protocol"
+description: "OAuth 2.0 was built for human users. AI agents have fundamentally different requirements -- here's why they need a purpose-built protocol."
+date: "2026-02-28"
+authors:
+  - name: "Sanjeev Mishra"
+---
+
+Every time you click "Sign in with Google" or grant an app access to your calendar, OAuth 2.0 is doing the work. It has been the backbone of delegated authorization for over a decade. So why can't we just use it for AI agents?
+
+The short answer: agents are not apps.
+
+## The Four Gaps
+
+### 1. Agent Identity vs. App Identity
+
+OAuth issues tokens to registered applications. An app has a `client_id`, a redirect URI, and a set of scopes. This model assumes a fixed, known piece of software.
+
+AI agents are different. A single orchestrator might spawn dozens of sub-agents at runtime, each with a different purpose. These agents need their own cryptographic identity -- not a shared `client_id`. Grantex assigns each agent a DID (Decentralized Identifier) backed by a key pair. The agent's identity is verifiable, rotatable, and independent of the platform it runs on.
+
+### 2. Scope Delegation Chains
+
+OAuth supports a flat model: a user grants scopes to an app, and that is the end of the story. But agents delegate work to other agents. A "research assistant" agent might call a "web search" sub-agent and a "summarizer" sub-agent, each of which should only get the scopes it actually needs.
+
+Grantex models this explicitly. When a parent agent delegates to a child, the child's grant token carries `parentAgt`, `parentGrnt`, and `delegationDepth` claims. The child's scopes must be a strict subset of the parent's. This is not a convention -- it is enforced at the protocol level.
+
+```
+Root user grants: [files:read, files:write, email:send]
+  └─ Parent agent:  [files:read, files:write]  (delegationDepth: 0)
+       └─ Child agent:  [files:read]            (delegationDepth: 1)
+```
+
+If the parent's grant is revoked, every child grant in the chain is automatically invalidated.
+
+### 3. Real-Time Revocation
+
+OAuth token revocation is defined in RFC 7009, but it is advisory. Resource servers are free to keep accepting a token until it expires. For a 1-hour access token, that is a 1-hour window of exposure.
+
+With agents performing high-stakes actions autonomously, you cannot afford that window. Grantex supports both offline verification (fast JWT validation) and online verification (`POST /v1/tokens/verify`) that checks revocation state in real time. When you revoke a grant, the very next verification call returns `valid: false`.
+
+### 4. Action-Level Audit Trails
+
+OAuth gives you an access log at the authorization server. You know when a token was issued and when it was refreshed. You do not know what happened next.
+
+Grantex includes a first-class audit subsystem. Every action an agent performs can be logged via `POST /v1/audit/log`, and the entries are append-only and hash-chained -- each entry references the hash of the previous one, making tampering detectable. You can query the full trail with `GET /v1/audit/entries` filtered by agent, grant, principal, or time range.
+
+## The Compliance Dimension
+
+This is not just a technical nicety. The EU AI Act (effective August 2025) requires that high-risk AI systems maintain logs of their operation, support human oversight, and provide transparency about their decision-making. Grantex's audit trail, scoped grants, and real-time revocation map directly onto these requirements.
+
+Similarly, SOC 2 auditors want to see evidence that access is scoped, time-limited, and revocable. Grant tokens with explicit `exp`, `scp`, and revocation support provide that evidence out of the box.
+
+## Why Not Extend OAuth?
+
+We considered it. The problem is that the primitives do not exist. OAuth has no concept of agent identity, delegation depth, or hash-chained audit logs. Bolting these onto OAuth would mean a constellation of non-standard extensions that no existing library supports.
+
+Grantex is a clean-sheet protocol that speaks the same language as OAuth where it makes sense (JWTs, JWKs, RS256, scopes, authorization codes) but adds the agent-specific primitives as first-class concepts. If you know OAuth, Grantex will feel familiar. But it will also handle the cases OAuth was never designed for.
+
+## Learn More
+
+- [How Grantex Works](/concepts/how-it-works) -- visual walkthrough of the authorization flow.
+- [Delegation Deep Dive](/concepts/delegation) -- how multi-agent delegation works.
+- [Protocol Specification](/protocol/specification) -- the full v1.0 spec.
+- [Quickstart](/quickstart) -- get a working integration in under 5 minutes.

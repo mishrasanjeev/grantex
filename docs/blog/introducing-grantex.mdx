@@ -1,0 +1,79 @@
+---
+title: "Introducing Grantex: OAuth 2.0 for AI Agents"
+description: "Grantex is an open delegated authorization protocol that brings human-approved, scoped, revocable permissions to AI agents."
+date: "2026-02-28"
+authors:
+  - name: "Sanjeev Mishra"
+---
+
+AI agents are shipping fast. They book flights, send emails, move money, and deploy code. But here is the uncomfortable truth: most of them operate with all-or-nothing API keys and zero audit trail. If an agent goes rogue, you find out after the damage is done.
+
+We built Grantex to fix that.
+
+## The Problem
+
+OAuth 2.0 was designed for human users clicking "Allow" on a consent screen. It works brilliantly for that. But agents are not humans. They operate autonomously, spawn sub-agents, and chain actions across services. OAuth was never designed for:
+
+- **Agent identity** -- agents need their own cryptographic identity, not borrowed user credentials.
+- **Delegation chains** -- a parent agent granting a sub-agent a narrower set of permissions.
+- **Action-level auditing** -- knowing exactly what an agent did, not just that it authenticated.
+- **Real-time revocation** -- killing a misbehaving agent's access in milliseconds, not minutes.
+
+## The Solution
+
+Grantex is an open protocol (Apache 2.0) that provides all of the above. Every agent gets a DID-based identity. Every permission is a scoped, time-limited grant token (JWT) that a human explicitly approved. Every action is logged in an append-only, hash-chained audit trail. And any grant can be revoked instantly.
+
+Here is what the flow looks like in TypeScript:
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const gx = new Grantex({
+  apiKey: process.env.GRANTEX_API_KEY,
+  baseUrl: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app',
+});
+
+// 1. Register an agent
+const agent = await gx.agents.create({
+  name: 'travel-booking-agent',
+  description: 'Books flights and hotels for users',
+});
+
+// 2. Request authorization from a user
+const auth = await gx.authorize({
+  agentId: agent.id,
+  userId: 'user_alice',
+  scopes: ['flights:book', 'hotels:search'],
+  callbackUrl: 'https://app.example.com/callback',
+});
+// → redirect user to auth.consentUrl
+
+// 3. Exchange the authorization code for a grant token
+const token = await gx.tokens.exchange({
+  code: callbackCode,
+  agentId: agent.id,
+});
+
+// 4. Verify the token before acting
+const result = await gx.tokens.verify(token.grantToken);
+console.log(result.scopes); // ['flights:book', 'hotels:search']
+```
+
+The same flow works in Python, and across every integration we ship.
+
+## What Ships Today
+
+- **Protocol spec v1.0** (final) -- the full specification is public and frozen.
+- **TypeScript SDK** (`@grantex/sdk`) and **Python SDK** (`grantex`) -- production-ready.
+- **7 framework integrations** -- LangChain, AutoGen, CrewAI, Vercel AI, OpenAI Agents SDK, Google ADK, and an MCP server for Claude Desktop.
+- **CLI** (`@grantex/cli`) -- manage agents, grants, and tokens from your terminal.
+- **Enterprise features** -- policy engine, SCIM/SSO, anomaly detection, compliance exports, and Stripe billing.
+
+## Get Started
+
+- [Quickstart guide](/quickstart) -- up and running in under 5 minutes.
+- [GitHub repository](https://github.com/mishrasanjeev/grantex) -- star, fork, contribute.
+- [Protocol specification](/protocol/specification) -- read the full spec.
+- [grantex.dev](https://grantex.dev) -- project homepage.
+
+We believe that as agents become more capable, proper authorization becomes more critical, not less. Grantex is our answer to that challenge.

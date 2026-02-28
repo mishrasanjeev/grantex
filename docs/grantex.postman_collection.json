@@ -1,0 +1,1509 @@
+{
+	"info": {
+		"_postman_id": "grantex-collection",
+		"name": "Grantex Auth Service API",
+		"description": "Complete API collection for the Grantex Auth Service — open delegated authorization for AI agents.\n\nBase URL: {{base_url}}\n\nAuthentication: Most endpoints require a Bearer token (API key) set at the collection level. Override auth on individual requests where noted.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{api_key}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [],
+	"item": [
+		{
+			"name": "System",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						},
+						"description": "Returns service health status. No authentication required."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "JWKS",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/.well-known/jwks.json",
+							"host": ["{{base_url}}"],
+							"path": [".well-known", "jwks.json"]
+						},
+						"description": "Returns the JSON Web Key Set used for verifying grant tokens. No authentication required."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				}
+			],
+			"description": "System health and key discovery endpoints."
+		},
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Sign Up",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.developerId) {",
+									"        pm.environment.set('developer_id', jsonData.developerId);",
+									"    }",
+									"    if (jsonData.apiKey) {",
+									"        pm.environment.set('api_key', jsonData.apiKey);",
+									"    }",
+									"    pm.test('Signup successful', function () {",
+									"        pm.expect(jsonData).to.have.property('developerId');",
+									"        pm.expect(jsonData).to.have.property('apiKey');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"My Developer Account\",\n  \"email\": \"developer@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/signup",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "signup"]
+						},
+						"description": "Create a new developer account. Returns a developerId and apiKey. The test script saves both to the environment automatically."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "Rotate API Key",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/keys/rotate",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "keys", "rotate"]
+						},
+						"description": "Rotate the current API key. Returns a new apiKey. The old key is invalidated."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current Developer",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/me",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "me"]
+						},
+						"description": "Returns the authenticated developer's profile."
+					},
+					"response": []
+				}
+			],
+			"description": "Developer signup, key rotation, and profile endpoints."
+		},
+		{
+			"name": "Agents",
+			"item": [
+				{
+					"name": "Create Agent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.agentId) {",
+									"        pm.environment.set('agent_id', jsonData.agentId);",
+									"    }",
+									"    if (jsonData.did) {",
+									"        pm.environment.set('agent_did', jsonData.did);",
+									"    }",
+									"    pm.test('Agent created', function () {",
+									"        pm.expect(jsonData).to.have.property('agentId');",
+									"        pm.expect(jsonData).to.have.property('did');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"My AI Agent\",\n  \"description\": \"An example AI agent\",\n  \"scopes\": [\"read:data\", \"write:data\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/agents",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "agents"]
+						},
+						"description": "Register a new agent. The test script saves agentId and did to the environment."
+					},
+					"response": []
+				},
+				{
+					"name": "List Agents",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/agents",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "agents"]
+						},
+						"description": "List all agents for the authenticated developer."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Agent",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/agents/{{agent_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "agents", "{{agent_id}}"]
+						},
+						"description": "Get a specific agent by ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Agent",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Agent Name\",\n  \"description\": \"Updated description\",\n  \"scopes\": [\"read:data\"],\n  \"status\": \"active\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/agents/{{agent_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "agents", "{{agent_id}}"]
+						},
+						"description": "Update an agent's name, description, scopes, or status."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Agent",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/agents/{{agent_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "agents", "{{agent_id}}"]
+						},
+						"description": "Delete an agent. Returns 204 No Content."
+					},
+					"response": []
+				}
+			],
+			"description": "Agent registration and management."
+		},
+		{
+			"name": "Authorization",
+			"item": [
+				{
+					"name": "Create Authorization Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.authRequestId) {",
+									"        pm.environment.set('auth_request_id', jsonData.authRequestId);",
+									"    }",
+									"    if (jsonData.code) {",
+									"        pm.environment.set('auth_code', jsonData.code);",
+									"    }",
+									"    pm.test('Authorization request created', function () {",
+									"        pm.expect(jsonData).to.have.property('authRequestId');",
+									"        pm.expect(jsonData).to.have.property('consentUrl');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"agentId\": \"{{agent_id}}\",\n  \"principalId\": \"{{principal_id}}\",\n  \"scopes\": [\"read:data\"],\n  \"redirectUri\": \"https://example.com/callback\",\n  \"state\": \"random-state-value\",\n  \"expiresIn\": \"24h\",\n  \"audience\": \"https://api.example.com\",\n  \"codeChallenge\": \"\",\n  \"codeChallengeMethod\": \"S256\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/authorize",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "authorize"]
+						},
+						"description": "Create an authorization request. Rate limited to 10/min. In sandbox mode, a code is returned directly. The test script saves authRequestId and code (if present) to the environment."
+					},
+					"response": []
+				},
+				{
+					"name": "Approve Authorization Request",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/authorize/{{auth_request_id}}/approve",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "authorize", "{{auth_request_id}}", "approve"]
+						},
+						"description": "Approve an authorization request (developer-side). Returns the authorization code."
+					},
+					"response": []
+				},
+				{
+					"name": "Deny Authorization Request",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/authorize/{{auth_request_id}}/deny",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "authorize", "{{auth_request_id}}", "deny"]
+						},
+						"description": "Deny an authorization request."
+					},
+					"response": []
+				}
+			],
+			"description": "Authorization request creation and approval flow."
+		},
+		{
+			"name": "Consent",
+			"item": [
+				{
+					"name": "Consent Page (HTML)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/consent?req={{auth_request_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["consent"],
+							"query": [
+								{
+									"key": "req",
+									"value": "{{auth_request_id}}"
+								}
+							]
+						},
+						"description": "Renders the consent page HTML for the user. No authentication required."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "Get Consent Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/consent/{{auth_request_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "consent", "{{auth_request_id}}"]
+						},
+						"description": "Get consent request details including agent info and scopes. No authentication required."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "Approve Consent",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/consent/{{auth_request_id}}/approve",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "consent", "{{auth_request_id}}", "approve"]
+						},
+						"description": "User approves the consent request. Returns an authorization code. No authentication required."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "Deny Consent",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/consent/{{auth_request_id}}/deny",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "consent", "{{auth_request_id}}", "deny"]
+						},
+						"description": "User denies the consent request. No authentication required."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				}
+			],
+			"description": "Public consent flow endpoints for end-user approval/denial."
+		},
+		{
+			"name": "Tokens",
+			"item": [
+				{
+					"name": "Exchange Code for Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    if (jsonData.grantToken) {",
+									"        pm.environment.set('grant_token', jsonData.grantToken);",
+									"    }",
+									"    if (jsonData.grantId) {",
+									"        pm.environment.set('grant_id', jsonData.grantId);",
+									"    }",
+									"    pm.test('Token exchanged', function () {",
+									"        pm.expect(jsonData).to.have.property('grantToken');",
+									"        pm.expect(jsonData).to.have.property('grantId');",
+									"    });",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"code\": \"{{auth_code}}\",\n  \"agentId\": \"{{agent_id}}\",\n  \"codeVerifier\": \"\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/token",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "token"]
+						},
+						"description": "Exchange an authorization code for a grant token. Rate limited to 20/min. The test script saves grantToken and grantId to the environment."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"{{grant_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/tokens/verify",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "tokens", "verify"]
+						},
+						"description": "Verify a grant token and return its claims. Auth requirements vary by configuration."
+					},
+					"response": []
+				},
+				{
+					"name": "Revoke Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jti\": \"{{grant_id}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/tokens/revoke",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "tokens", "revoke"]
+						},
+						"description": "Revoke a grant token by its JTI. Returns 204 No Content."
+					},
+					"response": []
+				}
+			],
+			"description": "Token exchange, verification, and revocation."
+		},
+		{
+			"name": "Grants",
+			"item": [
+				{
+					"name": "List Grants",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/grants?agentId=&principalId=&status=",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "grants"],
+							"query": [
+								{
+									"key": "agentId",
+									"value": "",
+									"description": "Filter by agent ID"
+								},
+								{
+									"key": "principalId",
+									"value": "",
+									"description": "Filter by principal ID"
+								},
+								{
+									"key": "status",
+									"value": "",
+									"description": "Filter by grant status"
+								}
+							]
+						},
+						"description": "List all grants for the authenticated developer. Supports filtering by agentId, principalId, and status."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Grant",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/grants/{{grant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "grants", "{{grant_id}}"]
+						},
+						"description": "Get a specific grant by ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Grant",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/grants/{{grant_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "grants", "{{grant_id}}"]
+						},
+						"description": "Revoke/delete a grant. Returns 204 No Content."
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Grant",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"{{grant_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/grants/verify",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "grants", "verify"]
+						},
+						"description": "Verify a grant token. Returns active status and claims."
+					},
+					"response": []
+				},
+				{
+					"name": "Delegate Grant",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"parentGrantToken\": \"{{grant_token}}\",\n  \"subAgentId\": \"{{agent_id}}\",\n  \"scopes\": [\"read:data\"],\n  \"expiresIn\": \"1h\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/grants/delegate",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "grants", "delegate"]
+						},
+						"description": "Delegate a grant to a sub-agent with narrowed scopes."
+					},
+					"response": []
+				}
+			],
+			"description": "Grant lifecycle management and delegation."
+		},
+		{
+			"name": "Audit",
+			"item": [
+				{
+					"name": "Log Audit Entry",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"agentId\": \"{{agent_id}}\",\n  \"agentDid\": \"{{agent_did}}\",\n  \"grantId\": \"{{grant_id}}\",\n  \"principalId\": \"{{principal_id}}\",\n  \"action\": \"data.read\",\n  \"metadata\": {\n    \"resource\": \"users\",\n    \"count\": 10\n  },\n  \"status\": \"success\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/audit/log",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "audit", "log"]
+						},
+						"description": "Log an audit entry for an agent action."
+					},
+					"response": []
+				},
+				{
+					"name": "List Audit Entries",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/audit/entries?agentId=&grantId=&principalId=&action=",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "audit", "entries"],
+							"query": [
+								{
+									"key": "agentId",
+									"value": "",
+									"description": "Filter by agent ID"
+								},
+								{
+									"key": "grantId",
+									"value": "",
+									"description": "Filter by grant ID"
+								},
+								{
+									"key": "principalId",
+									"value": "",
+									"description": "Filter by principal ID"
+								},
+								{
+									"key": "action",
+									"value": "",
+									"description": "Filter by action"
+								}
+							]
+						},
+						"description": "List audit entries with optional filters."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Audit Entry",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/audit/{{audit_entry_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "audit", "{{audit_entry_id}}"]
+						},
+						"description": "Get a specific audit entry by ID."
+					},
+					"response": []
+				}
+			],
+			"description": "Immutable audit log for agent actions."
+		},
+		{
+			"name": "Policies",
+			"item": [
+				{
+					"name": "Create Policy",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Restrict after hours\",\n  \"effect\": \"deny\",\n  \"priority\": 10,\n  \"agentId\": \"{{agent_id}}\",\n  \"principalId\": \"{{principal_id}}\",\n  \"scopes\": [\"write:data\"],\n  \"timeOfDayStart\": \"18:00\",\n  \"timeOfDayEnd\": \"08:00\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/policies",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "policies"]
+						},
+						"description": "Create a new authorization policy."
+					},
+					"response": []
+				},
+				{
+					"name": "List Policies",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/policies",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "policies"]
+						},
+						"description": "List all policies for the authenticated developer."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Policy",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/policies/{{policy_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "policies", "{{policy_id}}"]
+						},
+						"description": "Get a specific policy by ID."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Policy",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated policy name\",\n  \"effect\": \"allow\",\n  \"priority\": 5\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/policies/{{policy_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "policies", "{{policy_id}}"]
+						},
+						"description": "Update a policy's fields."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Policy",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/policies/{{policy_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "policies", "{{policy_id}}"]
+						},
+						"description": "Delete a policy. Returns 204 No Content."
+					},
+					"response": []
+				}
+			],
+			"description": "Authorization policies for fine-grained access control."
+		},
+		{
+			"name": "Webhooks",
+			"item": [
+				{
+					"name": "Create Webhook",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"url\": \"https://example.com/webhooks/grantex\",\n  \"events\": [\"grant.created\", \"grant.revoked\", \"token.issued\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/webhooks",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "webhooks"]
+						},
+						"description": "Register a webhook endpoint. Returns the webhook secret for signature verification."
+					},
+					"response": []
+				},
+				{
+					"name": "List Webhooks",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/webhooks",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "webhooks"]
+						},
+						"description": "List all registered webhooks."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Webhook",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/webhooks/{{webhook_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "webhooks", "{{webhook_id}}"]
+						},
+						"description": "Delete a webhook. Returns 204 No Content."
+					},
+					"response": []
+				}
+			],
+			"description": "Webhook registration for event notifications."
+		},
+		{
+			"name": "Billing",
+			"item": [
+				{
+					"name": "Stripe Webhook",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "stripe-signature",
+								"value": "",
+								"description": "Stripe webhook signature"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/billing/webhook",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "billing", "webhook"]
+						},
+						"description": "Stripe webhook receiver. No Bearer auth — uses Stripe signature verification."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "Get Subscription",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/billing/subscription",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "billing", "subscription"]
+						},
+						"description": "Get the current billing subscription status."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Checkout Session",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"plan\": \"pro\",\n  \"successUrl\": \"https://example.com/billing/success\",\n  \"cancelUrl\": \"https://example.com/billing/cancel\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/billing/checkout",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "billing", "checkout"]
+						},
+						"description": "Create a Stripe checkout session for plan upgrade. Plan must be 'pro' or 'enterprise'."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Billing Portal Session",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"returnUrl\": \"https://example.com/billing\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/billing/portal",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "billing", "portal"]
+						},
+						"description": "Create a Stripe customer portal session for managing subscription."
+					},
+					"response": []
+				}
+			],
+			"description": "Billing and subscription management via Stripe."
+		},
+		{
+			"name": "Anomalies",
+			"item": [
+				{
+					"name": "Detect Anomalies",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/anomalies/detect",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "anomalies", "detect"]
+						},
+						"description": "Trigger anomaly detection for the authenticated developer."
+					},
+					"response": []
+				},
+				{
+					"name": "List Anomalies",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/anomalies?unacknowledged=",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "anomalies"],
+							"query": [
+								{
+									"key": "unacknowledged",
+									"value": "",
+									"description": "Filter to unacknowledged anomalies only (true/false)"
+								}
+							]
+						},
+						"description": "List detected anomalies. Optionally filter to unacknowledged only."
+					},
+					"response": []
+				},
+				{
+					"name": "Acknowledge Anomaly",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/anomalies/{{anomaly_id}}/acknowledge",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "anomalies", "{{anomaly_id}}", "acknowledge"]
+						},
+						"description": "Acknowledge an anomaly. Returns 204 No Content."
+					},
+					"response": []
+				}
+			],
+			"description": "Anomaly detection and acknowledgment."
+		},
+		{
+			"name": "Compliance",
+			"item": [
+				{
+					"name": "Compliance Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/compliance/summary?since=&until=",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "compliance", "summary"],
+							"query": [
+								{
+									"key": "since",
+									"value": "",
+									"description": "Start date (ISO 8601)"
+								},
+								{
+									"key": "until",
+									"value": "",
+									"description": "End date (ISO 8601)"
+								}
+							]
+						},
+						"description": "Get a compliance summary for the authenticated developer."
+					},
+					"response": []
+				},
+				{
+					"name": "Export Grants",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/compliance/export/grants?since=&until=&status=",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "compliance", "export", "grants"],
+							"query": [
+								{
+									"key": "since",
+									"value": "",
+									"description": "Start date (ISO 8601)"
+								},
+								{
+									"key": "until",
+									"value": "",
+									"description": "End date (ISO 8601)"
+								},
+								{
+									"key": "status",
+									"value": "",
+									"description": "Filter by grant status"
+								}
+							]
+						},
+						"description": "Export grants data for compliance reporting."
+					},
+					"response": []
+				},
+				{
+					"name": "Export Audit Entries",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/compliance/export/audit?since=&until=&agentId=&status=",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "compliance", "export", "audit"],
+							"query": [
+								{
+									"key": "since",
+									"value": "",
+									"description": "Start date (ISO 8601)"
+								},
+								{
+									"key": "until",
+									"value": "",
+									"description": "End date (ISO 8601)"
+								},
+								{
+									"key": "agentId",
+									"value": "",
+									"description": "Filter by agent ID"
+								},
+								{
+									"key": "status",
+									"value": "",
+									"description": "Filter by status"
+								}
+							]
+						},
+						"description": "Export audit entries for compliance reporting."
+					},
+					"response": []
+				},
+				{
+					"name": "Evidence Pack",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/compliance/evidence-pack?since=&until=&framework=all",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "compliance", "evidence-pack"],
+							"query": [
+								{
+									"key": "since",
+									"value": "",
+									"description": "Start date (ISO 8601)"
+								},
+								{
+									"key": "until",
+									"value": "",
+									"description": "End date (ISO 8601)"
+								},
+								{
+									"key": "framework",
+									"value": "all",
+									"description": "Framework: 'soc2', 'gdpr', or 'all'"
+								}
+							]
+						},
+						"description": "Generate an evidence pack for compliance frameworks (SOC 2, GDPR)."
+					},
+					"response": []
+				}
+			],
+			"description": "Compliance reporting, data export, and evidence packs."
+		},
+		{
+			"name": "SCIM",
+			"item": [
+				{
+					"name": "Create SCIM Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"label\": \"Okta SCIM integration\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/scim/tokens",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "scim", "tokens"]
+						},
+						"description": "Create a SCIM bearer token for identity provider integration."
+					},
+					"response": []
+				},
+				{
+					"name": "List SCIM Tokens",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/scim/tokens",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "scim", "tokens"]
+						},
+						"description": "List all SCIM tokens."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete SCIM Token",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/scim/tokens/{{scim_token_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "scim", "tokens", "{{scim_token_id}}"]
+						},
+						"description": "Delete a SCIM token. Returns 204 No Content."
+					},
+					"response": []
+				},
+				{
+					"name": "SCIM Service Provider Config",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/scim/v2/ServiceProviderConfig",
+							"host": ["{{base_url}}"],
+							"path": ["scim", "v2", "ServiceProviderConfig"]
+						},
+						"description": "SCIM 2.0 Service Provider Configuration. No authentication required."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "List SCIM Users",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/scim/v2/Users?startIndex=1&count=100",
+							"host": ["{{base_url}}"],
+							"path": ["scim", "v2", "Users"],
+							"query": [
+								{
+									"key": "startIndex",
+									"value": "1",
+									"description": "Pagination start index"
+								},
+								{
+									"key": "count",
+									"value": "100",
+									"description": "Number of results per page"
+								}
+							]
+						},
+						"description": "List SCIM users. Requires SCIM bearer token."
+					},
+					"response": [],
+					"auth": {
+						"type": "bearer",
+						"bearer": [
+							{
+								"key": "token",
+								"value": "{{scim_token}}",
+								"type": "string"
+							}
+						]
+					}
+				},
+				{
+					"name": "Create SCIM User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userName\": \"jane.doe@example.com\",\n  \"displayName\": \"Jane Doe\",\n  \"externalId\": \"ext-123\",\n  \"active\": true,\n  \"emails\": [\n    {\n      \"value\": \"jane.doe@example.com\",\n      \"primary\": true\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/scim/v2/Users",
+							"host": ["{{base_url}}"],
+							"path": ["scim", "v2", "Users"]
+						},
+						"description": "Provision a new SCIM user. Requires SCIM bearer token."
+					},
+					"response": [],
+					"auth": {
+						"type": "bearer",
+						"bearer": [
+							{
+								"key": "token",
+								"value": "{{scim_token}}",
+								"type": "string"
+							}
+						]
+					}
+				},
+				{
+					"name": "Get SCIM User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/scim/v2/Users/{{scim_user_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["scim", "v2", "Users", "{{scim_user_id}}"]
+						},
+						"description": "Get a specific SCIM user. Requires SCIM bearer token."
+					},
+					"response": [],
+					"auth": {
+						"type": "bearer",
+						"bearer": [
+							{
+								"key": "token",
+								"value": "{{scim_token}}",
+								"type": "string"
+							}
+						]
+					}
+				},
+				{
+					"name": "Replace SCIM User",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"userName\": \"jane.doe@example.com\",\n  \"displayName\": \"Jane Doe Updated\",\n  \"externalId\": \"ext-123\",\n  \"active\": true,\n  \"emails\": [\n    {\n      \"value\": \"jane.doe@example.com\",\n      \"primary\": true\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/scim/v2/Users/{{scim_user_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["scim", "v2", "Users", "{{scim_user_id}}"]
+						},
+						"description": "Full replace of a SCIM user. Requires SCIM bearer token."
+					},
+					"response": [],
+					"auth": {
+						"type": "bearer",
+						"bearer": [
+							{
+								"key": "token",
+								"value": "{{scim_token}}",
+								"type": "string"
+							}
+						]
+					}
+				},
+				{
+					"name": "Patch SCIM User",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"Operations\": [\n    {\n      \"op\": \"replace\",\n      \"path\": \"active\",\n      \"value\": false\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/scim/v2/Users/{{scim_user_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["scim", "v2", "Users", "{{scim_user_id}}"]
+						},
+						"description": "Partial update of a SCIM user via SCIM PATCH operations. Requires SCIM bearer token."
+					},
+					"response": [],
+					"auth": {
+						"type": "bearer",
+						"bearer": [
+							{
+								"key": "token",
+								"value": "{{scim_token}}",
+								"type": "string"
+							}
+						]
+					}
+				},
+				{
+					"name": "Delete SCIM User",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/scim/v2/Users/{{scim_user_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["scim", "v2", "Users", "{{scim_user_id}}"]
+						},
+						"description": "Deprovision a SCIM user. Returns 204 No Content. Requires SCIM bearer token."
+					},
+					"response": [],
+					"auth": {
+						"type": "bearer",
+						"bearer": [
+							{
+								"key": "token",
+								"value": "{{scim_token}}",
+								"type": "string"
+							}
+						]
+					}
+				}
+			],
+			"description": "SCIM 2.0 user provisioning and token management."
+		},
+		{
+			"name": "SSO",
+			"item": [
+				{
+					"name": "Configure SSO",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"issuerUrl\": \"https://accounts.google.com\",\n  \"clientId\": \"your-client-id\",\n  \"clientSecret\": \"your-client-secret\",\n  \"redirectUri\": \"https://grantex-auth-dd4mtrt2gq-uc.a.run.app/sso/callback\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/sso/config",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "sso", "config"]
+						},
+						"description": "Configure OIDC-based SSO for the developer's organization."
+					},
+					"response": []
+				},
+				{
+					"name": "Get SSO Config",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/sso/config",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "sso", "config"]
+						},
+						"description": "Get the current SSO configuration."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete SSO Config",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/sso/config",
+							"host": ["{{base_url}}"],
+							"path": ["v1", "sso", "config"]
+						},
+						"description": "Remove SSO configuration. Returns 204 No Content."
+					},
+					"response": []
+				},
+				{
+					"name": "SSO Login",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/sso/login?org={{developer_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["sso", "login"],
+							"query": [
+								{
+									"key": "org",
+									"value": "{{developer_id}}",
+									"description": "Developer/organization ID (required)"
+								}
+							]
+						},
+						"description": "Initiate SSO login flow. Redirects to the configured identity provider. No authentication required."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				},
+				{
+					"name": "SSO Callback",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/sso/callback?code=&state=",
+							"host": ["{{base_url}}"],
+							"path": ["sso", "callback"],
+							"query": [
+								{
+									"key": "code",
+									"value": "",
+									"description": "Authorization code from IdP"
+								},
+								{
+									"key": "state",
+									"value": "",
+									"description": "State parameter for CSRF protection"
+								}
+							]
+						},
+						"description": "SSO callback endpoint. Called by the identity provider after authentication. No authentication required."
+					},
+					"response": [],
+					"auth": {
+						"type": "noauth"
+					}
+				}
+			],
+			"description": "Single Sign-On (OIDC) configuration and login flow."
+		}
+	]
+}
