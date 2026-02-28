@@ -1,0 +1,138 @@
+---
+title: "Billing"
+sidebarTitle: "Billing"
+description: "Manage subscriptions and access Stripe checkout and billing portal sessions."
+---
+
+## Overview
+
+The `billing` sub-client provides subscription management through Stripe. You can check the current subscription status, create checkout sessions for upgrades, and generate billing portal URLs for self-service management.
+
+```typescript
+const subscription = await grantex.billing.getSubscription();
+console.log(subscription.plan);   // 'free'
+console.log(subscription.status); // 'active'
+```
+
+---
+
+## billing.getSubscription()
+
+Get the current subscription status for the authenticated developer organization.
+
+```typescript
+const subscription = await grantex.billing.getSubscription();
+
+console.log(subscription.plan);             // 'free', 'pro', or 'enterprise'
+console.log(subscription.status);           // 'active', 'past_due', or 'canceled'
+console.log(subscription.currentPeriodEnd); // '2026-03-28T00:00:00Z' or null
+```
+
+### Response: `SubscriptionStatus`
+
+<ResponseField name="plan" type="string">
+  Current plan: `'free'`, `'pro'`, or `'enterprise'`.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Subscription status: `'active'`, `'past_due'`, or `'canceled'`.
+</ResponseField>
+
+<ResponseField name="currentPeriodEnd" type="string | null">
+  ISO 8601 end date of the current billing period, or `null` for the free plan.
+</ResponseField>
+
+---
+
+## billing.createCheckout()
+
+Create a Stripe Checkout session for upgrading to a paid plan. Redirect the user to the returned URL to complete the purchase.
+
+```typescript
+const checkout = await grantex.billing.createCheckout({
+  plan: 'pro',
+  successUrl: 'https://yourapp.com/billing/success',
+  cancelUrl: 'https://yourapp.com/billing/cancel',
+});
+
+console.log(checkout.checkoutUrl);
+// → 'https://checkout.stripe.com/c/pay/cs_live_...'
+// Redirect the user to this URL
+```
+
+### Parameters
+
+<ParamField body="plan" type="'pro' | 'enterprise'" required>
+  The plan to subscribe to.
+</ParamField>
+
+<ParamField body="successUrl" type="string" required>
+  URL to redirect to after successful payment.
+</ParamField>
+
+<ParamField body="cancelUrl" type="string" required>
+  URL to redirect to if the user cancels.
+</ParamField>
+
+### Response: `CheckoutResponse`
+
+<ResponseField name="checkoutUrl" type="string">
+  Stripe Checkout session URL. Redirect the user here.
+</ResponseField>
+
+---
+
+## billing.createPortal()
+
+Create a Stripe Billing Portal session for self-service subscription management (update payment method, cancel, view invoices).
+
+```typescript
+const portal = await grantex.billing.createPortal({
+  returnUrl: 'https://yourapp.com/settings',
+});
+
+console.log(portal.portalUrl);
+// → 'https://billing.stripe.com/p/session/...'
+// Redirect the user to this URL
+```
+
+### Parameters
+
+<ParamField body="returnUrl" type="string" required>
+  URL to redirect back to after the user finishes in the portal.
+</ParamField>
+
+### Response: `PortalResponse`
+
+<ResponseField name="portalUrl" type="string">
+  Stripe Billing Portal session URL. Redirect the user here.
+</ResponseField>
+
+---
+
+## Full example
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// Check current plan
+const subscription = await grantex.billing.getSubscription();
+
+if (subscription.plan === 'free') {
+  // Upgrade to pro
+  const { checkoutUrl } = await grantex.billing.createCheckout({
+    plan: 'pro',
+    successUrl: 'https://myapp.com/billing/success',
+    cancelUrl: 'https://myapp.com/billing/cancel',
+  });
+  // Redirect user to checkoutUrl
+} else {
+  // Open billing portal for management
+  const { portalUrl } = await grantex.billing.createPortal({
+    returnUrl: 'https://myapp.com/settings',
+  });
+  // Redirect user to portalUrl
+}
+```

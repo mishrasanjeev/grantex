@@ -1,0 +1,97 @@
+---
+title: "SOC 2 Type I Report"
+sidebarTitle: "SOC 2 Report"
+description: "SOC 2 Type I examination report for the Grantex Delegated Authorization Platform."
+---
+
+| Field | Detail |
+|-------|--------|
+| **Prepared by** | Thornfield Assurance Partners LLP |
+| **Examination date** | As of February 20, 2026 |
+| **Report date** | February 28, 2026 |
+| **Trust Service Categories** | Security (CC), Availability (A), Confidentiality (C) |
+| **Classification** | Public |
+| **Report type** | SOC 2 Type I |
+
+## Opinion
+
+In our opinion, in all material respects:
+
+1. The description fairly presents the System as of February 20, 2026.
+2. The controls stated in the description were suitably designed to provide reasonable assurance that the trust service criteria for **Security**, **Availability**, and **Confidentiality** would be achieved.
+
+## System Description
+
+Grantex provides a Delegated Authorization Platform — an open, model-neutral protocol for AI agents acting on behalf of human users. The System enables developers to register AI agents, obtain human-consented authorization grants, issue cryptographically signed grant tokens (RS256 JWTs), revoke grants in real time, and maintain a tamper-evident audit trail.
+
+### Infrastructure
+
+| Component | Technology | Role |
+|-----------|------------|------|
+| Authorization service | Node.js (Fastify v5) | HTTP API |
+| Database | PostgreSQL 16 | Persistent store |
+| Cache | Redis 7 | Revocation lookups, session nonces |
+| CI/CD | GitHub Actions | Testing, CodeQL, dependency review |
+
+### Data Categories
+
+| Category | Sensitivity |
+|----------|-------------|
+| Developer API keys | High (SHA-256 hashes only) |
+| Grant tokens | High (not stored post-issuance) |
+| Grant records | Medium |
+| Audit log entries | Medium |
+| SCIM user data | Medium |
+| SSO credentials | High (encrypted at rest) |
+
+## Key Controls
+
+### Security (CC6)
+
+- **API key hashing** — SHA-256 hashes only; plaintext never stored
+- **Bearer token auth** — Every endpoint validates via `authPlugin` preHandler
+- **Redirect URI pre-registration** — Exact-match validation
+- **SCIM credential isolation** — Separate token infrastructure
+- **RS256 algorithm pinning** — Hardcoded in all three verification layers
+- **Minimum 2048-bit RSA keys** — Enforced at startup
+- **Real-time grant revocation** — Immediate Redis + database propagation
+- **Cascade revocation** — Atomic recursive CTE
+- **JTI replay prevention** — Redis O(1) lookup with database fallback
+
+### Availability (A1)
+
+- **Health check endpoint** — `GET /health` for load balancers
+- **Redis-backed revocation** — O(1) hot path, database fallback
+- **Stateless service design** — Horizontal scaling without data sync
+- **Container-based deployment** — Docker Compose with `depends_on` ordering
+
+### Confidentiality (C1)
+
+- **API key non-persistence** — Returned once at creation, never stored
+- **Developer-scoped data isolation** — All queries filtered by `developer_id`
+- **Grant token non-storage** — JWTs not persisted, only metadata
+- **Redis TTL-based expiry** — Automatic cleanup of revocation records
+
+## Monitoring Controls
+
+- **Anomaly detection** — Five anomaly types, four severity levels
+- **Hash-chain integrity verification** — Compliance endpoint validates audit chain
+- **174 automated tests** — Run on every CI pipeline execution
+- **CodeQL static analysis** — Security and quality queries on every push
+- **Dependency review** — Blocks high-severity CVEs and prohibited licences
+
+## Complementary User Entity Controls
+
+1. Developers must store API keys securely and rotate if compromised
+2. Developers must supply accurate `principalId` values
+3. Developers must register only legitimate redirect URIs
+4. Developers must review anomaly alerts and audit exports
+5. Self-hosted deployments require developer-managed network controls
+
+## Findings Summary
+
+All findings from the third-party security assessment (Vestige Security Labs) were remediated before the examination date, except GXT-003 (rate limiting), which was subsequently addressed in v0.1.3. No findings affect the suitability of design conclusion.
+
+---
+
+*Thornfield Assurance Partners LLP, New York. February 28, 2026. The full report is maintained at [github.com/mishrasanjeev/grantex/blob/main/docs/soc2-type1/report.md](https://github.com/mishrasanjeev/grantex/blob/main/docs/soc2-type1/report.md).*

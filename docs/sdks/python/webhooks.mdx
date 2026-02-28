@@ -1,0 +1,167 @@
+---
+title: "Webhooks"
+sidebarTitle: "Webhooks"
+description: "Register webhook endpoints, receive event notifications, and verify webhook signatures with the Grantex Python SDK."
+---
+
+## Overview
+
+Webhooks allow your application to receive real-time notifications when events occur in Grantex. The `webhooks` client manages webhook endpoint registrations, and the `verify_webhook_signature()` function validates incoming payloads.
+
+Access the webhooks client via `client.webhooks`.
+
+## Create
+
+Register a new webhook endpoint that will receive event notifications:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    webhook = client.webhooks.create(
+        url="https://myapp.com/webhooks/grantex",
+        events=["grant.created", "grant.revoked", "token.issued"],
+    )
+
+    print(f"Webhook ID: {webhook.id}")
+    print(f"URL: {webhook.url}")
+    print(f"Events: {webhook.events}")
+    print(f"Secret: {webhook.secret}")  # Store this securely!
+```
+
+### Parameters
+
+All parameters are keyword-only.
+
+| Parameter | Type        | Required | Description                                   |
+|-----------|-------------|----------|-----------------------------------------------|
+| `url`     | `str`       | Yes      | The HTTPS URL that will receive webhook events. |
+| `events`  | `list[str]` | Yes      | The event types to subscribe to.              |
+
+### Returns
+
+A `WebhookEndpointWithSecret` dataclass. The `secret` field is only returned at creation time -- store it securely for signature verification.
+
+### Supported Events
+
+| Event            | Description                             |
+|------------------|-----------------------------------------|
+| `grant.created`  | A new grant has been issued.            |
+| `grant.revoked`  | A grant has been revoked.               |
+| `token.issued`   | A new grant token has been issued.      |
+
+## List
+
+List all registered webhook endpoints:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.webhooks.list()
+
+    for webhook in result.webhooks:
+        print(f"  {webhook.id}: {webhook.url} -> {webhook.events}")
+```
+
+### ListWebhooksResponse
+
+| Field      | Type                          | Description                     |
+|------------|-------------------------------|---------------------------------|
+| `webhooks` | `tuple[WebhookEndpoint, ...]` | The list of webhook endpoints.  |
+
+### WebhookEndpoint
+
+| Field        | Type              | Description                         |
+|--------------|-------------------|-------------------------------------|
+| `id`         | `str`             | Unique webhook endpoint identifier. |
+| `url`        | `str`             | The webhook URL.                    |
+| `events`     | `tuple[str, ...]` | Subscribed event types.             |
+| `created_at` | `str`             | ISO 8601 creation timestamp.        |
+
+## Delete
+
+Remove a webhook endpoint:
+
+```python
+client.webhooks.delete("wh_abc123")
+# Returns None on success
+```
+
+## Verify Webhook Signatures
+
+When your server receives a webhook payload, verify the signature to ensure it was sent by Grantex and has not been tampered with.
+
+### Import
+
+```python
+from grantex import verify_webhook_signature
+```
+
+### Usage
+
+```python
+from grantex import verify_webhook_signature
+
+# In your webhook handler:
+def handle_webhook(request):
+    body = request.body          # Raw request body (str or bytes)
+    signature = request.headers["X-Grantex-Signature"]
+    secret = "whsec_..."         # The secret from webhook creation
+
+    if verify_webhook_signature(body, signature, secret):
+        event = json.loads(body)
+        print(f"Received event: {event['type']}")
+        # Process the event
+    else:
+        print("Invalid signature -- rejecting")
+        return 403
+```
+
+### Parameters
+
+| Parameter   | Type            | Description                                                |
+|-------------|-----------------|------------------------------------------------------------|
+| `payload`   | `str \| bytes`  | The raw request body received from Grantex.                |
+| `signature` | `str`           | The value of the `X-Grantex-Signature` header.             |
+| `secret`    | `str`           | The webhook secret returned when the endpoint was created. |
+
+### Returns
+
+`True` if the signature is valid, `False` otherwise.
+
+### How It Works
+
+The signature is computed as `sha256=<hex-digest>` using HMAC-SHA256 with the webhook secret as the key and the raw request body as the message. The verification uses constant-time comparison to prevent timing attacks.
+
+## Full Example
+
+```python
+import json
+from grantex import Grantex, verify_webhook_signature
+
+# 1. Register a webhook endpoint
+with Grantex(api_key="gx_live_...") as client:
+    webhook = client.webhooks.create(
+        url="https://myapp.com/webhooks/grantex",
+        events=["grant.created", "grant.revoked"],
+    )
+    secret = webhook.secret  # Store securely
+
+# 2. In your webhook handler (e.g. Flask, FastAPI, Django)
+def webhook_handler(request):
+    body = request.body
+    signature = request.headers["X-Grantex-Signature"]
+
+    if not verify_webhook_signature(body, signature, secret):
+        return {"error": "Invalid signature"}, 403
+
+    event = json.loads(body)
+
+    if event["type"] == "grant.created":
+        print(f"New grant: {event['data']['grantId']}")
+    elif event["type"] == "grant.revoked":
+        print(f"Grant revoked: {event['data']['grantId']}")
+
+    return {"ok": True}, 200
+```

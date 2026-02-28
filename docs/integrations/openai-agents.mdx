@@ -1,0 +1,65 @@
+---
+title: "OpenAI Agents SDK"
+sidebarTitle: "OpenAI Agents"
+description: "Scope-enforced FunctionTool wrappers for the OpenAI Agents SDK."
+---
+
+## Install
+
+```bash
+pip install grantex-openai-agents
+```
+
+OpenAI Agents SDK is a peer dependency:
+
+```bash
+pip install openai-agents
+```
+
+## Quick Start
+
+```python
+from grantex_openai_agents import create_grantex_tool
+
+tool = create_grantex_tool(
+    name="read_calendar",
+    description="Read upcoming calendar events",
+    grant_token=grant_token,       # JWT from Grantex authorization flow
+    required_scope="calendar:read",
+    func=get_calendar_events,
+)
+
+# Use with any OpenAI Agents SDK agent
+from agents import Agent
+agent = Agent(name="assistant", tools=[tool])
+```
+
+If the grant token doesn't include the required scope, `create_grantex_tool` raises a `PermissionError` immediately — the tool is never created.
+
+## API Reference
+
+### `create_grantex_tool()`
+
+Creates an OpenAI Agents SDK `FunctionTool` with offline scope enforcement.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `str` | Tool name |
+| `description` | `str` | Tool description |
+| `grant_token` | `str` | JWT grant token from Grantex |
+| `required_scope` | `str` | Scope that must be present in the token |
+| `func` | `Callable[..., str]` | The function to wrap |
+
+### `get_tool_scopes(grant_token)`
+
+Returns the scopes embedded in a grant token (offline, no network call).
+
+### `decode_jwt_payload(token)`
+
+Decodes the payload of a JWT without verifying the signature. Useful for inspecting token claims.
+
+## Requirements
+
+- Python 3.9+
+- `grantex` >= 0.1.0
+- `openai-agents` >= 0.0.3 (peer dependency)

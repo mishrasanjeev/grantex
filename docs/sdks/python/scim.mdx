@@ -1,0 +1,226 @@
+---
+title: "SCIM 2.0"
+sidebarTitle: "SCIM"
+description: "Provision and manage users via SCIM 2.0, and manage SCIM bearer tokens with the Grantex Python SDK."
+---
+
+## Overview
+
+The `scim` client implements the SCIM 2.0 protocol for automated user provisioning. It supports both SCIM token management (for authenticating your identity provider) and full SCIM 2.0 user lifecycle operations.
+
+Access the SCIM client via `client.scim`.
+
+## Token Management
+
+SCIM tokens authenticate your identity provider (IdP) when it provisions users. Tokens are bearer tokens -- the raw secret is only returned once at creation time.
+
+### Create Token
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    scim_token = client.scim.create_token("Okta Production")
+
+    print(f"Token ID: {scim_token.id}")
+    print(f"Label: {scim_token.label}")
+    print(f"Token: {scim_token.token}")  # Store securely -- shown only once
+    print(f"Created at: {scim_token.created_at}")
+```
+
+#### ScimTokenWithSecret
+
+| Field          | Type          | Description                                     |
+|----------------|---------------|-------------------------------------------------|
+| `id`           | `str`         | Unique token identifier.                        |
+| `label`        | `str`         | Human-readable label.                           |
+| `token`        | `str`         | The bearer token secret (only returned at creation). |
+| `created_at`   | `str`         | ISO 8601 creation timestamp.                    |
+| `last_used_at` | `str \| None` | ISO 8601 timestamp of last use (or `None`).     |
+
+### List Tokens
+
+```python
+result = client.scim.list_tokens()
+
+for token in result.tokens:
+    print(f"  {token.id}: {token.label} (created {token.created_at})")
+```
+
+#### ListScimTokensResponse
+
+| Field    | Type                  | Description                 |
+|----------|-----------------------|-----------------------------|
+| `tokens` | `tuple[ScimToken, ...]` | The list of SCIM tokens (without secrets). |
+
+#### ScimToken
+
+| Field          | Type          | Description                            |
+|----------------|---------------|----------------------------------------|
+| `id`           | `str`         | Unique token identifier.               |
+| `label`        | `str`         | Human-readable label.                  |
+| `created_at`   | `str`         | ISO 8601 creation timestamp.           |
+| `last_used_at` | `str \| None` | ISO 8601 timestamp of last use.        |
+
+### Revoke Token
+
+```python
+client.scim.revoke_token("scim_tok_abc123")
+# Returns None on success
+```
+
+## User Operations
+
+SCIM 2.0 user operations support the full user lifecycle: create, read, update (full and partial), list, and delete.
+
+### List Users
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.scim.list_users(start_index=1, count=25)
+
+    print(f"Total results: {result.total_results}")
+    print(f"Start index: {result.start_index}")
+    print(f"Items per page: {result.items_per_page}")
+    for user in result.resources:
+        print(f"  {user.user_name} (active: {user.active})")
+```
+
+#### Parameters
+
+| Parameter     | Type          | Required | Description                              |
+|---------------|---------------|----------|------------------------------------------|
+| `start_index` | `int \| None` | No       | 1-based index of the first result.       |
+| `count`       | `int \| None` | No       | Maximum number of results to return.     |
+
+Both parameters are keyword-only.
+
+#### ScimListResponse
+
+| Field            | Type                  | Description                       |
+|------------------|-----------------------|-----------------------------------|
+| `total_results`  | `int`                 | Total number of matching users.   |
+| `start_index`    | `int`                 | 1-based index of the first result.|
+| `items_per_page` | `int`                 | Number of results per page.       |
+| `resources`      | `tuple[ScimUser, ...]`| The list of users.                |
+
+### Create User
+
+```python
+from grantex import Grantex, CreateScimUserParams
+
+with Grantex(api_key="gx_live_...") as client:
+    user = client.scim.create_user(CreateScimUserParams(
+        user_name="alice@example.com",
+        display_name="Alice Smith",
+        external_id="ext_12345",
+        emails=[{"value": "alice@example.com", "primary": True}],
+        active=True,
+    ))
+
+    print(f"User ID: {user.id}")
+    print(f"Username: {user.user_name}")
+    print(f"Active: {user.active}")
+```
+
+#### CreateScimUserParams
+
+| Field          | Type                         | Required | Default | Description                        |
+|----------------|------------------------------|----------|---------|------------------------------------|
+| `user_name`    | `str`                        | Yes      | --      | The user's username (typically email). |
+| `display_name` | `str \| None`                | No       | `None`  | Display name.                      |
+| `external_id`  | `str \| None`                | No       | `None`  | External ID from the IdP.         |
+| `emails`       | `list[dict[str, Any]] \| None` | No     | `None`  | List of email objects.             |
+| `active`       | `bool`                       | No       | `True`  | Whether the user is active.        |
+
+### Get User
+
+```python
+user = client.scim.get_user("scim_user_abc123")
+
+print(f"Username: {user.user_name}")
+print(f"Display name: {user.display_name}")
+print(f"Active: {user.active}")
+print(f"Emails: {[(e.value, e.primary) for e in user.emails]}")
+print(f"Created: {user.meta.created}")
+```
+
+### Replace User (PUT)
+
+Full replacement of a user's attributes:
+
+```python
+from grantex import Grantex, CreateScimUserParams
+
+with Grantex(api_key="gx_live_...") as client:
+    updated = client.scim.replace_user(
+        "scim_user_abc123",
+        CreateScimUserParams(
+            user_name="alice@example.com",
+            display_name="Alice Johnson",
+            active=True,
+        ),
+    )
+
+    print(f"Updated: {updated.display_name}")
+```
+
+### Update User (PATCH)
+
+Partial update using SCIM Operations:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    updated = client.scim.update_user(
+        "scim_user_abc123",
+        operations=[
+            {"op": "replace", "path": "displayName", "value": "Alice Johnson"},
+            {"op": "replace", "path": "active", "value": False},
+        ],
+    )
+
+    print(f"Display name: {updated.display_name}")
+    print(f"Active: {updated.active}")
+```
+
+### Delete User
+
+Deprovision a user:
+
+```python
+client.scim.delete_user("scim_user_abc123")
+# Returns None on success
+```
+
+## ScimUser Type
+
+The `ScimUser` frozen dataclass has the following fields:
+
+| Field          | Type                  | Description                          |
+|----------------|-----------------------|--------------------------------------|
+| `id`           | `str`                 | Unique user identifier.              |
+| `user_name`    | `str`                 | The user's username.                 |
+| `active`       | `bool`                | Whether the user is active.          |
+| `emails`       | `tuple[ScimEmail, ...]` | The user's email addresses.        |
+| `meta`         | `ScimUserMeta`        | SCIM metadata (timestamps, type).    |
+| `external_id`  | `str \| None`         | External ID from the IdP.           |
+| `display_name` | `str \| None`         | Display name.                        |
+
+### ScimEmail
+
+| Field     | Type   | Description                           |
+|-----------|--------|---------------------------------------|
+| `value`   | `str`  | The email address.                    |
+| `primary` | `bool` | Whether this is the primary email.    |
+
+### ScimUserMeta
+
+| Field           | Type  | Description                          |
+|-----------------|-------|--------------------------------------|
+| `resource_type` | `str` | The SCIM resource type.              |
+| `created`       | `str` | ISO 8601 creation timestamp.         |
+| `last_modified` | `str` | ISO 8601 last-modified timestamp.    |

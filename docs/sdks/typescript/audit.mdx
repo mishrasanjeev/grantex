@@ -1,0 +1,219 @@
+---
+title: "Audit"
+sidebarTitle: "Audit"
+description: "Log agent actions and query the tamper-evident audit trail."
+---
+
+## Overview
+
+The `audit` sub-client provides a tamper-evident, append-only audit trail for all agent actions. Each entry is hash-chained to the previous entry, providing cryptographic integrity guarantees.
+
+```typescript
+await grantex.audit.log({
+  agentId: agent.id,
+  grantId: token.grantId,
+  action: 'email.sent',
+  status: 'success',
+  metadata: { to: 'user@example.com', subject: 'Flight confirmation' },
+});
+```
+
+---
+
+## audit.log()
+
+Log an agent action to the audit trail.
+
+```typescript
+const entry = await grantex.audit.log({
+  agentId: 'ag_01HXYZ...',
+  grantId: 'grnt_01HXYZ...',
+  action: 'payment.initiated',
+  status: 'success',
+  metadata: { amount: 420, currency: 'USD', merchant: 'Air India' },
+});
+
+console.log(entry.entryId);   // 'aud_01HXYZ...'
+console.log(entry.hash);      // SHA-256 hash of this entry
+console.log(entry.prevHash);  // Hash of the previous entry (null for the first)
+console.log(entry.timestamp); // '2026-02-28T12:00:00Z'
+```
+
+### Parameters
+
+<ParamField body="agentId" type="string" required>
+  The agent that performed the action.
+</ParamField>
+
+<ParamField body="grantId" type="string" required>
+  The grant under which the action was performed.
+</ParamField>
+
+<ParamField body="action" type="string" required>
+  A descriptive action identifier (e.g. `'email.sent'`, `'payment.initiated'`, `'file.uploaded'`).
+</ParamField>
+
+<ParamField body="metadata" type="Record<string, unknown>">
+  Arbitrary metadata to attach to the audit entry.
+</ParamField>
+
+<ParamField body="status" type="string">
+  Action outcome: `'success'`, `'failure'`, or `'blocked'`.
+</ParamField>
+
+### Response: `AuditEntry`
+
+<ResponseField name="entryId" type="string">
+  Unique audit entry identifier.
+</ResponseField>
+
+<ResponseField name="agentId" type="string">
+  The agent that performed the action.
+</ResponseField>
+
+<ResponseField name="agentDid" type="string">
+  The agent's decentralized identifier.
+</ResponseField>
+
+<ResponseField name="grantId" type="string">
+  The associated grant ID.
+</ResponseField>
+
+<ResponseField name="principalId" type="string">
+  The user who authorized the grant.
+</ResponseField>
+
+<ResponseField name="action" type="string">
+  The action identifier.
+</ResponseField>
+
+<ResponseField name="metadata" type="Record<string, unknown>">
+  Arbitrary metadata attached to the entry.
+</ResponseField>
+
+<ResponseField name="hash" type="string">
+  SHA-256 hash of this entry, used for chain integrity verification.
+</ResponseField>
+
+<ResponseField name="prevHash" type="string | null">
+  Hash of the previous entry in the chain. `null` for the first entry.
+</ResponseField>
+
+<ResponseField name="timestamp" type="string">
+  ISO 8601 timestamp when the action was logged.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Action outcome: `'success'`, `'failure'`, or `'blocked'`.
+</ResponseField>
+
+---
+
+## audit.list()
+
+Query audit entries with optional filters.
+
+```typescript
+const result = await grantex.audit.list({
+  agentId: 'ag_01HXYZ...',
+  action: 'payment.initiated',
+  since: '2026-02-01T00:00:00Z',
+  until: '2026-02-28T23:59:59Z',
+  page: 1,
+  pageSize: 50,
+});
+
+console.log(result.total);  // 128
+for (const entry of result.entries) {
+  console.log(`[${entry.timestamp}] ${entry.action} - ${entry.status}`);
+}
+```
+
+### Parameters
+
+<ParamField body="agentId" type="string">
+  Filter by agent ID.
+</ParamField>
+
+<ParamField body="grantId" type="string">
+  Filter by grant ID.
+</ParamField>
+
+<ParamField body="principalId" type="string">
+  Filter by principal (user) ID.
+</ParamField>
+
+<ParamField body="action" type="string">
+  Filter by action identifier.
+</ParamField>
+
+<ParamField body="since" type="string">
+  ISO 8601 start date for the query range.
+</ParamField>
+
+<ParamField body="until" type="string">
+  ISO 8601 end date for the query range.
+</ParamField>
+
+<ParamField body="page" type="number">
+  Page number (1-indexed).
+</ParamField>
+
+<ParamField body="pageSize" type="number">
+  Number of entries per page.
+</ParamField>
+
+### Response: `ListAuditResponse`
+
+<ResponseField name="entries" type="AuditEntry[]">
+  Array of audit entry objects.
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total number of entries matching the filters.
+</ResponseField>
+
+<ResponseField name="page" type="number">
+  Current page number.
+</ResponseField>
+
+<ResponseField name="pageSize" type="number">
+  Number of entries per page.
+</ResponseField>
+
+---
+
+## audit.get()
+
+Retrieve a single audit entry by its ID.
+
+```typescript
+const entry = await grantex.audit.get('aud_01HXYZ...');
+
+console.log(entry.action);   // 'payment.initiated'
+console.log(entry.hash);     // 'a1b2c3d4e5f6...'
+console.log(entry.prevHash); // '9z8y7x6w5v4u...'
+console.log(entry.metadata); // { amount: 420, currency: 'USD' }
+```
+
+### Parameters
+
+<ParamField body="entryId" type="string" required>
+  The audit entry ID to retrieve.
+</ParamField>
+
+### Response
+
+Returns an `AuditEntry` object.
+
+## Chain integrity
+
+Each audit entry contains a `hash` of its contents and a `prevHash` linking it to the previous entry. This creates a tamper-evident chain similar to a blockchain. If any entry is modified after the fact, the hash chain breaks.
+
+Use the [Compliance](/sdks/typescript/compliance) evidence pack to verify chain integrity programmatically:
+
+```typescript
+const pack = await grantex.compliance.evidencePack({ framework: 'soc2' });
+console.log(pack.chainIntegrity.valid);          // true
+console.log(pack.chainIntegrity.checkedEntries);  // 1024
+```

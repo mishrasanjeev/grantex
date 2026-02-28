@@ -1,0 +1,79 @@
+---
+title: "LangChain Agent"
+sidebarTitle: "LangChain"
+description: "Scoped tools with automatic audit logging using LangChain."
+---
+
+## What it does
+
+This example demonstrates the `@grantex/langchain` integration by building a LangChain agent with Grantex-scoped tools:
+
+1. **Register an agent** and obtain a grant token via the sandbox flow
+2. **Create scoped tools** using `createGrantexTool` -- each tool is bound to a specific scope (`calendar:read`, `email:send`)
+3. **Attach a `GrantexAuditHandler`** that automatically logs every tool invocation to the Grantex audit trail
+4. **Invoke tools** directly (or via an LLM if `OPENAI_API_KEY` is set)
+5. **Demonstrate scope enforcement** -- attempting to create a tool with `account:delete` (a scope not in the grant) throws immediately
+6. **Inspect the audit trail** to see the logged actions
+
+## Prerequisites
+
+- **Node.js 18+**
+- **Docker** (Docker Desktop or Docker Engine with Compose)
+
+## Run
+
+Start the local Grantex stack from the repository root:
+
+```bash
+docker compose up --build
+```
+
+In a separate terminal, run the example:
+
+```bash
+cd examples/langchain-agent
+npm install
+npm start
+```
+
+To use a real LLM for tool selection instead of direct invocation, set `OPENAI_API_KEY`:
+
+```bash
+OPENAI_API_KEY=sk-... npm start
+```
+
+## Expected output
+
+```text
+Agent registered: ag_01HXYZ...
+Grant token received, grantId: grnt_01HXYZ...
+Tools created: read_calendar, send_email
+Audit handler configured
+
+--- Invoking read_calendar ---
+Result: {"events":[{"title":"Team standup","time":"9:00 AM","query":"today"},{"title":"Design review","time":"2:00 PM","query":"today"}]}
+
+--- Invoking send_email ---
+Result: Email sent successfully: "Meeting summary: standup at 9 AM, design review at 2 PM"
+
+--- Testing scope enforcement ---
+Scope check blocked unauthorized tool: Grant token does not include required scope "account:delete". Granted scopes: calendar:read, email:send
+
+--- Audit trail ---
+  [success] read_calendar — 2026-02-28T12:00:00.000Z
+  [success] send_email — 2026-02-28T12:00:01.000Z
+
+Done! LangChain integration demo complete.
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GRANTEX_URL` | `http://localhost:3001` | Base URL of the Grantex auth service |
+| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key. Use a sandbox key for auto-approval |
+| `OPENAI_API_KEY` | _(none)_ | Optional. Set to use a real LLM for tool selection |
+
+## Source code
+
+The full source is in [`examples/langchain-agent/src/index.ts`](https://github.com/mishrasanjeev/grantex/tree/main/examples/langchain-agent).

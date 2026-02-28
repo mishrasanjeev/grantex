@@ -1,0 +1,70 @@
+---
+title: "Google ADK"
+sidebarTitle: "Google ADK"
+description: "Scope-enforced tools using Google Agent Development Kit."
+---
+
+## What it does
+
+This example demonstrates the `grantex-adk` integration by building scope-enforced tools for Google Agent Development Kit (ADK):
+
+1. **Register an agent** and obtain a grant token via the sandbox flow
+2. **Create scoped tools** using `create_grantex_tool` -- each tool returns a plain function that can be used directly with Google ADK agents (`calendar:read`, `email:send`)
+3. **Invoke tools** directly as plain functions (in a full ADK agent, Gemini would select and call these tools)
+4. **Demonstrate scope enforcement** -- attempting to create a tool with `account:delete` (a scope not in the grant) raises a `PermissionError`
+5. **Inspect the audit trail** to see the logged actions
+
+## Prerequisites
+
+- **Python 3.9+**
+- **Docker** (Docker Desktop or Docker Engine with Compose)
+
+## Run
+
+Start the local Grantex stack from the repository root:
+
+```bash
+docker compose up --build
+```
+
+In a separate terminal, run the example:
+
+```bash
+cd examples/google-adk
+pip install -r requirements.txt
+python main.py
+```
+
+## Expected output
+
+```text
+Agent registered: ag_01HXYZ...
+Grant token received, grantId: grnt_01HXYZ...
+Tools created: read_calendar, send_email
+
+--- Invoking read_calendar ---
+Result: {"events": [{"title": "Team standup", "time": "9:00 AM", "query": "today"}, {"title": "Design review", "time": "2:00 PM", "query": "today"}]}
+
+--- Invoking send_email ---
+Result: Email sent successfully: "Meeting summary: standup at 9 AM, design review at 2 PM"
+
+--- Testing scope enforcement ---
+Scope check blocked unauthorized tool: Grant token does not include required scope "account:delete". Granted scopes: calendar:read, email:send
+
+--- Audit trail ---
+  [success] read_calendar — 2026-02-28T12:00:00.000Z
+  [success] send_email — 2026-02-28T12:00:01.000Z
+
+Done! Google ADK integration demo complete.
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GRANTEX_URL` | `http://localhost:3001` | Base URL of the Grantex auth service |
+| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key. Use a sandbox key for auto-approval |
+
+## Source code
+
+The full source is in [`examples/google-adk/main.py`](https://github.com/mishrasanjeev/grantex/tree/main/examples/google-adk).

@@ -1,0 +1,69 @@
+---
+title: "Google ADK"
+sidebarTitle: "Google ADK"
+description: "Scope-enforced plain function tools for Google Agent Development Kit."
+---
+
+## Install
+
+```bash
+pip install grantex-adk
+```
+
+Google ADK is a peer dependency:
+
+```bash
+pip install google-adk
+```
+
+## Quick Start
+
+```python
+from grantex_adk import create_grantex_tool
+from google.adk import Agent
+
+read_calendar = create_grantex_tool(
+    name="read_calendar",
+    description="Read upcoming calendar events",
+    grant_token=grant_token,       # JWT from Grantex authorization flow
+    required_scope="calendar:read",
+    func=get_calendar_events,
+)
+
+# Google ADK uses plain functions as tools
+agent = Agent(
+    model="gemini-2.0-flash",
+    name="assistant",
+    tools=[read_calendar],
+)
+```
+
+If the grant token doesn't include the required scope, `create_grantex_tool` raises a `PermissionError` immediately.
+
+## API Reference
+
+### `create_grantex_tool()`
+
+Creates a plain function with the correct `__name__` and `__doc__` for ADK tool discovery, with offline scope enforcement.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `str` | Tool name (becomes `__name__`) |
+| `description` | `str` | Tool description (becomes `__doc__`) |
+| `grant_token` | `str` | JWT grant token from Grantex |
+| `required_scope` | `str` | Scope that must be present in the token |
+| `func` | `Callable[..., str]` | The function to wrap |
+
+### `get_tool_scopes(grant_token)`
+
+Returns the scopes embedded in a grant token (offline, no network call).
+
+### `decode_jwt_payload(token)`
+
+Decodes the payload of a JWT without verifying the signature.
+
+## Requirements
+
+- Python 3.9+
+- `grantex` >= 0.1.0
+- `google-adk` >= 0.2.0 (peer dependency)

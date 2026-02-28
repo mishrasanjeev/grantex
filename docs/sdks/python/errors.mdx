@@ -1,0 +1,210 @@
+---
+title: "Error Handling"
+sidebarTitle: "Errors"
+description: "Handle API errors, authentication failures, token verification errors, and network issues in the Grantex Python SDK."
+---
+
+## Overview
+
+The Grantex Python SDK uses a structured exception hierarchy. All exceptions inherit from `GrantexError`, so you can catch all SDK errors with a single handler or handle specific error types individually.
+
+## Exception Hierarchy
+
+```
+GrantexError (base)
+├── GrantexApiError (non-2xx HTTP response)
+│   └── GrantexAuthError (401 or 403)
+├── GrantexTokenError (JWT verification / decoding failure)
+└── GrantexNetworkError (timeout, connection error)
+```
+
+## Import
+
+```python
+from grantex import (
+    GrantexError,
+    GrantexApiError,
+    GrantexAuthError,
+    GrantexTokenError,
+    GrantexNetworkError,
+)
+```
+
+## GrantexError
+
+The base exception for all Grantex SDK errors. Catch this to handle any SDK error:
+
+```python
+from grantex import Grantex, GrantexError
+
+with Grantex(api_key="gx_live_...") as client:
+    try:
+        agent = client.agents.get("agt_nonexistent")
+    except GrantexError as e:
+        print(f"Something went wrong: {e}")
+```
+
+## GrantexApiError
+
+Raised when the Grantex API returns a non-2xx HTTP response. Provides access to the HTTP status code, response body, and request ID.
+
+```python
+from grantex import Grantex, GrantexApiError
+
+with Grantex(api_key="gx_live_...") as client:
+    try:
+        agent = client.agents.get("agt_nonexistent")
+    except GrantexApiError as e:
+        print(f"Status code: {e.status_code}")
+        print(f"Message: {e}")
+        print(f"Response body: {e.body}")
+        print(f"Request ID: {e.request_id}")
+```
+
+### Attributes
+
+| Attribute    | Type          | Description                                          |
+|-------------|---------------|------------------------------------------------------|
+| `status_code`| `int`         | The HTTP status code (e.g. `404`, `422`, `500`).     |
+| `body`       | `Any`         | The parsed response body (usually a dict) or raw text. |
+| `request_id` | `str \| None` | The `X-Request-Id` header value (if present).        |
+
+The error message is extracted from the response body's `message` or `error` field, falling back to `"HTTP {status_code}"`.
+
+## GrantexAuthError
+
+A subclass of `GrantexApiError` raised specifically for `401` (Unauthorized) and `403` (Forbidden) responses. Typically indicates an invalid or expired API key.
+
+```python
+from grantex import Grantex, GrantexAuthError
+
+with Grantex(api_key="gx_invalid_key") as client:
+    try:
+        agents = client.agents.list()
+    except GrantexAuthError as e:
+        print(f"Authentication failed ({e.status_code}): {e}")
+        # Handle: refresh API key, prompt user, etc.
+```
+
+`GrantexAuthError` has the same attributes as `GrantexApiError`.
+
+## GrantexTokenError
+
+Raised when JWT verification or decoding fails. This occurs when using `verify_grant_token()` for offline verification or when `grants.verify()` cannot decode the returned token.
+
+```python
+from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenError
+
+try:
+    grant = verify_grant_token(
+        "invalid.jwt.token",
+        VerifyGrantTokenOptions(
+            jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+        ),
+    )
+except GrantexTokenError as e:
+    print(f"Token error: {e}")
+```
+
+Common causes:
+- Token uses an algorithm other than RS256
+- Token signature is invalid
+- Token is expired
+- Required claims are missing (`jti`, `sub`, `agt`, `dev`, `scp`, `iat`, `exp`)
+- Required scopes are not present
+- JWKS endpoint is unreachable
+- No matching RSA key found in the JWKS
+
+## GrantexNetworkError
+
+Raised on network-level failures such as timeouts, DNS resolution errors, or connection refused. The original exception is available via the `cause` attribute.
+
+```python
+from grantex import Grantex, GrantexNetworkError
+
+with Grantex(api_key="gx_live_...", timeout=5.0) as client:
+    try:
+        agents = client.agents.list()
+    except GrantexNetworkError as e:
+        print(f"Network error: {e}")
+        print(f"Original exception: {e.cause}")
+```
+
+### Attributes
+
+| Attribute | Type                   | Description                                 |
+|-----------|------------------------|---------------------------------------------|
+| `cause`   | `BaseException \| None`| The underlying `httpx` exception that caused the failure. |
+
+## Best Practices
+
+### Catch Specific Errors First
+
+Order your `except` clauses from most specific to least specific:
+
+```python
+from grantex import (
+    Grantex,
+    GrantexAuthError,
+    GrantexApiError,
+    GrantexNetworkError,
+    GrantexError,
+)
+
+with Grantex(api_key="gx_live_...") as client:
+    try:
+        agent = client.agents.get("agt_abc123")
+    except GrantexAuthError as e:
+        # 401/403 -- invalid or expired API key
+        print(f"Auth failed: {e}")
+    except GrantexApiError as e:
+        # Other HTTP errors (404, 422, 500, etc.)
+        print(f"API error {e.status_code}: {e}")
+    except GrantexNetworkError as e:
+        # Timeout, connection refused, DNS failure
+        print(f"Network error: {e}")
+    except GrantexError as e:
+        # Catch-all for any other SDK error
+        print(f"Unexpected error: {e}")
+```
+
+### Retry on Transient Errors
+
+Network errors and certain HTTP status codes (429, 502, 503, 504) are often transient and safe to retry:
+
+```python
+import time
+from grantex import Grantex, GrantexApiError, GrantexNetworkError
+
+def get_agent_with_retry(client, agent_id, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.agents.get(agent_id)
+        except GrantexNetworkError:
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(2 ** attempt)  # Exponential backoff
+        except GrantexApiError as e:
+            if e.status_code in (429, 502, 503, 504):
+                if attempt == max_retries - 1:
+                    raise
+                time.sleep(2 ** attempt)
+            else:
+                raise  # Non-retryable API error
+```
+
+### Use Request ID for Support
+
+When reporting issues, include the `request_id` from `GrantexApiError`:
+
+```python
+from grantex import Grantex, GrantexApiError
+
+with Grantex(api_key="gx_live_...") as client:
+    try:
+        client.agents.delete("agt_abc123")
+    except GrantexApiError as e:
+        print(f"Error: {e}")
+        if e.request_id:
+            print(f"Request ID for support: {e.request_id}")
+```

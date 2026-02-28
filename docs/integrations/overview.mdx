@@ -1,0 +1,59 @@
+---
+title: "Integrations"
+sidebarTitle: "Overview"
+description: "Grantex integrates with every major AI agent framework."
+---
+
+## Available Integrations
+
+<CardGroup cols={2}>
+  <Card title="MCP Server" icon="plug" href="/integrations/mcp">
+    13 tools for Claude Desktop, Cursor, and Windsurf.
+  </Card>
+  <Card title="LangChain" icon="link-horizontal" href="/integrations/langchain">
+    Scope-enforced tools and audit callbacks.
+  </Card>
+  <Card title="Vercel AI SDK" icon="bolt" href="/integrations/vercel-ai">
+    Zod-schema tools with scope checks at construction time.
+  </Card>
+  <Card title="AutoGen / OpenAI" icon="robot" href="/integrations/autogen">
+    Function calling with scope enforcement and registry.
+  </Card>
+  <Card title="CrewAI" icon="users" href="/integrations/crewai">
+    Python tools with scope enforcement and audit logging.
+  </Card>
+  <Card title="OpenAI Agents SDK" icon="microchip" href="/integrations/openai-agents">
+    FunctionTool wrapper with offline scope checks.
+  </Card>
+  <Card title="Google ADK" icon="brain" href="/integrations/google-adk">
+    Plain function tools for Google Agent Development Kit.
+  </Card>
+  <Card title="CLI" icon="terminal" href="/integrations/cli">
+    Manage agents, grants, and audit from your terminal.
+  </Card>
+</CardGroup>
+
+## At a Glance
+
+| Framework | Package | Install | Language |
+|-----------|---------|---------|----------|
+| MCP | `@grantex/mcp` | `npm install -g @grantex/mcp` | TypeScript |
+| LangChain | `@grantex/langchain` | `npm install @grantex/langchain` | TypeScript |
+| Vercel AI SDK | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | TypeScript |
+| AutoGen / OpenAI | `@grantex/autogen` | `npm install @grantex/autogen` | TypeScript |
+| CrewAI | `grantex-crewai` | `pip install grantex-crewai` | Python |
+| OpenAI Agents SDK | `grantex-openai-agents` | `pip install grantex-openai-agents` | Python |
+| Google ADK | `grantex-adk` | `pip install grantex-adk` | Python |
+| CLI | `@grantex/cli` | `npm install -g @grantex/cli` | TypeScript |
+
+## How Integrations Work
+
+Every integration follows the same pattern:
+
+1. **Wrap** your tool function with Grantex scope enforcement
+2. **Pass** a grant token (RS256 JWT) from the authorization flow
+3. **Specify** the required scope for the tool
+4. The integration **checks** the JWT's `scp` claim offline — no network call
+5. If the scope is missing, the tool **throws immediately** before your function runs
+
+This means scope enforcement is completely decoupled from the Grantex API — your agent's tools work even if the Grantex server is unreachable.

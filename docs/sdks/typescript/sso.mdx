@@ -1,0 +1,223 @@
+---
+title: "SSO (OIDC)"
+sidebarTitle: "SSO"
+description: "Configure OIDC single sign-on for your organization and handle login flows."
+---
+
+## Overview
+
+The `sso` sub-client configures and manages OIDC (OpenID Connect) single sign-on for your developer organization. It supports any OIDC-compliant identity provider (Okta, Azure AD, Google Workspace, Auth0, etc.).
+
+```typescript
+// Configure SSO
+const config = await grantex.sso.createConfig({
+  issuerUrl: 'https://accounts.google.com',
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret',
+  redirectUri: 'https://yourapp.com/sso/callback',
+});
+```
+
+---
+
+## sso.createConfig()
+
+Create or update the OIDC SSO configuration for your organization.
+
+```typescript
+const config = await grantex.sso.createConfig({
+  issuerUrl: 'https://accounts.google.com',
+  clientId: 'your-google-client-id',
+  clientSecret: 'your-google-client-secret',
+  redirectUri: 'https://yourapp.com/sso/callback',
+});
+
+console.log(config.issuerUrl);   // 'https://accounts.google.com'
+console.log(config.clientId);    // 'your-google-client-id'
+console.log(config.redirectUri); // 'https://yourapp.com/sso/callback'
+console.log(config.createdAt);   // '2026-02-28T12:00:00Z'
+console.log(config.updatedAt);   // '2026-02-28T12:00:00Z'
+```
+
+### Parameters
+
+<ParamField body="issuerUrl" type="string" required>
+  The OIDC issuer URL (e.g. `https://accounts.google.com`).
+</ParamField>
+
+<ParamField body="clientId" type="string" required>
+  OAuth 2.0 client ID from your identity provider.
+</ParamField>
+
+<ParamField body="clientSecret" type="string" required>
+  OAuth 2.0 client secret from your identity provider.
+</ParamField>
+
+<ParamField body="redirectUri" type="string" required>
+  The callback URL that your IdP redirects to after authentication.
+</ParamField>
+
+### Response: `SsoConfig`
+
+<ResponseField name="issuerUrl" type="string">
+  The OIDC issuer URL.
+</ResponseField>
+
+<ResponseField name="clientId" type="string">
+  The OAuth 2.0 client ID.
+</ResponseField>
+
+<ResponseField name="redirectUri" type="string">
+  The configured callback URL.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 creation timestamp.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 last-updated timestamp.
+</ResponseField>
+
+<Note>
+  The `clientSecret` is never returned in responses. It is stored securely on the server.
+</Note>
+
+---
+
+## sso.getConfig()
+
+Retrieve the current SSO configuration (without the client secret).
+
+```typescript
+const config = await grantex.sso.getConfig();
+
+console.log(config.issuerUrl);   // 'https://accounts.google.com'
+console.log(config.clientId);    // 'your-google-client-id'
+console.log(config.redirectUri); // 'https://yourapp.com/sso/callback'
+```
+
+### Response
+
+Returns an `SsoConfig` object.
+
+---
+
+## sso.deleteConfig()
+
+Remove the SSO configuration. After deletion, SSO login is disabled for the organization.
+
+```typescript
+await grantex.sso.deleteConfig();
+// Returns void -- SSO is now disabled
+```
+
+### Response
+
+Returns `void`.
+
+---
+
+## sso.getLoginUrl()
+
+Get the OIDC authorization URL to redirect the user to for SSO login.
+
+```typescript
+const login = await grantex.sso.getLoginUrl('dev_01HXYZ...');
+
+console.log(login.authorizeUrl);
+// → 'https://accounts.google.com/o/oauth2/v2/auth?client_id=...&redirect_uri=...&state=...'
+// Redirect the user to this URL
+```
+
+### Parameters
+
+<ParamField body="org" type="string" required>
+  The developer ID of the organization initiating the SSO login.
+</ParamField>
+
+### Response: `SsoLoginResponse`
+
+<ResponseField name="authorizeUrl" type="string">
+  The full OIDC authorization URL. Redirect the user here.
+</ResponseField>
+
+---
+
+## sso.handleCallback()
+
+Exchange the OIDC authorization code for user information after the identity provider redirects back.
+
+```typescript
+const result = await grantex.sso.handleCallback(code, state);
+
+console.log(result.email);       // 'alice@example.com'
+console.log(result.name);        // 'Alice Smith'
+console.log(result.sub);         // 'google-oauth2|12345'
+console.log(result.developerId); // 'dev_01HXYZ...'
+```
+
+### Parameters
+
+<ParamField body="code" type="string" required>
+  The authorization code from the IdP callback.
+</ParamField>
+
+<ParamField body="state" type="string" required>
+  The state parameter from the IdP callback (used for CSRF protection).
+</ParamField>
+
+### Response: `SsoCallbackResponse`
+
+<ResponseField name="email" type="string | null">
+  The user's email address from the IdP.
+</ResponseField>
+
+<ResponseField name="name" type="string | null">
+  The user's display name from the IdP.
+</ResponseField>
+
+<ResponseField name="sub" type="string | null">
+  The user's subject identifier from the IdP.
+</ResponseField>
+
+<ResponseField name="developerId" type="string">
+  The Grantex developer ID that the user has been mapped to.
+</ResponseField>
+
+---
+
+## Full SSO flow example
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+import express from 'express';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+const app = express();
+
+// Step 1: Configure SSO (one-time setup)
+await grantex.sso.createConfig({
+  issuerUrl: 'https://accounts.google.com',
+  clientId: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  redirectUri: 'https://yourapp.com/sso/callback',
+});
+
+// Step 2: Redirect user to SSO login
+app.get('/sso/login', async (req, res) => {
+  const { authorizeUrl } = await grantex.sso.getLoginUrl('dev_01HXYZ...');
+  res.redirect(authorizeUrl);
+});
+
+// Step 3: Handle the callback
+app.get('/sso/callback', async (req, res) => {
+  const { code, state } = req.query;
+  const result = await grantex.sso.handleCallback(code as string, state as string);
+
+  // User is authenticated
+  console.log(`Welcome, ${result.name} (${result.email})`);
+  // Create a session, redirect to dashboard, etc.
+  res.redirect('/dashboard');
+});
+```

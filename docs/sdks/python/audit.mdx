@@ -1,0 +1,147 @@
+---
+title: "Audit"
+sidebarTitle: "Audit"
+description: "Log, query, and retrieve tamper-evident audit entries for agent actions using the Grantex Python SDK."
+---
+
+## Overview
+
+The `audit` client provides a tamper-evident audit trail for agent actions. Every entry is hash-chained to the previous entry, making the log append-only and tamper-detectable.
+
+Access the audit client via `client.audit`.
+
+## Log
+
+Record an audit entry for an agent action:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    entry = client.audit.log(
+        agent_id="agt_abc123",
+        grant_id="grnt_xyz789",
+        action="file.read",
+        metadata={"path": "/documents/report.pdf", "size_bytes": 102400},
+        status="success",
+    )
+
+    print(f"Entry ID: {entry.entry_id}")
+    print(f"Hash: {entry.hash}")
+    print(f"Previous hash: {entry.prev_hash}")
+    print(f"Timestamp: {entry.timestamp}")
+```
+
+### Parameters
+
+All parameters are keyword-only.
+
+| Parameter  | Type                    | Required | Default     | Description                              |
+|------------|-------------------------|----------|-------------|------------------------------------------|
+| `agent_id` | `str`                   | Yes      | --          | The agent that performed the action.     |
+| `grant_id` | `str`                   | Yes      | --          | The grant under which the action was performed. |
+| `action`   | `str`                   | Yes      | --          | A label for the action (e.g. `"file.read"`). |
+| `metadata` | `dict[str, Any] \| None`| No       | `None`      | Additional context about the action.     |
+| `status`   | `str`                   | No       | `"success"` | The outcome (`"success"`, `"failure"`, `"blocked"`). |
+
+## List
+
+Query audit entries with optional filters:
+
+```python
+from grantex import Grantex, ListAuditParams
+
+with Grantex(api_key="gx_live_...") as client:
+    # List all entries
+    result = client.audit.list()
+    print(f"Total entries: {result.total}")
+
+    # List with filters
+    result = client.audit.list(ListAuditParams(
+        agent_id="agt_abc123",
+        action="file.read",
+        since="2026-01-01T00:00:00Z",
+        until="2026-02-01T00:00:00Z",
+        page=1,
+        page_size=50,
+    ))
+
+    for entry in result.entries:
+        print(f"  [{entry.timestamp}] {entry.action} - {entry.status}")
+```
+
+### ListAuditParams
+
+| Field          | Type          | Required | Description                                |
+|----------------|---------------|----------|--------------------------------------------|
+| `agent_id`     | `str \| None` | No       | Filter by agent ID.                       |
+| `grant_id`     | `str \| None` | No       | Filter by grant ID.                       |
+| `principal_id` | `str \| None` | No       | Filter by principal (user) ID.            |
+| `action`       | `str \| None` | No       | Filter by action label.                   |
+| `since`        | `str \| None` | No       | ISO 8601 start timestamp (inclusive).      |
+| `until`        | `str \| None` | No       | ISO 8601 end timestamp (exclusive).        |
+| `page`         | `int \| None` | No       | Page number for pagination.               |
+| `page_size`    | `int \| None` | No       | Number of results per page.               |
+
+### ListAuditResponse
+
+| Field       | Type                     | Description                        |
+|-------------|--------------------------|------------------------------------|
+| `entries`   | `tuple[AuditEntry, ...]` | The list of audit entries.         |
+| `total`     | `int`                    | Total number of matching entries.  |
+| `page`      | `int`                    | Current page number.               |
+| `page_size` | `int`                    | Number of entries per page.        |
+
+## Get
+
+Retrieve a single audit entry by its ID:
+
+```python
+entry = client.audit.get("aud_abc123")
+
+print(f"Action: {entry.action}")
+print(f"Agent: {entry.agent_id} ({entry.agent_did})")
+print(f"Grant: {entry.grant_id}")
+print(f"Principal: {entry.principal_id}")
+print(f"Hash: {entry.hash}")
+print(f"Previous hash: {entry.prev_hash}")
+print(f"Metadata: {entry.metadata}")
+```
+
+## AuditEntry Type
+
+The `AuditEntry` frozen dataclass has the following fields:
+
+| Field          | Type              | Description                                 |
+|----------------|-------------------|---------------------------------------------|
+| `entry_id`     | `str`             | Unique entry identifier.                    |
+| `agent_id`     | `str`             | The agent that performed the action.        |
+| `agent_did`    | `str`             | The agent's DID.                            |
+| `grant_id`     | `str`             | The grant under which the action occurred.  |
+| `principal_id` | `str`             | The authorizing user/principal.             |
+| `action`       | `str`             | The action label.                           |
+| `metadata`     | `dict[str, Any]`  | Additional context.                         |
+| `hash`         | `str`             | SHA-256 hash of this entry.                 |
+| `prev_hash`    | `str \| None`     | Hash of the previous entry (chain link).    |
+| `timestamp`    | `str`             | ISO 8601 timestamp of the action.           |
+| `status`       | `str`             | Outcome status.                             |
+
+## Hash Chain Integrity
+
+Each audit entry contains a `hash` and a `prev_hash` field. The `hash` is computed over the entry's contents, and `prev_hash` references the previous entry's hash. This creates a tamper-evident chain: modifying or deleting any entry breaks the chain for all subsequent entries.
+
+```python
+# Verify chain integrity by iterating entries
+result = client.audit.list()
+for i, entry in enumerate(result.entries):
+    if i == 0:
+        print(f"First entry: {entry.hash}")
+    else:
+        expected_prev = result.entries[i - 1].hash
+        if entry.prev_hash == expected_prev:
+            print(f"Entry {entry.entry_id}: chain valid")
+        else:
+            print(f"Entry {entry.entry_id}: CHAIN BROKEN")
+```
+
+For automated chain integrity verification, use the [compliance evidence pack](/sdks/python/compliance).

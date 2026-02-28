@@ -1,0 +1,80 @@
+---
+title: "Local Development"
+sidebarTitle: "Local Development"
+description: "Run the full Grantex stack locally with Docker Compose."
+---
+
+## Start the stack
+
+```bash
+git clone https://github.com/mishrasanjeev/grantex.git
+cd grantex
+docker compose up --build
+```
+
+This starts PostgreSQL, Redis, and the auth service. Two developer accounts are seeded automatically:
+
+| Key | Mode | Use for |
+|-----|------|---------|
+| `dev-api-key-local` | live | Full consent flow with redirect |
+| `sandbox-api-key-local` | sandbox | Skip consent UI — get a `code` immediately |
+
+Verify it's running:
+
+```bash
+curl http://localhost:3001/health
+# { "status": "ok" }
+
+curl http://localhost:3001/.well-known/jwks.json
+# { "keys": [{ "kty": "RSA", "alg": "RS256", ... }] }
+```
+
+## Sandbox mode
+
+Sandbox mode is designed for testing. With a sandbox key, `POST /v1/authorize` returns a `code` in the response body — no redirect required:
+
+```bash
+# Authorize + get code in one step
+curl -s -X POST http://localhost:3001/v1/authorize \
+  -H "Authorization: Bearer sandbox-api-key-local" \
+  -H "Content-Type: application/json" \
+  -d '{"agentId":"<id>","principalId":"test-user","scopes":["calendar:read"]}'
+# → { ..., "sandbox": true, "code": "01J..." }
+
+# Exchange immediately for a grant token
+curl -s -X POST http://localhost:3001/v1/token \
+  -H "Authorization: Bearer sandbox-api-key-local" \
+  -H "Content-Type: application/json" \
+  -d '{"code":"<code>","agentId":"<id>"}'
+```
+
+## Developer portal
+
+The **hosted portal** is available at [grantex.dev/dashboard](https://grantex.dev/dashboard) — sign up or enter an API key to manage agents, grants, policies, anomalies, compliance exports, and billing from the browser.
+
+For local development, the auth service also serves a lightweight dashboard at `http://localhost:3001/dashboard`.
+
+## SDK development
+
+```bash
+# TypeScript SDK
+cd packages/sdk-ts
+npm install
+npm run typecheck   # tsc --noEmit
+npm test            # vitest
+
+# Python SDK
+cd packages/sdk-py
+pip install -e ".[dev]"
+pytest
+
+# Auth service
+cd apps/auth-service
+npm install
+npm run typecheck
+npm test
+```
+
+## Next steps
+
+For production deployment, see the [self-hosting guide](/guides/self-hosting).

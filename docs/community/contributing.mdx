@@ -1,0 +1,107 @@
+---
+title: "Contributing"
+sidebarTitle: "Contributing"
+description: "How to contribute to the Grantex project."
+---
+
+Thanks for your interest in contributing. Grantex is an open protocol for delegated AI agent authorization — contributions help shape a safer agentic internet.
+
+## Where to Start
+
+| Area | What's needed | Skill |
+|------|--------------|-------|
+| New integrations | Add Grantex support to more frameworks | TypeScript / Python |
+| Examples & tutorials | End-to-end walkthroughs for common use cases | Writing |
+| Bug reports | Found a bug? Open an issue with reproduction steps | Any |
+| Protocol feedback | Review SPEC.md, open issues for gaps | Any |
+| Docs | Improve quickstart, add translations | Writing |
+
+Look for issues tagged [`good first issue`](https://github.com/mishrasanjeev/grantex/issues?q=is%3Aissue+label%3A%22good+first+issue%22).
+
+## Development Setup
+
+```bash
+# Prerequisites: Node.js 18+, Python 3.9+, Docker
+
+git clone https://github.com/mishrasanjeev/grantex
+cd grantex
+
+# Start the full local stack
+docker compose up --build
+
+# TypeScript SDK
+cd packages/sdk-ts
+npm install
+npm run typecheck   # tsc --noEmit
+npm test            # vitest
+
+# Python SDK
+cd packages/sdk-py
+pip install -e ".[dev]"
+pytest
+
+# Auth service
+cd apps/auth-service
+npm install
+npm run typecheck
+npm test
+
+# Integration packages
+cd packages/<package>
+npm install
+npm run typecheck
+npm test
+```
+
+## Repository Structure
+
+```
+grantex/
+├── SPEC.md                       ← Protocol specification (v1.0 final)
+├── packages/
+│   ├── sdk-ts/                   ← TypeScript SDK (@grantex/sdk)
+│   ├── sdk-py/                   ← Python SDK (grantex)
+│   ├── langchain/                ← LangChain integration
+│   ├── autogen/                  ← AutoGen / OpenAI integration
+│   ├── vercel-ai/                ← Vercel AI SDK integration
+│   ├── crewai/                   ← CrewAI integration
+│   ├── openai-agents/            ← OpenAI Agents SDK integration
+│   ├── google-adk/               ← Google ADK integration
+│   ├── mcp/                      ← MCP server
+│   └── cli/                      ← CLI tool
+├── apps/
+│   ├── auth-service/             ← Fastify auth service
+│   └── portal/                   ← Developer portal (React)
+├── examples/                     ← Runnable examples
+├── deploy/                       ← Docker, Helm, Nginx configs
+└── docs/                         ← This docs site
+```
+
+## PR Guidelines
+
+1. **Open an issue first** for anything non-trivial
+2. **One PR per concern** — don't bundle unrelated changes
+3. **Tests required** — all new code needs tests
+4. **Spec changes need discussion** — protocol changes require a Discussion with at least 72 hours for community input
+5. **Changelog entry** — add a line to `CHANGELOG.md` under `Unreleased`
+
+## Code Style
+
+- TypeScript: ESLint + Prettier
+- Python: Ruff + Black
+- Commits: [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `spec:`)
+
+## Protocol Changes (RFCs)
+
+Changes to SPEC.md follow a lightweight RFC process:
+
+1. Open a GitHub Discussion tagged `[RFC]`
+2. Describe the change, motivation, and alternatives
+3. 72-hour minimum comment period
+4. Maintainer merges or closes with reasoning
+
+## Questions?
+
+- [GitHub Discussions](https://github.com/mishrasanjeev/grantex/discussions) for design questions
+- [GitHub Issues](https://github.com/mishrasanjeev/grantex/issues) for bugs and feature requests
+- [Discord](https://discord.gg/grantex) for real-time chat

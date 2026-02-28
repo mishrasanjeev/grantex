@@ -1,0 +1,202 @@
+---
+title: "Agents"
+sidebarTitle: "Agents"
+description: "Register, list, update, and delete AI agents with the Grantex TypeScript SDK."
+---
+
+## Overview
+
+The `agents` sub-client manages the lifecycle of AI agents in your Grantex organization. Each agent receives a unique decentralized identifier (DID) and can request scoped grants from users.
+
+```typescript
+const agent = await grantex.agents.register({
+  name: 'travel-booker',
+  description: 'Books flights and hotels on behalf of users',
+  scopes: ['calendar:read', 'payments:initiate:max_500'],
+});
+```
+
+---
+
+## agents.register()
+
+Register a new agent with the Grantex service.
+
+```typescript
+const agent = await grantex.agents.register({
+  name: 'travel-booker',
+  description: 'Books flights and hotels on behalf of users',
+  scopes: ['calendar:read', 'payments:initiate:max_500', 'email:send'],
+});
+
+console.log(agent.id);     // 'ag_01HXYZ...'
+console.log(agent.did);    // 'did:grantex:ag_01HXYZ...'
+console.log(agent.status); // 'active'
+```
+
+### Parameters
+
+<ParamField body="name" type="string" required>
+  Human-readable name for the agent.
+</ParamField>
+
+<ParamField body="description" type="string" required>
+  A description of what the agent does.
+</ParamField>
+
+<ParamField body="scopes" type="string[]" required>
+  The maximum set of scopes this agent can request. Authorization requests must use a subset of these scopes.
+</ParamField>
+
+### Response: `Agent`
+
+<ResponseField name="id" type="string">
+  Unique agent identifier.
+</ResponseField>
+
+<ResponseField name="did" type="string">
+  Decentralized identifier (DID) for the agent.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The agent's display name.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  The agent's description.
+</ResponseField>
+
+<ResponseField name="scopes" type="string[]">
+  The agent's registered scopes.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Agent status: `'active'`, `'suspended'`, or `'revoked'`.
+</ResponseField>
+
+<ResponseField name="developerId" type="string">
+  The developer organization that owns this agent.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 creation timestamp.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 last-updated timestamp.
+</ResponseField>
+
+---
+
+## agents.get()
+
+Retrieve a single agent by its ID.
+
+```typescript
+const agent = await grantex.agents.get('ag_01HXYZ...');
+
+console.log(agent.name);   // 'travel-booker'
+console.log(agent.scopes); // ['calendar:read', 'payments:initiate:max_500', 'email:send']
+```
+
+### Parameters
+
+<ParamField body="agentId" type="string" required>
+  The agent ID to retrieve.
+</ParamField>
+
+### Response
+
+Returns an `Agent` object.
+
+---
+
+## agents.list()
+
+List all agents in your organization.
+
+```typescript
+const result = await grantex.agents.list();
+
+console.log(result.total);  // 3
+for (const agent of result.agents) {
+  console.log(`${agent.name} (${agent.status})`);
+}
+```
+
+### Response: `ListAgentsResponse`
+
+<ResponseField name="agents" type="Agent[]">
+  Array of agent objects.
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total number of agents.
+</ResponseField>
+
+<ResponseField name="page" type="number">
+  Current page number.
+</ResponseField>
+
+<ResponseField name="pageSize" type="number">
+  Number of agents per page.
+</ResponseField>
+
+---
+
+## agents.update()
+
+Update an existing agent's name, description, or scopes.
+
+```typescript
+const updated = await grantex.agents.update('ag_01HXYZ...', {
+  name: 'travel-booker-v2',
+  scopes: ['calendar:read', 'calendar:write', 'payments:initiate:max_1000'],
+});
+
+console.log(updated.name);   // 'travel-booker-v2'
+console.log(updated.scopes); // ['calendar:read', 'calendar:write', 'payments:initiate:max_1000']
+```
+
+### Parameters
+
+<ParamField body="agentId" type="string" required>
+  The agent ID to update.
+</ParamField>
+
+<ParamField body="name" type="string">
+  New display name.
+</ParamField>
+
+<ParamField body="description" type="string">
+  New description.
+</ParamField>
+
+<ParamField body="scopes" type="string[]">
+  New set of registered scopes.
+</ParamField>
+
+### Response
+
+Returns the updated `Agent` object.
+
+---
+
+## agents.delete()
+
+Delete an agent. This revokes the agent's DID and all active grants.
+
+```typescript
+await grantex.agents.delete('ag_01HXYZ...');
+// Returns void -- the agent is permanently removed
+```
+
+### Parameters
+
+<ParamField body="agentId" type="string" required>
+  The agent ID to delete.
+</ParamField>
+
+### Response
+
+Returns `void`.

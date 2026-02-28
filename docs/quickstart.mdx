@@ -1,0 +1,178 @@
+---
+title: "Quickstart"
+sidebarTitle: "Quickstart"
+description: "Get up and running with Grantex in under 5 minutes."
+---
+
+## 1. Install the SDK
+
+<CodeGroup>
+```bash npm
+npm install @grantex/sdk
+```
+
+```bash pip
+pip install grantex
+```
+</CodeGroup>
+
+## 2. Register your agent
+
+<CodeGroup>
+```typescript TypeScript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+const agent = await grantex.agents.register({
+  name: 'travel-booker',
+  description: 'Books flights and hotels on behalf of users',
+  scopes: ['calendar:read', 'payments:initiate:max_500', 'email:send'],
+});
+
+console.log(agent.did);
+// → did:grantex:ag_01HXYZ123abc...
+```
+
+```python Python
+from grantex import Grantex
+
+client = Grantex(api_key=os.environ["GRANTEX_API_KEY"])
+
+agent = client.agents.register(
+    name="travel-booker",
+    scopes=["calendar:read", "payments:initiate:max_500", "email:send"],
+    description="Books flights and hotels on behalf of users",
+)
+
+print(agent.did)
+# → did:grantex:ag_01HXYZ123abc...
+```
+</CodeGroup>
+
+## 3. Request authorization from a user
+
+<CodeGroup>
+```typescript TypeScript
+const authRequest = await grantex.authorize({
+  agentId: agent.id,
+  userId: 'user_abc123',
+  scopes: ['calendar:read', 'payments:initiate:max_500'],
+  expiresIn: '24h',
+  redirectUri: 'https://yourapp.com/auth/callback',
+});
+
+// Redirect user to the consent page
+console.log(authRequest.consentUrl);
+// → https://consent.grantex.dev/authorize?req=eyJ...
+```
+
+```python Python
+auth = client.authorize(
+    agent_id=agent.id,
+    user_id="user_abc123",
+    scopes=["calendar:read", "payments:initiate:max_500"],
+)
+
+# Redirect user to the consent page
+print(auth.consent_url)
+```
+</CodeGroup>
+
+## 4. Exchange the code for a grant token
+
+After the user approves, your redirect URI receives an authorization `code`. Exchange it for a signed grant token:
+
+<CodeGroup>
+```typescript TypeScript
+const token = await grantex.tokens.exchange({
+  code,                  // from the redirect callback
+  agentId: agent.id,
+});
+
+console.log(token.grantToken);  // RS256 JWT — pass this to your agent
+console.log(token.scopes);      // ['calendar:read', 'payments:initiate:max_500']
+console.log(token.grantId);     // 'grnt_01HXYZ...'
+```
+
+```python Python
+from grantex import ExchangeTokenParams
+
+token = client.tokens.exchange(ExchangeTokenParams(
+    code=code,
+    agent_id=agent.id,
+))
+
+print(token.grant_token)  # RS256 JWT
+print(token.scopes)       # ('calendar:read', 'payments:initiate:max_500')
+print(token.grant_id)     # 'grnt_01HXYZ...'
+```
+</CodeGroup>
+
+## 5. Verify the token offline
+
+<CodeGroup>
+```typescript TypeScript
+import { verifyGrantToken } from '@grantex/sdk';
+
+const grant = await verifyGrantToken(token.grantToken, {
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+  requiredScopes: ['calendar:read'],
+});
+
+console.log(grant.principalId); // 'user_abc123'
+console.log(grant.scopes);     // ['calendar:read', 'payments:initiate:max_500']
+```
+
+```python Python
+from grantex import verify_grant_token, VerifyGrantTokenOptions
+
+grant = verify_grant_token(token.grant_token, VerifyGrantTokenOptions(
+    jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+))
+
+print(grant.principal_id)  # 'user_abc123'
+print(grant.scopes)        # ('calendar:read', 'payments:initiate:max_500')
+```
+</CodeGroup>
+
+## 6. Log every action
+
+<CodeGroup>
+```typescript TypeScript
+await grantex.audit.log({
+  agentId: agent.id,
+  grantId: token.grantId,
+  action: 'payment.initiated',
+  status: 'success',
+  metadata: { amount: 420, currency: 'USD', merchant: 'Air India' },
+});
+```
+
+```python Python
+client.audit.log(
+    agent_id=agent.id,
+    grant_id=token.grant_id,
+    action="payment.initiated",
+    status="success",
+    metadata={"amount": 420, "currency": "USD", "merchant": "Air India"},
+)
+```
+</CodeGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Core Concepts" icon="lightbulb" href="/concepts/how-it-works">
+    Learn about the three primitives: agent identity, delegated grants, and audit trails.
+  </Card>
+  <Card title="Local Development" icon="docker" href="/local-development">
+    Run the full stack locally with Docker Compose and sandbox mode.
+  </Card>
+  <Card title="TypeScript SDK" icon="js" href="/sdks/typescript/overview">
+    Full API reference for the TypeScript SDK.
+  </Card>
+  <Card title="Python SDK" icon="python" href="/sdks/python/overview">
+    Full API reference for the Python SDK.
+  </Card>
+</CardGroup>

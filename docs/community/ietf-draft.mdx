@@ -1,0 +1,80 @@
+---
+title: "IETF Internet-Draft"
+sidebarTitle: "IETF Draft"
+description: "Delegated Agent Authorization Protocol (DAAP) — submitted to the IETF OAuth Working Group."
+---
+
+**Draft name:** `draft-mishra-oauth-agent-grants-00`
+**Target:** IETF OAuth Working Group (oauth@ietf.org)
+**Status:** Individual Submission — version 00
+
+## Document
+
+The Internet-Draft is written in [kramdown-rfc2629](https://github.com/cabo/kramdown-rfc) format — a Markdown superset that compiles to RFC XML (RFC 7991) and from there to canonical IETF text and HTML.
+
+The source is at [`docs/ietf-draft/draft-mishra-oauth-agent-grants-00.md`](https://github.com/mishrasanjeev/grantex/blob/main/docs/ietf-draft/draft-mishra-oauth-agent-grants-00.md).
+
+## Rendering Locally
+
+### Prerequisites
+
+```bash
+gem install kramdown-rfc2629
+pip install xml2rfc
+```
+
+### Build
+
+```bash
+# Markdown → RFC XML
+kdrfc draft-mishra-oauth-agent-grants-00.md
+
+# RFC XML → text (canonical IETF format)
+xml2rfc draft-mishra-oauth-agent-grants-00.xml --text
+
+# RFC XML → HTML
+xml2rfc draft-mishra-oauth-agent-grants-00.xml --html
+```
+
+Alternatively, paste the XML into the [IETF Author Tools](https://author-tools.ietf.org/) web interface.
+
+## Submitting to the Datatracker
+
+1. Render the XML or use `kdrfc` to produce the `.xml` file
+2. Go to [datatracker.ietf.org/submit](https://datatracker.ietf.org/submit/)
+3. Upload `draft-mishra-oauth-agent-grants-00.xml`
+4. Confirm via the email link
+
+The draft appears at: `https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/`
+
+## Path to Standards Track
+
+| Stage | Action |
+|-------|--------|
+| Individual I-D | Submit to Datatracker (current) |
+| WG adoption | Request adoption at IETF meeting or mailing list |
+| WG I-D | Rename to `draft-ietf-oauth-agent-grants-00` |
+| WGLC | Working Group Last Call (two-week review) |
+| IESG review | Internet Engineering Steering Group review |
+| RFC publication | Assigned an RFC number |
+
+## Related RFCs
+
+| RFC | Title | Relationship |
+|-----|-------|--------------|
+| RFC 6749 | OAuth 2.0 | Foundation — DAAP extends the grant flow model |
+| RFC 7519 | JSON Web Token (JWT) | Grant Token format |
+| RFC 7517 | JSON Web Key (JWK) | JWKS endpoint for offline verification |
+| RFC 7518 | JSON Web Algorithms | RS256 algorithm specification |
+| RFC 7636 | PKCE | Supported in DAAP authorization flow |
+| RFC 8693 | Token Exchange | Related — DAAP delegation vs. general token exchange |
+| RFC 7662 | Token Introspection | Related — DAAP `/v1/tokens/verify` |
+| RFC 8725 | JWT Best Practices | Algorithm restriction guidance |
+
+## Revision Process
+
+IETF Internet-Drafts expire after **6 months**. To keep the draft alive:
+
+1. Incorporate working group feedback
+2. Increment the version number (`-01`, `-02`, ...)
+3. Re-submit before the expiry date

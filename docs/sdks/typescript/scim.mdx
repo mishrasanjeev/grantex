@@ -1,0 +1,337 @@
+---
+title: "SCIM 2.0"
+sidebarTitle: "SCIM"
+description: "Provision and manage users via the SCIM 2.0 protocol, and manage SCIM bearer tokens."
+---
+
+## Overview
+
+The `scim` sub-client implements SCIM 2.0 (System for Cross-domain Identity Management) for automated user provisioning. It also provides SCIM token management for authenticating identity providers.
+
+```typescript
+// Create a SCIM token for your IdP
+const token = await grantex.scim.createToken({ label: 'Okta Production' });
+console.log(token.token); // Store securely -- shown only once
+
+// Provision a user
+const user = await grantex.scim.createUser({
+  userName: 'alice@example.com',
+  displayName: 'Alice Smith',
+  emails: [{ value: 'alice@example.com', primary: true }],
+});
+```
+
+---
+
+## Token Management
+
+SCIM tokens authenticate your identity provider (e.g. Okta, Azure AD) when it calls the Grantex SCIM endpoints.
+
+### scim.createToken()
+
+Create a new SCIM bearer token. The raw token value is returned only once.
+
+```typescript
+const scimToken = await grantex.scim.createToken({
+  label: 'Okta Production',
+});
+
+console.log(scimToken.id);        // 'scim_tok_01HXYZ...'
+console.log(scimToken.label);     // 'Okta Production'
+console.log(scimToken.token);     // 'scim_01HXYZ...' -- store securely!
+console.log(scimToken.createdAt); // '2026-02-28T12:00:00Z'
+```
+
+#### Parameters
+
+<ParamField body="label" type="string" required>
+  A human-readable label for the token (e.g. the IdP name).
+</ParamField>
+
+#### Response: `ScimTokenWithSecret`
+
+<ResponseField name="id" type="string">
+  Unique token identifier.
+</ResponseField>
+
+<ResponseField name="label" type="string">
+  The token label.
+</ResponseField>
+
+<ResponseField name="token" type="string">
+  The raw bearer token. Only returned on creation.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 creation timestamp.
+</ResponseField>
+
+<ResponseField name="lastUsedAt" type="string | null">
+  ISO 8601 timestamp of last use, or `null`.
+</ResponseField>
+
+---
+
+### scim.listTokens()
+
+List all SCIM tokens for your organization (without raw secrets).
+
+```typescript
+const result = await grantex.scim.listTokens();
+
+for (const token of result.tokens) {
+  console.log(`${token.label} (${token.id}) - last used: ${token.lastUsedAt ?? 'never'}`);
+}
+```
+
+#### Response: `ListScimTokensResponse`
+
+<ResponseField name="tokens" type="ScimToken[]">
+  Array of token objects (without the raw `token` field).
+</ResponseField>
+
+---
+
+### scim.revokeToken()
+
+Revoke a SCIM token by its ID.
+
+```typescript
+await grantex.scim.revokeToken('scim_tok_01HXYZ...');
+// Returns void -- the token is now invalid
+```
+
+#### Parameters
+
+<ParamField body="id" type="string" required>
+  The SCIM token ID to revoke.
+</ParamField>
+
+#### Response
+
+Returns `void`.
+
+---
+
+## User Operations
+
+These methods implement the SCIM 2.0 user provisioning protocol. They are typically called by your identity provider automatically, but can also be used directly.
+
+### scim.listUsers()
+
+List provisioned users with pagination.
+
+```typescript
+const result = await grantex.scim.listUsers({
+  startIndex: 1,
+  count: 25,
+});
+
+console.log(result.totalResults); // 100
+console.log(result.startIndex);   // 1
+console.log(result.itemsPerPage); // 25
+for (const user of result.Resources) {
+  console.log(`${user.userName} (${user.active ? 'active' : 'inactive'})`);
+}
+```
+
+#### Parameters
+
+<ParamField body="startIndex" type="number">
+  1-indexed start position for pagination.
+</ParamField>
+
+<ParamField body="count" type="number">
+  Maximum number of users to return.
+</ParamField>
+
+#### Response: `ScimListResponse`
+
+<ResponseField name="totalResults" type="number">
+  Total number of provisioned users.
+</ResponseField>
+
+<ResponseField name="startIndex" type="number">
+  The start index of this page.
+</ResponseField>
+
+<ResponseField name="itemsPerPage" type="number">
+  Number of users in this page.
+</ResponseField>
+
+<ResponseField name="Resources" type="ScimUser[]">
+  Array of SCIM user objects.
+</ResponseField>
+
+---
+
+### scim.createUser()
+
+Provision a new user.
+
+```typescript
+const user = await grantex.scim.createUser({
+  userName: 'alice@example.com',
+  displayName: 'Alice Smith',
+  externalId: 'okta-12345',
+  emails: [{ value: 'alice@example.com', primary: true }],
+  active: true,
+});
+
+console.log(user.id);       // 'scim_usr_01HXYZ...'
+console.log(user.userName);  // 'alice@example.com'
+```
+
+#### Parameters
+
+<ParamField body="userName" type="string" required>
+  The user's unique username (typically an email).
+</ParamField>
+
+<ParamField body="displayName" type="string">
+  The user's display name.
+</ParamField>
+
+<ParamField body="externalId" type="string">
+  External ID from the identity provider.
+</ParamField>
+
+<ParamField body="emails" type="ScimEmail[]">
+  Array of email objects: `{ value: string, primary?: boolean }`.
+</ParamField>
+
+<ParamField body="active" type="boolean">
+  Whether the user is active.
+</ParamField>
+
+#### Response: `ScimUser`
+
+<ResponseField name="id" type="string">
+  Unique SCIM user identifier.
+</ResponseField>
+
+<ResponseField name="externalId" type="string">
+  External ID from the identity provider.
+</ResponseField>
+
+<ResponseField name="userName" type="string">
+  The user's username.
+</ResponseField>
+
+<ResponseField name="displayName" type="string">
+  The user's display name.
+</ResponseField>
+
+<ResponseField name="active" type="boolean">
+  Whether the user is active.
+</ResponseField>
+
+<ResponseField name="emails" type="ScimEmail[]">
+  Array of email objects.
+</ResponseField>
+
+<ResponseField name="meta" type="ScimUserMeta">
+  SCIM metadata: `{ resourceType, created, lastModified }`.
+</ResponseField>
+
+---
+
+### scim.getUser()
+
+Get a single provisioned user by ID.
+
+```typescript
+const user = await grantex.scim.getUser('scim_usr_01HXYZ...');
+console.log(user.userName);    // 'alice@example.com'
+console.log(user.displayName); // 'Alice Smith'
+```
+
+#### Parameters
+
+<ParamField body="id" type="string" required>
+  The SCIM user ID.
+</ParamField>
+
+#### Response
+
+Returns a `ScimUser` object.
+
+---
+
+### scim.replaceUser()
+
+Full replace of a user (SCIM PUT operation).
+
+```typescript
+const updated = await grantex.scim.replaceUser('scim_usr_01HXYZ...', {
+  userName: 'alice@example.com',
+  displayName: 'Alice Johnson',
+  emails: [{ value: 'alice@example.com', primary: true }],
+  active: true,
+});
+```
+
+#### Parameters
+
+<ParamField body="id" type="string" required>
+  The SCIM user ID to replace.
+</ParamField>
+
+<ParamField body="params" type="CreateScimUserParams" required>
+  The complete user representation.
+</ParamField>
+
+#### Response
+
+Returns the updated `ScimUser` object.
+
+---
+
+### scim.updateUser()
+
+Partial update via SCIM Operations (SCIM PATCH operation).
+
+```typescript
+const updated = await grantex.scim.updateUser('scim_usr_01HXYZ...', [
+  { op: 'replace', path: 'displayName', value: 'Alice Johnson' },
+  { op: 'replace', path: 'active', value: false },
+]);
+
+console.log(updated.displayName); // 'Alice Johnson'
+console.log(updated.active);      // false
+```
+
+#### Parameters
+
+<ParamField body="id" type="string" required>
+  The SCIM user ID to update.
+</ParamField>
+
+<ParamField body="operations" type="Array<{ op: string; path?: string; value: unknown }>" required>
+  Array of SCIM patch operations. Supported `op` values: `'add'`, `'replace'`, `'remove'`.
+</ParamField>
+
+#### Response
+
+Returns the updated `ScimUser` object.
+
+---
+
+### scim.deleteUser()
+
+Deprovision a user (SCIM DELETE operation).
+
+```typescript
+await grantex.scim.deleteUser('scim_usr_01HXYZ...');
+// Returns void -- the user is deprovisioned
+```
+
+#### Parameters
+
+<ParamField body="id" type="string" required>
+  The SCIM user ID to delete.
+</ParamField>
+
+#### Response
+
+Returns `void`.

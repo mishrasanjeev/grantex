@@ -1,0 +1,114 @@
+---
+title: "CrewAI"
+sidebarTitle: "CrewAI"
+description: "Scope-enforced, audited agent tools for CrewAI."
+---
+
+## Install
+
+```bash
+pip install grantex-crewai
+```
+
+CrewAI is a peer dependency:
+
+```bash
+pip install crewai
+```
+
+## Scope-Enforced Tools
+
+```python
+from grantex_crewai import create_grantex_tool
+from pydantic import BaseModel
+
+class FetchParams(BaseModel):
+    url: str
+
+tool = create_grantex_tool(
+    name="fetch_data",
+    description="Fetches data from the given URL.",
+    grant_token="eyJhbGciOiJSUzI1NiIs...",  # Grantex JWT
+    required_scope="data:read",
+    func=lambda url: requests.get(url).text,
+    args_schema=FetchParams,
+)
+# Use in a CrewAI agent
+```
+
+The tool performs an **offline** scope check at creation time by decoding the JWT's `scp` claim. If the required scope is missing, a `PermissionError` is raised before the tool is ever used.
+
+## Audit Logging
+
+Wrap any Grantex tool with audit logging:
+
+```python
+from grantex import Grantex
+from grantex_crewai import create_grantex_tool, with_audit_logging
+
+client = Grantex(api_key="YOUR_API_KEY")
+
+tool = create_grantex_tool(
+    name="send_email",
+    description="Sends an email.",
+    grant_token=token,
+    required_scope="email:send",
+    func=send_email_fn,
+)
+
+tool = with_audit_logging(
+    tool, client,
+    agent_id="ag_01HXYZ...",
+    grant_id="grnt_01HXYZ...",
+)
+# Every call is now recorded in the audit trail
+```
+
+## API Reference
+
+### `create_grantex_tool()`
+
+```python
+create_grantex_tool(
+    *,
+    name: str,
+    description: str,
+    grant_token: str,
+    required_scope: str,
+    func: Callable[..., str],
+    args_schema: type[BaseModel] | None = None,
+) -> BaseTool
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `name` | Tool name (used in audit log entries) |
+| `description` | Human-readable description shown to the LLM |
+| `grant_token` | Grantex grant token (RS256 JWT) |
+| `required_scope` | Scope that must be present in the token's `scp` claim |
+| `func` | The function to execute when the tool is called |
+| `args_schema` | Optional Pydantic `BaseModel` describing tool inputs |
+
+**Raises:** `PermissionError` if the grant token doesn't contain `required_scope`.
+
+### `with_audit_logging()`
+
+```python
+with_audit_logging(
+    tool: BaseTool,
+    client: Grantex,
+    *,
+    agent_id: str,
+    grant_id: str,
+) -> BaseTool
+```
+
+### `get_tool_scopes(grant_token)`
+
+Returns the scopes embedded in a grant token. Purely offline — no network call.
+
+## Requirements
+
+- Python 3.9+
+- `grantex` >= 0.1.0
+- `crewai` >= 0.28.0 (peer dependency)

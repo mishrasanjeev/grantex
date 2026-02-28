@@ -1,0 +1,64 @@
+---
+title: "MCP Server"
+sidebarTitle: "MCP"
+description: "Use Grantex from Claude Desktop, Cursor, or Windsurf via the Model Context Protocol."
+---
+
+## Install
+
+```bash
+npm install -g @grantex/mcp
+```
+
+## Configuration
+
+Add to your MCP config (Claude Desktop, Cursor, or Windsurf):
+
+```json
+{
+  "mcpServers": {
+    "grantex": {
+      "command": "grantex-mcp",
+      "env": {
+        "GRANTEX_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GRANTEX_API_KEY` | Yes | Your Grantex API key |
+| `GRANTEX_BASE_URL` | No | Override API base URL (default: `https://api.grantex.dev`) |
+
+## Available Tools
+
+The MCP server exposes 13 tools:
+
+| Tool | Description |
+|------|-------------|
+| `grantex_agent_register` | Register a new AI agent |
+| `grantex_agent_list` | List all registered agents |
+| `grantex_agent_get` | Get details for a specific agent |
+| `grantex_authorize` | Start an authorization flow |
+| `grantex_token_exchange` | Exchange authorization code for grant token |
+| `grantex_token_verify` | Verify a grant token |
+| `grantex_token_revoke` | Revoke a grant token |
+| `grantex_grant_list` | List grants with filters |
+| `grantex_grant_get` | Get grant details |
+| `grantex_grant_revoke` | Revoke a grant |
+| `grantex_grant_delegate` | Delegate a grant to a sub-agent |
+| `grantex_audit_log` | Log an audit entry |
+| `grantex_audit_list` | List audit entries |
+
+## Usage
+
+Once configured, you can interact with Grantex through natural language in your MCP-compatible client:
+
+- "Register a new agent called travel-booker with calendar:read and payments:initiate scopes"
+- "List all my active grants"
+- "Revoke grant grnt_01XYZ..."
+- "Show the audit log for agent ag_01ABC..."

@@ -1,0 +1,174 @@
+---
+title: "Grants"
+sidebarTitle: "Grants"
+description: "Retrieve, list, revoke, delegate, and verify grants using the Grantex Python SDK."
+---
+
+## Overview
+
+The `grants` client manages authorization grants -- the records that track which users have authorized which agents with which scopes. Grants also support delegation, where a parent agent can create a sub-grant for a child agent.
+
+Access the grants client via `client.grants`.
+
+## Get
+
+Retrieve a single grant by its ID:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    grant = client.grants.get("grnt_abc123")
+
+    print(f"Agent: {grant.agent_id}")
+    print(f"Principal: {grant.principal_id}")
+    print(f"Scopes: {grant.scopes}")
+    print(f"Status: {grant.status}")
+    print(f"Expires at: {grant.expires_at}")
+```
+
+## List
+
+List grants with optional filters:
+
+```python
+from grantex import Grantex, ListGrantsParams
+
+with Grantex(api_key="gx_live_...") as client:
+    # List all grants
+    result = client.grants.list()
+    print(f"Total grants: {result.total}")
+
+    # List with filters
+    result = client.grants.list(ListGrantsParams(
+        agent_id="agt_abc123",
+        status="active",
+        page=1,
+        page_size=25,
+    ))
+
+    for grant in result.grants:
+        print(f"  {grant.id}: {grant.scopes} ({grant.status})")
+```
+
+### ListGrantsParams
+
+| Field          | Type          | Required | Description                              |
+|----------------|---------------|----------|------------------------------------------|
+| `agent_id`     | `str \| None` | No       | Filter by agent ID.                     |
+| `principal_id` | `str \| None` | No       | Filter by principal (user) ID.          |
+| `status`       | `str \| None` | No       | Filter by status (`"active"`, `"revoked"`, `"expired"`). |
+| `page`         | `int \| None` | No       | Page number for pagination.             |
+| `page_size`    | `int \| None` | No       | Number of results per page.             |
+
+### ListGrantsResponse
+
+| Field       | Type               | Description                     |
+|-------------|--------------------|---------------------------------|
+| `grants`    | `tuple[Grant, ...]`| The list of grants.             |
+| `total`     | `int`              | Total number of matching grants.|
+| `page`      | `int`              | Current page number.            |
+| `page_size` | `int`              | Number of grants per page.      |
+
+## Revoke
+
+Revoke a grant by its ID. This immediately invalidates the grant and any tokens issued under it:
+
+```python
+client.grants.revoke("grnt_abc123")
+# Returns None on success
+```
+
+## Delegate
+
+Create a delegated sub-grant for a child agent. The sub-agent receives a subset of the parent grant's scopes:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.grants.delegate(
+        parent_grant_token="eyJhbGciOiJSUzI1NiIs...",
+        sub_agent_id="agt_sub_agent",
+        scopes=["files:read"],
+        expires_in="1h",
+    )
+
+    print(f"Delegated grant token: {result['grantToken']}")
+```
+
+### Parameters
+
+All parameters are keyword-only.
+
+| Parameter            | Type          | Required | Description                                           |
+|----------------------|---------------|----------|-------------------------------------------------------|
+| `parent_grant_token` | `str`         | Yes      | The parent agent's grant token (JWT).                 |
+| `sub_agent_id`       | `str`         | Yes      | The agent ID of the sub-agent receiving the delegation. |
+| `scopes`             | `list[str]`   | Yes      | Scopes to delegate (must be a subset of parent scopes). |
+| `expires_in`         | `str \| None` | No       | TTL for the delegated grant (e.g. `"1h"`, `"30m"`).  |
+
+## Verify
+
+Verify a grant token online and decode its claims. This calls the Grantex API for server-side validation, then decodes the token locally:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    grant = client.grants.verify("eyJhbGciOiJSUzI1NiIs...")
+
+    print(f"Token ID: {grant.token_id}")
+    print(f"Grant ID: {grant.grant_id}")
+    print(f"Principal: {grant.principal_id}")
+    print(f"Agent DID: {grant.agent_did}")
+    print(f"Scopes: {grant.scopes}")
+```
+
+Returns a `VerifiedGrant` dataclass. See [Offline Verification](/sdks/python/offline-verification) for the full field reference.
+
+<Note>
+For purely offline verification without any network call to the Grantex API, use the standalone [`verify_grant_token()`](/sdks/python/offline-verification) function instead.
+</Note>
+
+## Grant Type
+
+The `Grant` frozen dataclass has the following fields:
+
+| Field          | Type              | Description                              |
+|----------------|-------------------|------------------------------------------|
+| `id`           | `str`             | Unique grant identifier.                 |
+| `agent_id`     | `str`             | The agent ID.                            |
+| `agent_did`    | `str`             | The agent's DID.                         |
+| `principal_id` | `str`             | The user/principal who authorized the grant. |
+| `developer_id` | `str`             | The developer who owns the agent.        |
+| `scopes`       | `tuple[str, ...]` | The granted scopes.                      |
+| `status`       | `str`             | Grant status (`"active"`, `"revoked"`, `"expired"`). |
+| `issued_at`    | `str`             | ISO 8601 timestamp when the grant was issued. |
+| `expires_at`   | `str`             | ISO 8601 timestamp when the grant expires. |
+| `revoked_at`   | `str \| None`     | ISO 8601 timestamp when the grant was revoked (if applicable). |
+
+## Example: Delegation Chain
+
+```python
+from grantex import Grantex, AuthorizeParams, ExchangeTokenParams
+
+with Grantex(api_key="gx_live_...") as client:
+    # Parent agent gets a grant token
+    auth = client.authorize(AuthorizeParams(
+        agent_id="agt_parent",
+        user_id="user_xyz",
+        scopes=["files:read", "files:write", "calendar:read"],
+    ))
+
+    # ... user approves, code is exchanged for token ...
+    # parent_token = client.tokens.exchange(...)
+
+    # Delegate a subset of scopes to a sub-agent
+    delegated = client.grants.delegate(
+        parent_grant_token=parent_token,
+        sub_agent_id="agt_child",
+        scopes=["files:read"],  # subset of parent scopes
+        expires_in="30m",
+    )
+```

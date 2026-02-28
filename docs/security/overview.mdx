@@ -1,0 +1,83 @@
+---
+title: "Security Policy"
+sidebarTitle: "Overview"
+description: "Supported versions, vulnerability reporting, and coordinated disclosure."
+---
+
+## Supported Versions
+
+| Component | Version | Supported |
+|-----------|---------|-----------|
+| Protocol spec | v1.0 | Yes |
+| `@grantex/sdk` | 0.1.x | Yes |
+| `grantex` (Python) | 0.1.x | Yes |
+| `@grantex/langchain` | 0.1.x | Yes |
+| `@grantex/autogen` | 0.1.x | Yes |
+| `@grantex/vercel-ai` | 0.1.x | Yes |
+| `grantex-crewai` | 0.1.x | Yes |
+| `@grantex/cli` | 0.1.x | Yes |
+
+If you are running a version not listed above, please upgrade before reporting.
+
+## Reporting a Vulnerability
+
+<Warning>
+Do not open a public GitHub issue for security vulnerabilities.
+</Warning>
+
+Send a report to **security@grantex.dev** with:
+
+- A clear description of the vulnerability and its potential impact
+- The affected component(s): `auth-service`, `sdk-ts`, `sdk-py`, `cli`, or `SPEC.md`
+- Steps to reproduce or a minimal proof-of-concept
+- Any suggested mitigations you have identified
+
+Encrypt sensitive reports with the PGP key at `https://grantex.dev/.well-known/security.asc`.
+
+## Response SLA
+
+| Stage | Target |
+|-------|--------|
+| Acknowledgement | 48 hours |
+| Substantive response | 7 business days |
+| Patch (Critical / High) | 30 days from confirmation |
+| Patch (Medium / Low) | Next scheduled release |
+
+## Coordinated Disclosure
+
+1. Reporter submits vulnerability to `security@grantex.dev`
+2. Triage, reproduce, and confirm within 7 business days
+3. Develop and test a fix, keeping the reporter in the loop
+4. Publish a patched release and a CVE (if applicable)
+5. Reporter is credited (or anonymously, at their choice) in release notes
+6. Reporter may publish their write-up 30 days after the patch ships
+
+## Scope
+
+### In scope
+
+| Component | Examples |
+|-----------|---------|
+| `auth-service` | Token issuance, verification, revocation, delegation |
+| `sdk-ts` | Client-side token handling, JWT verify |
+| `sdk-py` | Same surface as sdk-ts |
+| `langchain` | Scope enforcement, audit callbacks |
+| `autogen` | Function registry, scope enforcement |
+| `vercel-ai` | Tool scope checks, audit logging |
+| `crewai` | Tool scope enforcement |
+| `cli` | CLI tool, credential handling |
+| `portal` | Developer portal, auth flow, API key handling |
+| `SPEC.md` | Protocol design flaws |
+
+### Out of scope
+
+- Vulnerabilities in third-party dependencies (report upstream; let us know so we can track)
+- Physical access attacks
+- Social engineering
+- Denial-of-service attacks against hosted infrastructure
+- Findings requiring existing admin credentials with no privilege escalation
+- Automated scanner output without evidence of exploitability
+
+## Bug Bounty
+
+We do not currently operate a formal bug bounty programme. Impactful reports are recognized publicly in release notes and on the [Hall of Thanks](https://grantex.dev/security/thanks).

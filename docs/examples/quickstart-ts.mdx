@@ -1,0 +1,67 @@
+---
+title: "Quickstart (TypeScript)"
+sidebarTitle: "Quickstart (TS)"
+description: "End-to-end authorization lifecycle with the TypeScript SDK."
+---
+
+## What it does
+
+This example walks through the complete Grantex authorization lifecycle using the TypeScript SDK:
+
+1. **Register an agent** with `calendar:read` and `email:send` scopes
+2. **Authorize in sandbox mode** -- the sandbox API key auto-approves and returns a `code` immediately (no redirect required)
+3. **Exchange the code** for a signed RS256 grant token
+4. **Verify the token offline** against the local JWKS endpoint
+5. **Log an audit entry** recording a `calendar.read` action
+6. **Revoke the token** and confirm revocation via an online verify check
+
+## Prerequisites
+
+- **Node.js 18+**
+- **Docker** (Docker Desktop or Docker Engine with Compose)
+
+## Run
+
+Start the local Grantex stack from the repository root:
+
+```bash
+docker compose up --build
+```
+
+In a separate terminal, run the example:
+
+```bash
+cd examples/quickstart-ts
+npm install
+npm start
+```
+
+## Expected output
+
+```text
+Agent registered: ag_01HXYZ... did:grantex:ag_01HXYZ...
+Auth request: areq_01HXYZ...
+Sandbox auto-approved, code: 01JXYZ...
+Grant token received, grantId: grnt_01HXYZ...
+Scopes: calendar:read, email:send
+Token verified offline:
+  principalId: test-user-001
+  agentDid:    did:grantex:ag_01HXYZ...
+  scopes:      calendar:read, email:send
+Audit entry logged: aud_01HXYZ...
+Token revoked.
+Post-revocation verify: revoked
+
+Done! Full authorization lifecycle complete.
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GRANTEX_URL` | `http://localhost:3001` | Base URL of the Grantex auth service |
+| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key. Use a sandbox key for auto-approval |
+
+## Source code
+
+The full source is in [`examples/quickstart-ts/src/index.ts`](https://github.com/mishrasanjeev/grantex/tree/main/examples/quickstart-ts).

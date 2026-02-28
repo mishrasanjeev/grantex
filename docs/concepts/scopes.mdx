@@ -1,0 +1,97 @@
+---
+title: "Scopes"
+sidebarTitle: "Scopes"
+description: "Grantex scopes use the resource:action[:constraint] naming convention."
+---
+
+## Scope Format
+
+Grantex defines a standard scope format:
+
+```
+resource:action[:constraint]
+```
+
+| Part | Required | Description |
+|------|----------|-------------|
+| `resource` | Yes | The resource being accessed (e.g. `calendar`, `email`, `payments`) |
+| `action` | Yes | The action being performed (e.g. `read`, `write`, `send`, `initiate`) |
+| `constraint` | No | An optional constraint on the action (e.g. `max_500` for a payment cap) |
+
+## Examples
+
+| Scope | Meaning |
+|-------|---------|
+| `calendar:read` | Read calendar events |
+| `calendar:write` | Create and modify events |
+| `email:send` | Send emails on user's behalf |
+| `payments:initiate:max_500` | Initiate payments up to $500 |
+| `files:read` | Read user files |
+| `profile:read` | Read user profile |
+
+## How Scopes Work
+
+### At registration
+
+When a developer registers an agent, they declare the full set of scopes the agent may ever need:
+
+```typescript
+const agent = await grantex.agents.register({
+  name: 'travel-booker',
+  scopes: ['calendar:read', 'payments:initiate:max_500', 'email:send'],
+});
+```
+
+### At authorization
+
+When requesting user consent, the agent specifies which scopes it needs for this particular session. These must be a subset of the registered scopes:
+
+```typescript
+const auth = await grantex.authorize({
+  agentId: agent.id,
+  userId: 'user_abc123',
+  scopes: ['calendar:read', 'payments:initiate:max_500'],
+});
+```
+
+### In the grant token
+
+Approved scopes are embedded in the JWT's `scp` claim:
+
+```json
+{
+  "scp": ["calendar:read", "payments:initiate:max_500"]
+}
+```
+
+### At verification
+
+Services check the `scp` claim to decide whether to allow a request:
+
+```typescript
+const grant = await verifyGrantToken(token, {
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+  requiredScopes: ['payments:initiate'],
+});
+// Throws if 'payments:initiate' is not in the token's scopes
+```
+
+## Scope Enforcement in Integrations
+
+All framework integrations (LangChain, CrewAI, Vercel AI, etc.) perform offline scope checks by decoding the JWT's `scp` claim — no network call needed:
+
+```typescript
+// LangChain example
+const tool = createGrantexTool({
+  name: 'read_calendar',
+  grantToken,
+  requiredScope: 'calendar:read',  // checked offline from JWT
+  func: async (input) => getCalendarEvents(input),
+});
+```
+
+If the token doesn't include the required scope, the tool throws immediately — before your function runs.
+
+## User Experience
+
+Users see plain-language descriptions of scopes during the consent flow, not raw scope strings. Service providers define these descriptions when they register their scope definitions with Grantex.

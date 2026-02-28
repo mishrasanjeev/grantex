@@ -1,0 +1,157 @@
+---
+title: "Agents"
+sidebarTitle: "Agents"
+description: "Register, retrieve, update, list, and delete AI agents using the Grantex Python SDK."
+---
+
+## Overview
+
+The `agents` client manages AI agent registrations. Each agent has a unique ID, a DID (Decentralized Identifier), a set of scopes it can request, and a lifecycle status.
+
+Access the agents client via `client.agents`.
+
+## Register
+
+Register a new agent with a name and set of scopes:
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    agent = client.agents.register(
+        name="travel-assistant",
+        scopes=["booking:read", "booking:write", "profile:read"],
+        description="Books flights and hotels on behalf of users",
+    )
+
+    print(f"Agent ID: {agent.id}")
+    print(f"Agent DID: {agent.did}")
+    print(f"Scopes: {agent.scopes}")
+```
+
+### Parameters
+
+| Parameter     | Type        | Required | Default | Description                            |
+|---------------|-------------|----------|---------|----------------------------------------|
+| `name`        | `str`       | Yes      | --      | Human-readable name for the agent.     |
+| `scopes`      | `list[str]` | Yes      | --      | The scopes this agent can request.     |
+| `description` | `str`       | No       | `""`    | A description of what the agent does.  |
+
+All parameters are keyword-only.
+
+### Returns
+
+An `Agent` dataclass.
+
+## Get
+
+Retrieve a single agent by its ID:
+
+```python
+agent = client.agents.get("agt_abc123")
+
+print(f"Name: {agent.name}")
+print(f"Status: {agent.status}")
+print(f"Created: {agent.created_at}")
+```
+
+## List
+
+List all agents registered under your developer account:
+
+```python
+result = client.agents.list()
+
+print(f"Total agents: {result.total}")
+for agent in result.agents:
+    print(f"  {agent.name} ({agent.id}) - {agent.status}")
+```
+
+### ListAgentsResponse
+
+| Field       | Type               | Description                     |
+|-------------|--------------------|---------------------------------|
+| `agents`    | `tuple[Agent, ...]`| The list of agents.             |
+| `total`     | `int`              | Total number of agents.         |
+| `page`      | `int`              | Current page number.            |
+| `page_size` | `int`              | Number of agents per page.      |
+
+## Update
+
+Update an agent's name, description, or scopes. Only fields you provide will be modified:
+
+```python
+updated = client.agents.update(
+    "agt_abc123",
+    name="travel-assistant-v2",
+    description="Updated description",
+    scopes=["booking:read", "booking:write", "profile:read", "profile:write"],
+)
+
+print(f"Updated at: {updated.updated_at}")
+```
+
+### Parameters
+
+| Parameter     | Type              | Required | Description                              |
+|---------------|-------------------|----------|------------------------------------------|
+| `agent_id`    | `str`             | Yes      | The ID of the agent to update (positional). |
+| `name`        | `str \| None`     | No       | New name for the agent.                  |
+| `description` | `str \| None`     | No       | New description.                         |
+| `scopes`      | `list[str] \| None` | No     | New set of scopes.                       |
+
+## Delete
+
+Delete an agent by its ID:
+
+```python
+client.agents.delete("agt_abc123")
+# Returns None on success
+```
+
+## Agent Type
+
+The `Agent` frozen dataclass has the following fields:
+
+| Field          | Type              | Description                              |
+|----------------|-------------------|------------------------------------------|
+| `id`           | `str`             | Unique agent identifier.                 |
+| `did`          | `str`             | Decentralized Identifier for the agent.  |
+| `name`         | `str`             | Human-readable agent name.               |
+| `description`  | `str`             | Agent description.                       |
+| `scopes`       | `tuple[str, ...]` | Scopes this agent can request.           |
+| `status`       | `str`             | Agent status (e.g. `"active"`).          |
+| `developer_id` | `str`             | ID of the developer who owns this agent. |
+| `created_at`   | `str`             | ISO 8601 creation timestamp.             |
+| `updated_at`   | `str`             | ISO 8601 last-updated timestamp.         |
+
+## Example: Full Lifecycle
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    # Register
+    agent = client.agents.register(
+        name="email-drafter",
+        scopes=["email:draft", "email:send"],
+        description="Drafts and sends emails",
+    )
+    print(f"Registered: {agent.id}")
+
+    # Retrieve
+    fetched = client.agents.get(agent.id)
+    print(f"Name: {fetched.name}")
+
+    # Update
+    updated = client.agents.update(agent.id, name="email-assistant")
+    print(f"Renamed to: {updated.name}")
+
+    # List
+    all_agents = client.agents.list()
+    print(f"Total agents: {all_agents.total}")
+
+    # Delete
+    client.agents.delete(agent.id)
+    print("Deleted")
+```

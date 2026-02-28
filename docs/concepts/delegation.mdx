@@ -1,0 +1,113 @@
+---
+title: "Multi-Agent Delegation"
+sidebarTitle: "Delegation"
+description: "How Grantex handles authorization chains across multi-agent pipelines."
+---
+
+## Overview
+
+Grantex supports multi-agent pipelines where a root agent spawns sub-agents with narrower scopes. Sub-agent tokens carry a full delegation chain that any service can inspect.
+
+## How It Works
+
+A root agent that holds a grant for `['calendar:read', 'calendar:write', 'email:send']` can delegate a subset of those scopes to a sub-agent:
+
+<CodeGroup>
+```typescript TypeScript
+const delegated = await grantex.grants.delegate({
+  parentGrantToken: rootGrantToken,
+  subAgentId: subAgent.id,
+  scopes: ['calendar:read'],       // must be a subset of parent scopes
+  expiresIn: '1h',                 // capped at parent token's expiry
+});
+
+console.log(delegated.grantToken); // new JWT for the sub-agent
+console.log(delegated.grantId);
+```
+
+```python Python
+delegated = client.grants.delegate(
+    parent_grant_token=root_grant_token,
+    sub_agent_id=sub_agent.id,
+    scopes=["calendar:read"],
+    expires_in="1h",
+)
+
+print(delegated["grantToken"])
+print(delegated["grantId"])
+```
+</CodeGroup>
+
+## Delegation Claims
+
+The delegated token includes additional JWT claims that trace the delegation chain:
+
+```json
+{
+  "iss": "https://grantex.dev",
+  "sub": "user_abc123",
+  "agt": "did:grantex:ag_SUB_AGENT",
+  "scp": ["calendar:read"],
+  "parentAgt": "did:grantex:ag_ROOT_AGENT",
+  "parentGrnt": "grnt_01ROOT...",
+  "delegationDepth": 1,
+  ...
+}
+```
+
+| Claim | Description |
+|-------|-------------|
+| `parentAgt` | DID of the parent agent that created this delegation |
+| `parentGrnt` | Grant ID of the parent grant |
+| `delegationDepth` | Number of hops from the root grant (root = 0, first child = 1) |
+
+## Protocol Constraints
+
+The Grantex protocol enforces three constraints on delegation:
+
+### 1. Scope subset
+
+Sub-agent scopes must be a strict subset of the parent's scopes. Scope escalation is rejected with a `400` error.
+
+### 2. Expiry cap
+
+Sub-agent token expiry is `min(parent expiry, requested expiry)`. Sub-agents can never outlive their parent grant.
+
+### 3. Cascade revocation
+
+Revoking a root grant **cascades to all descendant grants atomically**. There is no window during which a child grant remains valid after its parent has been revoked. This is implemented as a single recursive CTE in the database.
+
+## Depth Limit
+
+The maximum delegation depth is **10 hops**, enforced at both the application level and the database level (via a `CHECK` constraint). This prevents unbounded delegation chains.
+
+## Inspecting Delegation Chains
+
+When verifying a delegated token offline, the `VerifiedGrant` object includes the delegation metadata:
+
+<CodeGroup>
+```typescript TypeScript
+const grant = await verifyGrantToken(delegatedToken, {
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+});
+
+if (grant.delegationDepth !== undefined) {
+  console.log('This is a delegated token');
+  console.log('Parent agent:', grant.parentAgentDid);
+  console.log('Parent grant:', grant.parentGrantId);
+  console.log('Delegation depth:', grant.delegationDepth);
+}
+```
+
+```python Python
+grant = verify_grant_token(delegated_token, VerifyGrantTokenOptions(
+    jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+))
+
+if grant.delegation_depth is not None:
+    print("This is a delegated token")
+    print("Parent agent:", grant.parent_agent_did)
+    print("Parent grant:", grant.parent_grant_id)
+    print("Delegation depth:", grant.delegation_depth)
+```
+</CodeGroup>
