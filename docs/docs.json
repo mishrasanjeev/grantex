@@ -21,8 +21,7 @@
         { "tab": "Python SDK", "href": "/sdks/python/overview" },
         { "tab": "Integrations", "href": "/integrations/overview" },
         { "tab": "API Reference", "href": "/api-reference" },
-        { "tab": "Protocol", "href": "/protocol/specification" },
-        { "tab": "Blog", "href": "/blog/introducing-grantex" }
+        { "tab": "Protocol", "href": "/protocol/specification" }
       ]
     },
     "tabs": [
