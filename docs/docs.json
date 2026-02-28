@@ -176,6 +176,12 @@
             "pages": [
               "integrations/cli"
             ]
+          },
+          {
+            "group": "Testing",
+            "pages": [
+              "integrations/conformance"
+            ]
           }
         ]
       },

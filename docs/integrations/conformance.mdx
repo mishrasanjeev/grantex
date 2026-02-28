@@ -1,0 +1,197 @@
+---
+title: "Conformance Suite"
+sidebarTitle: "Conformance Suite"
+description: "Validate that your Grantex server implementation is spec-compliant with automated black-box testing."
+---
+
+## Overview
+
+`@grantex/conformance` is a black-box test suite that validates any Grantex protocol server implementation. It makes real HTTP requests against a live endpoint and checks that responses match the [protocol specification](/protocol/specification).
+
+Use it to:
+
+- **Verify your self-hosted deployment** after setup or upgrades
+- **Validate custom implementations** of the Grantex protocol
+- **Run in CI/CD** to catch regressions before they reach production
+- **Certify compliance** with the Grantex spec
+
+## Install
+
+```bash
+npm install -g @grantex/conformance
+```
+
+Or run directly with `npx`:
+
+```bash
+npx @grantex/conformance --base-url http://localhost:3001 --api-key YOUR_API_KEY
+```
+
+## Configure
+
+The suite requires two parameters:
+
+| Parameter | Description |
+|-----------|-------------|
+| `--base-url` | Base URL of the Grantex auth service |
+| `--api-key` | Developer API key with permissions to manage agents, grants, and audit |
+
+## Usage
+
+### Run all core suites
+
+```bash
+grantex-conformance --base-url http://localhost:3001 --api-key sk_test_xxx
+```
+
+### Run a single suite
+
+```bash
+grantex-conformance --base-url http://localhost:3001 --api-key sk_test_xxx --suite health
+```
+
+### Include optional extensions
+
+```bash
+grantex-conformance --base-url http://localhost:3001 --api-key sk_test_xxx \
+  --include policies,webhooks,scim
+```
+
+### JSON output (for CI pipelines)
+
+```bash
+grantex-conformance --base-url http://localhost:3001 --api-key sk_test_xxx --format json
+```
+
+### Stop on first failure
+
+```bash
+grantex-conformance --base-url http://localhost:3001 --api-key sk_test_xxx --bail
+```
+
+## CLI Reference
+
+```
+grantex-conformance --base-url URL --api-key KEY [options]
+
+Options:
+  --base-url <url>       Base URL of the Grantex auth service (required)
+  --api-key <key>        API key for authentication (required)
+  --suite <name>         Run a specific suite only
+  --include <ext,...>    Include optional extensions (comma-separated)
+  --format <format>      Output format: text or json (default: text)
+  --bail                 Stop on first failure
+  -h, --help             Display help
+```
+
+## Core Suites
+
+The suite ships with **37 tests** across 9 core suites. These cover every MUST requirement in the specification.
+
+| Suite | Tests | Spec | What it validates |
+|-------|-------|------|-------------------|
+| `health` | 2 | [§3.3](/protocol/specification#health) | Health endpoint returns 200; JWKS contains valid RS256 keys |
+| `agents` | 5 | [§10](/protocol/specification#agents) | Agent CRUD: create with agentId + DID, list, get, update, delete |
+| `authorize` | 4 | [§5.1–5.2](/protocol/specification#authorization) | Authorization request creation, field validation, consent flow |
+| `token` | 3 | [§5.3](/protocol/specification#tokens) | Code exchange returns grant token; rejects invalid and reused codes |
+| `tokens` | 4 | [§7.2–7.3](/protocol/specification#token-verification) | Token verify, revoke, post-revoke verify, garbage token handling |
+| `grants` | 4 | [§7.1](/protocol/specification#grants) | Grant listing, retrieval, revocation, status transitions |
+| `delegation` | 5 | [§9](/protocol/specification#delegation) | Delegation with JWT claims, scope enforcement, depth limits, cascade revocation |
+| `audit` | 5 | [§8](/protocol/specification#audit) | Audit log creation, hash chain integrity, entry retrieval, hash computation |
+| `security` | 5 | [§14](/protocol/specification#security) | Auth enforcement, JWKS algorithm checks, scope escalation prevention, audit immutability |
+
+## Optional Extensions
+
+Enable these with `--include` to test optional protocol features:
+
+| Suite | Tests | What it validates |
+|-------|-------|-------------------|
+| `policies` | 5 | Policy CRUD and enforcement |
+| `webhooks` | 3 | Webhook registration and management |
+| `scim` | 6 | SCIM 2.0 provisioning endpoints |
+| `sso` | 4 | SSO configuration and OIDC flow |
+| `anomalies` | 3 | Anomaly detection and acknowledgement |
+| `compliance` | 4 | Compliance reporting and evidence export |
+
+## Programmatic API
+
+Use the conformance suite from your own code (e.g., integration tests):
+
+```typescript
+import { runConformanceTests } from '@grantex/conformance/runner';
+import { reportJson } from '@grantex/conformance/reporter';
+
+const report = await runConformanceTests({
+  baseUrl: 'http://localhost:3001',
+  apiKey: 'sk_test_xxx',
+  format: 'json',
+  bail: false,
+});
+
+// report.summary = { total, passed, failed, skipped, durationMs }
+console.log(reportJson(report));
+```
+
+The `ConformanceReport` object contains:
+
+```typescript
+{
+  suites: [{
+    name: string;
+    description: string;
+    optional: boolean;
+    tests: [{
+      name: string;
+      status: 'pass' | 'fail' | 'skip';
+      durationMs: number;
+      specRef: string;
+      error?: string;
+    }];
+    durationMs: number;
+  }];
+  summary: {
+    total: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+    durationMs: number;
+  };
+}
+```
+
+## Server Requirements
+
+Your server must meet these requirements to pass the conformance suite:
+
+1. Implement all core Grantex protocol endpoints (`/v1/agents`, `/v1/authorize`, `/v1/token`, `/v1/tokens/verify`, `/v1/tokens/revoke`, `/v1/grants`, `/v1/grants/delegate`, `/v1/audit/log`, `/v1/audit/entries`)
+2. Serve a JWKS at `/.well-known/jwks.json` with RS256 keys
+3. Return proper HTTP status codes (201 for creation, 204 for deletion, 400 for validation errors, 401 for auth failures)
+4. Support the authorization code flow (sandbox auto-code or `/v1/consent/:id/approve`)
+5. Enforce delegation scope constraints and depth limits
+
+## CI/CD Integration
+
+Add conformance tests to your deployment pipeline:
+
+```yaml
+# GitHub Actions example
+- name: Run conformance suite
+  run: |
+    npx @grantex/conformance \
+      --base-url ${{ secrets.GRANTEX_URL }} \
+      --api-key ${{ secrets.GRANTEX_KEY }} \
+      --format json \
+      --bail
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | All tests passed |
+| `1` | One or more tests failed |
+| `2` | Configuration or runtime error |
+
+## Requirements
+
+- Node.js 18+
