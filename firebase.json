@@ -2,6 +2,10 @@
   "hosting": {
     "public": "web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "redirects": [
+      { "source": "/docs", "destination": "https://grantex.mintlify.app", "type": 302 },
+      { "source": "/docs/:path*", "destination": "https://grantex.mintlify.app/:path*", "type": 302 }
+    ],
     "rewrites": [
       { "source": "/dashboard/**", "destination": "/dashboard/index.html" },
       { "source": "**", "destination": "/index.html" }
