@@ -1,0 +1,103 @@
+---
+title: "Rate Limits"
+sidebarTitle: "Rate Limits"
+description: "Understand and work with Grantex API rate limits."
+---
+
+Grantex enforces per-IP rate limits using 1-minute sliding windows. These limits protect the service from abuse while allowing normal usage patterns. All rate limits apply at the IP level — there are no per-key limits.
+
+## Default Limits
+
+| Endpoint | Limit | Notes |
+|----------|-------|-------|
+| **All endpoints** (global) | 100 req/min | Default for every route |
+| `POST /v1/authorize` | 10 req/min | Stricter — creates auth requests |
+| `POST /v1/token` | 20 req/min | Stricter — exchanges codes for tokens |
+| `GET /.well-known/jwks.json` | **Exempt** | Public key distribution is never throttled |
+
+## Response Headers
+
+Every response includes rate limit headers so your application can track its budget:
+
+| Header | Description |
+|--------|-------------|
+| `X-RateLimit-Limit` | Maximum requests allowed in the current window |
+| `X-RateLimit-Remaining` | Requests remaining in the current window |
+| `X-RateLimit-Reset` | Unix timestamp (seconds) when the window resets |
+| `Retry-After` | Seconds to wait before retrying (only on `429` responses) |
+
+## 429 Error Response
+
+When you exceed a rate limit, the API returns a `429 Too Many Requests` status with the following body:
+
+```json
+{
+  "message": "Rate limit exceeded, retry in 42 seconds",
+  "code": "BAD_REQUEST",
+  "requestId": "a1b2c3d4-e5f6-..."
+}
+```
+
+The `Retry-After` header tells you exactly how long to wait.
+
+## Retry Strategy
+
+Use exponential backoff with jitter to avoid thundering-herd problems when multiple clients hit the limit simultaneously.
+
+<CodeGroup>
+```typescript TypeScript
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      const retryAfter = (err as { headers?: Record<string, string> }).headers?.['retry-after'];
+
+      if (status !== 429 || attempt === maxRetries) throw err;
+
+      const base = retryAfter ? parseInt(retryAfter, 10) * 1000 : 2 ** attempt * 1000;
+      const jitter = Math.random() * 500;
+      await new Promise((r) => setTimeout(r, base + jitter));
+    }
+  }
+  throw new Error('Unreachable');
+}
+```
+
+```python Python
+import time
+import random
+from grantex import GrantexApiError
+
+def with_retry(fn, max_retries=3):
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except GrantexApiError as err:
+            if err.status != 429 or attempt == max_retries:
+                raise
+
+            base = float(err.headers.get("retry-after", 2 ** attempt))
+            jitter = random.uniform(0, 0.5)
+            time.sleep(base + jitter)
+```
+</CodeGroup>
+
+## Best Practices
+
+<Note>
+The JWKS endpoint (`/.well-known/jwks.json`) is exempt from rate limits. Prefer [offline token verification](/concepts/grant-token) over online `POST /v1/tokens/verify` calls to avoid hitting limits entirely.
+</Note>
+
+- **Cache tokens** — Grant tokens are valid JWTs. Store and reuse them until they expire instead of requesting new ones per operation.
+- **Use offline verification** — Call `verifyGrantToken()` with the JWKS URI to validate tokens locally. The JWKS endpoint is never rate-limited.
+- **Use webhooks instead of polling** — Subscribe to [webhook events](/guides/webhooks) like `grant.created` and `grant.revoked` rather than polling grant or audit endpoints.
+- **Honor `Retry-After`** — When you receive a `429`, always use the `Retry-After` header value as your minimum wait time.
+- **Spread requests** — If your system makes burst requests (e.g., batch token exchanges), add short delays between calls.
+
+## Self-Hosted Deployments
+
+If you're running the Grantex auth service yourself, rate limits are fully configurable. The global limit is set in `apps/auth-service/src/server.ts` and per-route limits are set in individual route files.
+
+See the [Self-Hosting guide](/guides/self-hosting) for deployment instructions.
