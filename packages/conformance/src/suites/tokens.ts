@@ -7,13 +7,11 @@ export const tokensSuite: SuiteDefinition = {
   optional: false,
   run: async (ctx: SuiteContext): Promise<TestResult[]> => {
     const results: TestResult[] = [];
-    let grantToken = '';
-    let refreshToken = '';
+    const { agentId, agentDid } = ctx.sharedAgent;
 
-    // Execute full flow to get tokens
-    const flow = await ctx.flow.executeFullFlow();
-    grantToken = flow.grantToken;
-    refreshToken = flow.refreshToken;
+    // Execute full flow to get tokens (reuse shared agent)
+    const flow = await ctx.flow.executeFullFlow({ agentId, agentDid });
+    const grantToken = flow.grantToken;
 
     results.push(
       await test('POST /v1/tokens/verify returns valid=true for active token', '§7.2', async () => {

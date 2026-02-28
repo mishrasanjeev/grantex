@@ -1,5 +1,5 @@
 import type { SuiteDefinition, SuiteContext, TestResult } from '../types.js';
-import { test, expectStatus, expectKeys, expectString, expectArray, expectIsoDate } from '../helpers.js';
+import { test, expectStatus, expectString, expectArray, expectIsoDate } from '../helpers.js';
 
 export const tokenSuite: SuiteDefinition = {
   name: 'token',
@@ -7,13 +7,18 @@ export const tokenSuite: SuiteDefinition = {
   optional: false,
   run: async (ctx: SuiteContext): Promise<TestResult[]> => {
     const results: TestResult[] = [];
+    const { agentId, agentDid } = ctx.sharedAgent;
 
     results.push(
       await test(
         'POST /v1/token exchanges code for grantToken, refreshToken, grantId, scopes, expiresAt',
         '§5.3',
         async () => {
-          const flow = await ctx.flow.executeFullFlow();
+          const flow = await ctx.flow.executeFullFlow({
+            agentId,
+            agentDid,
+            scopes: ['read', 'write'],
+          });
           expectString(flow.grantToken, 'grantToken');
           expectString(flow.refreshToken, 'refreshToken');
           expectString(flow.grantId, 'grantId');
@@ -25,17 +30,9 @@ export const tokenSuite: SuiteDefinition = {
 
     results.push(
       await test('POST /v1/token rejects invalid code (400)', '§5.3', async () => {
-        // Create agent first
-        const agentRes = await ctx.http.post<{ agentId: string }>('/v1/agents', {
-          name: `conformance-bad-code-${Date.now()}`,
-          scopes: ['read'],
-        });
-        expectStatus(agentRes, 201);
-        ctx.cleanup.trackAgent(agentRes.body.agentId);
-
         const res = await ctx.http.post('/v1/token', {
           code: 'invalid-code-12345',
-          agentId: agentRes.body.agentId,
+          agentId,
         });
         expectStatus(res, 400);
       }),
@@ -43,19 +40,12 @@ export const tokenSuite: SuiteDefinition = {
 
     results.push(
       await test('POST /v1/token rejects reused code (400)', '§5.3', async () => {
-        // Execute a full flow to get a valid code
-        const agentRes = await ctx.http.post<{ agentId: string }>('/v1/agents', {
-          name: `conformance-reuse-${Date.now()}`,
-          scopes: ['read'],
-        });
-        expectStatus(agentRes, 201);
-        ctx.cleanup.trackAgent(agentRes.body.agentId);
-
+        // Authorize to get a code
         const authRes = await ctx.http.post<{
           authRequestId: string;
           code?: string;
         }>('/v1/authorize', {
-          agentId: agentRes.body.agentId,
+          agentId,
           principalId: `principal-reuse-${Date.now()}`,
           scopes: ['read'],
         });
@@ -75,7 +65,7 @@ export const tokenSuite: SuiteDefinition = {
         // First exchange — should succeed
         const first = await ctx.http.post<{ grantId: string }>('/v1/token', {
           code,
-          agentId: agentRes.body.agentId,
+          agentId,
         });
         expectStatus(first, 201);
         ctx.cleanup.trackGrant(first.body.grantId);
@@ -83,7 +73,7 @@ export const tokenSuite: SuiteDefinition = {
         // Second exchange with same code — should fail
         const second = await ctx.http.post('/v1/token', {
           code,
-          agentId: agentRes.body.agentId,
+          agentId,
         });
         expectStatus(second, 400);
       }),

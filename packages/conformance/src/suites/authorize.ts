@@ -7,24 +7,13 @@ export const authorizeSuite: SuiteDefinition = {
   optional: false,
   run: async (ctx: SuiteContext): Promise<TestResult[]> => {
     const results: TestResult[] = [];
-    let agentId = '';
-
-    // Create an agent for authorize tests
-    const agentRes = await ctx.http.post<{ agentId: string }>('/v1/agents', {
-      name: `conformance-auth-${Date.now()}`,
-      scopes: ['read', 'write'],
-    });
-    if (agentRes.status === 201) {
-      agentId = agentRes.body.agentId;
-      ctx.cleanup.trackAgent(agentId);
-    }
+    const { agentId } = ctx.sharedAgent;
 
     results.push(
       await test(
         'POST /v1/authorize returns authRequestId, consentUrl, expiresAt (201)',
         '§5.1',
         async () => {
-          if (!agentId) throw new Error('Agent setup failed');
           const res = await ctx.http.post<{
             authRequestId: string;
             consentUrl: string;
@@ -63,7 +52,6 @@ export const authorizeSuite: SuiteDefinition = {
 
     results.push(
       await test('Consent approval produces authorization code', '§5.2', async () => {
-        if (!agentId) throw new Error('Agent setup failed');
         const authRes = await ctx.http.post<{
           authRequestId: string;
           code?: string;

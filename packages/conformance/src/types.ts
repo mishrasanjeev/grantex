@@ -43,12 +43,20 @@ export interface ConformanceReport {
   };
 }
 
+export interface SharedAgent {
+  agentId: string;
+  agentDid: string;
+  name: string;
+}
+
 export interface SuiteContext {
   baseUrl: string;
   apiKey: string;
   http: import('./http-client.js').ConformanceHttpClient;
   flow: import('./flow.js').AuthFlowHelper;
   cleanup: import('./cleanup.js').CleanupTracker;
+  /** Pre-created agent shared across suites to avoid plan limits */
+  sharedAgent: SharedAgent;
 }
 
 export interface SuiteDefinition {

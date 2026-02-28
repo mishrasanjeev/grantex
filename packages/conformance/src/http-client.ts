@@ -60,13 +60,18 @@ export class ConformanceHttpClient {
     headers: Record<string, string>,
   ): Promise<HttpResponse<T>> {
     const url = `${this.baseUrl}${path}`;
+    const reqHeaders: Record<string, string> = {
+      'User-Agent': USER_AGENT,
+      ...headers,
+    };
+
+    if (body !== undefined) {
+      reqHeaders['Content-Type'] = 'application/json';
+    }
+
     const init: RequestInit = {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': USER_AGENT,
-        ...headers,
-      },
+      headers: reqHeaders,
     };
 
     if (body !== undefined) {
@@ -74,7 +79,16 @@ export class ConformanceHttpClient {
     }
 
     const start = Date.now();
-    const res = await fetch(url, init);
+    let res = await fetch(url, init);
+
+    // Retry once on 429 (rate limited) after waiting the specified time
+    if (res.status === 429) {
+      const retryMatch = (await res.text()).match(/retry in (\d+)/);
+      const waitSec = retryMatch ? Math.min(parseInt(retryMatch[1]!, 10), 60) : 10;
+      await new Promise((resolve) => setTimeout(resolve, waitSec * 1000));
+      res = await fetch(url, init);
+    }
+
     const durationMs = Date.now() - start;
 
     const rawText = await res.text();

@@ -43,6 +43,9 @@ interface AgentResponse {
 }
 
 export interface FlowOptions {
+  /** Use an existing agent instead of creating a new one */
+  agentId?: string;
+  agentDid?: string;
   agentName?: string;
   scopes?: string[];
   principalId?: string;
@@ -55,22 +58,32 @@ export class AuthFlowHelper {
   ) {}
 
   async executeFullFlow(options?: FlowOptions): Promise<FlowResult> {
-    const agentName = options?.agentName ?? `conformance-agent-${Date.now()}`;
     const scopes = options?.scopes ?? ['read', 'write'];
     const principalId = options?.principalId ?? `principal-${Date.now()}`;
 
-    // 1. Create agent
-    const agentRes = await this.http.post<AgentResponse>('/v1/agents', {
-      name: agentName,
-      scopes,
-    });
-    if (agentRes.status !== 201) {
-      throw new Error(`Failed to create agent: ${agentRes.status} ${agentRes.rawText}`);
-    }
-    const { agentId, did: agentDid } = agentRes.body;
-    this.cleanup.trackAgent(agentId);
+    let agentId: string;
+    let agentDid: string;
 
-    // 2. Authorize
+    if (options?.agentId && options.agentDid) {
+      // Reuse existing agent
+      agentId = options.agentId;
+      agentDid = options.agentDid;
+    } else {
+      // Create agent
+      const agentName = options?.agentName ?? `conformance-agent-${Date.now()}`;
+      const agentRes = await this.http.post<AgentResponse>('/v1/agents', {
+        name: agentName,
+        scopes,
+      });
+      if (agentRes.status !== 201) {
+        throw new Error(`Failed to create agent: ${agentRes.status} ${agentRes.rawText}`);
+      }
+      agentId = agentRes.body.agentId;
+      agentDid = agentRes.body.did;
+      this.cleanup.trackAgent(agentId);
+    }
+
+    // Authorize
     const authRes = await this.http.post<AuthorizeResponse>('/v1/authorize', {
       agentId,
       principalId,
@@ -81,7 +94,7 @@ export class AuthFlowHelper {
     }
     const { authRequestId } = authRes.body;
 
-    // 3. Get code — sandbox auto-provides it, otherwise approve consent
+    // Get code — sandbox auto-provides it, otherwise approve consent
     let code: string;
     if (authRes.body.code) {
       code = authRes.body.code;
@@ -96,7 +109,7 @@ export class AuthFlowHelper {
       code = consentRes.body.code;
     }
 
-    // 4. Exchange code for token
+    // Exchange code for token
     const tokenRes = await this.http.post<TokenResponse>('/v1/token', {
       code,
       agentId,

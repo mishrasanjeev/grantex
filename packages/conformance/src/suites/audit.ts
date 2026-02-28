@@ -7,18 +7,17 @@ export const auditSuite: SuiteDefinition = {
   optional: false,
   run: async (ctx: SuiteContext): Promise<TestResult[]> => {
     const results: TestResult[] = [];
+    const { agentId, agentDid } = ctx.sharedAgent;
 
-    // Get a flow for audit entry data
+    // Get a flow using the shared agent
     const flow = await ctx.flow.executeFullFlow({
-      agentName: `conformance-audit-${Date.now()}`,
+      agentId,
+      agentDid,
       scopes: ['read'],
     });
 
     let entry1Id = '';
     let entry1Hash = '';
-    let entry2Id = '';
-    let entry2Hash = '';
-    let entry2PrevHash = '';
 
     results.push(
       await test(
@@ -63,13 +62,8 @@ export const auditSuite: SuiteDefinition = {
             action: 'conformance.test.2',
           });
           expectStatus(res, 201);
-          entry2Id = res.body.entryId;
-          entry2Hash = res.body.hash;
-          entry2PrevHash = res.body.prevHash as string;
+          const entry2PrevHash = res.body.prevHash as string;
 
-          // The prevHash of entry2 should equal the hash of entry1
-          // Note: prevHash chains per-developer, so this only holds if no other
-          // entries were created between entry1 and entry2
           if (entry1Hash && entry2PrevHash) {
             expectEqual(entry2PrevHash, entry1Hash, 'prevHash chain');
           }
@@ -103,7 +97,6 @@ export const auditSuite: SuiteDefinition = {
     results.push(
       await test('Audit hash is a valid SHA-256 hex string', '§8', async () => {
         if (!entry1Hash) throw new Error('No hash from previous test');
-        // SHA-256 hex string is 64 characters
         if (!/^[a-f0-9]{64}$/i.test(entry1Hash)) {
           throw new Error(`Expected SHA-256 hex hash, got: ${entry1Hash}`);
         }

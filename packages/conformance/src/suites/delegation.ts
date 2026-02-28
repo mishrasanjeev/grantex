@@ -7,22 +7,17 @@ export const delegationSuite: SuiteDefinition = {
   optional: false,
   run: async (ctx: SuiteContext): Promise<TestResult[]> => {
     const results: TestResult[] = [];
+    const { agentId, agentDid } = ctx.sharedAgent;
 
-    // Create parent flow
+    // Create parent flow using shared agent
     const parentFlow = await ctx.flow.executeFullFlow({
-      agentName: `conformance-parent-${Date.now()}`,
+      agentId,
+      agentDid,
       scopes: ['read', 'write'],
     });
 
-    // Create sub-agent for delegation
-    const subAgentRes = await ctx.http.post<{ agentId: string; did: string }>('/v1/agents', {
-      name: `conformance-sub-${Date.now()}`,
-      scopes: ['read', 'write'],
-    });
-    if (subAgentRes.status !== 201) {
-      throw new Error(`Failed to create sub-agent: ${subAgentRes.status}`);
-    }
-    ctx.cleanup.trackAgent(subAgentRes.body.agentId);
+    // Use the shared agent as both parent and sub-agent (self-delegation is valid)
+    const subAgentId = agentId;
 
     results.push(
       await test(
@@ -36,7 +31,7 @@ export const delegationSuite: SuiteDefinition = {
             grantId: string;
           }>('/v1/grants/delegate', {
             parentGrantToken: parentFlow.grantToken,
-            subAgentId: subAgentRes.body.agentId,
+            subAgentId,
             scopes: ['read'],
           });
           expectStatus(res, 201);
@@ -56,14 +51,13 @@ export const delegationSuite: SuiteDefinition = {
             '/v1/grants/delegate',
             {
               parentGrantToken: parentFlow.grantToken,
-              subAgentId: subAgentRes.body.agentId,
+              subAgentId,
               scopes: ['read'],
             },
           );
           expectStatus(res, 201);
           ctx.cleanup.trackGrant(res.body.grantId);
 
-          // Decode JWT payload
           const parts = res.body.grantToken.split('.');
           const payload = JSON.parse(atob(parts[1]!)) as {
             parentAgt: string;
@@ -85,7 +79,7 @@ export const delegationSuite: SuiteDefinition = {
         async () => {
           const res = await ctx.http.post('/v1/grants/delegate', {
             parentGrantToken: parentFlow.grantToken,
-            subAgentId: subAgentRes.body.agentId,
+            subAgentId,
             scopes: ['read', 'write', 'admin'],
           });
           expectStatus(res, 400);
@@ -98,45 +92,34 @@ export const delegationSuite: SuiteDefinition = {
         'Delegation depth limit is enforced',
         '§9',
         async () => {
-          // Create a chain: parent → child → grandchild
-          const child2Res = await ctx.http.post<{ agentId: string }>('/v1/agents', {
-            name: `conformance-child2-${Date.now()}`,
-            scopes: ['read'],
-          });
-          if (child2Res.status !== 201) throw new Error('Failed to create child2 agent');
-          ctx.cleanup.trackAgent(child2Res.body.agentId);
-
-          // Delegate parent → child
+          // Delegate parent → self (depth 1)
           const del1 = await ctx.http.post<{ grantToken: string; grantId: string }>(
             '/v1/grants/delegate',
             {
               parentGrantToken: parentFlow.grantToken,
-              subAgentId: subAgentRes.body.agentId,
+              subAgentId,
               scopes: ['read'],
             },
           );
           expectStatus(del1, 201);
           ctx.cleanup.trackGrant(del1.body.grantId);
 
-          // Delegate child → grandchild
+          // Delegate depth-1 → self (depth 2)
           const del2 = await ctx.http.post<{ grantToken: string; grantId: string }>(
             '/v1/grants/delegate',
             {
               parentGrantToken: del1.body.grantToken,
-              subAgentId: child2Res.body.agentId,
+              subAgentId,
               scopes: ['read'],
             },
           );
-          // Depth 2 — may succeed or fail depending on server config
-          // We just verify it returns a meaningful response
           if (del2.status === 201) {
             ctx.cleanup.trackGrant(del2.body.grantId);
-            // Check depth incremented
             const parts = del2.body.grantToken.split('.');
             const payload = JSON.parse(atob(parts[1]!)) as { delegationDepth: number };
             expectEqual(payload.delegationDepth, 2, 'delegationDepth');
           } else {
-            // Server enforces depth limit — this is also valid
+            // Server enforces depth limit — also valid
             expectStatus(del2, 400);
           }
         },
@@ -148,25 +131,44 @@ export const delegationSuite: SuiteDefinition = {
         'Revoking parent cascades to delegated grants',
         '§9',
         async () => {
-          // Create a fresh parent flow for cascade test
-          const cascadeFlow = await ctx.flow.executeFullFlow({
-            agentName: `conformance-cascade-parent-${Date.now()}`,
+          // New authorize+token flow using shared agent
+          const authRes = await ctx.http.post<{
+            authRequestId: string;
+            code?: string;
+          }>('/v1/authorize', {
+            agentId,
+            principalId: `principal-cascade-${Date.now()}`,
             scopes: ['read'],
           });
+          expectStatus(authRes, 201);
 
-          const cascadeSubRes = await ctx.http.post<{ agentId: string }>('/v1/agents', {
-            name: `conformance-cascade-sub-${Date.now()}`,
-            scopes: ['read'],
-          });
-          expectStatus(cascadeSubRes, 201);
-          ctx.cleanup.trackAgent(cascadeSubRes.body.agentId);
+          let code: string;
+          if (authRes.body.code) {
+            code = authRes.body.code;
+          } else {
+            const consentRes = await ctx.http.requestPublic<{ code: string }>(
+              'POST',
+              `/v1/consent/${authRes.body.authRequestId}/approve`,
+            );
+            if (consentRes.status !== 200) {
+              throw new Error(`Consent approve failed: ${consentRes.status} ${consentRes.rawText}`);
+            }
+            code = consentRes.body.code;
+          }
 
-          // Delegate
+          const tokenRes = await ctx.http.post<{
+            grantToken: string;
+            grantId: string;
+          }>('/v1/token', { code, agentId });
+          expectStatus(tokenRes, 201);
+          ctx.cleanup.trackGrant(tokenRes.body.grantId);
+
+          // Delegate to self
           const delRes = await ctx.http.post<{ grantToken: string; grantId: string }>(
             '/v1/grants/delegate',
             {
-              parentGrantToken: cascadeFlow.grantToken,
-              subAgentId: cascadeSubRes.body.agentId,
+              parentGrantToken: tokenRes.body.grantToken,
+              subAgentId,
               scopes: ['read'],
             },
           );
@@ -174,7 +176,7 @@ export const delegationSuite: SuiteDefinition = {
           ctx.cleanup.trackGrant(delRes.body.grantId);
 
           // Revoke parent grant
-          const revokeRes = await ctx.http.delete(`/v1/grants/${cascadeFlow.grantId}`);
+          const revokeRes = await ctx.http.delete(`/v1/grants/${tokenRes.body.grantId}`);
           expectStatus(revokeRes, 204);
 
           // Verify child token is now invalid

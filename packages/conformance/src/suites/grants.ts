@@ -7,8 +7,9 @@ export const grantsSuite: SuiteDefinition = {
   optional: false,
   run: async (ctx: SuiteContext): Promise<TestResult[]> => {
     const results: TestResult[] = [];
+    const { agentId, agentDid } = ctx.sharedAgent;
 
-    const flow = await ctx.flow.executeFullFlow();
+    const flow = await ctx.flow.executeFullFlow({ agentId, agentDid });
 
     results.push(
       await test('GET /v1/grants lists grants', '§7.1', async () => {

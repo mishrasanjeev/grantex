@@ -1,4 +1,4 @@
-import type { RunConfig, ConformanceReport, SuiteResult, SuiteContext, SuiteDefinition } from './types.js';
+import type { RunConfig, ConformanceReport, SuiteResult, SuiteContext, SuiteDefinition, SharedAgent } from './types.js';
 import { ConformanceHttpClient } from './http-client.js';
 import { CleanupTracker } from './cleanup.js';
 import { AuthFlowHelper } from './flow.js';
@@ -43,7 +43,52 @@ const optionalSuites: SuiteDefinition[] = [
   complianceSuite,
 ];
 
+async function setupSharedAgent(http: ConformanceHttpClient): Promise<SharedAgent> {
+  const listRes = await http.get<{ agents: Array<{ agentId: string; did: string; name: string; scopes: string[] }> }>('/v1/agents');
+
+  if (listRes.status === 200 && Array.isArray(listRes.body.agents) && listRes.body.agents.length > 0) {
+    // Pick the first agent with read+write scopes as shared
+    const withScopes = listRes.body.agents.find(
+      (a) => a.scopes.includes('read') && a.scopes.includes('write'),
+    );
+    const agent = withScopes ?? listRes.body.agents[0]!;
+
+    // Ensure it has the scopes we need
+    if (!agent.scopes.includes('read') || !agent.scopes.includes('write')) {
+      await http.patch(`/v1/agents/${agent.agentId}`, { scopes: ['read', 'write'] });
+    }
+
+    // Try to delete all OTHER agents to free up plan slots (best-effort)
+    for (const other of listRes.body.agents) {
+      if (other.agentId !== agent.agentId) {
+        try {
+          await http.delete(`/v1/agents/${other.agentId}`);
+        } catch {
+          // FK constraint may prevent deletion — that's OK
+        }
+      }
+    }
+
+    return { agentId: agent.agentId, agentDid: agent.did, name: agent.name };
+  }
+
+  // No agents exist — create one
+  const res = await http.post<{ agentId: string; did: string; name: string }>('/v1/agents', {
+    name: 'conformance-shared',
+    scopes: ['read', 'write'],
+  });
+  if (res.status !== 201) {
+    throw new Error(`Failed to create shared agent: ${res.status} ${res.rawText}`);
+  }
+  return { agentId: res.body.agentId, agentDid: res.body.did, name: res.body.name };
+}
+
 export async function runConformanceTests(config: RunConfig): Promise<ConformanceReport> {
+  const setupHttp = new ConformanceHttpClient(config.baseUrl, config.apiKey);
+
+  // Set up a shared agent for all suites (reuses existing or creates new)
+  const sharedAgent = await setupSharedAgent(setupHttp);
+
   const allSuites = [...coreSuites];
 
   if (config.include) {
@@ -81,6 +126,7 @@ export async function runConformanceTests(config: RunConfig): Promise<Conformanc
       http,
       flow,
       cleanup,
+      sharedAgent,
     };
 
     const suiteStart = Date.now();
