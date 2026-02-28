@@ -8,6 +8,10 @@ import { configCommand } from './commands/config.js';
 import { grantsCommand } from './commands/grants.js';
 import { tokensCommand } from './commands/tokens.js';
 import { webhooksCommand } from './commands/webhooks.js';
+import { policiesCommand } from './commands/policies.js';
+import { billingCommand } from './commands/billing.js';
+import { scimCommand } from './commands/scim.js';
+import { ssoCommand } from './commands/sso.js';
 
 const program = new Command();
 
@@ -24,6 +28,10 @@ program.addCommand(auditCommand());
 program.addCommand(webhooksCommand());
 program.addCommand(complianceCommand());
 program.addCommand(anomaliesCommand());
+program.addCommand(policiesCommand());
+program.addCommand(billingCommand());
+program.addCommand(scimCommand());
+program.addCommand(ssoCommand());
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.error((err instanceof Error ? err.message : String(err)));

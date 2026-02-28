@@ -22,6 +22,7 @@ import { scimRoutes } from './routes/scim.js';
 import { ssoRoutes } from './routes/sso.js';
 import { signupRoutes } from './routes/signup.js';
 import { meRoutes } from './routes/me.js';
+import { healthRoutes } from './routes/health.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -42,6 +43,7 @@ export async function buildApp(opts: AppOptions = {}) {
 
   // Public routes (no auth required)
   await app.register(jwksRoutes);
+  await app.register(healthRoutes);
   await app.register(consentRoutes);
   await app.register(dashboardRoutes);
 
