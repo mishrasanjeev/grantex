@@ -525,6 +525,53 @@
     .enterprise-cta h3 { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
     .enterprise-cta p { color: var(--muted); font-size: 15px; margin-bottom: 24px; }
 
+    /* ── Contact form ─────────────────────────────────────────────────────── */
+    .contact-form { max-width: 500px; }
+    .contact-form .form-group { margin-bottom: 16px; }
+    .contact-form label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .contact-form input[type="text"],
+    .contact-form input[type="email"],
+    .contact-form textarea {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 14px;
+      font-family: var(--sans);
+      transition: border-color 0.15s;
+    }
+    .contact-form input:focus,
+    .contact-form textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(63, 185, 80, 0.15);
+    }
+    .contact-form input::placeholder,
+    .contact-form textarea::placeholder { color: var(--muted); opacity: 0.5; }
+    .contact-form textarea { resize: vertical; min-height: 100px; }
+    .contact-form .form-row { display: flex; gap: 16px; }
+    .contact-form .form-row .form-group { flex: 1; }
+    .contact-msg {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .contact-msg.success { display: block; background: rgba(63, 185, 80, 0.1); color: var(--accent); border: 1px solid rgba(63, 185, 80, 0.3); }
+    .contact-msg.error { display: block; background: rgba(248, 81, 73, 0.1); color: #f85149; border: 1px solid rgba(248, 81, 73, 0.3); }
+    @media (max-width: 600px) {
+      .contact-form .form-row { flex-direction: column; gap: 0; }
+    }
+
     /* ── Footer ────────────────────────────────────────────────────────────── */
     footer {
       border-top: 1px solid var(--border);
@@ -1081,9 +1128,30 @@
           We work directly with engineering and security teams to design the right
           integration. Volume pricing and custom SLAs available.
         </p>
-        <a href="mailto:mishra.sanjeev@gmail.com" class="btn btn-primary">
-          Contact us &rarr;
-        </a>
+        <div id="contact-msg" class="contact-msg"></div>
+        <form id="contact-form" class="contact-form" action="https://formspree.io/f/YOUR_FORM_ID" method="POST">
+          <input type="hidden" name="_subject" value="Grantex Contact Form">
+          <input type="text" name="_gotcha" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="contact-name">Name *</label>
+              <input type="text" id="contact-name" name="name" required placeholder="Jane Smith">
+            </div>
+            <div class="form-group">
+              <label for="contact-email">Email *</label>
+              <input type="email" id="contact-email" name="email" required placeholder="jane@company.com">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="contact-company">Company</label>
+            <input type="text" id="contact-company" name="company" placeholder="Acme Inc.">
+          </div>
+          <div class="form-group">
+            <label for="contact-message">Message *</label>
+            <textarea id="contact-message" name="message" required placeholder="Tell us about your use case..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary">Send message &rarr;</button>
+        </form>
       </div>
     </div>
   </div>
@@ -1127,6 +1195,45 @@
       gtag('event', gaEvent, { event_category: 'quickstart' });
     }
   }
+
+  /* Contact form */
+  (function() {
+    var form = document.getElementById('contact-form');
+    var msg = document.getElementById('contact-msg');
+    if (!form) return;
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      msg.className = 'contact-msg';
+      msg.textContent = '';
+      var btn = form.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: { 'Accept': 'application/json' }
+      }).then(function(res) {
+        if (res.ok) {
+          msg.className = 'contact-msg success';
+          msg.textContent = 'Message sent! We\u2019ll get back to you soon.';
+          form.reset();
+          if (typeof gtag !== 'undefined') {
+            gtag('event', 'contact_form_submit', { event_category: 'engagement' });
+          }
+        } else {
+          return res.json().then(function(data) {
+            throw new Error(data.errors ? data.errors.map(function(e) { return e.message; }).join(', ') : 'Something went wrong');
+          });
+        }
+      }).catch(function(err) {
+        msg.className = 'contact-msg error';
+        msg.textContent = err.message || 'Failed to send message. Please try again.';
+      }).finally(function() {
+        btn.disabled = false;
+        btn.textContent = 'Send message \u2192';
+      });
+    });
+  })();
 
   /* Install command copy */
   function copyInstall(text, el) {
