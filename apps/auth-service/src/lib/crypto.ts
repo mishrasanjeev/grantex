@@ -4,6 +4,7 @@ import {
   importSPKI,
   exportJWK,
   SignJWT,
+  jwtVerify,
   decodeJwt,
   type KeyLike,
 } from 'jose';
@@ -136,4 +137,50 @@ export function parseExpiresIn(expiresIn: string): number {
     case 'd': return n * 86400;
     default: throw new Error(`Unknown unit: ${unit}`);
   }
+}
+
+// ─── Principal session tokens ────────────────────────────────────────────────
+
+export interface PrincipalSessionPayload {
+  principalId: string;
+  developerId: string;
+}
+
+export async function signPrincipalSessionToken(
+  payload: PrincipalSessionPayload,
+  expiresInSeconds: number,
+): Promise<string> {
+  const { privateKey, kid } = getKeyPair();
+  return new SignJWT({
+    dev: payload.developerId,
+    purpose: 'principal_dashboard',
+  })
+    .setProtectedHeader({ alg: 'RS256', kid })
+    .setIssuer(config.jwtIssuer)
+    .setSubject(payload.principalId)
+    .setIssuedAt()
+    .setExpirationTime(Math.floor(Date.now() / 1000) + expiresInSeconds)
+    .sign(privateKey);
+}
+
+export async function verifyPrincipalSessionToken(
+  token: string,
+): Promise<PrincipalSessionPayload> {
+  const { publicKey } = getKeyPair();
+  const { payload } = await jwtVerify(token, publicKey, {
+    issuer: config.jwtIssuer,
+    algorithms: ['RS256'],
+  });
+
+  if (payload['purpose'] !== 'principal_dashboard') {
+    throw new Error('Invalid token purpose');
+  }
+
+  const principalId = payload.sub;
+  const developerId = payload['dev'] as string | undefined;
+  if (!principalId || !developerId) {
+    throw new Error('Missing required claims');
+  }
+
+  return { principalId, developerId };
 }
