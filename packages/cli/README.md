@@ -1,8 +1,10 @@
 # @grantex/cli
 
-Command-line tool for the [Grantex](https://github.com/mishrasanjeev/grantex) delegated authorization protocol.
+Command-line tool for the [Grantex](https://grantex.dev) delegated authorization protocol.
 
 Manage agents, grants, audit logs, webhooks, policies, anomalies, and compliance exports from your terminal.
+
+> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 
@@ -118,6 +120,16 @@ grantex config set --url http://localhost:3001 --key dev-api-key-local
 - [TypeScript SDK](https://www.npmjs.com/package/@grantex/sdk)
 - [Self-Hosting Guide](https://github.com/mishrasanjeev/grantex/blob/main/docs/self-hosting.md)
 - [Developer Portal](https://grantex.dev/dashboard)
+
+## Grantex Ecosystem
+
+This package is part of the [Grantex](https://grantex.dev) ecosystem. See also:
+
+- [`@grantex/sdk`](https://www.npmjs.com/package/@grantex/sdk) — Core TypeScript SDK
+- [`grantex`](https://pypi.org/project/grantex/) — Python SDK
+- [`@grantex/langchain`](https://www.npmjs.com/package/@grantex/langchain) — LangChain integration
+- [`@grantex/mcp`](https://www.npmjs.com/package/@grantex/mcp) — MCP server for Claude Desktop / Cursor / Windsurf
+- [`@grantex/vercel-ai`](https://www.npmjs.com/package/@grantex/vercel-ai) — Vercel AI SDK integration
 
 ## License
 

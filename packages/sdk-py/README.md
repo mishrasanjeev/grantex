@@ -8,6 +8,8 @@ Grantex lets humans authorize AI agents with **verifiable, revocable, audited gr
 [![Python](https://img.shields.io/pypi/pyversions/grantex)](https://pypi.org/project/grantex/)
 [![License](https://img.shields.io/pypi/l/grantex)](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 
+> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[API Reference](https://grantex.mintlify.app/api-reference)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+
 ## Install
 
 ```bash
@@ -181,6 +183,20 @@ except GrantexNetworkError:
 - [TypeScript SDK](https://www.npmjs.com/package/@grantex/sdk)
 - [IETF Internet-Draft](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
 - [Landing page](https://grantex.dev)
+
+## Grantex Ecosystem
+
+| Package | Description |
+|---|---|
+| [`@grantex/sdk`](https://www.npmjs.com/package/@grantex/sdk) | TypeScript SDK |
+| [`@grantex/langchain`](https://www.npmjs.com/package/@grantex/langchain) | LangChain integration |
+| [`@grantex/autogen`](https://www.npmjs.com/package/@grantex/autogen) | AutoGen integration |
+| [`@grantex/vercel-ai`](https://www.npmjs.com/package/@grantex/vercel-ai) | Vercel AI SDK integration |
+| [`grantex-crewai`](https://pypi.org/project/grantex-crewai/) | CrewAI integration |
+| [`grantex-openai-agents`](https://pypi.org/project/grantex-openai-agents/) | OpenAI Agents SDK integration |
+| [`grantex-adk`](https://pypi.org/project/grantex-adk/) | Google ADK integration |
+| [`@grantex/mcp`](https://www.npmjs.com/package/@grantex/mcp) | MCP server for Claude Desktop / Cursor / Windsurf |
+| [`@grantex/cli`](https://www.npmjs.com/package/@grantex/cli) | Command-line tool |
 
 ## License
 

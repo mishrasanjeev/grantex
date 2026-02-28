@@ -1,8 +1,10 @@
 # @grantex/vercel-ai
 
-[Vercel AI SDK](https://sdk.vercel.ai/) integration for the [Grantex](https://github.com/mishrasanjeev/grantex) delegated authorization protocol.
+[Vercel AI SDK](https://sdk.vercel.ai/) integration for the [Grantex](https://grantex.dev) delegated authorization protocol.
 
 Adds scope-enforced tools and audit logging to any Vercel AI SDK agent.
+
+> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 
@@ -125,6 +127,16 @@ Error thrown when a grant token is missing the required scope.
 - [Vercel AI SDK Docs](https://sdk.vercel.ai/)
 - [TypeScript SDK](https://www.npmjs.com/package/@grantex/sdk)
 - [Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
+
+## Grantex Ecosystem
+
+This package is part of the [Grantex](https://grantex.dev) ecosystem. See also:
+
+- [`@grantex/sdk`](https://www.npmjs.com/package/@grantex/sdk) — Core TypeScript SDK
+- [`grantex`](https://pypi.org/project/grantex/) — Python SDK
+- [`@grantex/langchain`](https://www.npmjs.com/package/@grantex/langchain) — LangChain integration
+- [`@grantex/autogen`](https://www.npmjs.com/package/@grantex/autogen) — AutoGen integration
+- [`@grantex/mcp`](https://www.npmjs.com/package/@grantex/mcp) — MCP server for Claude Desktop / Cursor / Windsurf
 
 ## License
 

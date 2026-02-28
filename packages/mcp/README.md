@@ -2,6 +2,8 @@
 
 MCP (Model Context Protocol) server for the [Grantex](https://grantex.dev) delegated agent authorization protocol. Exposes 13 tools for managing agents, grants, tokens, authorization flows, and audit logs.
 
+> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+
 ## Quick Start
 
 ```bash
@@ -49,6 +51,16 @@ Add to your MCP config:
 | `grantex_grant_delegate` | Delegate a grant to a sub-agent |
 | `grantex_audit_log` | Log an audit entry |
 | `grantex_audit_list` | List audit entries |
+
+## Grantex Ecosystem
+
+This package is part of the [Grantex](https://grantex.dev) ecosystem. See also:
+
+- [`@grantex/sdk`](https://www.npmjs.com/package/@grantex/sdk) — Core TypeScript SDK
+- [`grantex`](https://pypi.org/project/grantex/) — Python SDK
+- [`@grantex/langchain`](https://www.npmjs.com/package/@grantex/langchain) — LangChain integration
+- [`@grantex/vercel-ai`](https://www.npmjs.com/package/@grantex/vercel-ai) — Vercel AI SDK integration
+- [`@grantex/cli`](https://www.npmjs.com/package/@grantex/cli) — Command-line tool
 
 ## License
 
