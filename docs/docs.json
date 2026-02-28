@@ -1,5 +1,6 @@
 {
   "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
   "name": "Grantex",
   "favicon": "/favicon.svg",
   "logo": {
@@ -14,187 +15,198 @@
       "dark": "#0d1117"
     }
   },
-  "tabs": [
-    {
-      "tab": "Documentation",
-      "groups": [
-        {
-          "group": "Getting Started",
-          "pages": [
-            "introduction",
-            "quickstart",
-            "local-development"
-          ]
-        },
-        {
-          "group": "Core Concepts",
-          "pages": [
-            "concepts/how-it-works",
-            "concepts/grant-token",
-            "concepts/scopes",
-            "concepts/delegation"
-          ]
-        },
-        {
-          "group": "Guides",
-          "pages": [
-            "guides/webhooks",
-            "guides/self-hosting"
-          ]
-        },
-        {
-          "group": "Examples",
-          "pages": [
-            "examples/quickstart-ts",
-            "examples/quickstart-py",
-            "examples/langchain-agent",
-            "examples/vercel-ai-chatbot",
-            "examples/crewai-agent",
-            "examples/openai-agents",
-            "examples/google-adk"
-          ]
-        }
+  "navigation": {
+    "global": {
+      "tabs": [
+        { "tab": "Documentation", "href": "/introduction" },
+        { "tab": "TypeScript SDK", "href": "/sdks/typescript/overview" },
+        { "tab": "Python SDK", "href": "/sdks/python/overview" },
+        { "tab": "Integrations", "href": "/integrations/overview" },
+        { "tab": "Protocol", "href": "/protocol/specification" }
       ]
     },
-    {
-      "tab": "TypeScript SDK",
-      "groups": [
-        {
-          "group": "Overview",
-          "pages": [
-            "sdks/typescript/overview"
-          ]
-        },
-        {
-          "group": "Authorization",
-          "pages": [
-            "sdks/typescript/authorization",
-            "sdks/typescript/tokens",
-            "sdks/typescript/offline-verification",
-            "sdks/typescript/pkce"
-          ]
-        },
-        {
-          "group": "Resources",
-          "pages": [
-            "sdks/typescript/agents",
-            "sdks/typescript/grants",
-            "sdks/typescript/audit",
-            "sdks/typescript/webhooks",
-            "sdks/typescript/policies",
-            "sdks/typescript/compliance",
-            "sdks/typescript/anomalies",
-            "sdks/typescript/billing",
-            "sdks/typescript/scim",
-            "sdks/typescript/sso"
-          ]
-        },
-        {
-          "group": "Reference",
-          "pages": [
-            "sdks/typescript/errors"
-          ]
-        }
-      ]
-    },
-    {
-      "tab": "Python SDK",
-      "groups": [
-        {
-          "group": "Overview",
-          "pages": [
-            "sdks/python/overview"
-          ]
-        },
-        {
-          "group": "Authorization",
-          "pages": [
-            "sdks/python/authorization",
-            "sdks/python/tokens",
-            "sdks/python/offline-verification",
-            "sdks/python/pkce"
-          ]
-        },
-        {
-          "group": "Resources",
-          "pages": [
-            "sdks/python/agents",
-            "sdks/python/grants",
-            "sdks/python/audit",
-            "sdks/python/webhooks",
-            "sdks/python/policies",
-            "sdks/python/compliance",
-            "sdks/python/anomalies",
-            "sdks/python/billing",
-            "sdks/python/scim",
-            "sdks/python/sso"
-          ]
-        },
-        {
-          "group": "Reference",
-          "pages": [
-            "sdks/python/errors"
-          ]
-        }
-      ]
-    },
-    {
-      "tab": "Integrations",
-      "groups": [
-        {
-          "group": "Overview",
-          "pages": [
-            "integrations/overview"
-          ]
-        },
-        {
-          "group": "Framework Integrations",
-          "pages": [
-            "integrations/mcp",
-            "integrations/langchain",
-            "integrations/vercel-ai",
-            "integrations/autogen",
-            "integrations/crewai",
-            "integrations/openai-agents",
-            "integrations/google-adk"
-          ]
-        },
-        {
-          "group": "CLI",
-          "pages": [
-            "integrations/cli"
-          ]
-        }
-      ]
-    },
-    {
-      "tab": "Protocol",
-      "groups": [
-        {
-          "group": "Specification",
-          "pages": [
-            "protocol/specification",
-            "protocol/changelog"
-          ]
-        },
-        {
-          "group": "Security",
-          "pages": [
-            "security/overview",
-            "security/audit-report",
-            "security/soc2-report"
-          ]
-        },
-        {
-          "group": "Community",
-          "pages": [
-            "community/contributing",
-            "community/ietf-draft"
-          ]
-        }
-      ]
-    }
-  ],
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "local-development"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/how-it-works",
+              "concepts/grant-token",
+              "concepts/scopes",
+              "concepts/delegation"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/webhooks",
+              "guides/self-hosting"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/quickstart-ts",
+              "examples/quickstart-py",
+              "examples/langchain-agent",
+              "examples/vercel-ai-chatbot",
+              "examples/crewai-agent",
+              "examples/openai-agents",
+              "examples/google-adk"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "TypeScript SDK",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "sdks/typescript/overview"
+            ]
+          },
+          {
+            "group": "Authorization",
+            "pages": [
+              "sdks/typescript/authorization",
+              "sdks/typescript/tokens",
+              "sdks/typescript/offline-verification",
+              "sdks/typescript/pkce"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "sdks/typescript/agents",
+              "sdks/typescript/grants",
+              "sdks/typescript/audit",
+              "sdks/typescript/webhooks",
+              "sdks/typescript/policies",
+              "sdks/typescript/compliance",
+              "sdks/typescript/anomalies",
+              "sdks/typescript/billing",
+              "sdks/typescript/scim",
+              "sdks/typescript/sso"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "sdks/typescript/errors"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Python SDK",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "sdks/python/overview"
+            ]
+          },
+          {
+            "group": "Authorization",
+            "pages": [
+              "sdks/python/authorization",
+              "sdks/python/tokens",
+              "sdks/python/offline-verification",
+              "sdks/python/pkce"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "sdks/python/agents",
+              "sdks/python/grants",
+              "sdks/python/audit",
+              "sdks/python/webhooks",
+              "sdks/python/policies",
+              "sdks/python/compliance",
+              "sdks/python/anomalies",
+              "sdks/python/billing",
+              "sdks/python/scim",
+              "sdks/python/sso"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "sdks/python/errors"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Integrations",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "integrations/overview"
+            ]
+          },
+          {
+            "group": "Framework Integrations",
+            "pages": [
+              "integrations/mcp",
+              "integrations/langchain",
+              "integrations/vercel-ai",
+              "integrations/autogen",
+              "integrations/crewai",
+              "integrations/openai-agents",
+              "integrations/google-adk"
+            ]
+          },
+          {
+            "group": "CLI",
+            "pages": [
+              "integrations/cli"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Protocol",
+        "groups": [
+          {
+            "group": "Specification",
+            "pages": [
+              "protocol/specification",
+              "protocol/changelog"
+            ]
+          },
+          {
+            "group": "Security",
+            "pages": [
+              "security/overview",
+              "security/audit-report",
+              "security/soc2-report"
+            ]
+          },
+          {
+            "group": "Community",
+            "pages": [
+              "community/contributing",
+              "community/ietf-draft"
+            ]
+          }
+        ]
+      }
+    ]
+  },
   "navbar": {
     "links": [
       {
