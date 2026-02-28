@@ -22,7 +22,7 @@
         { "tab": "Integrations", "href": "/integrations/overview" },
         { "tab": "API Reference", "href": "/api-reference" },
         { "tab": "Protocol", "href": "/protocol/specification" },
-        { "tab": "Blog", "href": "/blog" }
+        { "tab": "Blog", "href": "/blog/introducing-grantex" }
       ]
     },
     "tabs": [
@@ -354,12 +354,21 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "Blog",
+        "groups": [
+          {
+            "group": "Posts",
+            "pages": [
+              "blog/introducing-grantex",
+              "blog/why-ai-agents-need-authorization",
+              "blog/grantex-v0-1-whats-included"
+            ]
+          }
+        ]
       }
     ]
-  },
-  "blog": {
-    "enabled": true,
-    "path": "blog"
   },
   "navbar": {
     "links": [
