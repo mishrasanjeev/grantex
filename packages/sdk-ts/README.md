@@ -5,6 +5,8 @@ TypeScript SDK for the [Grantex](https://grantex.dev) delegated authorization pr
 [![npm version](https://img.shields.io/npm/v/@grantex/sdk)](https://www.npmjs.com/package/@grantex/sdk)
 [![License](https://img.shields.io/npm/l/@grantex/sdk)](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 
+> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[API Reference](https://grantex.mintlify.app/api-reference)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+
 ## Installation
 
 ```bash
@@ -665,6 +667,20 @@ try {
 - [Protocol Specification](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
 - [Python SDK](https://pypi.org/project/grantex/)
 - [API Reference](https://api.grantex.dev/.well-known/jwks.json)
+
+## Grantex Ecosystem
+
+| Package | Description |
+|---|---|
+| [`grantex`](https://pypi.org/project/grantex/) | Python SDK |
+| [`@grantex/langchain`](https://www.npmjs.com/package/@grantex/langchain) | LangChain integration |
+| [`@grantex/autogen`](https://www.npmjs.com/package/@grantex/autogen) | AutoGen integration |
+| [`@grantex/vercel-ai`](https://www.npmjs.com/package/@grantex/vercel-ai) | Vercel AI SDK integration |
+| [`grantex-crewai`](https://pypi.org/project/grantex-crewai/) | CrewAI integration |
+| [`grantex-openai-agents`](https://pypi.org/project/grantex-openai-agents/) | OpenAI Agents SDK integration |
+| [`grantex-adk`](https://pypi.org/project/grantex-adk/) | Google ADK integration |
+| [`@grantex/mcp`](https://www.npmjs.com/package/@grantex/mcp) | MCP server for Claude Desktop / Cursor / Windsurf |
+| [`@grantex/cli`](https://www.npmjs.com/package/@grantex/cli) | Command-line tool |
 
 ## License
 

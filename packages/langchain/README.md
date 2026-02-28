@@ -1,8 +1,10 @@
 # @grantex/langchain
 
-LangChain integration for the [Grantex](https://github.com/mishrasanjeev/grantex) delegated authorization protocol.
+LangChain integration for the [Grantex](https://grantex.dev) delegated authorization protocol.
 
 Adds scope-enforced tools and automatic audit logging to any LangChain agent.
+
+> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 
@@ -99,6 +101,16 @@ LangChain callback handler that writes tool invocations to the Grantex audit tra
 - [TypeScript SDK](https://www.npmjs.com/package/@grantex/sdk)
 - [Python SDK](https://pypi.org/project/grantex/)
 - [Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
+
+## Grantex Ecosystem
+
+This package is part of the [Grantex](https://grantex.dev) ecosystem. See also:
+
+- [`@grantex/sdk`](https://www.npmjs.com/package/@grantex/sdk) — Core TypeScript SDK
+- [`grantex`](https://pypi.org/project/grantex/) — Python SDK
+- [`@grantex/vercel-ai`](https://www.npmjs.com/package/@grantex/vercel-ai) — Vercel AI SDK integration
+- [`@grantex/autogen`](https://www.npmjs.com/package/@grantex/autogen) — AutoGen integration
+- [`@grantex/mcp`](https://www.npmjs.com/package/@grantex/mcp) — MCP server for Claude Desktop / Cursor / Windsurf
 
 ## License
 

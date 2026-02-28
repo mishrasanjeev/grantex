@@ -8,6 +8,8 @@ Wrap any function with Grantex grant token verification so your agents can only 
 [![Python](https://img.shields.io/pypi/pyversions/grantex-openai-agents)](https://pypi.org/project/grantex-openai-agents/)
 [![License](https://img.shields.io/pypi/l/grantex-openai-agents)](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 
+> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+
 ## Install
 
 ```bash
@@ -68,6 +70,16 @@ Decodes the payload of a JWT without verifying the signature. Useful for inspect
 - Python 3.9+
 - `grantex >= 0.1.0`
 - `openai-agents >= 0.0.3` (peer dependency)
+
+## Grantex Ecosystem
+
+This package is part of the [Grantex](https://grantex.dev) ecosystem. See also:
+
+- [`grantex`](https://pypi.org/project/grantex/) — Core Python SDK
+- [`@grantex/sdk`](https://www.npmjs.com/package/@grantex/sdk) — TypeScript SDK
+- [`grantex-crewai`](https://pypi.org/project/grantex-crewai/) — CrewAI integration
+- [`grantex-adk`](https://pypi.org/project/grantex-adk/) — Google ADK integration
+- [`@grantex/mcp`](https://www.npmjs.com/package/@grantex/mcp) — MCP server for Claude Desktop / Cursor / Windsurf
 
 ## License
 

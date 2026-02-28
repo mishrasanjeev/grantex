@@ -1,8 +1,10 @@
 # @grantex/autogen
 
-AutoGen / OpenAI function-calling integration for the [Grantex](https://github.com/mishrasanjeev/grantex) delegated authorization protocol.
+AutoGen / OpenAI function-calling integration for the [Grantex](https://grantex.dev) delegated authorization protocol.
 
 Adds scope-enforced functions, a function registry, and audit logging for any agent using OpenAI-style function calling.
+
+> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 
@@ -131,6 +133,16 @@ Wraps a `GrantexFunction` with audit logging.
 - [Grantex Protocol](https://github.com/mishrasanjeev/grantex)
 - [TypeScript SDK](https://www.npmjs.com/package/@grantex/sdk)
 - [Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
+
+## Grantex Ecosystem
+
+This package is part of the [Grantex](https://grantex.dev) ecosystem. See also:
+
+- [`@grantex/sdk`](https://www.npmjs.com/package/@grantex/sdk) — Core TypeScript SDK
+- [`grantex`](https://pypi.org/project/grantex/) — Python SDK
+- [`@grantex/langchain`](https://www.npmjs.com/package/@grantex/langchain) — LangChain integration
+- [`@grantex/vercel-ai`](https://www.npmjs.com/package/@grantex/vercel-ai) — Vercel AI SDK integration
+- [`@grantex/mcp`](https://www.npmjs.com/package/@grantex/mcp) — MCP server for Claude Desktop / Cursor / Windsurf
 
 ## License
 
