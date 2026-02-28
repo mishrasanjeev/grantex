@@ -376,6 +376,8 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **LangChain** | `@grantex/langchain` | `npm install @grantex/langchain` | ✅ Shipped |
 | **AutoGen / OpenAI** | `@grantex/autogen` | `npm install @grantex/autogen` | ✅ Shipped |
 | **CrewAI** | `grantex-crewai` | `pip install grantex-crewai` | ✅ Shipped |
+| **OpenAI Agents SDK** | `grantex-openai-agents` | `pip install grantex-openai-agents` | ✅ Shipped |
+| **Google ADK** | `grantex-adk` | `pip install grantex-adk` | ✅ Shipped |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | ✅ Shipped |
 | **TypeScript SDK** | `@grantex/sdk` | `npm install @grantex/sdk` | ✅ Shipped |
 | **Python SDK** | `grantex` | `pip install grantex` | ✅ Shipped |
@@ -445,6 +447,36 @@ tool = GrantexTool(
     func=get_calendar_events,
 )
 # Use with any CrewAI agent
+```
+
+**OpenAI Agents SDK** (Python):
+
+```python
+from grantex_openai_agents import create_grantex_tool
+
+tool = create_grantex_tool(
+    name="read_calendar",
+    description="Read upcoming calendar events",
+    grant_token=grant_token,
+    required_scope="calendar:read",
+    func=get_calendar_events,
+)
+# Returns a FunctionTool — use with any OpenAI Agents SDK agent
+```
+
+**Google ADK** (Python):
+
+```python
+from grantex_adk import create_grantex_tool
+
+read_calendar = create_grantex_tool(
+    name="read_calendar",
+    description="Read upcoming calendar events",
+    grant_token=grant_token,
+    required_scope="calendar:read",
+    func=get_calendar_events,
+)
+# Returns a plain function — pass directly to google.adk.Agent(tools=[...])
 ```
 
 **CLI**:
