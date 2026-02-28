@@ -27,6 +27,8 @@ const auditEntry = {
 describe('POST /v1/audit/log', () => {
   it('creates an audit entry with hash', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                  // subscription lookup → free plan
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);    // audit entry count → 0
     // Previous hash query
     sqlMock.mockResolvedValueOnce([]); // no previous entry
     // INSERT
@@ -61,8 +63,32 @@ describe('POST /v1/audit/log', () => {
     expect(body.entryId).toBe(auditEntry.id);
   });
 
+  it('returns 402 when plan audit entry limit is reached', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ plan: 'free' }]);   // subscription → free plan
+    sqlMock.mockResolvedValueOnce([{ count: '1000' }]);  // audit count → at limit
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/audit/log',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        agentDid: TEST_AGENT.did,
+        grantId: TEST_GRANT.id,
+        principalId: 'user_123',
+        action: 'invoke',
+      },
+    });
+
+    expect(res.statusCode).toBe(402);
+    expect(res.json<{ code: string }>().code).toBe('PLAN_LIMIT_EXCEEDED');
+  });
+
   it('includes previousHash in chain when prior entry exists', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                    // subscription lookup
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);      // audit count
     // Previous hash query returns an entry
     sqlMock.mockResolvedValueOnce([{ hash: 'previous_hash_value' }]);
     // INSERT

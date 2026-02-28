@@ -8,14 +8,19 @@ export function signWebhookPayload(secret: string, payload: string): string {
   return 'sha256=' + createHmac('sha256', secret).update(payload).digest('hex');
 }
 
+/**
+ * Enqueue webhook deliveries for all matching endpoints.
+ * Instead of fire-and-forget, deliveries are persisted to the
+ * `webhook_deliveries` table and processed by the retry worker.
+ */
 export async function fireWebhooks(
   developerId: string,
   type: WebhookEventType,
   data: Record<string, unknown>,
 ): Promise<void> {
   const sql = getSql();
-  const rows = await sql<{ url: string; secret: string }[]>`
-    SELECT url, secret FROM webhooks
+  const rows = await sql<{ id: string; url: string; secret: string }[]>`
+    SELECT id, url, secret FROM webhooks
     WHERE developer_id = ${developerId}
       AND ${type} = ANY(events)
   `;
@@ -31,15 +36,14 @@ export async function fireWebhooks(
 
   for (const row of rows) {
     const sig = signWebhookPayload(row.secret, payloadStr);
-    fetch(row.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Grantex-Signature': sig,
-        'User-Agent': 'Grantex-Webhooks/0.1',
-      },
-      body: payloadStr,
-      signal: AbortSignal.timeout(10_000),
-    }).catch(() => { /* best-effort delivery */ });
+    const deliveryId = `whd_${ulid()}`;
+
+    await sql`
+      INSERT INTO webhook_deliveries
+        (id, webhook_id, developer_id, event_id, event_type, payload, signature, url, status, attempts, next_retry_at)
+      VALUES
+        (${deliveryId}, ${row.id}, ${developerId}, ${event.id}, ${type},
+         ${payloadStr}, ${sig}, ${row.url}, 'pending', 0, NOW())
+    `;
   }
 }

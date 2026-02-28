@@ -26,6 +26,8 @@ const MOCK_POLICY = {
 describe('POST /v1/policies', () => {
   it('creates a policy and returns 201', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                  // subscription lookup → free plan
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);    // policy count → 0
     sqlMock.mockResolvedValueOnce([MOCK_POLICY]);
 
     const res = await app.inject({
@@ -40,6 +42,22 @@ describe('POST /v1/policies', () => {
     expect(body.id).toBe('pol_TEST01');
     expect(body.effect).toBe('deny');
     expect(body.name).toBe('Block all');
+  });
+
+  it('returns 402 when plan policy limit is reached', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ plan: 'free' }]);  // subscription → free plan
+    sqlMock.mockResolvedValueOnce([{ count: '5' }]);    // policy count → at limit
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/policies',
+      headers: authHeader(),
+      payload: { name: 'Another policy', effect: 'deny' },
+    });
+
+    expect(res.statusCode).toBe(402);
+    expect(res.json<{ code: string }>().code).toBe('PLAN_LIMIT_EXCEEDED');
   });
 
   it('returns 400 when name or effect is missing', async () => {

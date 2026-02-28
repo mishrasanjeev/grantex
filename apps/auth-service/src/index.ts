@@ -6,6 +6,8 @@ import { getRedis } from './redis/client.js';
 import { buildApp } from './server.js';
 import { hashApiKey } from './lib/hash.js';
 import { newDeveloperId } from './lib/ids.js';
+import { startWebhookDeliveryWorker } from './workers/webhookDelivery.js';
+import { startAnomalyDetectionWorker } from './workers/anomalyDetection.js';
 
 async function main() {
   // Initialize RSA keys
@@ -59,6 +61,10 @@ async function main() {
     app.log.error(err);
     process.exit(1);
   }
+
+  // Start background workers after the server is listening
+  startWebhookDeliveryWorker(sql);
+  startAnomalyDetectionWorker(sql);
 }
 
 main().catch((err) => {

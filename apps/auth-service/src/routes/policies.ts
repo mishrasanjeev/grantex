@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { newPolicyId } from '../lib/ids.js';
+import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 
 interface PolicyBody {
   name: string;
@@ -64,6 +65,28 @@ export async function policiesRoutes(app: FastifyInstance): Promise<void> {
 
     const sql = getSql();
     const developerId = request.developer.id;
+
+    // Enforce plan policy limit
+    const subRows = await sql<{ plan: string }[]>`
+      SELECT plan FROM subscriptions WHERE developer_id = ${developerId}
+    `;
+    const planName = subRows[0]?.plan ?? 'free';
+    const currentPlan = isPlanName(planName) ? planName : 'free';
+    const policyLimit = PLAN_LIMITS[currentPlan].policies;
+
+    const countRows = await sql<{ count: string }[]>`
+      SELECT COUNT(*) AS count FROM policies WHERE developer_id = ${developerId}
+    `;
+    const policyCount = parseInt(countRows[0]?.count ?? '0', 10);
+
+    if (policyCount >= policyLimit) {
+      return reply.status(402).send({
+        message: `Plan limit reached: ${currentPlan} plan allows ${policyLimit} policies. Upgrade at /v1/billing/checkout`,
+        code: 'PLAN_LIMIT_EXCEEDED',
+        requestId: request.id,
+      });
+    }
+
     const id = newPolicyId();
 
     const rows = await sql`
