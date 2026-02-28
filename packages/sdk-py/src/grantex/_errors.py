@@ -16,11 +16,13 @@ class GrantexApiError(GrantexError):
         status_code: int,
         body: Any = None,
         request_id: str | None = None,
+        code: str | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.body = body
         self.request_id = request_id
+        self.code = code
 
 
 class GrantexAuthError(GrantexApiError):

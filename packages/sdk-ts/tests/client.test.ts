@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Grantex } from '../src/client.js';
-import { GrantexAuthError, GrantexNetworkError } from '../src/errors.js';
+import { GrantexApiError, GrantexAuthError, GrantexNetworkError } from '../src/errors.js';
 
 function makeFetch(status: number, body: unknown, headers?: Record<string, string>) {
   return vi.fn().mockResolvedValue({
@@ -86,6 +86,23 @@ describe('Grantex client', () => {
       );
       const grantex = new Grantex({ apiKey: 'test_key' });
       await expect(grantex.agents.list()).rejects.toBeInstanceOf(GrantexAuthError);
+    });
+
+    it('exposes error code from response body', async () => {
+      vi.stubGlobal(
+        'fetch',
+        makeFetch(400, { message: 'Invalid code', code: 'BAD_REQUEST', requestId: 'req_1' }),
+      );
+      const grantex = new Grantex({ apiKey: 'test_key' });
+      try {
+        await grantex.agents.list();
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(GrantexApiError);
+        const apiErr = err as GrantexApiError;
+        expect(apiErr.code).toBe('BAD_REQUEST');
+        expect(apiErr.statusCode).toBe(400);
+      }
     });
 
     it('throws GrantexNetworkError when fetch throws', async () => {

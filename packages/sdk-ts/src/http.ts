@@ -87,6 +87,7 @@ export class HttpClient {
       }
 
       const message = extractErrorMessage(responseBody, response.status);
+      const errorCode = extractErrorCode(responseBody);
 
       if (response.status === 401 || response.status === 403) {
         throw new GrantexAuthError(
@@ -94,10 +95,11 @@ export class HttpClient {
           response.status as 401 | 403,
           responseBody,
           requestId,
+          errorCode,
         );
       }
 
-      throw new GrantexApiError(message, response.status, responseBody, requestId);
+      throw new GrantexApiError(message, response.status, responseBody, requestId, errorCode);
     }
 
     if (response.status === 204) {
@@ -106,6 +108,18 @@ export class HttpClient {
 
     return response.json() as Promise<T>;
   }
+}
+
+function extractErrorCode(body: unknown): string | undefined {
+  if (
+    body !== null &&
+    typeof body === 'object' &&
+    'code' in body &&
+    typeof (body as Record<string, unknown>)['code'] === 'string'
+  ) {
+    return (body as Record<string, string>)['code']!;
+  }
+  return undefined;
 }
 
 function extractErrorMessage(body: unknown, status: number): string {

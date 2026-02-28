@@ -6,9 +6,10 @@ description: "Exchange authorization codes for grant tokens, verify tokens onlin
 
 ## Overview
 
-The `tokens` client provides three operations for managing grant tokens:
+The `tokens` client provides four operations for managing grant tokens:
 
 - **Exchange** an authorization code for a grant token
+- **Refresh** a grant token using a refresh token
 - **Verify** a grant token online via the Grantex API
 - **Revoke** a grant token by its token ID (JTI)
 
@@ -64,6 +65,41 @@ with Grantex(api_key="gx_live_...") as client:
         code_verifier="dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk",
     ))
 ```
+
+## Refresh
+
+Refresh a grant token using a refresh token. Returns a new grant token and a new refresh token (the old refresh token is invalidated). The `grant_id` stays the same.
+
+Refresh tokens are single-use and rotated on every refresh per SPEC §7.4.
+
+```python
+from grantex import Grantex, RefreshTokenParams
+
+with Grantex(api_key="gx_live_...") as client:
+    new_token = client.tokens.refresh(RefreshTokenParams(
+        refresh_token="rt_01HXYZ...",
+        agent_id="agt_abc123",
+    ))
+
+    print(f"New grant token: {new_token.grant_token}")
+    print(f"New refresh token: {new_token.refresh_token}")
+    print(f"Same grant ID: {new_token.grant_id}")
+```
+
+### RefreshTokenParams
+
+| Field           | Type  | Required | Description                                                |
+|-----------------|-------|----------|------------------------------------------------------------|
+| `refresh_token` | `str` | Yes      | The refresh token from a previous `exchange()` or `refresh()` response. |
+| `agent_id`      | `str` | Yes      | The agent ID associated with the grant.                    |
+
+### Response
+
+Returns an `ExchangeTokenResponse` — same shape as `exchange()`. See above for field descriptions.
+
+<Warning>
+Each refresh token can only be used once. If you attempt to reuse a refresh token, the request will be rejected with a `400` error. Always store and use the new `refresh_token` from the response.
+</Warning>
 
 ## Verify
 

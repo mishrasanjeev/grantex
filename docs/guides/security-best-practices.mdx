@@ -1,0 +1,201 @@
+---
+title: "Security Best Practices"
+sidebarTitle: "Security Best Practices"
+description: "Harden your Grantex integration with token storage strategies, scope design, revocation handling, and more."
+---
+
+This guide covers security best practices for integrating Grantex into production applications. Following these recommendations helps protect your users, agents, and data.
+
+## Token Storage
+
+Grant tokens are RS256 JWTs. Where you store them depends on your threat model:
+
+| Strategy | When to use | Notes |
+|----------|-------------|-------|
+| **In-memory** | Short-lived agent tasks (minutes) | Token is lost on process restart — safest default |
+| **Encrypted session store** | Multi-step workflows across requests | Use AES-256-GCM; never store tokens in plaintext |
+| **Encrypted cache (Redis)** | High-throughput services sharing tokens | Set TTL to match token expiry; use TLS in transit |
+
+<Warning>
+Never store grant tokens in browser `localStorage`, cookies, or client-side storage. Grant tokens are meant for server-side agent code only.
+</Warning>
+
+### Refresh Token Storage
+
+Refresh tokens have a 30-day TTL and are single-use. Store them with the same care as API keys:
+
+- Encrypt at rest (e.g., envelope encryption with a KMS)
+- Restrict access to the service that performs token refresh
+- Never log refresh tokens — redact them in your logging pipeline
+
+## Scope Design
+
+Design scopes using the `resource:action` pattern with least privilege:
+
+```
+# Good — narrow, specific
+calendar:read
+payments:initiate:max_500
+files:read:folder_abc
+
+# Bad — overly broad
+calendar
+full_access
+admin
+```
+
+**Principles:**
+
+- **Request only what you need** — agents should declare the minimum scopes required for their task
+- **Prefer read over write** — if the agent only needs to read data, don't request write access
+- **Use parameterized scopes** — `payments:initiate:max_500` is safer than `payments:initiate`
+- **Review scope requests in the consent UI** — users see exactly what the agent is requesting
+
+## Revocation Handling
+
+Tokens can be revoked at any time by the user or developer. Your agent should handle revocation gracefully:
+
+<CodeGroup>
+```typescript TypeScript
+import { Grantex, GrantexAuthError } from '@grantex/sdk';
+
+async function callWithGrant(grantToken: string, fn: () => Promise<void>) {
+  try {
+    await fn();
+  } catch (err) {
+    if (err instanceof GrantexAuthError && err.statusCode === 401) {
+      // Token was revoked — stop the agent gracefully
+      console.log('Grant token revoked, halting agent');
+      return;
+    }
+    throw err;
+  }
+}
+```
+
+```python Python
+from grantex import GrantexAuthError
+
+def call_with_grant(grant_token: str, fn):
+    try:
+        fn()
+    except GrantexAuthError as err:
+        if err.status_code == 401:
+            print("Grant token revoked, halting agent")
+            return
+        raise
+```
+</CodeGroup>
+
+**Best practices:**
+
+- Listen for the `grant.revoked` [webhook event](/guides/webhooks) to react in real time
+- On 401, do not retry — the token has been permanently invalidated
+- Clean up any cached tokens after revocation
+
+## Delegation Security
+
+When delegating grants to sub-agents (SPEC §9):
+
+- **Minimize delegation depth** — each layer adds risk. Keep `delegationDepth` as low as possible
+- **Always narrow scopes** — the sub-agent should have fewer scopes than the parent
+- **Verify the chain** — use `verifyGrantToken()` to inspect `parentAgentDid` and `delegationDepth` claims
+- **Set short expiry** — delegated grants should expire before the parent grant
+
+```typescript
+// Good: narrowing scopes on delegation
+const delegated = await grantex.grants.delegate({
+  parentGrantToken: parentToken,
+  subAgentId: subAgent.id,
+  scopes: ['calendar:read'],  // subset of parent's ['calendar:read', 'calendar:write']
+  expiresIn: '1h',            // shorter than parent's 24h
+});
+```
+
+## PKCE
+
+Always use PKCE (Proof Key for Code Exchange) with S256 in production:
+
+<CodeGroup>
+```typescript TypeScript
+import { Grantex, generatePkce } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+const pkce = generatePkce();
+
+const auth = await grantex.authorize({
+  agentId: agent.id,
+  userId: 'user_123',
+  scopes: ['files:read'],
+  codeChallenge: pkce.codeChallenge,
+  codeChallengeMethod: 'S256',
+});
+
+// Later, when exchanging the code:
+const token = await grantex.tokens.exchange({
+  code: callbackCode,
+  agentId: agent.id,
+  codeVerifier: pkce.codeVerifier,
+});
+```
+
+```python Python
+from grantex import Grantex, AuthorizeParams, ExchangeTokenParams, generate_pkce
+
+pkce = generate_pkce()
+
+with Grantex(api_key="gx_live_...") as client:
+    auth = client.authorize(AuthorizeParams(
+        agent_id="agt_abc",
+        user_id="user_123",
+        scopes=["files:read"],
+        code_challenge=pkce.code_challenge,
+        code_challenge_method="S256",
+    ))
+
+    token = client.tokens.exchange(ExchangeTokenParams(
+        code=callback_code,
+        agent_id="agt_abc",
+        code_verifier=pkce.code_verifier,
+    ))
+```
+</CodeGroup>
+
+PKCE prevents authorization code interception attacks. Without it, an attacker who intercepts the code can exchange it for a grant token.
+
+## Audit Trail Best Practices
+
+The audit log is your forensic record. Use it proactively:
+
+- **Log every sensitive action** — file access, payment initiation, data deletion
+- **Include metadata** — resource IDs, amounts, user-facing descriptions
+- **Use appropriate status values** — `success`, `failure`, or `blocked`
+- **Query audit entries regularly** — detect anomalies before they become incidents
+- **Enable the anomaly detection worker** — it flags rate spikes, high failure rates, and off-hours activity automatically
+
+```typescript
+await grantex.audit.log({
+  agentId: agent.id,
+  grantId: grant.id,
+  action: 'payments:initiate',
+  metadata: { amount: 250, currency: 'USD', recipient: 'vendor_xyz' },
+  status: 'success',
+});
+```
+
+## Key Rotation
+
+- Rotate your Grantex API key periodically using `POST /v1/me/rotate-key`
+- After rotation, update all services that use the old key
+- The old key is immediately invalidated — plan for a brief deployment window
+
+## Summary Checklist
+
+<Check>Store tokens in memory or encrypted server-side stores</Check>
+<Check>Use `resource:action` scope format with least privilege</Check>
+<Check>Handle 401 gracefully — never retry revoked tokens</Check>
+<Check>Minimize delegation depth and always narrow scopes</Check>
+<Check>Always use PKCE S256 in production</Check>
+<Check>Log all sensitive agent actions to the audit trail</Check>
+<Check>Enable webhooks for `grant.revoked` events</Check>
+<Check>Rotate API keys periodically</Check>

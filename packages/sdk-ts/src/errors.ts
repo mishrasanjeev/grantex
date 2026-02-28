@@ -10,6 +10,7 @@ export class GrantexError extends Error {
 export class GrantexApiError extends GrantexError {
   readonly statusCode: number;
   readonly body: unknown;
+  readonly code: string | undefined;
   readonly requestId: string | undefined;
 
   constructor(
@@ -17,11 +18,13 @@ export class GrantexApiError extends GrantexError {
     statusCode: number,
     body: unknown,
     requestId?: string,
+    code?: string,
   ) {
     super(message);
     this.name = 'GrantexApiError';
     this.statusCode = statusCode;
     this.body = body;
+    this.code = code;
     this.requestId = requestId;
     Object.setPrototypeOf(this, new.target.prototype);
   }
@@ -33,8 +36,9 @@ export class GrantexAuthError extends GrantexApiError {
     statusCode: 401 | 403,
     body: unknown,
     requestId?: string,
+    code?: string,
   ) {
-    super(message, statusCode, body, requestId);
+    super(message, statusCode, body, requestId, code);
     this.name = 'GrantexAuthError';
     Object.setPrototypeOf(this, new.target.prototype);
   }

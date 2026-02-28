@@ -43,6 +43,7 @@ export type {
   // Tokens
   ExchangeTokenParams,
   ExchangeTokenResponse,
+  RefreshTokenParams,
   VerifyTokenResponse,
   // Audit
   LogAuditParams,

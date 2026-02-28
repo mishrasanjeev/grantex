@@ -70,6 +70,43 @@ console.log(token.refreshToken); // 'rt_01HXYZ...'
 
 ---
 
+## tokens.refresh()
+
+Refresh a grant token using a refresh token. Returns a new grant token and a new refresh token (the old refresh token is invalidated). The `grantId` stays the same.
+
+Refresh tokens are single-use and rotated on every refresh per SPEC §7.4.
+
+```typescript
+const newToken = await grantex.tokens.refresh({
+  refreshToken: token.refreshToken,
+  agentId: agent.id,
+});
+
+console.log(newToken.grantToken);   // new RS256 JWT
+console.log(newToken.refreshToken); // new refresh token (old one invalidated)
+console.log(newToken.grantId);      // same grant ID
+```
+
+### Parameters
+
+<ParamField body="refreshToken" type="string" required>
+  The refresh token from a previous `exchange()` or `refresh()` response.
+</ParamField>
+
+<ParamField body="agentId" type="string" required>
+  The agent ID associated with the grant.
+</ParamField>
+
+### Response: `ExchangeTokenResponse`
+
+Returns the same shape as `exchange()` — see above for field descriptions.
+
+<Warning>
+Each refresh token can only be used once. If you attempt to reuse a refresh token, the request will be rejected with a `400` error. Always store and use the new `refreshToken` from the response.
+</Warning>
+
+---
+
 ## tokens.verify()
 
 Verify a grant token online via the Grantex API. This is useful when you want server-side validation without managing JWKS yourself.

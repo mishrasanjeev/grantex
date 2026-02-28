@@ -10,6 +10,7 @@ import httpx
 from grantex import (
     Grantex,
     AuthorizeParams,
+    GrantexApiError,
     GrantexAuthError,
     GrantexNetworkError,
 )
@@ -145,3 +146,19 @@ def test_timeout_raises_network_error() -> None:
         client.authorize(
             AuthorizeParams(agent_id="ag_01", user_id="u_01", scopes=[])
         )
+
+
+@respx.mock
+def test_error_code_exposed() -> None:
+    respx.post("https://api.grantex.dev/v1/authorize").mock(
+        return_value=httpx.Response(
+            400, json={"message": "Invalid code", "code": "BAD_REQUEST", "requestId": "req_1"}
+        )
+    )
+    client = Grantex(api_key="test-key")
+    with pytest.raises(GrantexApiError) as exc_info:
+        client.authorize(
+            AuthorizeParams(agent_id="ag_01", user_id="u_01", scopes=[])
+        )
+    assert exc_info.value.code == "BAD_REQUEST"
+    assert exc_info.value.status_code == 400

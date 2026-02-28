@@ -169,6 +169,11 @@ export interface ExchangeTokenResponse {
   grantId: string;
 }
 
+export interface RefreshTokenParams {
+  refreshToken: string;
+  agentId: string;
+}
+
 export interface VerifyTokenResponse {
   valid: boolean;
   grantId?: string;
