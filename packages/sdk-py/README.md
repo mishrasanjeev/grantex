@@ -67,6 +67,38 @@ print(verified.principal_id) # 'usr_01HXYZ...'
 print(verified.agent_did)    # 'did:web:...'
 ```
 
+## PKCE Support
+
+The SDK includes built-in PKCE (Proof Key for Code Exchange) support using the S256 method:
+
+```python
+from grantex import Grantex, ExchangeTokenParams, generate_pkce
+
+client = Grantex(api_key="YOUR_API_KEY")
+
+# 1. Generate a PKCE challenge
+pkce = generate_pkce()
+# pkce.code_verifier        — random 43-char string (keep secret)
+# pkce.code_challenge       — SHA-256 hash of verifier (send to server)
+# pkce.code_challenge_method — 'S256'
+
+# 2. Pass the challenge when requesting authorization
+request = client.authorize(
+    agent_id="ag_01HXYZ...",
+    user_id="usr_01HXYZ...",
+    scopes=["files:read"],
+    code_challenge=pkce.code_challenge,
+    code_challenge_method=pkce.code_challenge_method,
+)
+
+# 3. Exchange the code with the verifier
+token = client.tokens.exchange(ExchangeTokenParams(
+    code="auth_code_from_redirect",
+    agent_id="ag_01HXYZ...",
+    code_verifier=pkce.code_verifier,
+))
+```
+
 ## Features
 
 | Feature | Description |

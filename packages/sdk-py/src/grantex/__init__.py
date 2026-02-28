@@ -76,7 +76,7 @@ from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook_signature
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 __all__ = [
     # Main client

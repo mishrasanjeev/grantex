@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.3] - 2026-02-28
+
+### Added
+- PKCE (S256) support in authorization and token exchange flows
+- `generatePkce()` helper in TypeScript SDK
+- `generate_pkce()` helper in Python SDK
+- Rate limiting on auth-service (100/min global, 20/min token, 10/min authorize)
+- CHANGELOG.md, CODE_OF_CONDUCT.md, issue templates, PR template
+
+### Changed
+- Bumped `@grantex/sdk` to 0.1.3 and `grantex` (Python) to 0.1.3
+
+### Fixed
+- "ML-based detection" copy corrected to "Pattern-based detection" on landing page
+
 ## [0.1.2] - 2026-02-27
 
 ### Added
