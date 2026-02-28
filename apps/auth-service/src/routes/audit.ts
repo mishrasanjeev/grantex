@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { newAuditEntryId } from '../lib/ids.js';
 import { computeAuditHash } from '../lib/hash.js';
+import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 
 interface AuditLogBody {
   agentId: string;
@@ -28,6 +29,27 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
 
     const sql = getSql();
     const developerId = request.developer.id;
+
+    // Enforce plan audit entry limit
+    const subRows = await sql<{ plan: string }[]>`
+      SELECT plan FROM subscriptions WHERE developer_id = ${developerId}
+    `;
+    const planName = subRows[0]?.plan ?? 'free';
+    const plan = isPlanName(planName) ? planName : 'free';
+    const auditLimit = PLAN_LIMITS[plan].auditEntries;
+
+    const countRows = await sql<{ count: string }[]>`
+      SELECT COUNT(*) AS count FROM audit_entries WHERE developer_id = ${developerId}
+    `;
+    const auditCount = parseInt(countRows[0]?.count ?? '0', 10);
+
+    if (auditCount >= auditLimit) {
+      return reply.status(402).send({
+        message: `Plan limit reached: ${plan} plan allows ${auditLimit} audit entries. Upgrade at /v1/billing/checkout`,
+        code: 'PLAN_LIMIT_EXCEEDED',
+        requestId: request.id,
+      });
+    }
 
     // Get last audit entry hash for chain
     const lastRows = await sql`

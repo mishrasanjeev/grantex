@@ -4,6 +4,7 @@ import { newAuthRequestId } from '../lib/ids.js';
 import { config } from '../config.js';
 import { ulid } from 'ulid';
 import { evaluatePolicies, type PolicyRow } from '../lib/policy.js';
+import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 
 interface AuthorizeBody {
   agentId: string;
@@ -30,6 +31,27 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
 
     const sql = getSql();
     const developerId = request.developer.id;
+
+    // Enforce plan grant limit
+    const subRows = await sql<{ plan: string }[]>`
+      SELECT plan FROM subscriptions WHERE developer_id = ${developerId}
+    `;
+    const planName = subRows[0]?.plan ?? 'free';
+    const plan = isPlanName(planName) ? planName : 'free';
+    const grantLimit = PLAN_LIMITS[plan].grants;
+
+    const countRows = await sql<{ count: string }[]>`
+      SELECT COUNT(*) AS count FROM grants WHERE developer_id = ${developerId} AND status = 'active'
+    `;
+    const grantCount = parseInt(countRows[0]?.count ?? '0', 10);
+
+    if (grantCount >= grantLimit) {
+      return reply.status(402).send({
+        message: `Plan limit reached: ${plan} plan allows ${grantLimit} active grant(s). Upgrade at /v1/billing/checkout`,
+        code: 'PLAN_LIMIT_EXCEEDED',
+        requestId: request.id,
+      });
+    }
 
     // Verify agent belongs to this developer
     const agentRows = await sql`

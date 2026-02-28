@@ -11,6 +11,8 @@ beforeAll(async () => {
 describe('POST /v1/authorize', () => {
   it('creates an auth request and returns requestId + consentUrl', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                  // subscription lookup → free plan
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);    // grant count → 0
     // Agent lookup
     sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]);
     // Policy lookup — no policies
@@ -50,8 +52,30 @@ describe('POST /v1/authorize', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('returns 402 when plan grant limit is reached', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ plan: 'free' }]);  // subscription → free plan
+    sqlMock.mockResolvedValueOnce([{ count: '50' }]);   // grant count → at limit
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        principalId: 'user_123',
+        scopes: ['read'],
+      },
+    });
+
+    expect(res.statusCode).toBe(402);
+    expect(res.json<{ code: string }>().code).toBe('PLAN_LIMIT_EXCEEDED');
+  });
+
   it('returns 404 when agent not found', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                  // subscription lookup
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);    // grant count
     sqlMock.mockResolvedValueOnce([]); // agent not found
 
     const res = await app.inject({
@@ -72,6 +96,8 @@ describe('POST /v1/authorize', () => {
 describe('POST /v1/authorize — sandbox mode', () => {
   it('auto-approves and returns code immediately for sandbox developer', async () => {
     seedSandboxAuth();
+    sqlMock.mockResolvedValueOnce([]);                       // subscription lookup
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);         // grant count
     sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // agent lookup
     sqlMock.mockResolvedValueOnce([]);                       // policy lookup
     sqlMock.mockResolvedValueOnce([]);                       // insert
@@ -97,6 +123,8 @@ describe('POST /v1/authorize — sandbox mode', () => {
 
   it('does not return code for live developer', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                       // subscription lookup
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);         // grant count
     sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]);
     sqlMock.mockResolvedValueOnce([]); // policy lookup
     sqlMock.mockResolvedValueOnce([]);
@@ -179,6 +207,8 @@ describe('POST /v1/authorize — policy engine', () => {
 
   it('returns 403 when a deny policy matches', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                       // subscription lookup
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);         // grant count
     sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // agent lookup
     sqlMock.mockResolvedValueOnce([DENY_POLICY]);            // policy lookup → deny
 
@@ -196,6 +226,8 @@ describe('POST /v1/authorize — policy engine', () => {
 
   it('auto-approves and returns code when an allow policy matches', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                       // subscription lookup
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);         // grant count
     sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // agent lookup
     sqlMock.mockResolvedValueOnce([ALLOW_POLICY]);           // policy lookup → allow
     sqlMock.mockResolvedValueOnce([]);                       // insert
