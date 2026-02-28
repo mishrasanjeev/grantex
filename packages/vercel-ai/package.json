@@ -41,6 +41,16 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "keywords": [
+    "grantex",
+    "vercel-ai",
+    "ai-sdk",
+    "ai-agents",
+    "authorization",
+    "oauth",
+    "jwt",
+    "agent-tools"
+  ],
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

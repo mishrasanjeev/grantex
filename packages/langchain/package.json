@@ -39,6 +39,16 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "keywords": [
+    "grantex",
+    "langchain",
+    "ai-agents",
+    "authorization",
+    "oauth",
+    "jwt",
+    "llm",
+    "agent-tools"
+  ],
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

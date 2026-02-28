@@ -12,6 +12,10 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Spec Version](https://img.shields.io/badge/spec-v1.0--final-green)](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
 [![GitHub Stars](https://img.shields.io/github/stars/mishrasanjeev/grantex?style=social)](https://github.com/mishrasanjeev/grantex)
+[![npm](https://img.shields.io/npm/v/@grantex/sdk)](https://www.npmjs.com/package/@grantex/sdk)
+[![PyPI](https://img.shields.io/pypi/v/grantex)](https://pypi.org/project/grantex/)
+[![CI](https://img.shields.io/github/actions/workflow/status/mishrasanjeev/grantex/ci.yml?branch=main&label=CI)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-grantex.dev-3fb950)](https://grantex.dev/docs)
 
 <br/>
 

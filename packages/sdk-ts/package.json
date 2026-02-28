@@ -35,6 +35,17 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "keywords": [
+    "grantex",
+    "ai-agents",
+    "authorization",
+    "oauth",
+    "jwt",
+    "delegated-auth",
+    "sdk",
+    "agent-permissions",
+    "grant-token"
+  ],
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
