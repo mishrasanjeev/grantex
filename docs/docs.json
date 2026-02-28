@@ -12,6 +12,7 @@
     "light": "#58a6ff",
     "dark": "#2ea043"
   },
+  "openapi": "openapi.yaml",
   "navigation": {
     "global": {
       "tabs": [
@@ -19,6 +20,7 @@
         { "tab": "TypeScript SDK", "href": "/sdks/typescript/overview" },
         { "tab": "Python SDK", "href": "/sdks/python/overview" },
         { "tab": "Integrations", "href": "/integrations/overview" },
+        { "tab": "API Reference", "href": "/api-reference" },
         { "tab": "Protocol", "href": "/protocol/specification" },
         { "tab": "Blog", "href": "/blog" }
       ]
@@ -172,6 +174,156 @@
             "group": "CLI",
             "pages": [
               "integrations/cli"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/introduction"
+            ]
+          },
+          {
+            "group": "System",
+            "pages": [
+              "api-reference/system/get-health",
+              "api-reference/system/get-jwks",
+              "api-reference/system/get-dashboard",
+              "api-reference/system/get-principal-dashboard"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "api-reference/authentication/signup",
+              "api-reference/authentication/get-me",
+              "api-reference/authentication/rotate-api-key"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "api-reference/agents/register-agent",
+              "api-reference/agents/list-agents",
+              "api-reference/agents/get-agent",
+              "api-reference/agents/update-agent",
+              "api-reference/agents/delete-agent"
+            ]
+          },
+          {
+            "group": "Authorization",
+            "pages": [
+              "api-reference/authorization/create-authorization-request",
+              "api-reference/authorization/approve-authorization-request",
+              "api-reference/authorization/deny-authorization-request"
+            ]
+          },
+          {
+            "group": "Tokens",
+            "pages": [
+              "api-reference/tokens/exchange-token",
+              "api-reference/tokens/verify-token",
+              "api-reference/tokens/revoke-token"
+            ]
+          },
+          {
+            "group": "Grants",
+            "pages": [
+              "api-reference/grants/list-grants",
+              "api-reference/grants/get-grant",
+              "api-reference/grants/revoke-grant",
+              "api-reference/grants/verify-grant",
+              "api-reference/grants/delegate-grant"
+            ]
+          },
+          {
+            "group": "Audit",
+            "pages": [
+              "api-reference/audit/create-audit-entry",
+              "api-reference/audit/list-audit-entries",
+              "api-reference/audit/get-audit-entry"
+            ]
+          },
+          {
+            "group": "Policies",
+            "pages": [
+              "api-reference/policies/create-policy",
+              "api-reference/policies/list-policies",
+              "api-reference/policies/get-policy",
+              "api-reference/policies/update-policy",
+              "api-reference/policies/delete-policy"
+            ]
+          },
+          {
+            "group": "Webhooks",
+            "pages": [
+              "api-reference/webhooks/create-webhook",
+              "api-reference/webhooks/list-webhooks",
+              "api-reference/webhooks/delete-webhook"
+            ]
+          },
+          {
+            "group": "Billing",
+            "pages": [
+              "api-reference/billing/get-subscription",
+              "api-reference/billing/create-checkout-session",
+              "api-reference/billing/create-billing-portal",
+              "api-reference/billing/handle-stripe-webhook"
+            ]
+          },
+          {
+            "group": "Anomalies",
+            "pages": [
+              "api-reference/anomalies/detect-anomalies",
+              "api-reference/anomalies/list-anomalies",
+              "api-reference/anomalies/acknowledge-anomaly"
+            ]
+          },
+          {
+            "group": "Compliance",
+            "pages": [
+              "api-reference/compliance/get-compliance-summary",
+              "api-reference/compliance/export-grants",
+              "api-reference/compliance/export-audit-entries",
+              "api-reference/compliance/get-evidence-pack"
+            ]
+          },
+          {
+            "group": "SCIM",
+            "pages": [
+              "api-reference/scim/create-scim-token",
+              "api-reference/scim/list-scim-tokens",
+              "api-reference/scim/delete-scim-token",
+              "api-reference/scim/get-scim-service-provider-config",
+              "api-reference/scim/list-scim-users",
+              "api-reference/scim/create-scim-user",
+              "api-reference/scim/get-scim-user",
+              "api-reference/scim/replace-scim-user",
+              "api-reference/scim/update-scim-user",
+              "api-reference/scim/delete-scim-user"
+            ]
+          },
+          {
+            "group": "SSO",
+            "pages": [
+              "api-reference/sso/create-sso-config",
+              "api-reference/sso/get-sso-config",
+              "api-reference/sso/delete-sso-config",
+              "api-reference/sso/sso-login",
+              "api-reference/sso/sso-callback"
+            ]
+          },
+          {
+            "group": "Consent",
+            "pages": [
+              "api-reference/consent/get-consent-page",
+              "api-reference/consent/get-consent-details",
+              "api-reference/consent/approve-consent",
+              "api-reference/consent/deny-consent"
             ]
           }
         ]

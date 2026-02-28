@@ -1,0 +1,39 @@
+---
+title: "API Reference"
+description: "Complete REST API reference for the Grantex Auth Service"
+---
+
+The Grantex Auth Service exposes a REST API covering agent registration, authorization flows, token management, audit logging, policy enforcement, anomaly detection, compliance exports, SCIM provisioning, SSO, and billing.
+
+## Base URLs
+
+| Environment | URL |
+|------------|-----|
+| **Production** | `https://grantex-auth-dd4mtrt2gq-uc.a.run.app` |
+| **Local** | `http://localhost:3001` |
+
+## Authentication
+
+Most endpoints require a **Bearer token** in the `Authorization` header. This is your developer API key, obtained via `POST /v1/signup`.
+
+```bash
+curl -H "Authorization: Bearer YOUR_API_KEY" \
+  https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/agents
+```
+
+SCIM 2.0 user endpoints use a separate **SCIM Bearer token**, created via `POST /v1/scim/tokens`.
+
+Public endpoints (health, JWKS, consent UI, SSO flow) require no authentication.
+
+## Rate Limits
+
+| Endpoint | Limit |
+|----------|-------|
+| Global default | 100 requests/minute |
+| `POST /v1/authorize` | 10 requests/minute |
+| `POST /v1/token` | 20 requests/minute |
+| `GET /.well-known/jwks.json` | Not rate-limited |
+
+## OpenAPI Spec
+
+The full OpenAPI 3.1 specification is available at [`openapi.yaml`](https://github.com/mishrasanjeev/grantex/blob/main/docs/openapi.yaml). You can import it into Swagger Editor, Postman, or any OpenAPI-compatible tool.

@@ -1,0 +1,2619 @@
+openapi: 3.1.0
+info:
+  title: Grantex Auth Service API
+  version: 0.1.3
+  description: |
+    The Grantex Auth Service implements the Grantex delegated authorization protocol for AI agents.
+    It provides agent registration, authorization flows, token management, audit logging, policy enforcement,
+    anomaly detection, compliance exports, SCIM provisioning, SSO, and billing.
+
+    ## Authentication
+    Most endpoints require a **Bearer token** (your developer API key) in the `Authorization` header.
+    SCIM 2.0 user endpoints use a separate SCIM Bearer token.
+    Public endpoints (health, JWKS, consent, SSO flow) require no authentication.
+
+    ## Rate Limits
+    - **Global default**: 100 requests/minute
+    - **POST /v1/authorize**: 10 requests/minute
+    - **POST /v1/token**: 20 requests/minute
+    - JWKS endpoint is allowlisted from rate limiting
+  license:
+    name: Apache 2.0
+    url: https://opensource.org/licenses/Apache-2.0
+  contact:
+    name: Grantex
+    url: https://grantex.dev
+
+servers:
+  - url: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+    description: Production (Cloud Run)
+  - url: http://localhost:3001
+    description: Local development (docker compose)
+
+tags:
+  - name: System
+    description: Health checks and public keys
+  - name: Authentication
+    description: Developer signup, profile, and key rotation
+  - name: Agents
+    description: Agent registration and management
+  - name: Authorization
+    description: Authorization request creation and approval
+  - name: Consent
+    description: End-user consent UI and approval flow
+  - name: Tokens
+    description: Token exchange, verification, and revocation
+  - name: Grants
+    description: Grant management, verification, and delegation
+  - name: Audit
+    description: Immutable audit log — append-only, hash-chained
+  - name: Policies
+    description: Access policy engine for automated grant decisions
+  - name: Webhooks
+    description: Webhook registration for real-time event notifications
+  - name: Billing
+    description: Stripe-based subscription billing
+  - name: Anomalies
+    description: Anomaly detection and acknowledgement
+  - name: Compliance
+    description: Compliance summaries, exports, and evidence packs
+  - name: SCIM
+    description: SCIM 2.0 user provisioning and token management
+  - name: SSO
+    description: OIDC single sign-on configuration and flow
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Developer API key
+    scimBearer:
+      type: http
+      scheme: bearer
+      description: SCIM provisioning token
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        statusCode:
+          type: integer
+      required: [error, code, statusCode]
+
+    Developer:
+      type: object
+      properties:
+        developerId:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        mode:
+          type: string
+          enum: [live, sandbox]
+        plan:
+          type: string
+          enum: [free, pro, enterprise]
+        createdAt:
+          type: string
+          format: date-time
+
+    Agent:
+      type: object
+      properties:
+        agentId:
+          type: string
+        did:
+          type: string
+        developerId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [active, suspended, revoked]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Grant:
+      type: object
+      properties:
+        grantId:
+          type: string
+        agentId:
+          type: string
+        principalId:
+          type: string
+        developerId:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [active, revoked, expired]
+        issuedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+        parentGrantId:
+          type: string
+        delegationDepth:
+          type: integer
+
+    AuditEntry:
+      type: object
+      properties:
+        entryId:
+          type: string
+        agentId:
+          type: string
+        agentDid:
+          type: string
+        grantId:
+          type: string
+        principalId:
+          type: string
+        developerId:
+          type: string
+        action:
+          type: string
+        metadata:
+          type: object
+        hash:
+          type: string
+        prevHash:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [success, failure, blocked]
+
+    Policy:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        effect:
+          type: string
+          enum: [allow, deny]
+        priority:
+          type: integer
+        agentId:
+          type: string
+        principalId:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        timeOfDayStart:
+          type: string
+        timeOfDayEnd:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            type: string
+            enum: [grant.created, grant.revoked, token.issued]
+        secret:
+          type: string
+          description: Only returned on creation
+        createdAt:
+          type: string
+          format: date-time
+
+    Anomaly:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [rate_spike, high_failure_rate, new_principal, off_hours_activity]
+        severity:
+          type: string
+          enum: [low, medium, high]
+        agentId:
+          type: string
+        principalId:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: object
+        detectedAt:
+          type: string
+          format: date-time
+        acknowledgedAt:
+          type: string
+          format: date-time
+
+    ScimUser:
+      type: object
+      properties:
+        schemas:
+          type: array
+          items:
+            type: string
+        id:
+          type: string
+        userName:
+          type: string
+        displayName:
+          type: string
+        externalId:
+          type: string
+        active:
+          type: boolean
+        emails:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+              primary:
+                type: boolean
+        meta:
+          type: object
+          properties:
+            resourceType:
+              type: string
+            created:
+              type: string
+              format: date-time
+            lastModified:
+              type: string
+              format: date-time
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ── System ───────────────────────────────────────────────────────────
+  /health:
+    get:
+      operationId: getHealth
+      tags: [System]
+      summary: Health check
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                required: [status]
+        "503":
+          description: Service is degraded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [degraded]
+                  failing:
+                    type: array
+                    items:
+                      type: string
+
+  /.well-known/jwks.json:
+    get:
+      operationId: getJwks
+      tags: [System]
+      summary: JSON Web Key Set
+      description: Public signing keys for offline grant token verification. Not rate-limited.
+      security: []
+      responses:
+        "200":
+          description: JWKS key set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+
+  # ── Authentication ───────────────────────────────────────────────────
+  /v1/signup:
+    post:
+      operationId: signup
+      tags: [Authentication]
+      summary: Register a new developer account
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Developer or organization name
+                email:
+                  type: string
+                  format: email
+              required: [name]
+      responses:
+        "201":
+          description: Developer account created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  developerId:
+                    type: string
+                  apiKey:
+                    type: string
+                  name:
+                    type: string
+                  email:
+                    type: string
+                  mode:
+                    type: string
+                    enum: [live, sandbox]
+                  createdAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Validation error (name missing)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/me:
+    get:
+      operationId: getMe
+      tags: [Authentication]
+      summary: Get current developer profile
+      responses:
+        "200":
+          description: Developer profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Developer"
+        "404":
+          description: Developer not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/keys/rotate:
+    post:
+      operationId: rotateApiKey
+      tags: [Authentication]
+      summary: Rotate API key
+      description: Generates a new API key and invalidates the current one.
+      responses:
+        "200":
+          description: New API key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apiKey:
+                    type: string
+                  rotatedAt:
+                    type: string
+                    format: date-time
+
+  # ── Agents ───────────────────────────────────────────────────────────
+  /v1/agents:
+    post:
+      operationId: registerAgent
+      tags: [Agents]
+      summary: Register a new agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Human-readable agent name
+                description:
+                  type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                  description: Scopes the agent may request
+              required: [name]
+      responses:
+        "201":
+          description: Agent registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "402":
+          description: Plan agent limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      operationId: listAgents
+      tags: [Agents]
+      summary: List all agents
+      responses:
+        "200":
+          description: Agent list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Agent"
+
+  /v1/agents/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Agent ID
+    get:
+      operationId: getAgent
+      tags: [Agents]
+      summary: Get agent by ID
+      responses:
+        "200":
+          description: Agent details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateAgent
+      tags: [Agents]
+      summary: Update an agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                status:
+                  type: string
+                  enum: [active, suspended]
+      responses:
+        "200":
+          description: Updated agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "400":
+          description: No fields to update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteAgent
+      tags: [Agents]
+      summary: Delete an agent
+      responses:
+        "204":
+          description: Agent deleted
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Authorization ────────────────────────────────────────────────────
+  /v1/authorize:
+    post:
+      operationId: createAuthorizationRequest
+      tags: [Authorization]
+      summary: Create an authorization request
+      description: |
+        Creates an authorization request and returns a consent URL for the end-user.
+        In sandbox mode, returns a `code` directly (no redirect needed).
+        If a matching policy auto-approves, returns a `code` with `policyEnforced: true`.
+
+        **Rate limit: 10 requests/minute.**
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentId:
+                  type: string
+                principalId:
+                  type: string
+                  description: Your application's user identifier
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                redirectUri:
+                  type: string
+                  format: uri
+                state:
+                  type: string
+                expiresIn:
+                  type: string
+                  default: "24h"
+                  description: Duration string (e.g. '1h', '24h', '7d')
+                audience:
+                  type: string
+                codeChallenge:
+                  type: string
+                  description: PKCE code challenge (S256 only)
+                codeChallengeMethod:
+                  type: string
+                  enum: [S256]
+              required: [agentId, principalId, scopes]
+      responses:
+        "201":
+          description: Authorization request created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authRequestId:
+                    type: string
+                  consentUrl:
+                    type: string
+                    format: uri
+                  expiresAt:
+                    type: string
+                    format: date-time
+                  sandbox:
+                    type: boolean
+                  code:
+                    type: string
+                    description: Present in sandbox mode or when policy auto-approves
+                  policyEnforced:
+                    type: boolean
+                  effect:
+                    type: string
+                    enum: [allow]
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "402":
+          description: Plan grant limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Policy denied the authorization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/authorize/{id}/approve:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Authorization request ID
+    post:
+      operationId: approveAuthorizationRequest
+      tags: [Authorization]
+      summary: Approve an authorization request
+      description: Programmatic approval (for testing). In production, use the consent UI.
+      responses:
+        "200":
+          description: Request approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requestId:
+                    type: string
+                  status:
+                    type: string
+                  code:
+                    type: string
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/authorize/{id}/deny:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Authorization request ID
+    post:
+      operationId: denyAuthorizationRequest
+      tags: [Authorization]
+      summary: Deny an authorization request
+      responses:
+        "200":
+          description: Request denied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requestId:
+                    type: string
+                  status:
+                    type: string
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Consent ──────────────────────────────────────────────────────────
+  /consent:
+    get:
+      operationId: getConsentPage
+      tags: [Consent]
+      summary: Consent UI page
+      description: HTML consent page for end-user approval.
+      security: []
+      parameters:
+        - name: req
+          in: query
+          schema:
+            type: string
+          description: Authorization request ID
+      responses:
+        "200":
+          description: HTML consent page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /v1/consent/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Authorization request ID
+    get:
+      operationId: getConsentDetails
+      tags: [Consent]
+      summary: Get consent request details
+      security: []
+      responses:
+        "200":
+          description: Consent request details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  agentName:
+                    type: string
+                  agentDid:
+                    type: string
+                  agentDescription:
+                    type: string
+                  scopes:
+                    type: array
+                    items:
+                      type: string
+                  scopeDescriptions:
+                    type: array
+                    items:
+                      type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+                  status:
+                    type: string
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Request expired or already processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/consent/{id}/approve:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Authorization request ID
+    post:
+      operationId: approveConsent
+      tags: [Consent]
+      summary: Approve consent (end-user action)
+      security: []
+      responses:
+        "200":
+          description: Consent approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: string
+                  redirectUri:
+                    type: string
+                  state:
+                    type: string
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Request expired or already processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/consent/{id}/deny:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Authorization request ID
+    post:
+      operationId: denyConsent
+      tags: [Consent]
+      summary: Deny consent (end-user action)
+      security: []
+      responses:
+        "200":
+          description: Consent denied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  redirectUri:
+                    type: string
+                  state:
+                    type: string
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Tokens ───────────────────────────────────────────────────────────
+  /v1/token:
+    post:
+      operationId: exchangeToken
+      tags: [Tokens]
+      summary: Exchange authorization code for grant token
+      description: |
+        Exchanges an authorization code for a signed grant token (RS256 JWT).
+        If the authorization used PKCE (S256), a `codeVerifier` is required.
+        Fires webhook events for `grant.created` and `token.issued`.
+
+        **Rate limit: 20 requests/minute.**
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  description: Authorization code from consent approval
+                agentId:
+                  type: string
+                codeVerifier:
+                  type: string
+                  description: PKCE code verifier (required if code_challenge was used)
+              required: [code, agentId]
+      responses:
+        "201":
+          description: Grant token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  grantToken:
+                    type: string
+                    description: Signed RS256 JWT
+                  expiresAt:
+                    type: string
+                    format: date-time
+                  scopes:
+                    type: array
+                    items:
+                      type: string
+                  refreshToken:
+                    type: string
+                  grantId:
+                    type: string
+        "400":
+          description: Invalid code, not approved, expired, or PKCE mismatch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/tokens/verify:
+    post:
+      operationId: verifyToken
+      tags: [Tokens]
+      summary: Verify a grant token online
+      description: Server-side token verification. For offline verification, use the JWKS endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+              required: [token]
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      valid:
+                        type: boolean
+                        const: true
+                      grantId:
+                        type: string
+                      scopes:
+                        type: array
+                        items:
+                          type: string
+                      principal:
+                        type: string
+                      agent:
+                        type: string
+                      expiresAt:
+                        type: string
+                        format: date-time
+                  - type: object
+                    properties:
+                      valid:
+                        type: boolean
+                        const: false
+        "400":
+          description: Token missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/tokens/revoke:
+    post:
+      operationId: revokeToken
+      tags: [Tokens]
+      summary: Revoke a grant token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                jti:
+                  type: string
+                  description: Token ID (jti claim from the JWT)
+              required: [jti]
+      responses:
+        "204":
+          description: Token revoked
+        "404":
+          description: Token not found or already revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Grants ───────────────────────────────────────────────────────────
+  /v1/grants:
+    get:
+      operationId: listGrants
+      tags: [Grants]
+      summary: List grants
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+        - name: principalId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, revoked, expired]
+      responses:
+        "200":
+          description: Grant list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  grants:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Grant"
+
+  /v1/grants/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Grant ID
+    get:
+      operationId: getGrant
+      tags: [Grants]
+      summary: Get grant by ID
+      responses:
+        "200":
+          description: Grant details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Grant"
+        "404":
+          description: Grant not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: revokeGrant
+      tags: [Grants]
+      summary: Revoke a grant
+      description: Revokes the grant and cascade-revokes all descendant delegated grants.
+      responses:
+        "204":
+          description: Grant revoked
+        "404":
+          description: Grant not found or already revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/grants/verify:
+    post:
+      operationId: verifyGrant
+      tags: [Grants]
+      summary: Verify a grant token's revocation status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+              required: [token]
+      responses:
+        "200":
+          description: Grant verification result
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      active:
+                        type: boolean
+                        const: true
+                      claims:
+                        type: object
+                  - type: object
+                    properties:
+                      active:
+                        type: boolean
+                        const: false
+                      reason:
+                        type: string
+                        enum: [revoked, not_found, expired]
+        "400":
+          description: Token missing or invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/grants/delegate:
+    post:
+      operationId: delegateGrant
+      tags: [Grants]
+      summary: Delegate a grant to a sub-agent
+      description: |
+        Creates a delegated grant for a sub-agent with narrowed scopes.
+        Sub-agent scopes must be a subset of the parent grant's scopes.
+        Sub-agent token expiry is capped at the parent token's expiry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parentGrantToken:
+                  type: string
+                  description: Parent agent's grant token (JWT)
+                subAgentId:
+                  type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                  description: Must be a subset of the parent grant's scopes
+                expiresIn:
+                  type: string
+                  default: "1h"
+              required: [parentGrantToken, subAgentId, scopes]
+      responses:
+        "201":
+          description: Delegated grant created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  grantToken:
+                    type: string
+                  expiresAt:
+                    type: string
+                    format: date-time
+                  scopes:
+                    type: array
+                    items:
+                      type: string
+                  grantId:
+                    type: string
+        "400":
+          description: Invalid token or scope escalation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Sub-agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Audit ────────────────────────────────────────────────────────────
+  /v1/audit/log:
+    post:
+      operationId: createAuditEntry
+      tags: [Audit]
+      summary: Log an audit entry
+      description: Appends an entry to the immutable, hash-chained audit log.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentId:
+                  type: string
+                agentDid:
+                  type: string
+                grantId:
+                  type: string
+                principalId:
+                  type: string
+                action:
+                  type: string
+                  description: "Action identifier (e.g. 'payment.initiated', 'file.read')"
+                metadata:
+                  type: object
+                status:
+                  type: string
+                  enum: [success, failure, blocked]
+                  default: success
+              required: [agentId, agentDid, grantId, principalId, action]
+      responses:
+        "201":
+          description: Audit entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEntry"
+        "400":
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "402":
+          description: Plan audit entry limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/audit/entries:
+    get:
+      operationId: listAuditEntries
+      tags: [Audit]
+      summary: List audit entries
+      parameters:
+        - name: agentId
+          in: query
+          schema:
+            type: string
+        - name: grantId
+          in: query
+          schema:
+            type: string
+        - name: principalId
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audit entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditEntry"
+
+  /v1/audit/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Audit entry ID
+    get:
+      operationId: getAuditEntry
+      tags: [Audit]
+      summary: Get audit entry by ID
+      responses:
+        "200":
+          description: Audit entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEntry"
+        "404":
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Policies ─────────────────────────────────────────────────────────
+  /v1/policies:
+    post:
+      operationId: createPolicy
+      tags: [Policies]
+      summary: Create an access policy
+      description: Policies automate grant approval or denial based on agent, principal, scopes, and time-of-day.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                effect:
+                  type: string
+                  enum: [allow, deny]
+                priority:
+                  type: integer
+                  default: 0
+                  description: Higher priority policies are evaluated first
+                agentId:
+                  type: string
+                principalId:
+                  type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                timeOfDayStart:
+                  type: string
+                  description: "HH:mm format"
+                timeOfDayEnd:
+                  type: string
+                  description: "HH:mm format"
+              required: [name, effect]
+      responses:
+        "201":
+          description: Policy created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "400":
+          description: Invalid effect value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "402":
+          description: Plan policy limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      operationId: listPolicies
+      tags: [Policies]
+      summary: List access policies
+      description: Returns policies ordered by priority (descending), then creation date (ascending).
+      responses:
+        "200":
+          description: Policy list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  policies:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Policy"
+                  total:
+                    type: integer
+
+  /v1/policies/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Policy ID
+    get:
+      operationId: getPolicy
+      tags: [Policies]
+      summary: Get policy by ID
+      responses:
+        "200":
+          description: Policy details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "404":
+          description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updatePolicy
+      tags: [Policies]
+      summary: Update a policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                effect:
+                  type: string
+                  enum: [allow, deny]
+                priority:
+                  type: integer
+                agentId:
+                  type: string
+                principalId:
+                  type: string
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                timeOfDayStart:
+                  type: string
+                timeOfDayEnd:
+                  type: string
+      responses:
+        "200":
+          description: Updated policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "400":
+          description: Invalid effect value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deletePolicy
+      tags: [Policies]
+      summary: Delete a policy
+      responses:
+        "204":
+          description: Policy deleted
+        "404":
+          description: Policy not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Webhooks ─────────────────────────────────────────────────────────
+  /v1/webhooks:
+    post:
+      operationId: createWebhook
+      tags: [Webhooks]
+      summary: Register a webhook
+      description: |
+        Register a URL to receive webhook notifications for grant and token events.
+        Valid events: `grant.created`, `grant.revoked`, `token.issued`.
+        Webhook payloads are signed with the returned `secret` (HMAC-SHA256).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                events:
+                  type: array
+                  items:
+                    type: string
+                    enum: [grant.created, grant.revoked, token.issued]
+                  minItems: 1
+              required: [url, events]
+      responses:
+        "201":
+          description: Webhook registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Webhook"
+        "400":
+          description: Invalid events
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "402":
+          description: Plan webhook limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      operationId: listWebhooks
+      tags: [Webhooks]
+      summary: List webhooks
+      responses:
+        "200":
+          description: Webhook list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhooks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Webhook"
+
+  /v1/webhooks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Webhook ID
+    delete:
+      operationId: deleteWebhook
+      tags: [Webhooks]
+      summary: Delete a webhook
+      responses:
+        "204":
+          description: Webhook deleted
+        "404":
+          description: Webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Billing ──────────────────────────────────────────────────────────
+  /v1/billing/subscription:
+    get:
+      operationId: getSubscription
+      tags: [Billing]
+      summary: Get current subscription
+      responses:
+        "200":
+          description: Subscription details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan:
+                    type: string
+                    enum: [free, pro, enterprise]
+                  status:
+                    type: string
+                  currentPeriodEnd:
+                    type: string
+                    format: date-time
+
+  /v1/billing/checkout:
+    post:
+      operationId: createCheckoutSession
+      tags: [Billing]
+      summary: Create a Stripe checkout session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plan:
+                  type: string
+                  enum: [pro, enterprise]
+                successUrl:
+                  type: string
+                  format: uri
+                cancelUrl:
+                  type: string
+                  format: uri
+              required: [plan, successUrl, cancelUrl]
+      responses:
+        "201":
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkoutUrl:
+                    type: string
+                    format: uri
+        "400":
+          description: Invalid plan or missing URLs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Billing not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/billing/portal:
+    post:
+      operationId: createBillingPortal
+      tags: [Billing]
+      summary: Create a Stripe billing portal session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                returnUrl:
+                  type: string
+                  format: uri
+              required: [returnUrl]
+      responses:
+        "201":
+          description: Portal session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  portalUrl:
+                    type: string
+                    format: uri
+        "400":
+          description: No active subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Billing not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/billing/webhook:
+    post:
+      operationId: handleStripeWebhook
+      tags: [Billing]
+      summary: Stripe webhook handler
+      description: Receives Stripe webhook events. Requires `stripe-signature` header.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Webhook processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  received:
+                    type: boolean
+                    const: true
+        "400":
+          description: Invalid signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Billing not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Anomalies ────────────────────────────────────────────────────────
+  /v1/anomalies/detect:
+    post:
+      operationId: detectAnomalies
+      tags: [Anomalies]
+      summary: Run anomaly detection
+      description: |
+        Scans recent activity for anomalous patterns: rate spikes, high failure rates,
+        new principals, and off-hours activity.
+      responses:
+        "200":
+          description: Detection results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  detectedAt:
+                    type: string
+                    format: date-time
+                  total:
+                    type: integer
+                  anomalies:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Anomaly"
+
+  /v1/anomalies:
+    get:
+      operationId: listAnomalies
+      tags: [Anomalies]
+      summary: List detected anomalies
+      parameters:
+        - name: unacknowledged
+          in: query
+          schema:
+            type: string
+            enum: ["true"]
+          description: Filter to unacknowledged anomalies only
+      responses:
+        "200":
+          description: Anomaly list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  anomalies:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Anomaly"
+                  total:
+                    type: integer
+
+  /v1/anomalies/{id}/acknowledge:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Anomaly ID
+    patch:
+      operationId: acknowledgeAnomaly
+      tags: [Anomalies]
+      summary: Acknowledge an anomaly
+      responses:
+        "200":
+          description: Anomaly acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Anomaly"
+        "404":
+          description: Anomaly not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Compliance ───────────────────────────────────────────────────────
+  /v1/compliance/summary:
+    get:
+      operationId: getComplianceSummary
+      tags: [Compliance]
+      summary: Get compliance summary
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: until
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Compliance summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  generatedAt:
+                    type: string
+                    format: date-time
+                  since:
+                    type: string
+                    format: date-time
+                  until:
+                    type: string
+                    format: date-time
+                  agents:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      active:
+                        type: integer
+                      suspended:
+                        type: integer
+                      revoked:
+                        type: integer
+                  grants:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      active:
+                        type: integer
+                      revoked:
+                        type: integer
+                      expired:
+                        type: integer
+                  auditEntries:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      success:
+                        type: integer
+                      failure:
+                        type: integer
+                      blocked:
+                        type: integer
+                  policies:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                  plan:
+                    type: string
+
+  /v1/compliance/export/grants:
+    get:
+      operationId: exportGrants
+      tags: [Compliance]
+      summary: Export grants for compliance
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: until
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, revoked, expired]
+      responses:
+        "200":
+          description: Grant export
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  generatedAt:
+                    type: string
+                    format: date-time
+                  total:
+                    type: integer
+                  grants:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Grant"
+
+  /v1/compliance/export/audit:
+    get:
+      operationId: exportAuditEntries
+      tags: [Compliance]
+      summary: Export audit entries for compliance
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: until
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: agentId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [success, failure, blocked]
+      responses:
+        "200":
+          description: Audit export
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  generatedAt:
+                    type: string
+                    format: date-time
+                  total:
+                    type: integer
+                  entries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditEntry"
+
+  /v1/compliance/evidence-pack:
+    get:
+      operationId: getEvidencePack
+      tags: [Compliance]
+      summary: Generate compliance evidence pack
+      description: Comprehensive evidence bundle for SOC 2, GDPR, or all frameworks.
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: until
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: framework
+          in: query
+          schema:
+            type: string
+            enum: [soc2, gdpr, all]
+            default: all
+      responses:
+        "200":
+          description: Evidence pack
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  meta:
+                    type: object
+                    properties:
+                      schemaVersion:
+                        type: string
+                      generatedAt:
+                        type: string
+                        format: date-time
+                      since:
+                        type: string
+                        format: date-time
+                      until:
+                        type: string
+                        format: date-time
+                      framework:
+                        type: string
+                  summary:
+                    type: object
+                  grants:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Grant"
+                  auditEntries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditEntry"
+                  policies:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Policy"
+                  chainIntegrity:
+                    type: object
+                    properties:
+                      valid:
+                        type: boolean
+                      checkedEntries:
+                        type: integer
+                      firstBrokenAt:
+                        type: string
+
+  # ── SCIM ─────────────────────────────────────────────────────────────
+  /v1/scim/tokens:
+    post:
+      operationId: createScimToken
+      tags: [SCIM]
+      summary: Create a SCIM provisioning token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+              required: [label]
+      responses:
+        "201":
+          description: SCIM token created (token value returned only on creation)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  label:
+                    type: string
+                  token:
+                    type: string
+                    description: Only returned on creation
+                  createdAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Label missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      operationId: listScimTokens
+      tags: [SCIM]
+      summary: List SCIM tokens
+      responses:
+        "200":
+          description: Token list (token values not included)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        label:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                        lastUsedAt:
+                          type: string
+                          format: date-time
+
+  /v1/scim/tokens/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: SCIM token ID
+    delete:
+      operationId: deleteScimToken
+      tags: [SCIM]
+      summary: Delete a SCIM token
+      responses:
+        "204":
+          description: Token deleted
+        "404":
+          description: Token not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /scim/v2/ServiceProviderConfig:
+    get:
+      operationId: getScimServiceProviderConfig
+      tags: [SCIM]
+      summary: SCIM service provider configuration
+      security: []
+      responses:
+        "200":
+          description: SCIM capabilities
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /scim/v2/Users:
+    get:
+      operationId: listScimUsers
+      tags: [SCIM]
+      summary: List SCIM users
+      security:
+        - scimBearer: []
+      parameters:
+        - name: startIndex
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: count
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 200
+      responses:
+        "200":
+          description: SCIM user list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  schemas:
+                    type: array
+                    items:
+                      type: string
+                  totalResults:
+                    type: integer
+                  startIndex:
+                    type: integer
+                  itemsPerPage:
+                    type: integer
+                  Resources:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ScimUser"
+        "401":
+          description: Invalid SCIM token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      operationId: createScimUser
+      tags: [SCIM]
+      summary: Create a SCIM user
+      security:
+        - scimBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userName:
+                  type: string
+                displayName:
+                  type: string
+                externalId:
+                  type: string
+                active:
+                  type: boolean
+                  default: true
+                emails:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                      primary:
+                        type: boolean
+              required: [userName]
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimUser"
+        "400":
+          description: userName missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid SCIM token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /scim/v2/Users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: SCIM user ID
+    get:
+      operationId: getScimUser
+      tags: [SCIM]
+      summary: Get SCIM user by ID
+      security:
+        - scimBearer: []
+      responses:
+        "200":
+          description: SCIM user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimUser"
+        "401":
+          description: Invalid SCIM token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      operationId: replaceScimUser
+      tags: [SCIM]
+      summary: Replace a SCIM user
+      security:
+        - scimBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userName:
+                  type: string
+                displayName:
+                  type: string
+                externalId:
+                  type: string
+                active:
+                  type: boolean
+                emails:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      value:
+                        type: string
+                      primary:
+                        type: boolean
+              required: [userName]
+      responses:
+        "200":
+          description: User replaced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimUser"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Invalid SCIM token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateScimUser
+      tags: [SCIM]
+      summary: Patch a SCIM user
+      security:
+        - scimBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                Operations:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      op:
+                        type: string
+                        enum: [replace, add]
+                      path:
+                        type: string
+                      value: {}
+              required: [Operations]
+      responses:
+        "200":
+          description: User patched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScimUser"
+        "401":
+          description: Invalid SCIM token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteScimUser
+      tags: [SCIM]
+      summary: Delete a SCIM user
+      security:
+        - scimBearer: []
+      responses:
+        "204":
+          description: User deleted
+        "401":
+          description: Invalid SCIM token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── SSO ──────────────────────────────────────────────────────────────
+  /v1/sso/config:
+    post:
+      operationId: createSsoConfig
+      tags: [SSO]
+      summary: Configure OIDC SSO
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                issuerUrl:
+                  type: string
+                  format: uri
+                clientId:
+                  type: string
+                clientSecret:
+                  type: string
+                redirectUri:
+                  type: string
+                  format: uri
+              required: [issuerUrl, clientId, clientSecret, redirectUri]
+      responses:
+        "201":
+          description: SSO configured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issuerUrl:
+                    type: string
+                  clientId:
+                    type: string
+                  redirectUri:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      operationId: getSsoConfig
+      tags: [SSO]
+      summary: Get SSO configuration
+      description: Returns SSO config with client secret masked.
+      responses:
+        "200":
+          description: SSO configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issuerUrl:
+                    type: string
+                  clientId:
+                    type: string
+                  redirectUri:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+                  updatedAt:
+                    type: string
+                    format: date-time
+        "404":
+          description: SSO not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteSsoConfig
+      tags: [SSO]
+      summary: Remove SSO configuration
+      responses:
+        "204":
+          description: SSO config removed
+        "404":
+          description: SSO not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /sso/login:
+    get:
+      operationId: ssoLogin
+      tags: [SSO]
+      summary: Initiate SSO login
+      security: []
+      parameters:
+        - name: org
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Developer ID (organization)
+      responses:
+        "200":
+          description: OIDC authorization URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authorizeUrl:
+                    type: string
+                    format: uri
+        "400":
+          description: org parameter missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: SSO not configured for this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /sso/callback:
+    get:
+      operationId: ssoCallback
+      tags: [SSO]
+      summary: SSO callback
+      description: OIDC callback endpoint. Exchanges the authorization code for user info.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: SSO user info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email:
+                    type: string
+                  name:
+                    type: string
+                  sub:
+                    type: string
+                  developerId:
+                    type: string
+        "400":
+          description: Missing or invalid code/state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Token exchange with IdP failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Dashboard ────────────────────────────────────────────────────────
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [System]
+      summary: Developer dashboard
+      description: Lightweight HTML dashboard for local development.
+      security: []
+      responses:
+        "200":
+          description: HTML dashboard
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /dashboard/principal:
+    get:
+      operationId: getPrincipalDashboard
+      tags: [System]
+      summary: Principal permissions dashboard
+      description: HTML page for managing principal (end-user) permissions.
+      security: []
+      parameters:
+        - name: id
+          in: query
+          schema:
+            type: string
+          description: Principal ID for prefill
+      responses:
+        "200":
+          description: HTML principal dashboard
+          content:
+            text/html:
+              schema:
+                type: string
