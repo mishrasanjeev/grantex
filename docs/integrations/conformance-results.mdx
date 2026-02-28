@@ -9,10 +9,10 @@ description: "Latest conformance test results for the Grantex production server.
 The Grantex hosted service at `grantex-auth-dd4mtrt2gq-uc.a.run.app` is continuously validated against the full conformance suite. Below are the latest results.
 
 <Info>
-**39 passed, 0 failed** — 39 core tests in ~75s
+**42 passed, 0 failed** — 39 core + 3 optional principal-sessions tests in ~79s
 </Info>
 
-Last run: **February 28, 2026** | Conformance suite version: **0.1.1**
+Last run: **February 28, 2026** | Conformance suite version: **0.1.2**
 
 ---
 
@@ -104,7 +104,7 @@ Last run: **February 28, 2026** | Conformance suite version: **0.1.1**
 
 ---
 
-## Optional Extension Suites (25 tests)
+## Optional Extension Suites (28 tests)
 
 ### policies — Policy CRUD and enforcement
 
@@ -161,6 +161,14 @@ Last run: **February 28, 2026** | Conformance suite version: **0.1.1**
 | GET /v1/compliance/export/audit returns audit export | Pass | §12 |
 | GET /v1/compliance/evidence-pack returns evidence pack | Pass | §12 |
 
+### principal-sessions — Principal session tokens and end-user permissions
+
+| Test | Status | Spec |
+|------|--------|------|
+| POST /v1/principal-sessions returns 201 with sessionToken and dashboardUrl | Pass | §12 |
+| POST /v1/principal-sessions returns 400 without principalId | Pass | §12 |
+| Session token can be used to GET /v1/principal/grants | Pass | §12 |
+
 ---
 
 ## Run It Yourself
@@ -171,7 +179,7 @@ Validate your own Grantex server:
 npx @grantex/conformance \
   --base-url YOUR_SERVER_URL \
   --api-key YOUR_API_KEY \
-  --include policies,webhooks,scim,sso,anomalies,compliance
+  --include policies,webhooks,scim,sso,anomalies,compliance,principal-sessions
 ```
 
 See the [Conformance Suite guide](/integrations/conformance) for full documentation.
