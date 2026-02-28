@@ -334,7 +334,7 @@ curl -s -X POST http://localhost:3001/v1/token \
 
 For local development, the auth service also serves a lightweight dashboard at `http://localhost:3001/dashboard`.
 
-See [docs/self-hosting.md](https://github.com/mishrasanjeev/grantex/blob/main/docs/self-hosting.md) for production deployment guidance.
+See the [self-hosting guide](https://grantex.mintlify.app/guides/self-hosting) for production deployment guidance.
 
 ---
 
@@ -566,7 +566,7 @@ MCP solves tool connectivity — how agents access data and call functions. Gran
 The protocol spec is open (Apache 2.0). Grantex Inc. maintains a hosted reference implementation. Our goal is to contribute the spec to a neutral standards body (W3C, IETF, or CNCF) once it stabilizes.
 
 **Can I self-host?**  
-Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See [docs/self-hosting.md](https://github.com/mishrasanjeev/grantex/blob/main/docs/self-hosting.md).
+Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See the [self-hosting guide](https://grantex.mintlify.app/guides/self-hosting).
 
 ---
 
@@ -578,7 +578,7 @@ Protocol specification and SDKs: [Apache 2.0](https://github.com/mishrasanjeev/g
 
 <div align="center">
 
-**[Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)** · **[Dashboard](https://grantex.dev/dashboard)** · **[Self-Hosting](https://github.com/mishrasanjeev/grantex/blob/main/docs/self-hosting.md)** · **[Roadmap](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md)** · **[Contributing](https://github.com/mishrasanjeev/grantex/blob/main/CONTRIBUTING.md)** · **[GitHub](https://github.com/mishrasanjeev/grantex)**
+**[Docs](https://grantex.mintlify.app)** · **[Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)** · **[Dashboard](https://grantex.dev/dashboard)** · **[Self-Hosting](https://grantex.mintlify.app/guides/self-hosting)** · **[Roadmap](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md)** · **[Contributing](https://grantex.mintlify.app/community/contributing)** · **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 <br/>
 
