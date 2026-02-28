@@ -1,0 +1,59 @@
+---
+title: "Interactive Playground"
+description: "Try the full Grantex authorization flow in your browser — no signup required."
+---
+
+## What is the Playground?
+
+The [Grantex Playground](https://grantex.dev/playground) is a browser-based, interactive walkthrough of the entire Grantex authorization protocol. It lets you execute real API calls against the Grantex auth service and see every request and response — no backend, no signup, no installation.
+
+## Getting Started
+
+1. **Get a sandbox API key** — [Register](https://grantex.dev/dashboard) for a free account and copy your API key from the dashboard.
+2. **Open the playground** — Visit [grantex.dev/playground](https://grantex.dev/playground).
+3. **Paste your API key** — Enter it in the configuration panel at the top. The default server URL points to the production auth service.
+4. **Walk through each step** — Click "Run" on each step to execute the API call and see the response.
+
+## The 7 Steps
+
+The playground walks you through the complete Grantex lifecycle:
+
+| Step | Endpoint | What Happens |
+|------|----------|-------------|
+| **1. Register Agent** | `POST /v1/agents` | Creates a new agent with a name, description, and requested scopes. Returns the agent ID and DID. |
+| **2. Authorize** | `POST /v1/authorize` | Starts an authorization request. In sandbox mode, the auth code is returned directly (no consent redirect). |
+| **3. Exchange Token** | `POST /v1/token` | Exchanges the authorization code for a signed RS256 grant token JWT and a refresh token. |
+| **4. Verify Token** | `POST /v1/tokens/verify` | Verifies the grant token online — returns validity, scopes, principal, and agent info. |
+| **5. Refresh Token** | `POST /v1/token/refresh` | Uses the refresh token to get a new grant token with the same grant ID. The old refresh token is consumed. |
+| **6. Revoke Token** | `POST /v1/tokens/revoke` | Revokes the grant token by its JTI, making it permanently invalid. |
+| **7. Verify After Revocation** | `POST /v1/tokens/verify` | Verifies the revoked token again — confirms it now returns `valid: false`. |
+
+## Features
+
+- **Auto-populated values** — Each step auto-fills values from previous steps (agent ID, auth code, grant token, refresh token, JTI).
+- **JWT decoding** — Grant tokens are decoded inline with human-readable claim labels (issuer, principal, agent DID, scopes, grant ID, etc.).
+- **Syntax-highlighted JSON** — All request bodies and responses are displayed with color-coded JSON.
+- **Status badges** — Each step shows its current state: Pending, Running, Done, or Error.
+- **Sandbox mode** — The playground uses sandbox mode, which auto-approves consent and returns the authorization code directly — no redirect needed.
+- **Zero dependencies** — Pure HTML/CSS/JS, no build step, no framework. Runs entirely in the browser.
+
+## Sandbox Mode
+
+The playground relies on Grantex's sandbox mode. When you call `POST /v1/authorize`, the auth service detects that you're using a sandbox/free-tier API key and:
+
+1. Skips the consent redirect flow
+2. Auto-approves the authorization request
+3. Returns the authorization `code` directly in the response
+
+This means you can complete the full flow without any browser redirects or user interaction — perfect for learning and testing.
+
+## Using Your Own Server
+
+If you're [self-hosting Grantex](/guides/self-hosting), change the **Server URL** in the configuration panel to point to your own auth service instance. The playground works with any spec-compliant Grantex server.
+
+## Security Notes
+
+- Your API key is **never stored** — it stays in browser memory only for the duration of your session.
+- All API calls go directly from your browser to the Grantex auth service over HTTPS.
+- The playground does not send your API key to any third-party service.
+- Agents and grants created in the playground are real — you can view and manage them in your [developer dashboard](https://grantex.dev/dashboard).

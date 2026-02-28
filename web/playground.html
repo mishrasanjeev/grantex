@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Playground — Grantex</title>
+  <meta name="description" content="Try the Grantex authorization protocol live in your browser. No signup required.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="https://grantex.dev/playground">
+  <style>
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --accent:   #3fb950;
+      --accent2:  #58a6ff;
+      --red:      #f85149;
+      --yellow:   #d29922;
+      --mono:     'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --sans:     'Inter', system-ui, -apple-system, sans-serif;
+      --radius:   8px;
+      --max-w:    900px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .container { max-width: var(--max-w); margin: 0 auto; padding: 0 24px; }
+
+    /* Nav */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(13, 17, 23, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      display: flex; align-items: center; justify-content: space-between; height: 60px;
+    }
+    .nav-logo {
+      font-family: var(--mono); font-size: 18px; font-weight: 700;
+      color: var(--accent); letter-spacing: -0.5px;
+    }
+    .nav-logo span { color: var(--text); }
+    .nav-links { display: flex; gap: 24px; list-style: none; font-size: 14px; }
+    .nav-links a { color: var(--muted); transition: color 0.15s; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-links .active { color: var(--accent); font-weight: 600; }
+
+    /* Header */
+    .pg-header {
+      padding: 48px 0 32px; text-align: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .pg-header h1 { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px; }
+    .pg-header p { color: var(--muted); font-size: 16px; max-width: 560px; margin: 0 auto; }
+
+    /* Setup card */
+    .setup-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px; margin: 32px 0;
+    }
+    .setup-card h2 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block; font-size: 13px; font-weight: 600;
+      color: var(--muted); margin-bottom: 4px;
+    }
+    .field input, .field select {
+      width: 100%; padding: 8px 12px;
+      background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      font-family: var(--mono); font-size: 13px;
+      outline: none; transition: border-color 0.15s;
+    }
+    .field input:focus, .field select:focus { border-color: var(--accent); }
+    .field input::placeholder { color: var(--muted); opacity: 0.6; }
+    .field .hint { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 20px; border-radius: 6px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      border: none; transition: all 0.15s;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-primary:hover:not(:disabled) { opacity: 0.88; }
+    .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover:not(:disabled) { border-color: var(--muted); }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-danger:hover:not(:disabled) { opacity: 0.88; }
+    .btn-sm { padding: 6px 14px; font-size: 13px; }
+
+    /* Steps */
+    .steps { padding: 24px 0 64px; }
+    .step {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); margin-bottom: 16px;
+      overflow: hidden; transition: border-color 0.2s;
+    }
+    .step.active { border-color: var(--accent); }
+    .step.done { border-color: var(--accent); opacity: 0.85; }
+    .step-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 20px; cursor: pointer; user-select: none;
+    }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; flex-shrink: 0;
+      background: var(--border); color: var(--muted);
+    }
+    .step.active .step-num { background: var(--accent); color: #0d1117; }
+    .step.done .step-num { background: var(--accent); color: #0d1117; }
+    .step-title { font-size: 14px; font-weight: 600; flex: 1; }
+    .step-badge {
+      font-size: 11px; font-weight: 600; padding: 2px 8px;
+      border-radius: 10px; letter-spacing: 0.3px;
+    }
+    .badge-pending { background: var(--border); color: var(--muted); }
+    .badge-running { background: rgba(210, 153, 34, 0.15); color: var(--yellow); }
+    .badge-done { background: rgba(63, 185, 80, 0.15); color: var(--accent); }
+    .badge-error { background: rgba(248, 81, 73, 0.15); color: var(--red); }
+
+    .step-body { padding: 0 20px 20px; display: none; }
+    .step.active .step-body { display: block; }
+    .step.done .step-body { display: block; }
+
+    .step-desc { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.5; }
+
+    /* Request/response panels */
+    .panel { margin-bottom: 12px; }
+    .panel-label {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--muted); margin-bottom: 6px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .panel-label .method {
+      font-size: 11px; padding: 1px 6px; border-radius: 4px;
+      font-weight: 700; font-family: var(--mono);
+    }
+    .method-post { background: rgba(63, 185, 80, 0.15); color: var(--accent); }
+    .method-get { background: rgba(88, 166, 255, 0.15); color: var(--accent2); }
+    .method-delete { background: rgba(248, 81, 73, 0.15); color: var(--red); }
+
+    pre {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 14px 16px; overflow-x: auto;
+      font-family: var(--mono); font-size: 12px; line-height: 1.7;
+      color: var(--text); white-space: pre-wrap; word-break: break-all;
+    }
+
+    /* JWT decode */
+    .jwt-section { margin-top: 12px; }
+    .jwt-section summary {
+      font-size: 13px; font-weight: 600; color: var(--accent2);
+      cursor: pointer; margin-bottom: 8px;
+    }
+    .jwt-claims { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; font-size: 13px; }
+    .jwt-key { font-family: var(--mono); color: var(--accent); font-weight: 600; }
+    .jwt-val { font-family: var(--mono); color: var(--text); word-break: break-all; }
+
+    /* Status indicator */
+    .status-valid { color: var(--accent); }
+    .status-revoked { color: var(--red); }
+
+    /* Footer */
+    .pg-footer {
+      border-top: 1px solid var(--border);
+      padding: 24px 0; text-align: center;
+      font-size: 13px; color: var(--muted);
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .nav-links { gap: 14px; font-size: 13px; }
+      .pg-header h1 { font-size: 24px; }
+      .setup-card, .step { margin-left: -8px; margin-right: -8px; }
+    }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="container">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo">grantex<span>.dev</span></a>
+      <ul class="nav-links">
+        <li><a href="/">Home</a></li>
+        <li><a href="/docs">Docs</a></li>
+        <li><a href="/playground" class="active">Playground</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="pg-header">
+    <h1>Interactive Playground</h1>
+    <p>Walk through the full Grantex authorization flow live in your browser. No signup required — just paste a sandbox API key.</p>
+  </div>
+
+  <!-- Setup -->
+  <div class="setup-card" id="setup">
+    <h2>Configuration</h2>
+    <div class="field">
+      <label for="apiKey">Sandbox API Key</label>
+      <input type="password" id="apiKey" placeholder="gx_sandbox_..." autocomplete="off">
+      <div class="hint">Get a free sandbox key from the <a href="/dashboard">Dashboard</a>, or use a local dev key.</div>
+    </div>
+    <div class="field">
+      <label for="baseUrl">Server URL</label>
+      <input type="text" id="baseUrl" value="https://grantex-auth-dd4mtrt2gq-uc.a.run.app">
+      <div class="hint">The Grantex auth service endpoint. Change this if self-hosting.</div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;margin-top:4px;">
+      <button class="btn btn-primary" onclick="startFlow()" id="startBtn">Start Flow</button>
+      <button class="btn btn-secondary" onclick="resetFlow()" id="resetBtn" style="display:none;">Reset</button>
+      <span id="setupError" style="font-size:13px;color:var(--red);"></span>
+    </div>
+  </div>
+
+  <!-- Steps -->
+  <div class="steps" id="stepsContainer" style="display:none;">
+
+    <!-- Step 1: Register Agent -->
+    <div class="step" id="step1">
+      <div class="step-header" onclick="toggleStep(1)">
+        <div class="step-num">1</div>
+        <div class="step-title">Register an Agent</div>
+        <span class="step-badge badge-pending" id="badge1">Pending</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">Register a demo agent that will request permissions on behalf of a user. This creates a cryptographic identity (DID) for the agent.</div>
+        <div class="panel">
+          <div class="panel-label"><span class="method method-post">POST</span> /v1/agents</div>
+          <pre id="req1"></pre>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="runStep(1)" id="run1">Run</button>
+        <div class="panel" id="res1-panel" style="display:none;margin-top:12px;">
+          <div class="panel-label">Response</div>
+          <pre id="res1"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Authorize -->
+    <div class="step" id="step2">
+      <div class="step-header" onclick="toggleStep(2)">
+        <div class="step-num">2</div>
+        <div class="step-title">Request Authorization</div>
+        <span class="step-badge badge-pending" id="badge2">Pending</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">Ask a user for permission. In sandbox mode, this auto-approves and returns an authorization code immediately — no consent page needed.</div>
+        <div class="panel">
+          <div class="panel-label"><span class="method method-post">POST</span> /v1/authorize</div>
+          <pre id="req2"></pre>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="runStep(2)" id="run2" disabled>Run</button>
+        <div class="panel" id="res2-panel" style="display:none;margin-top:12px;">
+          <div class="panel-label">Response</div>
+          <pre id="res2"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Exchange Token -->
+    <div class="step" id="step3">
+      <div class="step-header" onclick="toggleStep(3)">
+        <div class="step-num">3</div>
+        <div class="step-title">Exchange Code for Grant Token</div>
+        <span class="step-badge badge-pending" id="badge3">Pending</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">Exchange the authorization code for a signed RS256 JWT grant token. This is the credential your agent presents to any service.</div>
+        <div class="panel">
+          <div class="panel-label"><span class="method method-post">POST</span> /v1/token</div>
+          <pre id="req3"></pre>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="runStep(3)" id="run3" disabled>Run</button>
+        <div class="panel" id="res3-panel" style="display:none;margin-top:12px;">
+          <div class="panel-label">Response</div>
+          <pre id="res3"></pre>
+        </div>
+        <details class="jwt-section" id="jwt3" style="display:none;">
+          <summary>Decode JWT Claims</summary>
+          <div class="jwt-claims" id="jwt3-claims"></div>
+        </details>
+      </div>
+    </div>
+
+    <!-- Step 4: Verify Token -->
+    <div class="step" id="step4">
+      <div class="step-header" onclick="toggleStep(4)">
+        <div class="step-num">4</div>
+        <div class="step-title">Verify Token</div>
+        <span class="step-badge badge-pending" id="badge4">Pending</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">Verify the grant token online. In production, you'd verify offline via JWKS — this endpoint is a convenience for quick checks.</div>
+        <div class="panel">
+          <div class="panel-label"><span class="method method-post">POST</span> /v1/tokens/verify</div>
+          <pre id="req4"></pre>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="runStep(4)" id="run4" disabled>Run</button>
+        <div class="panel" id="res4-panel" style="display:none;margin-top:12px;">
+          <div class="panel-label">Response</div>
+          <pre id="res4"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5: Refresh Token -->
+    <div class="step" id="step5">
+      <div class="step-header" onclick="toggleStep(5)">
+        <div class="step-num">5</div>
+        <div class="step-title">Refresh Token</div>
+        <span class="step-badge badge-pending" id="badge5">Pending</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">Exchange the single-use refresh token for a new grant token. The old refresh token is invalidated (rotation).</div>
+        <div class="panel">
+          <div class="panel-label"><span class="method method-post">POST</span> /v1/token/refresh</div>
+          <pre id="req5"></pre>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="runStep(5)" id="run5" disabled>Run</button>
+        <div class="panel" id="res5-panel" style="display:none;margin-top:12px;">
+          <div class="panel-label">Response</div>
+          <pre id="res5"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 6: Revoke -->
+    <div class="step" id="step6">
+      <div class="step-header" onclick="toggleStep(6)">
+        <div class="step-num">6</div>
+        <div class="step-title">Revoke Grant</div>
+        <span class="step-badge badge-pending" id="badge6">Pending</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">Revoke the grant entirely. After this, the token fails verification. Revocation is instant and cascades to all delegated grants.</div>
+        <div class="panel">
+          <div class="panel-label"><span class="method method-delete">DELETE</span> /v1/grants/:id</div>
+          <pre id="req6"></pre>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="runStep(6)" id="run6" disabled>Run</button>
+        <div class="panel" id="res6-panel" style="display:none;margin-top:12px;">
+          <div class="panel-label">Response</div>
+          <pre id="res6"></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 7: Verify After Revocation -->
+    <div class="step" id="step7">
+      <div class="step-header" onclick="toggleStep(7)">
+        <div class="step-num">7</div>
+        <div class="step-title">Verify After Revocation</div>
+        <span class="step-badge badge-pending" id="badge7">Pending</span>
+      </div>
+      <div class="step-body">
+        <div class="step-desc">Try verifying the same token again. It should now return <code>valid: false</code> — proving that revocation is effective.</div>
+        <div class="panel">
+          <div class="panel-label"><span class="method method-post">POST</span> /v1/tokens/verify</div>
+          <pre id="req7"></pre>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="runStep(7)" id="run7" disabled>Run</button>
+        <div class="panel" id="res7-panel" style="display:none;margin-top:12px;">
+          <div class="panel-label">Response</div>
+          <pre id="res7"></pre>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer class="pg-footer">
+  <div class="container">
+    <a href="/">grantex.dev</a> &middot; <a href="/docs">Docs</a> &middot; <a href="https://github.com/mishrasanjeev/grantex">GitHub</a>
+  </div>
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+let state = {
+  apiKey: '',
+  baseUrl: '',
+  agentId: null,
+  code: null,
+  grantToken: null,
+  refreshToken: null,
+  grantId: null,
+  tokenJti: null,
+};
+
+function json(obj) { return JSON.stringify(obj, null, 2); }
+
+function decodeJwt(token) {
+  try {
+    const parts = token.split('.');
+    const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+    return payload;
+  } catch { return null; }
+}
+
+function renderJwtClaims(containerId, payload) {
+  const el = $(containerId);
+  const labels = {
+    iss: 'Issuer', sub: 'Principal (user)', agt: 'Agent DID', dev: 'Developer',
+    scp: 'Scopes', iat: 'Issued At', exp: 'Expires At', jti: 'Token ID', grnt: 'Grant ID',
+    parentAgt: 'Parent Agent', parentGrnt: 'Parent Grant', delegationDepth: 'Delegation Depth'
+  };
+  let html = '';
+  for (const [k, v] of Object.entries(payload)) {
+    const label = labels[k] || k;
+    let display = v;
+    if (k === 'iat' || k === 'exp') display = new Date(v * 1000).toISOString();
+    if (Array.isArray(v)) display = v.join(', ');
+    html += `<div class="jwt-key">${label}</div><div class="jwt-val">${display}</div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function apiCall(method, path, body) {
+  const url = state.baseUrl + path;
+  const opts = {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + state.apiKey,
+    },
+  };
+  if (body) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const resp = await fetch(url, opts);
+  const text = await resp.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = text; }
+  return { status: resp.status, data };
+}
+
+function setBadge(n, type, text) {
+  const badge = $('badge' + n);
+  badge.className = 'step-badge badge-' + type;
+  badge.textContent = text || { pending: 'Pending', running: 'Running...', done: 'Done', error: 'Error' }[type];
+}
+
+function activateStep(n) {
+  for (let i = 1; i <= 7; i++) {
+    $('step' + i).classList.remove('active');
+  }
+  $('step' + n).classList.add('active');
+}
+
+function toggleStep(n) {
+  const step = $('step' + n);
+  if (step.classList.contains('active')) {
+    step.classList.remove('active');
+  } else {
+    activateStep(n);
+  }
+}
+
+function enableRun(n) { $('run' + n).disabled = false; }
+
+function startFlow() {
+  state.apiKey = $('apiKey').value.trim();
+  state.baseUrl = $('baseUrl').value.trim().replace(/\/$/, '');
+
+  if (!state.apiKey) {
+    $('setupError').textContent = 'Please enter a sandbox API key.';
+    return;
+  }
+  $('setupError').textContent = '';
+  $('startBtn').style.display = 'none';
+  $('resetBtn').style.display = 'inline-flex';
+  $('stepsContainer').style.display = 'block';
+
+  // Prepare step 1
+  $('req1').textContent = json({
+    name: 'playground-agent',
+    description: 'Demo agent created in the Grantex playground',
+    scopes: ['calendar:read', 'email:send']
+  });
+  activateStep(1);
+}
+
+function resetFlow() {
+  state = { apiKey: state.apiKey, baseUrl: state.baseUrl, agentId: null, code: null, grantToken: null, refreshToken: null, grantId: null, tokenJti: null };
+  $('stepsContainer').style.display = 'none';
+  $('startBtn').style.display = 'inline-flex';
+  $('resetBtn').style.display = 'none';
+  for (let i = 1; i <= 7; i++) {
+    setBadge(i, 'pending');
+    $('step' + i).classList.remove('active', 'done');
+    $('run' + i).disabled = (i > 1);
+    const resPanel = $('res' + i + '-panel');
+    if (resPanel) resPanel.style.display = 'none';
+  }
+  const jwt3 = $('jwt3');
+  if (jwt3) jwt3.style.display = 'none';
+}
+
+async function runStep(n) {
+  $('run' + n).disabled = true;
+  setBadge(n, 'running');
+
+  try {
+    if (n === 1) await step1();
+    else if (n === 2) await step2();
+    else if (n === 3) await step3();
+    else if (n === 4) await step4();
+    else if (n === 5) await step5();
+    else if (n === 6) await step6();
+    else if (n === 7) await step7();
+  } catch (err) {
+    setBadge(n, 'error');
+    const resPanel = $('res' + n + '-panel');
+    if (resPanel) {
+      resPanel.style.display = 'block';
+      $('res' + n).textContent = 'Error: ' + (err.message || err);
+    }
+  }
+}
+
+async function step1() {
+  const body = { name: 'playground-agent', description: 'Demo agent created in the Grantex playground', scopes: ['calendar:read', 'email:send'] };
+  const { status, data } = await apiCall('POST', '/v1/agents', body);
+
+  $('res1-panel').style.display = 'block';
+  $('res1').textContent = status + ' ' + (status === 201 ? 'Created' : 'Error') + '\n\n' + json(data);
+
+  if (status !== 201) { setBadge(1, 'error'); return; }
+
+  state.agentId = data.id;
+  setBadge(1, 'done');
+  $('step1').classList.add('done');
+
+  // Prepare step 2
+  $('req2').textContent = json({
+    agentId: state.agentId,
+    principalId: 'playground-user',
+    scopes: ['calendar:read', 'email:send']
+  });
+  enableRun(2);
+  activateStep(2);
+}
+
+async function step2() {
+  const body = { agentId: state.agentId, principalId: 'playground-user', scopes: ['calendar:read', 'email:send'] };
+  const { status, data } = await apiCall('POST', '/v1/authorize', body);
+
+  $('res2-panel').style.display = 'block';
+  $('res2').textContent = status + ' ' + (status === 201 ? 'Created' : 'Error') + '\n\n' + json(data);
+
+  if (status !== 201 || !data.code) {
+    setBadge(2, 'error');
+    if (!data.code && status === 201) {
+      $('res2').textContent += '\n\nNote: No "code" in response. Make sure you are using a sandbox API key.';
+    }
+    return;
+  }
+
+  state.code = data.code;
+  setBadge(2, 'done');
+  $('step2').classList.add('done');
+
+  // Prepare step 3
+  $('req3').textContent = json({
+    code: state.code,
+    agentId: state.agentId
+  });
+  enableRun(3);
+  activateStep(3);
+}
+
+async function step3() {
+  const body = { code: state.code, agentId: state.agentId };
+  const { status, data } = await apiCall('POST', '/v1/token', body);
+
+  $('res3-panel').style.display = 'block';
+  $('res3').textContent = status + ' ' + (status === 201 ? 'Created' : 'Error') + '\n\n' + json(data);
+
+  if (status !== 201) { setBadge(3, 'error'); return; }
+
+  state.grantToken = data.grantToken;
+  state.refreshToken = data.refreshToken;
+  state.grantId = data.grantId;
+
+  // Decode JWT
+  const claims = decodeJwt(data.grantToken);
+  if (claims) {
+    state.tokenJti = claims.jti;
+    $('jwt3').style.display = 'block';
+    renderJwtClaims('jwt3-claims', claims);
+  }
+
+  setBadge(3, 'done');
+  $('step3').classList.add('done');
+
+  // Prepare step 4
+  $('req4').textContent = 'Authorization: Bearer ' + state.grantToken.substring(0, 40) + '...\n\n' + json({ token: state.grantToken });
+  enableRun(4);
+  activateStep(4);
+}
+
+async function step4() {
+  const { status, data } = await apiCall('POST', '/v1/tokens/verify', { token: state.grantToken });
+
+  $('res4-panel').style.display = 'block';
+  const validStr = data.valid ? '<span class="status-valid">valid: true</span>' : '<span class="status-revoked">valid: false</span>';
+  $('res4').innerHTML = status + ' OK\n\n' + json(data);
+
+  if (status !== 200) { setBadge(4, 'error'); return; }
+
+  setBadge(4, 'done');
+  $('step4').classList.add('done');
+
+  // Prepare step 5
+  $('req5').textContent = json({
+    refreshToken: state.refreshToken,
+    agentId: state.agentId
+  });
+  enableRun(5);
+  activateStep(5);
+}
+
+async function step5() {
+  const body = { refreshToken: state.refreshToken, agentId: state.agentId };
+  const { status, data } = await apiCall('POST', '/v1/token/refresh', body);
+
+  $('res5-panel').style.display = 'block';
+  $('res5').textContent = status + ' ' + (status === 201 ? 'Created' : 'Error') + '\n\n' + json(data);
+
+  if (status !== 201) { setBadge(5, 'error'); return; }
+
+  // Update state with new tokens
+  state.grantToken = data.grantToken;
+  state.refreshToken = data.refreshToken;
+  const claims = decodeJwt(data.grantToken);
+  if (claims) state.tokenJti = claims.jti;
+
+  setBadge(5, 'done');
+  $('step5').classList.add('done');
+
+  // Prepare step 6
+  $('req6').textContent = 'DELETE /v1/grants/' + state.grantId;
+  enableRun(6);
+  activateStep(6);
+}
+
+async function step6() {
+  const { status, data } = await apiCall('DELETE', '/v1/grants/' + state.grantId);
+
+  $('res6-panel').style.display = 'block';
+  $('res6').textContent = status + ' ' + (status === 204 ? 'No Content — Grant revoked' : 'Error') + (data ? '\n\n' + json(data) : '');
+
+  if (status !== 204) { setBadge(6, 'error'); return; }
+
+  setBadge(6, 'done');
+  $('step6').classList.add('done');
+
+  // Prepare step 7
+  $('req7').textContent = json({ token: state.grantToken });
+  enableRun(7);
+  activateStep(7);
+}
+
+async function step7() {
+  const { status, data } = await apiCall('POST', '/v1/tokens/verify', { token: state.grantToken });
+
+  $('res7-panel').style.display = 'block';
+  $('res7').textContent = status + ' OK\n\n' + json(data);
+
+  if (data && data.valid === false) {
+    setBadge(7, 'done', 'Revoked');
+    $('step7').classList.add('done');
+  } else {
+    setBadge(7, 'error');
+  }
+}
+</script>
+
+</body>
+</html>
