@@ -49,6 +49,7 @@
           {
             "group": "Guides",
             "pages": [
+              "guides/rate-limits",
               "guides/webhooks",
               "guides/self-hosting"
             ]
