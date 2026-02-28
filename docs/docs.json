@@ -180,7 +180,8 @@
           {
             "group": "Testing",
             "pages": [
-              "integrations/conformance"
+              "integrations/conformance",
+              "integrations/conformance-results"
             ]
           }
         ]

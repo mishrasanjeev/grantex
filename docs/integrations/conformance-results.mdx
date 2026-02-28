@@ -1,0 +1,177 @@
+---
+title: "Conformance Results"
+sidebarTitle: "Latest Results"
+description: "Latest conformance test results for the Grantex production server."
+---
+
+## Production Conformance Status
+
+The Grantex hosted service at `grantex-auth-dd4mtrt2gq-uc.a.run.app` is continuously validated against the full conformance suite. Below are the latest results.
+
+<Info>
+**60 passed, 2 skipped, 0 failed** — 62 total tests in ~77s
+</Info>
+
+Last run: **February 28, 2026**
+
+---
+
+## Core Suites (37 tests)
+
+### health — Health check and JWKS endpoints
+
+| Test | Status | Spec |
+|------|--------|------|
+| GET /health returns 200 with status ok | Pass | §3.3 |
+| JWKS endpoint has RS256 keys | Pass | §10 |
+
+### agents — Agent registration and management (CRUD)
+
+| Test | Status | Spec |
+|------|--------|------|
+| POST /v1/agents creates agent with agentId and did | Skipped | §10 |
+| GET /v1/agents lists agents | Pass | §10 |
+| GET /v1/agents/:id returns agent details | Pass | §10 |
+| PATCH /v1/agents/:id updates agent | Pass | §10 |
+| DELETE /v1/agents/:id returns 204 | Skipped | §10 |
+
+<Note>Agent create/delete tests are skipped on the free plan due to the 3-agent limit with existing FK-constrained agents. These tests pass on fresh environments.</Note>
+
+### authorize — Authorization request creation and consent flow
+
+| Test | Status | Spec |
+|------|--------|------|
+| POST /v1/authorize returns authRequestId, consentUrl, expiresAt (201) | Pass | §5.1 |
+| POST /v1/authorize rejects missing required fields (400) | Pass | §5.1 |
+| POST /v1/authorize rejects non-existent agent (404) | Pass | §5.1 |
+| Consent approval produces authorization code | Pass | §5.2 |
+
+### token — Token exchange (code to grant token)
+
+| Test | Status | Spec |
+|------|--------|------|
+| POST /v1/token exchanges code for grantToken, refreshToken, grantId, scopes, expiresAt | Pass | §5.3 |
+| POST /v1/token rejects invalid code (400) | Pass | §5.3 |
+| POST /v1/token rejects reused code (400) | Pass | §5.3 |
+
+### tokens — Token verification and revocation
+
+| Test | Status | Spec |
+|------|--------|------|
+| POST /v1/tokens/verify returns valid=true for active token | Pass | §7.2 |
+| POST /v1/tokens/revoke returns 204 | Pass | §7.3 |
+| POST /v1/tokens/verify returns valid=false after revocation | Pass | §7.3 |
+| POST /v1/tokens/verify returns valid=false for garbage token | Pass | §7.2 |
+
+### grants — Grant listing, retrieval, and revocation
+
+| Test | Status | Spec |
+|------|--------|------|
+| GET /v1/grants lists grants | Pass | §7.1 |
+| GET /v1/grants/:id returns grant details | Pass | §7.1 |
+| DELETE /v1/grants/:id returns 204 | Pass | §7.1 |
+| Grant status is revoked after DELETE | Pass | §7.1 |
+
+### delegation — Grant delegation and scope enforcement
+
+| Test | Status | Spec |
+|------|--------|------|
+| POST /v1/grants/delegate returns 201 with grantToken | Pass | §9 |
+| Delegated JWT contains parentAgt, parentGrnt, delegationDepth | Pass | §9 |
+| Delegation rejects scope superset (400) | Pass | §9 |
+| Delegation depth limit is enforced | Pass | §9 |
+| Revoking parent cascades to delegated grants | Pass | §9 |
+
+### audit — Audit logging with hash chain integrity
+
+| Test | Status | Spec |
+|------|--------|------|
+| POST /v1/audit/log creates entry with entryId, hash, prevHash (201) | Pass | §8 |
+| Hash chain integrity: entry2.prevHash === entry1.hash | Pass | §8 |
+| GET /v1/audit/entries returns entries list | Pass | §8 |
+| GET /v1/audit/:id returns single entry | Pass | §8 |
+| Audit hash is a valid SHA-256 hex string | Pass | §8 |
+
+### security — Authentication, authorization, and security enforcement
+
+| Test | Status | Spec |
+|------|--------|------|
+| Request without auth returns 401 | Pass | §14 |
+| Request with bad auth returns 401 | Pass | §14 |
+| JWKS only contains RS256 keys | Pass | §14 |
+| Delegation scope enforcement prevents escalation | Pass | §14 |
+| Audit log is append-only (PUT/DELETE return 404 or 405) | Pass | §14 |
+
+---
+
+## Optional Extension Suites (25 tests)
+
+### policies — Policy CRUD and enforcement
+
+| Test | Status | Spec |
+|------|--------|------|
+| POST /v1/policies creates policy (201) | Pass | §12 |
+| GET /v1/policies lists policies | Pass | §12 |
+| GET /v1/policies/:id returns policy details | Pass | §12 |
+| PATCH /v1/policies/:id updates policy | Pass | §12 |
+| DELETE /v1/policies/:id returns 204 | Pass | §12 |
+
+### webhooks — Webhook registration and management
+
+| Test | Status | Spec |
+|------|--------|------|
+| POST /v1/webhooks creates webhook (201) | Pass | §11 |
+| GET /v1/webhooks lists webhooks | Pass | §11 |
+| DELETE /v1/webhooks/:id returns 204 | Pass | §11 |
+
+### scim — SCIM 2.0 provisioning endpoints
+
+| Test | Status | Spec |
+|------|--------|------|
+| POST /v1/scim/tokens creates SCIM token (201) | Pass | §13 |
+| GET /v1/scim/tokens lists SCIM tokens | Pass | §13 |
+| GET /scim/v2/ServiceProviderConfig returns config | Pass | §13 |
+| POST /scim/v2/Users creates user (201) | Pass | §13 |
+| GET /scim/v2/Users lists users | Pass | §13 |
+| DELETE /scim/v2/Users/:id returns 204 | Pass | §13 |
+
+### sso — SSO configuration and flow
+
+| Test | Status | Spec |
+|------|--------|------|
+| POST /v1/sso/config creates SSO config (201) | Pass | §13 |
+| GET /v1/sso/config returns SSO config | Pass | §13 |
+| GET /sso/login requires org parameter | Pass | §13 |
+| DELETE /v1/sso/config returns 204 | Pass | §13 |
+
+### anomalies — Anomaly detection and acknowledgement
+
+| Test | Status | Spec |
+|------|--------|------|
+| POST /v1/anomalies/detect runs detection (200) | Pass | §12 |
+| GET /v1/anomalies lists anomalies | Pass | §12 |
+| PATCH /v1/anomalies/:id/acknowledge returns 404 for invalid ID | Pass | §12 |
+
+### compliance — Compliance reporting and evidence export
+
+| Test | Status | Spec |
+|------|--------|------|
+| GET /v1/compliance/summary returns summary | Pass | §12 |
+| GET /v1/compliance/export/grants returns grants export | Pass | §12 |
+| GET /v1/compliance/export/audit returns audit export | Pass | §12 |
+| GET /v1/compliance/evidence-pack returns evidence pack | Pass | §12 |
+
+---
+
+## Run It Yourself
+
+Validate your own Grantex server:
+
+```bash
+npx @grantex/conformance \
+  --base-url YOUR_SERVER_URL \
+  --api-key YOUR_API_KEY \
+  --include policies,webhooks,scim,sso,anomalies,compliance
+```
+
+See the [Conformance Suite guide](/integrations/conformance) for full documentation.
