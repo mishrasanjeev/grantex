@@ -21,6 +21,7 @@ import { scimSuite } from './suites/scim.js';
 import { ssoSuite } from './suites/sso.js';
 import { anomaliesSuite } from './suites/anomalies.js';
 import { complianceSuite } from './suites/compliance.js';
+import { principalSessionsSuite } from './suites/principal-sessions.js';
 
 const coreSuites: SuiteDefinition[] = [
   healthSuite,
@@ -41,6 +42,7 @@ const optionalSuites: SuiteDefinition[] = [
   ssoSuite,
   anomaliesSuite,
   complianceSuite,
+  principalSessionsSuite,
 ];
 
 async function setupSharedAgent(http: ConformanceHttpClient): Promise<SharedAgent> {

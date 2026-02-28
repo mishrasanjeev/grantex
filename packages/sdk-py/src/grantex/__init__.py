@@ -38,6 +38,8 @@ from ._types import (
     ExchangeTokenParams,
     ExchangeTokenResponse,
     RefreshTokenParams,
+    CreatePrincipalSessionParams,
+    PrincipalSessionResponse,
     Grant,
     GrantTokenPayload,
     ListAgentsResponse,
@@ -77,7 +79,7 @@ from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook_signature
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 __all__ = [
     # Main client
@@ -125,6 +127,8 @@ __all__ = [
     "ExchangeTokenParams",
     "ExchangeTokenResponse",
     "RefreshTokenParams",
+    "CreatePrincipalSessionParams",
+    "PrincipalSessionResponse",
     "Grant",
     "GrantTokenPayload",
     "ListAgentsResponse",

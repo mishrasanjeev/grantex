@@ -17,6 +17,7 @@ from .resources._tokens import TokensClient
 from .resources._webhooks import WebhooksClient
 from .resources._billing import BillingClient
 from .resources._policies import PoliciesClient
+from .resources._principal_sessions import PrincipalSessionsClient
 
 _DEFAULT_BASE_URL = "https://api.grantex.dev"
 
@@ -35,6 +36,7 @@ class Grantex:
     anomalies: AnomaliesClient
     scim: ScimClient
     sso: SsoClient
+    principal_sessions: PrincipalSessionsClient
 
     def __init__(
         self,
@@ -67,6 +69,7 @@ class Grantex:
         self.anomalies = AnomaliesClient(self._http)
         self.scim = ScimClient(self._http)
         self.sso = SsoClient(self._http)
+        self.principal_sessions = PrincipalSessionsClient(self._http)
 
     @staticmethod
     def signup(

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
 import { decodeTokenClaims } from '../lib/crypto.js';
-import { fireWebhooks } from '../lib/webhook.js';
+import { revokeGrantCascade } from '../lib/revoke.js';
 
 export async function grantsRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/grants
@@ -45,51 +45,11 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
 
   // DELETE /v1/grants/:id  (revoke)
   app.delete<{ Params: { id: string } }>('/v1/grants/:id', async (request, reply) => {
-    const sql = getSql();
-    const rows = await sql`
-      UPDATE grants
-      SET status = 'revoked', revoked_at = NOW()
-      WHERE id = ${request.params.id}
-        AND developer_id = ${request.developer.id}
-        AND status = 'active'
-      RETURNING id, expires_at
-    `;
+    const result = await revokeGrantCascade(request.params.id, request.developer.id);
 
-    const grant = rows[0];
-    if (!grant) {
+    if (!result.revoked) {
       return reply.status(404).send({ message: 'Grant not found or already revoked', code: 'NOT_FOUND', requestId: request.id });
     }
-
-    // Set Redis revocation key with TTL
-    const redis = getRedis();
-    const expiresAt = new Date(grant['expires_at'] as string);
-    const ttlSeconds = Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
-    await redis.set(`revoked:grant:${request.params.id}`, '1', 'EX', ttlSeconds);
-
-    // Cascade-revoke all descendant grants via recursive CTE
-    const descendantRows = await sql`
-      WITH RECURSIVE descendants AS (
-        SELECT id, expires_at FROM grants WHERE parent_grant_id = ${request.params.id} AND status = 'active'
-        UNION ALL
-        SELECT g.id, g.expires_at FROM grants g
-        JOIN descendants d ON g.parent_grant_id = d.id WHERE g.status = 'active'
-      )
-      UPDATE grants SET status = 'revoked', revoked_at = NOW()
-      WHERE id IN (SELECT id FROM descendants)
-      RETURNING id, expires_at
-    `;
-
-    for (const row of descendantRows) {
-      const descExpiresAt = new Date(row['expires_at'] as string);
-      const descTtl = Math.max(1, Math.floor((descExpiresAt.getTime() - Date.now()) / 1000));
-      await redis.set(`revoked:grant:${row['id'] as string}`, '1', 'EX', descTtl);
-    }
-
-    // Fire webhook event (best-effort, non-blocking)
-    fireWebhooks(request.developer.id, 'grant.revoked', {
-      grantId: request.params.id,
-      cascade: descendantRows.length > 0,
-    }).catch(() => {});
 
     return reply.status(204).send();
   });

@@ -10,6 +10,7 @@ import { ComplianceClient } from './resources/compliance.js';
 import { AnomaliesClient } from './resources/anomalies.js';
 import { ScimClient } from './resources/scim.js';
 import { SsoClient } from './resources/sso.js';
+import { PrincipalSessionsClient } from './resources/principal-sessions.js';
 import type {
   AuthorizationRequest,
   AuthorizeParams,
@@ -35,6 +36,7 @@ export class Grantex {
   readonly anomalies: AnomaliesClient;
   readonly scim: ScimClient;
   readonly sso: SsoClient;
+  readonly principalSessions: PrincipalSessionsClient;
 
   constructor(options: GrantexClientOptions = {}) {
     const apiKey =
@@ -63,6 +65,7 @@ export class Grantex {
     this.anomalies = new AnomaliesClient(this.#http);
     this.scim = new ScimClient(this.#http);
     this.sso = new SsoClient(this.#http);
+    this.principalSessions = new PrincipalSessionsClient(this.#http);
   }
 
   /**

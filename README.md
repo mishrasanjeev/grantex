@@ -82,6 +82,9 @@ Grantex introduces three primitives:
           │
           ▼
   User can revoke any grant at any time → effective in < 1 second
+          │
+          ▼
+  End-user permission dashboard → users self-service view & revoke access
 ```
 
 ---
@@ -178,6 +181,17 @@ const grant = await verifyGrantToken(token, {
   requiredScopes: ['payments:initiate'],
 });
 // Throws if token is expired, revoked, tampered, or missing required scopes
+```
+
+### 7. Give users control over their permissions
+
+```typescript
+// Generate a short-lived link for the end-user to view & revoke agent access
+const session = await grantex.principalSessions.create({
+  principalId: 'user_abc123',
+  expiresIn: '2h',
+});
+// Send session.dashboardUrl to the user via email, in-app notification, etc.
 ```
 
 ---

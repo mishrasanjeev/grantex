@@ -1,0 +1,67 @@
+---
+title: "Principal Sessions"
+sidebarTitle: "Principal Sessions"
+description: "Generate session tokens for end-users to view and manage their agent permissions."
+---
+
+## Overview
+
+The `principalSessions` sub-client lets you create short-lived session tokens for your end-users. These tokens power the [Permission Dashboard](/guides/end-user-permissions) where users can view which agents have access and revoke grants.
+
+```typescript
+const session = await grantex.principalSessions.create({
+  principalId: 'user_abc123',
+  expiresIn: '2h',
+});
+
+// Send session.dashboardUrl to the user
+console.log(session.dashboardUrl);
+```
+
+---
+
+## principalSessions.create()
+
+Create a session token for an end-user. Returns a URL they can open to manage their permissions.
+
+```typescript
+const session = await grantex.principalSessions.create({
+  principalId: 'user_abc123',
+  expiresIn: '2h',
+});
+
+console.log(session.sessionToken);  // JWT string
+console.log(session.dashboardUrl);  // Full URL with embedded token
+console.log(session.expiresAt);     // '2026-03-01T14:00:00.000Z'
+```
+
+### Parameters: `CreatePrincipalSessionParams`
+
+<ParamField body="principalId" type="string" required>
+  The end-user's principal ID — the same `userId` used in `grantex.authorize()`.
+</ParamField>
+
+<ParamField body="expiresIn" type="string">
+  Session duration. Format: `"30m"`, `"1h"`, `"24h"`. Defaults to `"1h"`, capped at `"24h"`.
+</ParamField>
+
+### Response: `PrincipalSessionResponse`
+
+<ResponseField name="sessionToken" type="string">
+  The signed JWT session token.
+</ResponseField>
+
+<ResponseField name="dashboardUrl" type="string">
+  Full URL the user can open in their browser to view and revoke permissions.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO 8601 timestamp when the session token expires.
+</ResponseField>
+
+### Errors
+
+| Status | Code | Cause |
+|--------|------|-------|
+| 400 | `BAD_REQUEST` | Missing `principalId` or invalid `expiresIn` format |
+| 404 | `NOT_FOUND` | No active grants exist for this principal |

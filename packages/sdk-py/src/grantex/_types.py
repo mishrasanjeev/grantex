@@ -310,6 +310,36 @@ class RefreshTokenParams:
         return {"refreshToken": self.refresh_token, "agentId": self.agent_id}
 
 
+# ─── Principal Sessions ──────────────────────────────────────────────────────
+
+
+@dataclass
+class CreatePrincipalSessionParams:
+    principal_id: str
+    expires_in: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {"principalId": self.principal_id}
+        if self.expires_in is not None:
+            body["expiresIn"] = self.expires_in
+        return body
+
+
+@dataclass(frozen=True)
+class PrincipalSessionResponse:
+    session_token: str
+    dashboard_url: str
+    expires_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PrincipalSessionResponse:
+        return cls(
+            session_token=data["sessionToken"],
+            dashboard_url=data["dashboardUrl"],
+            expires_at=data["expiresAt"],
+        )
+
+
 # ─── Audit ────────────────────────────────────────────────────────────────────
 
 

@@ -1,0 +1,75 @@
+---
+title: "Principal Sessions"
+sidebarTitle: "Principal Sessions"
+description: "Generate session tokens for end-users to view and manage their agent permissions."
+---
+
+## Overview
+
+The `principal_sessions` sub-client lets you create short-lived session tokens for your end-users. These tokens power the [Permission Dashboard](/guides/end-user-permissions) where users can view which agents have access and revoke grants.
+
+```python
+session = grantex.principal_sessions.create(
+    CreatePrincipalSessionParams(
+        principal_id="user_abc123",
+        expires_in="2h",
+    )
+)
+
+# Send session.dashboard_url to the user
+print(session.dashboard_url)
+```
+
+---
+
+## principal_sessions.create()
+
+Create a session token for an end-user. Returns a URL they can open to manage their permissions.
+
+```python
+from grantex import Grantex, CreatePrincipalSessionParams
+
+grantex = Grantex(api_key="your-api-key")
+
+session = grantex.principal_sessions.create(
+    CreatePrincipalSessionParams(
+        principal_id="user_abc123",
+        expires_in="2h",
+    )
+)
+
+print(session.session_token)   # JWT string
+print(session.dashboard_url)   # Full URL with embedded token
+print(session.expires_at)      # '2026-03-01T14:00:00.000Z'
+```
+
+### Parameters: `CreatePrincipalSessionParams`
+
+<ParamField body="principal_id" type="str" required>
+  The end-user's principal ID — the same `user_id` used in `grantex.authorize()`.
+</ParamField>
+
+<ParamField body="expires_in" type="str | None">
+  Session duration. Format: `"30m"`, `"1h"`, `"24h"`. Defaults to `"1h"`, capped at `"24h"`.
+</ParamField>
+
+### Response: `PrincipalSessionResponse`
+
+<ResponseField name="session_token" type="str">
+  The signed JWT session token.
+</ResponseField>
+
+<ResponseField name="dashboard_url" type="str">
+  Full URL the user can open in their browser to view and revoke permissions.
+</ResponseField>
+
+<ResponseField name="expires_at" type="str">
+  ISO 8601 timestamp when the session token expires.
+</ResponseField>
+
+### Errors
+
+| Status | Code | Cause |
+|--------|------|-------|
+| 400 | `BAD_REQUEST` | Missing `principal_id` or invalid `expires_in` format |
+| 404 | `NOT_FOUND` | No active grants exist for this principal |

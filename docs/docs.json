@@ -52,7 +52,8 @@
               "guides/self-hosting",
               "guides/security-best-practices",
               "guides/token-verification",
-              "guides/troubleshooting"
+              "guides/troubleshooting",
+              "guides/end-user-permissions"
             ]
           },
           {
@@ -100,7 +101,8 @@
               "sdks/typescript/anomalies",
               "sdks/typescript/billing",
               "sdks/typescript/scim",
-              "sdks/typescript/sso"
+              "sdks/typescript/sso",
+              "sdks/typescript/principal-sessions"
             ]
           },
           {
@@ -141,7 +143,8 @@
               "sdks/python/anomalies",
               "sdks/python/billing",
               "sdks/python/scim",
-              "sdks/python/sso"
+              "sdks/python/sso",
+              "sdks/python/principal-sessions"
             ]
           },
           {
@@ -325,6 +328,15 @@
               "api-reference/sso/remove-sso-configuration",
               "api-reference/sso/initiate-sso-login",
               "api-reference/sso/sso-callback"
+            ]
+          },
+          {
+            "group": "Principal Sessions",
+            "pages": [
+              "api-reference/principal-sessions/create-principal-session",
+              "api-reference/principal-sessions/list-principal-grants",
+              "api-reference/principal-sessions/get-principal-audit",
+              "api-reference/principal-sessions/revoke-principal-grant"
             ]
           },
           {

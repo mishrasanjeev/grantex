@@ -45,6 +45,9 @@ export type {
   ExchangeTokenResponse,
   RefreshTokenParams,
   VerifyTokenResponse,
+  // Principal Sessions
+  CreatePrincipalSessionParams,
+  PrincipalSessionResponse,
   // Audit
   LogAuditParams,
   AuditEntry,

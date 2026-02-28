@@ -1,0 +1,130 @@
+---
+title: "End-User Permission Dashboard"
+sidebarTitle: "End-User Permissions"
+description: "Give your users a self-service page to view and revoke agent access."
+---
+
+End-users (the people your agents act on behalf of) need visibility and control over which agents have access to their data. The Permission Dashboard lets you generate a short-lived, secure link that your users can open to view and revoke agent access — no API key needed.
+
+## How It Works
+
+1. **Developer generates a session URL** — Your backend calls `POST /v1/principal-sessions` with the user's `principalId` and gets back a short-lived session token embedded in a URL.
+2. **You share the URL with the user** — Via email, in-app notification, settings page link, etc.
+3. **User opens the dashboard** — They see all agents with active access, scopes granted, and a revoke button for each.
+4. **User revokes access** — One click revokes the grant and cascade-revokes any delegated sub-grants.
+
+Session tokens are JWT-based, scoped to a specific principal+developer pair, and expire after 1 hour by default (max 24 hours).
+
+## Generate a Session URL
+
+### Using curl
+
+```bash
+curl -X POST https://api.grantex.dev/v1/principal-sessions \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"principalId": "user_abc123", "expiresIn": "2h"}'
+```
+
+Response:
+
+```json
+{
+  "sessionToken": "eyJhbGciOiJSUzI1NiIs...",
+  "dashboardUrl": "https://api.grantex.dev/permissions?session=eyJhbGciOiJSUzI1NiIs...",
+  "expiresAt": "2026-03-01T14:00:00.000Z"
+}
+```
+
+### Using the TypeScript SDK
+
+<CodeGroup>
+```typescript TypeScript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+const session = await grantex.principalSessions.create({
+  principalId: 'user_abc123',
+  expiresIn: '2h',   // optional, defaults to "1h", max "24h"
+});
+
+console.log(session.dashboardUrl);
+// → "https://api.grantex.dev/permissions?session=eyJ..."
+
+// Send this URL to your user (email, in-app, etc.)
+```
+
+```python Python
+from grantex import Grantex, CreatePrincipalSessionParams
+
+grantex = Grantex(api_key="your-api-key")
+
+session = grantex.principal_sessions.create(
+    CreatePrincipalSessionParams(
+        principal_id="user_abc123",
+        expires_in="2h",   # optional, defaults to "1h", max "24h"
+    )
+)
+
+print(session.dashboard_url)
+# → "https://api.grantex.dev/permissions?session=eyJ..."
+```
+</CodeGroup>
+
+## Parameters
+
+<ParamField body="principalId" type="string" required>
+  The user's principal ID — the same `userId` / `principalId` used when creating authorization requests.
+</ParamField>
+
+<ParamField body="expiresIn" type="string" default="1h">
+  How long the session token is valid. Format: `"30m"`, `"1h"`, `"24h"`. Capped at 24 hours.
+</ParamField>
+
+## Response
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sessionToken` | `string` | The JWT session token |
+| `dashboardUrl` | `string` | Full URL the user can open in their browser |
+| `expiresAt` | `string` | ISO 8601 expiry timestamp |
+
+## What the User Sees
+
+When the user opens the dashboard URL, they see:
+
+- **Apps with access** — A card for each agent with an active grant, showing the agent name, description, granted scopes, issue date, expiry date, and a "Revoke access" button.
+- **Recent activity** — A table of recent audit log entries for actions taken by agents on their behalf.
+- **Session expired** — If the session token has expired, a clear message asking them to request a new link.
+
+## Revoking Access
+
+When a user clicks "Revoke access" on a grant:
+
+1. The grant is marked as revoked
+2. All delegated sub-grants (child grants from agent-to-agent delegation) are also revoked
+3. Redis revocation keys are set so tokens are rejected immediately
+4. A `grant.revoked` webhook event is fired
+
+This is the same cascade-revoke behavior as the developer-facing `DELETE /v1/grants/:id` endpoint.
+
+## Security Considerations
+
+- **Short-lived tokens** — Session tokens default to 1 hour. Use the shortest duration practical for your use case.
+- **Scoped access** — Session tokens are bound to a specific principal+developer pair. A user cannot see or revoke another user's grants, and cannot see grants from other developers.
+- **Purpose claim** — Session JWTs include a `purpose: "principal_dashboard"` claim that prevents grant tokens from being reused as session tokens (and vice versa).
+- **No API key exposure** — End-users never see or need the developer's API key.
+- **HTTPS only** — Always serve dashboard URLs over HTTPS in production.
+
+## API Endpoints
+
+The permission dashboard uses these endpoints under the hood:
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/v1/principal-sessions` | Developer API key | Create a session token |
+| `GET` | `/v1/principal/grants` | Session token | List active grants |
+| `GET` | `/v1/principal/audit` | Session token | List recent audit entries |
+| `DELETE` | `/v1/principal/grants/:id` | Session token | Revoke a grant |
+| `GET` | `/permissions` | None (public HTML) | Permission dashboard page |

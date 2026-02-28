@@ -183,6 +183,19 @@ export interface VerifyTokenResponse {
   expiresAt?: string;
 }
 
+// ─── Principal Sessions ──────────────────────────────────────────────────────
+
+export interface CreatePrincipalSessionParams {
+  principalId: string;
+  expiresIn?: string;
+}
+
+export interface PrincipalSessionResponse {
+  sessionToken: string;
+  dashboardUrl: string;
+  expiresAt: string;
+}
+
 // ─── Audit ────────────────────────────────────────────────────────────────────
 
 export interface LogAuditParams {

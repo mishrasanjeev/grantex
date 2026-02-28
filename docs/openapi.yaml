@@ -61,6 +61,8 @@ tags:
     description: SCIM 2.0 user provisioning and token management
   - name: SSO
     description: OIDC single sign-on configuration and flow
+  - name: Principal Sessions
+    description: End-user permission management via short-lived session tokens
 
 components:
   securitySchemes:
@@ -2596,6 +2598,194 @@ paths:
             text/html:
               schema:
                 type: string
+
+  /v1/principal-sessions:
+    post:
+      operationId: createPrincipalSession
+      tags: [Principal Sessions]
+      summary: Create a principal session
+      description: |
+        Generate a short-lived session token for an end-user to view and manage their agent permissions.
+        The returned `dashboardUrl` can be sent to the user (via email, in-app link, etc.).
+        Requires at least one active grant for the specified principal.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [principalId]
+              properties:
+                principalId:
+                  type: string
+                  description: The end-user's principal ID
+                  example: user_abc123
+                expiresIn:
+                  type: string
+                  description: Session duration (e.g. "1h", "30m", "24h"). Defaults to "1h", capped at "24h".
+                  example: "2h"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessionToken:
+                    type: string
+                    description: Signed JWT session token
+                  dashboardUrl:
+                    type: string
+                    description: Full URL the user can open to manage permissions
+                  expiresAt:
+                    type: string
+                    format: date-time
+                    description: When the session token expires
+        "400":
+          description: Missing principalId or invalid expiresIn
+        "404":
+          description: No active grants for this principal
+
+  /v1/principal/grants:
+    get:
+      operationId: listPrincipalGrants
+      tags: [Principal Sessions]
+      summary: List principal's active grants
+      description: |
+        Returns all active grants for the authenticated principal. Requires a session token
+        (from `POST /v1/principal-sessions`) in the Authorization header.
+      security: []
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          description: "Bearer <sessionToken>"
+      responses:
+        "200":
+          description: List of active grants
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  grants:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        grantId:
+                          type: string
+                        agentId:
+                          type: string
+                        agentName:
+                          type: string
+                        agentDescription:
+                          type: string
+                        agentDid:
+                          type: string
+                        scopes:
+                          type: array
+                          items:
+                            type: string
+                        status:
+                          type: string
+                        issuedAt:
+                          type: string
+                          format: date-time
+                        expiresAt:
+                          type: string
+                          format: date-time
+                        delegationDepth:
+                          type: integer
+                  principalId:
+                    type: string
+        "401":
+          description: Missing, invalid, or expired session token
+
+  /v1/principal/audit:
+    get:
+      operationId: getPrincipalAudit
+      tags: [Principal Sessions]
+      summary: Get principal's audit log
+      description: |
+        Returns recent audit entries for the authenticated principal. Requires a session token.
+      security: []
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          description: "Bearer <sessionToken>"
+      responses:
+        "200":
+          description: Audit entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        entryId:
+                          type: string
+                        agentId:
+                          type: string
+                        agentDid:
+                          type: string
+                        grantId:
+                          type: string
+                        principalId:
+                          type: string
+                        action:
+                          type: string
+                        metadata:
+                          type: object
+                        status:
+                          type: string
+                        timestamp:
+                          type: string
+                          format: date-time
+        "401":
+          description: Missing, invalid, or expired session token
+
+  /v1/principal/grants/{id}:
+    delete:
+      operationId: revokePrincipalGrant
+      tags: [Principal Sessions]
+      summary: Revoke a grant
+      description: |
+        Revoke a specific grant. The grant must belong to the authenticated principal and developer.
+        Cascade-revokes all descendant (delegated) grants. Requires a session token.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The grant ID to revoke
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+          description: "Bearer <sessionToken>"
+      responses:
+        "204":
+          description: Grant revoked
+        "401":
+          description: Missing, invalid, or expired session token
+        "404":
+          description: Grant not found or does not belong to this principal
 
   /dashboard/principal:
     get:
