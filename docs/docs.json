@@ -167,6 +167,7 @@
           {
             "group": "Framework Integrations",
             "pages": [
+              "integrations/express",
               "integrations/mcp",
               "integrations/langchain",
               "integrations/vercel-ai",

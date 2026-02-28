@@ -1,0 +1,284 @@
+---
+title: "Express.js"
+sidebarTitle: "Express.js"
+description: "Grant token verification and scope-based authorization middleware for Express.js."
+---
+
+## Install
+
+```bash
+npm install @grantex/express @grantex/sdk express
+```
+
+## Quick Start
+
+Two lines of middleware protect your entire API:
+
+```typescript
+import express from 'express';
+import { requireGrantToken, requireScopes } from '@grantex/express';
+
+const app = express();
+
+const JWKS_URI = 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json';
+
+// 1. Verify the grant token
+app.use('/api', requireGrantToken({ jwksUri: JWKS_URI }));
+
+// 2. Enforce scopes per route
+app.get('/api/calendar', requireScopes('calendar:read'), (req, res) => {
+  res.json({
+    principalId: req.grant.principalId,
+    scopes: req.grant.scopes,
+  });
+});
+
+app.post('/api/email/send', requireScopes('email:send'), (req, res) => {
+  res.json({ sent: true });
+});
+
+app.listen(3000);
+```
+
+After `requireGrantToken()` succeeds, every downstream handler can access `req.grant` — a fully typed `VerifiedGrant` object containing the principal, agent, scopes, and timestamps.
+
+---
+
+## How It Works
+
+```
+Client → Authorization: Bearer <grantToken> → Express app
+                                                 │
+                                    requireGrantToken()
+                                        │         │
+                                   Valid JWT?   Invalid/Missing?
+                                        │         │
+                                   Set req.grant   Return 401 JSON
+                                        │
+                                  requireScopes()
+                                   │           │
+                              Has scopes?   Missing scopes?
+                                   │           │
+                              Call next()   Return 403 JSON
+```
+
+1. `requireGrantToken()` extracts the Bearer token from the `Authorization` header
+2. It verifies the RS256 signature against the Grantex JWKS endpoint (offline — cached after first fetch)
+3. On success, `req.grant` is populated and `next()` is called
+4. `requireScopes()` checks that `req.grant.scopes` contains every required scope
+5. If any scope is missing, it returns a `403 Forbidden` response
+
+---
+
+## Factory Pattern
+
+Use `createGrantex()` to avoid repeating the same options on every route:
+
+```typescript
+import { createGrantex } from '@grantex/express';
+
+const grantex = createGrantex({
+  jwksUri: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json',
+  clockTolerance: 5,
+});
+
+// Clean, concise route definitions
+app.get('/api/calendar',  grantex.requireToken(), grantex.requireScopes('calendar:read'),  handler);
+app.get('/api/email',     grantex.requireToken(), grantex.requireScopes('email:read'),     handler);
+app.post('/api/calendar', grantex.requireToken(), grantex.requireScopes('calendar:write'), handler);
+```
+
+You can still override options per-route:
+
+```typescript
+app.get('/api/special', grantex.requireToken({ audience: 'special-app' }), handler);
+```
+
+---
+
+## Custom Token Extraction
+
+By default, the middleware reads the `Authorization: Bearer <token>` header. You can override this:
+
+<CodeGroup>
+
+```typescript Cookie
+app.use('/api', requireGrantToken({
+  jwksUri: JWKS_URI,
+  tokenExtractor: (req) => req.cookies?.grantToken,
+}));
+```
+
+```typescript Custom Header
+app.use('/api', requireGrantToken({
+  jwksUri: JWKS_URI,
+  tokenExtractor: (req) => req.headers['x-grant-token'] as string,
+}));
+```
+
+```typescript Query Parameter
+// Useful for WebSocket upgrade requests
+app.use('/ws', requireGrantToken({
+  jwksUri: JWKS_URI,
+  tokenExtractor: (req) => req.query.token as string,
+}));
+```
+
+</CodeGroup>
+
+---
+
+## Custom Error Handling
+
+Provide an `onError` callback to customize error responses:
+
+```typescript
+app.use('/api', requireGrantToken({
+  jwksUri: JWKS_URI,
+  onError: (err, req, res, next) => {
+    if (err.code === 'TOKEN_EXPIRED') {
+      res.status(401).json({
+        error: 'session_expired',
+        message: 'Your session has expired. Please re-authorize.',
+        refreshUrl: '/auth/refresh',
+      });
+    } else {
+      res.status(err.statusCode).json({
+        error: err.code,
+        message: err.message,
+      });
+    }
+  },
+}));
+```
+
+### Error Codes
+
+| Code | HTTP Status | When |
+|------|-------------|------|
+| `TOKEN_MISSING` | 401 | No token found in the request |
+| `TOKEN_INVALID` | 401 | JWT signature or format is invalid |
+| `TOKEN_EXPIRED` | 401 | JWT `exp` claim is in the past |
+| `SCOPE_INSUFFICIENT` | 403 | Token is missing one or more required scopes |
+
+---
+
+## `req.grant` Reference
+
+After `requireGrantToken()` succeeds, `req.grant` contains a `VerifiedGrant`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tokenId` | `string` | JWT `jti` claim — unique token identifier |
+| `grantId` | `string` | Grantex grant record ID |
+| `principalId` | `string` | End-user who authorized the agent |
+| `agentDid` | `string` | Agent's decentralized identifier |
+| `developerId` | `string` | Developer organization ID |
+| `scopes` | `string[]` | Scopes the agent was granted |
+| `issuedAt` | `number` | Token issued-at (seconds since epoch) |
+| `expiresAt` | `number` | Token expiry (seconds since epoch) |
+| `parentAgentDid?` | `string` | Parent agent DID (delegated grants only) |
+| `parentGrantId?` | `string` | Parent grant ID (delegated grants only) |
+| `delegationDepth?` | `number` | Delegation depth (0 = root grant) |
+
+---
+
+## Full Example
+
+A complete Express API protected by Grantex:
+
+```typescript
+import express from 'express';
+import { createGrantex } from '@grantex/express';
+import type { GrantexRequest } from '@grantex/express';
+
+const app = express();
+app.use(express.json());
+
+const grantex = createGrantex({
+  jwksUri: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json',
+});
+
+// Public health check — no auth required
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// Protected routes
+const api = express.Router();
+api.use(grantex.requireToken());
+
+api.get('/me', (req, res) => {
+  const { principalId, agentDid, scopes } = (req as GrantexRequest).grant;
+  res.json({ principalId, agentDid, scopes });
+});
+
+api.get('/calendar', grantex.requireScopes('calendar:read'), (req, res) => {
+  const { principalId } = (req as GrantexRequest).grant;
+  res.json({ events: getCalendarEvents(principalId) });
+});
+
+api.post('/calendar/events', grantex.requireScopes('calendar:write'), (req, res) => {
+  const { principalId } = (req as GrantexRequest).grant;
+  const event = createEvent(principalId, req.body);
+  res.status(201).json(event);
+});
+
+api.post('/email/send',
+  grantex.requireScopes('email:read', 'email:send'),
+  (req, res) => {
+    res.json({ sent: true });
+  },
+);
+
+app.use('/api', api);
+
+app.listen(3000, () => {
+  console.log('API server running on http://localhost:3000');
+});
+
+function getCalendarEvents(principalId: string) {
+  return [{ id: '1', title: 'Team standup', principalId }];
+}
+
+function createEvent(principalId: string, body: unknown) {
+  return { id: '2', principalId, ...(body as Record<string, unknown>) };
+}
+```
+
+---
+
+## TypeScript Support
+
+Import `GrantexRequest` for typed route handlers:
+
+```typescript
+import type { GrantexRequest } from '@grantex/express';
+import type { Response } from 'express';
+
+function calendarHandler(req: GrantexRequest, res: Response) {
+  // req.grant is fully typed — no casting needed
+  const { principalId, scopes, agentDid } = req.grant;
+  res.json({ principalId, scopes, agentDid });
+}
+```
+
+All types are exported:
+
+```typescript
+import type {
+  GrantexMiddlewareOptions,
+  GrantexRequest,
+  GrantexExpressError,
+  GrantexExpressErrorCode,
+  VerifiedGrant,
+} from '@grantex/express';
+```
+
+---
+
+## Requirements
+
+- Node.js 18+
+- Express 4.18+
+- `@grantex/sdk` >= 0.1.0

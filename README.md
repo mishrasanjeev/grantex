@@ -391,6 +391,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 | Framework | Package | Install | Status |
 |-----------|---------|---------|--------|
+| **Express.js** | `@grantex/express` | `npm install @grantex/express` | ✅ Shipped |
 | **LangChain** | `@grantex/langchain` | `npm install @grantex/langchain` | ✅ Shipped |
 | **AutoGen / OpenAI** | `@grantex/autogen` | `npm install @grantex/autogen` | ✅ Shipped |
 | **CrewAI** | `grantex-crewai` | `pip install grantex-crewai` | ✅ Shipped |
@@ -403,6 +404,20 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **Conformance Suite** | `@grantex/conformance` | `npm install -g @grantex/conformance` | ✅ Shipped |
 
 ### Framework Quick Examples
+
+**Express.js** — grant token verification + scope-based authorization:
+
+```typescript
+import express from 'express';
+import { requireGrantToken, requireScopes } from '@grantex/express';
+
+const JWKS_URI = 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json';
+
+app.use('/api', requireGrantToken({ jwksUri: JWKS_URI }));
+app.get('/api/calendar', requireScopes('calendar:read'), (req, res) => {
+  res.json({ principalId: req.grant.principalId, scopes: req.grant.scopes });
+});
+```
 
 **LangChain** — scope-enforced tools + audit callbacks:
 
