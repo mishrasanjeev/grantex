@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "grantex-fastapi"
+version = "0.1.0"
+description = "FastAPI middleware for Grantex grant token verification and scope-based authorization"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.9"
+keywords = ["grantex", "fastapi", "middleware", "authorization", "oauth", "jwt", "ai-agents"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+    "grantex>=0.1.0",
+    "fastapi>=0.100.0",
+]
+
+[project.urls]
+Homepage = "https://grantex.dev"
+Documentation = "https://grantex.dev/docs/integrations/fastapi"
+Repository = "https://github.com/mishrasanjeev/grantex"
+Issues = "https://github.com/mishrasanjeev/grantex/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.25.0",
+    "mypy>=1.8",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/grantex_fastapi"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.mypy]
+strict = true
+python_version = "3.9"
