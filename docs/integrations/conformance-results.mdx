@@ -9,14 +9,14 @@ description: "Latest conformance test results for the Grantex production server.
 The Grantex hosted service at `grantex-auth-dd4mtrt2gq-uc.a.run.app` is continuously validated against the full conformance suite. Below are the latest results.
 
 <Info>
-**60 passed, 2 skipped, 0 failed** — 62 total tests in ~77s
+**39 passed, 0 failed** — 39 core tests in ~75s
 </Info>
 
-Last run: **February 28, 2026**
+Last run: **February 28, 2026** | Conformance suite version: **0.1.1**
 
 ---
 
-## Core Suites (37 tests)
+## Core Suites (39 tests)
 
 ### health — Health check and JWKS endpoints
 
@@ -29,13 +29,11 @@ Last run: **February 28, 2026**
 
 | Test | Status | Spec |
 |------|--------|------|
-| POST /v1/agents creates agent with agentId and did | Skipped | §10 |
+| POST /v1/agents creates agent with agentId and did | Pass | §10 |
 | GET /v1/agents lists agents | Pass | §10 |
 | GET /v1/agents/:id returns agent details | Pass | §10 |
 | PATCH /v1/agents/:id updates agent | Pass | §10 |
-| DELETE /v1/agents/:id returns 204 | Skipped | §10 |
-
-<Note>Agent create/delete tests are skipped on the free plan due to the 3-agent limit with existing FK-constrained agents. These tests pass on fresh environments.</Note>
+| DELETE /v1/agents/:id returns 204 | Pass | §10 |
 
 ### authorize — Authorization request creation and consent flow
 
@@ -46,13 +44,15 @@ Last run: **February 28, 2026**
 | POST /v1/authorize rejects non-existent agent (404) | Pass | §5.1 |
 | Consent approval produces authorization code | Pass | §5.2 |
 
-### token — Token exchange (code to grant token)
+### token — Token exchange and refresh
 
 | Test | Status | Spec |
 |------|--------|------|
 | POST /v1/token exchanges code for grantToken, refreshToken, grantId, scopes, expiresAt | Pass | §5.3 |
 | POST /v1/token rejects invalid code (400) | Pass | §5.3 |
 | POST /v1/token rejects reused code (400) | Pass | §5.3 |
+| POST /v1/token/refresh exchanges refresh token for new grant token | Pass | §7.4 |
+| POST /v1/token/refresh rejects used refresh token (400) | Pass | §7.4 |
 
 ### tokens — Token verification and revocation
 
