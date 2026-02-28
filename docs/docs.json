@@ -12,6 +12,7 @@
     "light": "#58a6ff",
     "dark": "#2ea043"
   },
+  "openapi": "openapi.yaml",
   "navigation": {
     "global": {
       "tabs": [
@@ -48,7 +49,6 @@
           {
             "group": "Guides",
             "pages": [
-              "api-reference/introduction",
               "guides/webhooks",
               "guides/self-hosting"
             ]
@@ -180,7 +180,153 @@
       },
       {
         "tab": "API Reference",
-        "openapi": "openapi.yaml"
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api-reference/introduction"
+            ]
+          },
+          {
+            "group": "System",
+            "pages": [
+              "api-reference/system/health-check",
+              "api-reference/system/json-web-key-set",
+              "api-reference/system/developer-dashboard",
+              "api-reference/system/principal-permissions-dashboard"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "api-reference/authentication/register-a-new-developer-account",
+              "api-reference/authentication/get-current-developer-profile",
+              "api-reference/authentication/rotate-api-key"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "api-reference/agents/register-a-new-agent",
+              "api-reference/agents/list-all-agents",
+              "api-reference/agents/get-agent-by-id",
+              "api-reference/agents/update-an-agent",
+              "api-reference/agents/delete-an-agent"
+            ]
+          },
+          {
+            "group": "Authorization",
+            "pages": [
+              "api-reference/authorization/create-an-authorization-request",
+              "api-reference/authorization/approve-an-authorization-request",
+              "api-reference/authorization/deny-an-authorization-request"
+            ]
+          },
+          {
+            "group": "Tokens",
+            "pages": [
+              "api-reference/tokens/exchange-authorization-code-for-grant-token",
+              "api-reference/tokens/verify-a-grant-token-online",
+              "api-reference/tokens/revoke-a-grant-token"
+            ]
+          },
+          {
+            "group": "Grants",
+            "pages": [
+              "api-reference/grants/list-grants",
+              "api-reference/grants/get-grant-by-id",
+              "api-reference/grants/revoke-a-grant",
+              "api-reference/grants/verify-a-grant-tokens-revocation-status",
+              "api-reference/grants/delegate-a-grant-to-a-sub-agent"
+            ]
+          },
+          {
+            "group": "Audit",
+            "pages": [
+              "api-reference/audit/log-an-audit-entry",
+              "api-reference/audit/list-audit-entries",
+              "api-reference/audit/get-audit-entry-by-id"
+            ]
+          },
+          {
+            "group": "Policies",
+            "pages": [
+              "api-reference/policies/create-an-access-policy",
+              "api-reference/policies/list-access-policies",
+              "api-reference/policies/get-policy-by-id",
+              "api-reference/policies/update-a-policy",
+              "api-reference/policies/delete-a-policy"
+            ]
+          },
+          {
+            "group": "Webhooks",
+            "pages": [
+              "api-reference/webhooks/register-a-webhook",
+              "api-reference/webhooks/list-webhooks",
+              "api-reference/webhooks/delete-a-webhook"
+            ]
+          },
+          {
+            "group": "Billing",
+            "pages": [
+              "api-reference/billing/get-current-subscription",
+              "api-reference/billing/create-a-stripe-checkout-session",
+              "api-reference/billing/create-a-stripe-billing-portal-session",
+              "api-reference/billing/stripe-webhook-handler"
+            ]
+          },
+          {
+            "group": "Anomalies",
+            "pages": [
+              "api-reference/anomalies/run-anomaly-detection",
+              "api-reference/anomalies/list-detected-anomalies",
+              "api-reference/anomalies/acknowledge-an-anomaly"
+            ]
+          },
+          {
+            "group": "Compliance",
+            "pages": [
+              "api-reference/compliance/get-compliance-summary",
+              "api-reference/compliance/export-grants-for-compliance",
+              "api-reference/compliance/export-audit-entries-for-compliance",
+              "api-reference/compliance/generate-compliance-evidence-pack"
+            ]
+          },
+          {
+            "group": "SCIM",
+            "pages": [
+              "api-reference/scim/create-a-scim-provisioning-token",
+              "api-reference/scim/list-scim-tokens",
+              "api-reference/scim/delete-a-scim-token",
+              "api-reference/scim/scim-service-provider-configuration",
+              "api-reference/scim/list-scim-users",
+              "api-reference/scim/create-a-scim-user",
+              "api-reference/scim/get-scim-user-by-id",
+              "api-reference/scim/replace-a-scim-user",
+              "api-reference/scim/patch-a-scim-user",
+              "api-reference/scim/delete-a-scim-user"
+            ]
+          },
+          {
+            "group": "SSO",
+            "pages": [
+              "api-reference/sso/configure-oidc-sso",
+              "api-reference/sso/get-sso-configuration",
+              "api-reference/sso/remove-sso-configuration",
+              "api-reference/sso/initiate-sso-login",
+              "api-reference/sso/sso-callback"
+            ]
+          },
+          {
+            "group": "Consent",
+            "pages": [
+              "api-reference/consent/consent-ui-page",
+              "api-reference/consent/get-consent-request-details",
+              "api-reference/consent/approve-consent-end-user-action",
+              "api-reference/consent/deny-consent-end-user-action"
+            ]
+          }
+        ]
       },
       {
         "tab": "Protocol",
