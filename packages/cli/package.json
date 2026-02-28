@@ -33,6 +33,15 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "keywords": [
+    "grantex",
+    "cli",
+    "ai-agents",
+    "authorization",
+    "oauth",
+    "jwt",
+    "developer-tools"
+  ],
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
