@@ -24,6 +24,7 @@ import { RequireAuth } from './RequireAuth';
 export const routes: RouteObject[] = [
   { path: '/dashboard/login', element: <Login /> },
   { path: '/dashboard/signup', element: <Signup /> },
+  { path: '/dashboard/admin', element: <AdminPage /> },
   {
     element: (
       <RequireAuth>
@@ -48,7 +49,6 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/compliance', element: <ComplianceDashboard /> },
       { path: '/dashboard/billing', element: <BillingPage /> },
       { path: '/dashboard/settings', element: <SettingsPage /> },
-      { path: '/dashboard/admin', element: <AdminPage /> },
       { path: '/dashboard/*', element: <NotFound /> },
     ],
   },
