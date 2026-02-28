@@ -1,0 +1,189 @@
+---
+title: "Token Verification Strategy"
+sidebarTitle: "Token Verification"
+description: "Choose between offline, online, and hybrid token verification strategies."
+---
+
+Grantex supports two verification approaches, each with different trade-offs. This guide helps you pick the right strategy — or combine them.
+
+## Offline Verification
+
+Offline verification validates the JWT signature locally using the JWKS endpoint, without calling the Grantex API. This is the fastest option and the recommended default.
+
+**How it works:**
+1. Fetch the public keys from `/.well-known/jwks.json` (cached automatically)
+2. Verify the RS256 signature against the public key
+3. Check `exp`, `iss`, and optionally `aud` and required scopes
+4. Return the decoded claims
+
+**Best for:** High-velocity endpoints, latency-sensitive paths, reducing API calls.
+
+<CodeGroup>
+```typescript TypeScript
+import { verifyGrantToken } from '@grantex/sdk';
+
+const grant = await verifyGrantToken(grantToken, {
+  jwksUri: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json',
+  requiredScopes: ['calendar:read'],
+  audience: 'my-service',  // optional
+});
+
+console.log(grant.principalId);  // 'user_abc123'
+console.log(grant.scopes);       // ['calendar:read']
+console.log(grant.grantId);      // 'grnt_01HXYZ...'
+```
+
+```python Python
+from grantex import verify_grant_token, VerifyGrantTokenOptions
+
+grant = verify_grant_token(
+    grant_token,
+    VerifyGrantTokenOptions(
+        jwks_uri="https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json",
+        required_scopes=["calendar:read"],
+        audience="my-service",  # optional
+    ),
+)
+
+print(grant.principal_id)  # 'user_abc123'
+print(grant.scopes)        # ('calendar:read',)
+print(grant.grant_id)      # 'grnt_01HXYZ...'
+```
+</CodeGroup>
+
+**Trade-off:** Offline verification does not check the revocation list. A revoked token will still pass offline verification until it expires.
+
+<Note>
+The JWKS endpoint (`/.well-known/jwks.json`) is exempt from rate limits. You can fetch it as often as needed.
+</Note>
+
+## Online Verification
+
+Online verification calls `POST /v1/tokens/verify`, which checks the signature, expiry, **and** real-time revocation status on the server.
+
+**Best for:** High-stakes operations (payments, data deletion, privilege escalation).
+
+<CodeGroup>
+```typescript TypeScript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+const result = await grantex.tokens.verify(grantToken);
+
+if (!result.valid) {
+  throw new Error('Token is revoked or expired');
+}
+
+console.log(result.scopes);    // ['payments:initiate']
+console.log(result.principal); // 'user_abc123'
+```
+
+```python Python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.tokens.verify(grant_token)
+
+    if not result.valid:
+        raise ValueError("Token is revoked or expired")
+
+    print(result.scopes)    # ('payments:initiate',)
+    print(result.principal) # 'user_abc123'
+```
+</CodeGroup>
+
+**Trade-off:** Adds network latency (~50-100ms) and counts against your [rate limit](/guides/rate-limits) (100 req/min global).
+
+## Hybrid Approach
+
+The hybrid strategy uses offline verification as the fast path and online verification for sensitive operations. This gives you the best of both worlds.
+
+```typescript
+import { verifyGrantToken, Grantex } from '@grantex/sdk';
+
+const SENSITIVE_SCOPES = ['payments:initiate', 'files:delete', 'admin:write'];
+
+async function verifyToken(grantToken: string): Promise<void> {
+  // Step 1: Always verify the signature offline (fast, no network)
+  const grant = await verifyGrantToken(grantToken, {
+    jwksUri: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json',
+  });
+
+  // Step 2: If the token has sensitive scopes, also verify online
+  const hasSensitiveScope = grant.scopes.some(s => SENSITIVE_SCOPES.includes(s));
+  if (hasSensitiveScope) {
+    const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+    const result = await grantex.tokens.verify(grantToken);
+    if (!result.valid) {
+      throw new Error('Token revoked — blocking sensitive operation');
+    }
+  }
+}
+```
+
+## Caching Verification Results
+
+Per SPEC §7.4, you may cache online verification results for up to **5 minutes**. This reduces API calls while keeping revocation lag acceptable.
+
+```typescript
+const verifyCache = new Map<string, { result: VerifyTokenResponse; cachedAt: number }>();
+const MAX_CACHE_AGE_MS = 5 * 60 * 1000; // 5 minutes
+
+async function cachedVerify(grantex: Grantex, token: string) {
+  const cached = verifyCache.get(token);
+  if (cached && Date.now() - cached.cachedAt < MAX_CACHE_AGE_MS) {
+    return cached.result;
+  }
+
+  const result = await grantex.tokens.verify(token);
+  verifyCache.set(token, { result, cachedAt: Date.now() });
+  return result;
+}
+```
+
+<Warning>
+Do not cache for longer than 5 minutes. Revoked tokens must be detected within a reasonable window.
+</Warning>
+
+## Choosing a Strategy
+
+| Criteria | Offline | Online | Hybrid |
+|----------|---------|--------|--------|
+| **Latency** | ~0ms (after JWKS fetch) | ~50-100ms | Varies |
+| **Revocation check** | No | Yes | Conditional |
+| **Rate limit impact** | None | 1 req per verify | Reduced |
+| **Best for** | Read-only endpoints, high-velocity | Payment, deletion, admin | Most production apps |
+
+**Recommendation:** Start with the hybrid approach. Use offline verification for reads and online for writes or sensitive scopes.
+
+## Token Refresh
+
+When a grant token expires, use the refresh token to obtain a new one without re-prompting the user:
+
+<CodeGroup>
+```typescript TypeScript
+const newToken = await grantex.tokens.refresh({
+  refreshToken: previousResponse.refreshToken,
+  agentId: agent.id,
+});
+
+// newToken.grantToken — new JWT
+// newToken.refreshToken — new refresh token (old one is invalidated)
+// newToken.grantId — same grant, new token
+```
+
+```python Python
+from grantex import RefreshTokenParams
+
+new_token = client.tokens.refresh(RefreshTokenParams(
+    refresh_token=previous_response.refresh_token,
+    agent_id="agt_abc123",
+))
+
+# new_token.grant_token — new JWT
+# new_token.refresh_token — new refresh token (old one is invalidated)
+# new_token.grant_id — same grant, new token
+```
+</CodeGroup>
+
+Refresh tokens are single-use. Each refresh returns a new refresh token, forming a rotation chain. If a refresh token is used twice, the second attempt is rejected — this detects token theft.

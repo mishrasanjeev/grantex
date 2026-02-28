@@ -71,13 +71,14 @@ class HttpClient:
                 body_data = response.text or None
 
             message = _extract_error_message(body_data, response.status_code)
+            error_code = _extract_error_code(body_data)
 
             if response.status_code in (401, 403):
                 raise GrantexAuthError(
-                    message, response.status_code, body_data, request_id
+                    message, response.status_code, body_data, request_id, error_code
                 )
             raise GrantexApiError(
-                message, response.status_code, body_data, request_id
+                message, response.status_code, body_data, request_id, error_code
             )
 
         if response.status_code == 204:
@@ -93,6 +94,12 @@ class HttpClient:
 
     def __exit__(self, *args: object) -> None:
         self.close()
+
+
+def _extract_error_code(body: Any) -> str | None:
+    if isinstance(body, dict) and isinstance(body.get("code"), str):
+        return str(body["code"])
+    return None
 
 
 def _extract_error_message(body: Any, status: int) -> str:

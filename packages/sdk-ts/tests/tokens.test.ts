@@ -66,6 +66,35 @@ describe('TokensClient', () => {
     expect(url).toMatch(/\/v1\/tokens\/verify$/);
   });
 
+  it('refresh() POSTs to /v1/token/refresh', async () => {
+    const mockBody = {
+      grantToken: 'eyJ.new...',
+      expiresAt: '2026-03-01T00:00:00Z',
+      scopes: ['calendar:read'],
+      refreshToken: 'rt_new',
+      grantId: 'grnt_01',
+    };
+    const mockFetch = makeFetch(200, mockBody);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    const result = await grantex.tokens.refresh({
+      refreshToken: 'rt_old',
+      agentId: 'ag_01',
+    });
+
+    expect(result.grantToken).toBe('eyJ.new...');
+    expect(result.grantId).toBe('grnt_01');
+    expect(result.refreshToken).toBe('rt_new');
+
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/v1\/token\/refresh$/);
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body as string);
+    expect(body.refreshToken).toBe('rt_old');
+    expect(body.agentId).toBe('ag_01');
+  });
+
   it('revoke() POSTs to /v1/tokens/revoke', async () => {
     const mockFetch = makeFetch(204, null);
     vi.stubGlobal('fetch', mockFetch);

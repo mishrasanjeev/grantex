@@ -1,0 +1,203 @@
+---
+title: "Troubleshooting"
+sidebarTitle: "Troubleshooting"
+description: "Common issues and solutions when working with the Grantex API and SDKs."
+---
+
+## "Token invalid" or Verification Fails
+
+If `verifyGrantToken()` or `tokens.verify()` returns invalid results, work through this checklist:
+
+<Steps>
+  <Step title="Check token expiry">
+    Decode the JWT and inspect the `exp` claim. If `exp` is in the past, the token has expired.
+
+    ```bash
+    # Decode a JWT (base64 payload)
+    echo 'YOUR_JWT' | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool
+    ```
+  </Step>
+  <Step title="Check revocation status">
+    Call `POST /v1/tokens/verify` with the token. If `valid: false`, the token or its grant has been revoked.
+  </Step>
+  <Step title="Verify the JWKS URI">
+    Make sure you're using the correct JWKS endpoint for your environment:
+    - **Production:** `https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json`
+    - **Self-hosted:** `https://your-domain/.well-known/jwks.json`
+  </Step>
+  <Step title="Check clock skew">
+    JWT verification compares `exp` and `iat` against your server's clock. If your server clock is more than a few seconds off, tokens may fail verification. Use NTP to keep clocks synchronized.
+  </Step>
+  <Step title="Check audience mismatch">
+    If you set `audience` in `VerifyGrantTokenOptions`, the JWT's `aud` claim must match. Remove the audience check or ensure the authorization request included the same audience.
+  </Step>
+</Steps>
+
+## "Authorization Stuck" — Consent Flow Not Completing
+
+If the authorization request stays in `pending` status:
+
+1. **Check the consent URL** — ensure the user was redirected to `consentUrl` from the authorization response
+2. **Check the auth request status** — query `GET /v1/consent/:id` to see the current state
+3. **Check expiry** — auth requests expire after the `expiresIn` window (default 24h). If expired, create a new authorization request
+4. **Check the redirect URI** — if provided, the code is delivered via redirect. Ensure your callback handler is working
+5. **Sandbox mode** — in sandbox mode, consent is auto-approved and a code is returned directly in the response
+
+## Rate Limited (429)
+
+When you receive a `429 Too Many Requests` response:
+
+```json
+{
+  "message": "Rate limit exceeded, retry in 42 seconds",
+  "code": "BAD_REQUEST",
+  "requestId": "a1b2c3d4-e5f6-..."
+}
+```
+
+**What to do:**
+
+1. Read the `Retry-After` header for the minimum wait time
+2. Implement exponential backoff with jitter (see [Rate Limits guide](/guides/rate-limits))
+3. Reduce request frequency:
+   - **Use offline verification** instead of `POST /v1/tokens/verify` — the JWKS endpoint is exempt from rate limits
+   - **Use webhooks** instead of polling for grant status changes
+   - **Cache tokens** — don't re-exchange or re-verify tokens unnecessarily
+
+**Rate limits by endpoint:**
+
+| Endpoint | Limit |
+|----------|-------|
+| Global (all endpoints) | 100 req/min |
+| `POST /v1/authorize` | 10 req/min |
+| `POST /v1/token` | 20 req/min |
+| `POST /v1/token/refresh` | 20 req/min |
+| `GET /.well-known/jwks.json` | Exempt |
+
+## Plan Limit Exceeded (402)
+
+A `402 Payment Required` response means you've hit a resource limit for your current plan:
+
+```json
+{
+  "message": "Agent limit reached (free plan: 3)",
+  "code": "PLAN_LIMIT_EXCEEDED",
+  "requestId": "..."
+}
+```
+
+**Options:**
+
+- **Upgrade your plan** — use the billing portal to switch to Pro or Enterprise
+- **Clean up unused resources** — delete inactive agents, revoke expired grants
+- **Check your current usage** via the developer dashboard
+
+## Delegation Failed
+
+If `POST /v1/grants/delegate` returns an error:
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| "Scopes must be a subset" | Sub-agent scopes exceed parent grant scopes | Narrow the requested scopes |
+| "Delegation depth exceeded" | Too many levels of delegation | Reduce the chain or increase the limit |
+| "Parent grant expired" | The parent grant token has expired | Obtain a new grant token first |
+| "Parent grant revoked" | The parent grant was revoked | Re-authorize the parent agent |
+| "Invalid parent grant token" | JWT signature verification failed | Check the token is well-formed |
+
+## Refresh Token Rejected
+
+If `POST /v1/token/refresh` returns 400:
+
+| Error message | Cause | Fix |
+|---------------|-------|-----|
+| "Refresh token already used" | Token was already used (single-use rotation) | Use the new refresh token from the previous refresh response |
+| "Refresh token expired" | Token's 30-day TTL has elapsed | Re-authorize to get a fresh token pair |
+| "Grant has been revoked" | The underlying grant was revoked | Re-authorize the agent |
+| "Agent mismatch" | `agentId` doesn't match the grant's agent | Use the correct agent ID |
+| "Invalid refresh token" | Token ID not found | Check you're passing the correct refresh token value |
+
+## Error Codes Reference
+
+All Grantex API errors include a `code` field. SDKs expose this as `error.code`:
+
+<CodeGroup>
+```typescript TypeScript
+import { GrantexApiError } from '@grantex/sdk';
+
+try {
+  await grantex.tokens.exchange({ code, agentId });
+} catch (err) {
+  if (err instanceof GrantexApiError) {
+    console.log(err.code);       // 'BAD_REQUEST'
+    console.log(err.statusCode); // 400
+    console.log(err.message);    // 'Invalid code'
+    console.log(err.requestId);  // 'a1b2c3d4-...'
+  }
+}
+```
+
+```python Python
+from grantex import GrantexApiError
+
+try:
+    client.tokens.exchange(params)
+except GrantexApiError as err:
+    print(err.code)        # 'BAD_REQUEST'
+    print(err.status_code) # 400
+    print(str(err))        # 'Invalid code'
+    print(err.request_id)  # 'a1b2c3d4-...'
+```
+</CodeGroup>
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `BAD_REQUEST` | 400 | Invalid input, missing fields, or validation failure |
+| `UNAUTHORIZED` | 401 | Invalid or missing API key |
+| `FORBIDDEN` | 403 | Valid API key but insufficient permissions |
+| `NOT_FOUND` | 404 | Resource does not exist |
+| `CONFLICT` | 409 | Resource already exists (e.g., duplicate agent name) |
+| `GONE` | 410 | Resource was deleted |
+| `VALIDATION_ERROR` | 422 | Schema validation failure |
+| `PLAN_LIMIT_EXCEEDED` | 402 | Resource count exceeds plan threshold |
+| `POLICY_DENIED` | 403 | An access policy blocked the operation |
+| `SSO_ERROR` | 400 | SSO/OIDC configuration or callback error |
+| `SERVICE_UNAVAILABLE` | 503 | Service temporarily unavailable |
+| `INTERNAL_ERROR` | 500 | Unexpected server error |
+
+## Inspecting JWT Claims Locally
+
+You can decode a Grantex grant token without verification to inspect its claims:
+
+```bash
+# Using jq (if installed)
+echo 'YOUR_JWT' | cut -d. -f2 | base64 -d 2>/dev/null | jq .
+
+# Using Python
+python3 -c "import sys, json, base64; print(json.dumps(json.loads(base64.urlsafe_b64decode(sys.argv[1].split('.')[1] + '==')), indent=2))" 'YOUR_JWT'
+```
+
+**Grant token claims:**
+
+| Claim | Description |
+|-------|-------------|
+| `iss` | Issuer (Grantex auth service URL) |
+| `sub` | Principal ID (the user who authorized) |
+| `agt` | Agent DID |
+| `dev` | Developer ID |
+| `scp` | Scopes array |
+| `grnt` | Grant record ID |
+| `jti` | Token ID (unique per token) |
+| `iat` | Issued at (Unix timestamp) |
+| `exp` | Expires at (Unix timestamp) |
+| `aud` | Audience (optional) |
+| `parentAgt` | Parent agent DID (delegation only) |
+| `parentGrnt` | Parent grant ID (delegation only) |
+| `delegationDepth` | Delegation depth (delegation only) |
+
+## Getting Help
+
+If none of the above resolves your issue:
+
+- Check the [GitHub Issues](https://github.com/mishrasanjeev/grantex/issues) for known problems
+- Open a new issue with your error message, `requestId`, and reproduction steps
+- For Enterprise support, use the [contact form](https://grantex.dev/#enterprise)

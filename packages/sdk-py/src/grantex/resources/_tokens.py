@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .._http import HttpClient
-from .._types import ExchangeTokenParams, ExchangeTokenResponse, VerifyTokenResponse
+from .._types import ExchangeTokenParams, ExchangeTokenResponse, RefreshTokenParams, VerifyTokenResponse
 
 
 class TokensClient:
@@ -10,6 +10,10 @@ class TokensClient:
 
     def exchange(self, params: ExchangeTokenParams) -> ExchangeTokenResponse:
         data = self._http.post("/v1/token", params.to_dict())
+        return ExchangeTokenResponse.from_dict(data)
+
+    def refresh(self, params: RefreshTokenParams) -> ExchangeTokenResponse:
+        data = self._http.post("/v1/token/refresh", params.to_dict())
         return ExchangeTokenResponse.from_dict(data)
 
     def verify(self, token: str) -> VerifyTokenResponse:

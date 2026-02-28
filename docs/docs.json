@@ -50,7 +50,10 @@
             "pages": [
               "guides/rate-limits",
               "guides/webhooks",
-              "guides/self-hosting"
+              "guides/self-hosting",
+              "guides/security-best-practices",
+              "guides/token-verification",
+              "guides/troubleshooting"
             ]
           },
           {

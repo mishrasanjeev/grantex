@@ -301,6 +301,15 @@ class ExchangeTokenResponse:
         )
 
 
+@dataclass
+class RefreshTokenParams:
+    refresh_token: str
+    agent_id: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"refreshToken": self.refresh_token, "agentId": self.agent_id}
+
+
 # ─── Audit ────────────────────────────────────────────────────────────────────
 
 

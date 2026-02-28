@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grantex"
-version = "0.1.3"
+version = "0.1.4"
 description = "Python SDK for the Grantex delegated authorization protocol — OAuth 2.0 for AI agents"
 readme = "README.md"
 license = { text = "Apache-2.0" }
