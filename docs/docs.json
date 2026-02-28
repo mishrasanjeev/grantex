@@ -53,7 +53,8 @@
               "guides/security-best-practices",
               "guides/token-verification",
               "guides/troubleshooting",
-              "guides/end-user-permissions"
+              "guides/end-user-permissions",
+              "guides/playground"
             ]
           },
           {

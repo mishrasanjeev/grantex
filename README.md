@@ -19,7 +19,7 @@
 
 <br/>
 
-> **Status:** Production-ready. Protocol spec finalized (v1.0), auth service, TypeScript & Python SDKs, framework integrations (LangChain, AutoGen, CrewAI, Vercel AI), CLI, developer portal, and enterprise features (policies, anomaly detection, compliance exports) — all shipped.
+> **Status:** Production-ready. Protocol spec finalized (v1.0), auth service, TypeScript & Python SDKs, framework integrations (LangChain, AutoGen, CrewAI, Vercel AI), CLI, developer portal, [interactive playground](https://grantex.dev/playground), and enterprise features (policies, anomaly detection, compliance exports) — all shipped.
 
 ```bash
 npm install @grantex/sdk        # TypeScript / Node.js
@@ -540,6 +540,16 @@ grantex audit list --since 2026-01-01
 grantex anomalies detect
 grantex compliance summary
 ```
+
+---
+
+## Interactive Playground
+
+Try the full Grantex authorization flow live in your browser — no signup required:
+
+**[grantex.dev/playground](https://grantex.dev/playground)**
+
+Walk through all 7 steps of the protocol: register an agent, authorize, exchange tokens, verify, refresh, revoke, and verify revocation. Uses sandbox mode with your API key.
 
 ---
 

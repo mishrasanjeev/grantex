@@ -8,6 +8,7 @@
     ],
     "rewrites": [
       { "source": "/dashboard/**", "destination": "/dashboard/index.html" },
+      { "source": "/playground", "destination": "/playground.html" },
       { "source": "**", "destination": "/index.html" }
     ],
     "headers": [
