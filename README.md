@@ -386,6 +386,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **TypeScript SDK** | `@grantex/sdk` | `npm install @grantex/sdk` | ✅ Shipped |
 | **Python SDK** | `grantex` | `pip install grantex` | ✅ Shipped |
 | **CLI** | `@grantex/cli` | `npm install -g @grantex/cli` | ✅ Shipped |
+| **Conformance Suite** | `@grantex/conformance` | `npm install -g @grantex/conformance` | ✅ Shipped |
 
 ### Framework Quick Examples
 
