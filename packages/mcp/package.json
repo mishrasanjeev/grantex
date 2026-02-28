@@ -38,6 +38,17 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "keywords": [
+    "grantex",
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "authorization",
+    "oauth",
+    "claude",
+    "cursor",
+    "windsurf"
+  ],
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

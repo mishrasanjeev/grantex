@@ -66,6 +66,40 @@ const grantex = new Grantex({
 | `baseUrl` | `string` | `https://api.grantex.dev` | Base URL of the Grantex API |
 | `timeout` | `number` | `30000` | Request timeout in milliseconds |
 
+## PKCE Support
+
+The SDK includes built-in PKCE (Proof Key for Code Exchange) support using the S256 method for secure authorization flows:
+
+```typescript
+import { Grantex, generatePkce } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'YOUR_API_KEY' });
+
+// 1. Generate a PKCE challenge
+const pkce = generatePkce();
+// pkce.codeVerifier       — random 43-char string (keep secret)
+// pkce.codeChallenge      — SHA-256 hash of verifier (send to server)
+// pkce.codeChallengeMethod — 'S256'
+
+// 2. Pass the challenge when requesting authorization
+const { consentUrl } = await grantex.authorize({
+  agentId: 'ag_01J...',
+  userId: 'usr_01J...',
+  scopes: ['files:read'],
+  codeChallenge: pkce.codeChallenge,
+  codeChallengeMethod: pkce.codeChallengeMethod,
+});
+
+// 3. Exchange the code with the verifier
+const token = await grantex.tokens.exchange({
+  code: 'auth_code_from_redirect',
+  agentId: 'ag_01J...',
+  codeVerifier: pkce.codeVerifier,
+});
+```
+
+---
+
 ## API Reference
 
 ### Authorization
