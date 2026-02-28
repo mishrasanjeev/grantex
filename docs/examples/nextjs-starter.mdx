@@ -1,0 +1,82 @@
+---
+title: "Next.js Starter"
+sidebarTitle: "Next.js Starter"
+description: "Interactive Next.js app showing the full Grantex consent flow."
+---
+
+A full-stack Next.js application that walks through the complete Grantex authorization lifecycle — agent registration, consent UI, token exchange, and audit logging.
+
+Unlike the CLI examples, this demo runs a real web server so you can see the consent redirect flow visually.
+
+## What it demonstrates
+
+- Registering an agent from a server-side API route
+- Creating an authorization request with a redirect URI
+- Redirecting to the Grantex consent UI
+- Exchanging the authorization code for a grant token
+- Logging an audit entry after token exchange
+- Displaying grant details and audit trail in a callback page
+
+## Quick start
+
+```bash
+cd examples/nextjs-starter
+npm install
+cp .env.example .env
+# Edit .env with your GRANTEX_API_KEY
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) and click **Start Demo**.
+
+## Flow overview
+
+```
+Browser                    Next.js Server               Grantex API
+  │                             │                            │
+  │── Click "Start Demo" ──────▶│                            │
+  │                             │── POST /v1/agents ────────▶│
+  │                             │◀── agent { id, did } ──────│
+  │                             │── POST /v1/authorize ─────▶│
+  │                             │◀── { consentUrl } ─────────│
+  │◀── redirect to consentUrl ──│                            │
+  │                             │                            │
+  │── Approve on consent UI ────────────────────────────────▶│
+  │◀── redirect /callback?code=...&state=... ────────────────│
+  │                             │                            │
+  │── POST /api/exchange ──────▶│                            │
+  │                             │── POST /v1/token ─────────▶│
+  │                             │◀── { grantToken } ─────────│
+  │                             │── POST /v1/audit/log ─────▶│
+  │                             │◀── { entryId } ────────────│
+  │◀── grant details + audit ───│                            │
+```
+
+## Project structure
+
+```
+examples/nextjs-starter/
+  app/
+    page.tsx              # Landing page with "Start Demo" button
+    callback/page.tsx     # Receives code, displays grant details
+    api/
+      authorize/route.ts  # Registers agent + starts auth request
+      exchange/route.ts   # Exchanges code for grant token
+      audit/route.ts      # Lists audit entries for display
+  .env.example            # Required environment variables
+```
+
+## Environment variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GRANTEX_API_KEY` | Your Grantex API key | (required) |
+| `GRANTEX_URL` | Auth service base URL | `https://grantex-auth-dd4mtrt2gq-uc.a.run.app` |
+| `NEXT_PUBLIC_APP_URL` | Public URL of this app (for redirect URI) | `http://localhost:3000` |
+
+## Key design decisions
+
+- **Server-side SDK only** — All Grantex SDK calls happen in API routes. The API key never reaches the browser.
+- **Cookie-based state** — `agentId` and a random `state` are stored in cookies before redirect, then verified on the callback to prevent CSRF.
+- **Fresh agent per demo** — Each click registers a new agent. No database required.
+- **No UI libraries** — Minimal CSS matching the grantex.dev branding.

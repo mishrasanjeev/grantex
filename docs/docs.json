@@ -59,6 +59,7 @@
             "pages": [
               "examples/quickstart-ts",
               "examples/quickstart-py",
+              "examples/nextjs-starter",
               "examples/langchain-agent",
               "examples/vercel-ai-chatbot",
               "examples/crewai-agent",
