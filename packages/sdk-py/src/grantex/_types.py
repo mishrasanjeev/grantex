@@ -110,6 +110,8 @@ class AuthorizeParams:
     scopes: list[str]
     expires_in: str | None = None
     redirect_uri: str | None = None
+    code_challenge: str | None = None
+    code_challenge_method: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {
@@ -121,6 +123,10 @@ class AuthorizeParams:
             body["expiresIn"] = self.expires_in
         if self.redirect_uri is not None:
             body["redirectUri"] = self.redirect_uri
+        if self.code_challenge is not None:
+            body["codeChallenge"] = self.code_challenge
+        if self.code_challenge_method is not None:
+            body["codeChallengeMethod"] = self.code_challenge_method
         return body
 
 
@@ -267,9 +273,13 @@ class VerifyTokenResponse:
 class ExchangeTokenParams:
     code: str
     agent_id: str
+    code_verifier: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {"code": self.code, "agentId": self.agent_id}
+        body: dict[str, Any] = {"code": self.code, "agentId": self.agent_id}
+        if self.code_verifier is not None:
+            body["codeVerifier"] = self.code_verifier
+        return body
 
 
 @dataclass(frozen=True)

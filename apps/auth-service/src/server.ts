@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import { errorsPlugin } from './plugins/errors.js';
 import { authPlugin } from './plugins/auth.js';
 import { jwksRoutes } from './routes/jwks.js';
@@ -35,6 +36,16 @@ export async function buildApp(opts: AppOptions = {}) {
   });
 
   await app.register(cors);
+
+  // Global rate limit: 100 requests/minute per IP
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+    allowList: (req) => {
+      // Skip rate limiting for JWKS (public key distribution must never be throttled)
+      return req.url.startsWith('/.well-known/');
+    },
+  });
 
   // Call directly on root app (not via app.register) so that error handler
   // and preHandler hooks apply to ALL routes registered at the root scope.

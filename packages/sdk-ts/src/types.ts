@@ -72,6 +72,10 @@ export interface AuthorizeParams {
   scopes: string[];
   expiresIn?: string;
   redirectUri?: string;
+  /** PKCE S256 code challenge (from generatePkce()) */
+  codeChallenge?: string;
+  /** Must be 'S256' when codeChallenge is provided */
+  codeChallengeMethod?: string;
 }
 
 export interface AuthorizationRequest {
@@ -153,6 +157,8 @@ export interface DelegateParams {
 export interface ExchangeTokenParams {
   code: string;
   agentId: string;
+  /** PKCE code verifier (from generatePkce()) — required if codeChallenge was sent in authorize */
+  codeVerifier?: string;
 }
 
 export interface ExchangeTokenResponse {
