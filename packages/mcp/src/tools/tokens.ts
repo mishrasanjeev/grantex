@@ -39,4 +39,17 @@ export function registerTokenTools(server: McpServer, grantex: Grantex): void {
       return { content: [{ type: 'text' as const, text: 'Token revoked successfully.' }] };
     },
   );
+
+  server.tool(
+    'grantex_token_refresh',
+    'Refresh a grant token using a refresh token (single-use rotation)',
+    {
+      refreshToken: z.string().describe('Refresh token from a previous token exchange'),
+      agentId: z.string().describe('Agent ID (ag_...)'),
+    },
+    async ({ refreshToken, agentId }) => {
+      const result = await grantex.tokens.refresh({ refreshToken, agentId });
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    },
+  );
 }

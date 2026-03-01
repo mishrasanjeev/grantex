@@ -36,23 +36,27 @@ Add to your MCP config (Claude Desktop, Cursor, or Windsurf):
 
 ## Available Tools
 
-The MCP server exposes 13 tools:
+The MCP server exposes 17 tools:
 
 | Tool | Description |
 |------|-------------|
 | `grantex_agent_register` | Register a new AI agent |
 | `grantex_agent_list` | List all registered agents |
 | `grantex_agent_get` | Get details for a specific agent |
+| `grantex_agent_update` | Update an existing agent |
+| `grantex_agent_delete` | Delete an agent |
 | `grantex_authorize` | Start an authorization flow |
 | `grantex_token_exchange` | Exchange authorization code for grant token |
 | `grantex_token_verify` | Verify a grant token |
 | `grantex_token_revoke` | Revoke a grant token |
+| `grantex_token_refresh` | Refresh a grant token (single-use rotation) |
 | `grantex_grant_list` | List grants with filters |
 | `grantex_grant_get` | Get grant details |
 | `grantex_grant_revoke` | Revoke a grant |
 | `grantex_grant_delegate` | Delegate a grant to a sub-agent |
 | `grantex_audit_log` | Log an audit entry |
 | `grantex_audit_list` | List audit entries |
+| `grantex_principal_session_create` | Create a principal session for end-user permission management |
 
 ## Usage
 

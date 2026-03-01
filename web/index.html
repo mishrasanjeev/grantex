@@ -842,7 +842,7 @@
 <span class="kw">const</span> <span class="op">{</span> <span class="id">consentUrl</span> <span class="op">}</span> <span class="op">=</span> <span class="kw">await</span> <span class="id">grantex</span><span class="op">.</span><span class="fn">authorize</span><span class="op">({</span>
   <span class="id">agentId</span><span class="op">:</span>  <span class="str">'ag_01J...'</span><span class="op">,</span>
   <span class="id">userId</span><span class="op">:</span>   <span class="str">'usr_01J...'</span><span class="op">,</span>
-  <span class="id">scopes</span><span class="op">:</span>  <span class="op">[</span><span class="str">'files:read'</span><span class="op">,</span> <span class="str">'email:send'</span><span class="op">],</span>
+  <span class="id">scopes</span><span class="op">:</span>  <span class="op">[</span><span class="str">'calendar:read'</span><span class="op">,</span> <span class="str">'email:send'</span><span class="op">],</span>
 <span class="op">});</span>
 
 <span class="cm">// 2. Exchange the authorization code for a grant token</span>
@@ -852,7 +852,7 @@
 <span class="kw">const</span> <span class="id">grant</span> <span class="op">=</span> <span class="kw">await</span> <span class="fn">verifyGrantToken</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">grantToken</span><span class="op">,</span> <span class="op">{</span>
   <span class="id">jwksUri</span><span class="op">:</span> <span class="str">'https://api.grantex.dev/.well-known/jwks.json'</span><span class="op">,</span>
 <span class="op">});</span>
-<span class="id">console</span><span class="op">.</span><span class="fn">log</span><span class="op">(</span><span class="id">grant</span><span class="op">.</span><span class="id">scopes</span><span class="op">);</span> <span class="cm">// ['files:read', 'email:send']</span></pre>
+<span class="id">console</span><span class="op">.</span><span class="fn">log</span><span class="op">(</span><span class="id">grant</span><span class="op">.</span><span class="id">scopes</span><span class="op">);</span> <span class="cm">// ['calendar:read', 'email:send']</span></pre>
         </div>
       </div>
 
@@ -869,14 +869,14 @@
 <span class="id">auth</span> <span class="op">=</span> <span class="id">client</span><span class="op">.</span><span class="fn">authorize</span><span class="op">(</span>
     <span class="id">agent_id</span><span class="op">=</span><span class="str">"ag_01J..."</span><span class="op">,</span>
     <span class="id">user_id</span><span class="op">=</span><span class="str">"usr_01J..."</span><span class="op">,</span>
-    <span class="id">scopes</span><span class="op">=[</span><span class="str">"files:read"</span><span class="op">,</span> <span class="str">"email:send"</span><span class="op">],</span>
+    <span class="id">scopes</span><span class="op">=[</span><span class="str">"calendar:read"</span><span class="op">,</span> <span class="str">"email:send"</span><span class="op">],</span>
 <span class="op">)</span>
 
 <span class="cm"># 2. Exchange the authorization code for a grant token</span>
 <span class="id">token</span> <span class="op">=</span> <span class="id">client</span><span class="op">.</span><span class="id">tokens</span><span class="op">.</span><span class="fn">exchange</span><span class="op">(</span><span class="fn">ExchangeTokenParams</span><span class="op">(</span><span class="id">code</span><span class="op">=</span><span class="id">code</span><span class="op">,</span> <span class="id">agent_id</span><span class="op">=</span><span class="str">"ag_01J..."</span><span class="op">))</span>
 
 <span class="cm"># 3. Use the token — scopes, grantId, and JWT are all available</span>
-<span class="fn">print</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">scopes</span><span class="op">)</span>      <span class="cm"># ('files:read', 'email:send')</span>
+<span class="fn">print</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">scopes</span><span class="op">)</span>      <span class="cm"># ('calendar:read', 'email:send')</span>
 <span class="fn">print</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">grant_token</span><span class="op">)</span> <span class="cm"># RS256-signed JWT</span></pre>
         </div>
       </div>
@@ -944,6 +944,10 @@
       <a href="https://github.com/mishrasanjeev/grantex-go" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">Go</span>
         Go
+      </a>
+      <a href="https://www.npmjs.com/package/@grantex/mcp" class="integration-pill" style="text-decoration:none;">
+        <span class="integration-icon">&#x1F50C;</span>
+        MCP Server
       </a>
       <a href="https://www.npmjs.com/package/@grantex/conformance" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x2705;</span>
@@ -1186,7 +1190,7 @@
             <span class="check">&#x2713;</span>
             <div>
               <h4>Compliance exports</h4>
-              <p>SOC 2, HIPAA, and GDPR-ready audit log exports in standard formats.</p>
+              <p>SOC 2 and GDPR-ready audit log exports in standard formats.</p>
             </div>
           </div>
           <div class="enterprise-feature">

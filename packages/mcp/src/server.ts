@@ -5,6 +5,7 @@ import { registerAuthorizeTools } from './tools/authorize.js';
 import { registerTokenTools } from './tools/tokens.js';
 import { registerGrantTools } from './tools/grants.js';
 import { registerAuditTools } from './tools/audit.js';
+import { registerPrincipalSessionTools } from './tools/principal-sessions.js';
 
 export function buildServer(grantex: Grantex): McpServer {
   const server = new McpServer({
@@ -17,6 +18,7 @@ export function buildServer(grantex: Grantex): McpServer {
   registerTokenTools(server, grantex);
   registerGrantTools(server, grantex);
   registerAuditTools(server, grantex);
+  registerPrincipalSessionTools(server, grantex);
 
   return server;
 }
