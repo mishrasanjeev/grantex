@@ -16,6 +16,7 @@ info:
     - **Global default**: 100 requests/minute
     - **POST /v1/authorize**: 10 requests/minute
     - **POST /v1/token**: 20 requests/minute
+    - **POST /v1/token/refresh**: 20 requests/minute
     - JWKS endpoint is allowlisted from rate limiting
   license:
     name: Apache 2.0
@@ -615,6 +616,9 @@ paths:
         If a matching policy auto-approves, returns a `code` with `policyEnforced: true`.
 
         **Rate limit: 10 requests/minute.**
+      x-rateLimit:
+        limit: 10
+        period: minute
       requestBody:
         required: true
         content:
@@ -926,6 +930,9 @@ paths:
         Fires webhook events for `grant.created` and `token.issued`.
 
         **Rate limit: 20 requests/minute.**
+      x-rateLimit:
+        limit: 20
+        period: minute
       requestBody:
         required: true
         content:
@@ -966,6 +973,65 @@ paths:
                     type: string
         "400":
           description: Invalid code, not approved, expired, or PKCE mismatch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/token/refresh:
+    post:
+      operationId: refreshToken
+      tags: [Tokens]
+      summary: Refresh a grant token
+      description: |
+        Exchanges a refresh token for a new grant token and rotated refresh token.
+        The old refresh token is marked as used and cannot be reused (single-use rotation per SPEC §7.4).
+        Returns the same grantId with a new JWT and new refresh token.
+
+        **Rate limit: 20 requests/minute.**
+      x-rateLimit:
+        limit: 20
+        period: minute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token from a previous token exchange or refresh
+                agentId:
+                  type: string
+                  description: Agent ID that the refresh token was issued to
+              required: [refreshToken, agentId]
+      responses:
+        "201":
+          description: New grant token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  grantToken:
+                    type: string
+                    description: New signed RS256 JWT
+                  expiresAt:
+                    type: string
+                    format: date-time
+                  scopes:
+                    type: array
+                    items:
+                      type: string
+                  refreshToken:
+                    type: string
+                    description: New rotated refresh token (single-use)
+                  grantId:
+                    type: string
+                    description: Same grant ID as original token
+        "400":
+          description: Invalid, expired, used, or revoked refresh token
           content:
             application/json:
               schema:
