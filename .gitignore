@@ -32,6 +32,9 @@ build/
 .firebase/
 web/dashboard/
 
+# Generated PH gallery screenshots
+web/ph-gallery/
+
 # Coverage & caches
 coverage/
 .cache/
