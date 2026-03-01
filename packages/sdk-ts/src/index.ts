@@ -21,6 +21,7 @@ export {
 
 // Types
 export type {
+  RateLimit,
   GrantexClientOptions,
   // Signup
   SignupParams,

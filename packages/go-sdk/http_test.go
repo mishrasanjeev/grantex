@@ -288,3 +288,89 @@ func TestUnmarshalPassthroughError(t *testing.T) {
 		t.Error("expected passthrough error")
 	}
 }
+
+func TestHTTPClientRateLimitHeaders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Limit", "100")
+		w.Header().Set("X-RateLimit-Remaining", "97")
+		w.Header().Set("X-RateLimit-Reset", "1709337600")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	}))
+	defer server.Close()
+
+	h := &httpClient{baseURL: server.URL, apiKey: "test-key", client: http.DefaultClient}
+	_, err := h.get(context.Background(), "/test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if h.lastRateLimit == nil {
+		t.Fatal("expected lastRateLimit to be set")
+	}
+	if h.lastRateLimit.Limit != 100 {
+		t.Errorf("expected Limit 100, got %d", h.lastRateLimit.Limit)
+	}
+	if h.lastRateLimit.Remaining != 97 {
+		t.Errorf("expected Remaining 97, got %d", h.lastRateLimit.Remaining)
+	}
+	if h.lastRateLimit.Reset != 1709337600 {
+		t.Errorf("expected Reset 1709337600, got %d", h.lastRateLimit.Reset)
+	}
+	if h.lastRateLimit.RetryAfter != 0 {
+		t.Errorf("expected RetryAfter 0, got %d", h.lastRateLimit.RetryAfter)
+	}
+}
+
+func TestHTTPClientRateLimitOn429(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Limit", "20")
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", "1709337600")
+		w.Header().Set("Retry-After", "42")
+		w.WriteHeader(http.StatusTooManyRequests)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Rate limit exceeded"})
+	}))
+	defer server.Close()
+
+	h := &httpClient{baseURL: server.URL, apiKey: "test-key", client: http.DefaultClient}
+	_, err := h.get(context.Background(), "/test")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected APIError, got %T", err)
+	}
+	if apiErr.StatusCode != 429 {
+		t.Errorf("expected 429, got %d", apiErr.StatusCode)
+	}
+	if apiErr.RateLimit == nil {
+		t.Fatal("expected RateLimit on error")
+	}
+	if apiErr.RateLimit.RetryAfter != 42 {
+		t.Errorf("expected RetryAfter 42, got %d", apiErr.RateLimit.RetryAfter)
+	}
+	if apiErr.RateLimit.Remaining != 0 {
+		t.Errorf("expected Remaining 0, got %d", apiErr.RateLimit.Remaining)
+	}
+}
+
+func TestHTTPClientNoRateLimitHeaders(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	}))
+	defer server.Close()
+
+	h := &httpClient{baseURL: server.URL, apiKey: "test-key", client: http.DefaultClient}
+	_, err := h.get(context.Background(), "/test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if h.lastRateLimit != nil {
+		t.Error("expected lastRateLimit to be nil when headers are missing")
+	}
+}

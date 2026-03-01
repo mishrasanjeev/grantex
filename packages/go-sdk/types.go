@@ -1,5 +1,15 @@
 package grantex
 
+// --- Rate Limits ---
+
+// RateLimit contains rate limit metadata parsed from response headers.
+type RateLimit struct {
+	Limit      int
+	Remaining  int
+	Reset      int64
+	RetryAfter int // 0 = not present
+}
+
 // --- Signup ---
 
 // SignupParams are the parameters for developer registration.

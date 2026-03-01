@@ -12,6 +12,7 @@ type APIError struct {
 	Code       string
 	RequestID  string
 	Message    string
+	RateLimit  *RateLimit
 }
 
 func (e *APIError) Error() string {

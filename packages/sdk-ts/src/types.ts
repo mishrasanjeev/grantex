@@ -1,3 +1,12 @@
+// ─── Rate Limits ─────────────────────────────────────────────────────────────
+
+export interface RateLimit {
+  limit: number;
+  remaining: number;
+  reset: number;
+  retryAfter?: number;
+}
+
 // ─── Client configuration ────────────────────────────────────────────────────
 
 export interface GrantexClientOptions {

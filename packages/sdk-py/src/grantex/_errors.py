@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ._types import RateLimit
 
 
 class GrantexError(Exception):
@@ -17,12 +20,14 @@ class GrantexApiError(GrantexError):
         body: Any = None,
         request_id: str | None = None,
         code: str | None = None,
+        rate_limit: RateLimit | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.body = body
         self.request_id = request_id
         self.code = code
+        self.rate_limit = rate_limit
 
 
 class GrantexAuthError(GrantexApiError):

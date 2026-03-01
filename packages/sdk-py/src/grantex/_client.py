@@ -5,7 +5,7 @@ import os
 import httpx
 
 from ._http import HttpClient
-from ._types import AuthorizationRequest, AuthorizeParams, RotateKeyResponse, SignupParams, SignupResponse
+from ._types import AuthorizationRequest, AuthorizeParams, RateLimit, RotateKeyResponse, SignupParams, SignupResponse
 from .resources._agents import AgentsClient
 from .resources._audit import AuditClient
 from .resources._anomalies import AnomaliesClient
@@ -37,6 +37,10 @@ class Grantex:
     scim: ScimClient
     sso: SsoClient
     principal_sessions: PrincipalSessionsClient
+
+    @property
+    def last_rate_limit(self) -> RateLimit | None:
+        return self._http.last_rate_limit
 
     def __init__(
         self,

@@ -1,3 +1,5 @@
+import type { RateLimit } from './types.js';
+
 export class GrantexError extends Error {
   constructor(message: string) {
     super(message);
@@ -12,6 +14,7 @@ export class GrantexApiError extends GrantexError {
   readonly body: unknown;
   readonly code: string | undefined;
   readonly requestId: string | undefined;
+  readonly rateLimit: RateLimit | undefined;
 
   constructor(
     message: string,
@@ -19,6 +22,7 @@ export class GrantexApiError extends GrantexError {
     body: unknown,
     requestId?: string,
     code?: string,
+    rateLimit?: RateLimit,
   ) {
     super(message);
     this.name = 'GrantexApiError';
@@ -26,6 +30,7 @@ export class GrantexApiError extends GrantexError {
     this.body = body;
     this.code = code;
     this.requestId = requestId;
+    this.rateLimit = rateLimit;
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }
@@ -37,8 +42,9 @@ export class GrantexAuthError extends GrantexApiError {
     body: unknown,
     requestId?: string,
     code?: string,
+    rateLimit?: RateLimit,
   ) {
-    super(message, statusCode, body, requestId, code);
+    super(message, statusCode, body, requestId, code, rateLimit);
     this.name = 'GrantexAuthError';
     Object.setPrototypeOf(this, new.target.prototype);
   }
