@@ -19,7 +19,7 @@ function usagePercent(initial: string, remaining: string): number {
 function usageBadge(pct: number) {
   if (pct >= 100) return <Badge variant="danger">Exhausted</Badge>;
   if (pct >= 80) return <Badge variant="warning">{'>'} 80%</Badge>;
-  if (pct >= 50) return <Badge variant="info">{'>'} 50%</Badge>;
+  if (pct >= 50) return <Badge variant="default">{'>'} 50%</Badge>;
   return <Badge variant="success">Healthy</Badge>;
 }
 
