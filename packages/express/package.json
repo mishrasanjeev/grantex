@@ -48,6 +48,9 @@
     "grant-token"
   ],
   "license": "Apache-2.0",
+  "overrides": {
+    "esbuild": "^0.25.0"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/mishrasanjeev/grantex"
