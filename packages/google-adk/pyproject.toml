@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grantex-adk"
-version = "0.1.0"
+version = "0.1.1"
 description = "Google ADK integration for the Grantex delegated authorization protocol — scope-enforced agent tools"
 readme = "README.md"
 license = { text = "Apache-2.0" }
