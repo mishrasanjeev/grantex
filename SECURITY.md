@@ -13,7 +13,16 @@ Only the following versions of Grantex components receive security patches:
 | `@grantex/autogen` | 0.1.x | ✅ Yes |
 | `@grantex/vercel-ai` | 0.1.x | ✅ Yes |
 | `grantex-crewai` | 0.1.x | ✅ Yes |
+| `grantex-openai-agents` | 0.1.x | ✅ Yes |
+| `grantex-adk` | 0.1.x | ✅ Yes |
+| `@grantex/mcp` | 0.1.x | ✅ Yes |
+| `@grantex/express` | 0.1.x | ✅ Yes |
+| `grantex-fastapi` | 0.1.x | ✅ Yes |
+| `@grantex/adapters` | 0.1.x | ✅ Yes |
+| `@grantex/gateway` | 0.1.x | ✅ Yes |
 | `@grantex/cli` | 0.1.x | ✅ Yes |
+| `@grantex/conformance` | 0.1.x | ✅ Yes |
+| `github.com/mishrasanjeev/grantex-go` | 0.1.x | ✅ Yes |
 
 If you are running a version not listed above, please upgrade before reporting.
 
@@ -23,7 +32,12 @@ If you are running a version not listed above, please upgrade before reporting.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Send a report to **security@grantex.dev** with:
+Report via one of:
+
+- **Email**: [security@grantex.dev](mailto:security@grantex.dev)
+- **GitHub Security Advisories**: [Report a vulnerability](https://github.com/mishrasanjeev/grantex/security/advisories/new)
+
+Include in your report:
 
 - A clear description of the vulnerability and its potential impact
 - The affected component(s): `auth-service`, `sdk-ts`, `sdk-py`, `cli`, or `SPEC.md`
@@ -37,9 +51,9 @@ Encrypt sensitive reports with our PGP key (available at `https://grantex.dev/.w
 | Stage                      | Target                          |
 |----------------------------|---------------------------------|
 | Acknowledgement            | 48 hours                        |
-| Substantive response       | 7 business days                 |
-| Patch (Critical / High)    | 30 days from confirmation       |
-| Patch (Medium / Low)       | Next scheduled release          |
+| Substantive response       | 5 business days                 |
+| Patch (Critical / High)    | 7 days from confirmation        |
+| Patch (Medium / Low)       | 30 days from confirmation       |
 
 We will keep you informed of progress throughout the remediation process.
 

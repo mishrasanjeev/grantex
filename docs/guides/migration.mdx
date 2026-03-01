@@ -1,0 +1,181 @@
+---
+title: "Migration Guide"
+sidebarTitle: "Migration"
+description: "Step-by-step guides for migrating to Grantex from API keys or raw OAuth 2.0."
+---
+
+## Migrating from API Keys + Manual Audit
+
+If your agents currently authenticate with static API keys and you log actions manually, Grantex gives you verifiable permissions, automatic audit trails, and user-controlled revocation.
+
+### What stays the same
+
+- Your upstream APIs (Google Calendar, Slack, Stripe, etc.) — agents still call them
+- Your users — they keep their accounts and data
+- Your agent logic — business logic doesn't change
+
+### What changes
+
+- **Auth layer**: Static API keys are replaced with scoped, time-bound grant tokens
+- **Audit**: Manual logging is replaced with tamper-evident, hash-chained audit entries
+- **Revocation**: Instead of rotating API keys, users revoke grants through a dashboard
+
+### Step-by-step
+
+<Steps>
+  <Step title="Register as a developer">
+    Sign up at the [Grantex portal](https://grantex.dev/dashboard) or use the SDK:
+    ```typescript
+    const grantex = new Grantex({ baseUrl: 'https://your-auth-service.com' });
+    const dev = await grantex.developers.register({
+      name: 'Acme Corp',
+      email: 'dev@acme.com',
+    });
+    ```
+  </Step>
+  <Step title="Register your agent">
+    ```typescript
+    const agent = await grantex.agents.create({
+      name: 'Calendar Assistant',
+      description: 'Manages calendar events on behalf of users',
+      scopes: ['calendar:read', 'calendar:write'],
+    });
+    ```
+  </Step>
+  <Step title="Replace API key auth with grant tokens">
+    Before (API key):
+    ```typescript
+    // Old: static key, no user consent, no audit
+    const response = await fetch('/api/events', {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+    ```
+
+    After (Grantex):
+    ```typescript
+    // New: user-consented, scoped, audited
+    const { grantToken } = await grantex.tokens.exchange({
+      code: authorizationCode,
+      agentId: agent.agentDid,
+    });
+
+    const response = await fetch('/api/events', {
+      headers: { Authorization: `Bearer ${grantToken}` },
+    });
+    ```
+  </Step>
+  <Step title="Add token verification to your API">
+    Use the Express middleware or verify manually:
+    ```typescript
+    import { createGrantexMiddleware } from '@grantex/express';
+
+    app.use(createGrantexMiddleware({
+      baseUrl: 'https://your-auth-service.com',
+      apiKey: process.env.GRANTEX_API_KEY,
+      requiredScopes: ['calendar:read'],
+    }));
+    ```
+  </Step>
+  <Step title="Enable audit logging">
+    Log actions automatically through the SDK:
+    ```typescript
+    await grantex.audit.log({
+      grantId,
+      action: 'calendar.event.created',
+      resource: `event:${eventId}`,
+    });
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Migrating from Raw OAuth 2.0
+
+If you already use OAuth 2.0 for agent authorization, Grantex extends the model with agent-aware grants, delegation, and built-in audit.
+
+### What stays the same
+
+- Your **identity provider** (Okta, Auth0, Google) — keep using it for user login
+- Your **users** and their accounts
+- The general **authorize → consent → token** flow pattern
+
+### What changes
+
+- **Token format**: Opaque access tokens become Grantex JWTs with agent, principal, and scope claims
+- **Delegation**: OAuth has no standard sub-delegation — Grantex tracks the full chain
+- **Audit**: No more bolting on audit logging — it's built into the protocol
+- **Revocation**: Grant-level revocation cascades to all tokens (not just individual token revocation)
+
+### Step-by-step
+
+<Steps>
+  <Step title="Keep your OAuth login flow">
+    Continue using OIDC for user authentication. Map the authenticated user to a Grantex `principalId`.
+  </Step>
+  <Step title="Replace OAuth token issuance with Grantex authorization">
+    Before (OAuth):
+    ```
+    GET /oauth/authorize?client_id=...&scope=read+write&redirect_uri=...
+    POST /oauth/token  (authorization_code grant)
+    ```
+
+    After (Grantex):
+    ```typescript
+    const { consentUrl } = await grantex.authorize({
+      agentId: agent.agentDid,
+      userId: user.id,
+      scopes: ['calendar:read', 'calendar:write'],
+      callbackUrl: 'https://app.com/callback',
+    });
+    // Redirect user to consentUrl
+    // On callback, exchange the code:
+    const { grantToken } = await grantex.tokens.exchange({
+      code, agentId: agent.agentDid,
+    });
+    ```
+  </Step>
+  <Step title="Replace token introspection with offline verification">
+    Before (OAuth introspection):
+    ```
+    POST /oauth/introspect  { token: "..." }
+    ```
+
+    After (Grantex offline verification):
+    ```typescript
+    import { verifyGrantToken } from '@grantex/sdk';
+
+    const result = await verifyGrantToken(token, {
+      jwksUrl: 'https://your-auth-service.com/.well-known/jwks.json',
+    });
+    // No network call needed — JWT verified locally with JWKS
+    ```
+  </Step>
+  <Step title="Add delegation support (optional)">
+    If your agents delegate to sub-agents:
+    ```typescript
+    const delegated = await grantex.grants.delegate({
+      grantId: parentGrant.grantId,
+      agentId: subAgent.agentDid,
+      scopes: ['calendar:read'], // subset of parent scopes
+    });
+    ```
+  </Step>
+  <Step title="Enable the permissions dashboard">
+    Give users self-service grant management:
+    ```typescript
+    const { dashboardUrl } = await grantex.principalSessions.create({
+      principalId: user.id,
+    });
+    // Redirect user to dashboardUrl
+    ```
+  </Step>
+</Steps>
+
+## Further Reading
+
+- [Quickstart](/quickstart) — Get running in 5 minutes
+- [Token Verification](/guides/token-verification) — Online and offline verification
+- [End-User Permissions](/guides/end-user-permissions) — Principal sessions and dashboard
+- [Express Middleware](/integrations/express) — Drop-in middleware for Node.js APIs
+- [FastAPI Middleware](/integrations/fastapi) — Drop-in middleware for Python APIs

@@ -34,6 +34,9 @@ All examples use the sandbox key by default.
 | [`vercel-ai-chatbot`](./vercel-ai-chatbot/) | Vercel AI SDK tools with scope enforcement and audit logging | `@grantex/sdk`, `@grantex/vercel-ai` |
 | [`quickstart-py`](./quickstart-py/) | Core authorization flow in Python — register, authorize, token, verify, audit, revoke | `grantex` |
 | [`crewai-agent`](./crewai-agent/) | CrewAI agent with scoped tools and audit logging | `grantex`, `grantex-crewai` |
+| [`nextjs-starter`](./nextjs-starter/) | Next.js interactive consent flow with callback handling | `@grantex/sdk` |
+| [`openai-agents`](./openai-agents/) | OpenAI Agents SDK with scope enforcement | `grantex`, `grantex-openai-agents` |
+| [`google-adk`](./google-adk/) | Google ADK with scoped function tools | `grantex`, `grantex-adk` |
 
 ## Running an example
 

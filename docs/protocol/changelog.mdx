@@ -6,6 +6,35 @@ description: "All notable changes to the Grantex project."
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.5] - 2026-03-01
+
+### Added
+- Principal sessions — `POST /v1/principal-sessions` creates short-lived session JWTs for end-users
+- End-user permissions dashboard — `GET /permissions` serves HTML self-service UI
+- Three principal endpoints: `GET /v1/principal/grants`, `GET /v1/principal/audit`, `DELETE /v1/principal/grants/:id`
+- Express middleware (`@grantex/express`) — drop-in Grantex token verification for Node.js APIs
+- FastAPI middleware (`grantex-fastapi`) — drop-in Grantex token verification for Python APIs
+- Go SDK (`github.com/mishrasanjeev/grantex-go`) v0.1.0 — 12 resource services, offline JWT verification, PKCE, webhook HMAC-SHA256
+- Service provider adapters (`@grantex/adapters`) — Google Calendar, Gmail, Stripe, Slack
+- Reverse-proxy gateway (`@grantex/gateway`) — YAML-configured, Fastify-based token verification proxy
+- `principalSessions.create()` in TypeScript and Python SDKs
+- Conformance suite: principal-sessions test suite
+
+### Changed
+- Bumped `@grantex/sdk` to 0.1.5 and `grantex` (Python) to 0.1.5
+- Bumped `@grantex/conformance` to 0.1.2
+
+## [0.1.4] - 2026-02-28
+
+### Added
+- Token refresh — `POST /v1/token/refresh` with single-use rotation per SPEC §7.4
+- `tokens.refresh()` method in TypeScript and Python SDKs
+- Conformance suite: token refresh tests
+- Troubleshooting guide in docs
+
+### Changed
+- Bumped `@grantex/sdk` to 0.1.4 and `grantex` (Python) to 0.1.4
+
 ## [0.1.3] - 2026-02-28
 
 ### Added

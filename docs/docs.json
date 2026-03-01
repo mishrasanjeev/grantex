@@ -43,7 +43,8 @@
               "concepts/grant-token",
               "concepts/scopes",
               "concepts/scope-registry",
-              "concepts/delegation"
+              "concepts/delegation",
+              "concepts/vs-oauth"
             ]
           },
           {
@@ -56,6 +57,7 @@
               "guides/token-verification",
               "guides/troubleshooting",
               "guides/end-user-permissions",
+              "guides/migration",
               "guides/metrics-observability",
               "guides/playground"
             ]

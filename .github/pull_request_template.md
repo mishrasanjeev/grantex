@@ -6,8 +6,10 @@
 
 <!-- How was this tested? Check all that apply. -->
 
-- [ ] `npm run typecheck` passes
-- [ ] `npm test` passes
+- [ ] `npm run typecheck` passes (if TypeScript changed)
+- [ ] `npm test` passes (if TypeScript changed)
+- [ ] `pytest` passes (if Python changed)
+- [ ] `go test ./...` passes (if Go changed)
 - [ ] Manual testing (describe below)
 
 ## Related issues
