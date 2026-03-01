@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grantex — Product Hunt Gallery</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:      #0a0e14;
+      --surface: #12171f;
+      --surface2:#1a2030;
+      --border:  #1e2736;
+      --border2: #2a3545;
+      --text:    #e6edf3;
+      --muted:   #7d8590;
+      --green:   #3fb950;
+      --green2:  #56d364;
+      --blue:    #58a6ff;
+      --blue2:   #79c0ff;
+      --purple:  #bc8cff;
+      --red:     #ff7b72;
+      --orange:  #ffa657;
+      --mono:    'JetBrains Mono', monospace;
+      --sans:    'Inter', system-ui, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #060810;
+      font-family: var(--sans);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 60px;
+      padding: 60px 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Slide wrapper ──────────────────────────────────────────── */
+    .slide-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .slide-label {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    .slide {
+      width: 1270px;
+      height: 760px;
+      overflow: hidden;
+      position: relative;
+      flex-shrink: 0;
+      isolation: isolate;
+    }
+
+    /* ── Shared background elements ─────────────────────────────── */
+    .slide-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+
+    /* Dot grid pattern */
+    .dot-grid {
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 32px 32px;
+      z-index: 1;
+    }
+
+    /* Gradient orbs */
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      z-index: 0;
+      pointer-events: none;
+    }
+    .orb-green {
+      background: rgba(63, 185, 80, 0.15);
+    }
+    .orb-blue {
+      background: rgba(88, 166, 255, 0.12);
+    }
+    .orb-purple {
+      background: rgba(188, 140, 255, 0.08);
+    }
+    .orb-red {
+      background: rgba(255, 123, 114, 0.10);
+    }
+
+    /* Slide content layer */
+    .slide-content {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Shared typography ──────────────────────────────────────── */
+    .logo {
+      font-family: var(--mono);
+      font-weight: 700;
+    }
+    .logo .g { color: var(--green); }
+    .logo .e { color: var(--text); }
+
+    .gradient-text {
+      background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .green-gradient-text {
+      background: linear-gradient(135deg, var(--green2) 0%, var(--green) 50%, var(--blue) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ── Glass card mixin ──────────────────────────────────────── */
+    .glass {
+      background: linear-gradient(135deg, rgba(22, 27, 34, 0.8) 0%, rgba(18, 23, 31, 0.6) 100%);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+    }
+
+    .glass-subtle {
+      background: rgba(22, 27, 34, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 12px;
+    }
+
+    /* Gradient border wrapper */
+    .gradient-border {
+      padding: 1px;
+      border-radius: 17px;
+      background: linear-gradient(135deg, rgba(63, 185, 80, 0.3) 0%, rgba(88, 166, 255, 0.15) 50%, rgba(188, 140, 255, 0.1) 100%);
+    }
+    .gradient-border > * {
+      border-radius: 16px;
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       SLIDE 1 — Hero
+       ════════════════════════════════════════════════════════════ */
+    .hero-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 40px 80px;
+      text-align: center;
+      gap: 20px;
+    }
+
+    .hero-logo-wrap {
+      position: relative;
+      margin-bottom: 4px;
+    }
+    .hero-logo-glow {
+      position: absolute;
+      width: 300px;
+      height: 80px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(ellipse, rgba(63, 185, 80, 0.25) 0%, transparent 70%);
+      filter: blur(30px);
+      z-index: -1;
+    }
+    .hero-logo {
+      font-size: 80px;
+      letter-spacing: -0.04em;
+      position: relative;
+    }
+
+    .hero-tagline {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 0%, #c9d1d9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: 17px;
+      color: var(--muted);
+      max-width: 560px;
+      line-height: 1.6;
+    }
+
+    .trust-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .trust-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 600;
+      background: rgba(22, 27, 34, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .trust-pill svg {
+      flex-shrink: 0;
+    }
+
+    .install-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .install-chip {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      background: rgba(22, 27, 34, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--muted);
+    }
+    .install-chip .prompt {
+      color: var(--green);
+      margin-right: 8px;
+      user-select: none;
+    }
+    .install-chip .cmd {
+      color: var(--text);
+    }
+    .install-chip .pkg {
+      color: var(--blue);
+    }
+
+    .hero-url {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--green);
+      opacity: 0.7;
+      letter-spacing: 0.05em;
+      margin-top: 4px;
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       SLIDE 2 — The Problem
+       ════════════════════════════════════════════════════════════ */
+    .problem-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      padding: 56px 80px 48px;
+      gap: 12px;
+    }
+
+    .problem-label {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--red);
+      margin-bottom: 4px;
+    }
+
+    .problem-title {
+      font-size: 48px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #ffffff 0%, #c9d1d9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 12px;
+    }
+
+    .problem-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      width: 100%;
+      max-width: 1040px;
+    }
+
+    .problem-card {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      padding: 24px;
+      background: linear-gradient(135deg, rgba(22, 27, 34, 0.7) 0%, rgba(18, 23, 31, 0.5) 100%);
+      border: 1px solid rgba(255, 123, 114, 0.08);
+      border-radius: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    .problem-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent 0%, rgba(255, 123, 114, 0.2) 50%, transparent 100%);
+    }
+    .problem-x {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: rgba(255, 123, 114, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .problem-card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .problem-card p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .problem-callout {
+      margin-top: 16px;
+      padding: 18px 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(255, 123, 114, 0.04) 0%, rgba(255, 123, 114, 0.02) 100%);
+      border: 1px solid rgba(255, 123, 114, 0.12);
+      font-size: 17px;
+      color: var(--muted);
+      font-style: italic;
+      text-align: center;
+      position: relative;
+    }
+    .problem-callout::before {
+      content: '\201C';
+      font-size: 48px;
+      color: rgba(255, 123, 114, 0.2);
+      position: absolute;
+      top: -6px;
+      left: 16px;
+      font-style: normal;
+      font-family: Georgia, serif;
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       SLIDE 3 — How It Works
+       ════════════════════════════════════════════════════════════ */
+    .flow-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      padding: 48px 100px 44px;
+      gap: 8px;
+    }
+
+    .flow-label {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--green);
+      margin-bottom: 0;
+    }
+
+    .flow-title {
+      font-size: 44px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #ffffff 0%, #c9d1d9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+    }
+
+    .flow-steps {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 900px;
+      position: relative;
+      gap: 0;
+    }
+
+    /* Continuous vertical line */
+    .flow-steps::before {
+      content: '';
+      position: absolute;
+      left: 24px;
+      top: 24px;
+      bottom: 24px;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--green), rgba(88, 166, 255, 0.4), rgba(188, 140, 255, 0.2));
+      z-index: 0;
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 8px 0;
+      position: relative;
+      z-index: 1;
+    }
+
+    .flow-num {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 700;
+      flex-shrink: 0;
+      color: var(--green);
+      background: var(--bg);
+      border: 2px solid rgba(63, 185, 80, 0.4);
+      box-shadow: 0 0 20px rgba(63, 185, 80, 0.15);
+      position: relative;
+    }
+
+    .flow-card {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 18px 24px;
+      background: linear-gradient(135deg, rgba(22, 27, 34, 0.7) 0%, rgba(18, 23, 31, 0.5) 100%);
+      border: 1px solid rgba(63, 185, 80, 0.08);
+      border-radius: 14px;
+    }
+    .flow-card::before {
+      content: '';
+      position: absolute;
+      left: -1px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+    }
+    .flow-card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .flow-card p {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .flow-icon-box {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: rgba(63, 185, 80, 0.08);
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       SLIDE 4 — Code Quickstart
+       ════════════════════════════════════════════════════════════ */
+    .code-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      padding: 44px 56px 44px;
+      gap: 8px;
+    }
+
+    .code-label {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--blue);
+    }
+
+    .code-title {
+      font-size: 42px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #ffffff 0%, #c9d1d9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+    }
+
+    .code-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      width: 100%;
+      flex: 1;
+    }
+
+    .code-panel-wrap {
+      padding: 1px;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .code-panel-wrap.ts-border {
+      background: linear-gradient(135deg, rgba(49, 120, 198, 0.3) 0%, rgba(49, 120, 198, 0.05) 100%);
+    }
+    .code-panel-wrap.py-border {
+      background: linear-gradient(135deg, rgba(53, 114, 165, 0.3) 0%, rgba(255, 212, 59, 0.1) 100%);
+    }
+
+    .code-panel {
+      background: rgba(12, 16, 22, 0.95);
+      border-radius: 13px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+    .code-panel-bar {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      gap: 12px;
+    }
+    .traffic-dots {
+      display: flex;
+      gap: 6px;
+    }
+    .traffic-dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .traffic-dots .d-red { background: #ff5f57; }
+    .traffic-dots .d-yellow { background: #febc2e; }
+    .traffic-dots .d-green { background: #28c840; }
+
+    .code-panel-lang {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .code-panel-lang .lang-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .lang-dot.ts { background: #3178c6; }
+    .lang-dot.py { background: #3572a5; }
+
+    .code-panel pre {
+      padding: 16px 20px;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.75;
+      overflow: hidden;
+      flex: 1;
+      color: var(--text);
+    }
+
+    /* Syntax highlighting — GitHub Dark style */
+    .kw  { color: #ff7b72; }
+    .fn  { color: #d2a8ff; }
+    .str { color: #a5d6ff; }
+    .cm  { color: #6e7681; }
+    .ty  { color: #ffa657; }
+    .pr  { color: #e6edf3; }
+    .num { color: #79c0ff; }
+    .op  { color: #c9d1d9; }
+
+    /* ════════════════════════════════════════════════════════════
+       SLIDE 5 — Integrations
+       ════════════════════════════════════════════════════════════ */
+    .int-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100%;
+      padding: 52px 72px 44px;
+      gap: 8px;
+    }
+
+    .int-label {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--green);
+    }
+
+    .int-title {
+      font-size: 48px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #ffffff 0%, #c9d1d9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .int-subtitle {
+      font-size: 17px;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    .int-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      width: 100%;
+      max-width: 1000px;
+    }
+
+    .int-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 24px 12px 20px;
+      background: linear-gradient(135deg, rgba(22, 27, 34, 0.7) 0%, rgba(18, 23, 31, 0.5) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    .int-card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 20%;
+      right: 20%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(63, 185, 80, 0.15), transparent);
+    }
+
+    .int-icon-box {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      font-family: var(--sans);
+      flex-shrink: 0;
+    }
+
+    /* Individual integration icon colors */
+    .ic-langchain  { background: rgba(30, 136, 229, 0.12); color: #42a5f5; }
+    .ic-crewai     { background: rgba(255, 82, 82, 0.12);  color: #ff5252; }
+    .ic-autogen    { background: rgba(0, 150, 136, 0.12);   color: #26a69a; }
+    .ic-openai     { background: rgba(255, 255, 255, 0.08); color: #e6edf3; }
+    .ic-google     { background: rgba(66, 133, 244, 0.12);  color: #4285f4; }
+    .ic-vercel     { background: rgba(255, 255, 255, 0.08); color: #e6edf3; }
+    .ic-express    { background: rgba(104, 159, 56, 0.12);  color: #9ccc65; }
+    .ic-fastapi    { background: rgba(0, 150, 136, 0.12);   color: #009688; }
+    .ic-typescript { background: rgba(49, 120, 198, 0.12);  color: #58a6ff; }
+    .ic-python     { background: rgba(255, 212, 59, 0.12);  color: #ffd43b; }
+    .ic-go         { background: rgba(0, 173, 216, 0.12);   color: #00bcd4; }
+    .ic-mcp        { background: rgba(188, 140, 255, 0.12); color: #bc8cff; }
+
+    .int-card-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       SLIDE 6 — Open Source + CTA
+       ════════════════════════════════════════════════════════════ */
+    .os-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 44px 80px;
+      gap: 24px;
+      text-align: center;
+    }
+
+    .os-logo {
+      font-size: 64px;
+      letter-spacing: -0.04em;
+      position: relative;
+    }
+    .os-logo-glow {
+      position: absolute;
+      width: 240px;
+      height: 60px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(ellipse, rgba(63, 185, 80, 0.2) 0%, transparent 70%);
+      filter: blur(25px);
+      z-index: -1;
+    }
+
+    .os-title {
+      font-size: 48px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #ffffff 0%, #c9d1d9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .os-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 20px;
+      border-radius: 100px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--green);
+      background: rgba(63, 185, 80, 0.06);
+      border: 1px solid rgba(63, 185, 80, 0.2);
+    }
+
+    .stats-grid {
+      display: flex;
+      gap: 16px;
+      margin-top: 4px;
+    }
+    .stat-block {
+      padding: 24px 28px;
+      min-width: 170px;
+      text-align: center;
+      background: linear-gradient(135deg, rgba(22, 27, 34, 0.7) 0%, rgba(18, 23, 31, 0.5) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-block::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 25%;
+      right: 25%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(63, 185, 80, 0.2), transparent);
+    }
+    .stat-number {
+      font-family: var(--mono);
+      font-size: 32px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--green2) 0%, var(--green) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 4px;
+    }
+    .stat-text {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .cta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      font-family: var(--sans);
+    }
+    .cta-primary {
+      background: linear-gradient(135deg, var(--green) 0%, #2ea043 100%);
+      color: #ffffff;
+      box-shadow: 0 4px 24px rgba(63, 185, 80, 0.25);
+    }
+    .cta-secondary {
+      background: rgba(22, 27, 34, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+
+    /* ── SVG icons ──────────────────────────────────────────────── */
+    .icon-svg {
+      display: inline-flex;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 1 — Hero
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="slide-wrapper">
+  <div class="slide-label">Slide 1 / 6 &mdash; Hero</div>
+  <div class="slide">
+    <div class="slide-bg">
+      <div class="dot-grid"></div>
+      <div class="orb orb-green" style="width:600px;height:600px;top:-200px;left:50%;transform:translateX(-50%)"></div>
+      <div class="orb orb-blue" style="width:400px;height:400px;bottom:-100px;right:-50px"></div>
+      <div class="orb orb-purple" style="width:300px;height:300px;bottom:100px;left:-80px"></div>
+    </div>
+    <div class="slide-content hero-content">
+      <div class="hero-logo-wrap">
+        <div class="hero-logo-glow"></div>
+        <div class="logo hero-logo"><span class="g">grant</span><span class="e">ex</span></div>
+      </div>
+
+      <div class="hero-tagline">OAuth 2.0 for AI Agents</div>
+      <div class="hero-subtitle">Verifiable, revocable, audited grants built on JWT and OAuth 2.0. The missing authorization layer for the agentic web.</div>
+
+      <div class="trust-row">
+        <div class="trust-pill">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1L10 5.5L15 6.2L11.5 9.5L12.4 14.5L8 12L3.6 14.5L4.5 9.5L1 6.2L6 5.5L8 1Z" fill="#58a6ff"/></svg>
+          <span style="color:var(--blue)">IETF I-D</span>
+        </div>
+        <div class="trust-pill">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M6.5 12L2 7.5L3.4 6.1L6.5 9.2L12.6 3.1L14 4.5L6.5 12Z" fill="#3fb950"/></svg>
+          <span style="color:var(--green)">SOC 2 Type I</span>
+        </div>
+        <div class="trust-pill">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#3fb950" stroke-width="1.5" fill="none"/><path d="M5.5 8H10.5M8 5.5V10.5" stroke="#3fb950" stroke-width="1.5"/></svg>
+          <span style="color:var(--green)">Apache 2.0</span>
+        </div>
+        <div class="trust-pill">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="3" stroke="#58a6ff" stroke-width="1.5" fill="none"/><path d="M6 8L7.5 9.5L10.5 6" stroke="#58a6ff" stroke-width="1.5" fill="none"/></svg>
+          <span style="color:var(--blue)">v1.0 Final</span>
+        </div>
+      </div>
+
+      <div class="install-row">
+        <div class="install-chip">
+          <span class="prompt">$</span>
+          <span class="cmd">npm install </span><span class="pkg">@grantex/sdk</span>
+        </div>
+        <div class="install-chip">
+          <span class="prompt">$</span>
+          <span class="cmd">pip install </span><span class="pkg">grantex</span>
+        </div>
+        <div class="install-chip">
+          <span class="prompt">$</span>
+          <span class="cmd">go get </span><span class="pkg">grantex-go</span>
+        </div>
+      </div>
+
+      <div class="hero-url">grantex.dev</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 2 — The Problem
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="slide-wrapper">
+  <div class="slide-label">Slide 2 / 6 &mdash; The Problem</div>
+  <div class="slide">
+    <div class="slide-bg">
+      <div class="dot-grid"></div>
+      <div class="orb orb-red" style="width:500px;height:500px;top:-150px;right:-100px"></div>
+      <div class="orb orb-red" style="width:400px;height:400px;bottom:-100px;left:-50px;opacity:0.5"></div>
+    </div>
+    <div class="slide-content problem-content">
+      <div class="problem-label">The Status Quo</div>
+      <div class="problem-title">AI Agents Have No Authorization Standard</div>
+
+      <div class="problem-grid">
+        <div class="problem-card">
+          <div class="problem-x">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="#ff7b72" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <h3>No Scoped Permissions</h3>
+            <p>No standard way to give agents scoped, time-limited permissions for specific actions</p>
+          </div>
+        </div>
+        <div class="problem-card">
+          <div class="problem-x">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="#ff7b72" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <h3>Unverifiable Authorization</h3>
+            <p>Services can't cryptographically verify whether an agent is actually authorized</p>
+          </div>
+        </div>
+        <div class="problem-card">
+          <div class="problem-x">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="#ff7b72" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <h3>No Audit Trail</h3>
+            <p>No auditable, immutable record of what agents do on behalf of users</p>
+          </div>
+        </div>
+        <div class="problem-card">
+          <div class="problem-x">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M4 4L12 12M12 4L4 12" stroke="#ff7b72" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <h3>No Delegation Chain</h3>
+            <p>No delegation model for multi-agent orchestration and sub-agent pipelines</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="problem-callout">
+        This is where the internet was before OAuth 2.0.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 3 — How It Works
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="slide-wrapper">
+  <div class="slide-label">Slide 3 / 6 &mdash; How It Works</div>
+  <div class="slide">
+    <div class="slide-bg">
+      <div class="dot-grid"></div>
+      <div class="orb orb-green" style="width:500px;height:500px;top:-100px;left:-100px"></div>
+      <div class="orb orb-blue" style="width:400px;height:400px;bottom:-80px;right:-50px"></div>
+    </div>
+    <div class="slide-content flow-content">
+      <div class="flow-label">5-Step Flow</div>
+      <div class="flow-title">How It Works</div>
+
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-num">1</div>
+          <div class="flow-card">
+            <div class="flow-icon-box">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="3" stroke="#3fb950" stroke-width="1.5"/><path d="M7 10h6M10 7v6" stroke="#3fb950" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <div>
+              <h3>Register Agent & Declare Scopes</h3>
+              <p>Define what your agent can do: read emails, manage calendar, execute trades</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-num">2</div>
+          <div class="flow-card">
+            <div class="flow-icon-box">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3" stroke="#3fb950" stroke-width="1.5"/><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#3fb950" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <div>
+              <h3>User Approves via Consent UI</h3>
+              <p>Human-in-the-loop: the user reviews and approves requested scopes</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-num">3</div>
+          <div class="flow-card">
+            <div class="flow-icon-box">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="5" width="14" height="10" rx="2" stroke="#3fb950" stroke-width="1.5"/><path d="M7 9h6M7 12h4" stroke="#3fb950" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <div>
+              <h3>Grantex Issues Signed Grant Token</h3>
+              <p>RS256-signed JWT with scopes, expiry, principal ID, and audit claims</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-num">4</div>
+          <div class="flow-card">
+            <div class="flow-icon-box">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3v4M10 13v4M3 10h4M13 10h4" stroke="#3fb950" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="10" r="3" stroke="#3fb950" stroke-width="1.5"/></svg>
+            </div>
+            <div>
+              <h3>Any Service Verifies Offline via JWKS</h3>
+              <p>Zero network calls needed &mdash; verify tokens with the public key set</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-num">5</div>
+          <div class="flow-card">
+            <div class="flow-icon-box">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M5 10l3 3 7-7" stroke="#3fb950" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div>
+              <h3>Immutable Audit Trail + Instant Revocation</h3>
+              <p>Every action is logged. Revoke any grant instantly, across all services</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 4 — Code Quickstart
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="slide-wrapper">
+  <div class="slide-label">Slide 4 / 6 &mdash; Code Quickstart</div>
+  <div class="slide">
+    <div class="slide-bg">
+      <div class="dot-grid"></div>
+      <div class="orb orb-blue" style="width:500px;height:500px;top:-150px;left:-100px"></div>
+      <div class="orb orb-green" style="width:400px;height:400px;bottom:-100px;right:-80px"></div>
+    </div>
+    <div class="slide-content code-content">
+      <div class="code-label">Quick Start</div>
+      <div class="code-title">5 Lines to Authorize Your Agent</div>
+
+      <div class="code-panels">
+        <div class="code-panel-wrap ts-border">
+          <div class="code-panel">
+            <div class="code-panel-bar">
+              <div class="traffic-dots">
+                <span class="d-red"></span>
+                <span class="d-yellow"></span>
+                <span class="d-green"></span>
+              </div>
+              <div class="code-panel-lang">
+                <span class="lang-dot ts"></span>
+                TypeScript
+              </div>
+            </div>
+            <pre><span class="kw">import</span> { <span class="ty">Grantex</span> } <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
+
+<span class="kw">const</span> gx = <span class="kw">new</span> <span class="ty">Grantex</span>({ <span class="pr">apiKey</span>: <span class="str">'gx_...'</span> });
+
+<span class="cm">// 1. Request authorization</span>
+<span class="kw">const</span> auth = <span class="kw">await</span> gx.<span class="fn">authorize</span>({
+  <span class="pr">agentId</span>:  <span class="str">'agent_123'</span>,
+  <span class="pr">userId</span>:   <span class="str">'user_456'</span>,
+  <span class="pr">scopes</span>:   [<span class="str">'email:read'</span>, <span class="str">'calendar:write'</span>],
+});
+
+<span class="cm">// 2. Exchange code for grant token</span>
+<span class="kw">const</span> { <span class="pr">grantToken</span> } = <span class="kw">await</span> gx.tokens.<span class="fn">exchange</span>({
+  <span class="pr">code</span>:    auth.<span class="pr">code</span>,
+  <span class="pr">agentId</span>: <span class="str">'agent_123'</span>,
+});
+
+<span class="cm">// 3. Verify anywhere — zero network calls</span>
+<span class="kw">const</span> grant = <span class="kw">await</span> gx.tokens.<span class="fn">verify</span>(grantToken);</pre>
+          </div>
+        </div>
+
+        <div class="code-panel-wrap py-border">
+          <div class="code-panel">
+            <div class="code-panel-bar">
+              <div class="traffic-dots">
+                <span class="d-red"></span>
+                <span class="d-yellow"></span>
+                <span class="d-green"></span>
+              </div>
+              <div class="code-panel-lang">
+                <span class="lang-dot py"></span>
+                Python
+              </div>
+            </div>
+            <pre><span class="kw">from</span> <span class="ty">grantex</span> <span class="kw">import</span> <span class="ty">Grantex</span>
+
+gx = <span class="ty">Grantex</span>(<span class="pr">api_key</span>=<span class="str">"gx_..."</span>)
+
+<span class="cm"># 1. Request authorization</span>
+auth = gx.<span class="fn">authorize</span>(
+    <span class="pr">agent_id</span>=<span class="str">"agent_123"</span>,
+    <span class="pr">user_id</span>=<span class="str">"user_456"</span>,
+    <span class="pr">scopes</span>=[<span class="str">"email:read"</span>, <span class="str">"calendar:write"</span>],
+)
+
+<span class="cm"># 2. Exchange code for grant token</span>
+result = gx.tokens.<span class="fn">exchange</span>(
+    <span class="pr">code</span>=auth.<span class="pr">code</span>,
+    <span class="pr">agent_id</span>=<span class="str">"agent_123"</span>,
+)
+
+<span class="cm"># 3. Verify anywhere — zero network calls</span>
+grant = gx.tokens.<span class="fn">verify</span>(result.<span class="pr">grant_token</span>)</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 5 — Integrations
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="slide-wrapper">
+  <div class="slide-label">Slide 5 / 6 &mdash; Integrations</div>
+  <div class="slide">
+    <div class="slide-bg">
+      <div class="dot-grid"></div>
+      <div class="orb orb-green" style="width:500px;height:500px;top:-100px;right:-100px"></div>
+      <div class="orb orb-blue" style="width:400px;height:400px;bottom:-100px;left:-80px"></div>
+      <div class="orb orb-purple" style="width:350px;height:350px;top:200px;left:50%;transform:translateX(-50%)"></div>
+    </div>
+    <div class="slide-content int-content">
+      <div class="int-label">Ecosystem</div>
+      <div class="int-title">Works With Your Stack</div>
+      <div class="int-subtitle">Drop-in integrations for every major AI framework</div>
+
+      <div class="int-grid">
+        <div class="int-card">
+          <div class="int-icon-box ic-langchain">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 3L5 14h6l-1 7 8-11h-6l1-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="int-card-name">LangChain</div>
+        </div>
+        <div class="int-card">
+          <div class="int-icon-box ic-crewai">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.8"/><circle cx="16" cy="8" r="3" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="16" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M10.2 10l1.8 3M13.8 10l-1.8 3" stroke="currentColor" stroke-width="1.2"/></svg>
+          </div>
+          <div class="int-card-name">CrewAI</div>
+        </div>
+        <div class="int-card">
+          <div class="int-icon-box ic-autogen">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="4" stroke="currentColor" stroke-width="1.8"/><path d="M9 12h6M12 9v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </div>
+          <div class="int-card-name">AutoGen</div>
+        </div>
+        <div class="int-card">
+          <div class="int-icon-box ic-openai">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </div>
+          <div class="int-card-name">OpenAI Agents</div>
+        </div>
+        <div class="int-card">
+          <div class="int-icon-box ic-google">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 4l7 4v8l-7 4-7-4V8l7-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 4v8l7 4" stroke="currentColor" stroke-width="1.2"/><path d="M12 12L5 8" stroke="currentColor" stroke-width="1.2"/></svg>
+          </div>
+          <div class="int-card-name">Google ADK</div>
+        </div>
+        <div class="int-card">
+          <div class="int-icon-box ic-vercel">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 4L22 20H2L12 4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="int-card-name">Vercel AI</div>
+        </div>
+        <div class="int-card">
+          <div class="int-icon-box ic-express">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 12h16M4 12l4-4M4 12l4 4M20 12l-4-4M20 12l-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="int-card-name">Express.js</div>
+        </div>
+        <div class="int-card">
+          <div class="int-icon-box ic-fastapi">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 3L5 14h6l-1 7 8-11h-6l1-7z" fill="currentColor" opacity="0.3"/><path d="M13 3L5 14h6l-1 7 8-11h-6l1-7z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="int-card-name">FastAPI</div>
+        </div>
+        <div class="int-card">
+          <div class="int-icon-box ic-typescript">
+            <span style="font-size:16px;font-weight:800;font-family:var(--sans)">TS</span>
+          </div>
+          <div class="int-card-name">TypeScript SDK</div>
+        </div>
+        <div class="int-card">
+          <div class="int-icon-box ic-python">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 4C8 4 8 6 8 6v2h4v1H6s-3 0-3 4 2 4 2 4h2v-2s0-2 2-2h4s2 0 2-2V7s0-3-3-3zm-1.5 1.5a.75.75 0 110 1.5.75.75 0 010-1.5z" fill="currentColor" opacity="0.8"/><path d="M12 20c4 0 4-2 4-2v-2h-4v-1h6s3 0 3-4-2-4-2-4h-2v2s0 2-2 2h-4s-2 0-2 2v4s0 3 3 3zm1.5-1.5a.75.75 0 110-1.5.75.75 0 010 1.5z" fill="currentColor" opacity="0.5"/></svg>
+          </div>
+          <div class="int-card-name">Python SDK</div>
+        </div>
+        <div class="int-card">
+          <div class="int-icon-box ic-go">
+            <span style="font-size:15px;font-weight:800;font-family:var(--sans)">Go</span>
+          </div>
+          <div class="int-card-name">Go SDK</div>
+        </div>
+        <div class="int-card">
+          <div class="int-icon-box ic-mcp">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="4" y="6" width="16" height="12" rx="3" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="12" r="1.5" fill="currentColor"/><circle cx="15" cy="12" r="1.5" fill="currentColor"/></svg>
+          </div>
+          <div class="int-card-name">MCP Server</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SLIDE 6 — Open Source + CTA
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="slide-wrapper">
+  <div class="slide-label">Slide 6 / 6 &mdash; Open Source + CTA</div>
+  <div class="slide">
+    <div class="slide-bg">
+      <div class="dot-grid"></div>
+      <div class="orb orb-green" style="width:700px;height:700px;top:-250px;left:50%;transform:translateX(-50%)"></div>
+      <div class="orb orb-blue" style="width:400px;height:400px;bottom:-100px;left:-80px"></div>
+      <div class="orb orb-purple" style="width:350px;height:350px;bottom:-50px;right:-80px"></div>
+    </div>
+    <div class="slide-content os-content">
+      <div class="hero-logo-wrap">
+        <div class="os-logo-glow"></div>
+        <div class="logo os-logo"><span class="g">grant</span><span class="e">ex</span></div>
+      </div>
+
+      <div class="os-title">100% Open Source</div>
+
+      <div class="os-badge">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#3fb950" stroke-width="1.5"/><path d="M5.5 8H10.5M8 5.5V10.5" stroke="#3fb950" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Apache 2.0 License
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-block">
+          <div class="stat-number">v1.0</div>
+          <div class="stat-text">Protocol Final</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-number">3</div>
+          <div class="stat-text">SDKs</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-number">8</div>
+          <div class="stat-text">Integrations</div>
+        </div>
+        <div class="stat-block">
+          <div class="stat-number">155+</div>
+          <div class="stat-text">Docs Pages</div>
+        </div>
+      </div>
+
+      <div class="cta-buttons">
+        <a class="cta cta-primary" href="#">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="white" stroke-width="1.8"/><path d="M10 6v4l3 2" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>
+          grantex.dev
+        </a>
+        <a class="cta cta-secondary" href="#">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 2C5.58 2 2 5.58 2 10c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0018 10c0-4.42-3.58-8-8-8z" fill="currentColor"/></svg>
+          GitHub
+        </a>
+        <a class="cta cta-secondary" href="#">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M4 5h12M4 10h12M4 15h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Docs
+        </a>
+        <a class="cta cta-secondary" href="#">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M8 7l5 3-5 3V7z" fill="currentColor"/></svg>
+          Playground
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
