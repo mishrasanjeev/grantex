@@ -1,0 +1,34 @@
+# Grantex Gateway Configuration
+# See https://grantex.dev/docs/integrations/gateway for full reference
+
+upstream: https://api.internal.example.com
+jwksUri: https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json
+port: 8080
+
+# Optional: headers added to every upstream request
+upstreamHeaders:
+  X-Internal-Auth: "your-internal-secret"
+
+# Optional: Grantex API key for audit logging
+# grantexApiKey: gx_key_...
+
+routes:
+  # Calendar read access
+  - path: /calendar/**
+    methods: [GET]
+    requiredScopes: [calendar:read]
+
+  # Calendar write access
+  - path: /calendar/**
+    methods: [POST, PUT, PATCH]
+    requiredScopes: [calendar:write]
+
+  # Payment processing
+  - path: /payments/**
+    methods: [POST]
+    requiredScopes: [payments:initiate]
+
+  # User data read
+  - path: /users/*
+    methods: [GET]
+    requiredScopes: [users:read]

@@ -211,6 +211,13 @@
             ]
           },
           {
+            "group": "Service Providers",
+            "pages": [
+              "integrations/adapters",
+              "integrations/gateway"
+            ]
+          },
+          {
             "group": "Framework Integrations",
             "pages": [
               "integrations/express",
