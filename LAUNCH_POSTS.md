@@ -291,6 +291,55 @@ As agents get more capable, proper authorization becomes more critical — not l
 
 ---
 
+## 7. LinkedIn Post
+
+I've been thinking about a problem that keeps coming up in AI agent development: permissions.
+
+When you build an agent that books flights, sends emails, or moves money — how does it prove to downstream services what it's allowed to do? Right now, the answer is usually "hand it your API key and hope for the best."
+
+That's the same mistake the web made before OAuth. And it's going to scale very badly as agents get more capable.
+
+So I built Grantex — an open protocol for delegated authorization of AI agents.
+
+Here's how it works:
+
+1. An agent registers with the scopes it needs (e.g., flights:book, payments:max_500)
+2. The human approves those specific scopes via a consent screen
+3. The agent receives a signed JWT — scoped, time-limited, revocable
+4. Any downstream service can verify that JWT offline via JWKS — no Grantex account needed
+5. Every action gets logged in an append-only audit trail
+
+What makes this different from "just use OAuth":
+
+- Agents get their own cryptographic identity (DID-based), not borrowed user credentials
+- Delegation chains let a parent agent grant narrower permissions to sub-agents, with full depth tracking
+- Real-time revocation — kill a misbehaving agent's access in under a second
+
+What's shipping today:
+
+- Protocol spec v1.0 (frozen, public)
+- SDKs in TypeScript, Python, and Go
+- 8 framework integrations: LangChain, CrewAI, AutoGen, Vercel AI SDK, OpenAI Agents SDK, Google ADK, MCP server (works with Claude Desktop/Cursor/Windsurf), Express.js + FastAPI middleware
+- Auth service, CLI, developer portal, conformance test suite
+- Enterprise features: policy engine, SCIM/SSO, anomaly detection, compliance exports
+
+Everything is open source under Apache 2.0.
+
+If you're building with AI agents — whether it's a single-agent tool or a multi-agent pipeline — I'd love your feedback on the protocol design.
+
+Get started:
+npm install @grantex/sdk
+pip install grantex
+go get github.com/mishrasanjeev/grantex-go
+
+Homepage: https://grantex.dev
+Docs: https://grantex.dev/docs
+GitHub: https://github.com/mishrasanjeev/grantex
+
+#AI #OpenSource #Security #AIAgents #OAuth #Authorization
+
+---
+
 ## Posting Order (recommended)
 
 1. **Dev.to** — publish first so you have a canonical URL for cross-referencing
