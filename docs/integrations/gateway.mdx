@@ -1,0 +1,187 @@
+---
+title: "Grantex Gateway"
+sidebarTitle: "Gateway"
+description: "Zero-code reverse-proxy that enforces grant tokens in front of any API."
+---
+
+## Overview
+
+`@grantex/gateway` is a standalone reverse-proxy that enforces Grantex grant tokens in front of any upstream API. Define routes and required scopes in a YAML config — no code required.
+
+```bash
+npm install @grantex/gateway @grantex/sdk
+```
+
+## Quick Start
+
+**1. Create `gateway.yaml`:**
+
+```yaml
+upstream: https://api.internal.example.com
+jwksUri: https://your-auth-server/.well-known/jwks.json
+port: 8080
+upstreamHeaders:
+  X-Internal-Auth: "secret-key"
+routes:
+  - path: /calendar/**
+    methods: [GET]
+    requiredScopes: [calendar:read]
+  - path: /calendar/**
+    methods: [POST, PUT, PATCH]
+    requiredScopes: [calendar:write]
+  - path: /payments/**
+    methods: [POST]
+    requiredScopes: [payments:initiate]
+```
+
+**2. Start the gateway:**
+
+```bash
+npx @grantex/gateway --config gateway.yaml
+```
+
+**3. Make requests with grant tokens:**
+
+```bash
+curl -H "Authorization: Bearer <grant-token>" \
+  http://localhost:8080/calendar/events
+```
+
+## How It Works
+
+```
+Client → Gateway (verify token + check scopes) → Upstream API
+```
+
+1. **Route matching** — finds the first route matching the request method + path
+2. **Token verification** — extracts Bearer token and verifies offline via JWKS
+3. **Scope checking** — ensures the grant includes all required scopes
+4. **Proxy** — strips Authorization header, adds upstream headers + `X-Grantex-*` context, forwards to upstream
+5. **Response** — returns the upstream response to the client
+
+## YAML Config Reference
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `upstream` | string | Yes | — | Base URL of the upstream API |
+| `jwksUri` | string | Yes | — | JWKS endpoint for offline verification |
+| `port` | number | No | 8080 | Listen port |
+| `upstreamHeaders` | object | No | — | Headers added to every upstream request |
+| `grantexApiKey` | string | No | — | API key for audit logging |
+| `routes` | array | Yes | — | Route definitions |
+
+### Route Definition
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `path` | string | URL pattern. `*` matches one segment, `**` matches any depth |
+| `methods` | string[] | HTTP methods (GET, POST, PUT, PATCH, DELETE) |
+| `requiredScopes` | string[] | Scopes that must be present in the grant |
+
+### Path Matching
+
+| Pattern | Matches | Does Not Match |
+|---------|---------|----------------|
+| `/users/*` | `/users/123` | `/users/123/profile` |
+| `/calendar/**` | `/calendar/events`, `/calendar/events/123/attendees` | `/api/calendar` |
+| `/health` | `/health` | `/health/check` |
+
+## Context Headers
+
+The gateway adds these headers to every upstream request:
+
+| Header | Value |
+|--------|-------|
+| `X-Grantex-Principal` | Principal ID (end-user) |
+| `X-Grantex-Agent` | Agent DID |
+| `X-Grantex-GrantId` | Grant ID |
+
+Your upstream API can use these to apply fine-grained business logic without re-verifying the token.
+
+## Error Responses
+
+All errors return JSON with `error` and `message` fields:
+
+| Status | Error Code | When |
+|--------|-----------|------|
+| 404 | `ROUTE_NOT_FOUND` | No route matches the request |
+| 401 | `TOKEN_MISSING` | No Bearer token in Authorization header |
+| 401 | `TOKEN_INVALID` | Token signature verification failed |
+| 401 | `TOKEN_EXPIRED` | Token has expired |
+| 403 | `SCOPE_INSUFFICIENT` | Grant doesn't include required scopes |
+| 502 | `UPSTREAM_ERROR` | Upstream API is unreachable |
+
+## CLI Usage
+
+```bash
+# Start with config file
+npx @grantex/gateway --config gateway.yaml
+
+# Short flag
+npx @grantex/gateway -c gateway.yaml
+
+# Default: looks for gateway.yaml in current directory
+npx @grantex/gateway
+```
+
+## Library API
+
+Use the gateway programmatically in your own server:
+
+```typescript
+import { createGatewayServer, loadConfig } from '@grantex/gateway';
+
+const config = loadConfig('./gateway.yaml');
+const server = createGatewayServer(config);
+
+await server.listen({ port: config.port, host: '0.0.0.0' });
+```
+
+## Docker Deployment
+
+```dockerfile
+FROM node:20-slim AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --ignore-scripts
+COPY tsconfig*.json ./
+COPY src/ src/
+RUN npm run build
+
+FROM node:20-slim
+WORKDIR /app
+COPY --from=builder /app/package*.json ./
+RUN npm ci --omit=dev --ignore-scripts
+COPY --from=builder /app/dist/ dist/
+EXPOSE 8080
+ENTRYPOINT ["node", "dist/cli.js"]
+CMD ["--config", "/etc/grantex/gateway.yaml"]
+```
+
+```bash
+docker build -t grantex-gateway .
+docker run -p 8080:8080 -v ./gateway.yaml:/etc/grantex/gateway.yaml grantex-gateway
+```
+
+## Example: Protecting a Calendar API
+
+```yaml
+upstream: https://calendar-api.internal.svc
+jwksUri: https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json
+port: 8080
+upstreamHeaders:
+  X-Service-Key: "calendar-internal-key"
+routes:
+  - path: /calendars/*/events
+    methods: [GET]
+    requiredScopes: [calendar:read]
+  - path: /calendars/*/events
+    methods: [POST]
+    requiredScopes: [calendar:write]
+  - path: /calendars/*/events/*
+    methods: [PUT, PATCH]
+    requiredScopes: [calendar:write]
+  - path: /calendars/*/events/*
+    methods: [DELETE]
+    requiredScopes: [calendar:delete]
+```

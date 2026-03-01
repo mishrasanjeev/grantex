@@ -1,0 +1,196 @@
+---
+title: "Service Provider Adapters"
+sidebarTitle: "Adapters"
+description: "Pre-built integrations that translate Grantex grants into real API calls."
+---
+
+## Overview
+
+`@grantex/adapters` provides pre-built adapters for popular APIs — Google Calendar, Gmail, Stripe, and Slack. Each adapter verifies grant tokens offline (JWKS), checks scopes, enforces constraints, and calls the upstream API.
+
+```bash
+npm install @grantex/adapters @grantex/sdk
+```
+
+## Google Calendar
+
+Scopes: `calendar:read`, `calendar:write`
+
+```typescript
+import { GoogleCalendarAdapter } from '@grantex/adapters';
+
+const calendar = new GoogleCalendarAdapter({
+  jwksUri: 'https://your-auth-server/.well-known/jwks.json',
+  credentials: process.env.GOOGLE_ACCESS_TOKEN,
+});
+
+// List events (requires calendar:read)
+const events = await calendar.listEvents(grantToken, {
+  timeMin: new Date().toISOString(),
+  maxResults: 10,
+});
+
+// Create event (requires calendar:write)
+const created = await calendar.createEvent(grantToken, {
+  summary: 'Team Sync',
+  start: { dateTime: '2026-03-01T10:00:00Z' },
+  end: { dateTime: '2026-03-01T11:00:00Z' },
+});
+```
+
+## Gmail
+
+Scopes: `email:read`, `email:send`
+
+```typescript
+import { GmailAdapter } from '@grantex/adapters';
+
+const gmail = new GmailAdapter({ jwksUri, credentials });
+
+// List messages (requires email:read)
+const messages = await gmail.listMessages(grantToken, { q: 'from:alice' });
+
+// Send message (requires email:send)
+await gmail.sendMessage(grantToken, {
+  to: 'bob@example.com',
+  subject: 'Hello',
+  body: 'Hi Bob!',
+});
+```
+
+## Stripe
+
+Scopes: `payments:read`, `payments:initiate`
+
+Supports constraint enforcement — `payments:initiate:max_500` limits payments to $500.
+
+```typescript
+import { StripeAdapter } from '@grantex/adapters';
+
+const stripe = new StripeAdapter({
+  jwksUri,
+  credentials: process.env.STRIPE_SECRET_KEY,
+});
+
+// List payment intents (requires payments:read)
+const intents = await stripe.listPaymentIntents(grantToken, { limit: 10 });
+
+// Create payment intent (requires payments:initiate)
+// If grant has payments:initiate:max_500, amount must be <= $500
+await stripe.createPaymentIntent(grantToken, {
+  amount: 10000, // $100 in cents
+  currency: 'usd',
+});
+```
+
+## Slack
+
+Scopes: `notifications:send`, `notifications:read`
+
+```typescript
+import { SlackAdapter } from '@grantex/adapters';
+
+const slack = new SlackAdapter({
+  jwksUri,
+  credentials: process.env.SLACK_BOT_TOKEN,
+});
+
+// Send message (requires notifications:send)
+await slack.sendMessage(grantToken, {
+  channel: 'C123ABC',
+  text: 'Hello from agent!',
+});
+
+// List messages (requires notifications:read)
+const history = await slack.listMessages(grantToken, {
+  channel: 'C123ABC',
+  limit: 20,
+});
+```
+
+## Constraint Enforcement
+
+Scopes can include constraints that adapters enforce automatically:
+
+| Constraint | Meaning | Example |
+|-----------|---------|---------|
+| `max_N` | Value must be &lt;= N | `payments:initiate:max_500` — max $500 |
+| `min_N` | Value must be &gt;= N | `payments:initiate:min_10` — min $10 |
+| `limit_N` | Count must be &lt;= N | `api:calls:limit_1000` — max 1000 calls |
+
+```typescript
+import { parseScope, enforceConstraint } from '@grantex/adapters';
+
+const parsed = parseScope('payments:initiate:max_500');
+// { baseScope: 'payments:initiate', constraint: { type: 'max', value: 500 } }
+
+const result = enforceConstraint(parsed, 600);
+// { allowed: false, reason: 'Value 600 exceeds maximum 500' }
+```
+
+## Dynamic Credentials
+
+Pass an async function instead of a static string:
+
+```typescript
+const calendar = new GoogleCalendarAdapter({
+  jwksUri,
+  credentials: async () => {
+    return await refreshGoogleToken(serviceAccountId);
+  },
+});
+```
+
+## Audit Logging
+
+Connect adapters to Grantex audit:
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey, baseUrl });
+
+const stripe = new StripeAdapter({
+  jwksUri,
+  credentials: stripeKey,
+  auditLogger: (params) => grantex.audit.log(params),
+});
+```
+
+## Building Custom Adapters
+
+Extend `BaseAdapter` to integrate any API:
+
+```typescript
+import { BaseAdapter } from '@grantex/adapters';
+import type { AdapterConfig, AdapterResult } from '@grantex/adapters';
+
+class MyApiAdapter extends BaseAdapter {
+  constructor(config: AdapterConfig) {
+    super(config);
+  }
+
+  async getData(token: string): Promise<AdapterResult> {
+    const { grant } = await this.verifyAndCheckScope(token, 'myapi:read');
+    const credential = await this.resolveCredential();
+
+    const data = await this.callUpstream('https://api.myservice.com/data', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${credential}` },
+    });
+
+    await this.logAudit(grant, 'myapi:getData', 'success');
+    return this.wrapResult(grant, data);
+  }
+}
+```
+
+## Error Codes
+
+| Code | Meaning |
+|------|---------|
+| `TOKEN_INVALID` | Grant token verification failed |
+| `SCOPE_MISSING` | Grant doesn't include required scope |
+| `CONSTRAINT_VIOLATED` | Value exceeds scope constraint |
+| `UPSTREAM_ERROR` | Upstream API returned an error |
+| `CREDENTIAL_ERROR` | Failed to resolve credentials |

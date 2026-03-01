@@ -7,6 +7,12 @@ description: "Grantex integrates with every major AI agent framework."
 ## Available Integrations
 
 <CardGroup cols={2}>
+  <Card title="Service Provider Adapters" icon="puzzle-piece" href="/integrations/adapters">
+    Pre-built integrations for Google Calendar, Gmail, Stripe, and Slack.
+  </Card>
+  <Card title="Grantex Gateway" icon="shield-halved" href="/integrations/gateway">
+    Zero-code reverse-proxy that enforces grant tokens via YAML config.
+  </Card>
   <Card title="Express.js" icon="server" href="/integrations/express">
     Grant token verification and scope-based authorization middleware.
   </Card>
@@ -46,6 +52,8 @@ description: "Grantex integrates with every major AI agent framework."
 
 | Framework | Package | Install | Language |
 |-----------|---------|---------|----------|
+| Adapters | `@grantex/adapters` | `npm install @grantex/adapters` | TypeScript |
+| Gateway | `@grantex/gateway` | `npm install @grantex/gateway` | TypeScript |
 | Express.js | `@grantex/express` | `npm install @grantex/express` | TypeScript |
 | FastAPI | `grantex-fastapi` | `pip install grantex-fastapi` | Python |
 | MCP | `@grantex/mcp` | `npm install -g @grantex/mcp` | TypeScript |

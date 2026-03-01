@@ -392,6 +392,8 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 | Framework | Package | Install | Status |
 |-----------|---------|---------|--------|
+| **Adapters** | `@grantex/adapters` | `npm install @grantex/adapters` | ✅ Shipped |
+| **Gateway** | `@grantex/gateway` | `npm install @grantex/gateway` | ✅ Shipped |
 | **Express.js** | `@grantex/express` | `npm install @grantex/express` | ✅ Shipped |
 | **FastAPI** | `grantex-fastapi` | `pip install grantex-fastapi` | ✅ Shipped |
 | **LangChain** | `@grantex/langchain` | `npm install @grantex/langchain` | ✅ Shipped |
