@@ -73,21 +73,29 @@ grantex/
 ├── packages/
 │   ├── sdk-ts/                   ← TypeScript SDK (@grantex/sdk)
 │   ├── sdk-py/                   ← Python SDK (grantex)
+│   ├── go-sdk/                   ← Go SDK (github.com/mishrasanjeev/grantex-go)
+│   ├── mcp/                      ← MCP server (@grantex/mcp)
 │   ├── langchain/                ← LangChain integration (@grantex/langchain)
-│   ├── autogen/                  ← AutoGen / OpenAI integration (@grantex/autogen)
+│   ├── autogen/                  ← AutoGen integration (@grantex/autogen)
 │   ├── vercel-ai/                ← Vercel AI SDK integration (@grantex/vercel-ai)
 │   ├── crewai/                   ← CrewAI integration (grantex-crewai)
+│   ├── openai-agents/            ← OpenAI Agents SDK integration (grantex-openai-agents)
+│   ├── google-adk/               ← Google ADK integration (grantex-adk)
+│   ├── express/                  ← Express.js middleware (@grantex/express)
+│   ├── fastapi/                  ← FastAPI middleware (grantex-fastapi)
+│   ├── adapters/                 ← Service provider adapters (@grantex/adapters)
+│   ├── gateway/                  ← Reverse-proxy gateway (@grantex/gateway)
+│   ├── conformance/              ← Conformance test suite (@grantex/conformance)
 │   └── cli/                      ← CLI tool (@grantex/cli)
 ├── apps/
 │   ├── auth-service/             ← Fastify auth service (REST API)
 │   └── portal/                   ← Developer portal (React SPA)
+├── examples/                     ← Runnable examples
 ├── web/                          ← Landing page (Firebase Hosting)
 ├── deploy/                       ← Docker, Helm, Nginx deployment configs
 │   ├── helm/grantex/             ← Helm chart
 │   └── nginx/                    ← Nginx reverse proxy config
-├── docs/                         ← Extended documentation
-│   ├── self-hosting.md           ← Self-hosting guide
-│   └── webhooks.md               ← Webhook integration guide
+├── docs/                         ← Mintlify docs site (157+ MDX pages)
 └── docker-compose.yml            ← Local development stack
 ```
 

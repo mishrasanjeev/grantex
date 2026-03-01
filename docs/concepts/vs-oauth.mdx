@@ -1,0 +1,65 @@
+---
+title: "Grantex vs OAuth 2.0"
+sidebarTitle: "Grantex vs OAuth"
+description: "How Grantex compares to OAuth 2.0 and when to use each."
+---
+
+Grantex is built **on top of** OAuth 2.0 — not as a replacement, but as a purpose-built authorization layer for AI agents. This page explains the key differences and when each approach is the right fit.
+
+## Side-by-Side Comparison
+
+| Dimension | OAuth 2.0 | Grantex |
+|-----------|-----------|---------|
+| **Identity model** | Human users and client applications | Agents, principals (humans), and developers — first-class entities |
+| **Delegation** | Limited — no standard for sub-delegation | Agent-to-agent delegation with depth tracking and parent grant chaining (SPEC §9) |
+| **Revocation** | Revoke individual tokens | Revoke grants (all tokens under a grant cascade-revoke), plus principal self-service revocation |
+| **Audit** | Not built in — requires external logging | Tamper-evident, hash-chained audit log with compliance exports (SOC 2, HIPAA, GDPR) |
+| **Scope model** | Flat string scopes | Hierarchical scopes with a registry, scope constraints in policies, and time-bound restrictions |
+| **Agent-to-agent auth** | Not addressed | Sub-agent delegation with `parentAgt`, `parentGrnt`, and `delegationDepth` JWT claims |
+| **Compliance** | Bolted on | Built in — anomaly detection, policy engine, evidence packs |
+| **Offline verification** | Requires introspection endpoint | JWT-based with JWKS — verify tokens without network calls |
+
+## When to Use OAuth 2.0
+
+OAuth 2.0 is the right choice when:
+
+- You are building **human-facing** login flows (social login, SSO)
+- Your application follows the traditional **client → resource server** model
+- You need broad ecosystem compatibility with existing OAuth providers (Google, GitHub, Okta)
+- Agents are **not** part of your authorization model
+
+Grantex does not replace your identity provider. Use OAuth 2.0 / OIDC for authenticating humans, and Grantex for authorizing what agents can do on their behalf.
+
+## When to Use Grantex
+
+Grantex is the right choice when:
+
+- **AI agents** act on behalf of users and need verifiable, revocable permissions
+- Agents **delegate** to sub-agents and you need to track the delegation chain
+- You need a **tamper-evident audit trail** of every action agents take
+- **Compliance** requirements (SOC 2, HIPAA, GDPR) demand structured evidence of agent activity
+- Users need to **review and revoke** agent permissions through a self-service dashboard
+- You want **offline token verification** without hitting an introspection endpoint on every request
+
+## Using Both Together
+
+A common architecture is:
+
+1. **OAuth 2.0 / OIDC** handles user authentication (login with Google, Okta, etc.)
+2. **Grantex** handles agent authorization (what the agent can do, audit trail, revocation)
+
+```
+User ──[OIDC login]──▶ Your App ──[Grantex authorize]──▶ Agent
+                                                          │
+                                                          ▼
+                                                    Sub-Agent (delegated)
+```
+
+The Grantex `principalId` maps to your user's identity from the OAuth provider. Your app initiates a Grantex authorization request, the user consents, and the agent receives a grant token scoped to exactly what it needs.
+
+## Further Reading
+
+- [How It Works](/concepts/how-it-works) — Grantex authorization flow walkthrough
+- [Grant Tokens](/concepts/grant-token) — JWT structure and claims
+- [Delegation](/concepts/delegation) — Agent-to-agent delegation model
+- [Protocol Specification](/protocol/specification) — Full SPEC.md
