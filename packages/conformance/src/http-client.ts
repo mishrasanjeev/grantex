@@ -1,6 +1,6 @@
 import type { HttpResponse } from './types.js';
 
-const USER_AGENT = '@grantex/conformance/0.1.0';
+const USER_AGENT = '@grantex/conformance/0.1.3';
 
 export class ConformanceHttpClient {
   constructor(
@@ -91,6 +91,11 @@ export class ConformanceHttpClient {
 
     const durationMs = Date.now() - start;
 
+    const responseHeaders: Record<string, string> = {};
+    res.headers.forEach((value, key) => {
+      responseHeaders[key] = value;
+    });
+
     const rawText = await res.text();
     let parsed: T;
     try {
@@ -99,6 +104,6 @@ export class ConformanceHttpClient {
       parsed = rawText as T;
     }
 
-    return { status: res.status, body: parsed, rawText, durationMs };
+    return { status: res.status, headers: responseHeaders, body: parsed, rawText, durationMs };
   }
 }

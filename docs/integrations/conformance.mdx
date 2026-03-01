@@ -9,7 +9,7 @@ description: "Validate that your Grantex server implementation is spec-compliant
 `@grantex/conformance` is a black-box test suite that validates any Grantex protocol server implementation. It makes real HTTP requests against a live endpoint and checks that responses match the [protocol specification](/protocol/specification).
 
 <Card title="Latest Production Results" icon="chart-bar" href="/integrations/conformance-results">
-  60 passed, 2 skipped, 0 failed — 62 total tests. See the full breakdown.
+  63 passed, 2 skipped, 0 failed — 65 total tests. See the full breakdown.
 </Card>
 
 Use it to:
@@ -90,7 +90,7 @@ Options:
 
 ## Core Suites
 
-The suite ships with **37 tests** across 9 core suites. These cover every MUST requirement in the specification.
+The suite ships with **40 tests** across 10 core suites. These cover every MUST requirement in the specification.
 
 | Suite | Tests | Spec | What it validates |
 |-------|-------|------|-------------------|
@@ -103,6 +103,7 @@ The suite ships with **37 tests** across 9 core suites. These cover every MUST r
 | `delegation` | 5 | [§9](/protocol/specification#delegation) | Delegation with JWT claims, scope enforcement, depth limits, cascade revocation |
 | `audit` | 5 | [§8](/protocol/specification#audit) | Audit log creation, hash chain integrity, entry retrieval, hash computation |
 | `security` | 5 | [§14](/protocol/specification#security) | Auth enforcement, JWKS algorithm checks, scope escalation prevention, audit immutability |
+| `rate-limit-headers` | 3 | [§14](/protocol/specification#security) | Rate limit header presence and format, JWKS endpoint exemption |
 
 ## Optional Extensions
 

@@ -54,7 +54,7 @@ grantex-conformance --base-url http://localhost:3001 --api-key sk_test_xxx \
 grantex-conformance --base-url http://localhost:3001 --api-key sk_test_xxx --format json
 ```
 
-## Core Suites (37 tests)
+## Core Suites (40 tests)
 
 | Suite | Tests | Description |
 |-------|-------|-------------|
@@ -67,6 +67,7 @@ grantex-conformance --base-url http://localhost:3001 --api-key sk_test_xxx --for
 | `delegation` | 5 | Grant delegation, JWT claims, scope enforcement, depth limits, cascade revocation |
 | `audit` | 5 | Audit log creation, hash chain integrity, entry retrieval |
 | `security` | 5 | Auth enforcement, JWKS algorithm, scope escalation prevention, audit immutability |
+| `rate-limit-headers` | 3 | Rate limit header presence and format, JWKS endpoint exemption |
 
 ## Optional Extensions
 

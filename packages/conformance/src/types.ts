@@ -9,6 +9,7 @@ export interface RunConfig {
 
 export interface HttpResponse<T = unknown> {
   status: number;
+  headers: Record<string, string>;
   body: T;
   rawText: string;
   durationMs: number;
