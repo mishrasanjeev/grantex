@@ -146,7 +146,8 @@ print(token.scopes)  # ('flights:book', 'hotels:search')
 
 - **Protocol spec v1.0** (final) -- the full specification is [public and frozen](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md).
 - **TypeScript SDK** ([`@grantex/sdk`](https://www.npmjs.com/package/@grantex/sdk)) and **Python SDK** ([`grantex`](https://pypi.org/project/grantex/)) -- production-ready.
-- **7 framework integrations** -- [LangChain](https://www.npmjs.com/package/@grantex/langchain), [AutoGen](https://www.npmjs.com/package/@grantex/autogen), [CrewAI](https://pypi.org/project/grantex-crewai/), [Vercel AI](https://www.npmjs.com/package/@grantex/vercel-ai), [OpenAI Agents SDK](https://pypi.org/project/grantex-openai-agents/), [Google ADK](https://pypi.org/project/grantex-adk/), and an MCP server for Claude Desktop.
+- **Go SDK** ([`grantex-go`](https://pkg.go.dev/github.com/mishrasanjeev/grantex-go)) -- production-ready.
+- **8 framework integrations** -- [LangChain](https://www.npmjs.com/package/@grantex/langchain), [AutoGen](https://www.npmjs.com/package/@grantex/autogen), [CrewAI](https://pypi.org/project/grantex-crewai/), [Vercel AI](https://www.npmjs.com/package/@grantex/vercel-ai), [OpenAI Agents SDK](https://pypi.org/project/grantex-openai-agents/), [Google ADK](https://pypi.org/project/grantex-adk/), an MCP server for Claude Desktop, and [Express.js](https://www.npmjs.com/package/@grantex/express) + [FastAPI](https://pypi.org/project/grantex-fastapi/) middleware.
 - **CLI** ([`@grantex/cli`](https://www.npmjs.com/package/@grantex/cli)) -- manage agents, grants, and tokens from your terminal.
 - **Enterprise features** -- policy engine, SCIM/SSO, anomaly detection, compliance exports, and Stripe billing.
 - **Full API Reference** with [interactive docs](https://grantex.mintlify.app/api-reference) and a [Postman collection](https://github.com/mishrasanjeev/grantex/blob/main/docs/grantex.postman_collection.json).
@@ -158,6 +159,7 @@ Install the SDK:
 ```bash
 npm install @grantex/sdk        # TypeScript / Node.js
 pip install grantex             # Python
+go get github.com/mishrasanjeev/grantex-go  # Go
 npm install -g @grantex/cli     # CLI
 ```
 

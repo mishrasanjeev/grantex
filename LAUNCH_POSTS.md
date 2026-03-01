@@ -28,7 +28,9 @@ What ships today:
 - Protocol spec v1.0 (frozen): https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md
 - TypeScript SDK (`@grantex/sdk`): https://www.npmjs.com/package/@grantex/sdk
 - Python SDK (`grantex`): https://pypi.org/project/grantex/
-- 7 framework integrations: LangChain, AutoGen, CrewAI, Vercel AI, OpenAI Agents SDK, Google ADK, MCP server
+- Go SDK (`go get github.com/mishrasanjeev/grantex-go`)
+- 8 framework integrations: LangChain, AutoGen, CrewAI, Vercel AI, OpenAI Agents SDK, Google ADK, MCP server, Express.js + FastAPI middleware
+- Conformance test suite for verifying spec compliance
 - Auth service (Fastify, deployed on Cloud Run)
 - CLI, developer portal, enterprise features (policies, SCIM/SSO, anomaly detection, compliance exports)
 
@@ -83,8 +85,8 @@ Key features that go beyond OAuth:
 **What's available today**:
 
 - Protocol spec v1.0 (frozen, public)
-- SDKs: TypeScript (`npm install @grantex/sdk`) and Python (`pip install grantex`)
-- Integrations: LangChain, CrewAI, AutoGen, Vercel AI, OpenAI Agents SDK, Google ADK, MCP server
+- SDKs: TypeScript (`npm install @grantex/sdk`), Python (`pip install grantex`), and Go (`go get github.com/mishrasanjeev/grantex-go`)
+- Integrations: LangChain, CrewAI, AutoGen, Vercel AI, OpenAI Agents SDK, Google ADK, MCP server, Express.js + FastAPI middleware
 - Auth service, CLI, developer portal
 - Enterprise: SCIM/SSO, anomaly detection, compliance exports
 
@@ -98,6 +100,7 @@ Key features that go beyond OAuth:
 - Protocol spec: [SPEC.md](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
 - npm: [npmjs.com/package/@grantex/sdk](https://www.npmjs.com/package/@grantex/sdk)
 - PyPI: [pypi.org/project/grantex](https://pypi.org/project/grantex/)
+- Go: [pkg.go.dev/github.com/mishrasanjeev/grantex-go](https://pkg.go.dev/github.com/mishrasanjeev/grantex-go)
 
 Interested in feedback from anyone working on agent systems, multi-agent orchestration, or AI safety. The spec is public and I'd love to see other implementations.
 
@@ -124,7 +127,7 @@ I built **Grantex** to solve this. It's an open protocol (Apache 2.0) — basica
 
 It also handles **delegation** — if your agent spawns a sub-agent, the sub-agent gets a narrower grant derived from the parent's, with full chain tracking.
 
-There's a TypeScript SDK, Python SDK, and integrations for LangChain, CrewAI, AutoGen, Vercel AI, OpenAI Agents SDK, Google ADK, and an MCP server (so it works with Claude Desktop/Cursor/Windsurf).
+There's a TypeScript SDK, Python SDK, Go SDK, and integrations for LangChain, CrewAI, AutoGen, Vercel AI, OpenAI Agents SDK, Google ADK, and an MCP server (so it works with Claude Desktop/Cursor/Windsurf).
 
 Everything is open source:
 
@@ -134,6 +137,7 @@ Everything is open source:
 - Sign up (free): [grantex.dev/dashboard/signup](https://grantex.dev/dashboard/signup)
 - npm: `npm install @grantex/sdk`
 - PyPI: `pip install grantex`
+- Go: `go get github.com/mishrasanjeev/grantex-go`
 
 Would love to hear how others are handling agent permissions in their setups.
 
@@ -174,6 +178,7 @@ Verification is offline via JWKS (`/.well-known/jwks.json`) — receiving servic
 
 - TypeScript: `@grantex/sdk` (ESM, Node 18+, native fetch)
 - Python: `grantex` (httpx, PyJWT, Python 3.9+)
+- Go: `github.com/mishrasanjeev/grantex-go` (Go 1.21+, stdlib + jwt)
 - Framework integrations: LangChain, AutoGen, CrewAI, Vercel AI SDK, OpenAI Agents SDK, Google ADK
 - MCP server for Claude Desktop / Cursor / Windsurf
 - CLI tool
@@ -192,6 +197,7 @@ Everything is Apache 2.0.
 - Postman collection: [grantex.postman_collection.json](https://github.com/mishrasanjeev/grantex/blob/main/docs/grantex.postman_collection.json)
 - npm: [npmjs.com/package/@grantex/sdk](https://www.npmjs.com/package/@grantex/sdk)
 - PyPI: [pypi.org/project/grantex](https://pypi.org/project/grantex/)
+- Go: [pkg.go.dev/github.com/mishrasanjeev/grantex-go](https://pkg.go.dev/github.com/mishrasanjeev/grantex-go)
 
 ---
 
@@ -229,18 +235,19 @@ Grantex gives agents 3 things:
 
 Services verify offline via JWKS. Zero lock-in.
 
-**Tweet 4 — ship it (196 chars):**
+**Tweet 4 — ship it (220 chars):**
 
-Works in TypeScript and Python:
+Works in TypeScript, Python, and Go:
 
 npm install @grantex/sdk
 pip install grantex
+go get github.com/mishrasanjeev/grantex-go
 
 Register agent → user approves scopes → agent gets signed JWT → any service verifies offline.
 
-**Tweet 5 — integrations (247 chars):**
+**Tweet 5 — integrations (214 chars):**
 
-7 integrations out of the box:
+8 integrations out of the box:
 
 → LangChain
 → CrewAI
@@ -252,12 +259,13 @@ Register agent → user approves scopes → agent gets signed JWT → any servic
 
 Plus CLI, dev portal, policies, SCIM/SSO, anomaly detection.
 
-**Tweet 6 — CTA (185 chars):**
+**Tweet 6 — CTA (220 chars):**
 
 Open source. Apache 2.0.
 
 npm install @grantex/sdk
 pip install grantex
+go get github.com/mishrasanjeev/grantex-go
 Docs: grantex.dev/docs
 
 As agents get more capable, proper authorization becomes more critical — not less.
