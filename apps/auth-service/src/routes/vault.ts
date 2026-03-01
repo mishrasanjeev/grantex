@@ -137,7 +137,7 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/vault/credentials/exchange — exchange grant token for upstream credential
   app.post<{ Body: ExchangeCredentialBody }>(
     '/v1/vault/credentials/exchange',
-    { config: { skipAuth: true } },
+    { config: { skipAuth: true, rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const auth = request.headers.authorization;
       if (!auth || !auth.startsWith('Bearer ')) {

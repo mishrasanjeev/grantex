@@ -13,7 +13,7 @@
  */
 
 import { createServer } from 'node:http';
-import { Grantex, verifyGrantToken } from '@grantex/sdk';
+import { Grantex } from '@grantex/sdk';
 
 const BASE_URL = process.env['GRANTEX_URL'] ?? 'http://localhost:3001';
 const API_KEY = process.env['GRANTEX_API_KEY'] ?? 'sandbox-api-key-local';
@@ -23,7 +23,8 @@ const UPSTREAM_PORT = 4001;
 // ── Mock upstream API server ────────────────────────────────────────────
 
 const upstreamServer = createServer((req, res) => {
-  console.log(`  [upstream] ${req.method} ${req.url}`);
+  const sanitizedUrl = (req.url ?? '').replace(/[\r\n]/g, '');
+  console.log(`  [upstream] ${req.method} ${sanitizedUrl}`);
 
   if (req.url?.startsWith('/api/calendar')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });

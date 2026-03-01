@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { Histogram, Registry } from 'prom-client';
+import { Histogram } from 'prom-client';
 import { registry } from '../lib/metrics.js';
 import { config } from '../config.js';
 

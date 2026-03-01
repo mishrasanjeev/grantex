@@ -18,7 +18,7 @@ export function registerTokenEndpoint(
   clientStore: ClientStore,
   codeStore: CodeStore,
 ): void {
-  app.post<{ Body: TokenBody }>('/token', async (request, reply) => {
+  app.post<{ Body: TokenBody }>('/token', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { grant_type, code, redirect_uri, client_id, code_verifier, refresh_token } = request.body ?? {};
 
     if (grant_type === 'authorization_code') {
@@ -152,7 +152,7 @@ export function registerTokenEndpoint(
 
     return reply.status(400).send({
       error: 'unsupported_grant_type',
-      error_description: `Grant type "${grant_type}" is not supported`,
+      error_description: 'Only authorization_code and refresh_token grant types are supported',
     });
   });
 }
