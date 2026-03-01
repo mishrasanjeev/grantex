@@ -393,6 +393,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | Framework | Package | Install | Status |
 |-----------|---------|---------|--------|
 | **Adapters** | `@grantex/adapters` | `npm install @grantex/adapters` | ✅ Shipped |
+| **MCP Auth Server** | `@grantex/mcp-auth` | `npm install @grantex/mcp-auth` | ✅ Shipped |
 | **Gateway** | `@grantex/gateway` | `npm install @grantex/gateway` | ✅ Shipped |
 | **Express.js** | `@grantex/express` | `npm install @grantex/express` | ✅ Shipped |
 | **FastAPI** | `grantex-fastapi` | `pip install grantex-fastapi` | ✅ Shipped |
@@ -569,6 +570,9 @@ Walk through all 7 steps of the protocol: register an agent, authorize, exchange
 | [`crewai-agent`](examples/crewai-agent) | CrewAI agent with Grantex authorization | `python main.py` |
 | [`openai-agents`](examples/openai-agents) | OpenAI Agents SDK integration | `python main.py` |
 | [`google-adk`](examples/google-adk) | Google ADK agent with Grantex tools | `python main.py` |
+| [`gateway-proxy`](examples/gateway-proxy) | Gateway reverse proxy with YAML config and scope enforcement | `npm start` |
+| [`adapter-google-calendar`](examples/adapter-google-calendar) | GoogleCalendarAdapter with grant token verification | `npm start` |
+| [`multi-agent-delegation`](examples/multi-agent-delegation) | Parent/child delegation with cascade revocation | `npm start` |
 
 ---
 
@@ -615,6 +619,7 @@ All milestones through v1.0 are complete. See [ROADMAP.md](https://github.com/mi
 | **v0.2 — Integrations** | LangChain, AutoGen, webhooks, Stripe billing, CLI | ✅ Complete |
 | **v0.3 — Enterprise** | CrewAI, Vercel AI, compliance exports, policy engine, SCIM/SSO, anomaly detection | ✅ Complete |
 | **v1.0 — Stable Protocol** | Protocol spec finalized (v1.0), security audit, SOC2, standards submission | ✅ Complete |
+| **v2.0 — Platform** | MCP Auth Server, Credential Vault, 7 new adapters, webhook delivery log, examples | ✅ Complete |
 
 ---
 

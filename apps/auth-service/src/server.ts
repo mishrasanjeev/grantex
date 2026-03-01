@@ -26,6 +26,7 @@ import { meRoutes } from './routes/me.js';
 import { healthRoutes } from './routes/health.js';
 import { adminRoutes } from './routes/admin.js';
 import { principalRoutes } from './routes/principal.js';
+import { vaultRoutes } from './routes/vault.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -79,6 +80,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(meRoutes);
   await app.register(adminRoutes);
   await app.register(principalRoutes);
+  await app.register(vaultRoutes);
 
   return app;
 }

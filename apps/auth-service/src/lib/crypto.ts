@@ -106,6 +106,25 @@ export async function signGrantToken(
   return builder.sign(privateKey);
 }
 
+export async function verifyGrantToken(
+  token: string,
+): Promise<{ sub: string; dev: string; scp: string[] }> {
+  const { publicKey } = getKeyPair();
+  const { payload } = await jwtVerify(token, publicKey, {
+    issuer: config.jwtIssuer,
+    algorithms: ['RS256'],
+  });
+
+  const sub = payload.sub;
+  const dev = payload['dev'] as string | undefined;
+  const scp = payload['scp'] as string[] | undefined;
+  if (!sub || !dev || !scp) {
+    throw new Error('Missing required grant token claims');
+  }
+
+  return { sub, dev, scp };
+}
+
 export async function buildJwks(): Promise<{ keys: Record<string, unknown>[] }> {
   const { publicKey, kid } = getKeyPair();
   const jwk = await exportJWK(publicKey);

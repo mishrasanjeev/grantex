@@ -48,43 +48,20 @@
 
 ---
 
-## Now — v2.0 Platform
-
-Making Grantex the default authorization layer for every AI agent.
-
-### MCP Authorization Server
-- [ ] Drop-in OAuth 2.1 + PKCE auth provider for any MCP server
-- [ ] Dynamic client registration support
-- [ ] Resource indicators (RFC 8707) support
-
-### Credential Vault
-- [ ] Secure per-user credential store for third-party OAuth tokens
-- [ ] Agents exchange Grantex grant token for upstream service credential
-- [ ] Support for OAuth, API key, and custom credential types
-- [ ] Automatic token refresh for stored credentials
-
-### Service Provider Adapters
-- [ ] Google Drive (`files:read`, `files:write`)
-- [ ] GitHub (`repos:read`, `repos:write`, `issues:read`, `issues:write`)
-- [ ] Notion (`pages:read`, `pages:write`)
-- [ ] HubSpot (`contacts:read`, `contacts:write`)
-- [ ] Salesforce (`crm:read`, `crm:write`)
-- [ ] Linear (`issues:read`, `issues:write`)
-- [ ] Jira (`issues:read`, `issues:write`)
-
-### Quality & Completeness
-- [ ] Complete MCP tool coverage (token refresh, principal sessions, agent CRUD)
-- [ ] Conformance suites for token refresh and principal sessions
-- [ ] Portal pages for SSO configuration and SCIM token management
-- [ ] Webhook delivery history and retry log in portal
-- [ ] Go quickstart example
-- [ ] Gateway, adapters, and multi-agent delegation examples
-
-**Target: End of April 2026**
+### v2.0 Platform
+- [x] MCP Authorization Server — OAuth 2.1 + PKCE, dynamic client registration, RFC 8414 metadata
+- [x] Credential Vault — encrypted per-user credential store, grant-token-based exchange
+- [x] 7 new service provider adapters: Google Drive, GitHub, Notion, HubSpot, Salesforce, Linear, Jira
+- [x] Webhook delivery log — backend endpoint + portal page with status filtering
+- [x] Complete MCP tool coverage (token refresh, principal sessions, agent CRUD)
+- [x] Conformance suites for token refresh and principal sessions
+- [x] Portal pages for SSO configuration and SCIM token management
+- [x] Go quickstart example
+- [x] Gateway proxy, adapter, and multi-agent delegation examples
 
 ---
 
-## Next — v2.1 Enterprise Scale
+## Now — v2.1 Enterprise Scale
 
 Features that make Grantex indispensable for regulated, high-scale environments.
 

@@ -558,3 +558,55 @@ export interface SsoCallbackResponse {
   sub: string | null;
   developerId: string;
 }
+
+// ─── Credential Vault ───────────────────────────────────────────────────────
+
+export interface StoreCredentialParams {
+  principalId: string;
+  service: string;
+  credentialType?: string;
+  accessToken: string;
+  refreshToken?: string;
+  tokenExpiresAt?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface VaultCredential {
+  id: string;
+  principalId: string;
+  service: string;
+  credentialType: string;
+  tokenExpiresAt: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoreCredentialResponse {
+  id: string;
+  principalId: string;
+  service: string;
+  credentialType: string;
+  createdAt: string;
+}
+
+export interface ListVaultCredentialsParams {
+  principalId?: string;
+  service?: string;
+}
+
+export interface ListVaultCredentialsResponse {
+  credentials: VaultCredential[];
+}
+
+export interface ExchangeCredentialParams {
+  service: string;
+}
+
+export interface ExchangeCredentialResponse {
+  accessToken: string;
+  service: string;
+  credentialType: string;
+  tokenExpiresAt: string | null;
+  metadata: Record<string, unknown>;
+}

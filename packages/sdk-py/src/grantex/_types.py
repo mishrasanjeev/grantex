@@ -1150,3 +1150,116 @@ class SsoCallbackResponse:
             name=data.get("name"),
             sub=data.get("sub"),
         )
+
+
+# ── Credential Vault ─────────────────────────────────────────────────────────
+
+
+@dataclass
+class StoreCredentialParams:
+    principal_id: str
+    service: str
+    access_token: str
+    credential_type: str | None = None
+    refresh_token: str | None = None
+    token_expires_at: str | None = None
+    metadata: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "principalId": self.principal_id,
+            "service": self.service,
+            "accessToken": self.access_token,
+            **({"credentialType": self.credential_type} if self.credential_type is not None else {}),
+            **({"refreshToken": self.refresh_token} if self.refresh_token is not None else {}),
+            **({"tokenExpiresAt": self.token_expires_at} if self.token_expires_at is not None else {}),
+            **({"metadata": self.metadata} if self.metadata is not None else {}),
+        }
+
+
+@dataclass(frozen=True)
+class StoreCredentialResponse:
+    id: str
+    principal_id: str
+    service: str
+    credential_type: str
+    created_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "StoreCredentialResponse":
+        return cls(
+            id=data["id"],
+            principal_id=data["principalId"],
+            service=data["service"],
+            credential_type=data["credentialType"],
+            created_at=data["createdAt"],
+        )
+
+
+@dataclass(frozen=True)
+class VaultCredential:
+    id: str
+    principal_id: str
+    service: str
+    credential_type: str
+    token_expires_at: str | None
+    metadata: dict[str, Any]
+    created_at: str
+    updated_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "VaultCredential":
+        return cls(
+            id=data["id"],
+            principal_id=data["principalId"],
+            service=data["service"],
+            credential_type=data["credentialType"],
+            token_expires_at=data.get("tokenExpiresAt"),
+            metadata=data.get("metadata", {}),
+            created_at=data["createdAt"],
+            updated_at=data["updatedAt"],
+        )
+
+
+@dataclass
+class ListVaultCredentialsParams:
+    principal_id: str | None = None
+    service: str | None = None
+
+
+@dataclass(frozen=True)
+class ListVaultCredentialsResponse:
+    credentials: tuple[VaultCredential, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ListVaultCredentialsResponse":
+        return cls(
+            credentials=tuple(VaultCredential.from_dict(c) for c in data["credentials"]),
+        )
+
+
+@dataclass
+class ExchangeCredentialParams:
+    service: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"service": self.service}
+
+
+@dataclass(frozen=True)
+class ExchangeCredentialResponse:
+    access_token: str
+    service: str
+    credential_type: str
+    token_expires_at: str | None
+    metadata: dict[str, Any]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ExchangeCredentialResponse":
+        return cls(
+            access_token=data["accessToken"],
+            service=data["service"],
+            credential_type=data["credentialType"],
+            token_expires_at=data.get("tokenExpiresAt"),
+            metadata=data.get("metadata", {}),
+        )

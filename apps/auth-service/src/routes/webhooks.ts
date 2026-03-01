@@ -93,6 +93,68 @@ export async function webhooksRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  // GET /v1/webhooks/:id/deliveries
+  app.get<{ Params: { id: string } }>('/v1/webhooks/:id/deliveries', async (request, reply) => {
+    const sql = getSql();
+    const developerId = request.developer.id;
+    const webhookId = request.params.id;
+
+    // Verify webhook ownership
+    const whRows = await sql`
+      SELECT id FROM webhooks
+      WHERE id = ${webhookId} AND developer_id = ${developerId}
+    `;
+    if (!whRows[0]) {
+      return reply.status(404).send({
+        message: 'Webhook not found',
+        code: 'NOT_FOUND',
+        requestId: request.id,
+      });
+    }
+
+    const query = request.query as Record<string, string>;
+    const status = query['status'] ?? null;
+    const page = Math.max(1, parseInt(query['page'] ?? '1', 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(query['pageSize'] ?? '20', 10)));
+    const offset = (page - 1) * pageSize;
+
+    const countRows = await sql<{ count: string }[]>`
+      SELECT COUNT(*) AS count FROM webhook_deliveries
+      WHERE webhook_id = ${webhookId}
+        AND (${status}::text IS NULL OR status = ${status ?? ''})
+    `;
+    const total = parseInt(countRows[0]?.count ?? '0', 10);
+
+    const rows = await sql`
+      SELECT id, event_id, event_type, status, attempts, max_attempts, url,
+             last_error, created_at, delivered_at
+      FROM webhook_deliveries
+      WHERE webhook_id = ${webhookId}
+        AND (${status}::text IS NULL OR status = ${status ?? ''})
+      ORDER BY created_at DESC
+      LIMIT ${pageSize} OFFSET ${offset}
+    `;
+
+    return reply.send({
+      deliveries: rows.map(r => ({
+        id: r['id'],
+        webhookId,
+        eventId: r['event_id'],
+        eventType: r['event_type'],
+        status: r['status'],
+        attempts: r['attempts'],
+        maxAttempts: r['max_attempts'],
+        url: r['url'],
+        lastError: r['last_error'] ?? null,
+        createdAt: r['created_at'],
+        deliveredAt: r['delivered_at'] ?? null,
+      })),
+      total,
+      page,
+      pageSize,
+    });
+  });
+
   // DELETE /v1/webhooks/:id
   app.delete<{ Params: { id: string } }>('/v1/webhooks/:id', async (request, reply) => {
     const sql = getSql();

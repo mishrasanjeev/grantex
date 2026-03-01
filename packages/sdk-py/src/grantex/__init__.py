@@ -75,6 +75,14 @@ from ._types import (
     CreateSsoConfigParams,
     SsoLoginResponse,
     SsoCallbackResponse,
+    # Vault
+    StoreCredentialParams,
+    StoreCredentialResponse,
+    VaultCredential,
+    ListVaultCredentialsParams,
+    ListVaultCredentialsResponse,
+    ExchangeCredentialParams,
+    ExchangeCredentialResponse,
 )
 from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
@@ -165,6 +173,14 @@ __all__ = [
     "CreateSsoConfigParams",
     "SsoLoginResponse",
     "SsoCallbackResponse",
+    # Vault
+    "StoreCredentialParams",
+    "StoreCredentialResponse",
+    "VaultCredential",
+    "ListVaultCredentialsParams",
+    "ListVaultCredentialsResponse",
+    "ExchangeCredentialParams",
+    "ExchangeCredentialResponse",
     # Version
     "__version__",
 ]

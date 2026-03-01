@@ -13,3 +13,4 @@ export const newPolicyId = (): string => `pol_${ulid()}`;
 export const newAnomalyId = (): string => `anm_${ulid()}`;
 export const newScimTokenId = (): string => `scimtok_${ulid()}`;
 export const newScimUserId = (): string => `scimuser_${ulid()}`;
+export const newVaultCredentialId = (): string => `vault_${ulid()}`;

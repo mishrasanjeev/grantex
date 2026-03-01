@@ -1,0 +1,35 @@
+# Grantex Gateway — YAML Configuration Example
+#
+# This config proxies requests to a local mock API server,
+# enforcing Grantex grant tokens with scope validation.
+
+listen:
+  port: 4000
+  host: "0.0.0.0"
+
+jwksUri: "http://localhost:3001/.well-known/jwks.json"
+
+routes:
+  - path: "/api/calendar/**"
+    upstream: "http://localhost:4001"
+    requiredScopes:
+      - "calendar:read"
+    methods: ["GET"]
+
+  - path: "/api/calendar/events"
+    upstream: "http://localhost:4001"
+    requiredScopes:
+      - "calendar:write"
+    methods: ["POST"]
+
+  - path: "/api/email/**"
+    upstream: "http://localhost:4001"
+    requiredScopes:
+      - "email:read"
+    methods: ["GET"]
+
+  - path: "/api/email/send"
+    upstream: "http://localhost:4001"
+    requiredScopes:
+      - "email:send"
+    methods: ["POST"]

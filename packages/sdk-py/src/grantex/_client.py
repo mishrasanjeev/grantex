@@ -18,6 +18,7 @@ from .resources._webhooks import WebhooksClient
 from .resources._billing import BillingClient
 from .resources._policies import PoliciesClient
 from .resources._principal_sessions import PrincipalSessionsClient
+from .resources._vault import VaultClient
 
 _DEFAULT_BASE_URL = "https://api.grantex.dev"
 
@@ -37,6 +38,7 @@ class Grantex:
     scim: ScimClient
     sso: SsoClient
     principal_sessions: PrincipalSessionsClient
+    vault: VaultClient
 
     @property
     def last_rate_limit(self) -> RateLimit | None:
@@ -74,6 +76,7 @@ class Grantex:
         self.scim = ScimClient(self._http)
         self.sso = SsoClient(self._http)
         self.principal_sessions = PrincipalSessionsClient(self._http)
+        self.vault = VaultClient(self._http, base_url)
 
     @staticmethod
     def signup(
