@@ -11,6 +11,7 @@ import { AnomaliesClient } from './resources/anomalies.js';
 import { ScimClient } from './resources/scim.js';
 import { SsoClient } from './resources/sso.js';
 import { PrincipalSessionsClient } from './resources/principal-sessions.js';
+import { VaultClient } from './resources/vault.js';
 import type {
   AuthorizationRequest,
   AuthorizeParams,
@@ -38,6 +39,7 @@ export class Grantex {
   readonly scim: ScimClient;
   readonly sso: SsoClient;
   readonly principalSessions: PrincipalSessionsClient;
+  readonly vault: VaultClient;
 
   get lastRateLimit(): RateLimit | undefined {
     return this.#http.lastRateLimit;
@@ -71,6 +73,7 @@ export class Grantex {
     this.scim = new ScimClient(this.#http);
     this.sso = new SsoClient(this.#http);
     this.principalSessions = new PrincipalSessionsClient(this.#http);
+    this.vault = new VaultClient(this.#http, options.baseUrl ?? DEFAULT_BASE_URL);
   }
 
   /**

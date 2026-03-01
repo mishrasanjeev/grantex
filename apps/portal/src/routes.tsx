@@ -19,6 +19,7 @@ import { SettingsPage } from './pages/settings/SettingsPage';
 import { SsoConfigPage } from './pages/settings/SsoConfigPage';
 import { ScimTokensPage } from './pages/settings/ScimTokensPage';
 import { WebhookList } from './pages/webhooks/WebhookList';
+import { WebhookDeliveries } from './pages/webhooks/WebhookDeliveries';
 import { AdminPage } from './pages/admin/AdminPage';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './RequireAuth';
@@ -44,6 +45,7 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/audit', element: <AuditLog /> },
       { path: '/dashboard/audit/:id', element: <AuditDetail /> },
       { path: '/dashboard/webhooks', element: <WebhookList /> },
+      { path: '/dashboard/webhooks/:id/deliveries', element: <WebhookDeliveries /> },
       { path: '/dashboard/policies', element: <PolicyList /> },
       { path: '/dashboard/policies/new', element: <PolicyForm /> },
       { path: '/dashboard/policies/:id/edit', element: <PolicyForm /> },

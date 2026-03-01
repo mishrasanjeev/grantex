@@ -14,6 +14,7 @@ export default defineConfig({
       STRIPE_WEBHOOK_SECRET: 'whsec_fake',
       STRIPE_PRICE_PRO: 'price_pro_fake',
       STRIPE_PRICE_ENTERPRISE: 'price_enterprise_fake',
+      VAULT_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
     },
   },
 });

@@ -16,6 +16,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { CopyButton } from '../../components/ui/CopyButton';
+import { Link } from 'react-router-dom';
 import { formatDate, truncateId } from '../../lib/format';
 
 const EVENT_OPTIONS = ['grant.created', 'grant.revoked', 'token.issued'];
@@ -148,16 +149,25 @@ export function WebhookList() {
                   header: '',
                   className: 'text-right',
                   render: (w) => (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(w);
-                      }}
-                    >
-                      Delete
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        to={`/dashboard/webhooks/${w.id}/deliveries`}
+                        className="text-xs text-gx-accent hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Deliveries
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(w);
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   ),
                 },
               ]}

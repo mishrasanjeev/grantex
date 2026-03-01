@@ -25,6 +25,7 @@ export const config = {
   stripeWebhookSecret: process.env['STRIPE_WEBHOOK_SECRET'] ?? null,
   stripePricePro: process.env['STRIPE_PRICE_PRO'] ?? null,
   stripePriceEnterprise: process.env['STRIPE_PRICE_ENTERPRISE'] ?? null,
+  vaultEncryptionKey: process.env['VAULT_ENCRYPTION_KEY'] ?? null,
   adminApiKey: optional('ADMIN_API_KEY', ''),
 } as const;
 

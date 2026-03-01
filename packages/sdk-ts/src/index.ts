@@ -95,6 +95,14 @@ export type {
   CreateSsoConfigParams,
   SsoLoginResponse,
   SsoCallbackResponse,
+  // Vault
+  StoreCredentialParams,
+  StoreCredentialResponse,
+  VaultCredential,
+  ListVaultCredentialsParams,
+  ListVaultCredentialsResponse,
+  ExchangeCredentialParams,
+  ExchangeCredentialResponse,
   // Compliance
   ComplianceSummary,
   ComplianceExportGrantsParams,

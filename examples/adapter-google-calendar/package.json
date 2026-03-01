@@ -1,0 +1,17 @@
+{
+  "name": "grantex-example-adapter-google-calendar",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npx tsx src/index.ts"
+  },
+  "dependencies": {
+    "@grantex/adapters": "^0.1.1",
+    "@grantex/sdk": "^0.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}
