@@ -32,6 +32,8 @@ describe('PKCE — POST /v1/authorize', () => {
   it('accepts codeChallenge and codeChallengeMethod S256', async () => {
     const { challenge } = generateTestPkce();
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                       // subscriptions (plan limit)
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);         // grant count (plan limit)
     sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // agent lookup
     sqlMock.mockResolvedValueOnce([]);                       // policy lookup
     sqlMock.mockResolvedValueOnce([]);                       // insert
