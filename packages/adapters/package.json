@@ -1,6 +1,6 @@
 {
   "name": "@grantex/adapters",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Pre-built service provider adapters for Grantex — Google Calendar, Gmail, Stripe, Slack",
   "type": "module",
   "exports": {
