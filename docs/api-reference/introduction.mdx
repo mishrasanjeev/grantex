@@ -32,6 +32,7 @@ Public endpoints (health, JWKS, consent UI, SSO flow) require no authentication.
 | Global default | 100 requests/minute |
 | `POST /v1/authorize` | 10 requests/minute |
 | `POST /v1/token` | 20 requests/minute |
+| `POST /v1/token/refresh` | 20 requests/minute |
 | `GET /.well-known/jwks.json` | Not rate-limited |
 
 ## OpenAPI Spec

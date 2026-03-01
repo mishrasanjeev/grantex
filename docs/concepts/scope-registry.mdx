@@ -1,0 +1,171 @@
+---
+title: "Scope Registry"
+sidebarTitle: "Scope Registry"
+description: "Standard scope definitions for common domains, plus guidelines for custom scopes."
+---
+
+The Grantex scope registry provides standard scope definitions organized by domain. Use these as a starting point when registering agents, or define your own custom scopes following the conventions below.
+
+## Standard Scopes
+
+All scopes follow the `resource:action[:constraint]` format defined in [Scopes](/concepts/scopes).
+
+### Calendar
+
+| Scope | Description | Constraint Examples |
+|-------|-------------|---------------------|
+| `calendar:read` | Read calendar events and availability | `since_2026-01-01`, `limit_100` |
+| `calendar:write` | Create and modify calendar events | `max_duration_8h` |
+| `calendar:delete` | Delete calendar events | — |
+| `calendar:share` | Share calendars with other users | — |
+
+### Email
+
+| Scope | Description | Constraint Examples |
+|-------|-------------|---------------------|
+| `email:read` | Read email messages and metadata | `folder_inbox`, `since_2026-01-01` |
+| `email:send` | Send emails on the user's behalf | `limit_50` (per day) |
+| `email:delete` | Delete email messages | `folder_trash` |
+| `email:draft` | Create and manage draft messages | — |
+
+### Payments
+
+| Scope | Description | Constraint Examples |
+|-------|-------------|---------------------|
+| `payments:read` | View payment history and balances | `since_2026-01-01` |
+| `payments:initiate` | Initiate payments and transfers | `max_500`, `max_5000` |
+| `payments:approve` | Approve pending payments | `max_1000` |
+| `payments:refund` | Process refunds | `max_500` |
+
+### Files
+
+| Scope | Description | Constraint Examples |
+|-------|-------------|---------------------|
+| `files:read` | Read file contents and metadata | `folder_documents`, `limit_1000` |
+| `files:write` | Upload and modify files | `max_size_50mb` |
+| `files:delete` | Delete files | `folder_temp` |
+| `files:share` | Share files with other users | — |
+
+### Contacts
+
+| Scope | Description | Constraint Examples |
+|-------|-------------|---------------------|
+| `contacts:read` | Read contact information | `limit_500` |
+| `contacts:write` | Create and update contacts | — |
+| `contacts:delete` | Delete contacts | — |
+
+### Profile
+
+| Scope | Description | Constraint Examples |
+|-------|-------------|---------------------|
+| `profile:read` | Read user profile information | — |
+| `profile:write` | Update user profile | — |
+
+### Notifications
+
+| Scope | Description | Constraint Examples |
+|-------|-------------|---------------------|
+| `notifications:read` | Read notification history | `since_2026-01-01` |
+| `notifications:send` | Send notifications to the user | `limit_100` |
+| `notifications:manage` | Manage notification preferences | — |
+
+### Database
+
+| Scope | Description | Constraint Examples |
+|-------|-------------|---------------------|
+| `database:read` | Query database records | `limit_10000` |
+| `database:write` | Insert and update records | — |
+| `database:delete` | Delete records | `limit_100` |
+| `database:schema` | Read or modify database schema | — |
+
+### API
+
+| Scope | Description | Constraint Examples |
+|-------|-------------|---------------------|
+| `api:read` | Read API resources | `limit_1000` |
+| `api:write` | Create and update API resources | — |
+| `api:delete` | Delete API resources | — |
+| `api:admin` | Administrative API operations | — |
+
+### Admin
+
+| Scope | Description | Constraint Examples |
+|-------|-------------|---------------------|
+| `admin:read` | Read administrative data | — |
+| `admin:write` | Modify system configuration | — |
+| `admin:users` | Manage user accounts | — |
+| `admin:audit` | Access audit logs | `since_2026-01-01` |
+
+## Constraint Patterns
+
+Constraints are the optional third segment of a scope string. They narrow the permission granted:
+
+| Pattern | Description | Example Scope |
+|---------|-------------|---------------|
+| `max_<amount>` | Maximum monetary amount | `payments:initiate:max_500` |
+| `folder_<id>` | Restrict to a specific folder | `files:read:folder_documents` |
+| `since_<date>` | Only access data after a date | `email:read:since_2026-01-01` |
+| `limit_<n>` | Maximum number of items/operations | `contacts:read:limit_500` |
+| `max_size_<size>` | Maximum file/payload size | `files:write:max_size_50mb` |
+| `max_duration_<dur>` | Maximum time duration | `calendar:write:max_duration_8h` |
+
+Constraints are validated by the consuming service, not by Grantex itself. Grantex stores and delivers them in the `scp` claim — your application enforces the constraint logic.
+
+## Custom Scope Guidelines
+
+When your application needs scopes beyond the standard registry:
+
+### Naming Convention
+
+Follow the `resource:action[:constraint]` format:
+
+```
+# Good
+inventory:read
+orders:create:max_10
+reports:generate:since_2026-01-01
+
+# Bad — don't use dots, slashes, or camelCase
+inventory.read
+orders/create
+readInventory
+```
+
+### Recommendations
+
+1. **Use lowercase** — scope strings should be entirely lowercase with colons as separators
+2. **Keep resources singular or use a clear noun** — `order:read`, not `reading-orders`
+3. **Use standard actions** — prefer `read`, `write`, `create`, `delete`, `send`, `approve`, `manage`, `admin`
+4. **Add constraints only when needed** — constraints should narrow a broad permission, not replace fine-grained scopes
+5. **Document scopes** — include descriptions when registering agents so users see clear consent prompts
+
+### Registering Custom Scopes
+
+Declare your custom scopes when registering an agent:
+
+```typescript
+const agent = await grantex.agents.register({
+  name: 'inventory-bot',
+  scopes: [
+    'inventory:read',
+    'inventory:write',
+    'orders:create:max_10',
+  ],
+});
+```
+
+## Scope Compatibility
+
+Grantex supports wildcard matching for scope checking. A broader scope satisfies a narrower requirement:
+
+| Token Scope | Required Scope | Match? |
+|-------------|---------------|--------|
+| `files:read` | `files:read` | Yes — exact match |
+| `files:*` | `files:read` | Yes — wildcard matches any action |
+| `files:*` | `files:delete` | Yes — wildcard matches any action |
+| `files:read` | `files:write` | No — different action |
+| `files:read` | `files:*` | No — specific scope doesn't satisfy wildcard requirement |
+| `payments:initiate:max_500` | `payments:initiate` | Yes — constrained scope satisfies unconstrained |
+| `payments:initiate` | `payments:initiate:max_500` | No — unconstrained doesn't imply specific constraint |
+
+Wildcard scopes (`resource:*`) are useful for trusted internal agents that need full access to a resource domain.

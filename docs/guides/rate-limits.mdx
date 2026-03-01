@@ -13,6 +13,7 @@ Grantex enforces per-IP rate limits using 1-minute sliding windows. These limits
 | **All endpoints** (global) | 100 req/min | Default for every route |
 | `POST /v1/authorize` | 10 req/min | Stricter — creates auth requests |
 | `POST /v1/token` | 20 req/min | Stricter — exchanges codes for tokens |
+| `POST /v1/token/refresh` | 20 req/min | Stricter — refreshes grant tokens |
 | `GET /.well-known/jwks.json` | **Exempt** | Public key distribution is never throttled |
 
 ## Response Headers
@@ -81,6 +82,47 @@ def with_retry(fn, max_retries=3):
             base = float(err.headers.get("retry-after", 2 ** attempt))
             jitter = random.uniform(0, 0.5)
             time.sleep(base + jitter)
+```
+
+```go Go
+package main
+
+import (
+	"errors"
+	"math"
+	"math/rand"
+	"net/http"
+	"strconv"
+	"time"
+)
+
+func withRetry[T any](fn func() (T, error), maxRetries int) (T, error) {
+	var zero T
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		result, err := fn()
+		if err == nil {
+			return result, nil
+		}
+
+		var httpErr interface{ StatusCode() int }
+		if !errors.As(err, &httpErr) || httpErr.StatusCode() != http.StatusTooManyRequests || attempt == maxRetries {
+			return zero, err
+		}
+
+		base := math.Pow(2, float64(attempt))
+		// Use Retry-After header if available
+		if ra, ok := err.(interface{ Header(string) string }); ok {
+			if s := ra.Header("Retry-After"); s != "" {
+				if v, e := strconv.ParseFloat(s, 64); e == nil {
+					base = v
+				}
+			}
+		}
+		jitter := rand.Float64() * 0.5
+		time.Sleep(time.Duration((base+jitter)*1000) * time.Millisecond)
+	}
+	return zero, errors.New("unreachable")
+}
 ```
 </CodeGroup>
 
