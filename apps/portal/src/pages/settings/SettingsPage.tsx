@@ -22,7 +22,7 @@ export function SettingsPage() {
       setNewKey(rotatedKey);
       // Update client and auth state with new key
       setApiKey(rotatedKey);
-      localStorage.setItem('grantex_api_key', rotatedKey);
+      sessionStorage.setItem('grantex_api_key', rotatedKey);
       await login(rotatedKey);
       show('API key rotated successfully', 'success');
     } catch {
