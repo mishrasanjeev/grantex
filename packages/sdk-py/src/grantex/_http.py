@@ -5,9 +5,27 @@ from typing import Any
 import httpx
 
 from ._errors import GrantexApiError, GrantexAuthError, GrantexNetworkError
+from ._types import RateLimit
 
 _SDK_VERSION = "0.1.0"
 _DEFAULT_TIMEOUT = 30.0
+
+
+def _parse_rate_limit_headers(headers: httpx.Headers) -> RateLimit | None:
+    limit = headers.get("x-ratelimit-limit")
+    remaining = headers.get("x-ratelimit-remaining")
+    reset = headers.get("x-ratelimit-reset")
+
+    if limit is None or remaining is None or reset is None:
+        return None
+
+    retry_after_raw = headers.get("retry-after")
+    return RateLimit(
+        limit=int(limit),
+        remaining=int(remaining),
+        reset=int(reset),
+        retry_after=int(retry_after_raw) if retry_after_raw is not None else None,
+    )
 
 
 class HttpClient:
@@ -20,6 +38,7 @@ class HttpClient:
         timeout: float = _DEFAULT_TIMEOUT,
     ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._last_rate_limit: RateLimit | None = None
         self._client = httpx.Client(
             headers={
                 "Authorization": f"Bearer {api_key}",
@@ -28,6 +47,10 @@ class HttpClient:
             },
             timeout=timeout,
         )
+
+    @property
+    def last_rate_limit(self) -> RateLimit | None:
+        return self._last_rate_limit
 
     def get(self, path: str) -> Any:
         return self._request("GET", path)
@@ -62,6 +85,7 @@ class HttpClient:
             ) from exc
 
         request_id: str | None = response.headers.get("x-request-id")
+        self._last_rate_limit = _parse_rate_limit_headers(response.headers)
 
         if not response.is_success:
             body_data: Any = None
@@ -75,10 +99,12 @@ class HttpClient:
 
             if response.status_code in (401, 403):
                 raise GrantexAuthError(
-                    message, response.status_code, body_data, request_id, error_code
+                    message, response.status_code, body_data, request_id, error_code,
+                    self._last_rate_limit,
                 )
             raise GrantexApiError(
-                message, response.status_code, body_data, request_id, error_code
+                message, response.status_code, body_data, request_id, error_code,
+                self._last_rate_limit,
             )
 
         if response.status_code == 204:

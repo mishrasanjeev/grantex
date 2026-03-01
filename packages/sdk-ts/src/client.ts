@@ -15,6 +15,7 @@ import type {
   AuthorizationRequest,
   AuthorizeParams,
   GrantexClientOptions,
+  RateLimit,
   RotateKeyResponse,
   SignupParams,
   SignupResponse,
@@ -37,6 +38,10 @@ export class Grantex {
   readonly scim: ScimClient;
   readonly sso: SsoClient;
   readonly principalSessions: PrincipalSessionsClient;
+
+  get lastRateLimit(): RateLimit | undefined {
+    return this.#http.lastRateLimit;
+  }
 
   constructor(options: GrantexClientOptions = {}) {
     const apiKey =

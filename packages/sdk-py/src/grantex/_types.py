@@ -4,6 +4,17 @@ from dataclasses import dataclass
 from typing import Any
 
 
+# ─── Rate Limits ──────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class RateLimit:
+    limit: int
+    remaining: int
+    reset: int
+    retry_after: int | None = None
+
+
 # ─── Signup ───────────────────────────────────────────────────────────────────
 
 

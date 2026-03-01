@@ -7,15 +7,48 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
 const sdkVersion = "0.1.0"
 
+func parseRateLimitHeaders(header http.Header) *RateLimit {
+	limitStr := header.Get("X-RateLimit-Limit")
+	remainingStr := header.Get("X-RateLimit-Remaining")
+	resetStr := header.Get("X-RateLimit-Reset")
+
+	if limitStr == "" || remainingStr == "" || resetStr == "" {
+		return nil
+	}
+
+	limit, err1 := strconv.Atoi(limitStr)
+	remaining, err2 := strconv.Atoi(remainingStr)
+	reset, err3 := strconv.ParseInt(resetStr, 10, 64)
+	if err1 != nil || err2 != nil || err3 != nil {
+		return nil
+	}
+
+	rl := &RateLimit{
+		Limit:     limit,
+		Remaining: remaining,
+		Reset:     reset,
+	}
+
+	if ra := header.Get("Retry-After"); ra != "" {
+		if v, err := strconv.Atoi(ra); err == nil {
+			rl.RetryAfter = v
+		}
+	}
+
+	return rl
+}
+
 type httpClient struct {
-	baseURL string
-	apiKey  string
-	client  *http.Client
+	baseURL       string
+	apiKey        string
+	client        *http.Client
+	lastRateLimit *RateLimit
 }
 
 func (h *httpClient) get(ctx context.Context, path string) ([]byte, error) {
@@ -72,6 +105,8 @@ func (h *httpClient) do(ctx context.Context, method, path string, body interface
 		return nil, &NetworkError{Message: "failed to read response body", Cause: err}
 	}
 
+	h.lastRateLimit = parseRateLimitHeaders(resp.Header)
+
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		if resp.StatusCode == http.StatusNoContent || len(respBody) == 0 {
 			return nil, nil
@@ -79,13 +114,14 @@ func (h *httpClient) do(ctx context.Context, method, path string, body interface
 		return respBody, nil
 	}
 
-	return nil, h.parseError(resp.StatusCode, respBody)
+	return nil, h.parseError(resp.StatusCode, respBody, h.lastRateLimit)
 }
 
-func (h *httpClient) parseError(statusCode int, body []byte) error {
+func (h *httpClient) parseError(statusCode int, body []byte, rl *RateLimit) error {
 	apiErr := &APIError{
 		StatusCode: statusCode,
 		Body:       json.RawMessage(body),
+		RateLimit:  rl,
 	}
 
 	var parsed struct {

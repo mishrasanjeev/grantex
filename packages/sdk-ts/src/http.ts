@@ -1,7 +1,26 @@
 import { GrantexApiError, GrantexAuthError, GrantexNetworkError } from './errors.js';
+import type { RateLimit } from './types.js';
 
 const SDK_VERSION = '0.1.0';
 const DEFAULT_TIMEOUT_MS = 30_000;
+
+function parseRateLimitHeaders(headers: Headers): RateLimit | undefined {
+  const limit = headers.get('x-ratelimit-limit');
+  const remaining = headers.get('x-ratelimit-remaining');
+  const reset = headers.get('x-ratelimit-reset');
+
+  if (limit === null || remaining === null || reset === null) {
+    return undefined;
+  }
+
+  const retryAfterRaw = headers.get('retry-after');
+  return {
+    limit: Number(limit),
+    remaining: Number(remaining),
+    reset: Number(reset),
+    ...(retryAfterRaw !== null ? { retryAfter: Number(retryAfterRaw) } : {}),
+  };
+}
 
 export interface HttpClientOptions {
   baseUrl: string;
@@ -13,11 +32,16 @@ export class HttpClient {
   readonly #baseUrl: string;
   readonly #apiKey: string;
   readonly #timeout: number;
+  #lastRateLimit: RateLimit | undefined;
 
   constructor(options: HttpClientOptions) {
     this.#baseUrl = options.baseUrl.replace(/\/$/, '');
     this.#apiKey = options.apiKey;
     this.#timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  }
+
+  get lastRateLimit(): RateLimit | undefined {
+    return this.#lastRateLimit;
   }
 
   async get<T>(path: string): Promise<T> {
@@ -77,6 +101,7 @@ export class HttpClient {
     }
 
     const requestId = response.headers.get('x-request-id') ?? undefined;
+    this.#lastRateLimit = parseRateLimitHeaders(response.headers);
 
     if (!response.ok) {
       let responseBody: unknown;
@@ -96,10 +121,11 @@ export class HttpClient {
           responseBody,
           requestId,
           errorCode,
+          this.#lastRateLimit,
         );
       }
 
-      throw new GrantexApiError(message, response.status, responseBody, requestId, errorCode);
+      throw new GrantexApiError(message, response.status, responseBody, requestId, errorCode, this.#lastRateLimit);
     }
 
     if (response.status === 204) {

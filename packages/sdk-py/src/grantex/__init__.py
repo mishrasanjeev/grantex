@@ -11,6 +11,7 @@ from ._errors import (
     GrantexTokenError,
 )
 from ._types import (
+    RateLimit,
     Agent,
     RotateKeyResponse,
     SignupParams,
@@ -101,6 +102,8 @@ __all__ = [
     "GrantexAuthError",
     "GrantexTokenError",
     "GrantexNetworkError",
+    # Rate Limits
+    "RateLimit",
     # Types
     "Agent",
     "Anomaly",

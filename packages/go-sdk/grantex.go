@@ -100,6 +100,11 @@ func Signup(ctx context.Context, params SignupParams, opts ...Option) (*SignupRe
 	return unmarshal[SignupResponse](h.post(ctx, "/v1/developers/signup", params))
 }
 
+// LastRateLimit returns the rate limit metadata from the most recent API response, or nil if unavailable.
+func (c *Client) LastRateLimit() *RateLimit {
+	return c.http.lastRateLimit
+}
+
 // Authorize creates an authorization request for a user to grant permissions to an agent.
 func (c *Client) Authorize(ctx context.Context, params AuthorizeParams) (*AuthorizationRequest, error) {
 	return unmarshal[AuthorizationRequest](c.http.post(ctx, "/v1/authorize", params))

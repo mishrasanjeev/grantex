@@ -41,23 +41,97 @@ When you exceed a rate limit, the API returns a `429 Too Many Requests` status w
 
 The `Retry-After` header tells you exactly how long to wait.
 
+## Reading Rate Limits from SDKs
+
+All three SDKs automatically parse rate limit headers from every response. You can read them via `client.lastRateLimit` (TypeScript/Python) or `client.LastRateLimit()` (Go).
+
+### After a Successful Call
+
+<CodeGroup>
+```typescript TypeScript
+import { Grantex } from '@grantex/sdk';
+
+const client = new Grantex({ apiKey: 'gx_...' });
+const agents = await client.agents.list();
+
+const rl = client.lastRateLimit;
+if (rl) {
+  console.log(`${rl.remaining}/${rl.limit} requests left, resets at ${rl.reset}`);
+}
+```
+
+```python Python
+from grantex import Grantex
+
+client = Grantex(api_key="gx_...")
+agents = client.agents.list()
+
+rl = client.last_rate_limit
+if rl:
+    print(f"{rl.remaining}/{rl.limit} requests left, resets at {rl.reset}")
+```
+
+```go Go
+client := grantex.NewClient("gx_...")
+agents, _ := client.Agents.List(ctx)
+
+if rl := client.LastRateLimit(); rl != nil {
+    fmt.Printf("%d/%d requests left, resets at %d\n", rl.Remaining, rl.Limit, rl.Reset)
+}
+```
+</CodeGroup>
+
+### Handling 429 Errors
+
+When a `429` is returned, the error object includes rate limit info with the `retryAfter` value:
+
+<CodeGroup>
+```typescript TypeScript
+import { GrantexApiError } from '@grantex/sdk';
+
+try {
+  await client.tokens.verify(token);
+} catch (err) {
+  if (err instanceof GrantexApiError && err.rateLimit?.retryAfter) {
+    console.log(`Rate limited — retry in ${err.rateLimit.retryAfter}s`);
+  }
+}
+```
+
+```python Python
+from grantex import GrantexApiError
+
+try:
+    client.tokens.verify(token)
+except GrantexApiError as err:
+    if err.rate_limit and err.rate_limit.retry_after:
+        print(f"Rate limited — retry in {err.rate_limit.retry_after}s")
+```
+
+```go Go
+var apiErr *grantex.APIError
+if errors.As(err, &apiErr) && apiErr.RateLimit != nil && apiErr.RateLimit.RetryAfter > 0 {
+    fmt.Printf("Rate limited — retry in %ds\n", apiErr.RateLimit.RetryAfter)
+}
+```
+</CodeGroup>
+
 ## Retry Strategy
 
 Use exponential backoff with jitter to avoid thundering-herd problems when multiple clients hit the limit simultaneously.
 
 <CodeGroup>
 ```typescript TypeScript
+import { GrantexApiError } from '@grantex/sdk';
+
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
-      const retryAfter = (err as { headers?: Record<string, string> }).headers?.['retry-after'];
+      if (!(err instanceof GrantexApiError) || err.statusCode !== 429 || attempt === maxRetries) throw err;
 
-      if (status !== 429 || attempt === maxRetries) throw err;
-
-      const base = retryAfter ? parseInt(retryAfter, 10) * 1000 : 2 ** attempt * 1000;
+      const base = (err.rateLimit?.retryAfter ?? 2 ** attempt) * 1000;
       const jitter = Math.random() * 500;
       await new Promise((r) => setTimeout(r, base + jitter));
     }
@@ -76,10 +150,10 @@ def with_retry(fn, max_retries=3):
         try:
             return fn()
         except GrantexApiError as err:
-            if err.status != 429 or attempt == max_retries:
+            if err.status_code != 429 or attempt == max_retries:
                 raise
 
-            base = float(err.headers.get("retry-after", 2 ** attempt))
+            base = float(err.rate_limit.retry_after if err.rate_limit and err.rate_limit.retry_after else 2 ** attempt)
             jitter = random.uniform(0, 0.5)
             time.sleep(base + jitter)
 ```
@@ -91,9 +165,9 @@ import (
 	"errors"
 	"math"
 	"math/rand"
-	"net/http"
-	"strconv"
 	"time"
+
+	grantex "github.com/mishrasanjeev/grantex-go"
 )
 
 func withRetry[T any](fn func() (T, error), maxRetries int) (T, error) {
@@ -104,19 +178,14 @@ func withRetry[T any](fn func() (T, error), maxRetries int) (T, error) {
 			return result, nil
 		}
 
-		var httpErr interface{ StatusCode() int }
-		if !errors.As(err, &httpErr) || httpErr.StatusCode() != http.StatusTooManyRequests || attempt == maxRetries {
+		var apiErr *grantex.APIError
+		if !errors.As(err, &apiErr) || apiErr.StatusCode != 429 || attempt == maxRetries {
 			return zero, err
 		}
 
 		base := math.Pow(2, float64(attempt))
-		// Use Retry-After header if available
-		if ra, ok := err.(interface{ Header(string) string }); ok {
-			if s := ra.Header("Retry-After"); s != "" {
-				if v, e := strconv.ParseFloat(s, 64); e == nil {
-					base = v
-				}
-			}
+		if apiErr.RateLimit != nil && apiErr.RateLimit.RetryAfter > 0 {
+			base = float64(apiErr.RateLimit.RetryAfter)
 		}
 		jitter := rand.Float64() * 0.5
 		time.Sleep(time.Duration((base+jitter)*1000) * time.Millisecond)
