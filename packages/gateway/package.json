@@ -1,6 +1,6 @@
 {
   "name": "@grantex/gateway",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zero-code reverse-proxy gateway that enforces Grantex grant tokens via YAML config",
   "type": "module",
   "exports": {
