@@ -23,7 +23,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@grantex/sdk": "^0.1.2",
+    "@grantex/sdk": "^0.1.6",
     "@modelcontextprotocol/sdk": "^1.9.0",
     "zod": "^3.22.0"
   },

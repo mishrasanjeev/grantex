@@ -61,7 +61,6 @@ export const principalSessionsSuite: SuiteDefinition = {
         'Session token can be used to GET /v1/principal/grants',
         '§12',
         async () => {
-          // Create a session token
           const sessionRes = await ctx.http.post<{
             sessionToken: string;
           }>('/v1/principal-sessions', {
@@ -69,7 +68,6 @@ export const principalSessionsSuite: SuiteDefinition = {
           });
           expectStatus(sessionRes, 201);
 
-          // Use the session token to fetch grants
           const grantsRes = await ctx.http.doRequestWithToken<{
             grants: Array<{ grantId: string; agentId: string; scopes: string[] }>;
             principalId: string;
@@ -84,7 +82,6 @@ export const principalSessionsSuite: SuiteDefinition = {
               `Expected principalId ${principalId}, got ${grantsRes.body.principalId}`,
             );
           }
-          // Should find the grant we created
           const found = grantsRes.body.grants.some(
             (g) => g.grantId === flow.grantId,
           );
@@ -93,6 +90,94 @@ export const principalSessionsSuite: SuiteDefinition = {
               `Expected to find grant ${flow.grantId} in principal grants`,
             );
           }
+        },
+      ),
+    );
+
+    results.push(
+      await test(
+        'Session token can be used to GET /v1/principal/audit',
+        '§12',
+        async () => {
+          const sessionRes = await ctx.http.post<{
+            sessionToken: string;
+          }>('/v1/principal-sessions', {
+            principalId,
+          });
+          expectStatus(sessionRes, 201);
+
+          const auditRes = await ctx.http.doRequestWithToken<{
+            entries: unknown[];
+          }>('GET', '/v1/principal/audit', sessionRes.body.sessionToken);
+          expectStatus(auditRes, 200);
+
+          if (!Array.isArray(auditRes.body.entries)) {
+            throw new Error('Expected entries to be an array');
+          }
+        },
+      ),
+    );
+
+    results.push(
+      await test(
+        'Session token can revoke a principal grant via DELETE /v1/principal/grants/:id',
+        '§12',
+        async () => {
+          // Create a fresh grant to revoke
+          const revokeFlow = await ctx.flow.executeFullFlow({
+            agentId,
+            agentDid,
+            scopes: ['read'],
+            principalId,
+          });
+
+          const sessionRes = await ctx.http.post<{
+            sessionToken: string;
+          }>('/v1/principal-sessions', {
+            principalId,
+          });
+          expectStatus(sessionRes, 201);
+
+          const revokeRes = await ctx.http.doRequestWithToken(
+            'DELETE',
+            `/v1/principal/grants/${revokeFlow.grantId}`,
+            sessionRes.body.sessionToken,
+          );
+          expectStatus(revokeRes, 204);
+        },
+      ),
+    );
+
+    results.push(
+      await test(
+        'Session token is rejected on developer API endpoints (401)',
+        '§12',
+        async () => {
+          const sessionRes = await ctx.http.post<{
+            sessionToken: string;
+          }>('/v1/principal-sessions', {
+            principalId,
+          });
+          expectStatus(sessionRes, 201);
+
+          // Using session token on a developer endpoint should fail
+          const agentsRes = await ctx.http.doRequestWithToken(
+            'GET',
+            '/v1/agents',
+            sessionRes.body.sessionToken,
+          );
+          expectStatus(agentsRes, 401);
+        },
+      ),
+    );
+
+    results.push(
+      await test(
+        'GET /permissions returns HTML page (200)',
+        '§12',
+        async () => {
+          const res = await ctx.http.requestPublic('GET', '/permissions');
+          expectStatus(res, 200);
         },
       ),
     );
