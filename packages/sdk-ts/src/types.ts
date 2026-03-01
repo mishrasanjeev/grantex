@@ -610,3 +610,60 @@ export interface ExchangeCredentialResponse {
   tokenExpiresAt: string | null;
   metadata: Record<string, unknown>;
 }
+
+// ─── Budgets ─────────────────────────────────────────────────────────────────
+
+export interface AllocateBudgetParams {
+  grantId: string;
+  initialBudget: number;
+  currency?: string;
+}
+
+export interface BudgetAllocation {
+  id: string;
+  grantId: string;
+  developerId: string;
+  initialBudget: string;
+  remainingBudget: string;
+  currency: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DebitBudgetParams {
+  grantId: string;
+  amount: number;
+  description?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface DebitBudgetResponse {
+  remaining: string;
+  transactionId: string;
+}
+
+export interface BudgetTransaction {
+  id: string;
+  grantId: string;
+  allocationId: string;
+  amount: string;
+  description: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface BudgetTransactionsResponse {
+  transactions: BudgetTransaction[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+// ─── Event streaming ─────────────────────────────────────────────────────────
+
+export interface GrantexStreamEvent {
+  id: string;
+  type: string;
+  createdAt: string;
+  data: Record<string, unknown>;
+}

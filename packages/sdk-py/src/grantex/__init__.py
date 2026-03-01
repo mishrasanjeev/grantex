@@ -75,6 +75,13 @@ from ._types import (
     CreateSsoConfigParams,
     SsoLoginResponse,
     SsoCallbackResponse,
+    # Budgets
+    AllocateBudgetParams,
+    BudgetAllocation,
+    DebitBudgetParams,
+    DebitBudgetResponse,
+    BudgetTransaction,
+    BudgetTransactionsResponse,
     # Vault
     StoreCredentialParams,
     StoreCredentialResponse,
@@ -84,6 +91,7 @@ from ._types import (
     ExchangeCredentialParams,
     ExchangeCredentialResponse,
 )
+from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent, StreamOptions
 from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook_signature
@@ -173,6 +181,13 @@ __all__ = [
     "CreateSsoConfigParams",
     "SsoLoginResponse",
     "SsoCallbackResponse",
+    # Budgets
+    "AllocateBudgetParams",
+    "BudgetAllocation",
+    "DebitBudgetParams",
+    "DebitBudgetResponse",
+    "BudgetTransaction",
+    "BudgetTransactionsResponse",
     # Vault
     "StoreCredentialParams",
     "StoreCredentialResponse",
@@ -181,6 +196,10 @@ __all__ = [
     "ListVaultCredentialsResponse",
     "ExchangeCredentialParams",
     "ExchangeCredentialResponse",
+    # Events
+    "EventsClient",
+    "GrantexStreamEvent",
+    "StreamOptions",
     # Version
     "__version__",
 ]

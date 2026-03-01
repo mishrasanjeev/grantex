@@ -1,3 +1,4 @@
+import { initTracing } from './lib/tracing.js';
 import { config } from './config.js';
 import { initKeys } from './lib/crypto.js';
 import { getSql } from './db/client.js';
@@ -10,6 +11,9 @@ import { startWebhookDeliveryWorker } from './workers/webhookDelivery.js';
 import { startAnomalyDetectionWorker } from './workers/anomalyDetection.js';
 
 async function main() {
+  // Initialize OpenTelemetry tracing (must be first — hooks module loading)
+  await initTracing();
+
   // Initialize RSA keys
   await initKeys();
 

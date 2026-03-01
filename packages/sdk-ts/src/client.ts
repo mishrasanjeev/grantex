@@ -12,6 +12,8 @@ import { ScimClient } from './resources/scim.js';
 import { SsoClient } from './resources/sso.js';
 import { PrincipalSessionsClient } from './resources/principal-sessions.js';
 import { VaultClient } from './resources/vault.js';
+import { BudgetsClient } from './resources/budgets.js';
+import { EventsClient } from './resources/events.js';
 import type {
   AuthorizationRequest,
   AuthorizeParams,
@@ -40,6 +42,8 @@ export class Grantex {
   readonly sso: SsoClient;
   readonly principalSessions: PrincipalSessionsClient;
   readonly vault: VaultClient;
+  readonly budgets: BudgetsClient;
+  readonly events: EventsClient;
 
   get lastRateLimit(): RateLimit | undefined {
     return this.#http.lastRateLimit;
@@ -74,6 +78,8 @@ export class Grantex {
     this.sso = new SsoClient(this.#http);
     this.principalSessions = new PrincipalSessionsClient(this.#http);
     this.vault = new VaultClient(this.#http, options.baseUrl ?? DEFAULT_BASE_URL);
+    this.budgets = new BudgetsClient(this.#http);
+    this.events = new EventsClient(this.#http);
   }
 
   /**

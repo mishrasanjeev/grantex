@@ -64,6 +64,15 @@ export class HttpClient {
     return this.#request<T>('DELETE', path, undefined);
   }
 
+  async rawGet(path: string): Promise<Response> {
+    const url = `${this.#baseUrl}${path}`;
+    return fetch(url, {
+      headers: {
+        Authorization: `Bearer ${this.#apiKey}`,
+      },
+    });
+  }
+
   async #request<T>(method: string, path: string, body: unknown): Promise<T> {
     const url = `${this.#baseUrl}${path}`;
     const controller = new AbortController();

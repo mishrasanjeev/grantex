@@ -1,41 +1,83 @@
 ---
 title: "Metrics & Observability"
 sidebarTitle: "Metrics & Observability"
-description: "Monitor your Grantex deployment with key metrics, alerting thresholds, and structured logging."
+description: "Monitor your Grantex deployment with Prometheus metrics, Grafana dashboards, alerting rules, and structured logging."
 ---
 
-Effective monitoring ensures your Grantex deployment is healthy, performant, and secure. This guide covers the key metrics to track, recommended alert thresholds, logging best practices, and dashboard setup.
+Effective monitoring ensures your Grantex deployment is healthy, performant, and secure. This guide covers the native Prometheus metrics endpoint, Grafana dashboard templates, alert thresholds, and logging best practices.
 
-## Key Metrics to Monitor
+## Prometheus Metrics Endpoint
 
-| Metric | Description | Source |
-|--------|-------------|--------|
-| Auth request latency | Time to process `POST /v1/authorize` | Application / APM |
-| Token exchange success rate | Percentage of `POST /v1/token` calls returning 201 | Application logs |
-| Token refresh success rate | Percentage of `POST /v1/token/refresh` calls returning 201 | Application logs |
-| Grant revocation rate | Number of grants revoked per hour | Audit log (`grant.revoked` events) |
-| Anomaly count | Anomalies detected per detection cycle | `POST /v1/anomalies/detect` results |
-| Webhook delivery success | Percentage of webhooks delivered on first attempt | `webhook_deliveries` table |
-| 429 rate | Rate-limited requests per minute | Response status codes |
-| JWKS fetch latency | Time for clients to fetch `/.well-known/jwks.json` | Client-side instrumentation |
+The auth service exposes a `GET /metrics` endpoint in Prometheus exposition format:
+
+```bash
+curl https://your-auth-service/metrics
+```
+
+This endpoint is **unauthenticated** (no API key required) and rate-limited to 10 requests/minute per IP.
+
+### Counters
+
+| Metric | Labels | Description |
+|--------|--------|-------------|
+| `grantex_token_exchange_total` | `status` | Token exchange attempts |
+| `grantex_authorize_total` | `status` | Authorization requests |
+| `grantex_grants_revoked_total` | — | Grants revoked (including cascade) |
+| `grantex_webhook_deliveries_total` | `status` | Webhook delivery outcomes |
+| `grantex_anomalies_detected_total` | `type`, `severity` | Anomalies detected |
+
+### Histograms
+
+| Metric | Labels | Description |
+|--------|--------|-------------|
+| `grantex_authorize_duration_seconds` | — | Authorization request duration |
+| `grantex_token_exchange_duration_seconds` | — | Token exchange duration |
+| `grantex_http_request_duration_seconds` | `method`, `route`, `status_code` | HTTP request duration (all routes) |
+
+### Gauges
+
+| Metric | Description |
+|--------|-------------|
+| `grantex_active_grants` | Current active grants count |
+| `grantex_anomalies_unacknowledged` | Unacknowledged anomalies |
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `METRICS_ENABLED` | `true` | Set to `false` to disable metrics collection |
+
+## Grafana Dashboards
+
+Pre-built Grafana dashboards are available at [`deploy/grafana/`](https://github.com/mishrasanjeev/grantex/tree/main/deploy/grafana):
+
+| Dashboard | Description |
+|-----------|-------------|
+| `overview-dashboard.json` | Token exchange rate, success rate gauge, latency p50/p99, grants revoked, active grants, webhook deliveries, anomalies, HTTP error rate |
+| `per-agent-dashboard.json` | Per-agent drill-down with a `$agent_id` template variable |
+
+### Import Instructions
+
+1. In Grafana, go to **Dashboards > Import**
+2. Upload the JSON file or paste its contents
+3. Select your Prometheus data source when prompted (`${DS_PROMETHEUS}`)
+4. Click **Import**
 
 ## Health Check Endpoint
 
 The auth service exposes a `GET /health` endpoint that returns the service status:
 
 ```bash
-curl https://grantex-auth-dd4mtrt2gq-uc.a.run.app/health
+curl https://your-auth-service/health
 ```
 
 ```json
-{
-  "status": "ok"
-}
+{ "status": "ok" }
 ```
 
 Use this endpoint for:
-- **Load balancer health checks** — configure your LB to poll `/health` every 10–30 seconds
-- **Uptime monitoring** — services like UptimeRobot, Pingdom, or Cloud Monitoring
+- **Load balancer health checks** — poll `/health` every 10–30 seconds
+- **Uptime monitoring** — UptimeRobot, Pingdom, Cloud Monitoring
 - **Kubernetes liveness probes** — `livenessProbe.httpGet.path: /health`
 
 ## Alerting Thresholds
@@ -44,135 +86,83 @@ Recommended thresholds for production alerting:
 
 | Metric | Warning | Critical | Action |
 |--------|---------|----------|--------|
-| Token exchange failure rate | > 5% | > 15% | Check auth service logs for code validation errors |
+| Token exchange failure rate | > 5% | > 15% | Check auth service logs |
 | Token refresh failure rate | > 5% | > 15% | Check for refresh token reuse or clock skew |
-| Anomalies detected | > 5/hour | > 10/hour | Review anomaly details, check for compromised agents |
-| Webhook delivery success | < 98% | < 95% | Verify webhook endpoint availability, check retry queue |
-| 429 rate | > 50/min | > 200/min | Client misconfiguration or abuse; review IP sources |
+| Anomalies detected | > 5/hour | > 10/hour | Review anomaly details |
+| Webhook delivery success | < 98% | < 95% | Verify endpoint availability |
+| 429 rate | > 50/min | > 200/min | Client misconfiguration or abuse |
 | Auth request latency (p99) | > 500ms | > 2s | Database or Redis performance issue |
-| Health check failures | 1 consecutive | 3 consecutive | Service restart, infrastructure issue |
+| Health check failures | 1 consecutive | 3 consecutive | Service restart |
+
+### Alertmanager Rules
+
+```yaml
+groups:
+  - name: grantex
+    rules:
+      - alert: HighTokenExchangeFailureRate
+        expr: |
+          sum(rate(grantex_token_exchange_total{status!="success"}[5m]))
+          / sum(rate(grantex_token_exchange_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Token exchange failure rate > 5%"
+
+      - alert: HighAuthLatency
+        expr: |
+          histogram_quantile(0.99, rate(grantex_authorize_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Authorization p99 latency > 2s"
+
+      - alert: WebhookDeliveryFailure
+        expr: |
+          sum(rate(grantex_webhook_deliveries_total{status="failed"}[5m]))
+          / sum(rate(grantex_webhook_deliveries_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Webhook delivery failure rate > 5%"
+```
 
 ## Logging
 
-### What to Log
+### Structured Logging
 
-| Event | Log Level | Fields |
-|-------|-----------|--------|
-| Grant created | `info` | `grantId`, `agentId`, `principalId`, `scopes` |
-| Grant revoked | `info` | `grantId`, `revokedBy`, `cascadeCount` |
-| Token exchanged | `info` | `grantId`, `agentId` |
-| Token refreshed | `info` | `grantId`, `agentId` |
-| Token verification failed | `warn` | `reason`, `tokenId` (if available) |
-| Auth request denied | `warn` | `agentId`, `principalId`, `reason` |
-| Rate limit hit | `warn` | `ip`, `endpoint`, `retryAfter` |
-| Anomaly detected | `warn` | `type`, `severity`, `agentId` |
-| Webhook delivery failed | `error` | `webhookId`, `url`, `statusCode`, `attempt` |
-| Database connection error | `error` | `error`, `pool` |
-
-### Structured Logging Pattern
-
-Use JSON-structured logs for easy parsing by log aggregators:
+The auth service uses [Pino](https://getpino.io/) for JSON-structured logging:
 
 ```json
 {
   "level": "info",
   "msg": "grant.created",
   "timestamp": "2026-03-01T12:00:00.000Z",
-  "grantId": "grt_abc123",
-  "agentId": "agt_def456",
+  "grantId": "grnt_abc123",
+  "agentId": "ag_def456",
   "principalId": "user_789",
   "scopes": ["calendar:read", "email:send"],
   "latencyMs": 45
 }
 ```
 
-The Grantex auth service uses [Pino](https://getpino.io/) for structured JSON logging. In production (Cloud Run), logs are automatically ingested by Cloud Logging.
+### What to Log
 
-## Dashboard Setup
-
-### Grafana
-
-Import the following panels into a Grafana dashboard. These queries assume you're using Prometheus with a `grantex_` metric prefix:
-
-```json
-{
-  "panels": [
-    {
-      "title": "Token Exchange Success Rate",
-      "type": "gauge",
-      "targets": [
-        {
-          "expr": "sum(rate(grantex_token_exchange_total{status=\"success\"}[5m])) / sum(rate(grantex_token_exchange_total[5m])) * 100"
-        }
-      ],
-      "thresholds": [
-        { "value": 95, "color": "green" },
-        { "value": 85, "color": "yellow" },
-        { "value": 0, "color": "red" }
-      ]
-    },
-    {
-      "title": "Rate Limited Requests",
-      "type": "timeseries",
-      "targets": [
-        {
-          "expr": "sum(rate(grantex_http_responses_total{status=\"429\"}[5m]))"
-        }
-      ]
-    },
-    {
-      "title": "Auth Request Latency (p99)",
-      "type": "timeseries",
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.99, sum(rate(grantex_authorize_duration_seconds_bucket[5m])) by (le))"
-        }
-      ]
-    },
-    {
-      "title": "Anomalies Detected",
-      "type": "stat",
-      "targets": [
-        {
-          "expr": "sum(increase(grantex_anomalies_detected_total[1h]))"
-        }
-      ]
-    },
-    {
-      "title": "Webhook Delivery Success Rate",
-      "type": "gauge",
-      "targets": [
-        {
-          "expr": "sum(rate(grantex_webhook_deliveries_total{status=\"success\"}[5m])) / sum(rate(grantex_webhook_deliveries_total[5m])) * 100"
-        }
-      ]
-    }
-  ]
-}
-```
-
-### Datadog
-
-If you're using Datadog, create monitors for the key thresholds:
-
-```yaml
-# datadog-monitors.yaml
-monitors:
-  - name: "Grantex Token Exchange Failure Rate"
-    type: metric alert
-    query: >
-      sum(last_5m):sum:grantex.token_exchange.error{*}.as_rate()
-      / sum:grantex.token_exchange.total{*}.as_rate() > 0.05
-    message: "Token exchange failure rate is above 5%"
-    tags: ["service:grantex", "severity:warning"]
-
-  - name: "Grantex High 429 Rate"
-    type: metric alert
-    query: >
-      sum(last_5m):sum:grantex.http.429{*}.as_count() > 200
-    message: "High rate of 429 responses — possible client misconfiguration"
-    tags: ["service:grantex", "severity:warning"]
-```
+| Event | Log Level | Key Fields |
+|-------|-----------|------------|
+| Grant created | `info` | `grantId`, `agentId`, `principalId`, `scopes` |
+| Grant revoked | `info` | `grantId`, `revokedBy`, `cascadeCount` |
+| Token exchanged | `info` | `grantId`, `agentId` |
+| Token refreshed | `info` | `grantId`, `agentId` |
+| Token verification failed | `warn` | `reason`, `tokenId` |
+| Auth request denied | `warn` | `agentId`, `principalId`, `reason` |
+| Rate limit hit | `warn` | `ip`, `endpoint`, `retryAfter` |
+| Anomaly detected | `warn` | `type`, `severity`, `agentId` |
+| Webhook delivery failed | `error` | `webhookId`, `url`, `statusCode`, `attempt` |
+| Database connection error | `error` | `error`, `pool` |
 
 ## Webhook-Based Monitoring
 
@@ -183,31 +173,9 @@ import { Grantex } from '@grantex/sdk';
 
 const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY! });
 
-// Subscribe to security-relevant events
-await grantex.webhooks.register({
+await grantex.webhooks.create({
   url: 'https://your-app.com/webhooks/grantex-alerts',
-  events: ['grant.revoked', 'anomaly.detected', 'token.issued'],
+  events: ['grant.revoked', 'token.issued'],
   secret: process.env.WEBHOOK_SECRET!,
 });
 ```
-
-In your webhook handler, route events to your alerting system:
-
-```typescript
-app.post('/webhooks/grantex-alerts', (req, res) => {
-  const { event, data } = req.body;
-
-  switch (event) {
-    case 'anomaly.detected':
-      sendSlackAlert(`Anomaly detected: ${data.type} (${data.severity})`);
-      break;
-    case 'grant.revoked':
-      incrementMetric('grantex.grants.revoked');
-      break;
-  }
-
-  res.sendStatus(200);
-});
-```
-
-This approach gives you real-time visibility without consuming your rate limit budget on polling.

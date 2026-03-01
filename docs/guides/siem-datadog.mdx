@@ -1,0 +1,182 @@
+---
+title: "Datadog Integration"
+description: "Forward Grantex authorization events to Datadog for centralized logging, dashboards, and anomaly detection monitors."
+---
+
+The `@grantex/destinations` package includes a `DatadogDestination` that sends Grantex events to the Datadog Logs API. This guide covers setup, configuration, and example monitors for production alerting.
+
+## Prerequisites
+
+- A Datadog account with a **Logs API key** (not an application key)
+- The `@grantex/destinations` package installed:
+
+```bash
+npm install @grantex/destinations
+```
+
+## Setup
+
+```typescript
+import { EventSource, DatadogDestination } from '@grantex/destinations';
+
+const source = new EventSource({
+  url: 'https://api.grantex.dev',
+  apiKey: process.env.GRANTEX_API_KEY!,
+});
+
+const datadog = new DatadogDestination({
+  apiKey: process.env.DD_API_KEY!,
+  site: 'datadoghq.com',       // or datadoghq.eu, us5.datadoghq.com, etc.
+  service: 'grantex',
+  source: 'grantex',
+  batchSize: 100,
+  flushIntervalMs: 5000,
+});
+
+source.addDestination(datadog);
+await source.start();
+```
+
+## Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `apiKey` | `string` | **required** | Datadog API key for the Logs API |
+| `site` | `string` | `datadoghq.com` | Datadog site (e.g., `datadoghq.eu`, `us5.datadoghq.com`) |
+| `service` | `string` | `grantex` | Service name tag applied to all logs |
+| `source` | `string` | `grantex` | Source tag (`ddsource`) applied to all logs |
+| `batchSize` | `number` | `100` | Number of events to buffer before flushing to Datadog |
+| `flushIntervalMs` | `number` | — | Flush buffered events on a timer (milliseconds) |
+
+## How It Works
+
+The `DatadogDestination` buffers incoming events and flushes them in batches to the [Datadog Logs HTTP API](https://docs.datadoghq.com/api/latest/logs/#send-logs) (`POST https://http-intake.logs.<site>/api/v2/logs`).
+
+Each Grantex event becomes a Datadog log entry with:
+
+| Field | Value |
+|-------|-------|
+| `ddsource` | Value of `source` config (default: `grantex`) |
+| `ddtags` | `type:<event-type>` (e.g., `type:grant.created`) |
+| `hostname` | `grantex-auth-service` |
+| `service` | Value of `service` config (default: `grantex`) |
+| `message` | Full JSON-serialized Grantex event |
+
+## Filtering Event Types
+
+To send only specific events to Datadog, filter at the `EventSource` level:
+
+```typescript
+const source = new EventSource({
+  url: 'https://api.grantex.dev',
+  apiKey: process.env.GRANTEX_API_KEY!,
+  types: ['grant.created', 'grant.revoked', 'budget.exhausted'],
+});
+```
+
+## Datadog Log Pipeline
+
+Create a [Datadog log pipeline](https://docs.datadoghq.com/logs/log_configuration/pipelines/) to parse Grantex events:
+
+1. Go to **Logs > Configuration > Pipelines**
+2. Create a new pipeline with filter `source:grantex`
+3. Add a **JSON Mapper** processor to extract fields from `message`:
+   - `event.type` -> `grantex.event_type`
+   - `event.data.grantId` -> `grantex.grant_id`
+   - `event.data.agentId` -> `grantex.agent_id`
+   - `event.data.principalId` -> `grantex.principal_id`
+   - `event.data.scopes` -> `grantex.scopes`
+4. Add a **Category Processor** on `grantex.event_type` to set severity:
+   - `grant.revoked` -> `warn`
+   - `budget.exhausted` -> `error`
+   - Everything else -> `info`
+
+## Example Monitors
+
+### High Grant Revocation Rate
+
+Alert when grant revocations exceed a threshold, which may indicate a security incident or misconfigured agent.
+
+```
+Monitor type: Log Count
+Query: source:grantex type:grant.revoked
+Threshold:
+  Warning:  > 10 in 5 minutes
+  Critical: > 50 in 5 minutes
+Message:
+  High grant revocation rate detected.
+  {{#is_alert}}More than 50 grants revoked in 5 minutes — possible security incident.{{/is_alert}}
+  {{#is_warning}}More than 10 grants revoked in 5 minutes — investigate agent behavior.{{/is_warning}}
+```
+
+### Budget Exhaustion
+
+Alert immediately when any budget is fully consumed.
+
+```
+Monitor type: Log Count
+Query: source:grantex type:budget.exhausted
+Threshold:
+  Critical: > 0 in 1 minute
+Message:
+  A Grantex budget has been exhausted.
+  Review the event details in the log explorer to identify the affected grant and agent.
+```
+
+### No Events Received (Heartbeat)
+
+Detect if the event stream connection drops.
+
+```
+Monitor type: Log Count
+Query: source:grantex
+Threshold:
+  Critical: < 1 in 15 minutes
+Message:
+  No Grantex events received in the last 15 minutes.
+  Check the @grantex/destinations process and network connectivity.
+```
+
+### Anomalous Token Issuance
+
+Detect spikes in token issuance that deviate from the baseline.
+
+```
+Monitor type: Anomaly Detection
+Query: count:source:grantex type:token.issued
+Algorithm: agile
+Deviation: 3
+Message:
+  Anomalous spike in Grantex token issuance detected.
+  This may indicate a compromised API key or runaway agent.
+```
+
+## Datadog Dashboard
+
+Create a dashboard with these widgets for a Grantex overview:
+
+| Widget | Query | Visualization |
+|--------|-------|---------------|
+| Events by type | `source:grantex` group by `@grantex.event_type` | Timeseries (stacked bars) |
+| Grants created | `source:grantex type:grant.created` | Query Value |
+| Grants revoked | `source:grantex type:grant.revoked` | Query Value |
+| Budget alerts | `source:grantex type:budget.*` | Event Stream |
+| Top agents | `source:grantex` group by `@grantex.agent_id` | Top List |
+
+## Graceful Shutdown
+
+Ensure buffered events are flushed before your process exits:
+
+```typescript
+process.on('SIGTERM', async () => {
+  await source.stop();  // flushes all destinations and closes connections
+  process.exit(0);
+});
+```
+
+## Next Steps
+
+- [Event Streaming](/guides/event-streaming) — SSE/WebSocket architecture overview
+- [Splunk Integration](/guides/siem-splunk) — forward events to Splunk HEC
+- [S3 & BigQuery Archival](/guides/siem-s3-bigquery) — long-term compliance storage
+- [Metrics & Observability](/guides/metrics-observability) — Prometheus metrics and Grafana dashboards

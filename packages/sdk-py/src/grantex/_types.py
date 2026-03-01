@@ -1263,3 +1263,143 @@ class ExchangeCredentialResponse:
             token_expires_at=data.get("tokenExpiresAt"),
             metadata=data.get("metadata", {}),
         )
+
+
+# ─── Budgets ─────────────────────────────────────────────────────────────────
+
+
+@dataclass
+class AllocateBudgetParams:
+    grant_id: str
+    initial_budget: float
+    currency: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "grantId": self.grant_id,
+            "initialBudget": self.initial_budget,
+        }
+        if self.currency is not None:
+            body["currency"] = self.currency
+        return body
+
+
+@dataclass(frozen=True)
+class BudgetAllocation:
+    id: str
+    grant_id: str
+    developer_id: str
+    initial_budget: str
+    remaining_budget: str
+    currency: str
+    created_at: str
+    updated_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BudgetAllocation":
+        return cls(
+            id=data["id"],
+            grant_id=data["grantId"],
+            developer_id=data["developerId"],
+            initial_budget=data["initialBudget"],
+            remaining_budget=data["remainingBudget"],
+            currency=data["currency"],
+            created_at=data["createdAt"],
+            updated_at=data["updatedAt"],
+        )
+
+
+@dataclass
+class DebitBudgetParams:
+    grant_id: str
+    amount: float
+    description: str | None = None
+    metadata: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "grantId": self.grant_id,
+            "amount": self.amount,
+        }
+        if self.description is not None:
+            body["description"] = self.description
+        if self.metadata is not None:
+            body["metadata"] = self.metadata
+        return body
+
+
+@dataclass(frozen=True)
+class DebitBudgetResponse:
+    remaining: str
+    transaction_id: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "DebitBudgetResponse":
+        return cls(
+            remaining=data["remaining"],
+            transaction_id=data["transactionId"],
+        )
+
+
+@dataclass(frozen=True)
+class BudgetTransaction:
+    id: str
+    grant_id: str
+    allocation_id: str
+    amount: str
+    description: str
+    metadata: dict[str, Any]
+    created_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BudgetTransaction":
+        return cls(
+            id=data["id"],
+            grant_id=data["grantId"],
+            allocation_id=data["allocationId"],
+            amount=data["amount"],
+            description=data["description"],
+            metadata=data.get("metadata", {}),
+            created_at=data["createdAt"],
+        )
+
+
+@dataclass(frozen=True)
+class BudgetTransactionsResponse:
+    transactions: tuple[BudgetTransaction, ...]
+    total: int
+    page: int
+    page_size: int
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "BudgetTransactionsResponse":
+        return cls(
+            transactions=tuple(
+                BudgetTransaction.from_dict(t)
+                for t in data.get("transactions", [])
+            ),
+            total=data["total"],
+            page=data["page"],
+            page_size=data["pageSize"],
+        )
+
+
+# ─── Event streaming ─────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class GrantexStreamEvent:
+    """Event received from the SSE/WebSocket stream."""
+    id: str
+    type: str
+    created_at: str
+    data: dict[str, Any]
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "GrantexStreamEvent":
+        return cls(
+            id=d["id"],
+            type=d["type"],
+            created_at=d["createdAt"],
+            data=d.get("data", {}),
+        )

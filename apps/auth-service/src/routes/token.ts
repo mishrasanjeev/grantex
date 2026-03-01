@@ -2,7 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
-import { fireWebhooks } from '../lib/webhook.js';
+import { emitEvent } from '../lib/events.js';
+import { tokenExchangeTotal, tokenExchangeDuration } from '../lib/metrics.js';
+import { withSpan } from '../lib/tracing.js';
+import { GRANTEX_AGENT_ID, GRANTEX_GRANT_ID, GRANTEX_PRINCIPAL_ID, GRANTEX_SCOPES, GRANTEX_DEVELOPER_ID } from '../lib/traceAttributes.js';
 import { verifyPkceChallenge } from '../lib/pkce.js';
 
 interface TokenBody {
@@ -19,6 +22,7 @@ interface RefreshBody {
 export async function tokenRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/token — stricter rate limit: 20/min
   app.post<{ Body: TokenBody }>('/v1/token', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
+    const endTimer = tokenExchangeDuration.startTimer();
     const { code, agentId, codeVerifier } = request.body;
 
     if (!code || !agentId) {
@@ -110,9 +114,21 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       UPDATE auth_requests SET status = 'consumed' WHERE id = ${authReq['id'] as string}
     `;
 
-    // Sign JWT
+    // Check for budget allocation
+    const budgetRows = await sql<{ remaining_budget: string }[]>`
+      SELECT remaining_budget FROM budget_allocations WHERE grant_id = ${grantId}
+    `;
+    const budgetAmount = budgetRows[0] ? parseFloat(budgetRows[0].remaining_budget) : undefined;
+
+    // Sign JWT (with optional tracing span)
     const audience = authReq['audience'] as string | null | undefined;
-    const jwt = await signGrantToken({
+    const jwt = await withSpan('grantex.token.sign', {
+      [GRANTEX_AGENT_ID]: authReq['agent_did'] as string,
+      [GRANTEX_GRANT_ID]: grantId,
+      [GRANTEX_PRINCIPAL_ID]: authReq['principal_id'] as string,
+      [GRANTEX_DEVELOPER_ID]: developerId,
+      [GRANTEX_SCOPES]: authReq['scopes'] as string[],
+    }, () => signGrantToken({
       sub: authReq['principal_id'] as string,
       agt: authReq['agent_did'] as string,
       dev: authReq['developer_id'] as string,
@@ -120,19 +136,23 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       jti,
       grnt: grantId,
       ...(audience ? { aud: audience } : {}),
+      ...(budgetAmount !== undefined ? { bdg: budgetAmount } : {}),
       exp: expTimestamp,
-    });
+    }));
 
-    // Fire webhook events (best-effort, non-blocking)
-    const webhookData = {
+    // Emit events (best-effort, non-blocking)
+    const eventData = {
       grantId,
       agentId: authReq['agent_id'] as string,
       principalId: authReq['principal_id'] as string,
       scopes: authReq['scopes'] as string[],
       expiresAt: expiresAt.toISOString(),
     };
-    fireWebhooks(developerId, 'grant.created', webhookData).catch(() => {});
-    fireWebhooks(developerId, 'token.issued', { tokenId: jti, ...webhookData }).catch(() => {});
+    emitEvent(developerId, 'grant.created', eventData).catch(() => {});
+    emitEvent(developerId, 'token.issued', { tokenId: jti, ...eventData }).catch(() => {});
+
+    tokenExchangeTotal.inc({ status: 'success' });
+    endTimer();
 
     return reply.status(201).send({
       grantToken: jwt,
@@ -230,15 +250,15 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       exp: expTimestamp,
     });
 
-    // Fire webhook (best-effort)
-    const webhookData = {
+    // Emit event (best-effort)
+    const eventData = {
       grantId,
       agentId: row['agent_id'] as string,
       principalId: row['principal_id'] as string,
       scopes,
       expiresAt: grantExpiresAt.toISOString(),
     };
-    fireWebhooks(developerId, 'token.issued', { tokenId: jti, ...webhookData }).catch(() => {});
+    emitEvent(developerId, 'token.issued', { tokenId: jti, ...eventData }).catch(() => {});
 
     return reply.status(201).send({
       grantToken: jwt,

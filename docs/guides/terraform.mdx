@@ -1,0 +1,143 @@
+---
+title: "Terraform Provider"
+description: "Manage Grantex resources as infrastructure with the official Terraform provider."
+---
+
+## Overview
+
+The Grantex Terraform provider lets you manage agents, policies, webhooks, SSO configuration, and budget allocations as code.
+
+## Installation
+
+```hcl
+terraform {
+  required_providers {
+    grantex = {
+      source  = "mishrasanjeev/grantex"
+      version = "~> 0.1"
+    }
+  }
+}
+
+provider "grantex" {
+  api_key  = var.grantex_api_key   # or set GRANTEX_API_KEY env var
+  base_url = "https://api.grantex.dev"
+}
+```
+
+## Resources
+
+### grantex_agent
+
+```hcl
+resource "grantex_agent" "calendar_bot" {
+  name        = "Calendar Assistant"
+  description = "Manages calendar events for users"
+  scopes      = ["read:calendar", "write:calendar"]
+}
+
+output "agent_did" {
+  value = grantex_agent.calendar_bot.did
+}
+```
+
+### grantex_policy
+
+```hcl
+resource "grantex_policy" "business_hours" {
+  name             = "Business Hours Only"
+  effect           = "deny"
+  agent_id         = grantex_agent.calendar_bot.agent_id
+  time_of_day_start = "18:00"
+  time_of_day_end   = "08:00"
+}
+```
+
+### grantex_webhook
+
+```hcl
+resource "grantex_webhook" "slack_alerts" {
+  url    = "https://hooks.slack.com/services/T00/B00/xxx"
+  events = ["grant.created", "grant.revoked", "budget.threshold"]
+  secret = var.webhook_secret
+}
+```
+
+### grantex_sso_config
+
+```hcl
+resource "grantex_sso_config" "okta" {
+  provider_type = "okta"
+  domain        = "mycompany.okta.com"
+  client_id     = var.okta_client_id
+  client_secret = var.okta_client_secret
+  metadata_url  = "https://mycompany.okta.com/.well-known/openid-configuration"
+}
+```
+
+### grantex_budget_allocation
+
+```hcl
+resource "grantex_budget_allocation" "prod_budget" {
+  grant_id       = "grnt_01HXYZ..."
+  initial_budget = 500.00
+  currency       = "USD"
+}
+```
+
+## Data Sources
+
+### grantex_agent
+
+```hcl
+data "grantex_agent" "existing" {
+  agent_id = "agt_01HXYZ..."
+}
+
+output "agent_name" {
+  value = data.grantex_agent.existing.name
+}
+```
+
+### grantex_grants
+
+```hcl
+data "grantex_grants" "active" {
+  status   = "active"
+  agent_id = grantex_agent.calendar_bot.agent_id
+}
+
+output "active_grant_count" {
+  value = length(data.grantex_grants.active.grants)
+}
+```
+
+## Import
+
+Existing resources can be imported:
+
+```bash
+terraform import grantex_agent.calendar_bot agt_01HXYZ...
+terraform import grantex_policy.business_hours pol_01HXYZ...
+terraform import grantex_webhook.slack_alerts whk_01HXYZ...
+```
+
+## State Management
+
+The provider stores resource IDs in Terraform state. For team environments, use a remote backend:
+
+```hcl
+terraform {
+  backend "gcs" {
+    bucket = "my-terraform-state"
+    prefix = "grantex"
+  }
+}
+```
+
+## Environment Variables
+
+| Variable | Description |
+|---|---|
+| `GRANTEX_API_KEY` | API key (alternative to `api_key` in provider block) |
+| `GRANTEX_BASE_URL` | Base URL (alternative to `base_url`, default: `https://api.grantex.dev`) |

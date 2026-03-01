@@ -1,0 +1,240 @@
+---
+title: "Splunk Integration"
+description: "Forward Grantex authorization events to Splunk via the HTTP Event Collector for search, alerting, and compliance dashboards."
+---
+
+The `@grantex/destinations` package includes a `SplunkDestination` that sends Grantex events to Splunk via the HTTP Event Collector (HEC). This guide covers HEC setup, configuration options, and example saved searches.
+
+## Prerequisites
+
+- A Splunk instance (Cloud or Enterprise) with **HTTP Event Collector** enabled
+- An HEC token with permission to write to your target index
+- The `@grantex/destinations` package installed:
+
+```bash
+npm install @grantex/destinations
+```
+
+## Splunk HEC Setup
+
+If you have not yet enabled HEC in your Splunk instance:
+
+1. In Splunk Web, go to **Settings > Data Inputs > HTTP Event Collector**
+2. Click **Global Settings** and set **All Tokens** to **Enabled**
+3. Click **New Token** and follow the wizard:
+   - Name: `grantex`
+   - Source type: `_json`
+   - Index: `grantex` (or your preferred index)
+4. Copy the generated token
+
+<Note>
+For Splunk Cloud, HEC is available at `https://http-inputs-<your-host>.splunkcloud.com:8088`. For Splunk Enterprise, the default port is `8088`.
+</Note>
+
+## Setup
+
+```typescript
+import { EventSource, SplunkDestination } from '@grantex/destinations';
+
+const source = new EventSource({
+  url: 'https://api.grantex.dev',
+  apiKey: process.env.GRANTEX_API_KEY!,
+});
+
+const splunk = new SplunkDestination({
+  hecUrl: 'https://splunk.example.com:8088',
+  hecToken: process.env.SPLUNK_HEC_TOKEN!,
+  index: 'grantex',
+  source: 'grantex',
+  sourcetype: '_json',
+  batchSize: 100,
+  flushIntervalMs: 5000,
+});
+
+source.addDestination(splunk);
+await source.start();
+```
+
+## Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `hecUrl` | `string` | **required** | Splunk HEC URL (e.g., `https://splunk.example.com:8088`) |
+| `hecToken` | `string` | **required** | HEC authentication token |
+| `index` | `string` | `main` | Splunk index to write events to |
+| `source` | `string` | `grantex` | Source field for ingested events |
+| `sourcetype` | `string` | `_json` | Sourcetype for ingested events |
+| `batchSize` | `number` | `100` | Number of events to buffer before flushing |
+| `flushIntervalMs` | `number` | — | Flush buffered events on a timer (milliseconds) |
+
+## How It Works
+
+The `SplunkDestination` buffers incoming events and flushes them as newline-delimited JSON to the HEC endpoint (`POST /services/collector/event`).
+
+Each Grantex event is wrapped in the HEC envelope:
+
+```json
+{
+  "event": {
+    "id": "evt_01JXYZ...",
+    "type": "grant.created",
+    "createdAt": "2026-03-01T12:00:00Z",
+    "data": { "grantId": "grnt_01...", "agentId": "ag_01..." }
+  },
+  "time": 1740787200,
+  "source": "grantex",
+  "sourcetype": "_json",
+  "index": "grantex"
+}
+```
+
+Multiple events are sent in a single request as newline-delimited JSON for efficiency.
+
+## Filtering Event Types
+
+To send only specific events to Splunk, filter at the `EventSource` level:
+
+```typescript
+const source = new EventSource({
+  url: 'https://api.grantex.dev',
+  apiKey: process.env.GRANTEX_API_KEY!,
+  types: ['grant.created', 'grant.revoked', 'budget.threshold', 'budget.exhausted'],
+});
+```
+
+## Field Extraction
+
+Create a field extraction in Splunk to make Grantex event fields searchable:
+
+1. Go to **Settings > Fields > Field Extractions**
+2. Create a new extraction for sourcetype `_json`:
+
+```
+FIELDALIAS-grantex_event_type = event.type AS grantex_event_type
+FIELDALIAS-grantex_grant_id = event.data.grantId AS grantex_grant_id
+FIELDALIAS-grantex_agent_id = event.data.agentId AS grantex_agent_id
+FIELDALIAS-grantex_principal_id = event.data.principalId AS grantex_principal_id
+```
+
+Or use `spath` in your searches:
+
+```
+index=grantex sourcetype=_json
+| spath output=event_type path=event.type
+| spath output=grant_id path=event.data.grantId
+| spath output=agent_id path=event.data.agentId
+```
+
+## Example Saved Searches
+
+### Grant Activity Over Time
+
+View grant creation and revocation trends:
+
+```
+index=grantex sourcetype=_json
+| spath output=event_type path=event.type
+| where event_type="grant.created" OR event_type="grant.revoked"
+| timechart span=1h count by event_type
+```
+
+### Top Agents by Token Issuance
+
+Identify the most active agents:
+
+```
+index=grantex sourcetype=_json
+| spath output=event_type path=event.type
+| spath output=agent_id path=event.data.agentId
+| where event_type="token.issued"
+| stats count by agent_id
+| sort -count
+| head 20
+```
+
+### Grant Revocation Spike Detection
+
+Alert when revocations spike above a baseline:
+
+```
+index=grantex sourcetype=_json
+| spath output=event_type path=event.type
+| where event_type="grant.revoked"
+| timechart span=5m count AS revocations
+| where revocations > 10
+```
+
+Save this as an alert with:
+- Trigger condition: **Number of results > 0**
+- Throttle: **5 minutes**
+- Action: Send email or trigger a webhook
+
+### Budget Exhaustion Events
+
+Catch budget exhaustion immediately:
+
+```
+index=grantex sourcetype=_json
+| spath output=event_type path=event.type
+| where event_type="budget.exhausted"
+| spath output=grant_id path=event.data.grantId
+| spath output=agent_id path=event.data.agentId
+| table _time, agent_id, grant_id
+```
+
+### Scope Usage Analysis
+
+Analyze which scopes are most frequently granted:
+
+```
+index=grantex sourcetype=_json
+| spath output=event_type path=event.type
+| where event_type="grant.created"
+| spath output=scopes path=event.data.scopes{}
+| mvexpand scopes
+| stats count by scopes
+| sort -count
+```
+
+### Principal Activity Audit
+
+Track all events for a specific user:
+
+```
+index=grantex sourcetype=_json
+| spath output=principal_id path=event.data.principalId
+| where principal_id="user-123"
+| spath output=event_type path=event.type
+| table _time, event_type, principal_id
+| sort -_time
+```
+
+## Splunk Dashboard
+
+Build a Grantex security dashboard with these panels:
+
+| Panel | Search | Visualization |
+|-------|--------|---------------|
+| Event volume | `index=grantex \| timechart span=1h count` | Area chart |
+| Events by type | `index=grantex \| spath output=event_type path=event.type \| stats count by event_type` | Pie chart |
+| Revocations | `index=grantex \| spath output=event_type path=event.type \| where event_type="grant.revoked" \| timechart span=5m count` | Line chart |
+| Budget alerts | `index=grantex \| spath output=event_type path=event.type \| where event_type="budget.*"` | Events list |
+| Top 10 agents | `index=grantex \| spath output=agent_id path=event.data.agentId \| stats count by agent_id \| sort -count \| head 10` | Bar chart |
+
+## Graceful Shutdown
+
+Ensure buffered events are flushed before your process exits:
+
+```typescript
+process.on('SIGTERM', async () => {
+  await source.stop();  // flushes all destinations and closes connections
+  process.exit(0);
+});
+```
+
+## Next Steps
+
+- [Event Streaming](/guides/event-streaming) — SSE/WebSocket architecture overview
+- [Datadog Integration](/guides/siem-datadog) — forward events to Datadog
+- [S3 & BigQuery Archival](/guides/siem-s3-bigquery) — long-term compliance storage
+- [Metrics & Observability](/guides/metrics-observability) — Prometheus metrics and Grafana dashboards

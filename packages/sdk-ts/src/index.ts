@@ -19,6 +19,9 @@ export {
   GrantexNetworkError,
 } from './errors.js';
 
+// Event streaming
+export { EventsClient, type GrantexEvent as GrantexStreamEvent, type StreamOptions, type EventHandler } from './resources/events.js';
+
 // Types
 export type {
   RateLimit,
@@ -103,6 +106,13 @@ export type {
   ListVaultCredentialsResponse,
   ExchangeCredentialParams,
   ExchangeCredentialResponse,
+  // Budgets
+  AllocateBudgetParams,
+  BudgetAllocation,
+  DebitBudgetParams,
+  DebitBudgetResponse,
+  BudgetTransaction,
+  BudgetTransactionsResponse,
   // Compliance
   ComplianceSummary,
   ComplianceExportGrantsParams,

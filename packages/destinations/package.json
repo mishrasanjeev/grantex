@@ -1,0 +1,25 @@
+{
+  "name": "@grantex/destinations",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "Event destination connectors for Grantex (Datadog, Splunk, S3, BigQuery, Kafka)",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.3.1",
+    "@types/node": "^20.11.0"
+  },
+  "engines": { "node": ">=18.0.0" }
+}

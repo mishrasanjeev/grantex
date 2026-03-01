@@ -1,0 +1,386 @@
+---
+title: "S3 & BigQuery Archival"
+description: "Archive Grantex authorization events to Amazon S3 and Google BigQuery for compliance, auditing, and long-term analytics."
+---
+
+For compliance frameworks like SOC 2, HIPAA, and GDPR, organizations need to retain authorization events for extended periods. The `@grantex/destinations` package provides `S3Destination` and `BigQueryDestination` classes that archive events to durable storage for long-term retention and analytics.
+
+## Prerequisites
+
+- The `@grantex/destinations` package installed:
+
+```bash
+npm install @grantex/destinations
+```
+
+- For S3: AWS credentials configured (environment variables, IAM role, or `~/.aws/credentials`)
+- For BigQuery: Google Cloud credentials configured (service account key or Application Default Credentials)
+
+## Amazon S3
+
+### Setup
+
+```typescript
+import { EventSource, S3Destination } from '@grantex/destinations';
+
+const source = new EventSource({
+  url: 'https://api.grantex.dev',
+  apiKey: process.env.GRANTEX_API_KEY!,
+});
+
+const s3 = new S3Destination({
+  bucket: 'my-company-grantex-events',
+  prefix: 'grantex-events',
+  region: 'us-east-1',
+  batchSize: 1000,
+  flushIntervalMs: 60000,  // flush every 60 seconds
+});
+
+source.addDestination(s3);
+await source.start();
+```
+
+### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `bucket` | `string` | **required** | S3 bucket name |
+| `prefix` | `string` | `grantex-events` | Key prefix for uploaded objects |
+| `region` | `string` | `us-east-1` | AWS region |
+| `batchSize` | `number` | `1000` | Number of events to buffer before flushing |
+| `flushIntervalMs` | `number` | — | Flush buffered events on a timer (milliseconds) |
+
+### How It Works
+
+The `S3Destination` buffers events and writes them as NDJSON (newline-delimited JSON) files to S3. Each flush produces one object with a timestamped key:
+
+```
+s3://my-company-grantex-events/grantex-events/2026-03-01T12-00-00-000Z.ndjson
+```
+
+Each line in the file is a complete JSON event:
+
+```json
+{"id":"evt_01...","type":"grant.created","createdAt":"2026-03-01T12:00:00Z","data":{"grantId":"grnt_01...","agentId":"ag_01..."}}
+{"id":"evt_02...","type":"token.issued","createdAt":"2026-03-01T12:00:01Z","data":{"tokenId":"tok_01...","grantId":"grnt_01..."}}
+```
+
+<Note>
+The S3 destination dynamically imports `@aws-sdk/client-s3` at runtime. Install it as a peer dependency: `npm install @aws-sdk/client-s3`.
+</Note>
+
+### IAM Policy
+
+The S3 destination requires `s3:PutObject` permission. Attach this policy to your IAM role or user:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "s3:PutObject",
+      "Resource": "arn:aws:s3:::my-company-grantex-events/grantex-events/*"
+    }
+  ]
+}
+```
+
+### S3 Lifecycle Policy
+
+Configure an S3 lifecycle policy for cost-effective long-term retention:
+
+```json
+{
+  "Rules": [
+    {
+      "ID": "grantex-events-archival",
+      "Filter": { "Prefix": "grantex-events/" },
+      "Status": "Enabled",
+      "Transitions": [
+        { "Days": 30, "StorageClass": "STANDARD_IA" },
+        { "Days": 90, "StorageClass": "GLACIER" },
+        { "Days": 365, "StorageClass": "DEEP_ARCHIVE" }
+      ],
+      "Expiration": { "Days": 2555 }
+    }
+  ]
+}
+```
+
+This policy:
+- Moves objects to **Standard-IA** after 30 days
+- Moves to **Glacier** after 90 days
+- Moves to **Deep Archive** after 1 year
+- Deletes after 7 years (adjust per your retention requirements)
+
+### Querying with Athena
+
+Set up an Athena table to query your archived events with standard SQL:
+
+```sql
+CREATE EXTERNAL TABLE grantex_events (
+  id        STRING,
+  type      STRING,
+  createdAt STRING,
+  data      STRING
+)
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+LOCATION 's3://my-company-grantex-events/grantex-events/'
+TBLPROPERTIES ('has_encrypted_data'='false');
+```
+
+Example queries:
+
+```sql
+-- Count events by type in the last 7 days
+SELECT type, COUNT(*) as cnt
+FROM grantex_events
+WHERE createdAt >= date_format(date_add('day', -7, current_timestamp), '%Y-%m-%dT%H:%i:%sZ')
+GROUP BY type
+ORDER BY cnt DESC;
+
+-- Find all revocations for a specific principal
+SELECT *
+FROM grantex_events
+WHERE type = 'grant.revoked'
+  AND json_extract_scalar(data, '$.principalId') = 'user-123';
+```
+
+## Google BigQuery
+
+### Setup
+
+```typescript
+import { EventSource, BigQueryDestination } from '@grantex/destinations';
+
+const source = new EventSource({
+  url: 'https://api.grantex.dev',
+  apiKey: process.env.GRANTEX_API_KEY!,
+});
+
+const bigquery = new BigQueryDestination({
+  projectId: 'my-gcp-project',
+  datasetId: 'grantex',
+  tableId: 'events',
+  batchSize: 500,
+  flushIntervalMs: 30000,  // flush every 30 seconds
+});
+
+source.addDestination(bigquery);
+await source.start();
+```
+
+### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `projectId` | `string` | **required** | Google Cloud project ID |
+| `datasetId` | `string` | **required** | BigQuery dataset ID |
+| `tableId` | `string` | **required** | BigQuery table ID |
+| `batchSize` | `number` | `500` | Number of events to buffer before flushing |
+| `flushIntervalMs` | `number` | — | Flush buffered events on a timer (milliseconds) |
+
+### How It Works
+
+The `BigQueryDestination` buffers events and inserts them as rows into a BigQuery table using the streaming insert API. Each event maps to a row with these columns:
+
+| Column | BigQuery Type | Source |
+|--------|---------------|--------|
+| `event_id` | `STRING` | `event.id` |
+| `event_type` | `STRING` | `event.type` |
+| `created_at` | `STRING` | `event.createdAt` |
+| `data` | `STRING` | `JSON.stringify(event.data)` |
+
+<Note>
+The BigQuery destination dynamically imports `@google-cloud/bigquery` at runtime. Install it as a peer dependency: `npm install @google-cloud/bigquery`.
+</Note>
+
+### Table Schema
+
+Create the BigQuery table before starting the destination:
+
+```sql
+CREATE TABLE `my-gcp-project.grantex.events` (
+  event_id   STRING NOT NULL,
+  event_type STRING NOT NULL,
+  created_at STRING NOT NULL,
+  data       STRING
+)
+PARTITION BY DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%SZ', created_at))
+CLUSTER BY event_type;
+```
+
+Partitioning by date and clustering by `event_type` gives you fast queries and lower costs for time-range and type-filtered queries.
+
+### IAM Permissions
+
+The service account needs these BigQuery permissions:
+
+- `bigquery.tables.updateData` (for streaming inserts)
+- `bigquery.tables.get` (to verify table existence)
+
+Grant the `BigQuery Data Editor` role on the dataset:
+
+```bash
+gcloud projects add-iam-policy-binding my-gcp-project \
+  --member="serviceAccount:grantex-events@my-gcp-project.iam.gserviceaccount.com" \
+  --role="roles/bigquery.dataEditor"
+```
+
+### Example Queries
+
+```sql
+-- Events by type in the last 24 hours
+SELECT event_type, COUNT(*) as count
+FROM `my-gcp-project.grantex.events`
+WHERE PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%SZ', created_at) > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 24 HOUR)
+GROUP BY event_type
+ORDER BY count DESC;
+
+-- All grant revocations with cascade details
+SELECT
+  event_id,
+  created_at,
+  JSON_VALUE(data, '$.grantId') AS grant_id,
+  JSON_VALUE(data, '$.cascade') AS cascade
+FROM `my-gcp-project.grantex.events`
+WHERE event_type = 'grant.revoked'
+ORDER BY created_at DESC
+LIMIT 100;
+
+-- Agents with the most token issuances
+SELECT
+  JSON_VALUE(data, '$.agentId') AS agent_id,
+  COUNT(*) AS tokens_issued
+FROM `my-gcp-project.grantex.events`
+WHERE event_type = 'token.issued'
+GROUP BY agent_id
+ORDER BY tokens_issued DESC
+LIMIT 20;
+```
+
+## Multi-Destination Setup
+
+For comprehensive compliance, send events to both a SIEM (for real-time alerting) and a data warehouse (for long-term retention):
+
+```typescript
+import {
+  EventSource,
+  DatadogDestination,
+  S3Destination,
+  BigQueryDestination,
+} from '@grantex/destinations';
+
+const source = new EventSource({
+  url: 'https://api.grantex.dev',
+  apiKey: process.env.GRANTEX_API_KEY!,
+});
+
+// Real-time alerting
+source.addDestination(new DatadogDestination({
+  apiKey: process.env.DD_API_KEY!,
+  batchSize: 50,
+  flushIntervalMs: 5000,
+}));
+
+// Long-term archival (S3)
+source.addDestination(new S3Destination({
+  bucket: 'my-company-grantex-archive',
+  prefix: 'events',
+  region: 'us-east-1',
+  batchSize: 1000,
+  flushIntervalMs: 60000,
+}));
+
+// Analytics (BigQuery)
+source.addDestination(new BigQueryDestination({
+  projectId: 'my-gcp-project',
+  datasetId: 'grantex',
+  tableId: 'events',
+  batchSize: 500,
+  flushIntervalMs: 30000,
+}));
+
+await source.start();
+```
+
+Events are dispatched to all destinations concurrently. A failure in one destination does not block the others.
+
+## Compliance Best Practices
+
+### Retention Periods
+
+Align your retention periods with your compliance framework:
+
+| Framework | Minimum Retention | Recommendation |
+|-----------|-------------------|----------------|
+| SOC 2 | 1 year | 3 years |
+| HIPAA | 6 years | 7 years |
+| GDPR | As needed | 3 years (with deletion capability) |
+| PCI DSS | 1 year | 3 years |
+| FedRAMP | 3 years | 5 years |
+
+### Immutability
+
+Enable object lock on your S3 bucket to prevent deletion or modification of archived events:
+
+```bash
+aws s3api put-object-lock-configuration \
+  --bucket my-company-grantex-events \
+  --object-lock-configuration '{
+    "ObjectLockEnabled": "Enabled",
+    "Rule": {
+      "DefaultRetention": {
+        "Mode": "COMPLIANCE",
+        "Years": 3
+      }
+    }
+  }'
+```
+
+### Encryption
+
+- **S3**: Enable SSE-S3 or SSE-KMS default encryption on your bucket
+- **BigQuery**: Data is encrypted at rest by default; use CMEK for additional control
+
+### Access Controls
+
+- Use dedicated IAM roles with least-privilege permissions
+- Enable CloudTrail (AWS) or Audit Logs (GCP) on the archival resources
+- Restrict access to the archival bucket/dataset to compliance and security teams
+
+### Completeness Verification
+
+Periodically verify that your archive contains all expected events:
+
+```sql
+-- BigQuery: compare event count with Grantex audit log
+SELECT
+  DATE(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%SZ', created_at)) AS day,
+  COUNT(*) AS event_count
+FROM `my-gcp-project.grantex.events`
+GROUP BY day
+ORDER BY day DESC
+LIMIT 30;
+```
+
+Cross-reference these counts against the Grantex audit log (`GET /v1/audit/entries`) to confirm no events were lost.
+
+## Graceful Shutdown
+
+Ensure buffered events are flushed before your process exits:
+
+```typescript
+process.on('SIGTERM', async () => {
+  await source.stop();  // flushes all destinations and closes connections
+  process.exit(0);
+});
+```
+
+## Next Steps
+
+- [Event Streaming](/guides/event-streaming) — SSE/WebSocket architecture overview
+- [Datadog Integration](/guides/siem-datadog) — real-time alerting with Datadog
+- [Splunk Integration](/guides/siem-splunk) — search and dashboards with Splunk
+- [Metrics & Observability](/guides/metrics-observability) — Prometheus metrics and Grafana dashboards

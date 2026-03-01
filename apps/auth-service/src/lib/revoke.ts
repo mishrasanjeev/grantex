@@ -1,6 +1,9 @@
 import { getSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
-import { fireWebhooks } from './webhook.js';
+import { emitEvent } from './events.js';
+import { grantsRevokedTotal } from './metrics.js';
+import { withSpan } from './tracing.js';
+import { GRANTEX_GRANT_ID, GRANTEX_DEVELOPER_ID } from './traceAttributes.js';
 
 export interface RevokeResult {
   revoked: boolean;
@@ -56,11 +59,13 @@ export async function revokeGrantCascade(
     await redis.set(`revoked:grant:${row['id'] as string}`, '1', 'EX', descTtl);
   }
 
-  // Fire webhook event (best-effort, non-blocking)
-  fireWebhooks(developerId, 'grant.revoked', {
+  // Emit event (best-effort, non-blocking)
+  emitEvent(developerId, 'grant.revoked', {
     grantId,
     cascade: descendantRows.length > 0,
   }).catch(() => {});
+
+  grantsRevokedTotal.inc(1 + descendantRows.length);
 
   return { revoked: true, descendantCount: descendantRows.length };
 }

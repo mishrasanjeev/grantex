@@ -1,0 +1,116 @@
+---
+title: "Pulumi"
+description: "Use the Grantex Terraform provider with Pulumi via the Terraform bridge."
+---
+
+## Overview
+
+Pulumi can consume any Terraform provider via the [Terraform Bridge](https://github.com/pulumi/pulumi-terraform-bridge). This lets you manage Grantex resources in TypeScript, Python, Go, or C#.
+
+## Setup
+
+### 1. Install the Grantex Terraform provider
+
+Ensure the Terraform provider binary is available in your path or use a dynamic provider:
+
+```bash
+pulumi plugin install resource grantex v0.1.0 --server github://api.github.com/mishrasanjeev/terraform-provider-grantex
+```
+
+### 2. Configure
+
+```bash
+pulumi config set grantex:apiKey --secret gx_live_...
+pulumi config set grantex:baseUrl https://api.grantex.dev
+```
+
+## TypeScript Example
+
+```typescript
+import * as pulumi from "@pulumi/pulumi";
+import * as grantex from "@pulumi/grantex";
+
+const agent = new grantex.Agent("calendar-bot", {
+  name: "Calendar Assistant",
+  description: "Manages calendar events",
+  scopes: ["read:calendar", "write:calendar"],
+});
+
+const policy = new grantex.Policy("business-hours", {
+  name: "Business Hours Only",
+  effect: "deny",
+  agentId: agent.agentId,
+  timeOfDayStart: "18:00",
+  timeOfDayEnd: "08:00",
+});
+
+const webhook = new grantex.Webhook("alerts", {
+  url: "https://hooks.slack.com/services/T00/B00/xxx",
+  events: ["grant.created", "grant.revoked"],
+});
+
+export const agentDid = agent.did;
+```
+
+## Python Example
+
+```python
+import pulumi
+import pulumi_grantex as grantex
+
+agent = grantex.Agent("calendar-bot",
+    name="Calendar Assistant",
+    description="Manages calendar events",
+    scopes=["read:calendar", "write:calendar"],
+)
+
+policy = grantex.Policy("business-hours",
+    name="Business Hours Only",
+    effect="deny",
+    agent_id=agent.agent_id,
+    time_of_day_start="18:00",
+    time_of_day_end="08:00",
+)
+
+pulumi.export("agent_did", agent.did)
+```
+
+## Go Example
+
+```go
+package main
+
+import (
+    "github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+    "github.com/pulumi/pulumi-grantex/sdk/go/grantex"
+)
+
+func main() {
+    pulumi.Run(func(ctx *pulumi.Context) error {
+        agent, err := grantex.NewAgent(ctx, "calendar-bot", &grantex.AgentArgs{
+            Name:   pulumi.String("Calendar Assistant"),
+            Scopes: pulumi.StringArray{pulumi.String("read:calendar")},
+        })
+        if err != nil {
+            return err
+        }
+        ctx.Export("agentDid", agent.Did)
+        return nil
+    })
+}
+```
+
+## Building the Bridge
+
+To create a native Pulumi provider from the Terraform provider:
+
+```bash
+git clone https://github.com/pulumi/pulumi-tf-provider-boilerplate
+cd pulumi-tf-provider-boilerplate
+
+# Update provider/resources.go to point to grantex
+# Build the provider
+make build
+```
+
+See the [Pulumi Terraform Bridge docs](https://github.com/pulumi/pulumi-terraform-bridge) for detailed instructions.

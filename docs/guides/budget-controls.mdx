@@ -1,0 +1,182 @@
+---
+title: "Budget & Spending Controls"
+description: "Allocate budgets to grants and track spending with per-transaction debit, threshold alerts, and JWT budget claims."
+---
+
+## Overview
+
+Grantex budget controls let you allocate a monetary budget to any grant, debit amounts on each API call, and receive real-time alerts when spending thresholds are crossed.
+
+Key features:
+- **Per-grant budget allocation** with atomic debit operations
+- **Race-condition safe** — uses SQL `WHERE remaining_budget >= amount`
+- **Threshold alerts** at 50% and 80% via event bus (`budget.threshold`)
+- **Exhaustion events** when the budget hits zero (`budget.exhausted`)
+- **JWT `bdg` claim** — budget balance embedded in grant tokens for downstream enforcement
+
+## Allocating a Budget
+
+<CodeGroup>
+
+```typescript TypeScript
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const allocation = await grantex.budgets.allocate({
+  grantId: 'grnt_01HXYZ...',
+  initialBudget: 100,
+  currency: 'USD', // optional, defaults to USD
+});
+
+console.log(allocation.id);             // "bdg_01HXYZ..."
+console.log(allocation.remainingBudget); // "100.0000"
+```
+
+```python Python
+from grantex import Grantex, AllocateBudgetParams
+
+grantex = Grantex(api_key="gx_...")
+
+allocation = grantex.budgets.allocate(AllocateBudgetParams(
+    grant_id="grnt_01HXYZ...",
+    initial_budget=100,
+    currency="USD",
+))
+
+print(allocation.remaining_budget)  # "100.0000"
+```
+
+```bash cURL
+curl -X POST https://api.grantex.dev/v1/budget/allocate \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{"grantId": "grnt_01HXYZ...", "initialBudget": 100}'
+```
+
+</CodeGroup>
+
+## Debiting from a Budget
+
+Each debit atomically decrements the remaining balance. If the debit exceeds the remaining budget, the API returns **402 Payment Required** with code `INSUFFICIENT_BUDGET`.
+
+<CodeGroup>
+
+```typescript TypeScript
+const result = await grantex.budgets.debit({
+  grantId: 'grnt_01HXYZ...',
+  amount: 0.50,
+  description: 'GPT-4 API call',
+  metadata: { model: 'gpt-4', tokens: 1200 },
+});
+
+console.log(result.remaining);      // "99.5000"
+console.log(result.transactionId);  // "btx_01HXYZ..."
+```
+
+```python Python
+from grantex import DebitBudgetParams
+
+result = grantex.budgets.debit(DebitBudgetParams(
+    grant_id="grnt_01HXYZ...",
+    amount=0.50,
+    description="GPT-4 API call",
+))
+
+print(result.remaining)  # "99.5000"
+```
+
+</CodeGroup>
+
+### Handling Insufficient Budget
+
+```typescript
+try {
+  await grantex.budgets.debit({ grantId, amount: 9999 });
+} catch (err) {
+  if (err instanceof GrantexApiError && err.code === 'INSUFFICIENT_BUDGET') {
+    // Balance too low — prompt user to top up
+  }
+}
+```
+
+## Checking Balance
+
+```typescript
+const balance = await grantex.budgets.balance('grnt_01HXYZ...');
+console.log(balance.remainingBudget); // "99.5000"
+console.log(balance.currency);        // "USD"
+```
+
+## Transaction History
+
+```typescript
+const { transactions, total } = await grantex.budgets.transactions(
+  'grnt_01HXYZ...',
+  { page: 1, pageSize: 50 },
+);
+
+for (const tx of transactions) {
+  console.log(`${tx.description}: -$${tx.amount}`);
+}
+```
+
+## Budget JWT Claim
+
+When a grant has a budget allocation, the issued grant token includes a `bdg` claim with the current remaining balance at the time of token issuance:
+
+```json
+{
+  "sub": "user_123",
+  "agt": "did:grantex:agent_abc",
+  "scp": ["read:email", "send:email"],
+  "grnt": "grnt_01HXYZ...",
+  "bdg": 99.5,
+  "exp": 1709312000
+}
+```
+
+Service providers can use this claim to enforce budget limits without making additional API calls.
+
+## Threshold Alerts
+
+Grantex automatically emits events when spending crosses thresholds:
+
+| Event | Trigger |
+|---|---|
+| `budget.threshold` | Remaining budget drops below 50% or 20% of initial |
+| `budget.exhausted` | Remaining budget reaches zero |
+
+These events are delivered via:
+- **Webhooks** — to all registered webhook endpoints
+- **SSE/WebSocket** — via the real-time event stream (`GET /v1/events/stream`)
+
+Example event payload:
+
+```json
+{
+  "id": "evt_01HXYZ...",
+  "type": "budget.threshold",
+  "createdAt": "2026-03-01T12:00:00Z",
+  "data": {
+    "grantId": "grnt_01HXYZ...",
+    "remainingBudget": "20.0000",
+    "initialBudget": "100.0000",
+    "thresholdPercent": 80
+  }
+}
+```
+
+## Portal Dashboard
+
+Budget allocations are visible in the developer portal under **Budgets**:
+- Summary cards showing total allocated, spent, and remaining
+- Per-grant usage bars with status badges (Healthy / > 50% / > 80% / Exhausted)
+- Transaction drill-down with pagination
+
+## API Reference
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/budget/allocate` | Create a budget allocation for a grant |
+| `POST` | `/v1/budget/debit` | Debit an amount from a grant's budget |
+| `GET` | `/v1/budget/balance/:grantId` | Get current budget balance |
+| `GET` | `/v1/budget/transactions/:grantId` | List paginated transaction history |

@@ -3,6 +3,9 @@ import { getSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { decodeTokenClaims, signGrantToken, parseExpiresIn } from '../lib/crypto.js';
+import { emitEvent } from '../lib/events.js';
+import { withSpan } from '../lib/tracing.js';
+import { GRANTEX_AGENT_ID, GRANTEX_GRANT_ID, GRANTEX_PRINCIPAL_ID, GRANTEX_SCOPES, GRANTEX_DEVELOPER_ID } from '../lib/traceAttributes.js';
 
 interface DelegateBody {
   parentGrantToken: string;
@@ -130,6 +133,25 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       parentGrnt,
       delegationDepth,
     });
+
+    // Emit events (best-effort, non-blocking)
+    emitEvent(developerId, 'grant.created', {
+      grantId,
+      agentId: subAgentId,
+      principalId: parentClaims['sub'] as string,
+      scopes,
+      expiresAt: expiresAt.toISOString(),
+      delegationDepth,
+      parentGrantId: parentGrnt,
+    }).catch(() => {});
+    emitEvent(developerId, 'token.issued', {
+      tokenId: jti,
+      grantId,
+      agentId: subAgentId,
+      principalId: parentClaims['sub'] as string,
+      scopes,
+      expiresAt: expiresAt.toISOString(),
+    }).catch(() => {});
 
     return reply.status(201).send({
       grantToken: jwt,

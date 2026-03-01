@@ -27,6 +27,8 @@ export const config = {
   stripePriceEnterprise: process.env['STRIPE_PRICE_ENTERPRISE'] ?? null,
   vaultEncryptionKey: process.env['VAULT_ENCRYPTION_KEY'] ?? null,
   adminApiKey: optional('ADMIN_API_KEY', ''),
+  metricsEnabled: process.env['METRICS_ENABLED'] !== 'false',
+  otelEndpoint: process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? null,
 } as const;
 
 if (!config.rsaPrivateKey && !config.autoGenerateKeys) {
