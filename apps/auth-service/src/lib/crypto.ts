@@ -28,6 +28,7 @@ export interface GrantTokenPayload {
   parentAgt?: string;
   parentGrnt?: string;
   delegationDepth?: number;
+  bdg?: number;
 }
 
 let _keyPair: KeyPair | null = null;
@@ -91,6 +92,7 @@ export async function signGrantToken(
     ...(payload.parentAgt !== undefined ? { parentAgt: payload.parentAgt } : {}),
     ...(payload.parentGrnt !== undefined ? { parentGrnt: payload.parentGrnt } : {}),
     ...(payload.delegationDepth !== undefined ? { delegationDepth: payload.delegationDepth } : {}),
+    ...(payload.bdg !== undefined ? { bdg: payload.bdg } : {}),
   })
     .setProtectedHeader({ alg: 'RS256', kid })
     .setIssuer(config.jwtIssuer)

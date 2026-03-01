@@ -47,9 +47,31 @@ spec:
             {{- toYaml .Values.readinessProbe | nindent 12 }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+        {{- if and .Values.opentelemetry.enabled .Values.opentelemetry.collector.enabled }}
+        - name: otel-collector
+          image: {{ .Values.opentelemetry.collector.image }}
+          args: ["--config=/etc/otel/config.yaml"]
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              containerPort: 4318
+              protocol: TCP
+          volumeMounts:
+            - name: otel-config
+              mountPath: /etc/otel
+          resources:
+            {{- toYaml .Values.opentelemetry.collector.resources | nindent 12 }}
+        {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if and .Values.opentelemetry.enabled .Values.opentelemetry.collector.enabled }}
+        - name: otel-config
+          configMap:
+            name: {{ include "grantex.fullname" . }}-otel
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

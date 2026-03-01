@@ -1,0 +1,156 @@
+---
+title: "OpenTelemetry Tracing"
+sidebarTitle: "OpenTelemetry"
+description: "Instrument your Grantex auth service with OpenTelemetry for distributed tracing and APM."
+---
+
+The Grantex auth service includes built-in OpenTelemetry instrumentation. When enabled, it produces distributed traces for all HTTP requests, database queries, and Redis operations — plus custom spans for key Grantex operations (token exchange, authorization, delegation, revocation).
+
+## Enabling OpenTelemetry
+
+Set the `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable to activate tracing. When unset, there is **zero overhead** — no SDK is loaded.
+
+```bash
+# Direct to an OTel Collector
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+
+# Or direct to a backend
+OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
+```
+
+The service name is `grantex-auth-service`.
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Yes | OTLP HTTP endpoint (e.g., `http://localhost:4318`) |
+| `OTEL_EXPORTER_OTLP_HEADERS` | No | Additional headers (e.g., `x-honeycomb-team=YOUR_KEY`) |
+| `OTEL_SERVICE_NAME` | No | Override service name (default: `grantex-auth-service`) |
+
+## Auto-Instrumented Libraries
+
+The following libraries are automatically instrumented:
+
+- **HTTP/Fastify** — incoming request spans with method, route, status code
+- **postgres.js** — database query spans with statement text
+- **ioredis** — Redis command spans
+
+## Custom Grantex Spans
+
+Key operations create custom spans with Grantex-specific attributes:
+
+| Span Name | Attributes |
+|-----------|------------|
+| `grantex.token.sign` | `grantex.agent_id`, `grantex.grant_id`, `grantex.principal_id`, `grantex.developer_id`, `grantex.scopes` |
+| `grantex.authorize` | `grantex.agent_id`, `grantex.principal_id`, `grantex.developer_id`, `grantex.scopes` |
+| `grantex.revoke` | `grantex.grant_id`, `grantex.developer_id` |
+| `grantex.delegate` | `grantex.agent_id`, `grantex.grant_id`, `grantex.principal_id`, `grantex.developer_id`, `grantex.scopes` |
+
+## Collector Configuration
+
+### Basic Collector Config
+
+```yaml
+# otel-collector-config.yaml
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+exporters:
+  # Choose your backend:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+  # Or Honeycomb:
+  otlp/honeycomb:
+    endpoint: "api.honeycomb.io:443"
+    headers:
+      x-honeycomb-team: "${HONEYCOMB_API_KEY}"
+
+  # Or Datadog:
+  datadog:
+    api:
+      key: "${DD_API_KEY}"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/jaeger]
+```
+
+### Docker Compose
+
+```yaml
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4318:4318"
+
+  auth-service:
+    image: grantex/auth-service
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    depends_on:
+      - otel-collector
+```
+
+### Kubernetes (Helm)
+
+Enable the OTel collector sidecar in your Helm values:
+
+```yaml
+opentelemetry:
+  enabled: true
+  endpoint: "http://otel-collector:4318"
+  collector:
+    enabled: true
+    image: otel/opentelemetry-collector-contrib:0.96.0
+```
+
+## Backend-Specific Setup
+
+### Jaeger
+
+```bash
+docker run -d --name jaeger \
+  -p 16686:16686 \
+  -p 4317:4317 \
+  jaegertracing/all-in-one:latest
+```
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` on the auth service.
+
+Open `http://localhost:16686` to view traces.
+
+### Honeycomb
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
+OTEL_EXPORTER_OTLP_HEADERS="x-honeycomb-team=YOUR_API_KEY"
+```
+
+### Datadog APM
+
+Use the OTel Collector with the Datadog exporter, or use the Datadog Agent's OTLP ingestion:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://datadog-agent:4318
+```
+
+Ensure the Datadog Agent has `otlp_config.receiver.protocols.http.endpoint: 0.0.0.0:4318` in its config.

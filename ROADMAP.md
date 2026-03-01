@@ -61,31 +61,19 @@
 
 ---
 
-## Now — v2.1 Enterprise Scale
-
-Features that make Grantex indispensable for regulated, high-scale environments.
-
-### Real-Time Event Streaming
-- [ ] Server-Sent Events (SSE) and WebSocket event streams
-- [ ] Event destinations: Datadog, Splunk, S3, BigQuery, Kafka
-- [ ] SIEM integration guides
-
-### Budget & Spending Controls
-- [ ] First-class budget system in grant tokens
-- [ ] Per-transaction budget decrement with auto-expiry
-- [ ] Budget alerts and spending dashboards
-
-### Infrastructure as Code
-- [ ] Terraform provider (agents, policies, webhooks, SSO config)
-- [ ] Pulumi provider
-- [ ] Helm chart improvements
-
-### Observability
-- [ ] Native OpenTelemetry traces for entire grant lifecycle
-- [ ] Prometheus metrics endpoint
-- [ ] Grafana dashboard templates
-
-**Target: End of June 2026**
+### v2.1 Enterprise Scale
+- [x] Server-Sent Events (SSE) and WebSocket event streams
+- [x] Event destinations package: Datadog, Splunk, S3, BigQuery, Kafka (`@grantex/destinations`)
+- [x] SIEM integration guides (Datadog, Splunk, S3/BigQuery archival)
+- [x] Budget & spending controls — per-grant allocation, atomic debit, threshold alerts
+- [x] Budget JWT claim (`bdg`) for downstream enforcement
+- [x] Budget portal dashboard with spending visualization
+- [x] Terraform provider (agents, policies, webhooks, SSO config, budgets)
+- [x] Pulumi bridge documentation
+- [x] Helm chart: ServiceMonitor, Grafana dashboards, OTel collector sidecar
+- [x] Prometheus metrics endpoint (`GET /metrics`)
+- [x] OpenTelemetry distributed tracing with custom spans
+- [x] Grafana dashboard templates (overview + per-agent)
 
 ---
 

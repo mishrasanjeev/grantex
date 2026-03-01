@@ -1,4 +1,5 @@
 import type postgres from 'postgres';
+import { webhookDeliveriesTotal } from '../lib/metrics.js';
 
 interface PendingDelivery {
   id: string;
@@ -48,6 +49,7 @@ async function processDeliveries(sql: ReturnType<typeof postgres>): Promise<void
           SET status = 'delivered', attempts = ${nextAttempt}, delivered_at = NOW()
           WHERE id = ${row.id}
         `;
+        webhookDeliveriesTotal.inc({ status: 'delivered' });
       } else {
         await markRetryOrFail(sql, row, nextAttempt, `HTTP ${res.status}`);
       }
@@ -70,6 +72,7 @@ async function markRetryOrFail(
       SET status = 'failed', attempts = ${attempt}, last_error = ${error}
       WHERE id = ${row.id}
     `;
+    webhookDeliveriesTotal.inc({ status: 'failed' });
   } else {
     const delaySec = backoffSeconds(attempt);
     await sql`

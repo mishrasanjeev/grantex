@@ -58,6 +58,14 @@
               "guides/end-user-permissions",
               "guides/migration",
               "guides/metrics-observability",
+              "guides/opentelemetry",
+              "guides/event-streaming",
+              "guides/siem-datadog",
+              "guides/siem-splunk",
+              "guides/siem-s3-bigquery",
+              "guides/budget-controls",
+              "guides/terraform",
+              "guides/pulumi",
               "guides/playground"
             ]
           },

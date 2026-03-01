@@ -20,6 +20,8 @@ import { SsoConfigPage } from './pages/settings/SsoConfigPage';
 import { ScimTokensPage } from './pages/settings/ScimTokensPage';
 import { WebhookList } from './pages/webhooks/WebhookList';
 import { WebhookDeliveries } from './pages/webhooks/WebhookDeliveries';
+import { BudgetList } from './pages/budgets/BudgetList';
+import { BudgetDetail } from './pages/budgets/BudgetDetail';
 import { AdminPage } from './pages/admin/AdminPage';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './RequireAuth';
@@ -51,6 +53,8 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/policies/:id/edit', element: <PolicyForm /> },
       { path: '/dashboard/anomalies', element: <AnomalyList /> },
       { path: '/dashboard/compliance', element: <ComplianceDashboard /> },
+      { path: '/dashboard/budgets', element: <BudgetList /> },
+      { path: '/dashboard/budgets/:grantId', element: <BudgetDetail /> },
       { path: '/dashboard/billing', element: <BillingPage /> },
       { path: '/dashboard/settings', element: <SettingsPage /> },
       { path: '/dashboard/settings/sso', element: <SsoConfigPage /> },

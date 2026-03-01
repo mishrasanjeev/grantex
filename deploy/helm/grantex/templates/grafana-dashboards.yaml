@@ -1,0 +1,15 @@
+{{- if .Values.grafana.dashboards.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "grantex.fullname" . }}-grafana-dashboards
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "grantex.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  grantex-overview.json: |-
+    {{ .Files.Get "dashboards/overview-dashboard.json" | nindent 4 }}
+  grantex-per-agent.json: |-
+    {{ .Files.Get "dashboards/per-agent-dashboard.json" | nindent 4 }}
+{{- end }}

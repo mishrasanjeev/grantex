@@ -1,5 +1,6 @@
 import type postgres from 'postgres';
 import { ulid } from 'ulid';
+import { anomaliesDetectedTotal } from '../lib/metrics.js';
 
 type AnomalyType = 'rate_spike' | 'high_failure_rate' | 'new_principal' | 'off_hours_activity';
 type AnomalySeverity = 'low' | 'medium' | 'high';
@@ -135,6 +136,10 @@ async function detectForDeveloper(
   }
 
   if (anomalies.length === 0) return;
+
+  for (const a of anomalies) {
+    anomaliesDetectedTotal.inc({ type: a.type, severity: a.severity });
+  }
 
   // Clear existing unacknowledged anomalies for this developer
   await sql`

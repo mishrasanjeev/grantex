@@ -27,6 +27,11 @@ import { healthRoutes } from './routes/health.js';
 import { adminRoutes } from './routes/admin.js';
 import { principalRoutes } from './routes/principal.js';
 import { vaultRoutes } from './routes/vault.js';
+import { metricsRoutes } from './routes/metrics.js';
+import { eventsRoutes } from './routes/events.js';
+import { budgetRoutes } from './routes/budget.js';
+import { metricsHookPlugin } from './plugins/metricsHook.js';
+import websocket from '@fastify/websocket';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -39,6 +44,7 @@ export async function buildApp(opts: AppOptions = {}) {
   });
 
   await app.register(cors);
+  await app.register(websocket);
 
   // Global rate limit: 100 requests/minute per IP
   await app.register(rateLimit, {
@@ -55,11 +61,15 @@ export async function buildApp(opts: AppOptions = {}) {
   await errorsPlugin(app);
   await authPlugin(app);
 
+  // Metrics hook (records HTTP duration for all routes)
+  await metricsHookPlugin(app);
+
   // Public routes (no auth required)
   await app.register(jwksRoutes);
   await app.register(healthRoutes);
   await app.register(consentRoutes);
   await app.register(dashboardRoutes);
+  await app.register(metricsRoutes);
 
   // Protected routes
   await app.register(agentsRoutes);
@@ -81,6 +91,8 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(adminRoutes);
   await app.register(principalRoutes);
   await app.register(vaultRoutes);
+  await app.register(eventsRoutes);
+  await app.register(budgetRoutes);
 
   return app;
 }

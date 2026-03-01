@@ -136,6 +136,28 @@ export interface ListResponse<T> {
   pageSize: number;
 }
 
+// ── Budgets ──────────────────────────────────────────────────────────────
+export interface BudgetAllocation {
+  id: string;
+  grantId: string;
+  developerId: string;
+  initialBudget: string;
+  remainingBudget: string;
+  currency: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BudgetTransaction {
+  id: string;
+  grantId: string;
+  allocationId: string;
+  amount: string;
+  description: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
 // ── Stats ────────────────────────────────────────────────────────────────
 export interface DashboardStats {
   agents: number;

@@ -408,6 +408,8 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **Go SDK** | `grantex-go` | `go get github.com/mishrasanjeev/grantex-go` | ✅ Shipped |
 | **CLI** | `@grantex/cli` | `npm install -g @grantex/cli` | ✅ Shipped |
 | **Conformance Suite** | `@grantex/conformance` | `npm install -g @grantex/conformance` | ✅ Shipped |
+| **Event Destinations** | `@grantex/destinations` | `npm install @grantex/destinations` | ✅ Shipped |
+| **Terraform Provider** | `terraform-provider-grantex` | `terraform { required_providers { grantex = { source = "mishrasanjeev/grantex" } } }` | ✅ Shipped |
 
 ### Framework Quick Examples
 

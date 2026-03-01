@@ -5,6 +5,9 @@ import { config } from '../config.js';
 import { ulid } from 'ulid';
 import { evaluatePolicies, type PolicyRow } from '../lib/policy.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
+import { authorizeTotal, authorizeDuration } from '../lib/metrics.js';
+import { withSpan } from '../lib/tracing.js';
+import { GRANTEX_AGENT_ID, GRANTEX_PRINCIPAL_ID, GRANTEX_SCOPES, GRANTEX_DEVELOPER_ID } from '../lib/traceAttributes.js';
 
 interface AuthorizeBody {
   agentId: string;
@@ -21,6 +24,7 @@ interface AuthorizeBody {
 export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/authorize — stricter rate limit: 10/min
   app.post<{ Body: AuthorizeBody }>('/v1/authorize', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
+    const endTimer = authorizeDuration.startTimer();
     const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h', audience, codeChallenge, codeChallengeMethod } = request.body;
 
     if (!agentId || !principalId || !scopes?.length) {
@@ -131,6 +135,9 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       responseBody['effect'] = 'allow';
       responseBody['code'] = autoCode;
     }
+
+    authorizeTotal.inc({ status: 'success' });
+    endTimer();
 
     return reply.status(201).send(responseBody);
   });
