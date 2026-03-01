@@ -1,6 +1,6 @@
 {
   "name": "@grantex/cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "CLI tool for local Grantex development",
   "type": "module",
   "bin": {
