@@ -80,7 +80,7 @@ from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook_signature
 
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 
 __all__ = [
     # Main client
