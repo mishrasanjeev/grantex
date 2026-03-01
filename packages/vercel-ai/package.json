@@ -1,6 +1,6 @@
 {
   "name": "@grantex/vercel-ai",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Vercel AI SDK integration for the Grantex delegated authorization protocol",
   "type": "module",
   "exports": {
