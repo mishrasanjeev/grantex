@@ -4,8 +4,6 @@ import { getRedis } from '../redis/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { decodeTokenClaims, signGrantToken, parseExpiresIn } from '../lib/crypto.js';
 import { emitEvent } from '../lib/events.js';
-import { withSpan } from '../lib/tracing.js';
-import { GRANTEX_AGENT_ID, GRANTEX_GRANT_ID, GRANTEX_PRINCIPAL_ID, GRANTEX_SCOPES, GRANTEX_DEVELOPER_ID } from '../lib/traceAttributes.js';
 
 interface DelegateBody {
   parentGrantToken: string;

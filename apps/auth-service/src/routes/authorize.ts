@@ -6,8 +6,6 @@ import { ulid } from 'ulid';
 import { evaluatePolicies, type PolicyRow } from '../lib/policy.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 import { authorizeTotal, authorizeDuration } from '../lib/metrics.js';
-import { withSpan } from '../lib/tracing.js';
-import { GRANTEX_AGENT_ID, GRANTEX_PRINCIPAL_ID, GRANTEX_SCOPES, GRANTEX_DEVELOPER_ID } from '../lib/traceAttributes.js';
 
 interface AuthorizeBody {
   agentId: string;

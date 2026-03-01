@@ -19,7 +19,7 @@ export function registerAuthorizeEndpoint(
   clientStore: ClientStore,
   codeStore: CodeStore,
 ): void {
-  app.get<{ Querystring: AuthorizeQuery }>('/authorize', async (request, reply) => {
+  app.get<{ Querystring: AuthorizeQuery }>('/authorize', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const {
       response_type,
       client_id,

@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
+import rateLimit from '@fastify/rate-limit';
 import { InMemoryClientStore } from './lib/clients.js';
 import { InMemoryCodeStore } from './lib/codes.js';
 import { registerMetadataEndpoint } from './endpoints/metadata.js';
@@ -12,6 +13,8 @@ export async function createMcpAuthServer(
   config: McpAuthConfig,
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
+
+  await app.register(rateLimit, { max: 100, timeWindow: '1 minute' });
 
   const clientStore = config.clientStore ?? new InMemoryClientStore();
   const codeStore = new InMemoryCodeStore();

@@ -2,8 +2,6 @@ import { getSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
 import { emitEvent } from './events.js';
 import { grantsRevokedTotal } from './metrics.js';
-import { withSpan } from './tracing.js';
-import { GRANTEX_GRANT_ID, GRANTEX_DEVELOPER_ID } from './traceAttributes.js';
 
 export interface RevokeResult {
   revoked: boolean;
