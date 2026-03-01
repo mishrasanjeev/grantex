@@ -24,7 +24,7 @@
     "start": "node dist/cli.js"
   },
   "dependencies": {
-    "fastify": "^4.26.0",
+    "fastify": "^5.7.3",
     "yaml": "^2.3.4"
   },
   "peerDependencies": {
@@ -44,6 +44,9 @@
     "type": "git",
     "url": "https://github.com/mishrasanjeev/grantex.git",
     "directory": "packages/gateway"
+  },
+  "overrides": {
+    "esbuild": "^0.25.0"
   },
   "keywords": [
     "grantex",

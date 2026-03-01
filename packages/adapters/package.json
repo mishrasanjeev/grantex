@@ -37,6 +37,9 @@
     "url": "https://github.com/mishrasanjeev/grantex.git",
     "directory": "packages/adapters"
   },
+  "overrides": {
+    "esbuild": "^0.25.0"
+  },
   "keywords": [
     "grantex",
     "adapters",
