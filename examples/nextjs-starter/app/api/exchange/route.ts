@@ -1,13 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Grantex } from '@grantex/sdk';
 
-const BASE_URL = process.env['GRANTEX_URL'] ?? 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
+const ALLOWED_HOSTS = [
+  'https://grantex-auth-dd4mtrt2gq-uc.a.run.app',
+  'http://localhost:3001',
+];
+
+function getBaseUrl(): string {
+  const url = process.env['GRANTEX_URL'] ?? 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
+  if (!ALLOWED_HOSTS.includes(url)) {
+    throw new Error(`GRANTEX_URL must be one of: ${ALLOWED_HOSTS.join(', ')}`);
+  }
+  return url;
+}
+
 const API_KEY = process.env['GRANTEX_API_KEY'] ?? '';
 
 export async function POST(request: NextRequest) {
   if (!API_KEY) {
     return NextResponse.json({ error: 'GRANTEX_API_KEY not configured' }, { status: 500 });
   }
+
+  let baseUrl: string;
+  try {
+    baseUrl = getBaseUrl();
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Invalid GRANTEX_URL';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+
+  const gx = new Grantex({ apiKey: API_KEY, baseUrl });
 
   const body = await request.json() as { code?: string; agentId?: string };
   const { code, agentId } = body;
@@ -16,48 +38,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'code and agentId are required' }, { status: 400 });
   }
 
-  const headers = {
-    Authorization: `Bearer ${API_KEY}`,
-    'Content-Type': 'application/json',
-  };
-
   try {
     // Exchange authorization code for grant token
-    const tokenRes = await fetch(`${BASE_URL}/v1/token`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ code, agentId }),
-    });
-    const token = await tokenRes.json() as {
-      grantToken?: string; grantId?: string; scopes?: string[];
-      expiresAt?: string; message?: string;
-    };
-    if (!tokenRes.ok) {
-      return NextResponse.json({ error: token.message ?? 'Token exchange failed' }, { status: tokenRes.status });
-    }
-
-    // Fetch agent details to get the DID for audit logging
-    const agentRes = await fetch(`${BASE_URL}/v1/agents/${agentId}`, { headers });
-    const agent = await agentRes.json() as { did?: string };
+    const token = await gx.tokens.exchange({ code, agentId });
 
     // Log an audit entry (best-effort — don't fail the demo if this errors)
     let auditEntryId: string | null = null;
     try {
-      const auditRes = await fetch(`${BASE_URL}/v1/audit/log`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          agentId,
-          agentDid: agent.did,
-          grantId: token.grantId,
-          principalId: 'demo-user',
-          action: 'demo.token_exchanged',
-          status: 'success',
-          metadata: { source: 'nextjs-starter' },
-        }),
+      const auditEntry = await gx.audit.log({
+        agentId,
+        grantId: token.grantId,
+        action: 'demo.token_exchanged',
+        status: 'success',
+        metadata: { source: 'nextjs-starter' },
       });
-      const auditData = await auditRes.json() as { entryId?: string };
-      auditEntryId = auditData.entryId ?? null;
+      auditEntryId = auditEntry.entryId ?? null;
     } catch {
       // Audit logging is non-critical for the demo
     }

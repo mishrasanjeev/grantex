@@ -283,7 +283,12 @@ export async function scimRoutes(app: FastifyInstance): Promise<void> {
         if (op.path === 'active' || op.path === 'userName' || op.path === 'displayName') {
           patch[op.path] = op.value;
         } else if (!op.path && typeof op.value === 'object' && op.value !== null) {
-          Object.assign(patch, op.value);
+          const allowed = ['active', 'userName', 'displayName'] as const;
+          for (const key of allowed) {
+            if (key in (op.value as Record<string, unknown>)) {
+              patch[key] = (op.value as Record<string, unknown>)[key];
+            }
+          }
         }
       }
     }

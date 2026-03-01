@@ -16,20 +16,20 @@ const AuthContext = createContext<AuthState | null>(null);
 const STORAGE_KEY = 'grantex_api_key';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [apiKey, setKey] = useState<string | null>(() => localStorage.getItem(STORAGE_KEY));
+  const [apiKey, setKey] = useState<string | null>(() => sessionStorage.getItem(STORAGE_KEY));
   const [developer, setDeveloper] = useState<Developer | null>(null);
-  const [loading, setLoading] = useState(!!localStorage.getItem(STORAGE_KEY));
+  const [loading, setLoading] = useState(!!sessionStorage.getItem(STORAGE_KEY));
 
   const login = useCallback(async (key: string) => {
     setApiKey(key);
     const dev = await getMe();
-    localStorage.setItem(STORAGE_KEY, key);
+    sessionStorage.setItem(STORAGE_KEY, key);
     setKey(key);
     setDeveloper(dev);
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
     setApiKey(null);
     setKey(null);
     setDeveloper(null);
@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Restore session on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = sessionStorage.getItem(STORAGE_KEY);
     if (!stored) return;
     setApiKey(stored);
     getMe()
@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setDeveloper(dev);
       })
       .catch(() => {
-        localStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(STORAGE_KEY);
         setApiKey(null);
         setKey(null);
       })
