@@ -9,14 +9,14 @@ description: "Latest conformance test results for the Grantex production server.
 The Grantex hosted service at `grantex-auth-dd4mtrt2gq-uc.a.run.app` is continuously validated against the full conformance suite. Below are the latest results.
 
 <Info>
-**42 passed, 0 failed** — 39 core + 3 optional principal-sessions tests in ~79s
+**45 passed, 0 failed** — 42 core + 3 optional principal-sessions tests in ~80s
 </Info>
 
-Last run: **February 28, 2026** | Conformance suite version: **0.1.2**
+Last run: **March 1, 2026** | Conformance suite version: **0.1.3**
 
 ---
 
-## Core Suites (39 tests)
+## Core Suites (42 tests)
 
 ### health — Health check and JWKS endpoints
 
@@ -101,6 +101,14 @@ Last run: **February 28, 2026** | Conformance suite version: **0.1.2**
 | JWKS only contains RS256 keys | Pass | §14 |
 | Delegation scope enforcement prevents escalation | Pass | §14 |
 | Audit log is append-only (PUT/DELETE return 404 or 405) | Pass | §14 |
+
+### rate-limit-headers — Rate limit headers presence and format
+
+| Test | Status | Spec |
+|------|--------|------|
+| Rate limit headers on authenticated endpoint | Pass | §14 |
+| Rate limit headers on token verify endpoint | Pass | §14 |
+| JWKS endpoint exempt from rate limits | Pass | §14 |
 
 ---
 

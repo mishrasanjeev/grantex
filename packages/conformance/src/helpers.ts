@@ -88,3 +88,22 @@ export function expectIncludes(arr: unknown[], value: unknown, field: string): v
     );
   }
 }
+
+export function expectHeader(res: HttpResponse, name: string): string {
+  const value = res.headers[name.toLowerCase()];
+  if (value === undefined || value === '') {
+    throw new AssertionError(`Expected header "${name}" to be present`);
+  }
+  return value;
+}
+
+export function expectNumericHeader(res: HttpResponse, name: string): number {
+  const value = expectHeader(res, name);
+  const num = Number(value);
+  if (isNaN(num)) {
+    throw new AssertionError(
+      `Expected header "${name}" to be numeric, got "${value}"`,
+    );
+  }
+  return num;
+}

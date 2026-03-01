@@ -15,7 +15,7 @@ import {
 import type { HttpResponse } from '../src/types.js';
 
 function mockResponse<T>(status: number, body: T): HttpResponse<T> {
-  return { status, body, rawText: JSON.stringify(body), durationMs: 10 };
+  return { status, headers: {}, body, rawText: JSON.stringify(body), durationMs: 10 };
 }
 
 describe('test()', () => {

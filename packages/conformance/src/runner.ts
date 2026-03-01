@@ -13,6 +13,7 @@ import { grantsSuite } from './suites/grants.js';
 import { delegationSuite } from './suites/delegation.js';
 import { auditSuite } from './suites/audit.js';
 import { securitySuite } from './suites/security.js';
+import { rateLimitHeadersSuite } from './suites/rate-limit-headers.js';
 
 // Optional suites
 import { policiesSuite } from './suites/policies.js';
@@ -33,6 +34,7 @@ const coreSuites: SuiteDefinition[] = [
   delegationSuite,
   auditSuite,
   securitySuite,
+  rateLimitHeadersSuite,
 ];
 
 const optionalSuites: SuiteDefinition[] = [
