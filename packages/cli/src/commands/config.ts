@@ -32,10 +32,8 @@ export function configCommand(): Command {
       }
 
       console.log(`URL      ${config.baseUrl}`);
-      const masked = config.apiKey.length > 12
-        ? config.apiKey.slice(0, 8) + '…' + config.apiKey.slice(-4)
-        : '****';
-      console.log(`API key  ${masked}`);
+      const prefix = config.apiKey.startsWith('gx_test_') ? 'gx_test_' : 'gx_live_';
+      console.log(`API key  ${prefix}${'*'.repeat(8)}`);
 
       if (process.env['GRANTEX_URL'] || process.env['GRANTEX_KEY']) {
         console.log(chalk.dim('(env vars take precedence over config file)'));
