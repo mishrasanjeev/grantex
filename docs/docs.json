@@ -20,8 +20,7 @@
         { "tab": "TypeScript SDK", "href": "/sdks/typescript/overview" },
         { "tab": "Python SDK", "href": "/sdks/python/overview" },
         { "tab": "Go SDK", "href": "/sdks/go/overview" },
-        { "tab": "Integrations", "href": "/integrations/overview" },
-        { "tab": "API Reference", "href": "/api-reference" }
+        { "tab": "Integrations", "href": "/integrations/overview" }
       ]
     },
     "tabs": [
