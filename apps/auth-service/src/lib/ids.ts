@@ -16,3 +16,5 @@ export const newScimUserId = (): string => `scimuser_${ulid()}`;
 export const newVaultCredentialId = (): string => `vault_${ulid()}`;
 export const newBudgetAllocationId = (): string => `bdg_${ulid()}`;
 export const newBudgetTransactionId = (): string => `btx_${ulid()}`;
+export const newUsageDailyId = (): string => `usg_${ulid()}`;
+export const newPolicyBundleId = (): string => `pbnd_${ulid()}`;

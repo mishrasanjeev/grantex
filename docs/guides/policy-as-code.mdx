@@ -1,0 +1,63 @@
+---
+title: "Policy-as-Code"
+description: "Manage Grantex policies in Git with automated sync"
+---
+
+## Overview
+
+Grantex supports policy-as-code workflows where your authorization policies live in a Git repository and are automatically synced to the auth service.
+
+## Uploading Policy Bundles
+
+Upload a policy bundle via the API:
+
+```bash
+# Base64-encode your policy files
+CONTENT=$(tar czf - policies/ | base64)
+
+curl -X POST https://api.grantex.dev/v1/policies/sync \
+  -H "Authorization: Bearer $GRANTEX_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"format\": \"rego\",
+    \"version\": \"1.2.0\",
+    \"content\": \"$CONTENT\",
+    \"fileCount\": 5,
+    \"activate\": true
+  }"
+```
+
+## Git Webhook Integration
+
+Set up a webhook to automatically sync on push:
+
+1. Configure a webhook in your Git provider pointing to:
+   ```
+   POST https://api.grantex.dev/v1/policies/sync/webhook
+   ```
+2. Your CI/CD pipeline bundles and uploads the policies on each push to main
+
+## Managing Bundles
+
+```bash
+# List all bundles
+curl https://api.grantex.dev/v1/policies/bundles \
+  -H "Authorization: Bearer $GRANTEX_KEY"
+
+# Get active bundle
+curl "https://api.grantex.dev/v1/policies/bundles/active?format=rego" \
+  -H "Authorization: Bearer $GRANTEX_KEY"
+```
+
+## SDK Usage
+
+```typescript
+// TypeScript
+const grantex = new Grantex({ apiKey: '...' });
+// Policies are evaluated automatically on authorize()
+const auth = await grantex.authorize({
+  agentId: 'ag_...',
+  userId: 'user_...',
+  scopes: ['read'],
+});
+```

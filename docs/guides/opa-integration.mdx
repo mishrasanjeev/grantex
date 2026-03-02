@@ -1,0 +1,69 @@
+---
+title: "OPA Integration"
+description: "Use Open Policy Agent as your Grantex policy backend"
+---
+
+## Overview
+
+Grantex supports [Open Policy Agent (OPA)](https://www.openpolicyagent.org/) as a pluggable policy backend. When configured, authorization decisions are delegated to your OPA server instead of the built-in policy engine.
+
+## Configuration
+
+Set the following environment variables on your auth service:
+
+```bash
+POLICY_BACKEND=opa
+OPA_URL=http://opa:8181
+OPA_FALLBACK_TO_BUILTIN=true  # fallback to built-in if OPA is unreachable
+```
+
+## How It Works
+
+1. When a `POST /v1/authorize` request arrives, the auth service sends the evaluation context to OPA
+2. OPA evaluates the request against your Rego policies
+3. The result is mapped: `allow: true` → auto-approve, `allow: false` → deny
+4. If OPA is unavailable and fallback is enabled, the built-in policy engine is used
+
+## OPA Policy Structure
+
+Create a Rego policy at `grantex/authz`:
+
+```rego
+package grantex.authz
+
+default allow = false
+
+# Allow read-only scopes for any agent
+allow {
+    input.scopes[_] == "read"
+    count(input.scopes) == 1
+}
+
+# Deny after business hours
+allow = false {
+    input.time >= "18:00"
+    input.time < "08:00"
+}
+```
+
+## Policy Input
+
+The auth service sends the following input to OPA:
+
+```json
+{
+  "input": {
+    "agent_id": "ag_...",
+    "principal_id": "user_...",
+    "scopes": ["read", "write"],
+    "developer_id": "dev_...",
+    "time": "14:30"
+  }
+}
+```
+
+## Timeout and Fallback
+
+OPA requests have a 5-second timeout. If OPA is unreachable or returns an error:
+- With `OPA_FALLBACK_TO_BUILTIN=true` (default): falls back to the built-in policy engine
+- With `OPA_FALLBACK_TO_BUILTIN=false`: returns `null` (no policy match, goes to consent flow)

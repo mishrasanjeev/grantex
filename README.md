@@ -408,6 +408,8 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **Go SDK** | `grantex-go` | `go get github.com/mishrasanjeev/grantex-go` | ✅ Shipped |
 | **CLI** | `@grantex/cli` | `npm install -g @grantex/cli` | ✅ Shipped |
 | **Conformance Suite** | `@grantex/conformance` | `npm install -g @grantex/conformance` | ✅ Shipped |
+| **A2A Bridge (TS)** | `@grantex/a2a` | `npm install @grantex/a2a` | ✅ Shipped |
+| **A2A Bridge (Py)** | `grantex-a2a` | `pip install grantex-a2a` | ✅ Shipped |
 | **Event Destinations** | `@grantex/destinations` | `npm install @grantex/destinations` | ✅ Shipped |
 | **Terraform Provider** | `terraform-provider-grantex` | `terraform { required_providers { grantex = { source = "mishrasanjeev/grantex" } } }` | ✅ Shipped |
 
@@ -622,6 +624,8 @@ All milestones through v1.0 are complete. See [ROADMAP.md](https://github.com/mi
 | **v0.3 — Enterprise** | CrewAI, Vercel AI, compliance exports, policy engine, SCIM/SSO, anomaly detection | ✅ Complete |
 | **v1.0 — Stable Protocol** | Protocol spec finalized (v1.0), security audit, SOC2, standards submission | ✅ Complete |
 | **v2.0 — Platform** | MCP Auth Server, Credential Vault, 7 new adapters, webhook delivery log, examples | ✅ Complete |
+| **v2.1 — Enterprise Scale** | Event streaming, budget controls, observability, Terraform provider, gateway, conformance | ✅ Complete |
+| **v2.2 — Ecosystem** | OPA/Cedar policy backends, A2A protocol bridge, usage metering, custom domains, policy-as-code | ✅ Complete |
 
 ---
 

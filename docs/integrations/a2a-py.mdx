@@ -1,0 +1,64 @@
+---
+title: "A2A Protocol Bridge (Python)"
+description: "Inject Grantex grant tokens into Google A2A agent-to-agent communication from Python"
+---
+
+## Overview
+
+The `grantex-a2a` package is the Python counterpart to `@grantex/a2a`, bridging the Google A2A protocol with Grantex delegated authorization.
+
+## Installation
+
+```bash
+pip install grantex-a2a
+```
+
+## Client
+
+```python
+from grantex_a2a import (
+    A2AGrantexClient, A2AGrantexClientOptions,
+    TaskSendParams, A2AMessage, A2APart,
+)
+
+client = A2AGrantexClient(A2AGrantexClientOptions(
+    agent_url="https://agent.example.com/a2a",
+    grant_token="eyJ...",
+))
+
+task = client.send_task(TaskSendParams(
+    message=A2AMessage(role="user", parts=[A2APart(type="text", text="Hello")])
+))
+print(task.id, task.status.state)
+```
+
+## Server Middleware
+
+```python
+from grantex_a2a import create_a2a_auth_middleware, A2AAuthMiddlewareOptions
+
+middleware = create_a2a_auth_middleware(
+    A2AAuthMiddlewareOptions(
+        jwks_uri="https://grantex.dev/.well-known/jwks.json",
+        required_scopes=["read"],
+    )
+)
+
+# In your FastAPI/Flask handler:
+grant = middleware(dict(request.headers))
+print(grant.principal_id, grant.scopes)
+```
+
+## Agent Card
+
+```python
+from grantex_a2a import build_grantex_agent_card, GrantexAgentCardOptions
+
+card = build_grantex_agent_card(GrantexAgentCardOptions(
+    name="My Agent",
+    description="An agent",
+    url="https://my-agent.example.com/a2a",
+    jwks_uri="https://grantex.dev/.well-known/jwks.json",
+    issuer="https://grantex.dev",
+))
+```
