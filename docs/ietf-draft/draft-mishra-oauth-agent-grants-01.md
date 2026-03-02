@@ -31,18 +31,14 @@ normative:
   RFC7517:
   RFC7518:
   RFC6749:
-  RFC6750:
-  RFC7636:
   RFC8414:
   RFC4648:
   RFC3986:
   RFC8259:
 
 informative:
-  RFC7009:
   RFC7662:
   RFC8693:
-  RFC7517:
   RFC8725:
   DID-CORE:
     title: "Decentralized Identifiers (DIDs) v1.0"
@@ -62,7 +58,6 @@ informative:
     author:
       org: WHATWG
     date: 2024
-  RFC6455:
   OPA:
     title: "Open Policy Agent"
     target: https://www.openpolicyagent.org/docs/latest/
@@ -84,7 +79,7 @@ informative:
 
 --- abstract
 
-Artificial intelligence (AI) agents increasingly take autonomous actions — submitting forms, initiating payments, and sending communications — on behalf of human users across third-party services. This document defines the Delegated Agent Authorization Protocol (DAAP), an open, model-neutral, framework-agnostic protocol that specifies: cryptographic agent identity using Decentralized Identifiers (DIDs); a human-consent-based grant authorization flow modelled on OAuth 2.0; a signed JSON Web Token (JWT) grant token format with agent-specific claims; a revocation model with online verification; a hash-chained append-only audit trail; a policy engine for automated authorization decisions; a multi-agent delegation model with cascade revocation; budget controls for spending limits; real-time event streaming; a credential vault for secure secret storage; and external policy backend integration with OPA and Cedar. DAAP fills a gap unaddressed by existing OAuth 2.0 extensions: verifying that a specific human authorized a specific AI agent to perform a specific action, revoking that authorization in real time, and producing a tamper-evident record of what the agent did.
+Artificial intelligence (AI) agents increasingly take autonomous actions -- submitting forms, initiating payments, and sending communications -- on behalf of human users across third-party services. This document defines the Delegated Agent Authorization Protocol (DAAP), an open, model-neutral, framework-agnostic protocol that specifies: cryptographic agent identity using Decentralized Identifiers (DIDs); a human-consent-based grant authorization flow modelled on OAuth 2.0; a signed JSON Web Token (JWT) grant token format with agent-specific claims; a revocation model with online verification; a hash-chained append-only audit trail; a policy engine for automated authorization decisions; a multi-agent delegation model with cascade revocation; budget controls for spending limits; real-time event streaming; a credential vault for secure secret storage; and external policy backend integration with OPA and Cedar. DAAP fills a gap unaddressed by existing OAuth 2.0 extensions: verifying that a specific human authorized a specific AI agent to perform a specific action, revoking that authorization in real time, and producing a tamper-evident record of what the agent did.
 
 --- middle
 
@@ -153,7 +148,7 @@ Scope:
 : A named permission string following the format `resource:action[:constraint]` as defined in {{scope-format}}.
 
 DID:
-: A Decentralized Identifier {{DID-CORE}} — the Agent's cryptographic identity. In DAAP, Agent DIDs take the form `did:grantex:<agent_id>`.
+: A Decentralized Identifier {{DID-CORE}} -- the Agent's cryptographic identity. In DAAP, Agent DIDs take the form `did:grantex:<agent_id>`.
 
 Policy:
 : A rule evaluated by the Policy Engine ({{policy-engine}}) that automatically approves or denies an authorization request before the consent UI is shown to the Principal.
@@ -604,7 +599,7 @@ Response `201 Created`:
 
 ## Cascade Revocation
 
-Revoking a Grant via `DELETE /v1/grants/:id` MUST atomically revoke all descendant Grants — that is, all Grants whose `parent_grant_id` traces back to the revoked Grant at any depth. Authorization Servers SHOULD implement this as a single recursive database transaction to eliminate any window during which descendant tokens remain valid.
+Revoking a Grant via `DELETE /v1/grants/:id` MUST atomically revoke all descendant Grants -- that is, all Grants whose `parent_grant_id` traces back to the revoked Grant at any depth. Authorization Servers SHOULD implement this as a single recursive database transaction to eliminate any window during which descendant tokens remain valid.
 
 # Conformance Requirements {#conformance}
 
@@ -708,7 +703,7 @@ Authorization Servers MUST implement budget debit as an atomic operation (e.g., 
 
 When a Grant has an active budget allocation, the Authorization Server SHOULD include the `bdg` claim in issued Grant Tokens. The value MUST be the remaining budget amount at the time of token issuance.
 
-Services receiving a Grant Token with a `bdg` claim MAY use it for local pre-flight budget checks. However, the `bdg` claim is advisory — the atomic debit endpoint remains the authoritative mechanism for budget enforcement.
+Services receiving a Grant Token with a `bdg` claim MAY use it for local pre-flight budget checks. However, the `bdg` claim is advisory -- the atomic debit endpoint remains the authoritative mechanism for budget enforcement.
 
 ## Threshold Alerts
 
@@ -1116,7 +1111,7 @@ DAAP shares OAuth 2.0's fundamental grant model but differs in the following res
 OAuth 2.0 defines a general-purpose delegated authorization framework. DAAP specializes this for AI agents by: adding cryptographic agent identity (DID); defining agent-specific JWT claims (`agt`, `dev`, `grnt`, `scp`, `bdg`); mandating RS256 exclusively; and adding the delegation, audit, policy, anomaly detection, budget controls, event streaming, credential vault, and external policy backend subsystems.
 
 **versus RFC 8693 (Token Exchange):**
-Token Exchange {{RFC8693}} enables a client to exchange one token for another, including impersonation and delegation use cases. DAAP's delegation model serves a narrower purpose — chaining AI agent sub-authorizations back to a human principal — and adds depth-limiting and cascade revocation semantics not present in RFC 8693.
+Token Exchange {{RFC8693}} enables a client to exchange one token for another, including impersonation and delegation use cases. DAAP's delegation model serves a narrower purpose -- chaining AI agent sub-authorizations back to a human principal -- and adds depth-limiting and cascade revocation semantics not present in RFC 8693.
 
 **versus RFC 7662 (Token Introspection):**
 Token Introspection {{RFC7662}} defines an endpoint for resource servers to query token metadata. DAAP's `/v1/tokens/verify` endpoint serves a similar purpose but returns DAAP-specific fields (`agent`, `principal`, `scopes`) and is used by agent-side SDKs rather than resource servers.
