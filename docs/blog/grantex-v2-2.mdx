@@ -1,0 +1,90 @@
+---
+title: "Grantex v2.2: Policy Engines, A2A, and the Managed Cloud"
+description: "v2.2 brings OPA and Cedar policy backends, Google A2A agent-to-agent bridging, a managed cloud offering, and SDK 0.2.0 across all three languages."
+date: "2026-03-02"
+authors:
+  - name: "Sanjeev Mishra"
+---
+
+When we shipped Grantex v1.0 three months ago, the goal was straightforward: give AI agents real authorization instead of all-or-nothing API keys. Since then, the ecosystem has grown from a spec and two SDKs to 30+ packages spanning three languages, 11 framework integrations, and a production authorization server handling real traffic.
+
+v2.2 closes the loop on enterprise readiness. Here is what shipped.
+
+## Policy Engines: OPA and Cedar
+
+The built-in policy engine handles simple allow/deny rules well, but production deployments need richer policy languages. v2.2 adds pluggable policy backends for [Open Policy Agent](https://www.openpolicyagent.org/) (Rego) and [Cedar](https://www.cedarpolicy.com/) (Amazon's authorization policy language).
+
+Configuration is a single environment variable:
+
+```bash
+POLICY_BACKEND=opa
+OPA_URL=http://localhost:8181
+```
+
+The authorization server translates every authorization request into an evaluation context aligned with the [OpenID AuthZEN](https://openid.net/specs/openid-authzen-authorization-api-1_0.html) subject/resource/action/context model, then forwards it to the configured PDP. If the PDP is unreachable, a configurable fallback kicks in — deny (default), allow, or fall back to the built-in engine.
+
+Policy-as-code is also here: upload policy bundles via `POST /v1/policies/sync` or wire up a git webhook for automatic sync on push.
+
+## A2A Bridge: Agent-to-Agent with Grantex Auth
+
+Google's [Agent-to-Agent (A2A) protocol](https://google.github.io/A2A/) defines how agents discover and communicate with each other. The missing piece was authorization — A2A assumes agents can authenticate, but does not specify how.
+
+`@grantex/a2a` (TypeScript) and `grantex-a2a` (Python) bridge that gap. They wrap A2A task creation and status polling with Grantex grant token authentication:
+
+```typescript
+import { A2AClient } from '@grantex/a2a';
+
+const a2a = new A2AClient({
+  grantex: { apiKey: process.env.GRANTEX_API_KEY },
+  agentCard: 'https://agent.example.com/.well-known/agent.json',
+});
+
+const task = await a2a.createTask({
+  message: 'Book a flight from DEL to BOM on March 15',
+  grantToken: token.grantToken,
+});
+```
+
+Every A2A request carries a Grantex grant token. The receiving agent verifies it before processing.
+
+## Managed Cloud
+
+Self-hosting is still fully supported, but for teams that want to skip the infrastructure work: the managed cloud is live at `grantex-auth-dd4mtrt2gq-uc.a.run.app`. Sign up via the developer portal, get an API key, and start authorizing agents.
+
+Usage metering (`GET /v1/usage`), custom domains with DNS TXT verification, email verification for new accounts, and per-plan dynamic rate limiting are all included.
+
+## SDK 0.2.0
+
+All three SDKs — TypeScript (`@grantex/sdk`), Python (`grantex`), and Go (`grantex-go`) — ship at 0.2.0 with full coverage of the v2.2 feature set:
+
+- `usage.current()` / `usage.history()` — usage metering
+- `domains.create()` / `domains.list()` / `domains.verify()` / `domains.delete()` — custom domain management
+- Budget controls, event streaming, and vault APIs (shipped in 0.1.9)
+
+The conformance test suite (`@grantex/conformance` v0.1.4) validates all of the above.
+
+## By the Numbers
+
+| Metric | Count |
+|--------|-------|
+| npm packages | 14 |
+| PyPI packages | 6 |
+| Go modules | 1 |
+| Framework integrations | 11 |
+| Auth service tests | ~362 |
+| SDK tests (combined) | 317 |
+| Mintlify doc pages | 174+ |
+| IETF draft revision | -01 |
+
+## What's Next
+
+The IETF draft (`draft-mishra-oauth-agent-grants-01`) has been updated with Budget Controls, Event Streaming, Credential Vault, and External Policy Backends sections plus a full implementation report. We have also submitted a public comment to the NIST NCCoE mapping DAAP capabilities to the AI Risk Management Framework.
+
+Standards alignment is the theme for the next phase. The AuthZEN conformance mapping is published, and we are exploring formal IETF working group adoption.
+
+- [OPA integration guide](/guides/opa-integration)
+- [Cedar integration guide](/guides/cedar-integration)
+- [Policy-as-code guide](/guides/policy-as-code)
+- [A2A integration docs](/integrations/a2a)
+- [Usage metering guide](/guides/usage-metering)
+- [Custom domains guide](/guides/custom-domains)

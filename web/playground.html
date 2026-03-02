@@ -562,7 +562,7 @@ async function step1() {
 
   if (status !== 201) { setBadge(1, 'error'); return; }
 
-  state.agentId = data.id;
+  state.agentId = data.agentId;
   setBadge(1, 'done');
   $('step1').classList.add('done');
 
@@ -583,11 +583,14 @@ async function step2() {
   $('res2-panel').style.display = 'block';
   $('res2').textContent = status + ' ' + (status === 201 ? 'Created' : 'Error') + '\n\n' + json(data);
 
-  if (status !== 201 || !data.code) {
+  if (status !== 201) {
     setBadge(2, 'error');
-    if (!data.code && status === 201) {
-      $('res2').textContent += '\n\nNote: No "code" in response. Make sure you are using a sandbox API key.';
-    }
+    return;
+  }
+
+  if (!data.code) {
+    setBadge(2, 'error');
+    $('res2').textContent += '\n\nNote: No "code" in response. The playground requires a sandbox API key (gx_sandbox_...) or a policy that auto-approves. Live keys redirect to a consent page, which the playground cannot handle.\n\nTo get a sandbox key, switch your account to sandbox mode in the Dashboard settings.';
     return;
   }
 

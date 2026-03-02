@@ -448,7 +448,9 @@
             "group": "Community",
             "pages": [
               "community/contributing",
-              "community/ietf-draft"
+              "community/ietf-draft",
+              "community/nist-comment",
+              "community/authzen-mapping"
             ]
           }
         ]
@@ -461,7 +463,8 @@
             "pages": [
               "blog/introducing-grantex",
               "blog/why-ai-agents-need-authorization",
-              "blog/grantex-v0-1-whats-included"
+              "blog/grantex-v0-1-whats-included",
+              "blog/grantex-v2-2"
             ]
           }
         ]
