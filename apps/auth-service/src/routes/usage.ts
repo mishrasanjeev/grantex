@@ -30,7 +30,7 @@ export async function usageRoutes(app: FastifyInstance): Promise<void> {
       SELECT date, token_exchanges, authorizations, verifications, total_requests
       FROM usage_daily
       WHERE developer_id = ${developerId}
-        AND date >= CURRENT_DATE - ${days}
+        AND date >= CURRENT_DATE - ${days}::int
       ORDER BY date DESC
     `;
 
