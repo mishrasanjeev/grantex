@@ -165,7 +165,14 @@ describe('PATCH /v1/agents/:id', () => {
 describe('DELETE /v1/agents/:id', () => {
   it('deletes agent and returns 204', async () => {
     seedAuth();
-    sqlMock.mockResolvedValueOnce({ count: 1 });
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // SELECT existence check
+    sqlMock.mockResolvedValueOnce([]); // DELETE budget_transactions
+    sqlMock.mockResolvedValueOnce([]); // DELETE budget_allocations
+    sqlMock.mockResolvedValueOnce([]); // DELETE refresh_tokens
+    sqlMock.mockResolvedValueOnce([]); // DELETE grant_tokens
+    sqlMock.mockResolvedValueOnce([]); // DELETE grants
+    sqlMock.mockResolvedValueOnce([]); // DELETE auth_requests
+    sqlMock.mockResolvedValueOnce([]); // DELETE agents
 
     const res = await app.inject({
       method: 'DELETE',
@@ -178,7 +185,7 @@ describe('DELETE /v1/agents/:id', () => {
 
   it('returns 404 when agent not found', async () => {
     seedAuth();
-    sqlMock.mockResolvedValueOnce({ count: 0 });
+    sqlMock.mockResolvedValueOnce([]); // SELECT existence check → empty
 
     const res = await app.inject({
       method: 'DELETE',
