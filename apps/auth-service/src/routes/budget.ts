@@ -4,6 +4,7 @@ import {
   createBudgetAllocation,
   debitBudget,
   getBudgetBalance,
+  listBudgetAllocations,
   listBudgetTransactions,
   InsufficientBudgetError,
 } from '../lib/budget.js';
@@ -22,6 +23,13 @@ interface DebitBody {
 }
 
 export async function budgetRoutes(app: FastifyInstance): Promise<void> {
+  // GET /v1/budget/allocations — list all budget allocations for the developer
+  app.get('/v1/budget/allocations', async (request, reply) => {
+    const sql = getSql();
+    const allocations = await listBudgetAllocations(sql, request.developer.id);
+    return reply.send({ allocations });
+  });
+
   // POST /v1/budget/allocate — create a budget allocation for a grant
   app.post<{ Body: AllocateBody }>('/v1/budget/allocate', async (request, reply) => {
     const { grantId, initialBudget, currency } = request.body;

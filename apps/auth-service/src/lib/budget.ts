@@ -156,6 +156,20 @@ function mapAllocationRow(row: Record<string, unknown>): BudgetAllocation {
   };
 }
 
+export async function listBudgetAllocations(
+  sql: ReturnType<typeof postgres>,
+  developerId: string,
+): Promise<BudgetAllocation[]> {
+  const rows = await sql`
+    SELECT id, grant_id, developer_id, initial_budget, remaining_budget, currency, created_at, updated_at
+    FROM budget_allocations
+    WHERE developer_id = ${developerId}
+    ORDER BY created_at DESC
+  `;
+
+  return rows.map(mapAllocationRow);
+}
+
 export class InsufficientBudgetError extends Error {
   constructor(grantId: string) {
     super(`Insufficient budget for grant ${grantId}`);
