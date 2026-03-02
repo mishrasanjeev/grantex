@@ -35,6 +35,9 @@ web/dashboard/
 # Generated PH gallery screenshots
 web/ph-gallery/
 
+# Marketing content (local only)
+docs/marketing/
+
 # Coverage & caches
 coverage/
 .cache/
