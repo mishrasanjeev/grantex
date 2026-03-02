@@ -1,0 +1,74 @@
+---
+title: "Usage Metering"
+description: "Track and monitor API usage across your Grantex deployment"
+---
+
+## Overview
+
+Grantex tracks API usage in real-time using Redis counters with periodic PostgreSQL rollup. Monitor token exchanges, authorizations, and verifications per developer.
+
+## Enabling Usage Metering
+
+Set the environment variable:
+
+```bash
+USAGE_METERING_ENABLED=true
+```
+
+## API Endpoints
+
+### Current Period Usage
+
+```bash
+curl https://api.grantex.dev/v1/usage \
+  -H "Authorization: Bearer $GRANTEX_KEY"
+```
+
+Response:
+```json
+{
+  "developerId": "dev_...",
+  "period": "2026-03-02",
+  "tokenExchanges": 42,
+  "authorizations": 18,
+  "verifications": 7,
+  "totalRequests": 67
+}
+```
+
+### Usage History
+
+```bash
+curl "https://api.grantex.dev/v1/usage/history?days=30" \
+  -H "Authorization: Bearer $GRANTEX_KEY"
+```
+
+## SDK Usage
+
+```typescript
+// TypeScript
+const usage = await grantex.usage.current();
+console.log(`Today: ${usage.totalRequests} requests`);
+
+const history = await grantex.usage.history({ days: 7 });
+for (const day of history.entries) {
+  console.log(`${day.date}: ${day.totalRequests}`);
+}
+```
+
+```python
+# Python
+usage = grantex.usage.current()
+print(f"Today: {usage.total_requests} requests")
+
+history = grantex.usage.history(days=7)
+for day in history.entries:
+    print(f"{day.date}: {day.total_requests}")
+```
+
+## Plan Limits
+
+| Metric | Free | Pro | Enterprise |
+|---|---|---|---|
+| Token exchanges/month | 1,000 | 100,000 | Unlimited |
+| Authorizations/month | 1,000 | 100,000 | Unlimited |

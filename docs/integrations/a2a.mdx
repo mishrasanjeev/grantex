@@ -1,0 +1,88 @@
+---
+title: "A2A Protocol Bridge (TypeScript)"
+description: "Inject Grantex grant tokens into Google A2A agent-to-agent communication"
+---
+
+## Overview
+
+The `@grantex/a2a` package bridges the [Google A2A protocol](https://github.com/google/a2a) with Grantex delegated authorization, enabling secure agent-to-agent communication with grant token authentication.
+
+## Installation
+
+```bash
+npm install @grantex/a2a
+```
+
+## Client — Calling A2A Agents
+
+Send tasks to remote A2A agents with automatic grant token auth:
+
+```typescript
+import { A2AGrantexClient } from '@grantex/a2a';
+
+const client = new A2AGrantexClient({
+  agentUrl: 'https://agent.example.com/a2a',
+  grantToken: 'eyJ...', // Grantex grant token
+});
+
+// Send a task
+const task = await client.sendTask({
+  message: { role: 'user', parts: [{ type: 'text', text: 'Search for flights' }] },
+});
+
+// Check status
+const status = await client.getTask({ id: task.id });
+
+// Cancel
+await client.cancelTask({ id: task.id });
+```
+
+## Server Middleware — Validating Incoming Tokens
+
+Validate Grantex grant tokens on incoming A2A requests:
+
+```typescript
+import { createA2AAuthMiddleware } from '@grantex/a2a';
+
+const authMiddleware = createA2AAuthMiddleware({
+  jwksUri: 'https://grantex.dev/.well-known/jwks.json',
+  requiredScopes: ['read', 'write'],
+});
+
+// In your A2A handler:
+const grant = authMiddleware(request);
+console.log(grant.principalId, grant.scopes);
+```
+
+## Agent Card Builder
+
+Generate A2A-compliant agent cards with Grantex auth configuration:
+
+```typescript
+import { buildGrantexAgentCard } from '@grantex/a2a';
+
+const card = buildGrantexAgentCard({
+  name: 'Travel Agent',
+  description: 'Books flights and hotels',
+  url: 'https://travel-agent.example.com/a2a',
+  jwksUri: 'https://grantex.dev/.well-known/jwks.json',
+  issuer: 'https://grantex.dev',
+  requiredScopes: ['travel:read', 'travel:write'],
+  delegationAllowed: true,
+});
+```
+
+## JWT Utilities
+
+Decode grant tokens offline (without verification):
+
+```typescript
+import { decodeJwtPayload, isTokenExpired } from '@grantex/a2a';
+
+const payload = decodeJwtPayload(grantToken);
+console.log(payload.sub, payload.scp, payload.bdg);
+
+if (isTokenExpired(payload)) {
+  // Token needs refresh
+}
+```

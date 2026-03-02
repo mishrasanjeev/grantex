@@ -1,0 +1,54 @@
+{
+  "name": "@grantex/a2a",
+  "version": "0.1.0",
+  "description": "Google A2A protocol bridge for Grantex — inject grant tokens into agent-to-agent communication",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "@grantex/sdk": ">=0.1.0"
+  },
+  "devDependencies": {
+    "@grantex/sdk": "file:../sdk-ts",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
+  },
+  "overrides": {
+    "esbuild": ">=0.25.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "grantex",
+    "a2a",
+    "agent-to-agent",
+    "google-a2a",
+    "authorization",
+    "oauth",
+    "jwt",
+    "ai-agents"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mishrasanjeev/grantex"
+  }
+}

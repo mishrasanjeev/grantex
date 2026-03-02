@@ -14,6 +14,8 @@ import { PrincipalSessionsClient } from './resources/principal-sessions.js';
 import { VaultClient } from './resources/vault.js';
 import { BudgetsClient } from './resources/budgets.js';
 import { EventsClient } from './resources/events.js';
+import { UsageClient } from './resources/usage.js';
+import { DomainsClient } from './resources/domains.js';
 import type {
   AuthorizationRequest,
   AuthorizeParams,
@@ -44,6 +46,8 @@ export class Grantex {
   readonly vault: VaultClient;
   readonly budgets: BudgetsClient;
   readonly events: EventsClient;
+  readonly usage: UsageClient;
+  readonly domains: DomainsClient;
 
   get lastRateLimit(): RateLimit | undefined {
     return this.#http.lastRateLimit;
@@ -80,6 +84,8 @@ export class Grantex {
     this.vault = new VaultClient(this.#http, options.baseUrl ?? DEFAULT_BASE_URL);
     this.budgets = new BudgetsClient(this.#http);
     this.events = new EventsClient(this.#http);
+    this.usage = new UsageClient(this.#http);
+    this.domains = new DomainsClient(this.#http);
   }
 
   /**

@@ -1,0 +1,63 @@
+---
+title: "Custom Domains"
+description: "Use your own domain for Grantex API endpoints (Enterprise)"
+---
+
+## Overview
+
+Enterprise plan customers can configure custom domains for their Grantex API endpoints. Domain ownership is verified via DNS TXT records.
+
+## Setup
+
+### 1. Register a Domain
+
+```bash
+curl -X POST https://api.grantex.dev/v1/domains \
+  -H "Authorization: Bearer $GRANTEX_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"domain": "auth.yourcompany.com"}'
+```
+
+Response includes verification instructions:
+```json
+{
+  "id": "dom_...",
+  "domain": "auth.yourcompany.com",
+  "verified": false,
+  "verificationToken": "grantex-verify-abc123",
+  "instructions": "Add a DNS TXT record: _grantex.auth.yourcompany.com = grantex-verify-abc123"
+}
+```
+
+### 2. Add DNS Record
+
+Add a TXT record to your DNS:
+- **Name**: `_grantex.auth.yourcompany.com`
+- **Value**: `grantex-verify-abc123`
+
+### 3. Verify
+
+```bash
+curl -X POST https://api.grantex.dev/v1/domains/dom_.../verify \
+  -H "Authorization: Bearer $GRANTEX_KEY"
+```
+
+## SDK Usage
+
+```typescript
+// TypeScript
+const result = await grantex.domains.create({ domain: 'auth.yourcompany.com' });
+console.log(result.instructions);
+
+// After DNS setup:
+await grantex.domains.verify(result.id);
+
+// List domains
+const { domains } = await grantex.domains.list();
+```
+
+```python
+# Python
+result = grantex.domains.create(CreateDomainParams(domain="auth.yourcompany.com"))
+print(result.instructions)
+```

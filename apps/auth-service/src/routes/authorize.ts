@@ -3,9 +3,10 @@ import { getSql } from '../db/client.js';
 import { newAuthRequestId } from '../lib/ids.js';
 import { config } from '../config.js';
 import { ulid } from 'ulid';
-import { evaluatePolicies, type PolicyRow } from '../lib/policy.js';
+import { getPolicyBackend } from '../lib/policy-backend.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 import { authorizeTotal, authorizeDuration } from '../lib/metrics.js';
+import { incrementUsage } from '../lib/usage.js';
 
 interface AuthorizeBody {
   agentId: string;
@@ -74,16 +75,14 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
     }
 
-    // Evaluate policies — query ordered by priority DESC, then created_at ASC
-    const policyRows = await sql<PolicyRow[]>`
-      SELECT id, effect, priority, agent_id, principal_id, scopes,
-             time_of_day_start, time_of_day_end
-      FROM policies
-      WHERE developer_id = ${developerId}
-      ORDER BY priority DESC, created_at ASC
-    `;
-
-    const policyEffect = evaluatePolicies(policyRows, { agentId, principalId, scopes });
+    // Evaluate policies via pluggable backend (builtin, OPA, or Cedar)
+    const policyDecision = await getPolicyBackend().evaluate({
+      agentId,
+      principalId,
+      scopes,
+      developerId,
+    });
+    const policyEffect = policyDecision.effect;
 
     if (policyEffect === 'deny') {
       return reply.status(403).send({
@@ -136,6 +135,9 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
 
     authorizeTotal.inc({ status: 'success' });
     endTimer();
+
+    // Usage metering (best-effort)
+    incrementUsage(developerId, 'authorizations').catch(() => {});
 
     return reply.status(201).send(responseBody);
   });

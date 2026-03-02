@@ -126,6 +126,17 @@ vi.mock('../src/lib/stripe.js', () => ({
   getStripe: () => mockStripe,
 }));
 
+// Mock email — prevents real Resend API calls
+vi.mock('../src/lib/email.js', () => ({
+  sendEmail: vi.fn().mockResolvedValue(undefined),
+  verificationEmailHtml: vi.fn().mockReturnValue('<p>Verify</p>'),
+}));
+
+// Mock domain DNS verification — prevents real DNS lookups
+vi.mock('../src/lib/domains.js', () => ({
+  verifyDomainDns: vi.fn().mockResolvedValue(false),
+}));
+
 // ------------------------------------------------------------------
 // Reset all mocks before each test
 // ------------------------------------------------------------------

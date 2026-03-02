@@ -77,28 +77,31 @@
 
 ---
 
-## Later — v2.2 Ecosystem
+### v2.2 Ecosystem
+- [x] A2A Protocol Bridge — TypeScript (`@grantex/a2a`) and Python (`grantex-a2a`) packages
+- [x] A2A client with grant token auth, server middleware, agent card builder
+- [x] Pluggable policy backend abstraction (builtin, OPA, Cedar)
+- [x] OPA (Open Policy Agent) and AWS Cedar policy backends with fallback
+- [x] Policy-as-code git sync — bundle upload, versioning, webhook trigger
+- [x] Usage metering — Redis real-time counters, PostgreSQL rollup, API endpoints
+- [x] Self-service email verification (Resend API)
+- [x] Usage-based rate limiting (per-plan: Free=100, Pro=500, Enterprise=2000/min)
+- [x] Custom domains for Enterprise (DNS TXT verification)
+- [x] SDK updates: UsageClient + DomainsClient in both TS and Python SDKs
 
-Protocol interoperability and ecosystem maturity.
+---
 
-### A2A Protocol Bridge
-- [ ] Grantex grant tokens inside Google A2A agent communication
-- [ ] A2A agent discovery with Grantex authorization
+## Later — v2.3
 
-### Policy Engine Integrations
-- [ ] Open Policy Agent (OPA/Rego) as policy backend
-- [ ] AWS Cedar as policy backend
-- [ ] Policy-as-code git workflow
+### Standards Engagement
+- [ ] NIST NCCoE public comment submission
+- [ ] OpenID AuthZEN working group participation
+- [ ] IETF draft revision with implementation report
 
 ### Managed Cloud
 - [ ] Hosted multi-tenant offering at `api.grantex.dev`
-- [ ] Free tier (3 agents, 1K tokens/month)
-- [ ] Usage-based pricing for Pro/Enterprise
-
-### Standards Engagement
-- [ ] NIST NCCoE public comment submission (by April 2, 2026)
-- [ ] OpenID AuthZEN working group participation
-- [ ] IETF draft revision with implementation report
+- [ ] Usage-based pricing dashboard in portal
+- [ ] Custom domain SSL provisioning
 
 **Target: End of September 2026**
 

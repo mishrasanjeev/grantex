@@ -30,6 +30,10 @@ import { vaultRoutes } from './routes/vault.js';
 import { metricsRoutes } from './routes/metrics.js';
 import { eventsRoutes } from './routes/events.js';
 import { budgetRoutes } from './routes/budget.js';
+import { usageRoutes } from './routes/usage.js';
+import { verifyEmailRoutes } from './routes/verify-email.js';
+import { domainsRoutes } from './routes/domains.js';
+import { policySyncRoutes } from './routes/policy-sync.js';
 import { metricsHookPlugin } from './plugins/metricsHook.js';
 import websocket from '@fastify/websocket';
 
@@ -93,6 +97,10 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(vaultRoutes);
   await app.register(eventsRoutes);
   await app.register(budgetRoutes);
+  await app.register(usageRoutes);
+  await app.register(verifyEmailRoutes);
+  await app.register(domainsRoutes);
+  await app.register(policySyncRoutes);
 
   return app;
 }

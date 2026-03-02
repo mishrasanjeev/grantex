@@ -667,3 +667,59 @@ export interface GrantexStreamEvent {
   createdAt: string;
   data: Record<string, unknown>;
 }
+
+// ─── Usage metering ─────────────────────────────────────────────────────────
+
+export interface UsageResponse {
+  developerId: string;
+  period: string;
+  tokenExchanges: number;
+  authorizations: number;
+  verifications: number;
+  totalRequests: number;
+}
+
+export interface UsageHistoryEntry {
+  date: string;
+  tokenExchanges: number;
+  authorizations: number;
+  verifications: number;
+  totalRequests: number;
+}
+
+export interface UsageHistoryResponse {
+  developerId: string;
+  days: number;
+  entries: UsageHistoryEntry[];
+}
+
+// ─── Custom domains ─────────────────────────────────────────────────────────
+
+export interface CreateDomainParams {
+  domain: string;
+}
+
+export interface CreateDomainResponse {
+  id: string;
+  domain: string;
+  verified: boolean;
+  verificationToken: string;
+  instructions: string;
+}
+
+export interface DomainEntry {
+  id: string;
+  domain: string;
+  verified: boolean;
+  verifiedAt: string | null;
+  createdAt: string;
+}
+
+export interface ListDomainsResponse {
+  domains: DomainEntry[];
+}
+
+export interface VerifyDomainResponse {
+  verified: boolean;
+  message: string;
+}

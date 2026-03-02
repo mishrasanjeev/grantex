@@ -21,6 +21,8 @@ from .resources._principal_sessions import PrincipalSessionsClient
 from .resources._vault import VaultClient
 from .resources._budgets import BudgetsClient
 from .resources._events import EventsClient
+from .resources._usage import UsageClient
+from .resources._domains import DomainsClient
 
 _DEFAULT_BASE_URL = "https://api.grantex.dev"
 
@@ -43,6 +45,8 @@ class Grantex:
     vault: VaultClient
     budgets: BudgetsClient
     events: EventsClient
+    usage: UsageClient
+    domains: DomainsClient
 
     @property
     def last_rate_limit(self) -> RateLimit | None:
@@ -83,6 +87,8 @@ class Grantex:
         self.vault = VaultClient(self._http, base_url)
         self.budgets = BudgetsClient(self._http)
         self.events = EventsClient(base_url, resolved_key)
+        self.usage = UsageClient(self._http)
+        self.domains = DomainsClient(self._http)
 
     @staticmethod
     def signup(

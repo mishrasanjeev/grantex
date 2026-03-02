@@ -7,6 +7,7 @@ import { tokenExchangeTotal, tokenExchangeDuration } from '../lib/metrics.js';
 import { withSpan } from '../lib/tracing.js';
 import { GRANTEX_AGENT_ID, GRANTEX_GRANT_ID, GRANTEX_PRINCIPAL_ID, GRANTEX_SCOPES, GRANTEX_DEVELOPER_ID } from '../lib/traceAttributes.js';
 import { verifyPkceChallenge } from '../lib/pkce.js';
+import { incrementUsage } from '../lib/usage.js';
 
 interface TokenBody {
   code: string;
@@ -153,6 +154,9 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
 
     tokenExchangeTotal.inc({ status: 'success' });
     endTimer();
+
+    // Usage metering (best-effort)
+    incrementUsage(developerId, 'token_exchanges').catch(() => {});
 
     return reply.status(201).send({
       grantToken: jwt,

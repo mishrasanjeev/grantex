@@ -29,6 +29,17 @@ export const config = {
   adminApiKey: optional('ADMIN_API_KEY', ''),
   metricsEnabled: process.env['METRICS_ENABLED'] !== 'false',
   otelEndpoint: process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? null,
+  // Policy backend ('builtin' | 'opa' | 'cedar')
+  policyBackend: optional('POLICY_BACKEND', 'builtin') as 'builtin' | 'opa' | 'cedar',
+  opaUrl: process.env['OPA_URL'] ?? null,
+  opaFallbackToBuiltin: process.env['OPA_FALLBACK_TO_BUILTIN'] !== 'false',
+  cedarUrl: process.env['CEDAR_URL'] ?? null,
+  cedarFallbackToBuiltin: process.env['CEDAR_FALLBACK_TO_BUILTIN'] !== 'false',
+  // Usage metering
+  usageMeteringEnabled: process.env['USAGE_METERING_ENABLED'] === 'true',
+  // Email (Resend)
+  emailApiKey: process.env['RESEND_API_KEY'] ?? null,
+  emailFrom: optional('EMAIL_FROM', 'Grantex <noreply@grantex.dev>'),
 } as const;
 
 if (!config.rsaPrivateKey && !config.autoGenerateKeys) {

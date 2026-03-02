@@ -122,4 +122,14 @@ export type {
   EvidencePackParams,
   EvidencePack,
   ChainIntegrity,
+  // Usage
+  UsageResponse,
+  UsageHistoryEntry,
+  UsageHistoryResponse,
+  // Custom Domains
+  CreateDomainParams,
+  CreateDomainResponse,
+  DomainEntry,
+  ListDomainsResponse,
+  VerifyDomainResponse,
 } from './types.js';

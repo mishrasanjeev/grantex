@@ -1,0 +1,53 @@
+---
+title: "Cedar Integration"
+description: "Use AWS Cedar as your Grantex policy backend"
+---
+
+## Overview
+
+Grantex supports [AWS Cedar](https://www.cedarpolicy.com/) as a pluggable policy backend. Cedar provides fine-grained, type-safe policy evaluation with an entity-based model.
+
+## Configuration
+
+```bash
+POLICY_BACKEND=cedar
+CEDAR_URL=http://cedar:8180
+CEDAR_FALLBACK_TO_BUILTIN=true
+```
+
+## Cedar Entity Model
+
+Grantex maps authorization requests to Cedar's entity model:
+
+| Cedar Concept | Grantex Mapping |
+|---|---|
+| Principal | `Grantex::Agent` with agent ID |
+| Action | `Grantex::Action::authorize` |
+| Resource | `Grantex::Grant` with grant ID |
+| Context | scopes, principal, developer, time |
+
+## Example Cedar Policy
+
+```cedar
+// Allow any agent to authorize read-only grants
+permit(
+  principal is Grantex::Agent,
+  action == Grantex::Action::"authorize",
+  resource is Grantex::Grant
+) when {
+  context.scopes == ["read"]
+};
+
+// Deny delegation beyond depth 2
+forbid(
+  principal is Grantex::Agent,
+  action == Grantex::Action::"authorize",
+  resource is Grantex::Grant
+) when {
+  context.delegationDepth > 2
+};
+```
+
+## Timeout and Fallback
+
+Same as OPA: 5-second timeout with configurable fallback to built-in.
