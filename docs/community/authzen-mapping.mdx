@@ -1,0 +1,86 @@
+---
+title: "OpenID AuthZEN Mapping"
+sidebarTitle: "AuthZEN Mapping"
+description: "How Grantex maps to the OpenID AuthZEN Authorization API for interoperable policy evaluation."
+---
+
+## Overview
+
+The [OpenID AuthZEN Authorization API](https://openid.net/specs/openid-authzen-authorization-api-1_0.html) defines a standard interface between Policy Enforcement Points (PEPs) and Policy Decision Points (PDPs). Grantex aligns its external policy backend integration with the AuthZEN subject/resource/action/context model.
+
+## How It Works
+
+When an authorization request arrives at the Grantex server and an external policy backend is configured (OPA or Cedar), the server translates the request into an AuthZEN-aligned evaluation context:
+
+| AuthZEN Element | DAAP Source |
+|----------------|-------------|
+| **Subject** | Agent DID, developer ID, principal ID |
+| **Resource** | Grant with requested scopes |
+| **Action** | `authorize`, `delegate`, `verify`, or `debit` |
+| **Context** | Timestamp, IP address, budget state |
+
+## Example
+
+A DAAP authorization request:
+
+```json
+{
+  "agentId": "ag_01HXYZ123abc",
+  "principalId": "user_abc123",
+  "scopes": ["calendar:read", "payments:initiate:max_500"]
+}
+```
+
+Becomes the following AuthZEN evaluation request:
+
+```json
+{
+  "subject": {
+    "type": "agent",
+    "id": "did:grantex:ag_01HXYZ123abc",
+    "properties": {
+      "developer": "org_yourcompany",
+      "principalId": "user_abc123"
+    }
+  },
+  "resource": {
+    "type": "grant",
+    "properties": {
+      "scopes": ["calendar:read", "payments:initiate:max_500"]
+    }
+  },
+  "action": { "name": "authorize" },
+  "context": {
+    "timestamp": "2026-02-01T12:00:00Z"
+  }
+}
+```
+
+## Backend-Specific Details
+
+### OPA (Rego)
+
+OPA receives the context in its `input` field and evaluates Rego policies:
+
+```bash
+POLICY_BACKEND=opa
+OPA_URL=http://localhost:8181
+```
+
+See the [OPA integration guide](/guides/opa-integration) for policy examples.
+
+### Cedar
+
+Cedar maps the context to typed entities (Agent, Grant, Action):
+
+```bash
+POLICY_BACKEND=cedar
+CEDAR_URL=http://localhost:8180
+```
+
+See the [Cedar integration guide](/guides/cedar-integration) for policy examples.
+
+## Full Documentation
+
+- [AuthZEN conformance mapping](https://github.com/mishrasanjeev/grantex/blob/main/docs/standards/authzen-conformance-mapping.md) — complete subject/resource/action/context mapping
+- [AuthZEN evaluation API alignment](https://github.com/mishrasanjeev/grantex/blob/main/docs/standards/authzen-evaluation-api.md) — OPA and Cedar PDP integration details

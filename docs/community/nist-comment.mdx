@@ -1,0 +1,42 @@
+---
+title: "NIST NCCoE Public Comment"
+sidebarTitle: "NIST Comment"
+description: "Grantex response to NIST NCCoE AI challenge areas — mapping DAAP to the AI Risk Management Framework."
+---
+
+## Overview
+
+We submitted a public comment to the NIST National Cybersecurity Center of Excellence (NCCoE) mapping DAAP protocol capabilities to the NIST AI Risk Management Framework (AI RMF 1.0). The comment addresses the gap in standardized authorization frameworks for autonomous AI agents.
+
+## Key Mappings
+
+The comment maps DAAP capabilities to all four AI RMF functions:
+
+| AI RMF Function | DAAP Capabilities |
+|----------------|-------------------|
+| **Map** | Agent scope declarations, policy engine risk tolerance, anomaly baselines |
+| **Measure** | Usage metering, hash-chained audit trail, budget controls, conformance suite |
+| **Manage** | Real-time revocation, cascade revocation, event streaming, webhooks |
+| **Govern** | OPA/Cedar policy backends, principal sessions, compliance exports, policy-as-code |
+
+## Implementation Evidence
+
+The comment includes evidence from the Grantex reference implementation:
+
+- **Authorization server**: ~362 automated tests, deployed on Cloud Run
+- **SDK coverage**: TypeScript, Python, Go — all at v0.2.0 with 317 combined tests
+- **Framework integrations**: 11 production-ready integrations
+- **Conformance suite**: `@grantex/conformance` v0.1.4
+
+## Recommendations
+
+1. Adopt agent-specific identity standards (DIDs over API keys)
+2. Require action-level audit trails with tamper evidence
+3. Mandate real-time revocation with cascade semantics
+4. Define budget control requirements for financial agents
+5. Encourage external policy backend integration (OPA, Cedar, AuthZEN)
+6. Reference interoperability test suites in standards
+
+## Full Document
+
+The complete comment is available in the repository at [`docs/standards/nist-nccoe-comment.md`](https://github.com/mishrasanjeev/grantex/blob/main/docs/standards/nist-nccoe-comment.md).

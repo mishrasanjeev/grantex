@@ -158,6 +158,28 @@ export interface BudgetTransaction {
   createdAt: string;
 }
 
+// ── Usage ────────────────────────────────────────────────────────────────
+export interface UsageResponse {
+  developerId: string;
+  period: string;
+  tokenExchanges: number;
+  authorizations: number;
+  verifications: number;
+  totalRequests: number;
+}
+
+export interface UsageHistoryEntry {
+  date: string;
+  tokenExchanges: number;
+  authorizations: number;
+  verifications: number;
+  totalRequests: number;
+}
+
+export interface UsageHistoryResponse {
+  entries: UsageHistoryEntry[];
+}
+
 // ── Stats ────────────────────────────────────────────────────────────────
 export interface DashboardStats {
   agents: number;
