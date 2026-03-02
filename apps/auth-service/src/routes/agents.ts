@@ -118,13 +118,27 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
   // DELETE /v1/agents/:id
   app.delete<{ Params: { id: string } }>('/v1/agents/:id', async (request, reply) => {
     const sql = getSql();
-    const result = await sql`
-      DELETE FROM agents
-      WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
+    const agentId = request.params.id;
+    const developerId = request.developer.id;
+
+    // Verify agent exists and belongs to this developer
+    const rows = await sql`
+      SELECT id FROM agents WHERE id = ${agentId} AND developer_id = ${developerId}
     `;
-    if (result.count === 0) {
+    if (rows.length === 0) {
       return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
     }
+
+    // Cascade delete: dependents first, then agent
+    const grantSubquery = sql`SELECT id FROM grants WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
+    await sql`DELETE FROM budget_transactions WHERE grant_id IN (${grantSubquery})`;
+    await sql`DELETE FROM budget_allocations WHERE grant_id IN (${grantSubquery})`;
+    await sql`DELETE FROM refresh_tokens WHERE grant_id IN (${grantSubquery})`;
+    await sql`DELETE FROM grant_tokens WHERE grant_id IN (${grantSubquery})`;
+    await sql`DELETE FROM grants WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
+    await sql`DELETE FROM auth_requests WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
+    await sql`DELETE FROM agents WHERE id = ${agentId} AND developer_id = ${developerId}`;
+
     return reply.status(204).send();
   });
 }
