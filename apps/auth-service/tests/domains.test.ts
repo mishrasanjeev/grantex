@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { buildTestApp, seedAuth, authHeader, sqlMock } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 

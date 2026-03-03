@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { verifyDomainDns } from '../lib/domains.js';
-import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 
 export async function domainsRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/domains — register a custom domain
@@ -79,7 +78,7 @@ export async function domainsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // POST /v1/domains/:id/verify — verify domain DNS
-  app.post<{ Params: { id: string } }>('/v1/domains/:id/verify', async (request, reply) => {
+  app.post<{ Params: { id: string } }>('/v1/domains/:id/verify', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const sql = getSql();
 
     const rows = await sql`
