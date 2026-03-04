@@ -2,6 +2,10 @@
   "name": "@grantex/langchain",
   "version": "0.1.2",
   "description": "LangChain integration for the Grantex delegated authorization protocol",
+  "homepage": "https://grantex.dev/for/langchain",
+  "bugs": {
+    "url": "https://github.com/mishrasanjeev/grantex/issues"
+  },
   "type": "module",
   "exports": {
     ".": {

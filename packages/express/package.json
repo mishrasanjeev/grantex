@@ -2,6 +2,10 @@
   "name": "@grantex/express",
   "version": "0.1.1",
   "description": "Express.js middleware for Grantex grant token verification and scope-based authorization",
+  "homepage": "https://grantex.dev/for/express",
+  "bugs": {
+    "url": "https://github.com/mishrasanjeev/grantex/issues"
+  },
   "type": "module",
   "exports": {
     ".": {

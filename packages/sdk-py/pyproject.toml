@@ -31,7 +31,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://grantex.dev"
-Documentation = "https://github.com/mishrasanjeev/grantex"
+Documentation = "https://docs.grantex.dev"
 Repository = "https://github.com/mishrasanjeev/grantex"
 Issues = "https://github.com/mishrasanjeev/grantex/issues"
 Changelog = "https://github.com/mishrasanjeev/grantex/releases"

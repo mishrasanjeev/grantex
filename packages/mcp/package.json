@@ -2,6 +2,10 @@
   "name": "@grantex/mcp",
   "version": "0.1.1",
   "description": "MCP server for Grantex delegated agent authorization",
+  "homepage": "https://grantex.dev/for/mcp",
+  "bugs": {
+    "url": "https://github.com/mishrasanjeev/grantex/issues"
+  },
   "type": "module",
   "bin": {
     "grantex-mcp": "./dist/index.js"

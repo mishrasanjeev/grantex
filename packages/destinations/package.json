@@ -4,6 +4,10 @@
   "type": "module",
   "license": "Apache-2.0",
   "description": "Event destination connectors for Grantex (Datadog, Splunk, S3, BigQuery, Kafka)",
+  "homepage": "https://grantex.dev",
+  "bugs": {
+    "url": "https://github.com/mishrasanjeev/grantex/issues"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
