@@ -30,7 +30,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://grantex.dev"
-Documentation = "https://grantex.dev/docs/integrations/fastapi"
+Documentation = "https://docs.grantex.dev/integrations/frameworks/fastapi"
 Repository = "https://github.com/mishrasanjeev/grantex"
 Issues = "https://github.com/mishrasanjeev/grantex/issues"
 

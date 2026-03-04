@@ -2,6 +2,10 @@
   "name": "@grantex/sdk",
   "version": "0.2.0",
   "description": "TypeScript SDK for the Grantex delegated authorization protocol",
+  "homepage": "https://grantex.dev",
+  "bugs": {
+    "url": "https://github.com/mishrasanjeev/grantex/issues"
+  },
   "type": "module",
   "exports": {
     ".": {

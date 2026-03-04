@@ -28,7 +28,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://grantex.dev"
-Documentation = "https://github.com/mishrasanjeev/grantex"
+Documentation = "https://docs.grantex.dev/integrations/frameworks/google-adk"
 Repository = "https://github.com/mishrasanjeev/grantex"
 Issues = "https://github.com/mishrasanjeev/grantex/issues"
 
