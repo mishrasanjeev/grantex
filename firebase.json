@@ -10,6 +10,7 @@
       { "source": "/dashboard/**", "destination": "/dashboard/index.html" },
       { "source": "/playground", "destination": "/playground.html" },
       { "source": "/for/:framework", "destination": "/for/index.html" },
+      { "source": "/vs/:topic", "destination": "/vs/index.html" },
       { "source": "**", "destination": "/index.html" }
     ],
     "headers": [
