@@ -37,6 +37,9 @@ web/ph-gallery/
 
 # Marketing content (local only)
 docs/marketing/
+LAUNCH_PLAYBOOK.md
+LAUNCH_POSTS.md
+DEVTO_ARTICLE.md
 
 # Coverage & caches
 coverage/
