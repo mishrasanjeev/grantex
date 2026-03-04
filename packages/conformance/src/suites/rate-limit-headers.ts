@@ -1,8 +1,6 @@
 import type { SuiteDefinition, SuiteContext, TestResult } from '../types.js';
 import { test, expectStatus, expectNumericHeader } from '../helpers.js';
 
-const YEAR_2020_EPOCH = 1577836800;
-
 export const rateLimitHeadersSuite: SuiteDefinition = {
   name: 'rate-limit-headers',
   description: 'Rate limit headers presence and format',
@@ -19,9 +17,11 @@ export const rateLimitHeadersSuite: SuiteDefinition = {
         expectNumericHeader(res, 'x-ratelimit-remaining');
         const reset = expectNumericHeader(res, 'x-ratelimit-reset');
 
-        if (reset < YEAR_2020_EPOCH) {
+        // Per IETF draft-ietf-httpapi-ratelimit-headers, reset is seconds
+        // remaining until the window resets (not a Unix timestamp)
+        if (reset < 0 || reset > 3600) {
           throw new Error(
-            `Expected x-ratelimit-reset to be a plausible unix timestamp (> ${YEAR_2020_EPOCH}), got ${reset}`,
+            `Expected x-ratelimit-reset to be seconds remaining (0–3600), got ${reset}`,
           );
         }
       }),
