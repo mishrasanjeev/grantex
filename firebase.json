@@ -3,12 +3,13 @@
     "public": "web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "redirects": [
-      { "source": "/docs", "destination": "https://grantex.mintlify.app", "type": 302 },
-      { "source": "/docs/:path*", "destination": "https://grantex.mintlify.app/:path*", "type": 302 }
+      { "source": "/docs", "destination": "https://docs.grantex.dev", "type": 301 },
+      { "source": "/docs/:path*", "destination": "https://docs.grantex.dev/:path*", "type": 301 }
     ],
     "rewrites": [
       { "source": "/dashboard/**", "destination": "/dashboard/index.html" },
       { "source": "/playground", "destination": "/playground.html" },
+      { "source": "/for/:framework", "destination": "/for/index.html" },
       { "source": "**", "destination": "/index.html" }
     ],
     "headers": [

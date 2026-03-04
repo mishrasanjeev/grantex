@@ -33,9 +33,75 @@
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Any",
     "url": "https://grantex.dev",
-    "description": "Open delegated authorization protocol for AI agents",
+    "description": "Open delegated authorization protocol for AI agents. Scoped, human-approved, revocable permissions via signed JWTs.",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
-    "codeRepository": "https://github.com/mishrasanjeev/grantex"
+    "codeRepository": "https://github.com/mishrasanjeev/grantex",
+    "applicationSubCategory": "Security",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Grantex",
+    "url": "https://grantex.dev",
+    "logo": "https://grantex.dev/favicon.svg",
+    "sameAs": [
+      "https://github.com/mishrasanjeev/grantex",
+      "https://www.npmjs.com/package/@grantex/sdk",
+      "https://pypi.org/project/grantex/"
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "How is Grantex different from OAuth 2.0?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "OAuth 2.0 was designed for human users granting access to apps. Grantex extends that model for AI agents with cryptographic agent identity (DID), delegation chains for multi-agent pipelines, action-level hash-chained audit trails, and sub-second revocation. If you know OAuth, Grantex will feel familiar — but it handles the cases OAuth was never designed for."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What AI agent frameworks does Grantex integrate with?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Grantex has official integrations for LangChain, CrewAI, AutoGen, Vercel AI SDK, OpenAI Agents SDK, Google ADK, and a Model Context Protocol (MCP) server for Claude Desktop and Cursor. SDKs are available for TypeScript, Python, and Go."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is Grantex open source?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex is fully open source under the Apache 2.0 license. The protocol specification is public and frozen at v1.0. Verification is offline via JWKS — services never need to talk to Grantex servers. You can self-host your own auth server."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I secure my AI agent with Grantex?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Install the SDK (npm install @grantex/sdk or pip install grantex), register your agent, create an authorization request with specific scopes, have the user approve via consent URL, and exchange the code for a signed JWT. The agent uses this token for all API calls, and any service can verify it offline. The entire flow takes about 10 lines of code."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I revoke an AI agent's access?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex supports real-time revocation that takes effect in under 1 second. You can revoke individual grants or all grants for an agent. Revoking a parent agent's grant automatically cascades to all delegated sub-agent grants."
+        }
+      }
+    ]
   }
   </script>
 
@@ -905,35 +971,35 @@
         <span class="integration-icon">&#x1F6E1;</span>
         Gateway
       </a>
-      <a href="https://www.npmjs.com/package/@grantex/express" class="integration-pill" style="text-decoration:none;">
+      <a href="/for/express" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">Ex</span>
         Express.js
       </a>
-      <a href="https://pypi.org/project/grantex-fastapi/" class="integration-pill" style="text-decoration:none;">
+      <a href="/for/fastapi" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x26A1;</span>
         FastAPI
       </a>
-      <a href="https://www.npmjs.com/package/@grantex/langchain" class="integration-pill" style="text-decoration:none;">
+      <a href="/for/langchain" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x1F997;</span>
         LangChain
       </a>
-      <a href="https://www.npmjs.com/package/@grantex/autogen" class="integration-pill" style="text-decoration:none;">
+      <a href="/for/autogen" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x1F916;</span>
         AutoGen
       </a>
-      <a href="https://pypi.org/project/grantex-crewai/" class="integration-pill" style="text-decoration:none;">
+      <a href="/for/crewai" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x1F6A2;</span>
         CrewAI
       </a>
-      <a href="https://pypi.org/project/grantex-openai-agents/" class="integration-pill" style="text-decoration:none;">
+      <a href="/for/openai-agents" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x1F9E0;</span>
         OpenAI Agents
       </a>
-      <a href="https://pypi.org/project/grantex-adk/" class="integration-pill" style="text-decoration:none;">
+      <a href="/for/google-adk" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">G</span>
         Google ADK
       </a>
-      <a href="https://www.npmjs.com/package/@grantex/vercel-ai" class="integration-pill" style="text-decoration:none;">
+      <a href="/for/vercel-ai" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x25B2;</span>
         Vercel AI SDK
       </a>
@@ -949,7 +1015,7 @@
         <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">Go</span>
         Go
       </a>
-      <a href="https://www.npmjs.com/package/@grantex/mcp" class="integration-pill" style="text-decoration:none;">
+      <a href="/for/mcp" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x1F50C;</span>
         MCP Server
       </a>
