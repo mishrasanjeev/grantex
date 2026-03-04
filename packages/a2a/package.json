@@ -1,6 +1,6 @@
 {
   "name": "@grantex/a2a",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Google A2A protocol bridge for Grantex — inject grant tokens into agent-to-agent communication",
   "homepage": "https://grantex.dev",
   "bugs": {

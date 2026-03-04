@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grantex-crewai"
-version = "0.1.2"
+version = "0.1.3"
 description = "CrewAI integration for the Grantex delegated authorization protocol — scope-enforced, audited agent tools"
 readme = "README.md"
 license = { text = "Apache-2.0" }
