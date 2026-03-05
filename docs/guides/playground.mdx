@@ -9,10 +9,10 @@ The [Grantex Playground](https://grantex.dev/playground) is a browser-based, int
 
 ## Getting Started
 
-1. **Get a sandbox API key** — [Register](https://grantex.dev/dashboard) for a free account and copy your API key from the dashboard.
-2. **Open the playground** — Visit [grantex.dev/playground](https://grantex.dev/playground).
-3. **Paste your API key** — Enter it in the configuration panel at the top. The default server URL points to the production auth service.
-4. **Walk through each step** — Click "Run" on each step to execute the API call and see the response.
+1. **Open the playground** — Visit [grantex.dev/playground](https://grantex.dev/playground).
+2. **Click "Start Demo"** — The playground uses a built-in public sandbox key, so no signup or API key is needed.
+3. **Walk through each step** — Click "Run" on each step to execute the API call and see the response.
+4. *(Optional)* Click **"Advanced"** to use your own sandbox key or a custom server URL.
 
 ## The 7 Steps
 
@@ -53,7 +53,8 @@ If you're [self-hosting Grantex](/guides/self-hosting), change the **Server URL*
 
 ## Security Notes
 
-- Your API key is **never stored** — it stays in browser memory only for the duration of your session.
+- The playground uses a **built-in public sandbox key** by default. This key only authenticates a sandbox-mode developer with auto-approved consent, no real user data, and free-plan rate limits — it is intentionally public.
+- If you use your own API key, it is **never stored** — it stays in browser memory only for the duration of your session.
 - All API calls go directly from your browser to the Grantex auth service over HTTPS.
-- The playground does not send your API key to any third-party service.
+- The playground does not send any API key to any third-party service.
 - Agents and grants created in the playground are real — you can view and manage them in your [developer dashboard](https://grantex.dev/dashboard).
