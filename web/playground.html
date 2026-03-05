@@ -250,7 +250,7 @@
     <div id="advancedPanel" style="display:none;margin-top:16px;">
       <div class="field">
         <label for="apiKey">Sandbox API Key</label>
-        <input type="password" id="apiKey" placeholder="Leave blank to use the public demo key" autocomplete="off">
+        <input type="text" id="apiKey" placeholder="Leave blank to use the public demo key" autocomplete="off">
         <div class="hint">Optionally use your own sandbox key from the <a href="/dashboard">Dashboard</a>, or leave blank for the built-in demo key.</div>
       </div>
       <div class="field">
@@ -518,9 +518,10 @@ function toggleAdvanced() {
 }
 
 function startFlow() {
-  const customKey = $('apiKey').value.trim();
+  const advancedOpen = $('advancedPanel').style.display !== 'none';
+  const customKey = advancedOpen ? $('apiKey').value.trim() : '';
   state.apiKey = customKey || DEMO_KEY;
-  state.baseUrl = ($('baseUrl').value.trim() || DEFAULT_BASE_URL).replace(/\/$/, '');
+  state.baseUrl = (advancedOpen ? $('baseUrl').value.trim() : DEFAULT_BASE_URL).replace(/\/$/, '') || DEFAULT_BASE_URL;
 
   $('setupError').textContent = '';
   $('startBtn').style.display = 'none';
