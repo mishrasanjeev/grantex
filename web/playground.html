@@ -236,26 +236,28 @@
   <!-- Header -->
   <div class="pg-header">
     <h1>Interactive Playground</h1>
-    <p>Walk through the full Grantex authorization flow live in your browser. No signup required — just paste a sandbox API key.</p>
+    <p>Walk through the full Grantex authorization flow live in your browser. No signup, no API key — just click Start.</p>
   </div>
 
   <!-- Setup -->
   <div class="setup-card" id="setup">
-    <h2>Configuration</h2>
-    <div class="field">
-      <label for="apiKey">Sandbox API Key</label>
-      <input type="password" id="apiKey" placeholder="gx_sandbox_..." autocomplete="off">
-      <div class="hint">Get a free sandbox key from the <a href="/dashboard">Dashboard</a>, or use a local dev key.</div>
-    </div>
-    <div class="field">
-      <label for="baseUrl">Server URL</label>
-      <input type="text" id="baseUrl" value="https://grantex-auth-dd4mtrt2gq-uc.a.run.app">
-      <div class="hint">The Grantex auth service endpoint. Change this if self-hosting.</div>
-    </div>
-    <div style="display:flex;gap:12px;align-items:center;margin-top:4px;">
-      <button class="btn btn-primary" onclick="startFlow()" id="startBtn">Start Flow</button>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <button class="btn btn-primary" onclick="startFlow()" id="startBtn" style="font-size:16px;padding:12px 32px;">Start Demo</button>
       <button class="btn btn-secondary" onclick="resetFlow()" id="resetBtn" style="display:none;">Reset</button>
+      <button class="btn btn-secondary btn-sm" onclick="toggleAdvanced()" id="advancedToggle">Advanced</button>
       <span id="setupError" style="font-size:13px;color:var(--red);"></span>
+    </div>
+    <div id="advancedPanel" style="display:none;margin-top:16px;">
+      <div class="field">
+        <label for="apiKey">Sandbox API Key</label>
+        <input type="password" id="apiKey" placeholder="Leave blank to use the public demo key" autocomplete="off">
+        <div class="hint">Optionally use your own sandbox key from the <a href="/dashboard">Dashboard</a>, or leave blank for the built-in demo key.</div>
+      </div>
+      <div class="field">
+        <label for="baseUrl">Server URL</label>
+        <input type="text" id="baseUrl" value="https://grantex-auth-dd4mtrt2gq-uc.a.run.app">
+        <div class="hint">The Grantex auth service endpoint. Change this if self-hosting.</div>
+      </div>
     </div>
   </div>
 
@@ -425,6 +427,9 @@
 <script>
 const $ = (id) => document.getElementById(id);
 
+const DEMO_KEY = 'gx_test_playground_demo_2026';
+const DEFAULT_BASE_URL = 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
+
 let state = {
   apiKey: '',
   baseUrl: '',
@@ -507,16 +512,20 @@ function toggleStep(n) {
 
 function enableRun(n) { $('run' + n).disabled = false; }
 
-function startFlow() {
-  state.apiKey = $('apiKey').value.trim();
-  state.baseUrl = $('baseUrl').value.trim().replace(/\/$/, '');
+function toggleAdvanced() {
+  const panel = $('advancedPanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
 
-  if (!state.apiKey) {
-    $('setupError').textContent = 'Please enter a sandbox API key.';
-    return;
-  }
+function startFlow() {
+  const customKey = $('apiKey').value.trim();
+  state.apiKey = customKey || DEMO_KEY;
+  state.baseUrl = ($('baseUrl').value.trim() || DEFAULT_BASE_URL).replace(/\/$/, '');
+
   $('setupError').textContent = '';
   $('startBtn').style.display = 'none';
+  $('advancedToggle').style.display = 'none';
+  $('advancedPanel').style.display = 'none';
   $('resetBtn').style.display = 'inline-flex';
   $('stepsContainer').style.display = 'block';
 
@@ -530,9 +539,10 @@ function startFlow() {
 }
 
 function resetFlow() {
-  state = { apiKey: state.apiKey, baseUrl: state.baseUrl, agentId: null, code: null, grantToken: null, refreshToken: null, grantId: null, tokenJti: null };
+  state = { apiKey: '', baseUrl: '', agentId: null, code: null, grantToken: null, refreshToken: null, grantId: null, tokenJti: null };
   $('stepsContainer').style.display = 'none';
   $('startBtn').style.display = 'inline-flex';
+  $('advancedToggle').style.display = 'inline-flex';
   $('resetBtn').style.display = 'none';
   for (let i = 1; i <= 7; i++) {
     setBadge(i, 'pending');
