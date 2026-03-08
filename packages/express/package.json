@@ -1,6 +1,6 @@
 {
   "name": "@grantex/express",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Express.js middleware for Grantex grant token verification and scope-based authorization",
   "homepage": "https://grantex.dev/for/express",
   "bugs": {
