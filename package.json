@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "@grantex/sdk": "file:packages/sdk-ts",
+    "vitest": "^4.0.18"
+  }
+}

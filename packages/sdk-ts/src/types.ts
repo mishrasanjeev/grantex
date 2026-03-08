@@ -23,6 +23,7 @@ export interface GrantexClientOptions {
 export interface SignupParams {
   name: string;
   email?: string;
+  mode?: 'live' | 'sandbox';
 }
 
 export interface SignupResponse {
@@ -209,7 +210,9 @@ export interface PrincipalSessionResponse {
 
 export interface LogAuditParams {
   agentId: string;
+  agentDid: string;
   grantId: string;
+  principalId: string;
   action: string;
   metadata?: Record<string, unknown>;
   status?: 'success' | 'failure' | 'blocked';

@@ -6,6 +6,7 @@ import { hashApiKey, generateApiKey } from '../lib/hash.js';
 interface SignupBody {
   name: string;
   email?: string;
+  mode?: 'live' | 'sandbox';
 }
 
 export async function signupRoutes(app: FastifyInstance): Promise<void> {
@@ -14,10 +15,12 @@ export async function signupRoutes(app: FastifyInstance): Promise<void> {
     '/v1/signup',
     { config: { skipAuth: true } },
     async (request, reply) => {
-      const { name, email } = request.body;
+      const { name, email, mode: requestedMode } = request.body;
       if (!name) {
         return reply.status(400).send({ message: 'name is required', code: 'BAD_REQUEST', requestId: request.id });
       }
+
+      const mode = requestedMode === 'sandbox' ? 'sandbox' : 'live';
 
       const sql = getSql();
 
@@ -29,12 +32,12 @@ export async function signupRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const id = newDeveloperId();
-      const apiKey = generateApiKey();
+      const apiKey = generateApiKey(mode);
       const keyHash = hashApiKey(apiKey);
 
       const rows = await sql`
         INSERT INTO developers (id, name, email, api_key_hash, mode)
-        VALUES (${id}, ${name}, ${email ?? null}, ${keyHash}, 'live')
+        VALUES (${id}, ${name}, ${email ?? null}, ${keyHash}, ${mode})
         RETURNING id, name, email, mode, created_at
       `;
 
