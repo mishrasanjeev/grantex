@@ -364,6 +364,65 @@ describe('verifySDJWT', () => {
     expect(result.error).toBe('Invalid disclosure format');
   });
 
+  it('returns invalid for KB-JWT missing nonce and aud', async () => {
+    const { sdJwt } = await issueSDJWT(defaultParams);
+
+    // Create a KB-JWT with typ=kb+jwt but no nonce or aud
+    const kbHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'kb+jwt' })).toString('base64url');
+    const kbPayload = Buffer.from(JSON.stringify({ iat: 12345 })).toString('base64url');
+    const kbJwt = `${kbHeader}.${kbPayload}.`;
+
+    // Append KB-JWT to SD-JWT
+    const withKb = sdJwt.replace(/~$/, '') + '~' + kbJwt + '~';
+    const result = await verifySDJWT(withKb);
+
+    expect(result.valid).toBe(false);
+    expect(result.error).toBe('KB-JWT missing nonce or aud');
+  });
+
+  it('returns invalid for malformed KB-JWT', async () => {
+    const { sdJwt } = await issueSDJWT(defaultParams);
+
+    // Create something that has a kb+jwt header but invalid JWT payload
+    const kbHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'kb+jwt' })).toString('base64url');
+    const kbJwt = `${kbHeader}.!!!invalid!!!.`;
+
+    const withKb = sdJwt.replace(/~$/, '') + '~' + kbJwt + '~';
+    const result = await verifySDJWT(withKb);
+
+    expect(result.valid).toBe(false);
+    expect(result.error).toBe('Invalid KB-JWT format');
+  });
+
+  it('accepts valid KB-JWT with nonce', async () => {
+    const { sdJwt } = await issueSDJWT(defaultParams);
+
+    // Create a valid KB-JWT with nonce
+    const kbHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'kb+jwt' })).toString('base64url');
+    const kbPayload = Buffer.from(JSON.stringify({ nonce: 'test-nonce-123', iat: Math.floor(Date.now() / 1000) })).toString('base64url');
+    const kbJwt = `${kbHeader}.${kbPayload}.`;
+
+    const withKb = sdJwt.replace(/~$/, '') + '~' + kbJwt + '~';
+    const result = await verifySDJWT(withKb);
+
+    expect(result.valid).toBe(true);
+    expect(result.disclosedClaims).toBeDefined();
+  });
+
+  it('accepts valid KB-JWT with aud', async () => {
+    const { sdJwt } = await issueSDJWT(defaultParams);
+
+    // Create a valid KB-JWT with aud
+    const kbHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'kb+jwt' })).toString('base64url');
+    const kbPayload = Buffer.from(JSON.stringify({ aud: 'https://verifier.example.com', iat: Math.floor(Date.now() / 1000) })).toString('base64url');
+    const kbJwt = `${kbHeader}.${kbPayload}.`;
+
+    const withKb = sdJwt.replace(/~$/, '') + '~' + kbJwt + '~';
+    const result = await verifySDJWT(withKb);
+
+    expect(result.valid).toBe(true);
+  });
+
   it('returns invalid for disclosure with wrong array length', async () => {
     const { sdJwt } = await issueSDJWT(defaultParams);
     const issuerJwt = sdJwt.split('~')[0]!;
@@ -443,6 +502,47 @@ describe('createPresentation', () => {
     const parts = presentation.split('~');
     const nonEmptyDisclosures = parts.slice(1).filter((p) => p.length > 0);
     expect(nonEmptyDisclosures).toHaveLength(0);
+  });
+
+  it('strips KB-JWT (typ=kb+jwt) from the SD-JWT during presentation', async () => {
+    const { sdJwt } = await issueSDJWT(defaultParams);
+
+    // Craft a fake KB-JWT with typ=kb+jwt
+    const kbHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'kb+jwt' })).toString('base64url');
+    const kbPayload = Buffer.from(JSON.stringify({ nonce: 'n', aud: 'a' })).toString('base64url');
+    const kbJwt = `${kbHeader}.${kbPayload}.`;
+
+    // Append the KB-JWT before the trailing ~
+    const withKb = sdJwt.replace(/~$/, '') + '~' + kbJwt + '~';
+
+    const presentation = createPresentation(withKb, ['principalId']);
+    const presentationParts = presentation.split('~').filter((p) => p.length > 0);
+
+    // KB-JWT should not be in the presentation
+    for (const part of presentationParts.slice(1)) {
+      const dots = part.split('.').length - 1;
+      if (dots === 2) {
+        // Should not have kb+jwt type
+        try {
+          const header = JSON.parse(Buffer.from(part.split('.')[0]!, 'base64url').toString('utf-8'));
+          expect(header.typ).not.toBe('kb+jwt');
+        } catch {
+          // Not a JWT, that's fine
+        }
+      }
+    }
+  });
+
+  it('treats parts with 2 dots but non-JWT header as disclosures', async () => {
+    const { sdJwt } = await issueSDJWT(defaultParams);
+
+    // Add a disclosure that happens to have 2 dots but is not a valid JWT
+    const fakePartWithDots = 'not.a.jwt';
+    const withFakePart = sdJwt.replace(/~$/, '') + '~' + fakePartWithDots + '~';
+
+    // Should not throw — the part should be treated as a disclosure (and will fail verification since hash won't match)
+    const presentation = createPresentation(withFakePart, ['principalId']);
+    expect(typeof presentation).toBe('string');
   });
 });
 

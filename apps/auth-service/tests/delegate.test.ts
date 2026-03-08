@@ -137,6 +137,54 @@ describe('POST /v1/grants/delegate', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('returns 400 when parentGrantToken is not a valid JWT', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/delegate',
+      headers: authHeader(),
+      payload: {
+        parentGrantToken: 'not-a-valid-jwt',
+        subAgentId: SUB_AGENT.id,
+        scopes: ['read'],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json<{ message: string; code: string }>();
+    expect(body.message).toBe('Invalid parentGrantToken');
+    expect(body.code).toBe('BAD_REQUEST');
+  });
+
+  it('returns 400 when parentGrantToken is missing required claims (jti)', async () => {
+    seedAuth();
+
+    // Create a JWT without jti (and without grnt, scp, exp)
+    const { SignJWT: JoseSignJWT } = await import('jose');
+    const { getKeyPair } = await import('../src/lib/crypto.js');
+    const { privateKey } = getKeyPair();
+    const invalidToken = await new JoseSignJWT({ sub: 'user_123', agt: 'did:test:agent' })
+      .setProtectedHeader({ alg: 'RS256' })
+      .sign(privateKey);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/delegate',
+      headers: authHeader(),
+      payload: {
+        parentGrantToken: invalidToken,
+        subAgentId: SUB_AGENT.id,
+        scopes: ['read'],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json<{ message: string; code: string }>();
+    expect(body.message).toBe('Invalid parentGrantToken claims');
+    expect(body.code).toBe('BAD_REQUEST');
+  });
+
   it('returns 400 when required fields are missing', async () => {
     seedAuth();
 

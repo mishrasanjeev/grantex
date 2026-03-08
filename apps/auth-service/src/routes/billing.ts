@@ -17,12 +17,6 @@ interface PortalBody {
   returnUrl: string;
 }
 
-interface StripeWebhookBody extends Buffer {}
-
-function requireStripe(reply: Parameters<FastifyInstance['post']>[1] extends infer R ? never : never) {
-  // dummy — see usage in handlers
-}
-
 export async function billingRoutes(app: FastifyInstance): Promise<void> {
   // ----------------------------------------------------------------
   // POST /v1/billing/webhook (Stripe → us)

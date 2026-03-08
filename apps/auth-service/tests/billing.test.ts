@@ -422,4 +422,42 @@ describe('POST /v1/billing/webhook', () => {
 
     expect(res.statusCode).toBe(400);
   });
+
+  it('returns 503 when stripeWebhookSecret is not configured', async () => {
+    const { config } = await import('../src/config.js');
+    const original = config.stripeWebhookSecret;
+    (config as { stripeWebhookSecret: string | null }).stripeWebhookSecret = null;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/webhook',
+      headers: {
+        'content-type': 'application/json',
+        'stripe-signature': 'sig_test',
+      },
+      payload: JSON.stringify({}),
+    });
+
+    (config as { stripeWebhookSecret: string | null }).stripeWebhookSecret = original;
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json().message).toBe('Billing not configured');
+  });
+
+  it('returns 503 when getStripe throws in webhook handler', async () => {
+    mockGetStripe.mockImplementationOnce(() => { throw new Error('STRIPE_SECRET_KEY is not configured'); });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/webhook',
+      headers: {
+        'content-type': 'application/json',
+        'stripe-signature': 'sig_test',
+      },
+      payload: JSON.stringify({}),
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json().message).toBe('Billing not configured');
+  });
 });
