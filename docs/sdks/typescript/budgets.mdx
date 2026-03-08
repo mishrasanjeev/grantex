@@ -1,0 +1,243 @@
+---
+title: "Budgets"
+sidebarTitle: "Budgets"
+description: "Allocate per-grant spending budgets, debit usage, check balances, and view transaction history."
+---
+
+## Overview
+
+The `budgets` sub-client manages per-grant spending budgets. Allocate a budget when issuing a grant, debit against it as your agent consumes resources, check remaining balances, and review transaction history.
+
+```typescript
+// Allocate, debit, check balance, list transactions
+await grantex.budgets.allocate({ grantId: 'grnt_01HXYZ...', initialBudget: 1000 });
+await grantex.budgets.debit({ grantId: 'grnt_01HXYZ...', amount: 50, description: 'API call' });
+const balance = await grantex.budgets.balance('grnt_01HXYZ...');
+const history = await grantex.budgets.transactions('grnt_01HXYZ...');
+```
+
+---
+
+## budgets.allocate()
+
+Allocate a spending budget for a grant. The budget is denominated in your chosen unit (e.g., cents, tokens, credits). Threshold alerts are automatically triggered at 50% and 80% consumption.
+
+```typescript
+const allocation = await grantex.budgets.allocate({
+  grantId: 'grnt_01HXYZ...',
+  initialBudget: 1000,
+});
+
+console.log(allocation.id);               // 'bdg_01HXYZ...'
+console.log(allocation.grantId);           // 'grnt_01HXYZ...'
+console.log(allocation.initialBudget);     // 1000
+console.log(allocation.remainingBudget);   // 1000
+console.log(allocation.createdAt);         // '2026-03-08T10:00:00Z'
+```
+
+### Parameters
+
+<ParamField body="grantId" type="string" required>
+  The grant ID to allocate a budget for.
+</ParamField>
+
+<ParamField body="initialBudget" type="number" required>
+  The initial budget amount. Must be a positive number.
+</ParamField>
+
+### Response: `BudgetAllocation`
+
+<ResponseField name="id" type="string">
+  Unique budget allocation identifier.
+</ResponseField>
+
+<ResponseField name="grantId" type="string">
+  The associated grant ID.
+</ResponseField>
+
+<ResponseField name="initialBudget" type="number">
+  The original allocated budget amount.
+</ResponseField>
+
+<ResponseField name="remainingBudget" type="number">
+  The current remaining budget amount.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the allocation was created.
+</ResponseField>
+
+---
+
+## budgets.debit()
+
+Debit an amount from a grant's budget. Uses atomic operations (`WHERE remaining >= amount`) to prevent overdraft. Returns a `402 INSUFFICIENT_BUDGET` error if the remaining balance is insufficient.
+
+```typescript
+const result = await grantex.budgets.debit({
+  grantId: 'grnt_01HXYZ...',
+  amount: 50,
+  description: 'GPT-4 API call',
+});
+
+console.log(result.remaining);      // 950
+console.log(result.transactionId);  // 'txn_01HXYZ...'
+```
+
+### Parameters
+
+<ParamField body="grantId" type="string" required>
+  The grant ID to debit from.
+</ParamField>
+
+<ParamField body="amount" type="number" required>
+  The amount to debit. Must be a positive number.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Optional description for the transaction (e.g., `'GPT-4 API call'`).
+</ParamField>
+
+### Response: `DebitResponse`
+
+<ResponseField name="remaining" type="number">
+  The remaining budget after the debit.
+</ResponseField>
+
+<ResponseField name="transactionId" type="string">
+  Unique identifier for the debit transaction.
+</ResponseField>
+
+<Warning>
+If the remaining budget is less than the debit amount, the API returns a `402` error with code `INSUFFICIENT_BUDGET`. The debit is not applied partially — it either succeeds in full or fails entirely.
+</Warning>
+
+---
+
+## budgets.balance()
+
+Check the current budget balance for a grant.
+
+```typescript
+const allocation = await grantex.budgets.balance('grnt_01HXYZ...');
+
+console.log(allocation.id);               // 'bdg_01HXYZ...'
+console.log(allocation.grantId);           // 'grnt_01HXYZ...'
+console.log(allocation.initialBudget);     // 1000
+console.log(allocation.remainingBudget);   // 950
+console.log(allocation.createdAt);         // '2026-03-08T10:00:00Z'
+```
+
+### Parameters
+
+<ParamField body="grantId" type="string" required>
+  The grant ID to check the balance for.
+</ParamField>
+
+### Response: `BudgetAllocation`
+
+Returns the same `BudgetAllocation` shape as `allocate()` — see above for field descriptions.
+
+---
+
+## budgets.transactions()
+
+List all transactions for a grant's budget. Supports pagination.
+
+```typescript
+const result = await grantex.budgets.transactions('grnt_01HXYZ...', {
+  page: 1,
+  pageSize: 50,
+});
+
+console.log(result.total);            // 12
+for (const txn of result.transactions) {
+  console.log(txn.id);          // 'txn_01HXYZ...'
+  console.log(txn.amount);      // 50
+  console.log(txn.description); // 'GPT-4 API call'
+  console.log(txn.createdAt);   // '2026-03-08T10:05:00Z'
+  console.log(txn.balanceAfter); // 950
+}
+```
+
+### Parameters
+
+<ParamField body="grantId" type="string" required>
+  The grant ID to list transactions for.
+</ParamField>
+
+<ParamField body="page" type="number">
+  Page number for pagination (default: 1).
+</ParamField>
+
+<ParamField body="pageSize" type="number">
+  Number of results per page (default: 20, max: 100).
+</ParamField>
+
+### Response: `TransactionsResponse`
+
+<ResponseField name="transactions" type="BudgetTransaction[]">
+  Array of transaction records.
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Total number of transactions for this grant.
+</ResponseField>
+
+Each `BudgetTransaction` contains:
+
+<ResponseField name="id" type="string">
+  Unique transaction identifier.
+</ResponseField>
+
+<ResponseField name="amount" type="number">
+  The debited amount.
+</ResponseField>
+
+<ResponseField name="description" type="string | null">
+  Optional description of the transaction.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the transaction was created.
+</ResponseField>
+
+<ResponseField name="balanceAfter" type="number">
+  The remaining budget after this transaction.
+</ResponseField>
+
+---
+
+## Full example
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// Allocate a budget for a grant
+const allocation = await grantex.budgets.allocate({
+  grantId: 'grnt_01HXYZ...',
+  initialBudget: 500,
+});
+console.log(`Budget allocated: ${allocation.initialBudget}`);
+
+// Debit as the agent uses resources
+const debit = await grantex.budgets.debit({
+  grantId: 'grnt_01HXYZ...',
+  amount: 25,
+  description: 'Document analysis',
+});
+console.log(`Remaining: ${debit.remaining}`);
+
+// Check the current balance
+const balance = await grantex.budgets.balance('grnt_01HXYZ...');
+console.log(`${balance.remainingBudget} / ${balance.initialBudget} remaining`);
+
+// Review transaction history
+const { transactions, total } = await grantex.budgets.transactions('grnt_01HXYZ...');
+console.log(`${total} transaction(s)`);
+for (const txn of transactions) {
+  console.log(`  ${txn.description}: -${txn.amount} (balance: ${txn.balanceAfter})`);
+}
+```

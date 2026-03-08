@@ -466,6 +466,331 @@ curl https://api.grantex.dev/.well-known/did.json
 
 ---
 
+## SD-JWT Selective Disclosure
+
+Grantex supports SD-JWT (Selective Disclosure JWT) for privacy-preserving credential presentation. While a standard VC-JWT reveals all claims to every verifier, SD-JWT lets the holder choose exactly which fields to disclose — keeping everything else hidden.
+
+### Why SD-JWT?
+
+In agentic commerce, different verifiers need different levels of information. A payment processor needs to know the agent's scopes and budget, but not the principal's identity. A compliance auditor needs the principal and timestamps, but not the scopes. SD-JWT enables minimum-disclosure presentations that satisfy each verifier's requirements without over-sharing.
+
+### How It Works
+
+When exchanging an authorization code, pass `credentialFormat: "sd-jwt"` to receive an SD-JWT credential:
+
+```typescript
+const result = await grantex.tokens.exchange({
+  code,
+  agentId: agent.id,
+  credentialFormat: 'sd-jwt',   // opt-in to SD-JWT issuance
+});
+
+console.log(result.grantToken);         // standard RS256 JWT (unchanged)
+console.log(result.sdJwt);              // SD-JWT with selective disclosure
+```
+
+```python
+result = client.tokens.exchange(ExchangeTokenParams(
+    code=code,
+    agent_id=agent.id,
+    credential_format="sd-jwt",
+))
+
+print(result.sd_jwt)  # SD-JWT with selective disclosure
+```
+
+### Creating a Presentation
+
+The holder selects which claims to disclose when presenting to a verifier:
+
+```typescript
+const presentation = await grantex.credentials.present({
+  sdJwt: result.sdJwt,
+  disclosedClaims: ['scopes', 'agentId'],   // only reveal these fields
+});
+
+// Send presentation to the verifier — they see scopes and agentId,
+// but principalId, developerId, grantId, etc. remain hidden
+```
+
+```python
+presentation = client.credentials.present(
+    sd_jwt=result.sd_jwt,
+    disclosed_claims=["scopes", "agent_id"],
+)
+```
+
+### SD-JWT Format
+
+An SD-JWT consists of: `<issuer-jwt>~<disclosure1>~<disclosure2>~...~`
+
+Each disclosure is a base64url-encoded JSON array `[salt, claim-name, claim-value]`. The verifier can only see claims for which a disclosure is provided.
+
+### Disclosable Claims
+
+| Claim | Description |
+|-------|-------------|
+| `principalId` | The end-user who authorized the grant |
+| `developerId` | The developer who owns the agent |
+| `scopes` | The authorized scopes |
+| `agentId` | The agent's DID |
+| `grantId` | The grant record identifier |
+| `issuedAt` | When the credential was issued |
+| `expiresAt` | When the credential expires |
+
+### SD-JWT API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/token` | Exchange code for grant token + SD-JWT (with `credentialFormat: "sd-jwt"`) |
+| `POST` | `/v1/credentials/verify` | Verify an SD-JWT presentation |
+
+---
+
+## Budget Controls
+
+Grantex provides per-grant budget controls that let developers cap how much an agent can spend. Budget allocations are enforced atomically — if a debit would exceed the remaining balance, it fails with a 402 `INSUFFICIENT_BUDGET` error. Threshold alerts fire at 50% and 80% consumption, and the remaining budget is embedded in grant tokens via the `bdg` JWT claim.
+
+```typescript
+// Allocate a budget to a grant
+const budget = await grantex.budgets.allocate({
+  grantId: 'grnt_01HXYZ...',
+  amount: 1000,
+  currency: 'USD',
+});
+
+// Debit against the budget
+const debit = await grantex.budgets.debit({
+  grantId: 'grnt_01HXYZ...',
+  amount: 42.50,
+  description: 'Flight booking',
+});
+console.log(debit.remaining); // 957.50
+
+// Check the current balance
+const balance = await grantex.budgets.balance('grnt_01HXYZ...');
+console.log(balance.remainingBudget);
+
+// List all budget transactions for a grant
+const { transactions } = await grantex.budgets.transactions('grnt_01HXYZ...');
+```
+
+```python
+# Allocate a budget to a grant
+budget = client.budgets.allocate(
+    grant_id="grnt_01HXYZ...",
+    amount=1000,
+    currency="USD",
+)
+
+# Debit against the budget
+debit = client.budgets.debit(
+    grant_id="grnt_01HXYZ...",
+    amount=42.50,
+    description="Flight booking",
+)
+print(debit.remaining)  # 957.50
+
+# Check the current balance
+balance = client.budgets.balance("grnt_01HXYZ...")
+
+# List all budget transactions
+transactions = client.budgets.transactions("grnt_01HXYZ...")
+```
+
+### Budget API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/budget/allocate` | Create a budget allocation for a grant |
+| `POST` | `/v1/budget/debit` | Debit against a grant's budget (402 if insufficient) |
+| `GET` | `/v1/budget/balance/:grantId` | Get remaining balance for a grant |
+| `GET` | `/v1/budget/allocations` | List all budget allocations |
+| `GET` | `/v1/budget/transactions/:grantId` | List transactions and total spend for a grant |
+
+---
+
+## Event Streaming
+
+Grantex provides real-time event streaming via Server-Sent Events (SSE) and WebSocket. Subscribe to authorization lifecycle events as they happen — grant creation, revocation, token issuance, and budget threshold alerts. Events are published to both webhooks and streaming endpoints, so you can choose push or pull.
+
+```typescript
+// SSE — async generator, automatically reconnects
+for await (const event of grantex.events.stream()) {
+  console.log(event.type);   // 'grant.created', 'token.issued', etc.
+  console.log(event.data);
+}
+
+// Convenience wrapper with a callback
+grantex.events.subscribe((event) => {
+  if (event.type === 'budget.threshold') {
+    alert(`Grant ${event.data.grantId} is at ${event.data.percentage}% budget`);
+  }
+});
+```
+
+```python
+# SSE — async generator
+async for event in client.events.stream():
+    print(event.type)   # 'grant.created', 'grant.revoked', etc.
+    print(event.data)
+
+# Convenience wrapper
+async def handler(event):
+    if event.type == "budget.exhausted":
+        await revoke_grant(event.data["grant_id"])
+
+await client.events.subscribe(handler)
+```
+
+### Event Types
+
+| Event | Description |
+|-------|-------------|
+| `grant.created` | A new grant was approved by an end-user |
+| `grant.revoked` | A grant was revoked (by user, developer, or cascade) |
+| `token.issued` | A grant token was exchanged or refreshed |
+| `budget.threshold` | A budget allocation crossed 50% or 80% usage |
+| `budget.exhausted` | A budget allocation reached 0 remaining |
+
+### Event Streaming API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/events/stream` | SSE event stream (Bearer auth) |
+| `GET` | `/v1/events/ws` | WebSocket event stream |
+
+---
+
+## Usage Metering
+
+Grantex tracks API usage per developer — token exchanges, authorization requests, and verification calls. Use the metering API to monitor consumption, enforce plan limits, and export usage data for billing.
+
+```typescript
+// Get current period usage
+const usage = await grantex.usage.current();
+console.log(usage.tokenExchanges);
+console.log(usage.authorizations);
+console.log(usage.totalRequests);
+
+// Get usage history over the last 30 days
+const { entries } = await grantex.usage.history({ days: 30 });
+entries.forEach((e) => console.log(`${e.date}: ${e.totalRequests} requests`));
+```
+
+```python
+# Get current period usage
+usage = client.usage.current()
+print(usage.token_exchanges)
+print(usage.total_requests)
+
+# Get usage history over the last 30 days
+history = client.usage.history(days=30)
+for entry in history.entries:
+    print(f"{entry.date}: {entry.total_requests} requests")
+```
+
+### Usage Metering API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/usage` | Current period usage for the authenticated developer |
+| `GET` | `/v1/usage/history?days=N` | Daily usage history for the last N days |
+
+---
+
+## Custom Domains
+
+Grantex supports custom domains for white-labeling the consent UI and API endpoints. Register your domain, verify ownership via DNS TXT record, and all Grantex-hosted consent pages will be served under your brand.
+
+```typescript
+// Register a custom domain
+const domain = await grantex.domains.create({ domain: 'auth.yourapp.com' });
+console.log(domain.verificationToken);
+// → Add a DNS TXT record: _grantex-verify.auth.yourapp.com = <token>
+
+// Verify the domain after adding the DNS record
+const verified = await grantex.domains.verify(domain.id);
+console.log(verified.verified); // true
+
+// List all registered domains
+const { domains } = await grantex.domains.list();
+
+// Delete a domain
+await grantex.domains.delete(domain.id);
+```
+
+```python
+# Register a custom domain
+domain = client.domains.create(domain="auth.yourapp.com")
+print(domain.verification_token)
+
+# Verify after adding DNS TXT record
+verified = client.domains.verify(domain.id)
+print(verified.verified)  # True
+
+# List all domains
+domains = client.domains.list()
+
+# Delete a domain
+client.domains.delete(domain.id)
+```
+
+### Custom Domains API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/domains` | Register a new custom domain |
+| `GET` | `/v1/domains` | List all registered domains |
+| `POST` | `/v1/domains/:id/verify` | Verify domain ownership via DNS TXT |
+| `DELETE` | `/v1/domains/:id` | Remove a custom domain |
+
+---
+
+## Policy-as-Code
+
+Grantex supports pluggable policy backends for fine-grained authorization decisions. In addition to the built-in policy engine, you can connect OPA (Open Policy Agent) or Cedar to evaluate authorization requests against externally managed policy bundles. Policy bundles can be synced via direct upload or triggered automatically from a git repository webhook.
+
+```typescript
+// Upload a policy bundle
+await grantex.policies.sync({
+  format: 'opa',           // 'opa' or 'cedar'
+  bundle: bundleBuffer,    // policy bundle as Buffer
+});
+
+// List policy bundles
+const { bundles } = await grantex.policies.bundles();
+```
+
+```python
+# Upload a policy bundle
+client.policies.sync(
+    format="opa",
+    bundle=bundle_bytes,
+)
+
+# List policy bundles
+bundles = client.policies.bundles()
+```
+
+### Supported Policy Backends
+
+| Backend | Description | Config |
+|---------|-------------|--------|
+| **Builtin** | Default rule engine — scope matching + delegation constraints | No config needed |
+| **OPA** | Open Policy Agent — Rego policies evaluated at `POST /v1/data/grantex/authz` | `POLICY_BACKEND=opa`, `OPA_URL=...` |
+| **Cedar** | AWS Cedar — Cedar policies evaluated at `POST /v1/is_authorized` | `POLICY_BACKEND=cedar`, `CEDAR_URL=...` |
+
+### Policy-as-Code API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/policies/sync` | Upload a policy bundle (OPA or Cedar) |
+| `POST` | `/v1/policies/sync/webhook` | Git webhook trigger for policy sync |
+| `GET` | `/v1/policies/bundles` | List uploaded policy bundles |
+
+---
+
 ## Local Development
 
 Start the full stack with one command:
@@ -777,7 +1102,7 @@ All milestones through v1.0 are complete. See [ROADMAP.md](https://github.com/mi
 | **v2.0 — Platform** | MCP Auth Server, Credential Vault, 7 new adapters, webhook delivery log, examples | ✅ Complete |
 | **v2.1 — Enterprise Scale** | Event streaming, budget controls, observability, Terraform provider, gateway, conformance | ✅ Complete |
 | **v2.2 — Ecosystem** | OPA/Cedar policy backends, A2A protocol bridge, usage metering, custom domains, policy-as-code | ✅ Complete |
-| **v2.3 — Trust & Identity** | FIDO2/WebAuthn passkeys, W3C Verifiable Credentials, DID infrastructure, StatusList2021 revocation, Mastercard Verifiable Intent | ✅ Complete |
+| **v2.3 — Trust & Identity** | FIDO2/WebAuthn passkeys, W3C Verifiable Credentials, SD-JWT selective disclosure, DID infrastructure, StatusList2021 revocation, Mastercard Verifiable Intent | ✅ Complete |
 
 ---
 

@@ -1,0 +1,103 @@
+---
+title: "Usage"
+sidebarTitle: "Usage"
+description: "Track API usage metrics for the current billing period and view historical usage."
+---
+
+## Overview
+
+The `usage` client provides access to API usage metrics. Check your current billing period's usage and retrieve historical usage data broken down by day.
+
+Access the usage client via `client.usage`.
+
+## Current
+
+Get API usage metrics for the current billing period.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    usage = client.usage.current()
+
+    print(f"Developer: {usage.developer_id}")
+    print(f"Period: {usage.period}")
+    print(f"Token exchanges: {usage.token_exchanges}")
+    print(f"Authorizations: {usage.authorizations}")
+    print(f"Verifications: {usage.verifications}")
+    print(f"Total requests: {usage.total_requests}")
+```
+
+### UsageMetrics
+
+| Field              | Type  | Description                                           |
+|--------------------|-------|-------------------------------------------------------|
+| `developer_id`     | `str` | The developer organization ID.                        |
+| `period`           | `str` | The current billing period (e.g., `'2026-03'`).       |
+| `token_exchanges`  | `int` | Number of token exchange operations this period.      |
+| `authorizations`   | `int` | Number of authorization requests this period.         |
+| `verifications`    | `int` | Number of token verifications this period.            |
+| `total_requests`   | `int` | Total API requests across all endpoints this period.  |
+
+## History
+
+Retrieve historical usage data for the specified number of days, broken down by day.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    history = client.usage.history(days=7)
+
+    for entry in history.entries:
+        print(f"{entry.date}: {entry.total_requests} requests")
+        print(f"  Exchanges: {entry.token_exchanges}")
+        print(f"  Authorizations: {entry.authorizations}")
+        print(f"  Verifications: {entry.verifications}")
+```
+
+### Parameters
+
+| Parameter | Type  | Required | Description                                         |
+|-----------|-------|----------|-----------------------------------------------------|
+| `days`    | `int` | Yes      | Number of days of history to retrieve (e.g., 7, 30, 90). |
+
+### UsageHistory
+
+| Field     | Type              | Description                                                 |
+|-----------|-------------------|-------------------------------------------------------------|
+| `entries` | `list[UsageEntry]` | Daily usage entries, ordered from oldest to newest.         |
+
+### UsageEntry
+
+| Field              | Type  | Description                                    |
+|--------------------|-------|------------------------------------------------|
+| `date`             | `str` | The date in `YYYY-MM-DD` format.               |
+| `token_exchanges`  | `int` | Number of token exchange operations on this day. |
+| `authorizations`   | `int` | Number of authorization requests on this day.  |
+| `verifications`    | `int` | Number of token verifications on this day.     |
+| `total_requests`   | `int` | Total API requests on this day.                |
+
+## Example: Usage Dashboard
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    # Check current period usage
+    current = client.usage.current()
+    print(f"Period: {current.period}")
+    print(f"Total requests: {current.total_requests}")
+    print(f"  Authorizations: {current.authorizations}")
+    print(f"  Token exchanges: {current.token_exchanges}")
+    print(f"  Verifications: {current.verifications}")
+
+    # Get last 30 days of usage
+    history = client.usage.history(days=30)
+    total_month = sum(e.total_requests for e in history.entries)
+    print(f"\nLast 30 days: {total_month} total requests")
+
+    # Find peak usage day
+    peak = max(history.entries, key=lambda e: e.total_requests)
+    print(f"Peak day: {peak.date} ({peak.total_requests} requests)")
+```

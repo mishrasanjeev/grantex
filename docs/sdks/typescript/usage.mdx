@@ -1,0 +1,138 @@
+---
+title: "Usage"
+sidebarTitle: "Usage"
+description: "Track API usage metrics for the current billing period and view historical usage."
+---
+
+## Overview
+
+The `usage` sub-client provides access to API usage metrics. You can check your current billing period's usage and retrieve historical usage data broken down by day.
+
+```typescript
+const current = await grantex.usage.current();
+const history = await grantex.usage.history({ days: 30 });
+```
+
+---
+
+## usage.current()
+
+Get API usage metrics for the current billing period.
+
+```typescript
+const usage = await grantex.usage.current();
+
+console.log(usage.developerId);        // 'dev_01HXYZ...'
+console.log(usage.period);             // '2026-03'
+console.log(usage.tokenExchanges);     // 142
+console.log(usage.authorizations);     // 89
+console.log(usage.verifications);      // 1024
+console.log(usage.totalRequests);      // 1255
+```
+
+### Response: `UsageMetrics`
+
+<ResponseField name="developerId" type="string">
+  The developer organization ID.
+</ResponseField>
+
+<ResponseField name="period" type="string">
+  The current billing period (e.g., `'2026-03'`).
+</ResponseField>
+
+<ResponseField name="tokenExchanges" type="number">
+  Number of token exchange operations this period.
+</ResponseField>
+
+<ResponseField name="authorizations" type="number">
+  Number of authorization requests this period.
+</ResponseField>
+
+<ResponseField name="verifications" type="number">
+  Number of token verifications this period.
+</ResponseField>
+
+<ResponseField name="totalRequests" type="number">
+  Total API requests across all endpoints this period.
+</ResponseField>
+
+---
+
+## usage.history()
+
+Retrieve historical usage data for the specified number of days, broken down by day.
+
+```typescript
+const history = await grantex.usage.history({ days: 7 });
+
+for (const entry of history.entries) {
+  console.log(entry.date);              // '2026-03-07'
+  console.log(entry.tokenExchanges);     // 18
+  console.log(entry.authorizations);     // 12
+  console.log(entry.verifications);      // 156
+  console.log(entry.totalRequests);      // 186
+}
+```
+
+### Parameters
+
+<ParamField body="days" type="number" required>
+  Number of days of history to retrieve (e.g., `7`, `30`, `90`).
+</ParamField>
+
+### Response: `UsageHistory`
+
+<ResponseField name="entries" type="UsageEntry[]">
+  Array of daily usage entries, ordered from oldest to newest.
+</ResponseField>
+
+Each `UsageEntry` contains:
+
+<ResponseField name="date" type="string">
+  The date in `YYYY-MM-DD` format.
+</ResponseField>
+
+<ResponseField name="tokenExchanges" type="number">
+  Number of token exchange operations on this day.
+</ResponseField>
+
+<ResponseField name="authorizations" type="number">
+  Number of authorization requests on this day.
+</ResponseField>
+
+<ResponseField name="verifications" type="number">
+  Number of token verifications on this day.
+</ResponseField>
+
+<ResponseField name="totalRequests" type="number">
+  Total API requests on this day.
+</ResponseField>
+
+---
+
+## Full example
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// Check current period usage
+const current = await grantex.usage.current();
+console.log(`Period: ${current.period}`);
+console.log(`Total requests: ${current.totalRequests}`);
+console.log(`  Authorizations: ${current.authorizations}`);
+console.log(`  Token exchanges: ${current.tokenExchanges}`);
+console.log(`  Verifications: ${current.verifications}`);
+
+// Get last 30 days of usage
+const history = await grantex.usage.history({ days: 30 });
+const totalMonth = history.entries.reduce((sum, e) => sum + e.totalRequests, 0);
+console.log(`\nLast 30 days: ${totalMonth} total requests`);
+
+// Find peak usage day
+const peak = history.entries.reduce((max, e) =>
+  e.totalRequests > max.totalRequests ? e : max
+);
+console.log(`Peak day: ${peak.date} (${peak.totalRequests} requests)`);
+```

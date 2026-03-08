@@ -1,0 +1,149 @@
+---
+title: "Events"
+description: "Subscribe to real-time authorization events via Server-Sent Events"
+---
+
+## Overview
+
+The `Events` service provides real-time streaming of authorization events via Server-Sent Events (SSE). Consume events with a channel-based `Stream()` method or use the `Subscribe()` convenience wrapper with a callback.
+
+## Stream
+
+Open an SSE connection and receive authorization events on a channel. The connection remains open until the context is cancelled.
+
+```go
+eventCh, errCh, err := client.Events.Stream(ctx, &grantex.StreamOptions{
+    EventTypes: []string{"grant.created", "budget.threshold"},
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+for {
+    select {
+    case event := <-eventCh:
+        fmt.Printf("Type: %s\n", event.Type)
+        fmt.Printf("ID: %s\n", event.ID)
+        fmt.Printf("Timestamp: %s\n", event.Timestamp)
+        fmt.Printf("Data: %v\n", event.Data)
+    case err := <-errCh:
+        log.Printf("Stream error: %v\n", err)
+        return
+    case <-ctx.Done():
+        return
+    }
+}
+```
+
+### Parameters (`StreamOptions`)
+
+| Parameter    | Type       | Required | Description                                                    |
+|--------------|------------|----------|----------------------------------------------------------------|
+| `EventTypes` | `[]string` | No       | Filter to specific event types. If empty, all types are streamed. |
+| `Since`      | `*string`  | No       | ISO 8601 timestamp to replay events from (for catch-up).       |
+
+### Event (`GrantexEvent`)
+
+| Field       | Type             | Description                                              |
+|-------------|------------------|----------------------------------------------------------|
+| `ID`        | `string`         | Unique event identifier.                                 |
+| `Type`      | `string`         | Event type (see [Event types](#event-types) below).      |
+| `Timestamp` | `string`         | ISO 8601 timestamp when the event occurred.              |
+| `Data`      | `map[string]any` | Event payload. Shape varies by event type.               |
+
+## Subscribe
+
+Subscribe to events with a callback function. Returns a cancel function to close the connection. This is a convenience wrapper around `Stream()`.
+
+```go
+cancel, err := client.Events.Subscribe(ctx, func(event grantex.GrantexEvent) {
+    switch event.Type {
+    case "grant.created":
+        fmt.Printf("New grant: %s\n", event.Data["grantId"])
+    case "grant.revoked":
+        fmt.Printf("Grant revoked: %s\n", event.Data["grantId"])
+    case "budget.threshold":
+        fmt.Printf("Budget at %v%% for grant %s\n",
+            event.Data["percentage"], event.Data["grantId"])
+    case "budget.exhausted":
+        fmt.Printf("Budget exhausted for grant %s\n", event.Data["grantId"])
+    }
+}, &grantex.StreamOptions{
+    EventTypes: []string{"grant.created", "grant.revoked", "budget.threshold", "budget.exhausted"},
+})
+if err != nil {
+    log.Fatal(err)
+}
+defer cancel()
+
+// Block until interrupted
+<-ctx.Done()
+```
+
+### Parameters
+
+| Parameter | Type                                  | Required | Description                        |
+|-----------|---------------------------------------|----------|------------------------------------|
+| `handler` | `func(grantex.GrantexEvent)`          | Yes      | Callback invoked for each event.   |
+| `options` | `*StreamOptions`                      | No       | Optional stream configuration.     |
+
+### Returns
+
+Returns a `func()` cancel function and an `error`. Call the cancel function to close the SSE connection.
+
+## Event types
+
+### `grant.created`
+
+Emitted when a new grant is created after user consent.
+
+```go
+// event.Data fields:
+// "grantId"     - string
+// "agentId"     - string
+// "principalId" - string
+// "scopes"      - []any
+```
+
+### `grant.revoked`
+
+Emitted when a grant is revoked.
+
+```go
+// event.Data fields:
+// "grantId"   - string
+// "revokedBy" - string ("developer" | "principal" | "system")
+```
+
+### `token.issued`
+
+Emitted when a grant token is issued (via exchange or refresh).
+
+```go
+// event.Data fields:
+// "grantId" - string
+// "tokenId" - string
+// "method"  - string ("exchange" | "refresh")
+```
+
+### `budget.threshold`
+
+Emitted when a grant's budget consumption crosses 50% or 80%.
+
+```go
+// event.Data fields:
+// "grantId"    - string
+// "percentage" - float64 (50 or 80)
+// "remaining"  - float64
+// "initial"    - float64
+```
+
+### `budget.exhausted`
+
+Emitted when a grant's budget is fully consumed.
+
+```go
+// event.Data fields:
+// "grantId" - string
+// "initial" - float64
+```

@@ -1,0 +1,116 @@
+---
+title: "Usage"
+description: "Track API usage metrics for the current billing period and view historical usage"
+---
+
+## Overview
+
+The `Usage` service provides access to API usage metrics. Check your current billing period's usage and retrieve historical usage data broken down by day.
+
+## Current
+
+Get API usage metrics for the current billing period.
+
+```go
+usage, err := client.Usage.Current(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Developer: %s\n", usage.DeveloperID)
+fmt.Printf("Period: %s\n", usage.Period)
+fmt.Printf("Token exchanges: %d\n", usage.TokenExchanges)
+fmt.Printf("Authorizations: %d\n", usage.Authorizations)
+fmt.Printf("Verifications: %d\n", usage.Verifications)
+fmt.Printf("Total requests: %d\n", usage.TotalRequests)
+```
+
+### Response (`UsageMetrics`)
+
+| Field            | Type     | Description                                          |
+|------------------|----------|------------------------------------------------------|
+| `DeveloperID`    | `string` | The developer organization ID.                       |
+| `Period`         | `string` | The current billing period (e.g., `"2026-03"`).      |
+| `TokenExchanges` | `int`    | Number of token exchange operations this period.     |
+| `Authorizations` | `int`    | Number of authorization requests this period.        |
+| `Verifications`  | `int`    | Number of token verifications this period.           |
+| `TotalRequests`  | `int`    | Total API requests across all endpoints this period. |
+
+## History
+
+Retrieve historical usage data for the specified number of days, broken down by day.
+
+```go
+history, err := client.Usage.History(ctx, 30)
+if err != nil {
+    log.Fatal(err)
+}
+for _, entry := range history.Entries {
+    fmt.Printf("%s: %d requests\n", entry.Date, entry.TotalRequests)
+    fmt.Printf("  Exchanges: %d\n", entry.TokenExchanges)
+    fmt.Printf("  Authorizations: %d\n", entry.Authorizations)
+    fmt.Printf("  Verifications: %d\n", entry.Verifications)
+}
+```
+
+### Parameters
+
+| Parameter | Type  | Required | Description                                         |
+|-----------|-------|----------|-----------------------------------------------------|
+| `days`    | `int` | Yes      | Number of days of history to retrieve (e.g., 7, 30, 90). |
+
+### Response (`UsageHistory`)
+
+| Field     | Type           | Description                                           |
+|-----------|----------------|-------------------------------------------------------|
+| `Entries` | `[]UsageEntry` | Daily usage entries, ordered from oldest to newest.   |
+
+### `UsageEntry`
+
+| Field            | Type     | Description                                      |
+|------------------|----------|--------------------------------------------------|
+| `Date`           | `string` | The date in `YYYY-MM-DD` format.                 |
+| `TokenExchanges` | `int`    | Number of token exchange operations on this day. |
+| `Authorizations` | `int`    | Number of authorization requests on this day.    |
+| `Verifications`  | `int`    | Number of token verifications on this day.       |
+| `TotalRequests`  | `int`    | Total API requests on this day.                  |
+
+## Full Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    grantex "github.com/mishrasanjeev/grantex-go"
+)
+
+func main() {
+    client := grantex.NewClient("gx_live_...")
+    ctx := context.Background()
+
+    // Check current period usage
+    current, err := client.Usage.Current(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Period: %s\n", current.Period)
+    fmt.Printf("Total requests: %d\n", current.TotalRequests)
+    fmt.Printf("  Authorizations: %d\n", current.Authorizations)
+    fmt.Printf("  Token exchanges: %d\n", current.TokenExchanges)
+    fmt.Printf("  Verifications: %d\n", current.Verifications)
+
+    // Get last 30 days of usage
+    history, err := client.Usage.History(ctx, 30)
+    if err != nil {
+        log.Fatal(err)
+    }
+    totalMonth := 0
+    for _, e := range history.Entries {
+        totalMonth += e.TotalRequests
+    }
+    fmt.Printf("\nLast 30 days: %d total requests\n", totalMonth)
+}
+```

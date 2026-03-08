@@ -1,0 +1,162 @@
+---
+title: "WebAuthn"
+description: "Register and manage FIDO2/WebAuthn passkey credentials for end-users"
+---
+
+## Overview
+
+The `WebAuthn` service manages FIDO2/WebAuthn passkey credentials for end-users. Generate registration options, verify attestation responses, list credentials, and delete them.
+
+## Register Options
+
+Generate WebAuthn registration options for a principal. Returns a `PublicKeyCredentialCreationOptions`-compatible struct to send to the browser.
+
+```go
+options, err := client.WebAuthn.RegisterOptions(ctx, "user_abc123")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Challenge: %s\n", options.Challenge)
+fmt.Printf("RP: %s (%s)\n", options.RP.Name, options.RP.ID)
+fmt.Printf("Timeout: %d\n", options.Timeout)
+```
+
+### Parameters
+
+| Parameter     | Type     | Required | Description                                          |
+|---------------|----------|----------|------------------------------------------------------|
+| `principalID` | `string` | Yes      | The ID of the principal to register a passkey for.   |
+
+### Response (`WebAuthnRegisterOptions`)
+
+| Field               | Type                      | Description                                             |
+|---------------------|---------------------------|---------------------------------------------------------|
+| `Challenge`         | `string`                  | Base64url-encoded challenge for the registration.       |
+| `RP`                | `RelyingParty`            | Relying party information (`Name`, `ID`).               |
+| `User`              | `WebAuthnUser`            | User entity (`ID`, `Name`, `DisplayName`).              |
+| `PubKeyCredParams`  | `[]PubKeyCredParam`       | Supported public key algorithms.                        |
+| `Timeout`           | `int`                     | Timeout in milliseconds.                                |
+| `Attestation`       | `string`                  | Attestation conveyance preference.                      |
+| `ExcludeCredentials`| `[]CredentialDescriptor`  | Existing credentials to prevent re-registration.        |
+
+## Register Verify
+
+Verify a WebAuthn registration response. On success, the credential is stored and associated with the principal.
+
+```go
+credential, err := client.WebAuthn.RegisterVerify(ctx, grantex.WebAuthnRegisterVerifyParams{
+    PrincipalID: "user_abc123",
+    Credential:  attestationResponseFromBrowser,
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Credential ID: %s\n", credential.CredentialID)
+fmt.Printf("Sign count: %d\n", credential.SignCount)
+fmt.Printf("Created: %s\n", credential.CreatedAt)
+```
+
+### Parameters
+
+| Parameter     | Type                  | Required | Description                                             |
+|---------------|-----------------------|----------|---------------------------------------------------------|
+| `PrincipalID` | `string`              | Yes      | The principal ID this credential belongs to.            |
+| `Credential`  | `map[string]any`      | Yes      | The WebAuthn attestation response from the browser.     |
+
+### Response (`WebAuthnCredential`)
+
+| Field          | Type      | Description                                            |
+|----------------|-----------|--------------------------------------------------------|
+| `CredentialID` | `string`  | Unique credential identifier.                          |
+| `PublicKey`    | `string`  | Base64url-encoded public key.                          |
+| `SignCount`    | `int`     | The signature counter value.                           |
+| `CreatedAt`    | `string`  | ISO 8601 timestamp when the credential was registered. |
+| `AAGUID`       | `string`  | The authenticator attestation GUID.                    |
+| `LastUsedAt`   | `*string` | ISO 8601 timestamp of last authentication, or `nil`.   |
+
+## List Credentials
+
+List all WebAuthn credentials registered for a principal.
+
+```go
+credentials, err := client.WebAuthn.ListCredentials(ctx, "user_abc123")
+if err != nil {
+    log.Fatal(err)
+}
+for _, cred := range credentials {
+    fmt.Printf("%s — created %s\n", cred.CredentialID, cred.CreatedAt)
+}
+```
+
+### Parameters
+
+| Parameter     | Type     | Required | Description                              |
+|---------------|----------|----------|------------------------------------------|
+| `principalID` | `string` | Yes      | The principal ID to list credentials for. |
+
+### Response
+
+Returns `[]WebAuthnCredential`. See above for field descriptions.
+
+## Delete Credential
+
+Delete a WebAuthn credential by its ID.
+
+```go
+err := client.WebAuthn.DeleteCredential(ctx, "cred_01HXYZ...")
+// Returns nil on success (HTTP 204)
+```
+
+### Parameters
+
+| Parameter      | Type     | Required | Description                  |
+|----------------|----------|----------|------------------------------|
+| `credentialID` | `string` | Yes      | The credential ID to delete. |
+
+Returns `nil` on success.
+
+## Full Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    grantex "github.com/mishrasanjeev/grantex-go"
+)
+
+func main() {
+    client := grantex.NewClient("gx_live_...")
+    ctx := context.Background()
+
+    // 1. Generate registration options
+    options, err := client.WebAuthn.RegisterOptions(ctx, "user_abc123")
+    if err != nil {
+        log.Fatal(err)
+    }
+    // Send options to browser for navigator.credentials.create()
+
+    // 2. Verify attestation response
+    credential, err := client.WebAuthn.RegisterVerify(ctx, grantex.WebAuthnRegisterVerifyParams{
+        PrincipalID: "user_abc123",
+        Credential:  attestationFromBrowser,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Registered passkey: %s\n", credential.CredentialID)
+
+    // 3. List all passkeys
+    creds, _ := client.WebAuthn.ListCredentials(ctx, "user_abc123")
+    fmt.Printf("User has %d passkey(s)\n", len(creds))
+
+    // 4. Delete a passkey
+    err = client.WebAuthn.DeleteCredential(ctx, credential.CredentialID)
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```

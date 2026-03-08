@@ -129,7 +129,13 @@
               "sdks/typescript/billing",
               "sdks/typescript/scim",
               "sdks/typescript/sso",
-              "sdks/typescript/principal-sessions"
+              "sdks/typescript/principal-sessions",
+              "sdks/typescript/webauthn",
+              "sdks/typescript/credentials",
+              "sdks/typescript/budgets",
+              "sdks/typescript/events",
+              "sdks/typescript/usage",
+              "sdks/typescript/domains"
             ]
           },
           {
@@ -171,7 +177,13 @@
               "sdks/python/billing",
               "sdks/python/scim",
               "sdks/python/sso",
-              "sdks/python/principal-sessions"
+              "sdks/python/principal-sessions",
+              "sdks/python/webauthn",
+              "sdks/python/credentials",
+              "sdks/python/budgets",
+              "sdks/python/events",
+              "sdks/python/usage",
+              "sdks/python/domains"
             ]
           },
           {
@@ -213,7 +225,13 @@
               "sdks/go/billing",
               "sdks/go/scim",
               "sdks/go/sso",
-              "sdks/go/principal-sessions"
+              "sdks/go/principal-sessions",
+              "sdks/go/webauthn",
+              "sdks/go/credentials",
+              "sdks/go/budgets",
+              "sdks/go/events",
+              "sdks/go/usage",
+              "sdks/go/domains"
             ]
           },
           {

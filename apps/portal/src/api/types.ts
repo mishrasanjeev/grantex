@@ -5,6 +5,8 @@ export interface Developer {
   email: string | null;
   mode: 'live' | 'sandbox';
   plan: string;
+  fidoRequired: boolean;
+  fidoRpName: string | null;
   createdAt: string;
 }
 
@@ -186,4 +188,14 @@ export interface DashboardStats {
   activeGrants: number;
   auditEntries: number;
   anomalies: number;
+}
+
+// ── Domains ──────────────────────────────────────────────────────────────
+export interface Domain {
+  id: string;
+  domain: string;
+  verified: boolean;
+  verificationToken: string;
+  instructions: string;
+  createdAt: string;
 }

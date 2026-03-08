@@ -6,13 +6,13 @@
 
   <!-- SEO -->
   <title>Grantex — OAuth 2.0 for AI Agents</title>
-  <meta name="description" content="Open delegated authorization protocol for AI agents. Verifiable, revocable, audited grants built on JWT and OAuth 2.0.">
+  <meta name="description" content="Open delegated authorization protocol for AI agents. W3C Verifiable Credentials, FIDO2/WebAuthn passkeys, SD-JWT selective disclosure, and DID infrastructure — built on JWT and OAuth 2.0.">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/">
 
   <!-- OpenGraph -->
   <meta property="og:title" content="Grantex — OAuth 2.0 for AI Agents">
-  <meta property="og:description" content="Open delegated authorization protocol for AI agents. Verifiable, revocable, audited grants built on JWT and OAuth 2.0.">
+  <meta property="og:description" content="Open delegated authorization protocol for AI agents. W3C Verifiable Credentials, FIDO2/WebAuthn passkeys, SD-JWT selective disclosure, and DID infrastructure — built on JWT and OAuth 2.0.">
   <meta property="og:url" content="https://grantex.dev/">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
   <meta property="og:type" content="website">
@@ -21,7 +21,7 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Grantex — OAuth 2.0 for AI Agents">
-  <meta name="twitter:description" content="Open delegated authorization protocol for AI agents. Verifiable, revocable, audited grants built on JWT and OAuth 2.0.">
+  <meta name="twitter:description" content="Open delegated authorization protocol for AI agents. W3C Verifiable Credentials, FIDO2/WebAuthn passkeys, SD-JWT selective disclosure, and DID infrastructure — built on JWT and OAuth 2.0.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
 
   <!-- JSON-LD Structured Data -->
@@ -99,6 +99,30 @@
         "acceptedAnswer": {
           "@type": "Answer",
           "text": "Yes. Grantex supports real-time revocation that takes effect in under 1 second. You can revoke individual grants or all grants for an agent. Revoking a parent agent's grant automatically cascades to all delegated sub-agent grants."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does Grantex support WebAuthn/passkeys?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex integrates FIDO2/WebAuthn for cryptographic human presence verification. When enabled, end-users authenticate with biometrics, security keys, or platform authenticators during the consent flow, and the assertion is embedded as evidence in Verifiable Credentials."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What are Verifiable Credentials in Grantex?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Grantex issues W3C Verifiable Credentials (VC-JWT) alongside standard grant tokens. VCs are portable, tamper-proof proofs of authorization that any third party can verify using the published DID document — no Grantex account required."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is SD-JWT selective disclosure?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "SD-JWT allows credential holders to selectively disclose only the claims a verifier needs. Instead of revealing all grant details, agents can present minimal information — for example, showing scopes without revealing the principal's identity."
         }
       }
     ]
@@ -1295,14 +1319,14 @@
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Event Streaming</h4>
+              <h4><a href="https://docs.grantex.dev/guides/event-streaming" style="color:inherit;text-decoration:none;">Event Streaming</a></h4>
               <p>Real-time SSE and WebSocket streams with Datadog, Splunk, S3, BigQuery, and Kafka destinations.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Budget Controls</h4>
+              <h4><a href="https://docs.grantex.dev/guides/budget-controls" style="color:inherit;text-decoration:none;">Budget Controls</a></h4>
               <p>Per-grant spending limits with atomic debit, threshold alerts, and JWT budget claims.</p>
             </div>
           </div>
@@ -1316,21 +1340,21 @@
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Terraform Provider</h4>
+              <h4><a href="https://docs.grantex.dev/guides/terraform" style="color:inherit;text-decoration:none;">Terraform Provider</a></h4>
               <p>Manage agents, policies, webhooks, and budgets as infrastructure with the official Terraform provider.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>OPA &amp; Cedar Backends</h4>
+              <h4><a href="https://docs.grantex.dev/guides/opa-integration" style="color:inherit;text-decoration:none;">OPA &amp; Cedar Backends</a></h4>
               <p>Pluggable policy engines — delegate authorization to Open Policy Agent or AWS Cedar.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Policy-as-Code</h4>
+              <h4><a href="https://docs.grantex.dev/guides/policy-as-code" style="color:inherit;text-decoration:none;">Policy-as-Code</a></h4>
               <p>Manage policies in Git with versioned bundles and automatic sync via webhooks.</p>
             </div>
           </div>
@@ -1344,15 +1368,43 @@
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Usage Metering</h4>
+              <h4><a href="https://docs.grantex.dev/guides/usage-metering" style="color:inherit;text-decoration:none;">Usage Metering</a></h4>
               <p>Real-time API usage tracking with Redis counters, daily rollup, and per-plan rate limits.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Custom Domains</h4>
+              <h4><a href="https://docs.grantex.dev/guides/custom-domains" style="color:inherit;text-decoration:none;">Custom Domains</a></h4>
               <p>Use your own domain for API endpoints with DNS TXT record verification.</p>
+            </div>
+          </div>
+          <div class="enterprise-feature">
+            <span class="check">&#x2713;</span>
+            <div>
+              <h4><a href="https://docs.grantex.dev/features/fido-webauthn" style="color:inherit;text-decoration:none;">FIDO2 / WebAuthn</a></h4>
+              <p>Cryptographic human presence verification via passkeys. Biometric, security key, or platform authenticator — embedded as evidence in Verifiable Credentials.</p>
+            </div>
+          </div>
+          <div class="enterprise-feature">
+            <span class="check">&#x2713;</span>
+            <div>
+              <h4><a href="https://docs.grantex.dev/features/verifiable-credentials" style="color:inherit;text-decoration:none;">W3C Verifiable Credentials</a></h4>
+              <p>Portable, tamper-proof authorization proof in W3C VC-JWT format. Any verifier can validate using the published DID document — no Grantex account needed.</p>
+            </div>
+          </div>
+          <div class="enterprise-feature">
+            <span class="check">&#x2713;</span>
+            <div>
+              <h4><a href="https://docs.grantex.dev/features/sd-jwt" style="color:inherit;text-decoration:none;">SD-JWT Selective Disclosure</a></h4>
+              <p>Privacy-preserving credential presentation. Holders choose exactly which claims to reveal — minimum disclosure for each verifier.</p>
+            </div>
+          </div>
+          <div class="enterprise-feature">
+            <span class="check">&#x2713;</span>
+            <div>
+              <h4><a href="https://docs.grantex.dev/features/did-infrastructure" style="color:inherit;text-decoration:none;">DID Infrastructure</a></h4>
+              <p>W3C DID document at did:web:grantex.dev with RS256 and Ed25519 public keys for offline credential and token verification.</p>
             </div>
           </div>
         </div>
