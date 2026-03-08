@@ -113,6 +113,155 @@ describe('Grantex client', () => {
       const grantex = new Grantex({ apiKey: 'test_key' });
       await expect(grantex.agents.list()).rejects.toBeInstanceOf(GrantexNetworkError);
     });
+
+    it('uses error field from response body when message is absent', async () => {
+      vi.stubGlobal(
+        'fetch',
+        makeFetch(400, { error: 'Bad input data' }),
+      );
+      const grantex = new Grantex({ apiKey: 'test_key' });
+      try {
+        await grantex.agents.list();
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(GrantexApiError);
+        expect((err as GrantexApiError).message).toBe('Bad input data');
+      }
+    });
+
+    it('falls back to HTTP status when body has no message or error', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        headers: new Headers(),
+        json: () => Promise.reject(new Error('not json')),
+        text: () => Promise.resolve('plain text error'),
+      }));
+      const grantex = new Grantex({ apiKey: 'test_key' });
+      try {
+        await grantex.agents.list();
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(GrantexApiError);
+        // Falls back to text body; extractErrorMessage sees a string, not object
+        expect((err as GrantexApiError).message).toBe('HTTP 422');
+      }
+    });
+
+    it('falls back to HTTP status when text() also fails', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        headers: new Headers(),
+        json: () => Promise.reject(new Error('not json')),
+        text: () => Promise.reject(new Error('text failed')),
+      }));
+      const grantex = new Grantex({ apiKey: 'test_key' });
+      try {
+        await grantex.agents.list();
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(GrantexApiError);
+        expect((err as GrantexApiError).message).toBe('HTTP 500');
+      }
+    });
+
+    it('throws GrantexNetworkError with timeout message on AbortError', async () => {
+      const abortError = new Error('The operation was aborted');
+      abortError.name = 'AbortError';
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockRejectedValue(abortError),
+      );
+      const grantex = new Grantex({ apiKey: 'test_key', timeout: 5000 });
+      try {
+        await grantex.agents.list();
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(GrantexNetworkError);
+        expect((err as GrantexNetworkError).message).toContain('timed out');
+      }
+    });
+
+    it('throws GrantexNetworkError with stringified cause when fetch throws a non-Error value', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockRejectedValue('string error'),
+      );
+      const grantex = new Grantex({ apiKey: 'test_key' });
+      try {
+        await grantex.agents.list();
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(GrantexNetworkError);
+        expect((err as GrantexNetworkError).message).toBe('Network error: string error');
+      }
+    });
+  });
+
+  describe('Grantex.signup() error handling', () => {
+    it('throws error with message from response body', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ message: 'Invalid email format' }),
+      }));
+
+      await expect(Grantex.signup({ name: 'Test', email: 'bad' }))
+        .rejects.toThrow('Invalid email format');
+    });
+
+    it('throws HTTP status fallback when body has no message', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new Error('not json')),
+      }));
+
+      await expect(Grantex.signup({ name: 'Test' }))
+        .rejects.toThrow('HTTP 500');
+    });
+  });
+
+  describe('rawGet via events.stream', () => {
+    it('rawGet() sends Bearer token and returns raw response', async () => {
+      const encoder = new TextEncoder();
+      const event = { id: 'evt_1', type: 'grant.created', createdAt: '2026-03-01T00:00:00Z', data: {} };
+      let readCount = 0;
+      const reader = {
+        read: vi.fn().mockImplementation(() => {
+          readCount++;
+          if (readCount === 1) {
+            return Promise.resolve({
+              done: false,
+              value: encoder.encode(`data: ${JSON.stringify(event)}\n`),
+            });
+          }
+          return Promise.resolve({ done: true, value: undefined });
+        }),
+        releaseLock: vi.fn(),
+      };
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        body: { getReader: () => reader },
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
+      const grantex = new Grantex({ apiKey: 'my_key' });
+      const events = [];
+      for await (const e of grantex.events.stream()) {
+        events.push(e);
+      }
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toEqual(event);
+      // Verify rawGet sends the Authorization header
+      const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/v1/events/stream');
+      const headers = init.headers as Record<string, string>;
+      expect(headers['Authorization']).toBe('Bearer my_key');
+    });
   });
 
   describe('Authorization header', () => {

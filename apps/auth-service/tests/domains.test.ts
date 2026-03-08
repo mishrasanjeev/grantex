@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { buildTestApp, seedAuth, authHeader, sqlMock } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -56,6 +56,24 @@ describe('POST /v1/domains', () => {
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 409 for duplicate domain', async () => {
+    seedAuth();
+    // Subscription query
+    sqlMock.mockResolvedValueOnce([{ plan: 'enterprise' }]);
+    // Insert throws duplicate error
+    sqlMock.mockRejectedValueOnce(Object.assign(new Error('duplicate key'), { code: '23505' }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/domains',
+      headers: authHeader(),
+      payload: { domain: 'api.example.com' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('CONFLICT');
   });
 });
 
@@ -151,6 +169,53 @@ describe('POST /v1/domains/:id/verify', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().verified).toBe(true);
+  });
+
+  it('returns 400 when DNS verification fails', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      id: 'dom_1',
+      domain: 'api.example.com',
+      verification_token: 'grantex-verify-123',
+      verified: false,
+    }]);
+    // verifyDomainDns is mocked to return false by default in setup.ts
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/domains/dom_1/verify',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('VERIFICATION_FAILED');
+  });
+
+  it('succeeds when DNS verification passes', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      id: 'dom_1',
+      domain: 'api.example.com',
+      verification_token: 'grantex-verify-123',
+      verified: false,
+    }]);
+
+    // Override the default mock to return true
+    const { verifyDomainDns } = await import('../src/lib/domains.js');
+    vi.mocked(verifyDomainDns).mockResolvedValueOnce(true);
+
+    // SQL update for setting verified = TRUE
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/domains/dom_1/verify',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().verified).toBe(true);
+    expect(res.json().message).toBe('Domain verified successfully');
   });
 });
 

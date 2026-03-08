@@ -67,6 +67,16 @@ describe('verifyGrantToken', () => {
     ).rejects.toBeInstanceOf(GrantexTokenError);
   });
 
+  it('throws GrantexTokenError with stringified cause when jose throws a non-Error value', async () => {
+    vi.mocked(jose.jwtVerify).mockRejectedValue('non-error rejection');
+
+    await expect(
+      verifyGrantToken('bad.token', {
+        jwksUri: 'https://grantex.dev/.well-known/jwks.json',
+      }),
+    ).rejects.toThrow('Grant token verification failed: non-error rejection');
+  });
+
   it('throws GrantexTokenError when required scopes are missing', async () => {
     vi.mocked(jose.jwtVerify).mockResolvedValue({
       payload: VALID_PAYLOAD,
@@ -110,6 +120,42 @@ describe('verifyGrantToken', () => {
 
     expect(result.grantId).toBe('tok_01HXYZ987xyz');
   });
+
+  it('passes clockTolerance option to jwtVerify', async () => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: VALID_PAYLOAD,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    await verifyGrantToken('fake.token.here', {
+      jwksUri: 'https://grantex.dev/.well-known/jwks.json',
+      clockTolerance: 60,
+    });
+
+    expect(jose.jwtVerify).toHaveBeenCalledWith(
+      'fake.token.here',
+      'mock-jwks',
+      expect.objectContaining({ clockTolerance: 60 }),
+    );
+  });
+
+  it('passes audience option to jwtVerify', async () => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: VALID_PAYLOAD,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    await verifyGrantToken('fake.token.here', {
+      jwksUri: 'https://grantex.dev/.well-known/jwks.json',
+      audience: 'https://myapp.example.com',
+    });
+
+    expect(jose.jwtVerify).toHaveBeenCalledWith(
+      'fake.token.here',
+      'mock-jwks',
+      expect.objectContaining({ audience: 'https://myapp.example.com' }),
+    );
+  });
 });
 
 describe('mapOnlineVerifyToVerifiedGrant', () => {
@@ -133,5 +179,43 @@ describe('mapOnlineVerifyToVerifiedGrant', () => {
     expect(() => mapOnlineVerifyToVerifiedGrant('bad.token')).toThrow(
       GrantexTokenError,
     );
+  });
+
+  it('throws GrantexTokenError with stringified cause when decodeJwt throws a non-Error value', () => {
+    vi.mocked(jose.decodeJwt).mockImplementation(() => {
+      throw 'string decode error';
+    });
+
+    expect(() => mapOnlineVerifyToVerifiedGrant('bad.token')).toThrow(
+      'Failed to decode grant token: string decode error',
+    );
+  });
+
+  it('throws GrantexTokenError when payload is missing required claims', () => {
+    // Payload missing jti, agt, dev, scp, iat, exp
+    const incompletePayload = { sub: 'user_abc' };
+    vi.mocked(jose.decodeJwt).mockReturnValue(incompletePayload as never);
+
+    expect(() => mapOnlineVerifyToVerifiedGrant('incomplete.token')).toThrow(
+      GrantexTokenError,
+    );
+    expect(() => mapOnlineVerifyToVerifiedGrant('incomplete.token')).toThrow(
+      /missing required claims/,
+    );
+  });
+
+  it('includes delegation claims when present', () => {
+    const delegatedPayload = {
+      ...VALID_PAYLOAD,
+      parentAgt: 'did:grantex:parent_01',
+      parentGrnt: 'grant_parent_01',
+      delegationDepth: 1,
+    };
+    vi.mocked(jose.decodeJwt).mockReturnValue(delegatedPayload as never);
+
+    const result = mapOnlineVerifyToVerifiedGrant('delegated.token');
+    expect(result.parentAgentDid).toBe('did:grantex:parent_01');
+    expect(result.parentGrantId).toBe('grant_parent_01');
+    expect(result.delegationDepth).toBe(1);
   });
 });

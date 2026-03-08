@@ -282,6 +282,61 @@ describe('PATCH /scim/v2/Users/:id', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json<{ active: boolean }>().active).toBe(false);
   });
+
+  it('applies operation without path using object value', async () => {
+    const updated = { ...SCIM_USER_ROW, active: false, display_name: 'Bob', updated_at: '2026-02-27T03:00:00Z' };
+    seedScimToken();
+    sqlMock.mockResolvedValueOnce([updated]);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/scim/v2/Users/scimuser_01',
+      headers: { authorization: 'Bearer scim-test-token', 'content-type': 'application/json' },
+      payload: {
+        Operations: [
+          { op: 'replace', value: { active: false, displayName: 'Bob' } },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ active: boolean; displayName: string }>().active).toBe(false);
+    expect(res.json<{ displayName: string }>().displayName).toBe('Bob');
+  });
+
+  it('applies add operation without path using object value', async () => {
+    const updated = { ...SCIM_USER_ROW, user_name: 'new@corp.com', updated_at: '2026-02-27T04:00:00Z' };
+    seedScimToken();
+    sqlMock.mockResolvedValueOnce([updated]);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/scim/v2/Users/scimuser_01',
+      headers: { authorization: 'Bearer scim-test-token', 'content-type': 'application/json' },
+      payload: {
+        Operations: [
+          { op: 'add', value: { userName: 'new@corp.com' } },
+        ],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('returns 404 when user not found for PATCH', async () => {
+    seedScimToken();
+    sqlMock.mockResolvedValueOnce([]); // no matching user
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/scim/v2/Users/scimuser_missing',
+      headers: { authorization: 'Bearer scim-test-token', 'content-type': 'application/json' },
+      payload: { Operations: [{ op: 'replace', path: 'active', value: false }] },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().scimType).toBe('noTarget');
+  });
 });
 
 describe('DELETE /scim/v2/Users/:id', () => {

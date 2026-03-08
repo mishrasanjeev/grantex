@@ -89,6 +89,19 @@ describe('AuditClient', () => {
     expect(url).toMatch(/\/v1\/audit\/evt_01$/);
   });
 
+  it('list() with all-undefined params omits query string', async () => {
+    const listResponse = { entries: [], total: 0, page: 1, pageSize: 20 };
+    const mockFetch = makeFetch(200, listResponse);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await grantex.audit.list({ agentId: undefined, action: undefined });
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toMatch(/\/v1\/audit\/entries$/);
+    expect(url).not.toContain('?');
+  });
+
   it('log() without metadata still works', async () => {
     vi.stubGlobal('fetch', makeFetch(200, { ...MOCK_ENTRY, metadata: {} }));
 

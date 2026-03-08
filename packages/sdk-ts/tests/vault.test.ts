@@ -150,4 +150,46 @@ describe('VaultClient', () => {
     const [url] = mockFetch.mock.calls[0] as [string];
     expect(url).toMatch(/\/v1\/vault\/credentials$/);
   });
+
+  it('exchange() throws error with message from response body', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: () => Promise.resolve({ message: 'Insufficient scopes' }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await expect(
+      grantex.vault.exchange('grant.jwt.token', { service: 'google' }),
+    ).rejects.toThrow('Insufficient scopes');
+  });
+
+  it('exchange() throws HTTP status fallback when body has no message', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ error: 'internal' }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await expect(
+      grantex.vault.exchange('grant.jwt.token', { service: 'google' }),
+    ).rejects.toThrow('HTTP 500');
+  });
+
+  it('exchange() throws HTTP status fallback when json parsing fails', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: () => Promise.reject(new Error('invalid json')),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await expect(
+      grantex.vault.exchange('grant.jwt.token', { service: 'google' }),
+    ).rejects.toThrow('HTTP 502');
+  });
 });

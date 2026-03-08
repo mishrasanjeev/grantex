@@ -95,6 +95,30 @@ describe('ComplianceClient', () => {
     expect(init.method).toBe('GET');
   });
 
+  it('exportAudit() appends filter query params', async () => {
+    const mockFetch = makeFetch(200, { generatedAt: '2026-02-26T00:00:00Z', total: 0, entries: [] });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await grantex.compliance.exportAudit({ since: '2026-01-01T00:00:00Z', until: '2026-06-01T00:00:00Z' });
+
+    const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('since=');
+    expect(url).toContain('until=');
+  });
+
+  it('exportAudit() omits query string when all param values are undefined', async () => {
+    const mockFetch = makeFetch(200, { generatedAt: '2026-02-26T00:00:00Z', total: 0, entries: [] });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await grantex.compliance.exportAudit({ since: undefined, until: undefined });
+
+    const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/v1\/compliance\/export\/audit$/);
+    expect(url).not.toContain('?');
+  });
+
   it('evidencePack() GETs /v1/compliance/evidence-pack', async () => {
     const mockPack = {
       meta: { schemaVersion: '1.0', generatedAt: '2026-02-26T00:00:00Z', framework: 'all' },

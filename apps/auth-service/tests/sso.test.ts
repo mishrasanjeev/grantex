@@ -229,4 +229,39 @@ describe('GET /sso/callback', () => {
 
     expect(res.statusCode).toBe(502);
   });
+
+  it('returns 404 when org SSO config not found in callback', async () => {
+    const state = Buffer.from(JSON.stringify({ org: 'dev_UNKNOWN' })).toString('base64url');
+    sqlMock.mockResolvedValueOnce([]); // No SSO config for this org
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sso/callback?code=auth_code_xyz&state=${state}`,
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('NOT_FOUND');
+  });
+
+  it('returns 502 when ID token has invalid payload', async () => {
+    const state = Buffer.from(JSON.stringify({ org: 'dev_TEST' })).toString('base64url');
+    sqlMock.mockResolvedValueOnce([SSO_CONFIG_ROW]);
+
+    // Return a token with invalid base64 payload
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id_token: 'header.!!!invalid!!!.sig', access_token: 'at_xxx' }),
+      }),
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sso/callback?code=auth_code_xyz&state=${state}`,
+    });
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json().code).toBe('SSO_ERROR');
+  });
 });

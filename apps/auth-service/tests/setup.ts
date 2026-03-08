@@ -122,8 +122,9 @@ vi.mock('prom-client', () => {
 });
 
 // Mock Stripe — prevents real HTTP calls and avoids needing STRIPE_SECRET_KEY.
+export const mockGetStripe = vi.fn().mockReturnValue(mockStripe);
 vi.mock('../src/lib/stripe.js', () => ({
-  getStripe: () => mockStripe,
+  getStripe: (...args: unknown[]) => mockGetStripe(...args),
 }));
 
 // Mock email — prevents real Resend API calls
@@ -151,6 +152,7 @@ beforeEach(() => {
   mockRedis.incr.mockReset().mockResolvedValue(1);
   mockRedis.decr.mockReset().mockResolvedValue(0);
   mockRedis.expire.mockReset().mockResolvedValue(1);
+  mockGetStripe.mockReset().mockReturnValue(mockStripe);
   mockStripe.checkout.sessions.create.mockReset().mockResolvedValue({ url: 'https://checkout.stripe.com/test' });
   mockStripe.billingPortal.sessions.create.mockReset().mockResolvedValue({ url: 'https://billing.stripe.com/test' });
   mockStripe.webhooks.constructEvent.mockReset();
