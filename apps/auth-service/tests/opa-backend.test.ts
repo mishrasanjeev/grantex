@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OpaBackend } from '../src/lib/backends/opa.js';
 import type { PolicyEvalContext } from '../src/lib/policy-backend.js';
+import { sqlMock } from './setup.js';
 
 const ctx: PolicyEvalContext = {
   agentId: 'ag_1',
@@ -117,6 +118,27 @@ describe('OpaBackend', () => {
     expect(body.input.time).toBe('14:30');
     expect(body.input.grant.id).toBe('grnt_1');
     expect(body.input.request.ip).toBe('1.2.3.4');
+  });
+
+  it('falls back to builtin on network error when fallbackToBuiltin is true', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    sqlMock.mockResolvedValueOnce([]); // No policies — BuiltinBackend returns null
+
+    const backend = new OpaBackend('http://opa:8181', true);
+    const decision = await backend.evaluate(ctx);
+    expect(decision.effect).toBeNull(); // No matching policies
+  });
+
+  it('falls back to builtin on HTTP error when fallbackToBuiltin is true', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+    } as Response);
+    sqlMock.mockResolvedValueOnce([]); // No policies
+
+    const backend = new OpaBackend('http://opa:8181', true);
+    const decision = await backend.evaluate(ctx);
+    expect(decision.effect).toBeNull();
   });
 
   it('strips trailing slash from URL', async () => {

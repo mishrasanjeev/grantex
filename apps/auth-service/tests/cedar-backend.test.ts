@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CedarBackend } from '../src/lib/backends/cedar.js';
 import type { PolicyEvalContext } from '../src/lib/policy-backend.js';
+import { sqlMock } from './setup.js';
 
 const ctx: PolicyEvalContext = {
   agentId: 'ag_1',
@@ -124,6 +125,27 @@ describe('CedarBackend', () => {
 
     const body = JSON.parse(vi.mocked(fetch).mock.calls[0]![1]!.body as string);
     expect(body.resource.id).toBe('pending');
+  });
+
+  it('falls back to builtin on network error when fallbackToBuiltin is true', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    sqlMock.mockResolvedValueOnce([]); // No policies — BuiltinBackend returns null
+
+    const backend = new CedarBackend('http://cedar:8180', true);
+    const decision = await backend.evaluate(ctx);
+    expect(decision.effect).toBeNull();
+  });
+
+  it('falls back to builtin on HTTP error when fallbackToBuiltin is true', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+    } as Response);
+    sqlMock.mockResolvedValueOnce([]); // No policies
+
+    const backend = new CedarBackend('http://cedar:8180', true);
+    const decision = await backend.evaluate(ctx);
+    expect(decision.effect).toBeNull();
   });
 
   it('strips trailing slash from URL', async () => {

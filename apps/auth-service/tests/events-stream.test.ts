@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { buildTestApp, seedAuth, authHeader, mockRedis } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -32,6 +32,28 @@ describe('GET /v1/events/stream (SSE)', () => {
     expect(res.json().code).toBe('TOO_MANY_CONNECTIONS');
     expect(mockRedis.decr).toHaveBeenCalled();
   });
+
+  it('sets expire on connection counter', async () => {
+    seedAuth();
+    mockRedis.incr.mockResolvedValueOnce(6); // Over limit — tests the expire call
+
+    await app.inject({
+      method: 'GET',
+      url: '/v1/events/stream',
+      headers: authHeader(),
+    });
+
+    expect(mockRedis.expire).toHaveBeenCalledWith(
+      expect.stringContaining('sse:connections:'),
+      300,
+    );
+  });
+
+  // NOTE: The SSE happy path (lines 37-75) uses reply.hijack() which causes
+  // Fastify's inject() to hang indefinitely. These lines can only be tested
+  // with a real HTTP connection (e.g., supertest with a running server).
+  // The connection limit (429) path and auth (401) path above are the
+  // testable branches via inject().
 });
 
 describe('GET /v1/events/ws (WebSocket)', () => {

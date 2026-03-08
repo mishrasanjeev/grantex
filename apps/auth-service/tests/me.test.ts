@@ -59,6 +59,24 @@ describe('GET /v1/me', () => {
     expect(res.json().email).toBeNull();
   });
 
+  it('returns 404 when developer row not found', async () => {
+    const app = await buildTestApp();
+
+    seedAuth();
+    // SQL returns empty — developer not found
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/me',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('NOT_FOUND');
+    expect(res.json().message).toBe('Developer not found');
+  });
+
   it('returns 401 without auth', async () => {
     const app = await buildTestApp();
 
@@ -68,5 +86,23 @@ describe('GET /v1/me', () => {
     });
 
     expect(res.statusCode).toBe(401);
+    expect(res.json().code).toBe('UNAUTHORIZED');
+  });
+
+  it('returns 401 with valid header but invalid API key', async () => {
+    const app = await buildTestApp();
+
+    // Don't seed auth — SQL returns empty for the key lookup
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/me',
+      headers: { authorization: 'Bearer invalid-key-12345' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().message).toBe('Invalid API key');
+    expect(res.json().code).toBe('UNAUTHORIZED');
   });
 });

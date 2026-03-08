@@ -107,6 +107,46 @@ describe('GrantsClient', () => {
     expect(result.grantId).toBe('grant_01');
   });
 
+  it('verify() uses fallback token when API response has no token property', async () => {
+    // Response without a `token` field — the code falls back to the original token
+    const serverResponse = { valid: true, grantId: 'grant_01' };
+    vi.stubGlobal('fetch', makeFetch(200, serverResponse));
+    vi.mocked(jose.decodeJwt).mockReturnValue(MOCK_PAYLOAD as never);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    const result = await grantex.grants.verify('original.jwt.token');
+
+    // mapOnlineVerifyToVerifiedGrant should be called with the fallback (original) token
+    expect(jose.decodeJwt).toHaveBeenCalledWith('original.jwt.token');
+    expect(result.principalId).toBe('user_abc');
+  });
+
+  it('list() filters out undefined/null query param values', async () => {
+    const listResponse = { grants: [], total: 0, page: 1, pageSize: 20 };
+    const mockFetch = makeFetch(200, listResponse);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await grantex.grants.list({ agentId: 'ag_01' });
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toContain('agentId=ag_01');
+    expect(url).not.toContain('principalId');
+    expect(url).not.toContain('status');
+  });
+
+  it('list() with all undefined params sends no query string', async () => {
+    const listResponse = { grants: [], total: 0, page: 1, pageSize: 20 };
+    const mockFetch = makeFetch(200, listResponse);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await grantex.grants.list({});
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toMatch(/\/v1\/grants$/);
+  });
+
   it('delegate() POSTs to /v1/grants/delegate and returns grant token', async () => {
     const delegateResponse = {
       grantToken: 'delegated.jwt.token',

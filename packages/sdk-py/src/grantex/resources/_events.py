@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Iterator, Optional, Sequence
+from typing import Any, Callable, Iterator, Optional, Sequence
 import json
 import httpx
 
@@ -11,10 +11,10 @@ class GrantexEvent:
     id: str
     type: str
     created_at: str
-    data: dict
+    data: dict[str, Any]
 
     @classmethod
-    def from_dict(cls, d: dict) -> "GrantexEvent":
+    def from_dict(cls, d: dict[str, Any]) -> "GrantexEvent":
         return cls(
             id=d["id"],
             type=d["type"],

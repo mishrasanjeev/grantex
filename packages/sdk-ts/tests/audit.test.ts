@@ -35,7 +35,9 @@ describe('AuditClient', () => {
     const grantex = new Grantex({ apiKey: 'test_key' });
     const entry = await grantex.audit.log({
       agentId: 'ag_01',
+      agentDid: 'did:grantex:ag_01',
       grantId: 'grant_01',
+      principalId: 'user_abc',
       action: 'payment.initiated',
       metadata: { amount: 420, currency: 'USD', merchant: 'Air India' },
       status: 'success',
@@ -89,13 +91,28 @@ describe('AuditClient', () => {
     expect(url).toMatch(/\/v1\/audit\/evt_01$/);
   });
 
+  it('list() with all-undefined params omits query string', async () => {
+    const listResponse = { entries: [], total: 0, page: 1, pageSize: 20 };
+    const mockFetch = makeFetch(200, listResponse);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await grantex.audit.list({});
+
+    const [url] = mockFetch.mock.calls[0] as [string];
+    expect(url).toMatch(/\/v1\/audit\/entries$/);
+    expect(url).not.toContain('?');
+  });
+
   it('log() without metadata still works', async () => {
     vi.stubGlobal('fetch', makeFetch(200, { ...MOCK_ENTRY, metadata: {} }));
 
     const grantex = new Grantex({ apiKey: 'test_key' });
     const entry = await grantex.audit.log({
       agentId: 'ag_01',
+      agentDid: 'did:grantex:ag_01',
       grantId: 'grant_01',
+      principalId: 'user_abc',
       action: 'file.read',
     });
 

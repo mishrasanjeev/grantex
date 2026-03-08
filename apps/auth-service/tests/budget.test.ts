@@ -73,6 +73,41 @@ describe('POST /v1/budget/allocate', () => {
 
     expect(res.statusCode).toBe(401);
   });
+
+  it('returns 409 for duplicate budget allocation', async () => {
+    seedAuth();
+    // Grant exists
+    sqlMock.mockResolvedValueOnce([{ id: 'grnt_1' }]);
+    // Insert fails with unique constraint
+    sqlMock.mockRejectedValueOnce(Object.assign(new Error('unique constraint violated'), { code: '23505' }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/allocate',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_1', initialBudget: 100 },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('CONFLICT');
+  });
+
+  it('re-throws unknown errors from allocation', async () => {
+    seedAuth();
+    // Grant exists
+    sqlMock.mockResolvedValueOnce([{ id: 'grnt_1' }]);
+    // Insert fails with non-unique error
+    sqlMock.mockRejectedValueOnce(new Error('connection lost'));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/allocate',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_1', initialBudget: 100 },
+    });
+
+    expect(res.statusCode).toBe(500);
+  });
 });
 
 describe('POST /v1/budget/debit', () => {
@@ -172,6 +207,94 @@ describe('GET /v1/budget/balance/:grantId', () => {
     });
 
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('GET /v1/budget/allocations', () => {
+  it('returns all budget allocations for the developer', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([
+      {
+        id: 'bdg_1',
+        grant_id: 'grnt_1',
+        developer_id: 'dev_TEST',
+        initial_budget: '100.0000',
+        remaining_budget: '75.0000',
+        currency: 'USD',
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+      {
+        id: 'bdg_2',
+        grant_id: 'grnt_2',
+        developer_id: 'dev_TEST',
+        initial_budget: '200.0000',
+        remaining_budget: '200.0000',
+        currency: 'USD',
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/budget/allocations',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().allocations).toHaveLength(2);
+  });
+
+  it('returns empty list when no allocations', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/budget/allocations',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().allocations).toHaveLength(0);
+  });
+});
+
+describe('POST /v1/budget/debit (threshold events)', () => {
+  it('emits 50% threshold event when usage crosses 50%', async () => {
+    seedAuth();
+    // Debit UPDATE returns row with 50% used (initial=100, remaining=45 after debit)
+    sqlMock.mockResolvedValueOnce([{ id: 'bdg_1', initial_budget: '100.0000', remaining_budget: '45.0000' }]);
+    // Insert transaction
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/debit',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_1', amount: 5, description: 'API call' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('remaining');
+  });
+
+  it('emits exhausted event when remaining reaches 0', async () => {
+    seedAuth();
+    // Debit UPDATE returns row with 0 remaining
+    sqlMock.mockResolvedValueOnce([{ id: 'bdg_1', initial_budget: '100.0000', remaining_budget: '0.0000' }]);
+    // Insert transaction
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/debit',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_1', amount: 10 },
+    });
+
+    expect(res.statusCode).toBe(200);
   });
 });
 

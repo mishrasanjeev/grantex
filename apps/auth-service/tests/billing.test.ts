@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildTestApp, authHeader, seedAuth, sqlMock } from './helpers.js';
-import { mockStripe } from './setup.js';
+import { mockStripe, mockGetStripe } from './setup.js';
 
 let app: FastifyInstance;
 
@@ -130,6 +130,118 @@ describe('POST /v1/billing/portal', () => {
   });
 });
 
+describe('POST /v1/billing/portal (error path)', () => {
+  it('returns 400 when returnUrl is missing', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/portal',
+      headers: authHeader(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('BAD_REQUEST');
+  });
+});
+
+describe('POST /v1/billing/checkout (enterprise plan)', () => {
+  it('resolves the enterprise price ID', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/checkout',
+      headers: authHeader(),
+      payload: {
+        plan: 'enterprise',
+        successUrl: 'https://app.example.com/success',
+        cancelUrl: 'https://app.example.com/cancel',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ plan: 'enterprise' }),
+      }),
+    );
+  });
+});
+
+describe('POST /v1/billing/checkout (priceId not configured)', () => {
+  it('returns 503 when price ID is null', async () => {
+    seedAuth();
+
+    // Temporarily remove the price env var so config.stripePricePro is null.
+    // The config object is imported from a module and reads env vars at load time,
+    // so we need to directly patch the config object.
+    const { config } = await import('../src/config.js');
+    const originalPricePro = config.stripePricePro;
+    (config as { stripePricePro: string | null }).stripePricePro = null;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/checkout',
+      headers: authHeader(),
+      payload: {
+        plan: 'pro',
+        successUrl: 'https://app.example.com/success',
+        cancelUrl: 'https://app.example.com/cancel',
+      },
+    });
+
+    // Restore
+    (config as { stripePricePro: string | null }).stripePricePro = originalPricePro;
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe('SERVICE_UNAVAILABLE');
+  });
+});
+
+describe('POST /v1/billing/checkout (stripe not configured)', () => {
+  it('returns 503 when getStripe throws', async () => {
+    seedAuth();
+
+    mockGetStripe.mockImplementationOnce(() => { throw new Error('STRIPE_SECRET_KEY is not configured'); });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/checkout',
+      headers: authHeader(),
+      payload: {
+        plan: 'pro',
+        successUrl: 'https://app.example.com/success',
+        cancelUrl: 'https://app.example.com/cancel',
+      },
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe('SERVICE_UNAVAILABLE');
+  });
+});
+
+describe('POST /v1/billing/portal (stripe not configured)', () => {
+  it('returns 503 when getStripe throws', async () => {
+    seedAuth();
+    // Has a subscription with a stripe customer
+    sqlMock.mockResolvedValueOnce([{ stripe_customer_id: 'cus_TEST123' }]);
+
+    mockGetStripe.mockImplementationOnce(() => { throw new Error('STRIPE_SECRET_KEY is not configured'); });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/portal',
+      headers: authHeader(),
+      payload: { returnUrl: 'https://app.example.com/settings' },
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe('SERVICE_UNAVAILABLE');
+  });
+});
+
 describe('POST /v1/billing/webhook', () => {
   const MOCK_SESSION = {
     type: 'checkout.session.completed',
@@ -159,6 +271,127 @@ describe('POST /v1/billing/webhook', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json<{ received: boolean }>().received).toBe(true);
     expect(mockStripe.webhooks.constructEvent).toHaveBeenCalledOnce();
+  });
+
+  it('processes customer.subscription.updated event', async () => {
+    mockStripe.webhooks.constructEvent.mockReturnValue({
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_TEST456',
+          customer: 'cus_TEST123',
+          status: 'active',
+          current_period_end: 1735689600,
+          items: { data: [{ price: { id: 'price_pro_123' } }] },
+        },
+      },
+    });
+    sqlMock.mockResolvedValueOnce([]); // UPDATE
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/webhook',
+      headers: {
+        'content-type': 'application/json',
+        'stripe-signature': 'sig_test',
+      },
+      payload: JSON.stringify({ type: 'customer.subscription.updated' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().received).toBe(true);
+  });
+
+  it('processes customer.subscription.deleted event', async () => {
+    mockStripe.webhooks.constructEvent.mockReturnValue({
+      type: 'customer.subscription.deleted',
+      data: {
+        object: { id: 'sub_TEST456' },
+      },
+    });
+    sqlMock.mockResolvedValueOnce([]); // UPDATE
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/webhook',
+      headers: {
+        'content-type': 'application/json',
+        'stripe-signature': 'sig_test',
+      },
+      payload: JSON.stringify({ type: 'customer.subscription.deleted' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().received).toBe(true);
+  });
+
+  it('processes invoice.payment_failed event', async () => {
+    mockStripe.webhooks.constructEvent.mockReturnValue({
+      type: 'invoice.payment_failed',
+      data: {
+        object: { subscription: 'sub_TEST456' },
+      },
+    });
+    sqlMock.mockResolvedValueOnce([]); // UPDATE
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/webhook',
+      headers: {
+        'content-type': 'application/json',
+        'stripe-signature': 'sig_test',
+      },
+      payload: JSON.stringify({ type: 'invoice.payment_failed' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().received).toBe(true);
+  });
+
+  it('handles checkout.session.completed with missing metadata gracefully', async () => {
+    mockStripe.webhooks.constructEvent.mockReturnValue({
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          customer: 'cus_TEST123',
+          subscription: 'sub_TEST456',
+          metadata: {},
+        },
+      },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/webhook',
+      headers: {
+        'content-type': 'application/json',
+        'stripe-signature': 'sig_test',
+      },
+      payload: JSON.stringify({ type: 'checkout.session.completed' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().received).toBe(true);
+  });
+
+  it('handles unknown webhook event type', async () => {
+    mockStripe.webhooks.constructEvent.mockReturnValue({
+      type: 'some.unknown.event',
+      data: { object: {} },
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/webhook',
+      headers: {
+        'content-type': 'application/json',
+        'stripe-signature': 'sig_test',
+      },
+      payload: JSON.stringify({ type: 'some.unknown.event' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().received).toBe(true);
   });
 
   it('returns 400 when Stripe signature is invalid', async () => {
