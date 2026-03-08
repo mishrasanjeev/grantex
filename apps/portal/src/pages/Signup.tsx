@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../store/auth';
 import { useToast } from '../store/toast';
-import { signup } from '../api/auth';
+import { signup, sendVerificationEmail } from '../api/auth';
+import { setApiKey } from '../api/client';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { CopyButton } from '../components/ui/CopyButton';
@@ -13,6 +14,7 @@ export function Signup() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
+  const [verificationSent, setVerificationSent] = useState(false);
   const { login } = useAuth();
   const { show } = useToast();
   const navigate = useNavigate();
@@ -23,12 +25,24 @@ export function Signup() {
 
     setLoading(true);
     try {
+      const trimmedEmail = email.trim();
       const result = await signup({
         name: name.trim(),
-        ...(email.trim() ? { email: email.trim() } : {}),
+        ...(trimmedEmail ? { email: trimmedEmail } : {}),
       });
       setNewKey(result.apiKey);
       show('Account created!', 'success');
+
+      // Trigger email verification if email was provided
+      if (trimmedEmail) {
+        try {
+          setApiKey(result.apiKey);
+          await sendVerificationEmail(trimmedEmail);
+          setVerificationSent(true);
+        } catch {
+          // Non-fatal — account is created, verification can be retried
+        }
+      }
     } catch {
       show('Failed to create account', 'error');
     } finally {
@@ -66,6 +80,12 @@ export function Signup() {
             <code className="text-sm font-mono text-gx-accent2 break-all">{newKey}</code>
             <CopyButton text={newKey} />
           </div>
+
+          {verificationSent && (
+            <p className="text-sm text-gx-muted mb-4 text-center">
+              A verification email has been sent to <span className="text-gx-text">{email.trim()}</span>. Check your inbox to verify your account.
+            </p>
+          )}
 
           <Button onClick={handleContinue} className="w-full">
             Continue to Dashboard
