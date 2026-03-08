@@ -181,11 +181,14 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         agent_name: string;
         agent_description: string | null;
         agent_did: string;
+        fido_required: boolean;
       }[]>`
         SELECT ar.id, ar.scopes, ar.expires_at, ar.status, ar.redirect_uri, ar.state,
-               a.name AS agent_name, a.description AS agent_description, a.did AS agent_did
+               a.name AS agent_name, a.description AS agent_description, a.did AS agent_did,
+               d.fido_required
         FROM auth_requests ar
         JOIN agents a ON a.id = ar.agent_id
+        JOIN developers d ON d.id = ar.developer_id
         WHERE ar.id = ${request.params.id}
       `;
 
@@ -208,6 +211,7 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         scopeDescriptions: row.scopes.map(describeScope),
         expiresAt: row.expires_at,
         status: row.status,
+        fidoRequired: Boolean(row.fido_required),
       });
     },
   );
@@ -226,11 +230,34 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         WHERE id = ${request.params.id}
           AND status = 'pending'
           AND expires_at > NOW()
+          AND (
+            NOT EXISTS (
+              SELECT 1 FROM developers d
+              WHERE d.id = auth_requests.developer_id AND d.fido_required = TRUE
+            )
+            OR fido_verified = TRUE
+          )
         RETURNING id, code, redirect_uri, state
       `;
 
       const row = rows[0];
       if (!row) {
+        // Distinguish FIDO_REQUIRED from expired/processed
+        const fidoCheck = await sql`
+          SELECT d.fido_required, ar.fido_verified, ar.status, ar.expires_at
+          FROM auth_requests ar
+          JOIN developers d ON d.id = ar.developer_id
+          WHERE ar.id = ${request.params.id}
+        `;
+        const fc = fidoCheck[0];
+        if (fc && fc['fido_required'] && !fc['fido_verified']
+            && fc['status'] === 'pending' && new Date(fc['expires_at'] as string) > new Date()) {
+          return reply.status(403).send({
+            message: 'FIDO verification required before approval',
+            code: 'FIDO_REQUIRED',
+            requestId: request.id,
+          });
+        }
         return reply.status(410).send({ message: 'Auth request expired or already processed', code: 'GONE', requestId: request.id });
       }
 

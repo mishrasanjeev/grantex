@@ -138,6 +138,65 @@ vi.mock('../src/lib/domains.js', () => ({
   verifyDomainDns: vi.fn().mockResolvedValue(false),
 }));
 
+// Mock WebAuthn — prevents real crypto operations in tests
+vi.mock('../src/lib/webauthn.js', () => ({
+  generateRegOptions: vi.fn().mockResolvedValue({
+    challenge: 'mock-challenge-base64url',
+    rp: { name: 'Grantex', id: 'grantex.dev' },
+    user: { id: 'dXNlcl8xMjM', name: 'user_123', displayName: '' },
+    pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
+    excludeCredentials: [],
+    authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+    attestation: 'direct',
+  }),
+  verifyRegResponse: vi.fn().mockResolvedValue({
+    verified: true,
+    registrationInfo: {
+      fmt: 'packed',
+      aaguid: '00000000-0000-0000-0000-000000000000',
+      credential: {
+        id: 'bW9jay1jcmVkLWlk',
+        publicKey: new Uint8Array([1, 2, 3, 4]),
+        counter: 0,
+        transports: ['internal'],
+      },
+      credentialType: 'public-key',
+      attestationObject: new Uint8Array([]),
+      userVerified: true,
+      credentialDeviceType: 'multiDevice',
+      credentialBackedUp: true,
+      origin: 'https://grantex.dev',
+      rpID: 'grantex.dev',
+    },
+  }),
+  generateAuthOptions: vi.fn().mockResolvedValue({
+    challenge: 'mock-auth-challenge-base64url',
+    rpId: 'grantex.dev',
+    allowCredentials: [],
+    userVerification: 'preferred',
+  }),
+  verifyAuthResponse: vi.fn().mockResolvedValue({
+    verified: true,
+    authenticationInfo: {
+      credentialID: 'bW9jay1jcmVkLWlk',
+      newCounter: 1,
+      userVerified: true,
+      credentialDeviceType: 'multiDevice',
+      credentialBackedUp: true,
+      origin: 'https://grantex.dev',
+      rpID: 'grantex.dev',
+    },
+  }),
+}));
+
+// Mock isoBase64URL from @simplewebauthn/server/helpers
+vi.mock('@simplewebauthn/server/helpers', () => ({
+  isoBase64URL: {
+    fromBuffer: vi.fn((buf: Uint8Array) => Buffer.from(buf).toString('base64url')),
+    toBuffer: vi.fn((str: string) => Buffer.from(str, 'base64url')),
+  },
+}));
+
 // ------------------------------------------------------------------
 // Reset all mocks before each test
 // ------------------------------------------------------------------

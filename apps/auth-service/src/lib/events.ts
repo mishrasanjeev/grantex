@@ -7,7 +7,9 @@ export type EventType =
   | 'grant.revoked'
   | 'token.issued'
   | 'budget.threshold'
-  | 'budget.exhausted';
+  | 'budget.exhausted'
+  | 'fido.registered'
+  | 'fido.assertion';
 
 export interface GrantexEvent {
   id: string;

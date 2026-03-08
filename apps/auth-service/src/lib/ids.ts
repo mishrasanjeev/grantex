@@ -18,3 +18,6 @@ export const newBudgetAllocationId = (): string => `bdg_${ulid()}`;
 export const newBudgetTransactionId = (): string => `btx_${ulid()}`;
 export const newUsageDailyId = (): string => `usg_${ulid()}`;
 export const newPolicyBundleId = (): string => `pbnd_${ulid()}`;
+export const newSigningKeyId = (): string => `key_${ulid()}`;
+export const newWebAuthnCredentialId = (): string => `cred_${ulid()}`;
+export const newWebAuthnChallengeId = (): string => `wac_${ulid()}`;

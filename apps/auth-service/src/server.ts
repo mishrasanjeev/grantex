@@ -34,6 +34,8 @@ import { usageRoutes } from './routes/usage.js';
 import { verifyEmailRoutes } from './routes/verify-email.js';
 import { domainsRoutes } from './routes/domains.js';
 import { policySyncRoutes } from './routes/policy-sync.js';
+import { didRoutes } from './routes/did.js';
+import { webauthnRoutes } from './routes/webauthn.js';
 import { metricsHookPlugin } from './plugins/metricsHook.js';
 import websocket from '@fastify/websocket';
 
@@ -70,6 +72,7 @@ export async function buildApp(opts: AppOptions = {}) {
 
   // Public routes (no auth required)
   await app.register(jwksRoutes);
+  await app.register(didRoutes);
   await app.register(healthRoutes);
   await app.register(consentRoutes);
   await app.register(dashboardRoutes);
@@ -101,6 +104,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(verifyEmailRoutes);
   await app.register(domainsRoutes);
   await app.register(policySyncRoutes);
+  await app.register(webauthnRoutes);
 
   return app;
 }
