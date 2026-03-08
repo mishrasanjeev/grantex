@@ -2,8 +2,9 @@
 name: Integration Request
 about: Request a new framework or platform integration
 title: "[Integration] "
-labels: integration
+labels: ''
 assignees: ''
+
 ---
 
 ## Framework / Platform

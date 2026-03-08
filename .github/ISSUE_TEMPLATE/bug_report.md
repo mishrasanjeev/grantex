@@ -4,6 +4,7 @@ about: Report a bug in Grantex
 title: "[Bug] "
 labels: bug
 assignees: ''
+
 ---
 
 **Describe the bug**
