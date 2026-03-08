@@ -63,7 +63,7 @@ describe('dynamicRateLimitPlugin', () => {
 
     testApp.get('/test-rate', async (request) => {
       // Simulate developer being set by auth plugin
-      (request as Record<string, unknown>).developer = { plan: 'pro' };
+      (request as unknown as Record<string, unknown>).developer = { plan: 'pro' };
       // Manually trigger preHandler hooks
       return { limit: (request as { planRateLimit?: number }).planRateLimit };
     });
@@ -88,7 +88,7 @@ describe('dynamicRateLimitPlugin', () => {
     // Add a preHandler hook that sets developer BEFORE the dynamic rate limit hook runs
     // Hook registration order matters — Fastify runs them in order
     testApp.addHook('preHandler', async (request) => {
-      (request as Record<string, unknown>).developer = { id: 'dev_1', name: 'Test', plan: 'enterprise' };
+      (request as unknown as Record<string, unknown>).developer = { id: 'dev_1', name: 'Test', plan: 'enterprise' };
     });
 
     await dynamicRateLimitPlugin(testApp);
@@ -116,7 +116,7 @@ describe('dynamicRateLimitPlugin', () => {
 
     // Register developer hook BEFORE dynamic rate limit plugin
     testApp.addHook('preHandler', async (request) => {
-      (request as Record<string, unknown>).developer = { id: 'dev_1', name: 'Test' };
+      (request as unknown as Record<string, unknown>).developer = { id: 'dev_1', name: 'Test' };
     });
 
     await dynamicRateLimitPlugin(testApp);

@@ -35,7 +35,9 @@ describe('AuditClient', () => {
     const grantex = new Grantex({ apiKey: 'test_key' });
     const entry = await grantex.audit.log({
       agentId: 'ag_01',
+      agentDid: 'did:grantex:ag_01',
       grantId: 'grant_01',
+      principalId: 'user_abc',
       action: 'payment.initiated',
       metadata: { amount: 420, currency: 'USD', merchant: 'Air India' },
       status: 'success',
@@ -95,7 +97,7 @@ describe('AuditClient', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     const grantex = new Grantex({ apiKey: 'test_key' });
-    await grantex.audit.list({ agentId: undefined, action: undefined });
+    await grantex.audit.list({});
 
     const [url] = mockFetch.mock.calls[0] as [string];
     expect(url).toMatch(/\/v1\/audit\/entries$/);
@@ -108,7 +110,9 @@ describe('AuditClient', () => {
     const grantex = new Grantex({ apiKey: 'test_key' });
     const entry = await grantex.audit.log({
       agentId: 'ag_01',
+      agentDid: 'did:grantex:ag_01',
       grantId: 'grant_01',
+      principalId: 'user_abc',
       action: 'file.read',
     });
 

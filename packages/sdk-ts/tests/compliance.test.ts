@@ -112,7 +112,7 @@ describe('ComplianceClient', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     const grantex = new Grantex({ apiKey: 'test_key' });
-    await grantex.compliance.exportAudit({ since: undefined, until: undefined });
+    await grantex.compliance.exportAudit({});
 
     const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/v1\/compliance\/export\/audit$/);

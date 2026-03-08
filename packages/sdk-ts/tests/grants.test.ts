@@ -127,7 +127,7 @@ describe('GrantsClient', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     const grantex = new Grantex({ apiKey: 'test_key' });
-    await grantex.grants.list({ agentId: 'ag_01', principalId: undefined, status: undefined });
+    await grantex.grants.list({ agentId: 'ag_01' });
 
     const [url] = mockFetch.mock.calls[0] as [string];
     expect(url).toContain('agentId=ag_01');
@@ -141,7 +141,7 @@ describe('GrantsClient', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     const grantex = new Grantex({ apiKey: 'test_key' });
-    await grantex.grants.list({ agentId: undefined });
+    await grantex.grants.list({});
 
     const [url] = mockFetch.mock.calls[0] as [string];
     expect(url).toMatch(/\/v1\/grants$/);
