@@ -3,3 +3,4 @@ Allow: /
 Disallow: /dashboard/
 
 Sitemap: https://grantex.dev/sitemap.xml
+Sitemap: https://docs.grantex.dev/sitemap.xml

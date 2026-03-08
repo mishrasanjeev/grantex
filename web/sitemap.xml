@@ -90,4 +90,8 @@
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
+  <url><loc>https://docs.grantex.dev/features/fido-webauthn</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://docs.grantex.dev/features/verifiable-credentials</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://docs.grantex.dev/features/sd-jwt</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://docs.grantex.dev/features/did-infrastructure</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
 </urlset>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../store/auth';
 import { rotateKey } from '../../api/auth';
-import { setApiKey } from '../../api/client';
+import { api, setApiKey } from '../../api/client';
 import { useToast } from '../../store/toast';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -14,6 +14,9 @@ export function SettingsPage() {
   const { show } = useToast();
   const [rotating, setRotating] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
+  const [fidoRequired, setFidoRequired] = useState(developer?.fidoRequired ?? false);
+  const [fidoRpName, setFidoRpName] = useState(developer?.fidoRpName ?? '');
+  const [savingFido, setSavingFido] = useState(false);
 
   async function handleRotateKey() {
     setRotating(true);
@@ -109,6 +112,57 @@ export function SettingsPage() {
           >
             {rotating ? <Spinner className="h-3 w-3" /> : 'Rotate Key'}
           </Button>
+        </div>
+      </Card>
+
+      {/* FIDO2 / WebAuthn */}
+      <Card className="mt-6">
+        <h2 className="text-sm font-semibold text-gx-text mb-4">FIDO2 / WebAuthn</h2>
+        <div className="space-y-4">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={fidoRequired}
+              onChange={(e) => setFidoRequired(e.target.checked)}
+              className="h-4 w-4 rounded border-gx-border text-gx-accent focus:ring-gx-accent"
+            />
+            <span className="text-sm text-gx-text">Require FIDO2 for consent flows</span>
+          </label>
+
+          <div>
+            <label className="block text-xs text-gx-muted mb-1">Relying Party Name</label>
+            <input
+              type="text"
+              value={fidoRpName}
+              onChange={(e) => setFidoRpName(e.target.value)}
+              placeholder="My Organization"
+              className="w-full px-3 py-2 text-sm bg-gx-bg border border-gx-border rounded-md text-gx-text placeholder:text-gx-muted focus:outline-none focus:border-gx-accent"
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gx-muted">
+              When enabled, end-users must authenticate with a passkey during consent.
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={savingFido}
+              onClick={async () => {
+                setSavingFido(true);
+                try {
+                  await api.patch('/v1/me', { fidoRequired, fidoRpName });
+                  show('FIDO2 settings saved', 'success');
+                } catch {
+                  show('Failed to save FIDO2 settings', 'error');
+                } finally {
+                  setSavingFido(false);
+                }
+              }}
+            >
+              {savingFido ? <Spinner className="h-3 w-3" /> : 'Save'}
+            </Button>
+          </div>
         </div>
       </Card>
     </div>
