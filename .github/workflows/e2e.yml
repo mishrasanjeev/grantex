@@ -3,7 +3,7 @@ name: E2E Integration Tests
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 0' # Every Sunday at midnight UTC
+    - cron: '0 0 * * *' # Every day at midnight UTC
 
 jobs:
   e2e:
@@ -30,6 +30,5 @@ jobs:
 
       - name: Run E2E tests
         env:
-          E2E_API_KEY: ${{ secrets.E2E_API_KEY }}
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
         run: npx vitest run tests/e2e/e2e.test.ts
