@@ -93,3 +93,23 @@ describe('Grantex.rotateKey()', () => {
     expect(init.method).toBe('POST');
   });
 });
+
+describe('Grantex.updateSettings()', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('PATCHes /v1/me with settings', async () => {
+    const mockFetch = makeFetch(200, { updated: true });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    const result = await grantex.updateSettings({ fidoRequired: true, fidoRpName: 'MyApp' });
+
+    expect(result.updated).toBe(true);
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/v1\/me$/);
+    expect(init.method).toBe('PATCH');
+    const body = JSON.parse(init.body as string);
+    expect(body.fidoRequired).toBe(true);
+    expect(body.fidoRpName).toBe('MyApp');
+  });
+});

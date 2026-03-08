@@ -165,6 +165,20 @@ describe('PATCH /v1/policies/:id', () => {
 
     expect(res.statusCode).toBe(404);
   });
+
+  it('returns 400 for invalid effect value in PATCH', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/policies/${MOCK_POLICY.id}`,
+      headers: authHeader(),
+      payload: { effect: 'maybe' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('BAD_REQUEST');
+  });
 });
 
 describe('DELETE /v1/policies/:id', () => {

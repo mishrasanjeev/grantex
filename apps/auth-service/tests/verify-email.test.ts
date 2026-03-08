@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { buildTestApp, seedAuth, authHeader, sqlMock } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -47,6 +47,26 @@ describe('POST /v1/signup/verify', () => {
     });
 
     expect(res.statusCode).toBe(401);
+  });
+
+  it('succeeds even when email sending fails', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]); // INSERT email_verification
+
+    // Mock sendEmail to throw
+    const { sendEmail } = await import('../src/lib/email.js');
+    const sendEmailMock = vi.mocked(sendEmail);
+    sendEmailMock.mockRejectedValueOnce(new Error('SMTP connection failed'));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/signup/verify',
+      headers: authHeader(),
+      payload: { email: 'test@example.com' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().message).toBe('Verification email sent');
   });
 });
 

@@ -423,6 +423,23 @@ describe('verifySDJWT', () => {
     expect(result.valid).toBe(true);
   });
 
+  it('treats parts with 2 dots but invalid JWT header as disclosures during verify', async () => {
+    const { sdJwt } = await issueSDJWT(defaultParams);
+    const issuerJwt = sdJwt.split('~')[0]!;
+
+    // Create a part that has 2 dots but is NOT a valid JWT (invalid base64url header)
+    // decodeProtectedHeader will throw, triggering the catch on line 220-221
+    const fakeJwtLikePart = '!!!.not.valid';
+    const withFake = issuerJwt + '~' + fakeJwtLikePart + '~';
+
+    // It should be treated as a disclosure (not a KB-JWT), and then fail
+    // because it's not a valid disclosure either
+    const result = await verifySDJWT(withFake);
+    expect(result.valid).toBe(false);
+    // It should fail with disclosure error since it's parsed as disclosure
+    expect(result.error).toBe('Invalid disclosure format');
+  });
+
   it('returns invalid for disclosure with wrong array length', async () => {
     const { sdJwt } = await issueSDJWT(defaultParams);
     const issuerJwt = sdJwt.split('~')[0]!;

@@ -106,6 +106,18 @@ describe('POST /v1/tokens/verify', () => {
     const body = res.json<{ valid: boolean }>();
     expect(body.valid).toBe(false);
   });
+
+  it('returns 400 when token field is missing', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/tokens/verify',
+      headers: authHeader(),
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('BAD_REQUEST');
+  });
 });
 
 describe('POST /v1/tokens/revoke', () => {

@@ -148,6 +148,21 @@ describe('PATCH /v1/agents/:id', () => {
     expect(body.name).toBe('Updated Name');
   });
 
+  it('returns 404 when patching a non-existent agent', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]); // UPDATE returns no rows
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/agents/ag_NONEXISTENT',
+      headers: authHeader(),
+      payload: { name: 'New Name' },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('NOT_FOUND');
+  });
+
   it('returns 400 when no fields provided', async () => {
     seedAuth();
 

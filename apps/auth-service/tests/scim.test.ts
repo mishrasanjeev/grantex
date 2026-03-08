@@ -266,6 +266,35 @@ describe('PUT /scim/v2/Users/:id', () => {
   });
 });
 
+describe('PUT /scim/v2/Users/:id (error paths)', () => {
+  it('returns 400 when userName is missing', async () => {
+    seedScimToken();
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/scim/v2/Users/scimuser_01',
+      headers: { authorization: 'Bearer scim-test-token', 'content-type': 'application/json' },
+      payload: { displayName: 'No Username', active: true, emails: [] },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 404 when user not found', async () => {
+    seedScimToken();
+    sqlMock.mockResolvedValueOnce([]); // no matching user
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/scim/v2/Users/scimuser_missing',
+      headers: { authorization: 'Bearer scim-test-token', 'content-type': 'application/json' },
+      payload: { userName: 'alice@corp.com', displayName: 'Alice', active: true, emails: [] },
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 describe('PATCH /scim/v2/Users/:id', () => {
   it('applies Operations and returns updated user', async () => {
     const deactivated = { ...SCIM_USER_ROW, active: false, updated_at: '2026-02-27T02:00:00Z' };
