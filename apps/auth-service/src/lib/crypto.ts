@@ -127,19 +127,86 @@ export async function verifyGrantToken(
   return { sub, dev, scp };
 }
 
+// ─── Ed25519 key support (optional — for VC Data Integrity proofs) ────────────
+
+export interface EdKeyPair {
+  privateKey: KeyLike;
+  publicKey: KeyLike;
+  kid: string;
+}
+
+let _edKeyPair: EdKeyPair | null = null;
+
+function buildEdKid(): string {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  return `grantex-ed25519-${year}-${month}`;
+}
+
+export async function initEdKey(): Promise<void> {
+  if (config.ed25519PrivateKey) {
+    const pem = config.ed25519PrivateKey.replace(/\\n/g, '\n');
+    const privateKey = await importPKCS8(pem, 'EdDSA');
+    const jwk = await exportJWK(privateKey);
+    if (!jwk.crv || !jwk.x) throw new Error('Cannot extract Ed25519 public key components');
+    const { createPublicKey } = await import('node:crypto');
+    const nodePk = createPublicKey({
+      key: { kty: jwk.kty as string, crv: jwk.crv, x: jwk.x },
+      format: 'jwk',
+    });
+    const spkiPem = nodePk.export({ type: 'spki', format: 'pem' }) as string;
+    const publicKey = await importSPKI(spkiPem, 'EdDSA');
+    _edKeyPair = { privateKey, publicKey, kid: buildEdKid() };
+    return;
+  }
+
+  // Auto-generate Ed25519 key pair
+  const { privateKey, publicKey } = await generateKeyPair('EdDSA', { crv: 'Ed25519' });
+  _edKeyPair = { privateKey, publicKey, kid: buildEdKid() };
+}
+
+export function getEdKeyPair(): EdKeyPair | null {
+  return _edKeyPair;
+}
+
+export async function signWithEd25519(payload: Record<string, unknown>): Promise<string> {
+  if (!_edKeyPair) throw new Error('Ed25519 key not initialized — call initEdKey() first');
+  const { privateKey, kid } = _edKeyPair;
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: 'EdDSA', kid })
+    .setIssuer(config.jwtIssuer)
+    .setIssuedAt()
+    .setExpirationTime(Math.floor(Date.now() / 1000) + 3600)
+    .sign(privateKey);
+}
+
+// ─── End Ed25519 ─────────────────────────────────────────────────────────────
+
 export async function buildJwks(): Promise<{ keys: Record<string, unknown>[] }> {
   const { publicKey, kid } = getKeyPair();
   const jwk = await exportJWK(publicKey);
-  return {
-    keys: [
-      {
-        ...jwk,
-        alg: 'RS256',
-        use: 'sig',
-        kid,
-      },
-    ],
-  };
+  const keys: Record<string, unknown>[] = [
+    {
+      ...jwk,
+      alg: 'RS256',
+      use: 'sig',
+      kid,
+    },
+  ];
+
+  // Include Ed25519 key if initialized
+  if (_edKeyPair) {
+    const edJwk = await exportJWK(_edKeyPair.publicKey);
+    keys.push({
+      ...edJwk,
+      alg: 'EdDSA',
+      use: 'sig',
+      kid: _edKeyPair.kid,
+    });
+  }
+
+  return { keys };
 }
 
 export function decodeTokenClaims(jwt: string): Record<string, unknown> {

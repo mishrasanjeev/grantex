@@ -1,6 +1,6 @@
 import { initTracing } from './lib/tracing.js';
 import { config } from './config.js';
-import { initKeys } from './lib/crypto.js';
+import { initKeys, initEdKey } from './lib/crypto.js';
 import { getSql } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { getRedis } from './redis/client.js';
@@ -16,6 +16,9 @@ async function main() {
 
   // Initialize RSA keys
   await initKeys();
+
+  // Initialize Ed25519 key (optional — for DID / VC support)
+  await initEdKey();
 
   // Initialize DB connection
   const sql = getSql();

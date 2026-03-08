@@ -41,4 +41,36 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
       createdAt: dev.created_at,
     });
   });
+
+  // PATCH /v1/me — update developer settings (e.g. FIDO)
+  app.patch<{ Body: { fidoRequired?: boolean; fidoRpName?: string } }>(
+    '/v1/me',
+    async (request, reply) => {
+      const sql = getSql();
+      const developerId = request.developer.id;
+      const { fidoRequired, fidoRpName } = request.body;
+
+      if (fidoRequired === undefined && fidoRpName === undefined) {
+        return reply.status(400).send({ message: 'No fields to update', code: 'BAD_REQUEST', requestId: request.id });
+      }
+
+      if (fidoRequired !== undefined && fidoRpName !== undefined) {
+        await sql`
+          UPDATE developers
+          SET fido_required = ${fidoRequired}, fido_rp_name = ${fidoRpName}
+          WHERE id = ${developerId}
+        `;
+      } else if (fidoRequired !== undefined) {
+        await sql`
+          UPDATE developers SET fido_required = ${fidoRequired} WHERE id = ${developerId}
+        `;
+      } else {
+        await sql`
+          UPDATE developers SET fido_rp_name = ${fidoRpName!} WHERE id = ${developerId}
+        `;
+      }
+
+      return reply.send({ updated: true });
+    },
+  );
 }

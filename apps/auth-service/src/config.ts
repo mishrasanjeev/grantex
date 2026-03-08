@@ -40,6 +40,14 @@ export const config = {
   // Email (Resend)
   emailApiKey: process.env['RESEND_API_KEY'] ?? null,
   emailFrom: optional('EMAIL_FROM', 'Grantex <noreply@grantex.dev>'),
+  // Ed25519 key for VC Data Integrity proofs (optional)
+  ed25519PrivateKey: process.env['ED25519_PRIVATE_KEY'] ?? null,
+  // DID Web domain
+  didWebDomain: optional('DID_WEB_DOMAIN', 'grantex.dev'),
+  // FIDO/WebAuthn
+  fidoRpId: optional('FIDO_RP_ID', 'grantex.dev'),
+  fidoRpName: optional('FIDO_RP_NAME', 'Grantex'),
+  fidoOrigin: optional('FIDO_ORIGIN', 'https://grantex.dev'),
 } as const;
 
 if (!config.rsaPrivateKey && !config.autoGenerateKeys) {
