@@ -1,0 +1,182 @@
+---
+title: "Events"
+sidebarTitle: "Events"
+description: "Subscribe to real-time authorization events via Server-Sent Events."
+---
+
+## Overview
+
+The `events` client provides real-time streaming of authorization events via Server-Sent Events (SSE). Consume events with an async generator via `stream()`, or use the `subscribe()` convenience wrapper for callback-based consumption.
+
+Access the events client via `client.events`.
+
+## Stream
+
+Open an SSE connection and yield authorization events as an async generator. The connection remains open until you break out of the loop or the server closes it.
+
+```python
+from grantex import Grantex
+
+async with Grantex(api_key="gx_live_...") as client:
+    async for event in client.events.stream():
+        print(f"Type: {event.type}")
+        print(f"ID: {event.id}")
+        print(f"Timestamp: {event.timestamp}")
+        print(f"Data: {event.data}")
+
+        if event.type == "budget.exhausted":
+            break
+```
+
+### Parameters
+
+| Parameter     | Type                | Required | Description                                                    |
+|---------------|---------------------|----------|----------------------------------------------------------------|
+| `event_types` | `list[str] \| None` | No       | Filter to specific event types. If omitted, all types are streamed. |
+| `since`       | `str \| None`       | No       | ISO 8601 timestamp to replay events from (for catch-up after disconnection). |
+
+### GrantexEvent
+
+| Field       | Type         | Description                                                    |
+|-------------|--------------|----------------------------------------------------------------|
+| `id`        | `str`        | Unique event identifier.                                       |
+| `type`      | `str`        | Event type (see [Event types](#event-types) below).            |
+| `timestamp` | `str`        | ISO 8601 timestamp when the event occurred.                    |
+| `data`      | `dict`       | Event payload. Shape varies by event type.                     |
+
+## Subscribe
+
+Subscribe to events with a callback function. Returns an unsubscribe callable to close the connection. This is a convenience wrapper around `stream()`.
+
+```python
+from grantex import Grantex
+
+async with Grantex(api_key="gx_live_...") as client:
+    def handle_event(event):
+        if event.type == "grant.created":
+            print(f"New grant: {event.data['grantId']}")
+        elif event.type == "grant.revoked":
+            print(f"Grant revoked: {event.data['grantId']}")
+        elif event.type == "budget.threshold":
+            print(f"Budget at {event.data['percentage']}%")
+        elif event.type == "budget.exhausted":
+            print(f"Budget exhausted for {event.data['grantId']}")
+
+    unsubscribe = client.events.subscribe(handle_event)
+
+    # Later: close the SSE connection
+    unsubscribe()
+```
+
+### Parameters
+
+| Parameter     | Type                       | Required | Description                                            |
+|---------------|----------------------------|----------|--------------------------------------------------------|
+| `handler`     | `Callable[[GrantexEvent], None]` | Yes  | Callback invoked for each event.                       |
+| `event_types` | `list[str] \| None`        | No       | Filter to specific event types.                        |
+| `since`       | `str \| None`              | No       | ISO 8601 timestamp to replay events from.              |
+
+### Returns
+
+Returns a callable. Call it to close the SSE connection and stop receiving events.
+
+## Event types
+
+### `grant.created`
+
+Emitted when a new grant is created after user consent.
+
+```python
+{
+    "type": "grant.created",
+    "data": {
+        "grantId": "grnt_01HXYZ...",
+        "agentId": "ag_01HXYZ...",
+        "principalId": "user_abc123",
+        "scopes": ["calendar:read", "contacts:read"],
+    }
+}
+```
+
+### `grant.revoked`
+
+Emitted when a grant is revoked.
+
+```python
+{
+    "type": "grant.revoked",
+    "data": {
+        "grantId": "grnt_01HXYZ...",
+        "revokedBy": "developer",  # 'developer' | 'principal' | 'system'
+    }
+}
+```
+
+### `token.issued`
+
+Emitted when a grant token is issued (via exchange or refresh).
+
+```python
+{
+    "type": "token.issued",
+    "data": {
+        "grantId": "grnt_01HXYZ...",
+        "tokenId": "tok_01HXYZ...",
+        "method": "exchange",  # 'exchange' | 'refresh'
+    }
+}
+```
+
+### `budget.threshold`
+
+Emitted when a grant's budget consumption crosses 50% or 80%.
+
+```python
+{
+    "type": "budget.threshold",
+    "data": {
+        "grantId": "grnt_01HXYZ...",
+        "percentage": 80,
+        "remaining": 200,
+        "initial": 1000,
+    }
+}
+```
+
+### `budget.exhausted`
+
+Emitted when a grant's budget is fully consumed.
+
+```python
+{
+    "type": "budget.exhausted",
+    "data": {
+        "grantId": "grnt_01HXYZ...",
+        "initial": 1000,
+    }
+}
+```
+
+## Example: Budget Alert Monitor
+
+```python
+import asyncio
+from grantex import Grantex
+
+async def monitor_budgets():
+    async with Grantex(api_key="gx_live_...") as client:
+        async for event in client.events.stream(
+            event_types=["budget.threshold", "budget.exhausted"]
+        ):
+            if event.type == "budget.threshold":
+                print(
+                    f"Budget alert: {event.data['percentage']}% used "
+                    f"for grant {event.data['grantId']}"
+                )
+            elif event.type == "budget.exhausted":
+                print(f"Budget exhausted for grant {event.data['grantId']}")
+                # Revoke the grant to prevent further usage
+                client.grants.revoke(event.data["grantId"])
+
+asyncio.run(monitor_budgets())
+```

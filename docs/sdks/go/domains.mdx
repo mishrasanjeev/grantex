@@ -1,0 +1,168 @@
+---
+title: "Domains"
+description: "Register custom domains with DNS TXT verification for your Grantex API endpoints"
+---
+
+## Overview
+
+The `Domains` service manages custom domains for your Grantex API endpoints. Register a domain, verify ownership via DNS TXT records, list all registered domains, and remove them.
+
+## Create
+
+Register a new custom domain. Returns a verification token that you must add as a DNS TXT record before calling `Verify()`.
+
+```go
+domain, err := client.Domains.Create(ctx, "auth.example.com")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("ID: %s\n", domain.ID)
+fmt.Printf("Domain: %s\n", domain.Domain)
+fmt.Printf("Verified: %v\n", domain.Verified)
+fmt.Printf("Token: %s\n", domain.VerificationToken)
+fmt.Printf("Instructions: %s\n", domain.Instructions)
+```
+
+### Parameters
+
+| Parameter | Type     | Required | Description                                             |
+|-----------|----------|----------|---------------------------------------------------------|
+| `domain`  | `string` | Yes      | The custom domain to register (e.g., `"auth.example.com"`). |
+
+### Response (`DomainRegistration`)
+
+| Field               | Type     | Description                                                |
+|---------------------|----------|------------------------------------------------------------|
+| `ID`                | `string` | Unique domain registration identifier.                     |
+| `Domain`            | `string` | The registered domain name.                                |
+| `Verified`          | `bool`   | Whether the domain has been verified (initially `false`).  |
+| `VerificationToken` | `string` | The token value to add as a DNS TXT record.                |
+| `Instructions`      | `string` | Human-readable instructions for adding the DNS TXT record. |
+
+## List
+
+List all registered custom domains for the authenticated developer.
+
+```go
+result, err := client.Domains.List(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+for _, d := range result.Domains {
+    verified := "pending"
+    if d.Verified {
+        verified = "verified"
+    }
+    fmt.Printf("%s — %s\n", d.Domain, verified)
+}
+```
+
+### Response (`ListDomainsResponse`)
+
+| Field     | Type                   | Description                          |
+|-----------|------------------------|--------------------------------------|
+| `Domains` | `[]DomainRegistration` | Slice of registered domain objects.  |
+
+## Verify
+
+Verify ownership of a registered domain by checking the DNS TXT record. Call this after adding the verification token to your DNS configuration.
+
+```go
+result, err := client.Domains.Verify(ctx, "dom_01HXYZ...")
+if err != nil {
+    log.Fatal(err)
+}
+if result.Verified {
+    fmt.Println("Domain verified successfully!")
+} else {
+    fmt.Println("DNS record not found yet — try again after propagation.")
+}
+```
+
+<Note>
+DNS propagation can take up to 48 hours. If verification fails, wait and try again. The verification token does not expire.
+</Note>
+
+### Parameters
+
+| Parameter | Type     | Required | Description                          |
+|-----------|----------|----------|--------------------------------------|
+| `id`      | `string` | Yes      | The domain registration ID to verify. |
+
+### Response (`DomainVerifyResponse`)
+
+| Field      | Type   | Description                                                             |
+|------------|--------|-------------------------------------------------------------------------|
+| `Verified` | `bool` | Whether the DNS TXT record was found and matches the verification token. |
+
+## Delete
+
+Remove a custom domain registration.
+
+```go
+err := client.Domains.Delete(ctx, "dom_01HXYZ...")
+// Returns nil on success (HTTP 204)
+```
+
+### Parameters
+
+| Parameter | Type     | Required | Description                           |
+|-----------|----------|----------|---------------------------------------|
+| `id`      | `string` | Yes      | The domain registration ID to delete. |
+
+Returns `nil` on success.
+
+## Full Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    grantex "github.com/mishrasanjeev/grantex-go"
+)
+
+func main() {
+    client := grantex.NewClient("gx_live_...")
+    ctx := context.Background()
+
+    // 1. Register a custom domain
+    registration, err := client.Domains.Create(ctx, "auth.myapp.com")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Add this DNS TXT record:\n")
+    fmt.Printf("  %s\n", registration.Instructions)
+    fmt.Printf("  Value: %s\n", registration.VerificationToken)
+
+    // 2. After adding the DNS record, verify ownership
+    verification, err := client.Domains.Verify(ctx, registration.ID)
+    if err != nil {
+        log.Fatal(err)
+    }
+    if verification.Verified {
+        fmt.Println("Domain verified successfully!")
+    } else {
+        fmt.Println("DNS record not found yet — try again after propagation.")
+    }
+
+    // 3. List all domains
+    result, _ := client.Domains.List(ctx)
+    for _, d := range result.Domains {
+        verified := "pending"
+        if d.Verified {
+            verified = "verified"
+        }
+        fmt.Printf("%s — %s\n", d.Domain, verified)
+    }
+
+    // 4. Remove a domain
+    err = client.Domains.Delete(ctx, registration.ID)
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+```

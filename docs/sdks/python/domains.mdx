@@ -1,0 +1,146 @@
+---
+title: "Domains"
+sidebarTitle: "Domains"
+description: "Register custom domains with DNS TXT verification for your Grantex API endpoints."
+---
+
+## Overview
+
+The `domains` client manages custom domains for your Grantex API endpoints. Register a domain, verify ownership via DNS TXT records, list all registered domains, and remove them.
+
+Access the domains client via `client.domains`.
+
+## Create
+
+Register a new custom domain. Returns a verification token that you must add as a DNS TXT record before calling `verify()`.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    domain = client.domains.create("auth.example.com")
+
+    print(f"ID: {domain.id}")
+    print(f"Domain: {domain.domain}")
+    print(f"Verified: {domain.verified}")
+    print(f"Token: {domain.verification_token}")
+    print(f"Instructions: {domain.instructions}")
+```
+
+### Parameters
+
+| Parameter | Type  | Required | Description                                          |
+|-----------|-------|----------|------------------------------------------------------|
+| `domain`  | `str` | Yes      | The custom domain to register (e.g., `'auth.example.com'`). |
+
+### DomainRegistration
+
+| Field                | Type   | Description                                                 |
+|----------------------|--------|-------------------------------------------------------------|
+| `id`                 | `str`  | Unique domain registration identifier.                      |
+| `domain`             | `str`  | The registered domain name.                                 |
+| `verified`           | `bool` | Whether the domain has been verified (initially `False`).   |
+| `verification_token` | `str`  | The token value to add as a DNS TXT record.                 |
+| `instructions`       | `str`  | Human-readable instructions for adding the DNS TXT record.  |
+
+## List
+
+List all registered custom domains for the authenticated developer.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.domains.list()
+
+    for domain in result.domains:
+        status = "verified" if domain.verified else "pending"
+        print(f"{domain.domain} — {status}")
+```
+
+### ListDomainsResponse
+
+| Field     | Type                       | Description                          |
+|-----------|----------------------------|--------------------------------------|
+| `domains` | `list[DomainRegistration]`  | List of registered domain objects.   |
+
+## Verify
+
+Verify ownership of a registered domain by checking the DNS TXT record. Call this after adding the verification token to your DNS configuration.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.domains.verify("dom_01HXYZ...")
+
+    if result.verified:
+        print("Domain verified successfully!")
+    else:
+        print("DNS record not found yet — try again after propagation.")
+```
+
+<Note>
+DNS propagation can take up to 48 hours. If verification fails, wait and try again. The verification token does not expire.
+</Note>
+
+### Parameters
+
+| Parameter | Type  | Required | Description                         |
+|-----------|-------|----------|-------------------------------------|
+| `id`      | `str` | Yes      | The domain registration ID to verify. |
+
+### DomainVerifyResponse
+
+| Field      | Type   | Description                                                            |
+|------------|--------|------------------------------------------------------------------------|
+| `verified` | `bool` | Whether the DNS TXT record was found and matches the verification token. |
+
+## Delete
+
+Remove a custom domain registration. The domain is immediately disassociated from your Grantex endpoints.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    client.domains.delete("dom_01HXYZ...")
+    # Returns None — domain registration is removed
+```
+
+### Parameters
+
+| Parameter | Type  | Required | Description                          |
+|-----------|-------|----------|--------------------------------------|
+| `id`      | `str` | Yes      | The domain registration ID to delete. |
+
+The method returns `None`. A `GrantexApiError` is raised if the domain does not exist.
+
+## Example: Domain Setup Flow
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    # 1. Register a custom domain
+    registration = client.domains.create("auth.myapp.com")
+    print(f"Add this DNS TXT record:")
+    print(f"  {registration.instructions}")
+    print(f"  Value: {registration.verification_token}")
+
+    # 2. After adding the DNS record, verify ownership
+    verification = client.domains.verify(registration.id)
+    if verification.verified:
+        print("Domain verified successfully!")
+    else:
+        print("DNS record not found yet — try again after propagation.")
+
+    # 3. List all domains
+    result = client.domains.list()
+    for d in result.domains:
+        status = "verified" if d.verified else "pending"
+        print(f"{d.domain} — {status}")
+
+    # 4. Remove a domain when no longer needed
+    client.domains.delete(registration.id)
+```

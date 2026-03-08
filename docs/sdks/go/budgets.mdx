@@ -1,0 +1,149 @@
+---
+title: "Budgets"
+description: "Allocate per-grant spending budgets, debit usage, check balances, and view transaction history"
+---
+
+## Overview
+
+The `Budgets` service manages per-grant spending budgets. Allocate budgets when issuing grants, debit as agents consume resources, check remaining balances, and review transaction history.
+
+## Allocate
+
+Allocate a spending budget for a grant. Threshold alerts are automatically triggered at 50% and 80% consumption.
+
+```go
+allocation, err := client.Budgets.Allocate(ctx, grantex.AllocateBudgetParams{
+    GrantID:       "grnt_01HXYZ...",
+    InitialBudget: 1000,
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Budget ID: %s\n", allocation.ID)
+fmt.Printf("Initial: %.2f\n", allocation.InitialBudget)
+fmt.Printf("Remaining: %.2f\n", allocation.RemainingBudget)
+```
+
+### Parameters
+
+| Parameter       | Type      | Required | Description                                 |
+|-----------------|-----------|----------|---------------------------------------------|
+| `GrantID`       | `string`  | Yes      | The grant ID to allocate a budget for.      |
+| `InitialBudget` | `float64` | Yes      | The initial budget amount. Must be positive. |
+
+### Response (`BudgetAllocation`)
+
+| Field             | Type      | Description                                    |
+|-------------------|-----------|------------------------------------------------|
+| `ID`              | `string`  | Unique budget allocation identifier.           |
+| `GrantID`         | `string`  | The associated grant ID.                       |
+| `InitialBudget`   | `float64` | The original allocated budget amount.          |
+| `RemainingBudget` | `float64` | The current remaining budget amount.           |
+| `CreatedAt`       | `string`  | ISO 8601 timestamp when the allocation was created. |
+
+## Debit
+
+Debit an amount from a grant's budget. Uses atomic operations to prevent overdraft. Returns an error with HTTP 402 and code `INSUFFICIENT_BUDGET` if the balance is insufficient.
+
+```go
+result, err := client.Budgets.Debit(ctx, grantex.DebitBudgetParams{
+    GrantID:     "grnt_01HXYZ...",
+    Amount:      50,
+    Description: grantex.String("GPT-4 API call"),
+})
+if err != nil {
+    // Check for insufficient budget
+    var apiErr *grantex.APIError
+    if errors.As(err, &apiErr) && apiErr.StatusCode == 402 {
+        fmt.Println("Insufficient budget")
+        return
+    }
+    log.Fatal(err)
+}
+fmt.Printf("Remaining: %.2f\n", result.Remaining)
+fmt.Printf("Transaction ID: %s\n", result.TransactionID)
+```
+
+### Parameters
+
+| Parameter     | Type      | Required | Description                                 |
+|---------------|-----------|----------|---------------------------------------------|
+| `GrantID`     | `string`  | Yes      | The grant ID to debit from.                 |
+| `Amount`      | `float64` | Yes      | The amount to debit. Must be positive.      |
+| `Description` | `*string` | No       | Optional description for the transaction.   |
+
+### Response (`DebitResponse`)
+
+| Field           | Type      | Description                            |
+|-----------------|-----------|----------------------------------------|
+| `Remaining`     | `float64` | The remaining budget after the debit.  |
+| `TransactionID` | `string`  | Unique identifier for the transaction. |
+
+<Warning>
+Debits are all-or-nothing. If the remaining budget is less than the debit amount, the API returns HTTP 402 with code `INSUFFICIENT_BUDGET` and the debit is not applied.
+</Warning>
+
+## Balance
+
+Check the current budget balance for a grant.
+
+```go
+allocation, err := client.Budgets.Balance(ctx, "grnt_01HXYZ...")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("%.2f / %.2f remaining\n", allocation.RemainingBudget, allocation.InitialBudget)
+```
+
+### Parameters
+
+| Parameter | Type     | Required | Description                            |
+|-----------|----------|----------|----------------------------------------|
+| `grantID` | `string` | Yes      | The grant ID to check the balance for. |
+
+### Response
+
+Returns a `BudgetAllocation` — same struct as `Allocate`. See above for field descriptions.
+
+## Transactions
+
+List all transactions for a grant's budget. Supports pagination.
+
+```go
+result, err := client.Budgets.Transactions(ctx, "grnt_01HXYZ...", grantex.PaginationParams{
+    Page:     grantex.Int(1),
+    PageSize: grantex.Int(50),
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Total: %d\n", result.Total)
+for _, txn := range result.Transactions {
+    fmt.Printf("  %s: -%.2f (balance: %.2f)\n", *txn.Description, txn.Amount, txn.BalanceAfter)
+}
+```
+
+### Parameters
+
+| Parameter  | Type   | Required | Description                               |
+|------------|--------|----------|-------------------------------------------|
+| `grantID`  | `string` | Yes    | The grant ID to list transactions for.    |
+| `Page`     | `*int` | No       | Page number for pagination (default: 1).  |
+| `PageSize` | `*int` | No       | Results per page (default: 20, max: 100). |
+
+### Response (`TransactionsResponse`)
+
+| Field          | Type                 | Description                                  |
+|----------------|----------------------|----------------------------------------------|
+| `Transactions` | `[]BudgetTransaction` | Slice of transaction records.               |
+| `Total`        | `int`                | Total number of transactions for this grant. |
+
+### `BudgetTransaction`
+
+| Field          | Type      | Description                              |
+|----------------|-----------|------------------------------------------|
+| `ID`           | `string`  | Unique transaction identifier.           |
+| `Amount`       | `float64` | The debited amount.                      |
+| `Description`  | `*string` | Optional description.                   |
+| `CreatedAt`    | `string`  | ISO 8601 timestamp of the transaction.   |
+| `BalanceAfter` | `float64` | Remaining budget after this transaction. |

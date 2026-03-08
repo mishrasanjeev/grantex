@@ -1,0 +1,223 @@
+---
+title: "Events"
+sidebarTitle: "Events"
+description: "Subscribe to real-time authorization events via Server-Sent Events."
+---
+
+## Overview
+
+The `events` sub-client provides real-time streaming of authorization events. You can consume events as an async generator via `stream()`, or use the convenience `subscribe()` wrapper for a callback-based approach. Events are delivered via Server-Sent Events (SSE).
+
+```typescript
+// Stream events or subscribe with a handler
+for await (const event of grantex.events.stream()) {
+  console.log(event.type, event.data);
+}
+
+// Or use the convenience wrapper
+const unsubscribe = grantex.events.subscribe((event) => {
+  console.log(event.type, event.data);
+});
+```
+
+---
+
+## events.stream()
+
+Open an SSE connection and yield authorization events as an async generator. The connection remains open until you break out of the loop or the server closes it.
+
+```typescript
+for await (const event of grantex.events.stream()) {
+  console.log(event.type);      // 'grant.created' | 'grant.revoked' | 'token.issued' | ...
+  console.log(event.id);        // 'evt_01HXYZ...'
+  console.log(event.timestamp); // '2026-03-08T14:30:00Z'
+  console.log(event.data);      // { grantId: 'grnt_01HXYZ...', ... }
+
+  if (event.type === 'budget.exhausted') {
+    // Handle budget exhaustion
+    break;
+  }
+}
+```
+
+### Parameters
+
+<ParamField body="eventTypes" type="string[]">
+  Filter to specific event types. If omitted, all event types are streamed.
+</ParamField>
+
+<ParamField body="since" type="string">
+  ISO 8601 timestamp to replay events from. Useful for catching up after a disconnection.
+</ParamField>
+
+### Yielded: `GrantexEvent`
+
+<ResponseField name="id" type="string">
+  Unique event identifier.
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  Event type: `'grant.created'`, `'grant.revoked'`, `'token.issued'`, `'budget.threshold'`, or `'budget.exhausted'`.
+</ResponseField>
+
+<ResponseField name="timestamp" type="string">
+  ISO 8601 timestamp when the event occurred.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Event payload. Shape varies by event type — see [Event types](#event-types) below.
+</ResponseField>
+
+---
+
+## events.subscribe()
+
+Subscribe to events with a callback function. This is a convenience wrapper around `stream()` that handles the async iteration for you and returns an unsubscribe function to close the connection.
+
+```typescript
+const unsubscribe = grantex.events.subscribe((event) => {
+  switch (event.type) {
+    case 'grant.created':
+      console.log(`New grant: ${event.data.grantId}`);
+      break;
+    case 'grant.revoked':
+      console.log(`Grant revoked: ${event.data.grantId}`);
+      break;
+    case 'token.issued':
+      console.log(`Token issued for grant: ${event.data.grantId}`);
+      break;
+    case 'budget.threshold':
+      console.log(`Budget at ${event.data.percentage}% for grant: ${event.data.grantId}`);
+      break;
+    case 'budget.exhausted':
+      console.log(`Budget exhausted for grant: ${event.data.grantId}`);
+      break;
+  }
+});
+
+// Later: close the SSE connection
+unsubscribe();
+```
+
+### Parameters
+
+<ParamField body="handler" type="(event: GrantexEvent) => void" required>
+  Callback function invoked for each event.
+</ParamField>
+
+<ParamField body="options" type="object">
+  Optional configuration with `eventTypes` and `since` fields (same as `stream()`).
+</ParamField>
+
+### Returns: `() => void`
+
+An unsubscribe function. Call it to close the SSE connection and stop receiving events.
+
+---
+
+## Event types
+
+### `grant.created`
+
+Emitted when a new grant is created after user consent.
+
+```typescript
+{
+  type: 'grant.created',
+  data: {
+    grantId: 'grnt_01HXYZ...',
+    agentId: 'ag_01HXYZ...',
+    principalId: 'user_abc123',
+    scopes: ['calendar:read', 'contacts:read'],
+  }
+}
+```
+
+### `grant.revoked`
+
+Emitted when a grant is revoked (by the developer, principal, or system).
+
+```typescript
+{
+  type: 'grant.revoked',
+  data: {
+    grantId: 'grnt_01HXYZ...',
+    revokedBy: 'developer',  // 'developer' | 'principal' | 'system'
+  }
+}
+```
+
+### `token.issued`
+
+Emitted when a grant token is issued (via exchange or refresh).
+
+```typescript
+{
+  type: 'token.issued',
+  data: {
+    grantId: 'grnt_01HXYZ...',
+    tokenId: 'tok_01HXYZ...',
+    method: 'exchange',  // 'exchange' | 'refresh'
+  }
+}
+```
+
+### `budget.threshold`
+
+Emitted when a grant's budget consumption crosses 50% or 80%.
+
+```typescript
+{
+  type: 'budget.threshold',
+  data: {
+    grantId: 'grnt_01HXYZ...',
+    percentage: 80,
+    remaining: 200,
+    initial: 1000,
+  }
+}
+```
+
+### `budget.exhausted`
+
+Emitted when a grant's budget is fully consumed.
+
+```typescript
+{
+  type: 'budget.exhausted',
+  data: {
+    grantId: 'grnt_01HXYZ...',
+    initial: 1000,
+  }
+}
+```
+
+---
+
+## Full example
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// Subscribe to budget events only
+const unsubscribe = grantex.events.subscribe(
+  (event) => {
+    if (event.type === 'budget.threshold') {
+      console.warn(`Budget alert: ${event.data.percentage}% used for ${event.data.grantId}`);
+    }
+    if (event.type === 'budget.exhausted') {
+      console.error(`Budget exhausted for ${event.data.grantId} — revoking grant`);
+      grantex.grants.revoke(event.data.grantId);
+    }
+  },
+  { eventTypes: ['budget.threshold', 'budget.exhausted'] },
+);
+
+// Clean up on shutdown
+process.on('SIGINT', () => {
+  unsubscribe();
+  process.exit(0);
+});
+```

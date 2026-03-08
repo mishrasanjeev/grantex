@@ -1,0 +1,168 @@
+---
+title: "Domains"
+sidebarTitle: "Domains"
+description: "Register custom domains with DNS TXT verification for your Grantex API endpoints."
+---
+
+## Overview
+
+The `domains` sub-client manages custom domains for your Grantex API endpoints. Register a domain, verify ownership via DNS TXT records, list all registered domains, and remove them.
+
+```typescript
+const domain = await grantex.domains.create({ domain: 'auth.example.com' });
+const verified = await grantex.domains.verify(domain.id);
+const all = await grantex.domains.list();
+await grantex.domains.delete(domain.id);
+```
+
+---
+
+## domains.create()
+
+Register a new custom domain. Returns a verification token that you must add as a DNS TXT record before calling `verify()`.
+
+```typescript
+const domain = await grantex.domains.create({
+  domain: 'auth.example.com',
+});
+
+console.log(domain.id);                // 'dom_01HXYZ...'
+console.log(domain.domain);            // 'auth.example.com'
+console.log(domain.verified);          // false
+console.log(domain.verificationToken); // 'grantex-verify=abc123xyz...'
+console.log(domain.instructions);      // 'Add a TXT record to _grantex.auth.example.com ...'
+```
+
+### Parameters
+
+<ParamField body="domain" type="string" required>
+  The custom domain to register (e.g., `'auth.example.com'`).
+</ParamField>
+
+### Response: `DomainRegistration`
+
+<ResponseField name="id" type="string">
+  Unique domain registration identifier.
+</ResponseField>
+
+<ResponseField name="domain" type="string">
+  The registered domain name.
+</ResponseField>
+
+<ResponseField name="verified" type="boolean">
+  Whether the domain has been verified (initially `false`).
+</ResponseField>
+
+<ResponseField name="verificationToken" type="string">
+  The token value to add as a DNS TXT record.
+</ResponseField>
+
+<ResponseField name="instructions" type="string">
+  Human-readable instructions for adding the DNS TXT record.
+</ResponseField>
+
+---
+
+## domains.list()
+
+List all registered custom domains for the authenticated developer.
+
+```typescript
+const result = await grantex.domains.list();
+
+for (const domain of result.domains) {
+  console.log(domain.id);        // 'dom_01HXYZ...'
+  console.log(domain.domain);    // 'auth.example.com'
+  console.log(domain.verified);  // true
+}
+```
+
+### Response: `ListDomainsResponse`
+
+<ResponseField name="domains" type="DomainRegistration[]">
+  Array of registered domain objects.
+</ResponseField>
+
+---
+
+## domains.verify()
+
+Verify ownership of a registered domain by checking the DNS TXT record. Call this after adding the verification token to your DNS configuration.
+
+```typescript
+const result = await grantex.domains.verify('dom_01HXYZ...');
+
+console.log(result.verified); // true
+```
+
+<Note>
+DNS propagation can take up to 48 hours. If verification fails, wait and try again. The verification token does not expire.
+</Note>
+
+### Parameters
+
+<ParamField body="id" type="string" required>
+  The domain registration ID to verify.
+</ParamField>
+
+### Response: `DomainVerifyResponse`
+
+<ResponseField name="verified" type="boolean">
+  Whether the DNS TXT record was found and matches the expected verification token.
+</ResponseField>
+
+---
+
+## domains.delete()
+
+Remove a custom domain registration. The domain is immediately disassociated from your Grantex endpoints.
+
+```typescript
+await grantex.domains.delete('dom_01HXYZ...');
+// Returns void — domain registration is removed
+```
+
+### Parameters
+
+<ParamField body="id" type="string" required>
+  The domain registration ID to delete.
+</ParamField>
+
+### Response
+
+Returns `void`. The domain registration is immediately removed.
+
+---
+
+## Full example
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// 1. Register a custom domain
+const registration = await grantex.domains.create({
+  domain: 'auth.myapp.com',
+});
+console.log(`Add this DNS TXT record:`);
+console.log(`  ${registration.instructions}`);
+console.log(`  Value: ${registration.verificationToken}`);
+
+// 2. After adding the DNS record, verify ownership
+const verification = await grantex.domains.verify(registration.id);
+if (verification.verified) {
+  console.log('Domain verified successfully!');
+} else {
+  console.log('DNS record not found yet — try again after propagation.');
+}
+
+// 3. List all domains
+const { domains } = await grantex.domains.list();
+for (const d of domains) {
+  console.log(`${d.domain} — ${d.verified ? 'verified' : 'pending'}`);
+}
+
+// 4. Remove a domain
+await grantex.domains.delete(registration.id);
+```

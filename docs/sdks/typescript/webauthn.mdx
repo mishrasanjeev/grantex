@@ -1,0 +1,227 @@
+---
+title: "WebAuthn"
+sidebarTitle: "WebAuthn"
+description: "Register and manage FIDO2/WebAuthn passkey credentials for end-users."
+---
+
+## Overview
+
+The `webauthn` sub-client manages FIDO2/WebAuthn passkey credentials for your end-users. You can generate registration options, verify registration responses, list credentials, and delete them.
+
+```typescript
+// Register a passkey, list credentials, delete one
+const options = await grantex.webauthn.registerOptions({ principalId: 'user_abc123' });
+const credential = await grantex.webauthn.registerVerify({ principalId: 'user_abc123', credential: attestation });
+const credentials = await grantex.webauthn.listCredentials('user_abc123');
+await grantex.webauthn.deleteCredential('cred_01HXYZ...');
+```
+
+---
+
+## webauthn.registerOptions()
+
+Generate WebAuthn registration options for a principal. Returns a `PublicKeyCredentialCreationOptions`-compatible object that you pass to `navigator.credentials.create()` in the browser.
+
+```typescript
+const options = await grantex.webauthn.registerOptions({
+  principalId: 'user_abc123',
+});
+
+console.log(options.challenge);       // base64url-encoded challenge
+console.log(options.rp);              // { name: 'Grantex', id: 'grantex.dev' }
+console.log(options.user);            // { id, name, displayName }
+console.log(options.pubKeyCredParams); // [{ type: 'public-key', alg: -7 }, ...]
+console.log(options.timeout);         // 60000
+console.log(options.attestation);     // 'none'
+```
+
+### Parameters
+
+<ParamField body="principalId" type="string" required>
+  The ID of the principal (end-user) to register a passkey for.
+</ParamField>
+
+### Response: `WebAuthnRegisterOptions`
+
+<ResponseField name="challenge" type="string">
+  Base64url-encoded challenge for the registration ceremony.
+</ResponseField>
+
+<ResponseField name="rp" type="object">
+  Relying party information (`name`, `id`).
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  User entity (`id`, `name`, `displayName`) for the credential.
+</ResponseField>
+
+<ResponseField name="pubKeyCredParams" type="object[]">
+  Supported public key algorithms (e.g., ES256, RS256).
+</ResponseField>
+
+<ResponseField name="timeout" type="number">
+  Timeout in milliseconds for the registration ceremony.
+</ResponseField>
+
+<ResponseField name="attestation" type="string">
+  Attestation conveyance preference (`'none'`, `'indirect'`, `'direct'`).
+</ResponseField>
+
+<ResponseField name="excludeCredentials" type="object[]">
+  List of existing credential descriptors to prevent re-registration.
+</ResponseField>
+
+---
+
+## webauthn.registerVerify()
+
+Verify a WebAuthn registration response from the browser. On success, the credential is stored and associated with the principal.
+
+```typescript
+const credential = await grantex.webauthn.registerVerify({
+  principalId: 'user_abc123',
+  credential: {
+    id: 'base64url-credential-id',
+    rawId: 'base64url-raw-id',
+    type: 'public-key',
+    response: {
+      clientDataJSON: 'base64url-encoded',
+      attestationObject: 'base64url-encoded',
+    },
+  },
+});
+
+console.log(credential.credentialId); // 'cred_01HXYZ...'
+console.log(credential.publicKey);     // 'base64url-encoded-public-key'
+console.log(credential.signCount);     // 0
+console.log(credential.createdAt);     // '2026-03-08T10:00:00Z'
+```
+
+### Parameters
+
+<ParamField body="principalId" type="string" required>
+  The principal ID that this credential belongs to.
+</ParamField>
+
+<ParamField body="credential" type="object" required>
+  The WebAuthn attestation response from `navigator.credentials.create()`. Must include `id`, `rawId`, `type`, and `response` (with `clientDataJSON` and `attestationObject`).
+</ParamField>
+
+### Response: `WebAuthnCredential`
+
+<ResponseField name="credentialId" type="string">
+  Unique credential identifier.
+</ResponseField>
+
+<ResponseField name="publicKey" type="string">
+  Base64url-encoded public key.
+</ResponseField>
+
+<ResponseField name="signCount" type="number">
+  The signature counter (starts at 0).
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the credential was registered.
+</ResponseField>
+
+<ResponseField name="aaguid" type="string">
+  The authenticator attestation GUID, identifying the authenticator model.
+</ResponseField>
+
+---
+
+## webauthn.listCredentials()
+
+List all WebAuthn credentials registered for a principal.
+
+```typescript
+const credentials = await grantex.webauthn.listCredentials('user_abc123');
+
+for (const cred of credentials) {
+  console.log(cred.credentialId); // 'cred_01HXYZ...'
+  console.log(cred.createdAt);    // '2026-03-08T10:00:00Z'
+  console.log(cred.lastUsedAt);   // '2026-03-08T14:30:00Z' or null
+}
+```
+
+### Parameters
+
+<ParamField body="principalId" type="string" required>
+  The principal ID to list credentials for.
+</ParamField>
+
+### Response: `WebAuthnCredential[]`
+
+Returns an array of `WebAuthnCredential` objects.
+
+<ResponseField name="credentialId" type="string">
+  Unique credential identifier.
+</ResponseField>
+
+<ResponseField name="publicKey" type="string">
+  Base64url-encoded public key.
+</ResponseField>
+
+<ResponseField name="signCount" type="number">
+  Current signature counter value.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the credential was registered.
+</ResponseField>
+
+<ResponseField name="lastUsedAt" type="string | null">
+  ISO 8601 timestamp of the last successful authentication, or `null` if never used.
+</ResponseField>
+
+---
+
+## webauthn.deleteCredential()
+
+Delete a WebAuthn credential by its ID. The credential is immediately invalidated.
+
+```typescript
+await grantex.webauthn.deleteCredential('cred_01HXYZ...');
+// Returns void — credential is deleted
+```
+
+### Parameters
+
+<ParamField body="credentialId" type="string" required>
+  The credential ID to delete.
+</ParamField>
+
+### Response
+
+Returns `void`. The credential is immediately removed and can no longer be used for authentication.
+
+---
+
+## Full example
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// 1. Generate registration options (send to browser)
+const options = await grantex.webauthn.registerOptions({
+  principalId: 'user_abc123',
+});
+// → Send options to the client for navigator.credentials.create()
+
+// 2. Verify the attestation response (received from browser)
+const credential = await grantex.webauthn.registerVerify({
+  principalId: 'user_abc123',
+  credential: attestationResponseFromBrowser,
+});
+console.log(`Registered passkey: ${credential.credentialId}`);
+
+// 3. List all passkeys for the user
+const allCredentials = await grantex.webauthn.listCredentials('user_abc123');
+console.log(`User has ${allCredentials.length} passkey(s)`);
+
+// 4. Delete a passkey when the user requests removal
+await grantex.webauthn.deleteCredential(credential.credentialId);
+```

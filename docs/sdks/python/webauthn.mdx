@@ -1,0 +1,160 @@
+---
+title: "WebAuthn"
+sidebarTitle: "WebAuthn"
+description: "Register and manage FIDO2/WebAuthn passkey credentials for end-users."
+---
+
+## Overview
+
+The `webauthn` client manages FIDO2/WebAuthn passkey credentials for your end-users. Register passkeys, verify attestation responses, list credentials, and delete them.
+
+Access the webauthn client via `client.webauthn`.
+
+## Register Options
+
+Generate WebAuthn registration options for a principal. Returns a `PublicKeyCredentialCreationOptions`-compatible dict to pass to the browser's `navigator.credentials.create()`.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    options = client.webauthn.register_options("user_abc123")
+
+    print(f"Challenge: {options.challenge}")
+    print(f"RP: {options.rp}")
+    print(f"User: {options.user}")
+    print(f"Timeout: {options.timeout}")
+```
+
+### Parameters
+
+| Parameter      | Type  | Required | Description                                          |
+|----------------|-------|----------|------------------------------------------------------|
+| `principal_id` | `str` | Yes      | The ID of the principal (end-user) to register a passkey for. |
+
+### WebAuthnRegisterOptions
+
+| Field                 | Type              | Description                                                   |
+|-----------------------|-------------------|---------------------------------------------------------------|
+| `challenge`           | `str`             | Base64url-encoded challenge for the registration ceremony.    |
+| `rp`                  | `dict`            | Relying party information (`name`, `id`).                     |
+| `user`                | `dict`            | User entity (`id`, `name`, `display_name`).                   |
+| `pub_key_cred_params` | `list[dict]`      | Supported public key algorithms (e.g., ES256, RS256).         |
+| `timeout`             | `int`             | Timeout in milliseconds for the registration ceremony.        |
+| `attestation`         | `str`             | Attestation conveyance preference.                            |
+| `exclude_credentials` | `list[dict]`      | Existing credential descriptors to prevent re-registration.   |
+
+## Register Verify
+
+Verify a WebAuthn registration response from the browser. On success, the credential is stored and associated with the principal.
+
+```python
+from grantex import Grantex, WebAuthnRegisterVerifyParams
+
+with Grantex(api_key="gx_live_...") as client:
+    credential = client.webauthn.register_verify(WebAuthnRegisterVerifyParams(
+        principal_id="user_abc123",
+        credential={
+            "id": "base64url-credential-id",
+            "rawId": "base64url-raw-id",
+            "type": "public-key",
+            "response": {
+                "clientDataJSON": "base64url-encoded",
+                "attestationObject": "base64url-encoded",
+            },
+        },
+    ))
+
+    print(f"Credential ID: {credential.credential_id}")
+    print(f"Public key: {credential.public_key}")
+    print(f"Sign count: {credential.sign_count}")
+    print(f"Created at: {credential.created_at}")
+```
+
+### WebAuthnRegisterVerifyParams
+
+| Parameter      | Type   | Required | Description                                                    |
+|----------------|--------|----------|----------------------------------------------------------------|
+| `principal_id` | `str`  | Yes      | The principal ID that this credential belongs to.              |
+| `credential`   | `dict` | Yes      | The WebAuthn attestation response from `navigator.credentials.create()`. |
+
+### WebAuthnCredential
+
+| Field           | Type          | Description                                            |
+|-----------------|---------------|--------------------------------------------------------|
+| `credential_id` | `str`         | Unique credential identifier.                          |
+| `public_key`    | `str`         | Base64url-encoded public key.                          |
+| `sign_count`    | `int`         | The signature counter value.                           |
+| `created_at`    | `str`         | ISO 8601 timestamp when the credential was registered. |
+| `aaguid`        | `str`         | The authenticator attestation GUID.                    |
+| `last_used_at`  | `str \| None` | ISO 8601 timestamp of last authentication, or `None`.  |
+
+## List Credentials
+
+List all WebAuthn credentials registered for a principal.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    credentials = client.webauthn.list_credentials("user_abc123")
+
+    for cred in credentials:
+        print(f"{cred.credential_id} — created {cred.created_at}")
+        print(f"  Last used: {cred.last_used_at or 'never'}")
+```
+
+### Parameters
+
+| Parameter      | Type  | Required | Description                             |
+|----------------|-------|----------|-----------------------------------------|
+| `principal_id` | `str` | Yes      | The principal ID to list credentials for. |
+
+### Response
+
+Returns a `list[WebAuthnCredential]`. See above for field descriptions.
+
+## Delete Credential
+
+Delete a WebAuthn credential by its ID. The credential is immediately invalidated.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    client.webauthn.delete_credential("cred_01HXYZ...")
+    # Returns None — credential is deleted
+```
+
+### Parameters
+
+| Parameter       | Type  | Required | Description                  |
+|-----------------|-------|----------|------------------------------|
+| `credential_id` | `str` | Yes      | The credential ID to delete. |
+
+The method returns `None`. A `GrantexApiError` is raised if the credential does not exist.
+
+## Example: Full Passkey Flow
+
+```python
+from grantex import Grantex, WebAuthnRegisterVerifyParams
+
+with Grantex(api_key="gx_live_...") as client:
+    # 1. Generate registration options (send to browser)
+    options = client.webauthn.register_options("user_abc123")
+    # → Send options to the client for navigator.credentials.create()
+
+    # 2. Verify the attestation response (received from browser)
+    credential = client.webauthn.register_verify(WebAuthnRegisterVerifyParams(
+        principal_id="user_abc123",
+        credential=attestation_response_from_browser,
+    ))
+    print(f"Registered passkey: {credential.credential_id}")
+
+    # 3. List all passkeys for the user
+    all_credentials = client.webauthn.list_credentials("user_abc123")
+    print(f"User has {len(all_credentials)} passkey(s)")
+
+    # 4. Delete a passkey when the user requests removal
+    client.webauthn.delete_credential(credential.credential_id)
+```

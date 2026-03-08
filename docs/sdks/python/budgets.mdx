@@ -1,0 +1,183 @@
+---
+title: "Budgets"
+sidebarTitle: "Budgets"
+description: "Allocate per-grant spending budgets, debit usage, check balances, and view transaction history."
+---
+
+## Overview
+
+The `budgets` client manages per-grant spending budgets. Allocate budgets when issuing grants, debit as agents consume resources, check remaining balances, and review transaction history.
+
+Access the budgets client via `client.budgets`.
+
+## Allocate
+
+Allocate a spending budget for a grant. Threshold alerts are automatically triggered at 50% and 80% consumption.
+
+```python
+from grantex import Grantex, AllocateBudgetParams
+
+with Grantex(api_key="gx_live_...") as client:
+    allocation = client.budgets.allocate(AllocateBudgetParams(
+        grant_id="grnt_01HXYZ...",
+        initial_budget=1000,
+    ))
+
+    print(f"Budget ID: {allocation.id}")
+    print(f"Grant ID: {allocation.grant_id}")
+    print(f"Initial: {allocation.initial_budget}")
+    print(f"Remaining: {allocation.remaining_budget}")
+    print(f"Created: {allocation.created_at}")
+```
+
+### AllocateBudgetParams
+
+| Parameter        | Type    | Required | Description                                     |
+|------------------|---------|----------|-------------------------------------------------|
+| `grant_id`       | `str`   | Yes      | The grant ID to allocate a budget for.          |
+| `initial_budget`  | `int \| float` | Yes | The initial budget amount. Must be positive. |
+
+### BudgetAllocation
+
+| Field              | Type    | Description                                  |
+|--------------------|---------|----------------------------------------------|
+| `id`               | `str`   | Unique budget allocation identifier.         |
+| `grant_id`         | `str`   | The associated grant ID.                     |
+| `initial_budget`   | `float` | The original allocated budget amount.        |
+| `remaining_budget` | `float` | The current remaining budget amount.         |
+| `created_at`       | `str`   | ISO 8601 timestamp when the allocation was created. |
+
+## Debit
+
+Debit an amount from a grant's budget. Uses atomic operations to prevent overdraft. Raises a `GrantexApiError` with status `402` and code `INSUFFICIENT_BUDGET` if the balance is insufficient.
+
+```python
+from grantex import Grantex, DebitBudgetParams
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.budgets.debit(DebitBudgetParams(
+        grant_id="grnt_01HXYZ...",
+        amount=50,
+        description="GPT-4 API call",
+    ))
+
+    print(f"Remaining: {result.remaining}")
+    print(f"Transaction ID: {result.transaction_id}")
+```
+
+### DebitBudgetParams
+
+| Parameter     | Type            | Required | Description                                     |
+|---------------|-----------------|----------|-------------------------------------------------|
+| `grant_id`    | `str`           | Yes      | The grant ID to debit from.                     |
+| `amount`      | `int \| float`  | Yes      | The amount to debit. Must be positive.           |
+| `description` | `str \| None`   | No       | Optional description for the transaction.        |
+
+### DebitResponse
+
+| Field            | Type    | Description                            |
+|------------------|---------|----------------------------------------|
+| `remaining`      | `float` | The remaining budget after the debit.  |
+| `transaction_id` | `str`   | Unique identifier for the transaction. |
+
+<Warning>
+If the remaining budget is less than the debit amount, a `GrantexApiError` is raised with HTTP status `402` and code `INSUFFICIENT_BUDGET`. Debits are all-or-nothing — no partial debits.
+</Warning>
+
+## Balance
+
+Check the current budget balance for a grant.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    allocation = client.budgets.balance("grnt_01HXYZ...")
+
+    print(f"Initial: {allocation.initial_budget}")
+    print(f"Remaining: {allocation.remaining_budget}")
+    used = allocation.initial_budget - allocation.remaining_budget
+    print(f"Used: {used}")
+```
+
+### Parameters
+
+| Parameter  | Type  | Required | Description                         |
+|------------|-------|----------|-------------------------------------|
+| `grant_id` | `str` | Yes      | The grant ID to check the balance for. |
+
+### Response
+
+Returns a `BudgetAllocation` — see above for field descriptions.
+
+## Transactions
+
+List all transactions for a grant's budget. Supports pagination.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.budgets.transactions("grnt_01HXYZ...", page=1, page_size=50)
+
+    print(f"Total transactions: {result.total}")
+    for txn in result.transactions:
+        print(f"  {txn.description}: -{txn.amount} (balance: {txn.balance_after})")
+```
+
+### Parameters
+
+| Parameter   | Type          | Required | Description                                   |
+|-------------|---------------|----------|-----------------------------------------------|
+| `grant_id`  | `str`         | Yes      | The grant ID to list transactions for.        |
+| `page`      | `int \| None` | No       | Page number for pagination (default: 1).      |
+| `page_size` | `int \| None` | No       | Results per page (default: 20, max: 100).     |
+
+### TransactionsResponse
+
+| Field          | Type                     | Description                                  |
+|----------------|--------------------------|----------------------------------------------|
+| `transactions` | `list[BudgetTransaction]` | List of transaction records.                 |
+| `total`        | `int`                    | Total number of transactions for this grant. |
+
+### BudgetTransaction
+
+| Field           | Type          | Description                                   |
+|-----------------|---------------|-----------------------------------------------|
+| `id`            | `str`         | Unique transaction identifier.                |
+| `amount`        | `float`       | The debited amount.                           |
+| `description`   | `str \| None` | Optional description.                         |
+| `created_at`    | `str`         | ISO 8601 timestamp of the transaction.        |
+| `balance_after` | `float`       | Remaining budget after this transaction.      |
+
+## Example: Budget Lifecycle
+
+```python
+from grantex import Grantex, AllocateBudgetParams, DebitBudgetParams
+
+with Grantex(api_key="gx_live_...") as client:
+    # Allocate a budget for a grant
+    allocation = client.budgets.allocate(AllocateBudgetParams(
+        grant_id="grnt_01HXYZ...",
+        initial_budget=500,
+    ))
+    print(f"Budget allocated: {allocation.initial_budget}")
+
+    # Debit as the agent uses resources
+    debit = client.budgets.debit(DebitBudgetParams(
+        grant_id="grnt_01HXYZ...",
+        amount=25,
+        description="Document analysis",
+    ))
+    print(f"Remaining: {debit.remaining}")
+
+    # Check the current balance
+    balance = client.budgets.balance("grnt_01HXYZ...")
+    print(f"{balance.remaining_budget} / {balance.initial_budget} remaining")
+
+    # Review transaction history
+    result = client.budgets.transactions("grnt_01HXYZ...")
+    print(f"{result.total} transaction(s)")
+    for txn in result.transactions:
+        print(f"  {txn.description}: -{txn.amount} (balance: {txn.balance_after})")
+```
