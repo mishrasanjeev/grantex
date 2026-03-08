@@ -56,6 +56,29 @@ describe('POST /v1/webauthn/register/options', () => {
 
     expect(res.statusCode).toBe(401);
   });
+
+  it('passes existing credentials to generateRegOptions for exclusion', async () => {
+    seedAuth();
+    // Return existing credentials
+    sqlMock.mockResolvedValueOnce([{
+      credential_id: 'existingCredId',
+      public_key: 'existingPK',
+      counter: 5,
+      transports: ['usb', 'ble'],
+    }]);
+    // Insert challenge
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webauthn/register/options',
+      headers: authHeader(),
+      payload: { principalId: 'user_with_cred' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().challengeId).toBeDefined();
+  });
 });
 
 // ---------------------------------------------------------------

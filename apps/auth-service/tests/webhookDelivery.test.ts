@@ -106,6 +106,42 @@ describe('startWebhookDeliveryWorker', () => {
     clearInterval(timer);
   });
 
+  it('logs error when initial processDeliveries rejects', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    sqlMock.mockRejectedValueOnce(new Error('DB connection lost'));
+
+    const timer = startWebhookDeliveryWorker(sqlMock as never, 60_000);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[webhook-delivery] Error on initial run:',
+      expect.any(Error),
+    );
+
+    consoleSpy.mockRestore();
+    clearInterval(timer);
+  });
+
+  it('logs error when interval processDeliveries rejects', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Initial run succeeds
+    sqlMock.mockResolvedValueOnce([]);
+    // Interval run fails
+    sqlMock.mockRejectedValueOnce(new Error('DB connection lost'));
+
+    const timer = startWebhookDeliveryWorker(sqlMock as never, 10_000);
+    await vi.advanceTimersByTimeAsync(0); // initial run
+    await vi.advanceTimersByTimeAsync(10_000); // interval run
+
+    expect(consoleSpy).toHaveBeenCalledWith(
+      '[webhook-delivery] Error processing deliveries:',
+      expect.any(Error),
+    );
+
+    consoleSpy.mockRestore();
+    clearInterval(timer);
+  });
+
   it('runs on the configured interval', async () => {
     // First run (immediate)
     sqlMock.mockResolvedValueOnce([]);

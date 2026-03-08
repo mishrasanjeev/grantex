@@ -21,3 +21,6 @@ export const newPolicyBundleId = (): string => `pbnd_${ulid()}`;
 export const newSigningKeyId = (): string => `key_${ulid()}`;
 export const newWebAuthnCredentialId = (): string => `cred_${ulid()}`;
 export const newWebAuthnChallengeId = (): string => `wac_${ulid()}`;
+export const newVerifiableCredentialId = (): string => `vc_${ulid()}`;
+export const newStatusListId = (): string => `vcsl_${ulid()}`;
+export const newPresentationId = (): string => `pres_${ulid()}`;

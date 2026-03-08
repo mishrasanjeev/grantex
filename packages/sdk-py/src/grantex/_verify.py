@@ -35,7 +35,12 @@ def verify_grant_token(
             "only RS256 is allowed per SPEC §11"
         )
 
-    signing_key = _fetch_signing_key(options.jwks_uri, header.get("kid"))
+    jwks_uri = options.jwks_uri
+    if options.issuer_did is not None and options.issuer_did.startswith("did:web:"):
+        domain = options.issuer_did.removeprefix("did:web:").replace(":", "/")
+        jwks_uri = f"https://{domain}/.well-known/jwks.json"
+
+    signing_key = _fetch_signing_key(jwks_uri, header.get("kid"))
 
     decode_kwargs: dict[str, Any] = {
         "algorithms": ["RS256"],

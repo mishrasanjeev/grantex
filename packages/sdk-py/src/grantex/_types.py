@@ -285,11 +285,14 @@ class ExchangeTokenParams:
     code: str
     agent_id: str
     code_verifier: str | None = None
+    credential_format: str | None = None  # 'jwt' | 'vc-jwt' | 'both'
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {"code": self.code, "agentId": self.agent_id}
         if self.code_verifier is not None:
             body["codeVerifier"] = self.code_verifier
+        if self.credential_format is not None:
+            body["credentialFormat"] = self.credential_format
         return body
 
 
@@ -300,6 +303,7 @@ class ExchangeTokenResponse:
     scopes: tuple[str, ...]
     refresh_token: str
     grant_id: str
+    verifiable_credential: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ExchangeTokenResponse:
@@ -309,6 +313,7 @@ class ExchangeTokenResponse:
             scopes=tuple(data.get("scopes", [])),
             refresh_token=data["refreshToken"],
             grant_id=data["grantId"],
+            verifiable_credential=data.get("verifiableCredential"),
         )
 
 
@@ -463,6 +468,7 @@ class VerifyGrantTokenOptions:
     required_scopes: list[str] | None = None
     clock_tolerance: int = 0
     audience: str | None = None
+    issuer_did: str | None = None
 
 
 # ─── Raw JWT payload shape ────────────────────────────────────────────────────
@@ -1403,3 +1409,211 @@ class GrantexStreamEvent:
             created_at=d["createdAt"],
             data=d.get("data", {}),
         )
+
+
+# ─── WebAuthn / FIDO ─────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class WebAuthnRegistrationOptions:
+    challenge_id: str
+    public_key: dict[str, Any]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "WebAuthnRegistrationOptions":
+        return cls(
+            challenge_id=data["challengeId"],
+            public_key=data["publicKey"],
+        )
+
+
+@dataclass
+class WebAuthnRegistrationVerifyParams:
+    challenge_id: str
+    response: dict[str, Any]
+    device_name: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "challengeId": self.challenge_id,
+            "response": self.response,
+        }
+        if self.device_name is not None:
+            body["deviceName"] = self.device_name
+        return body
+
+
+@dataclass(frozen=True)
+class WebAuthnCredential:
+    id: str
+    principal_id: str
+    device_name: str | None
+    backed_up: bool
+    transports: tuple[str, ...]
+    created_at: str
+    last_used_at: str | None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "WebAuthnCredential":
+        return cls(
+            id=data["id"],
+            principal_id=data["principalId"],
+            device_name=data.get("deviceName"),
+            backed_up=data.get("backedUp", False),
+            transports=tuple(data.get("transports", [])),
+            created_at=data["createdAt"],
+            last_used_at=data.get("lastUsedAt"),
+        )
+
+
+@dataclass(frozen=True)
+class ListWebAuthnCredentialsResponse:
+    credentials: tuple[WebAuthnCredential, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ListWebAuthnCredentialsResponse":
+        return cls(
+            credentials=tuple(
+                WebAuthnCredential.from_dict(c)
+                for c in data.get("credentials", [])
+            ),
+        )
+
+
+# ─── Verifiable Credentials ─────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class VerifiableCredentialRecord:
+    id: str
+    grant_id: str
+    credential_type: str
+    format: str
+    credential: str
+    status: str
+    issued_at: str
+    expires_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "VerifiableCredentialRecord":
+        return cls(
+            id=data["id"],
+            grant_id=data["grantId"],
+            credential_type=data["credentialType"],
+            format=data["format"],
+            credential=data["credential"],
+            status=data["status"],
+            issued_at=data["issuedAt"],
+            expires_at=data["expiresAt"],
+        )
+
+
+@dataclass
+class ListCredentialsParams:
+    grant_id: str | None = None
+    principal_id: str | None = None
+    status: str | None = None
+
+    def to_query(self) -> dict[str, str]:
+        result: dict[str, str] = {}
+        if self.grant_id is not None:
+            result["grantId"] = self.grant_id
+        if self.principal_id is not None:
+            result["principalId"] = self.principal_id
+        if self.status is not None:
+            result["status"] = self.status
+        return result
+
+
+@dataclass(frozen=True)
+class ListCredentialsResponse:
+    credentials: tuple[VerifiableCredentialRecord, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ListCredentialsResponse":
+        return cls(
+            credentials=tuple(
+                VerifiableCredentialRecord.from_dict(c)
+                for c in data.get("credentials", [])
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class VCVerificationResult:
+    valid: bool
+    credential_type: str | None = None
+    issuer: str | None = None
+    subject: dict[str, Any] | None = None
+    expires_at: str | None = None
+    revoked: bool | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "VCVerificationResult":
+        return cls(
+            valid=data["valid"],
+            credential_type=data.get("credentialType"),
+            issuer=data.get("issuer"),
+            subject=data.get("subject"),
+            expires_at=data.get("expiresAt"),
+            revoked=data.get("revoked"),
+        )
+
+
+# ─── SD-JWT Presentation ─────────────────────────────────────────────────────
+
+
+@dataclass
+class SDJWTPresentParams:
+    sd_jwt: str
+    nonce: str | None = None
+    audience: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {"sdJwt": self.sd_jwt}
+        if self.nonce is not None:
+            body["nonce"] = self.nonce
+        if self.audience is not None:
+            body["audience"] = self.audience
+        return body
+
+
+@dataclass
+class SDJWTPresentResult:
+    valid: bool
+    disclosed_claims: dict[str, Any] | None = None
+    error: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SDJWTPresentResult":
+        return cls(
+            valid=data["valid"],
+            disclosed_claims=data.get("disclosedClaims"),
+            error=data.get("error"),
+        )
+
+
+# ─── Developer Settings ──────────────────────────────────────────────────────
+
+
+@dataclass
+class UpdateDeveloperSettingsParams:
+    fido_required: bool | None = None
+    fido_rp_name: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {}
+        if self.fido_required is not None:
+            body["fidoRequired"] = self.fido_required
+        if self.fido_rp_name is not None:
+            body["fidoRpName"] = self.fido_rp_name
+        return body
+
+
+@dataclass(frozen=True)
+class UpdateDeveloperSettingsResponse:
+    updated: bool
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "UpdateDeveloperSettingsResponse":
+        return cls(updated=data["updated"])

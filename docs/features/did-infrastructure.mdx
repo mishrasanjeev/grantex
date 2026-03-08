@@ -1,0 +1,269 @@
+---
+title: "DID Infrastructure"
+sidebarTitle: "DID Infrastructure"
+description: "W3C Decentralized Identifier (DID) infrastructure for independent credential verification. Resolve did:web:grantex.dev to verify any Grantex-issued credential."
+---
+
+## Overview
+
+Grantex publishes a W3C Decentralized Identifier (DID) document that enables any party to verify Grantex-issued Verifiable Credentials without contacting the Grantex API. The DID document contains the public keys used to sign VCs and is hosted at a well-known URL following the `did:web` method.
+
+## did:web:grantex.dev
+
+The Grantex DID follows the [did:web method specification](https://w3c-ccg.github.io/did-method-web/). The DID `did:web:grantex.dev` resolves to:
+
+```
+https://grantex.dev/.well-known/did.json
+```
+
+On the auth service, the DID document is served at:
+
+```
+https://api.grantex.dev/.well-known/did.json
+```
+
+Both URLs return the same document. The endpoint is public and requires no authentication.
+
+## DID Document Structure
+
+```json
+{
+  "@context": [
+    "https://www.w3.org/ns/did/v1",
+    "https://w3id.org/security/suites/jws-2020/v1"
+  ],
+  "id": "did:web:grantex.dev",
+  "verificationMethod": [
+    {
+      "id": "did:web:grantex.dev#key-1",
+      "type": "JsonWebKey2020",
+      "controller": "did:web:grantex.dev",
+      "publicKeyJwk": {
+        "kty": "RSA",
+        "alg": "RS256",
+        "n": "...",
+        "e": "AQAB",
+        "kid": "key-1",
+        "use": "sig"
+      }
+    },
+    {
+      "id": "did:web:grantex.dev#key-2",
+      "type": "JsonWebKey2020",
+      "controller": "did:web:grantex.dev",
+      "publicKeyJwk": {
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": "...",
+        "kid": "key-2",
+        "use": "sig"
+      }
+    }
+  ],
+  "authentication": [
+    "did:web:grantex.dev#key-1"
+  ],
+  "assertionMethod": [
+    "did:web:grantex.dev#key-1",
+    "did:web:grantex.dev#key-2"
+  ],
+  "service": [
+    {
+      "id": "did:web:grantex.dev#grantex-api",
+      "type": "GrantexAuthService",
+      "serviceEndpoint": "https://api.grantex.dev"
+    },
+    {
+      "id": "did:web:grantex.dev#status-list",
+      "type": "StatusList2021Service",
+      "serviceEndpoint": "https://api.grantex.dev/v1/credentials/status"
+    }
+  ]
+}
+```
+
+## Verification Methods
+
+The DID document contains two verification methods:
+
+| Key | Algorithm | Purpose |
+|-----|-----------|---------|
+| `key-1` | RS256 (RSA) | Primary signing key for grant tokens and VCs. Same key published in the JWKS endpoint. |
+| `key-2` | Ed25519 | Secondary signing key for future use with EdDSA-based VCs. |
+
+### Relationship to JWKS
+
+The RS256 key in the DID document is the same key available via the JWKS endpoint (`/.well-known/jwks.json`). The two endpoints serve different ecosystems:
+
+| Endpoint | Format | Used by |
+|----------|--------|---------|
+| `/.well-known/jwks.json` | JSON Web Key Set | JWT libraries verifying grant tokens |
+| `/.well-known/did.json` | DID Document | VC libraries verifying Verifiable Credentials |
+
+Both resolve to the same underlying RSA key pair. If you are only verifying grant tokens (JWTs), use the JWKS endpoint. If you are verifying Verifiable Credentials, use the DID document.
+
+## How Verification Works
+
+When a verifier receives a Grantex-issued Verifiable Credential (VC-JWT), the verification process is:
+
+```
+  Verifier                                      Public Internet
+    │                                                 │
+    │── 1. Decode VC-JWT header ──────────────────────│
+    │   (extract "iss": "did:web:grantex.dev")        │
+    │                                                 │
+    │── 2. Resolve DID ──────────────────────────────►│
+    │   GET https://grantex.dev/.well-known/did.json  │
+    │◄── DID document with public keys ───────────────│
+    │                                                 │
+    │── 3. Extract matching key (by kid) ─────────────│
+    │                                                 │
+    │── 4. Verify JWT signature ──────────────────────│
+    │   (RS256 or Ed25519)                            │
+    │                                                 │
+    │── 5. Check credentialStatus ───────────────────►│
+    │   GET .../v1/credentials/status/:id             │
+    │◄── StatusList2021 bitstring ────────────────────│
+    │                                                 │
+    │── 6. Check bit at statusListIndex ──────────────│
+    │   (0 = active, 1 = revoked)                     │
+    │                                                 │
+    │── Verification complete ────────────────────────│
+```
+
+### Example: Verifying Without the Grantex SDK
+
+Any JWT library can verify Grantex VCs. Here is a minimal example using `jose` (TypeScript) and `PyJWT` (Python):
+
+<CodeGroup>
+```typescript TypeScript
+import * as jose from 'jose';
+
+// 1. Fetch the DID document
+const didDoc = await fetch('https://api.grantex.dev/.well-known/did.json')
+  .then(r => r.json());
+
+// 2. Extract the RS256 key
+const keyEntry = didDoc.verificationMethod.find(
+  (vm: any) => vm.publicKeyJwk.alg === 'RS256'
+);
+const publicKey = await jose.importJWK(keyEntry.publicKeyJwk, 'RS256');
+
+// 3. Verify the VC-JWT
+const { payload } = await jose.jwtVerify(vcJwt, publicKey, {
+  issuer: 'did:web:grantex.dev',
+});
+
+console.log(payload.vc.credentialSubject);
+// { id: 'did:grantex:ag_01...', scopes: ['calendar:read'], ... }
+
+// 4. Check revocation status
+const statusUrl = payload.vc.credentialStatus.statusListCredential;
+const statusList = await fetch(statusUrl).then(r => r.json());
+// Decode the bitstring and check the index
+```
+
+```python Python
+import jwt
+import requests
+
+# 1. Fetch the DID document
+did_doc = requests.get("https://api.grantex.dev/.well-known/did.json").json()
+
+# 2. Extract the RS256 key
+key_entry = next(
+    vm for vm in did_doc["verificationMethod"]
+    if vm["publicKeyJwk"].get("alg") == "RS256"
+)
+public_key = jwt.algorithms.RSAAlgorithm.from_jwk(key_entry["publicKeyJwk"])
+
+# 3. Verify the VC-JWT
+payload = jwt.decode(
+    vc_jwt,
+    public_key,
+    algorithms=["RS256"],
+    issuer="did:web:grantex.dev",
+)
+
+print(payload["vc"]["credentialSubject"])
+
+# 4. Check revocation status
+status_url = payload["vc"]["credentialStatus"]["statusListCredential"]
+status_list = requests.get(status_url).json()
+# Decode the bitstring and check the index
+```
+</CodeGroup>
+
+## Agent DIDs
+
+Every agent registered in Grantex receives a DID in the format `did:grantex:ag_XXXX`. This DID serves as the agent's cryptographic identity and appears in:
+
+- The `agt` claim of grant tokens
+- The `credentialSubject.id` field of Verifiable Credentials
+- Audit log entries
+
+Agent DIDs are issued by Grantex and are not self-sovereign. They identify the agent within the Grantex ecosystem and are resolvable via the Grantex API.
+
+## Service Endpoints
+
+The DID document declares two service endpoints:
+
+### GrantexAuthService
+
+The primary Grantex API endpoint. Verifiers can use this to access the token verification API, JWKS, and other endpoints.
+
+```json
+{
+  "id": "did:web:grantex.dev#grantex-api",
+  "type": "GrantexAuthService",
+  "serviceEndpoint": "https://api.grantex.dev"
+}
+```
+
+### StatusList2021Service
+
+The base URL for StatusList2021 credentials. Verifiers append the status list ID to check revocation.
+
+```json
+{
+  "id": "did:web:grantex.dev#status-list",
+  "type": "StatusList2021Service",
+  "serviceEndpoint": "https://api.grantex.dev/v1/credentials/status"
+}
+```
+
+## Self-Hosting
+
+When self-hosting Grantex, the DID document is served from your own domain. The `did:web` method resolves based on the domain in the DID string:
+
+| DID | Resolves to |
+|-----|-------------|
+| `did:web:grantex.dev` | `https://grantex.dev/.well-known/did.json` |
+| `did:web:auth.example.com` | `https://auth.example.com/.well-known/did.json` |
+
+Configure the `ISSUER_DID` environment variable in your auth service deployment to set the DID that appears in issued VCs. The auth service automatically generates the DID document from the signing key.
+
+## W3C Standards Alignment
+
+| Standard | Grantex Implementation |
+|----------|------------------------|
+| [DID Core v1.0](https://www.w3.org/TR/did-core/) | Full compliance for `did:web` method |
+| [did:web Method](https://w3c-ccg.github.io/did-method-web/) | `/.well-known/did.json` hosting |
+| [JsonWebKey2020](https://w3c-ccg.github.io/lds-jws2020/) | Verification method format |
+| [VC Data Model v2.0](https://www.w3.org/TR/vc-data-model-2.0/) | Credential issuance and verification |
+| [StatusList2021](https://www.w3.org/TR/vc-status-list/) | Revocation checking |
+
+## API Reference
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/.well-known/did.json` | None (public) | W3C DID document |
+| `GET` | `/.well-known/jwks.json` | None (public) | JSON Web Key Set (same RSA key) |
+| `GET` | `/v1/credentials/status/:id` | None (public) | StatusList2021 credential |
+
+## Next Steps
+
+- [Verifiable Credentials](/features/verifiable-credentials) -- issue and verify W3C VCs
+- [FIDO2 / WebAuthn](/features/fido-webauthn) -- human presence verification
+- [Grant Token](/concepts/grant-token) -- the standard JWT-based grant token
+- [Token Verification](/guides/token-verification) -- offline JWT verification via JWKS

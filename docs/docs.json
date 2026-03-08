@@ -47,6 +47,15 @@
             ]
           },
           {
+            "group": "Trust & Identity",
+            "pages": [
+              "features/fido-webauthn",
+              "features/verifiable-credentials",
+              "features/sd-jwt",
+              "features/did-infrastructure"
+            ]
+          },
+          {
             "group": "Guides",
             "pages": [
               "guides/rate-limits",
@@ -422,6 +431,32 @@
               "api-reference/consent/get-consent-request-details",
               "api-reference/consent/approve-consent-end-user-action",
               "api-reference/consent/deny-consent-end-user-action"
+            ]
+          },
+          {
+            "group": "WebAuthn / FIDO",
+            "pages": [
+              "api-reference/webauthn/generate-registration-options",
+              "api-reference/webauthn/verify-registration",
+              "api-reference/webauthn/list-credentials",
+              "api-reference/webauthn/delete-credential",
+              "api-reference/webauthn/generate-assertion-options",
+              "api-reference/webauthn/verify-assertion"
+            ]
+          },
+          {
+            "group": "Verifiable Credentials",
+            "pages": [
+              "api-reference/credentials/get-credential",
+              "api-reference/credentials/list-credentials",
+              "api-reference/credentials/verify-credential",
+              "api-reference/credentials/status-list"
+            ]
+          },
+          {
+            "group": "DID",
+            "pages": [
+              "api-reference/did/did-document"
             ]
           }
         ]

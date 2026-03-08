@@ -170,6 +170,21 @@ describe('POST /v1/budget/debit', () => {
 
     expect(res.statusCode).toBe(400);
   });
+
+  it('re-throws non-InsufficientBudgetError exceptions', async () => {
+    seedAuth();
+    // debitBudget's SQL call fails with a generic error
+    sqlMock.mockRejectedValueOnce(new Error('connection lost'));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/debit',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_1', amount: 10 },
+    });
+
+    expect(res.statusCode).toBe(500);
+  });
 });
 
 describe('GET /v1/budget/balance/:grantId', () => {
@@ -295,6 +310,75 @@ describe('POST /v1/budget/debit (threshold events)', () => {
     });
 
     expect(res.statusCode).toBe(200);
+  });
+
+  it('emits budget.threshold at 50% usage', async () => {
+    seedAuth();
+    // Debit UPDATE RETURNING — initial=100, remaining=50 → usedPct=50
+    sqlMock.mockResolvedValueOnce([{
+      id: 'bdg_thresh50',
+      grant_id: 'grnt_thresh50',
+      initial_budget: '100.0000',
+      remaining_budget: '50.0000',
+    }]);
+    // INSERT budget_transaction
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/debit',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_thresh50', amount: 50 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().remaining).toBe('50.0000');
+  });
+
+  it('emits budget.threshold at 80% usage', async () => {
+    seedAuth();
+    // Debit UPDATE RETURNING — initial=100, remaining=20 → usedPct=80
+    sqlMock.mockResolvedValueOnce([{
+      id: 'bdg_thresh80',
+      grant_id: 'grnt_thresh80',
+      initial_budget: '100.0000',
+      remaining_budget: '20.0000',
+    }]);
+    // INSERT budget_transaction
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/debit',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_thresh80', amount: 80 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().remaining).toBe('20.0000');
+  });
+
+  it('emits budget.exhausted when remaining hits 0', async () => {
+    seedAuth();
+    // Debit UPDATE RETURNING — initial=100, remaining=0 → exhausted
+    sqlMock.mockResolvedValueOnce([{
+      id: 'bdg_exhaust',
+      grant_id: 'grnt_exhaust',
+      initial_budget: '100.0000',
+      remaining_budget: '0.0000',
+    }]);
+    // INSERT budget_transaction
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/debit',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_exhaust', amount: 100 },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().remaining).toBe('0.0000');
   });
 });
 

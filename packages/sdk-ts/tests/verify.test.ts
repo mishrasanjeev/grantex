@@ -156,6 +156,41 @@ describe('verifyGrantToken', () => {
       expect.objectContaining({ audience: 'https://myapp.example.com' }),
     );
   });
+
+  it('resolves did:web issuerDid to JWKS URI', async () => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: VALID_PAYLOAD,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    const result = await verifyGrantToken('fake.token.here', {
+      jwksUri: 'https://fallback.example.com/.well-known/jwks.json',
+      issuerDid: 'did:web:grantex.dev',
+    });
+
+    // The DID should resolve to https://grantex.dev/.well-known/jwks.json
+    expect(jose.createRemoteJWKSet).toHaveBeenCalledWith(
+      new URL('https://grantex.dev/.well-known/jwks.json'),
+    );
+    expect(result.grantId).toBe('grant_01');
+  });
+
+  it('resolves did:web issuerDid with path segments', async () => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: VALID_PAYLOAD,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    await verifyGrantToken('fake.token.here', {
+      jwksUri: 'https://fallback.example.com/.well-known/jwks.json',
+      issuerDid: 'did:web:example.com:api:v1',
+    });
+
+    // Colons after the method-specific-id prefix become path separators
+    expect(jose.createRemoteJWKSet).toHaveBeenCalledWith(
+      new URL('https://example.com/api/v1/.well-known/jwks.json'),
+    );
+  });
 });
 
 describe('mapOnlineVerifyToVerifiedGrant', () => {

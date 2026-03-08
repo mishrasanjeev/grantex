@@ -19,7 +19,7 @@
 
 <br/>
 
-> **Status:** Production-ready. Protocol spec finalized (v1.0), auth service, TypeScript & Python SDKs, framework integrations (LangChain, AutoGen, CrewAI, Vercel AI), CLI, developer portal, [interactive playground](https://grantex.dev/playground), and enterprise features (policies, anomaly detection, compliance exports) — all shipped.
+> **Status:** Production-ready. Protocol spec finalized (v1.0), auth service, TypeScript & Python SDKs, framework integrations (LangChain, AutoGen, CrewAI, Vercel AI), CLI, developer portal, [interactive playground](https://grantex.dev/playground), enterprise features (policies, anomaly detection, compliance exports), and trust infrastructure (FIDO2/WebAuthn, W3C Verifiable Credentials, DID) — all shipped.
 
 ```bash
 npm install @grantex/sdk        # TypeScript / Node.js
@@ -312,6 +312,157 @@ delegated = grantex.grants.delegate(
 - Sub-agent scopes must be a strict subset of the parent's scopes — scope escalation is rejected with 400
 - Sub-agent token expiry is `min(parent expiry, requested expiry)` — sub-agents can never outlive their parent
 - Revoking a root grant cascades to all descendant grants atomically
+
+---
+
+## FIDO2 / WebAuthn
+
+Grantex supports passkey-based human presence verification using the FIDO2/WebAuthn standard. When enabled, end-users prove they are physically present during the consent flow by authenticating with a passkey (biometric, security key, or platform authenticator). This raises the assurance level of every grant from "user clicked approve" to "user was cryptographically verified."
+
+### How It Works
+
+1. **Developer enables FIDO** — Set `fidoRequired: true` on your developer profile via `PATCH /v1/me`
+2. **User registers a passkey** — During the first consent flow, the user registers a FIDO2 credential (fingerprint, Face ID, YubiKey, etc.)
+3. **User authenticates on consent** — On subsequent authorization requests, the user completes a WebAuthn assertion challenge instead of a simple button click
+4. **FIDO evidence embedded in grants** — The assertion result is recorded in the grant and can be embedded in Verifiable Credentials as cryptographic proof of human presence
+
+### SDK Usage
+
+```typescript
+// Enable FIDO for your developer account
+await grantex.updateSettings({ fidoRequired: true, fidoRpName: 'My App' });
+
+// Register a passkey for an end-user (called from the browser)
+const options = await grantex.webauthn.registerOptions({ principalId: 'user_abc123' });
+// Pass options to navigator.credentials.create() in the browser
+const credential = await navigator.credentials.create({ publicKey: options });
+await grantex.webauthn.registerVerify({ challengeId: options.challengeId, response: credential });
+
+// List and manage credentials
+const creds = await grantex.webauthn.listCredentials('user_abc123');
+await grantex.webauthn.deleteCredential(credentialId);
+```
+
+```python
+# Enable FIDO for your developer account
+client.update_settings(fido_required=True, fido_rp_name="My App")
+
+# Register a passkey (server-side portion)
+options = client.webauthn.register_options(principal_id="user_abc123")
+# Browser performs navigator.credentials.create() and sends response back
+result = client.webauthn.register_verify(challenge_id=options.challenge_id, response=credential_response)
+
+# List and manage credentials
+creds = client.webauthn.list_credentials("user_abc123")
+client.webauthn.delete_credential(credential_id)
+```
+
+### WebAuthn API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/webauthn/register/options` | Generate passkey registration options |
+| `POST` | `/v1/webauthn/register/verify` | Verify registration and store credential |
+| `GET` | `/v1/webauthn/credentials` | List WebAuthn credentials for a principal |
+| `DELETE` | `/v1/webauthn/credentials/:id` | Delete a credential |
+| `POST` | `/v1/webauthn/assert/options` | Generate assertion options for consent |
+| `POST` | `/v1/webauthn/assert/verify` | Verify assertion during consent |
+| `PATCH` | `/v1/me` | Update developer settings (FIDO config) |
+
+---
+
+## Verifiable Credentials
+
+Grantex can issue W3C Verifiable Credentials (VCs) alongside standard JWTs. While JWTs are optimized for real-time authorization, VCs provide a portable, tamper-proof, standards-compliant proof of authorization that can be presented to any verifier — including systems outside the Grantex ecosystem.
+
+### Why VCs Matter for Agents
+
+In agentic commerce, an agent acting on your behalf needs to prove its authorization to third-party services that may not integrate with Grantex directly. A Verifiable Credential is a self-contained, cryptographically signed document that any party can verify using the issuer's published DID document — no API calls, no accounts, no trust relationships required.
+
+### How It Works
+
+When exchanging an authorization code for a grant token, pass `credentialFormat: "vc-jwt"` to receive a Verifiable Credential alongside the standard grant token:
+
+```typescript
+const result = await grantex.tokens.exchange({
+  code,
+  agentId: agent.id,
+  credentialFormat: 'vc-jwt',   // opt-in to VC issuance
+});
+
+console.log(result.grantToken);         // standard RS256 JWT (unchanged)
+console.log(result.verifiableCredential); // W3C VC-JWT
+```
+
+```python
+result = client.tokens.exchange(ExchangeTokenParams(
+    code=code,
+    agent_id=agent.id,
+    credential_format="vc-jwt",
+))
+
+print(result.verifiable_credential)  # W3C VC-JWT
+```
+
+### Credential Types
+
+| Type | Description |
+|------|-------------|
+| `AgentGrantCredential` | Issued for direct grants — attests that a principal authorized an agent with specific scopes |
+| `DelegatedGrantCredential` | Issued for delegated grants — includes the full delegation chain |
+
+### Verifying a VC
+
+```typescript
+const verification = await grantex.credentials.verify(vcJwt);
+console.log(verification.valid);
+console.log(verification.credentialSubject);
+console.log(verification.issuer); // "did:web:grantex.dev"
+```
+
+```python
+verification = client.credentials.verify(vc_jwt)
+print(verification.valid)
+print(verification.credential_subject)
+```
+
+### Revocation via StatusList2021
+
+Grantex implements the W3C StatusList2021 revocation mechanism. Each credential references a status list entry. When a grant is revoked, the corresponding bit in the status list is flipped, and any verifier checking the credential sees it as revoked.
+
+```typescript
+// Check a specific credential's status
+const cred = await grantex.credentials.get(credentialId);
+console.log(cred.status); // "active" or "revoked"
+
+// List credentials with filters
+const { credentials } = await grantex.credentials.list({
+  grantId: 'grnt_01HXYZ...',
+  status: 'active',
+});
+```
+
+### FIDO Evidence in VCs
+
+When FIDO is enabled and the user completes a WebAuthn assertion during consent, the VC includes a `fidoEvidence` field that cryptographically proves human presence at the time of authorization. This is compatible with the Mastercard Verifiable Intent specification for agentic commerce.
+
+### DID Infrastructure
+
+Grantex publishes a W3C DID document at `/.well-known/did.json` (`did:web:grantex.dev`). This document contains the public keys used to sign Verifiable Credentials, enabling any party to verify credentials without contacting Grantex:
+
+```bash
+curl https://api.grantex.dev/.well-known/did.json
+```
+
+### Verifiable Credentials API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/credentials/:id` | Retrieve a Verifiable Credential |
+| `GET` | `/v1/credentials` | List Verifiable Credentials |
+| `POST` | `/v1/credentials/verify` | Verify a VC-JWT |
+| `GET` | `/v1/credentials/status/:id` | StatusList2021 credential |
+| `GET` | `/.well-known/did.json` | W3C DID document |
 
 ---
 
@@ -626,6 +777,7 @@ All milestones through v1.0 are complete. See [ROADMAP.md](https://github.com/mi
 | **v2.0 — Platform** | MCP Auth Server, Credential Vault, 7 new adapters, webhook delivery log, examples | ✅ Complete |
 | **v2.1 — Enterprise Scale** | Event streaming, budget controls, observability, Terraform provider, gateway, conformance | ✅ Complete |
 | **v2.2 — Ecosystem** | OPA/Cedar policy backends, A2A protocol bridge, usage metering, custom domains, policy-as-code | ✅ Complete |
+| **v2.3 — Trust & Identity** | FIDO2/WebAuthn passkeys, W3C Verifiable Credentials, DID infrastructure, StatusList2021 revocation, Mastercard Verifiable Intent | ✅ Complete |
 
 ---
 

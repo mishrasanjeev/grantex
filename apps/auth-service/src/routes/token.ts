@@ -8,11 +8,14 @@ import { withSpan } from '../lib/tracing.js';
 import { GRANTEX_AGENT_ID, GRANTEX_GRANT_ID, GRANTEX_PRINCIPAL_ID, GRANTEX_SCOPES, GRANTEX_DEVELOPER_ID } from '../lib/traceAttributes.js';
 import { verifyPkceChallenge } from '../lib/pkce.js';
 import { incrementUsage } from '../lib/usage.js';
+import { issueAgentGrantVC } from '../lib/vc.js';
+import { issueSDJWT } from '../lib/sd-jwt.js';
 
 interface TokenBody {
   code: string;
   agentId: string;
   codeVerifier?: string;
+  credentialFormat?: 'jwt' | 'vc-jwt' | 'sd-jwt' | 'both';
 }
 
 interface RefreshBody {
@@ -141,6 +144,45 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       exp: expTimestamp,
     }));
 
+    // VC-JWT issuance (optional)
+    let verifiableCredential: string | undefined;
+    const { credentialFormat } = request.body;
+    if (credentialFormat === 'vc-jwt' || credentialFormat === 'both') {
+      try {
+        const vcResult = await issueAgentGrantVC({
+          grantId,
+          agentDid: authReq['agent_did'] as string,
+          principalId: authReq['principal_id'] as string,
+          developerId,
+          scopes: authReq['scopes'] as string[],
+          expiresAt,
+        });
+        verifiableCredential = vcResult.vcJwt;
+        emitEvent(developerId, 'vc.issued', { vcId: vcResult.vcId, grantId }).catch(() => {});
+      } catch {
+        // Best-effort — don't fail the token exchange if VC issuance fails
+      }
+    }
+
+    // SD-JWT issuance (optional)
+    let sdJwtCredential: string | undefined;
+    if (credentialFormat === 'sd-jwt') {
+      try {
+        const sdResult = await issueSDJWT({
+          grantId,
+          agentDid: authReq['agent_did'] as string,
+          principalId: authReq['principal_id'] as string,
+          developerId,
+          scopes: authReq['scopes'] as string[],
+          expiresAt,
+        });
+        sdJwtCredential = sdResult.sdJwt;
+        emitEvent(developerId, 'sd-jwt.issued', { vcId: sdResult.vcId, grantId }).catch(() => {});
+      } catch {
+        // Best-effort — don't fail the token exchange if SD-JWT issuance fails
+      }
+    }
+
     // Emit events (best-effort, non-blocking)
     const eventData = {
       grantId,
@@ -164,6 +206,8 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       scopes: authReq['scopes'] as string[],
       refreshToken: refreshId,
       grantId,
+      ...(verifiableCredential !== undefined ? { verifiableCredential } : {}),
+      ...(sdJwtCredential !== undefined ? { sdJwtCredential } : {}),
     });
   });
 

@@ -4,12 +4,14 @@ import { getRedis } from '../redis/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { decodeTokenClaims, signGrantToken, parseExpiresIn } from '../lib/crypto.js';
 import { emitEvent } from '../lib/events.js';
+import { issueAgentGrantVC } from '../lib/vc.js';
 
 interface DelegateBody {
   parentGrantToken: string;
   subAgentId: string;
   scopes: string[];
   expiresIn?: string;
+  credentialFormat?: 'jwt' | 'vc-jwt' | 'both';
 }
 
 export async function delegateRoutes(app: FastifyInstance): Promise<void> {
@@ -132,6 +134,27 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       delegationDepth,
     });
 
+    // VC-JWT issuance (optional)
+    let verifiableCredential: string | undefined;
+    const { credentialFormat } = request.body;
+    if (credentialFormat === 'vc-jwt' || credentialFormat === 'both') {
+      try {
+        const vcResult = await issueAgentGrantVC({
+          grantId,
+          agentDid: subAgent['did'] as string,
+          principalId: parentClaims['sub'] as string,
+          developerId,
+          scopes,
+          expiresAt,
+          delegationDepth,
+        });
+        verifiableCredential = vcResult.vcJwt;
+        emitEvent(developerId, 'vc.issued', { vcId: vcResult.vcId, grantId }).catch(() => {});
+      } catch {
+        // Best-effort — don't fail delegation if VC issuance fails
+      }
+    }
+
     // Emit events (best-effort, non-blocking)
     emitEvent(developerId, 'grant.created', {
       grantId,
@@ -156,6 +179,7 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       expiresAt: expiresAt.toISOString(),
       scopes,
       grantId,
+      ...(verifiableCredential !== undefined ? { verifiableCredential } : {}),
     });
   });
 }

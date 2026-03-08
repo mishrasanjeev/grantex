@@ -1,0 +1,198 @@
+---
+title: "SD-JWT (Selective Disclosure)"
+sidebarTitle: "SD-JWT"
+description: "Selective Disclosure JWTs let agents present only the claims needed for a given transaction, enabling privacy-preserving authorization and Verifiable Intent compatibility."
+---
+
+## Overview
+
+SD-JWT (Selective Disclosure JWT) extends Grantex's Verifiable Credential support with privacy-preserving selective disclosure. Instead of revealing all credential claims to every verifier, agents can choose which fields to disclose per interaction.
+
+<Info>
+SD-JWT builds on the existing VC-JWT infrastructure. Pass `credentialFormat: "sd-jwt"` during token exchange to receive an SD-JWT instead of a standard VC-JWT.
+</Info>
+
+## Why Selective Disclosure?
+
+In agentic commerce, an agent may interact with many services, each needing different information:
+
+- A payment processor needs to verify budget authorization, but doesn't need the principal's identity
+- A content API needs to verify scopes, but doesn't need to know the developer
+- A compliance auditor needs full disclosure of all claims
+
+SD-JWT lets the agent present a tailored credential for each interaction, revealing only what's necessary. This follows the principle of minimal disclosure and aligns with privacy regulations like GDPR.
+
+## How It Works
+
+### SD-JWT Format
+
+An SD-JWT consists of three parts separated by `~`:
+
+```
+<issuer-jwt>~<disclosure1>~<disclosure2>~...~
+```
+
+- **Issuer JWT**: A standard JWT containing visible claims and SHA-256 hashes of selective claims in a `_sd` array
+- **Disclosures**: Base64url-encoded JSON arrays of `[salt, claim_name, claim_value]`
+- **Trailing `~`**: Indicates the end of disclosures
+
+### Issuance Flow
+
+```typescript
+// Request an SD-JWT during token exchange
+const result = await grantex.tokens.exchange({
+  code: authCode,
+  agentId: 'ag_01ABC',
+  credentialFormat: 'sd-jwt',
+});
+
+// result.sdJwtCredential contains the full SD-JWT
+```
+
+### Presentation Flow
+
+When presenting to a verifier, the agent selects which fields to reveal:
+
+```typescript
+// Present only the scopes and grantId (omitting principalId, developerId)
+const result = await grantex.credentials.present({
+  sdJwt: sdJwtCredential,
+  nonce: 'verifier-nonce-123',
+  audience: 'https://api.merchant.com',
+});
+
+// result.disclosedClaims contains only the revealed fields
+```
+
+### Verification
+
+Any party can verify an SD-JWT presentation:
+
+```typescript
+const verification = await grantex.credentials.present({
+  sdJwt: presentedSdJwt,
+});
+
+if (verification.valid) {
+  console.log('Disclosed claims:', verification.disclosedClaims);
+  // Only contains the fields the holder chose to reveal
+}
+```
+
+## Default Selective Fields
+
+By default, the following credential subject fields are selectively disclosable:
+
+| Field | Description | Always visible? |
+|-------|-------------|-----------------|
+| `id` (agentDid) | Agent's DID identifier | Yes |
+| `type` | Credential type (`AIAgent`) | Yes |
+| `grantId` | Grant record ID | Yes |
+| `principalId` | End-user who authorized | No (selective) |
+| `developerId` | Developer organization | No (selective) |
+| `scopes` | Authorized scopes | No (selective) |
+| `delegationDepth` | Delegation chain depth | No (selective) |
+
+## Verifiable Intent Compatibility
+
+SD-JWT enables Grantex credentials to be compatible with Verifiable Intent frameworks like the Mastercard model. By selectively disclosing only the fields relevant to a specific transaction, agents can:
+
+1. **Prove authorization** without revealing identity
+2. **Demonstrate scope** without exposing the full grant
+3. **Verify delegation chains** without leaking organizational structure
+
+## SDK Support
+
+### TypeScript
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_live_...' });
+
+// Issue SD-JWT
+const exchange = await grantex.tokens.exchange({
+  code: authCode,
+  agentId: agentId,
+  credentialFormat: 'sd-jwt',
+});
+
+// Verify presentation
+const result = await grantex.credentials.present({
+  sdJwt: exchange.sdJwtCredential!,
+  nonce: 'verifier-nonce',
+});
+```
+
+### Python
+
+```python
+from grantex import Grantex, SDJWTPresentParams
+
+grantex = Grantex(api_key="gx_live_...")
+
+# Verify an SD-JWT presentation
+result = grantex.credentials.present(
+    SDJWTPresentParams(
+        sd_jwt=sd_jwt_string,
+        nonce="verifier-nonce",
+    )
+)
+
+if result.valid:
+    print(result.disclosed_claims)
+```
+
+## API Reference
+
+### Token Exchange with SD-JWT
+
+```http
+POST /v1/token
+Content-Type: application/json
+Authorization: Bearer gx_live_...
+
+{
+  "code": "auth-code",
+  "agentId": "ag_01ABC",
+  "credentialFormat": "sd-jwt"
+}
+```
+
+Response includes `sdJwtCredential` alongside the standard `grantToken`.
+
+### Verify SD-JWT Presentation
+
+```http
+POST /v1/credentials/present
+Content-Type: application/json
+
+{
+  "sdJwt": "<issuer-jwt>~<disc1>~<disc2>~",
+  "nonce": "optional-verifier-nonce",
+  "audience": "optional-audience"
+}
+```
+
+**Response:**
+
+```json
+{
+  "valid": true,
+  "vcId": "vc_01ABC...",
+  "disclosedClaims": {
+    "id": "did:grantex:ag_01ABC",
+    "type": "AIAgent",
+    "grantId": "grnt_01ABC",
+    "scopes": ["read", "write"]
+  }
+}
+```
+
+## Security Considerations
+
+- Disclosures are salted with 128-bit cryptographic random values to prevent correlation attacks
+- The `_sd` array contains SHA-256 hashes that bind disclosures to the issuer JWT
+- Tampered or fabricated disclosures are detected by hash mismatch
+- The issuer JWT signature covers the `_sd` array, preventing hash substitution
+- SD-JWT verification requires the same public key infrastructure as VC-JWT (Grantex JWKS/DID)

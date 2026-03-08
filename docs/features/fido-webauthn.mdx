@@ -1,0 +1,320 @@
+---
+title: "FIDO2 / WebAuthn"
+sidebarTitle: "FIDO2 / WebAuthn"
+description: "Passkey-based human presence verification for agent authorization. Cryptographic proof that a real human approved the grant."
+---
+
+## Overview
+
+Grantex supports FIDO2/WebAuthn passkeys as a human presence verification mechanism during the consent flow. When enabled, end-users authenticate with a biometric, security key, or platform authenticator before a grant is issued. This raises the assurance level from "user clicked approve" to "user was cryptographically verified by their device."
+
+FIDO is opt-in per developer. When `fidoRequired` is set to `true`, all authorization requests for that developer require a WebAuthn assertion before the grant is approved.
+
+## Why FIDO for Agents?
+
+Standard consent flows rely on a button click in a browser. This is vulnerable to session hijacking, UI redressing, and automated approval. A FIDO assertion proves that:
+
+1. The specific device registered by the user is present
+2. The user completed a biometric or physical authentication
+3. The assertion is bound to the specific challenge issued by Grantex
+
+For high-value agent operations (payments, data access, contract signing), this level of assurance is required by emerging standards like the Mastercard Verifiable Intent specification.
+
+## Developer Setup
+
+Enable FIDO for your account using the SDK or REST API:
+
+<CodeGroup>
+```typescript TypeScript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+await grantex.updateSettings({
+  fidoRequired: true,
+  fidoRpName: 'My Application',  // displayed in browser passkey prompts
+});
+```
+
+```python Python
+from grantex import Grantex
+
+client = Grantex(api_key="gx_...")
+
+client.update_settings(
+    fido_required=True,
+    fido_rp_name="My Application",
+)
+```
+
+```bash cURL
+curl -X PATCH https://api.grantex.dev/v1/me \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"fidoRequired": true, "fidoRpName": "My Application"}'
+```
+</CodeGroup>
+
+<ParamField body="fidoRequired" type="boolean" default="false">
+  When `true`, all authorization requests for this developer require a WebAuthn assertion before the grant is approved.
+</ParamField>
+
+<ParamField body="fidoRpName" type="string">
+  The Relying Party name displayed in the browser's passkey prompt. Typically your application name.
+</ParamField>
+
+## Registration Ceremony
+
+Before a user can authenticate with FIDO, they must register a passkey. This is a one-time process per user per device.
+
+```
+  Browser                          Your Server                     Grantex
+    │                                  │                              │
+    │                                  │─── registerOptions() ───────►│
+    │                                  │◄── challenge + options ──────│
+    │◄── publicKey options ────────────│                              │
+    │                                  │                              │
+    │── navigator.credentials.create() │                              │
+    │── (user touches fingerprint) ────│                              │
+    │                                  │                              │
+    │── attestation response ─────────►│                              │
+    │                                  │─── registerVerify() ────────►│
+    │                                  │◄── credential stored ────────│
+    │◄── success ──────────────────────│                              │
+```
+
+### Step 1: Get Registration Options
+
+<CodeGroup>
+```typescript TypeScript
+const options = await grantex.webauthn.registerOptions({
+  principalId: 'user_abc123',
+});
+
+// options contains:
+// - challengeId: string (server-side reference)
+// - rp: { name, id }
+// - user: { id, name, displayName }
+// - pubKeyCredParams: [{ type: 'public-key', alg: -7 }, ...]
+// - authenticatorSelection: { userVerification: 'required' }
+// - timeout: 60000
+// - challenge: base64url-encoded
+```
+
+```python Python
+options = client.webauthn.register_options(principal_id="user_abc123")
+# Returns WebAuthnRegisterOptions with challengeId, rp, user, etc.
+```
+</CodeGroup>
+
+### Step 2: Create Credential in Browser
+
+Pass the options to the browser's WebAuthn API:
+
+```javascript
+// In the browser
+const credential = await navigator.credentials.create({
+  publicKey: {
+    challenge: base64urlToBuffer(options.challenge),
+    rp: options.rp,
+    user: {
+      id: base64urlToBuffer(options.user.id),
+      name: options.user.name,
+      displayName: options.user.displayName,
+    },
+    pubKeyCredParams: options.pubKeyCredParams,
+    authenticatorSelection: options.authenticatorSelection,
+    timeout: options.timeout,
+  },
+});
+```
+
+### Step 3: Verify and Store
+
+Send the credential response back to your server and forward it to Grantex:
+
+<CodeGroup>
+```typescript TypeScript
+await grantex.webauthn.registerVerify({
+  challengeId: options.challengeId,
+  response: {
+    id: credential.id,
+    rawId: bufferToBase64url(credential.rawId),
+    type: credential.type,
+    response: {
+      clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
+      attestationObject: bufferToBase64url(credential.response.attestationObject),
+    },
+  },
+});
+```
+
+```python Python
+client.webauthn.register_verify(
+    challenge_id=options.challenge_id,
+    response={
+        "id": credential_id,
+        "rawId": raw_id_b64,
+        "type": "public-key",
+        "response": {
+            "clientDataJSON": client_data_b64,
+            "attestationObject": attestation_b64,
+        },
+    },
+)
+```
+</CodeGroup>
+
+## Assertion Ceremony (Consent Flow)
+
+When FIDO is enabled, the consent flow includes a WebAuthn assertion challenge. This happens automatically in the hosted consent UI, but you can also drive it programmatically.
+
+```
+  Browser                          Grantex Consent UI              Grantex
+    │                                  │                              │
+    │── user opens consent URL ───────►│                              │
+    │                                  │── assertOptions() ──────────►│
+    │                                  │◄── challenge ────────────────│
+    │◄── publicKey get options ────────│                              │
+    │                                  │                              │
+    │── navigator.credentials.get() ──►│                              │
+    │── (user touches fingerprint) ────│                              │
+    │                                  │                              │
+    │── assertion response ───────────►│                              │
+    │                                  │── assertVerify() ───────────►│
+    │                                  │◄── grant approved ───────────│
+    │◄── redirect to callback ─────────│                              │
+```
+
+### Programmatic Assertion
+
+If you build a custom consent UI, use the assertion endpoints directly:
+
+<CodeGroup>
+```typescript TypeScript
+// Get assertion options
+const assertOpts = await grantex.webauthn.assertOptions({
+  principalId: 'user_abc123',
+  authRequestId: 'areq_01HXYZ...',
+});
+
+// Browser performs navigator.credentials.get()
+const assertion = await navigator.credentials.get({
+  publicKey: {
+    challenge: base64urlToBuffer(assertOpts.challenge),
+    allowCredentials: assertOpts.allowCredentials,
+    userVerification: 'required',
+    timeout: 60000,
+  },
+});
+
+// Verify the assertion and approve the grant
+await grantex.webauthn.assertVerify({
+  challengeId: assertOpts.challengeId,
+  response: {
+    id: assertion.id,
+    rawId: bufferToBase64url(assertion.rawId),
+    type: assertion.type,
+    response: {
+      clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+      authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+      signature: bufferToBase64url(assertion.response.signature),
+    },
+  },
+});
+```
+
+```python Python
+# Get assertion options
+assert_opts = client.webauthn.assert_options(
+    principal_id="user_abc123",
+    auth_request_id="areq_01HXYZ...",
+)
+
+# After browser performs navigator.credentials.get()
+client.webauthn.assert_verify(
+    challenge_id=assert_opts.challenge_id,
+    response={
+        "id": assertion_id,
+        "rawId": raw_id_b64,
+        "type": "public-key",
+        "response": {
+            "clientDataJSON": client_data_b64,
+            "authenticatorData": auth_data_b64,
+            "signature": signature_b64,
+        },
+    },
+)
+```
+</CodeGroup>
+
+## Managing Credentials
+
+Users can have multiple passkeys registered (e.g., laptop fingerprint + phone + YubiKey). Use the credentials endpoints to list and delete them.
+
+<CodeGroup>
+```typescript TypeScript
+// List all credentials for a user
+const credentials = await grantex.webauthn.listCredentials('user_abc123');
+for (const cred of credentials) {
+  console.log(cred.id, cred.createdAt, cred.lastUsedAt);
+}
+
+// Delete a credential
+await grantex.webauthn.deleteCredential('cred_01HXYZ...');
+```
+
+```python Python
+# List all credentials for a user
+credentials = client.webauthn.list_credentials("user_abc123")
+for cred in credentials:
+    print(cred.id, cred.created_at, cred.last_used_at)
+
+# Delete a credential
+client.webauthn.delete_credential("cred_01HXYZ...")
+```
+</CodeGroup>
+
+## FIDO Evidence in Grants
+
+When a grant is approved via FIDO assertion, the grant record includes FIDO evidence metadata:
+
+```json
+{
+  "grantId": "grnt_01HXYZ...",
+  "fidoEvidence": {
+    "credentialId": "cred_01HXYZ...",
+    "authenticatorType": "platform",
+    "userVerified": true,
+    "assertedAt": "2026-03-08T12:00:00Z"
+  }
+}
+```
+
+This evidence is also embedded in Verifiable Credentials when `credentialFormat: "vc-jwt"` is used during token exchange. See [Verifiable Credentials](/features/verifiable-credentials) for details.
+
+## API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/webauthn/register/options` | Generate passkey registration options |
+| `POST` | `/v1/webauthn/register/verify` | Verify registration and store credential |
+| `GET` | `/v1/webauthn/credentials` | List WebAuthn credentials for a principal |
+| `DELETE` | `/v1/webauthn/credentials/:id` | Delete a credential |
+| `POST` | `/v1/webauthn/assert/options` | Generate assertion options for consent |
+| `POST` | `/v1/webauthn/assert/verify` | Verify assertion during consent |
+| `PATCH` | `/v1/me` | Update developer settings (FIDO config) |
+
+## Security Considerations
+
+- **User verification required**: All FIDO operations set `userVerification: "required"`, ensuring the authenticator performs biometric or PIN verification. `"discouraged"` or `"preferred"` are not accepted.
+- **Challenge expiry**: Registration and assertion challenges expire after 5 minutes. Replaying an expired challenge returns a 400 error.
+- **Credential binding**: Each credential is bound to a specific principal and developer. A credential registered for one developer's consent flow cannot be used for another.
+- **Attestation**: Grantex accepts `"none"`, `"indirect"`, and `"direct"` attestation conveyance. Attestation statements are stored but not currently used for trust decisions.
+- **Fallback behavior**: If FIDO is enabled but the user has no registered credentials, the consent flow prompts them to register a passkey before proceeding.
+
+## Next Steps
+
+- [Verifiable Credentials](/features/verifiable-credentials) -- FIDO evidence embedded in W3C VCs
+- [DID Infrastructure](/features/did-infrastructure) -- how verifiers resolve Grantex's signing keys
+- [End-User Permissions](/guides/end-user-permissions) -- user-facing permission dashboard

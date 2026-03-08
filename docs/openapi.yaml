@@ -64,6 +64,12 @@ tags:
     description: OIDC single sign-on configuration and flow
   - name: Principal Sessions
     description: End-user permission management via short-lived session tokens
+  - name: WebAuthn
+    description: FIDO2/WebAuthn passkey registration, assertion, and credential management
+  - name: Verifiable Credentials
+    description: W3C Verifiable Credential issuance, verification, and StatusList2021 revocation
+  - name: DID
+    description: W3C Decentralized Identifier (DID) document for credential verification
 
 components:
   securitySchemes:
@@ -439,6 +445,37 @@ paths:
                 $ref: "#/components/schemas/Developer"
         "404":
           description: Developer not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    patch:
+      operationId: updateSettings
+      tags: [Authentication]
+      summary: Update developer settings
+      description: Update developer profile settings including FIDO/WebAuthn configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fidoRequired:
+                  type: boolean
+                  description: Require FIDO2/WebAuthn assertion for all authorization requests
+                fidoRpName:
+                  type: string
+                  description: Relying Party name displayed in browser passkey prompts
+      responses:
+        "200":
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Developer"
+        "400":
+          description: Validation error
           content:
             application/json:
               schema:
@@ -948,6 +985,12 @@ paths:
                 codeVerifier:
                   type: string
                   description: PKCE code verifier (required if code_challenge was used)
+                credentialFormat:
+                  type: string
+                  enum: [vc-jwt]
+                  description: |
+                    When set to "vc-jwt", a W3C Verifiable Credential (VC-JWT) is issued alongside the
+                    standard grant token. The VC is a portable, tamper-proof proof of authorization.
               required: [code, agentId]
       responses:
         "201":
@@ -971,6 +1014,9 @@ paths:
                     type: string
                   grantId:
                     type: string
+                  verifiableCredential:
+                    type: string
+                    description: W3C VC-JWT (present when credentialFormat is "vc-jwt")
         "400":
           description: Invalid code, not approved, expired, or PKCE mismatch
           content:
@@ -2873,3 +2919,569 @@ paths:
             text/html:
               schema:
                 type: string
+
+  # ── WebAuthn / FIDO ──────────────────────────────────────────────────
+  /v1/webauthn/register/options:
+    post:
+      operationId: webauthnRegisterOptions
+      tags: [WebAuthn]
+      summary: Generate registration options
+      description: |
+        Generate FIDO2/WebAuthn registration options for a principal. Returns a challenge and
+        PublicKeyCredentialCreationOptions that the browser passes to navigator.credentials.create().
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [principalId]
+              properties:
+                principalId:
+                  type: string
+                  description: The end-user's principal ID
+                  example: user_abc123
+      responses:
+        "200":
+          description: Registration options
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challengeId:
+                    type: string
+                    description: Server-side challenge reference
+                  challenge:
+                    type: string
+                    description: Base64url-encoded challenge
+                  rp:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      id:
+                        type: string
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      name:
+                        type: string
+                      displayName:
+                        type: string
+                  pubKeyCredParams:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                        alg:
+                          type: integer
+                  authenticatorSelection:
+                    type: object
+                    properties:
+                      userVerification:
+                        type: string
+                        enum: [required]
+                  timeout:
+                    type: integer
+        "400":
+          description: Missing principalId
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/webauthn/register/verify:
+    post:
+      operationId: webauthnRegisterVerify
+      tags: [WebAuthn]
+      summary: Verify registration
+      description: |
+        Verify the attestation response from navigator.credentials.create() and store the credential.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeId, response]
+              properties:
+                challengeId:
+                  type: string
+                  description: The challengeId from registerOptions
+                response:
+                  type: object
+                  description: The credential response from the browser
+                  properties:
+                    id:
+                      type: string
+                    rawId:
+                      type: string
+                    type:
+                      type: string
+                    response:
+                      type: object
+                      properties:
+                        clientDataJSON:
+                          type: string
+                        attestationObject:
+                          type: string
+      responses:
+        "201":
+          description: Credential registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  credentialId:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Invalid challenge or attestation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/webauthn/credentials:
+    get:
+      operationId: listWebAuthnCredentials
+      tags: [WebAuthn]
+      summary: List WebAuthn credentials
+      description: List all registered FIDO2 credentials for a principal.
+      parameters:
+        - name: principalId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The principal ID to list credentials for
+      responses:
+        "200":
+          description: List of credentials
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    principalId:
+                      type: string
+                    authenticatorType:
+                      type: string
+                    createdAt:
+                      type: string
+                      format: date-time
+                    lastUsedAt:
+                      type: string
+                      format: date-time
+
+  /v1/webauthn/credentials/{id}:
+    delete:
+      operationId: deleteWebAuthnCredential
+      tags: [WebAuthn]
+      summary: Delete a credential
+      description: Remove a registered FIDO2 credential.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Credential ID
+      responses:
+        "204":
+          description: Credential deleted
+        "404":
+          description: Credential not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/webauthn/assert/options:
+    post:
+      operationId: webauthnAssertOptions
+      tags: [WebAuthn]
+      summary: Generate assertion options
+      description: |
+        Generate FIDO2/WebAuthn assertion options for the consent flow. Returns a challenge and
+        PublicKeyCredentialRequestOptions that the browser passes to navigator.credentials.get().
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [principalId, authRequestId]
+              properties:
+                principalId:
+                  type: string
+                  description: The end-user's principal ID
+                authRequestId:
+                  type: string
+                  description: The authorization request ID this assertion is for
+      responses:
+        "200":
+          description: Assertion options
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challengeId:
+                    type: string
+                  challenge:
+                    type: string
+                  allowCredentials:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        type:
+                          type: string
+                  userVerification:
+                    type: string
+                    enum: [required]
+                  timeout:
+                    type: integer
+        "400":
+          description: Missing parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No credentials registered for this principal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/webauthn/assert/verify:
+    post:
+      operationId: webauthnAssertVerify
+      tags: [WebAuthn]
+      summary: Verify assertion
+      description: |
+        Verify the assertion response from navigator.credentials.get(). On success, the associated
+        authorization request is approved with FIDO evidence attached to the grant.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeId, response]
+              properties:
+                challengeId:
+                  type: string
+                response:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    rawId:
+                      type: string
+                    type:
+                      type: string
+                    response:
+                      type: object
+                      properties:
+                        clientDataJSON:
+                          type: string
+                        authenticatorData:
+                          type: string
+                        signature:
+                          type: string
+      responses:
+        "200":
+          description: Assertion verified, grant approved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verified:
+                    type: boolean
+                  grantId:
+                    type: string
+                  fidoEvidence:
+                    type: object
+                    properties:
+                      credentialId:
+                        type: string
+                      authenticatorType:
+                        type: string
+                      userVerified:
+                        type: boolean
+                      assertedAt:
+                        type: string
+                        format: date-time
+        "400":
+          description: Invalid assertion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Verifiable Credentials ──────────────────────────────────────────
+  /v1/credentials/{id}:
+    get:
+      operationId: getCredential
+      tags: [Verifiable Credentials]
+      summary: Retrieve a Verifiable Credential
+      description: Get a specific Verifiable Credential by ID.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Credential ID
+      responses:
+        "200":
+          description: Verifiable Credential
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  grantId:
+                    type: string
+                  type:
+                    type: string
+                    enum: [AgentGrantCredential, DelegatedGrantCredential]
+                  vcJwt:
+                    type: string
+                    description: The VC-JWT string
+                  status:
+                    type: string
+                    enum: [active, revoked]
+                  issuedAt:
+                    type: string
+                    format: date-time
+                  expiresAt:
+                    type: string
+                    format: date-time
+        "404":
+          description: Credential not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/credentials:
+    get:
+      operationId: listCredentials
+      tags: [Verifiable Credentials]
+      summary: List Verifiable Credentials
+      description: List credentials with optional filters.
+      parameters:
+        - name: grantId
+          in: query
+          schema:
+            type: string
+          description: Filter by grant ID
+        - name: principalId
+          in: query
+          schema:
+            type: string
+          description: Filter by principal ID
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, revoked]
+          description: Filter by status
+      responses:
+        "200":
+          description: List of credentials
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  credentials:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        grantId:
+                          type: string
+                        type:
+                          type: string
+                        status:
+                          type: string
+                        issuedAt:
+                          type: string
+                          format: date-time
+                        expiresAt:
+                          type: string
+                          format: date-time
+
+  /v1/credentials/verify:
+    post:
+      operationId: verifyCredential
+      tags: [Verifiable Credentials]
+      summary: Verify a VC-JWT
+      description: |
+        Verify a Verifiable Credential JWT. Checks the signature against the issuer's DID document,
+        validates expiry, and checks the StatusList2021 revocation status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vcJwt]
+              properties:
+                vcJwt:
+                  type: string
+                  description: The VC-JWT to verify
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  issuer:
+                    type: string
+                  credentialSubject:
+                    type: object
+                  status:
+                    type: string
+                    enum: [active, revoked]
+                  reason:
+                    type: string
+                    description: Present when valid is false
+
+  /v1/credentials/status/{id}:
+    get:
+      operationId: getStatusList
+      tags: [Verifiable Credentials]
+      summary: StatusList2021 credential
+      description: |
+        Public endpoint returning a StatusList2021 credential (bitstring-based revocation list).
+        No authentication required.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Status list ID
+      responses:
+        "200":
+          description: StatusList2021 credential
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  "@context":
+                    type: array
+                    items:
+                      type: string
+                  type:
+                    type: array
+                    items:
+                      type: string
+                  issuer:
+                    type: string
+                  issuanceDate:
+                    type: string
+                    format: date-time
+                  credentialSubject:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      type:
+                        type: string
+                      statusPurpose:
+                        type: string
+                      encodedList:
+                        type: string
+                        description: Base64-encoded bitstring
+        "404":
+          description: Status list not found
+
+  # ── DID ──────────────────────────────────────────────────────────────
+  /.well-known/did.json:
+    get:
+      operationId: getDidDocument
+      tags: [DID]
+      summary: W3C DID document
+      description: |
+        Public DID document for did:web:grantex.dev. Contains verification methods (public keys)
+        used to sign Verifiable Credentials. No authentication required.
+      security: []
+      responses:
+        "200":
+          description: DID document
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  "@context":
+                    type: array
+                    items:
+                      type: string
+                  id:
+                    type: string
+                    example: "did:web:grantex.dev"
+                  verificationMethod:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        type:
+                          type: string
+                        controller:
+                          type: string
+                        publicKeyJwk:
+                          type: object
+                  authentication:
+                    type: array
+                    items:
+                      type: string
+                  assertionMethod:
+                    type: array
+                    items:
+                      type: string
+                  service:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        type:
+                          type: string
+                        serviceEndpoint:
+                          type: string

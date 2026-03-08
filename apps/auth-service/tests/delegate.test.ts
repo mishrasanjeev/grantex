@@ -137,6 +137,54 @@ describe('POST /v1/grants/delegate', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('returns 400 when parentGrantToken is not a valid JWT', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/delegate',
+      headers: authHeader(),
+      payload: {
+        parentGrantToken: 'not-a-valid-jwt',
+        subAgentId: SUB_AGENT.id,
+        scopes: ['read'],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json<{ message: string; code: string }>();
+    expect(body.message).toBe('Invalid parentGrantToken');
+    expect(body.code).toBe('BAD_REQUEST');
+  });
+
+  it('returns 400 when parentGrantToken is missing required claims (jti)', async () => {
+    seedAuth();
+
+    // Create a JWT without jti (and without grnt, scp, exp)
+    const { SignJWT: JoseSignJWT } = await import('jose');
+    const { getKeyPair } = await import('../src/lib/crypto.js');
+    const { privateKey } = getKeyPair();
+    const invalidToken = await new JoseSignJWT({ sub: 'user_123', agt: 'did:test:agent' })
+      .setProtectedHeader({ alg: 'RS256' })
+      .sign(privateKey);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/delegate',
+      headers: authHeader(),
+      payload: {
+        parentGrantToken: invalidToken,
+        subAgentId: SUB_AGENT.id,
+        scopes: ['read'],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json<{ message: string; code: string }>();
+    expect(body.message).toBe('Invalid parentGrantToken claims');
+    expect(body.code).toBe('BAD_REQUEST');
+  });
+
   it('returns 400 when required fields are missing', async () => {
     seedAuth();
 
@@ -148,5 +196,156 @@ describe('POST /v1/grants/delegate', () => {
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  it('includes verifiableCredential when credentialFormat is vc-jwt', async () => {
+    seedAuth();
+    mockRedis.get.mockResolvedValue(null);
+    // Sub-agent lookup
+    sqlMock.mockResolvedValueOnce([SUB_AGENT]);
+    // INSERT grants
+    sqlMock.mockResolvedValueOnce([]);
+    // INSERT grant_tokens
+    sqlMock.mockResolvedValueOnce([]);
+    // INSERT refresh_tokens
+    sqlMock.mockResolvedValueOnce([]);
+    // VC issuance: SELECT vc_status_lists (existing list)
+    sqlMock.mockResolvedValueOnce([{ id: 'vcsl_TEST', next_index: 0 }]);
+    // VC issuance: UPDATE vc_status_lists next_index
+    sqlMock.mockResolvedValueOnce([]);
+    // VC issuance: INSERT verifiable_credentials
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/delegate',
+      headers: authHeader(),
+      payload: {
+        parentGrantToken: parentToken,
+        subAgentId: SUB_AGENT.id,
+        scopes: ['read'],
+        expiresIn: '1h',
+        credentialFormat: 'vc-jwt',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{
+      grantToken: string;
+      expiresAt: string;
+      scopes: string[];
+      grantId: string;
+      verifiableCredential: string;
+    }>();
+    expect(typeof body.grantToken).toBe('string');
+    expect(body.scopes).toEqual(['read']);
+    expect(typeof body.grantId).toBe('string');
+    expect(typeof body.verifiableCredential).toBe('string');
+
+    // Verify the VC-JWT is a valid JWT with vc claim
+    const vcClaims = decodeJwt(body.verifiableCredential);
+    expect(vcClaims['vc']).toBeDefined();
+    const vc = vcClaims['vc'] as Record<string, unknown>;
+    expect((vc['type'] as string[])).toContain('AgentGrantCredential');
+    const subject = vc['credentialSubject'] as Record<string, unknown>;
+    expect(subject['id']).toBe(SUB_AGENT.did);
+    expect(subject['scopes']).toEqual(['read']);
+  });
+
+  it('includes verifiableCredential when credentialFormat is both', async () => {
+    seedAuth();
+    mockRedis.get.mockResolvedValue(null);
+    // Sub-agent lookup
+    sqlMock.mockResolvedValueOnce([SUB_AGENT]);
+    // INSERT grants
+    sqlMock.mockResolvedValueOnce([]);
+    // INSERT grant_tokens
+    sqlMock.mockResolvedValueOnce([]);
+    // INSERT refresh_tokens
+    sqlMock.mockResolvedValueOnce([]);
+    // VC issuance: SELECT vc_status_lists (existing list)
+    sqlMock.mockResolvedValueOnce([{ id: 'vcsl_TEST', next_index: 0 }]);
+    // VC issuance: UPDATE vc_status_lists next_index
+    sqlMock.mockResolvedValueOnce([]);
+    // VC issuance: INSERT verifiable_credentials
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/delegate',
+      headers: authHeader(),
+      payload: {
+        parentGrantToken: parentToken,
+        subAgentId: SUB_AGENT.id,
+        scopes: ['read'],
+        expiresIn: '1h',
+        credentialFormat: 'both',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{
+      grantToken: string;
+      expiresAt: string;
+      scopes: string[];
+      grantId: string;
+      verifiableCredential: string;
+    }>();
+    expect(typeof body.grantToken).toBe('string');
+    expect(typeof body.verifiableCredential).toBe('string');
+
+    // Both the grant JWT and the VC-JWT should be present and different
+    expect(body.grantToken).not.toBe(body.verifiableCredential);
+
+    // Verify grant JWT has delegation claims
+    const grantClaims = decodeJwt(body.grantToken);
+    expect(grantClaims['delegationDepth']).toBe(1);
+
+    // Verify VC-JWT has vc claim
+    const vcClaims = decodeJwt(body.verifiableCredential);
+    expect(vcClaims['vc']).toBeDefined();
+  });
+
+  it('succeeds without verifiableCredential when VC issuance fails (best-effort)', async () => {
+    seedAuth();
+    mockRedis.get.mockResolvedValue(null);
+    // Sub-agent lookup
+    sqlMock.mockResolvedValueOnce([SUB_AGENT]);
+    // INSERT grants
+    sqlMock.mockResolvedValueOnce([]);
+    // INSERT grant_tokens
+    sqlMock.mockResolvedValueOnce([]);
+    // INSERT refresh_tokens
+    sqlMock.mockResolvedValueOnce([]);
+    // VC issuance: SELECT vc_status_lists — reject to simulate DB failure
+    sqlMock.mockRejectedValueOnce(new Error('status list query failed'));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/delegate',
+      headers: authHeader(),
+      payload: {
+        parentGrantToken: parentToken,
+        subAgentId: SUB_AGENT.id,
+        scopes: ['read'],
+        expiresIn: '1h',
+        credentialFormat: 'vc-jwt',
+      },
+    });
+
+    // Delegation should still succeed
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{
+      grantToken: string;
+      expiresAt: string;
+      scopes: string[];
+      grantId: string;
+      verifiableCredential?: string;
+    }>();
+    expect(typeof body.grantToken).toBe('string');
+    expect(body.scopes).toEqual(['read']);
+    expect(typeof body.grantId).toBe('string');
+    // verifiableCredential should NOT be present since VC issuance failed
+    expect(body.verifiableCredential).toBeUndefined();
   });
 });

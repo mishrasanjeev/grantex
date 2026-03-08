@@ -16,6 +16,8 @@ import { BudgetsClient } from './resources/budgets.js';
 import { EventsClient } from './resources/events.js';
 import { UsageClient } from './resources/usage.js';
 import { DomainsClient } from './resources/domains.js';
+import { WebAuthnClient } from './resources/webauthn.js';
+import { CredentialsClient } from './resources/credentials.js';
 import type {
   AuthorizationRequest,
   AuthorizeParams,
@@ -24,6 +26,8 @@ import type {
   RotateKeyResponse,
   SignupParams,
   SignupResponse,
+  UpdateDeveloperSettingsParams,
+  UpdateDeveloperSettingsResponse,
 } from './types.js';
 
 const DEFAULT_BASE_URL = 'https://api.grantex.dev';
@@ -48,6 +52,8 @@ export class Grantex {
   readonly events: EventsClient;
   readonly usage: UsageClient;
   readonly domains: DomainsClient;
+  readonly webauthn: WebAuthnClient;
+  readonly credentials: CredentialsClient;
 
   get lastRateLimit(): RateLimit | undefined {
     return this.#http.lastRateLimit;
@@ -86,6 +92,8 @@ export class Grantex {
     this.events = new EventsClient(this.#http);
     this.usage = new UsageClient(this.#http);
     this.domains = new DomainsClient(this.#http);
+    this.webauthn = new WebAuthnClient(this.#http);
+    this.credentials = new CredentialsClient(this.#http);
   }
 
   /**
@@ -135,5 +143,12 @@ export class Grantex {
    */
   rotateKey(): Promise<RotateKeyResponse> {
     return this.#http.post<RotateKeyResponse>('/v1/keys/rotate');
+  }
+
+  /**
+   * Update developer settings (e.g. FIDO/WebAuthn requirements).
+   */
+  updateSettings(params: UpdateDeveloperSettingsParams): Promise<UpdateDeveloperSettingsResponse> {
+    return this.#http.patch<UpdateDeveloperSettingsResponse>('/v1/me', params);
   }
 }

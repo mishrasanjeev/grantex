@@ -123,4 +123,29 @@ describe('POST /v1/token', () => {
 
     expect(res.statusCode).toBe(400);
   });
+
+  it('succeeds without verifiableCredential when VC issuance fails (best-effort)', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([validAuthRequest]);  // Auth request lookup
+    sqlMock.mockResolvedValueOnce([]);  // INSERT grants
+    sqlMock.mockResolvedValueOnce([]);  // INSERT grant_tokens
+    sqlMock.mockResolvedValueOnce([]);  // INSERT refresh_tokens
+    sqlMock.mockResolvedValueOnce([]);  // UPDATE auth_requests
+    sqlMock.mockResolvedValueOnce([]);  // Budget check (no allocation)
+    // VC issuance: getOrCreateStatusList SQL fails → catch block swallows error
+    sqlMock.mockRejectedValueOnce(new Error('VC status list query failed'));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token',
+      headers: authHeader(),
+      payload: { code: 'code-vc-fail', agentId: TEST_AGENT.id, credentialFormat: 'vc-jwt' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.grantToken).toBeDefined();
+    expect(body.verifiableCredential).toBeUndefined();
+  });
+
 });

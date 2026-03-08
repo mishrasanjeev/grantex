@@ -266,4 +266,16 @@ describe('POST /v1/vault/credentials/exchange', () => {
 
     expect(res.statusCode).toBe(404);
   });
+
+  it('returns 401 when grant token is expired/invalid', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/vault/credentials/exchange',
+      headers: { authorization: 'Bearer invalid.jwt.token' },
+      payload: { service: 'google' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().code).toBe('UNAUTHORIZED');
+  });
 });
