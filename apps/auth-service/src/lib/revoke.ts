@@ -2,6 +2,7 @@ import { getSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
 import { emitEvent } from './events.js';
 import { grantsRevokedTotal } from './metrics.js';
+import { revokeVCsByGrantIds } from './vc.js';
 
 export interface RevokeResult {
   revoked: boolean;
@@ -56,6 +57,10 @@ export async function revokeGrantCascade(
     const descTtl = Math.max(1, Math.floor((descExpiresAt.getTime() - Date.now()) / 1000));
     await redis.set(`revoked:grant:${row['id'] as string}`, '1', 'EX', descTtl);
   }
+
+  // Revoke associated VCs (best-effort, non-blocking)
+  const allRevokedIds = [grantId, ...descendantRows.map(r => r['id'] as string)];
+  revokeVCsByGrantIds(allRevokedIds, developerId).catch(() => {});
 
   // Emit event (best-effort, non-blocking)
   emitEvent(developerId, 'grant.revoked', {

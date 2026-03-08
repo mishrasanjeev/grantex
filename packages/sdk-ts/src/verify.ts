@@ -12,7 +12,12 @@ export async function verifyGrantToken(
   token: string,
   options: VerifyGrantTokenOptions,
 ): Promise<VerifiedGrant> {
-  const jwks = createRemoteJWKSet(new URL(options.jwksUri));
+  let jwksUri = options.jwksUri;
+  if (options.issuerDid?.startsWith('did:web:')) {
+    const domain = options.issuerDid.replace('did:web:', '').replaceAll(':', '/');
+    jwksUri = `https://${domain}/.well-known/jwks.json`;
+  }
+  const jwks = createRemoteJWKSet(new URL(jwksUri));
 
   let payload: GrantTokenPayload;
   try {

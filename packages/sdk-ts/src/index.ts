@@ -132,4 +132,20 @@ export type {
   DomainEntry,
   ListDomainsResponse,
   VerifyDomainResponse,
+  // WebAuthn / FIDO
+  WebAuthnRegistrationOptions,
+  WebAuthnRegistrationVerifyParams,
+  WebAuthnCredential,
+  ListWebAuthnCredentialsResponse,
+  // Verifiable Credentials
+  VerifiableCredentialRecord,
+  ListCredentialsParams,
+  ListCredentialsResponse,
+  VCVerificationResult,
+  // SD-JWT
+  SDJWTPresentParams,
+  SDJWTPresentResult,
+  // Developer Settings
+  UpdateDeveloperSettingsParams,
+  UpdateDeveloperSettingsResponse,
 } from './types.js';

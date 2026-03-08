@@ -90,6 +90,22 @@ from ._types import (
     ListVaultCredentialsResponse,
     ExchangeCredentialParams,
     ExchangeCredentialResponse,
+    # WebAuthn / FIDO
+    WebAuthnRegistrationOptions,
+    WebAuthnRegistrationVerifyParams,
+    WebAuthnCredential,
+    ListWebAuthnCredentialsResponse,
+    # Verifiable Credentials
+    VerifiableCredentialRecord,
+    ListCredentialsParams,
+    ListCredentialsResponse,
+    VCVerificationResult,
+    # SD-JWT
+    SDJWTPresentParams,
+    SDJWTPresentResult,
+    # Developer Settings
+    UpdateDeveloperSettingsParams,
+    UpdateDeveloperSettingsResponse,
 )
 from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent, StreamOptions
 from ._pkce import PkceChallenge, generate_pkce
@@ -196,6 +212,22 @@ __all__ = [
     "ListVaultCredentialsResponse",
     "ExchangeCredentialParams",
     "ExchangeCredentialResponse",
+    # WebAuthn / FIDO
+    "WebAuthnRegistrationOptions",
+    "WebAuthnRegistrationVerifyParams",
+    "WebAuthnCredential",
+    "ListWebAuthnCredentialsResponse",
+    # Verifiable Credentials
+    "VerifiableCredentialRecord",
+    "ListCredentialsParams",
+    "ListCredentialsResponse",
+    "VCVerificationResult",
+    # SD-JWT
+    "SDJWTPresentParams",
+    "SDJWTPresentResult",
+    # Developer Settings
+    "UpdateDeveloperSettingsParams",
+    "UpdateDeveloperSettingsResponse",
     # Events
     "EventsClient",
     "GrantexStreamEvent",

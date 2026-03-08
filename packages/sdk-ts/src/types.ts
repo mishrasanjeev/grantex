@@ -169,6 +169,8 @@ export interface ExchangeTokenParams {
   agentId: string;
   /** PKCE code verifier (from generatePkce()) — required if codeChallenge was sent in authorize */
   codeVerifier?: string;
+  /** Request a verifiable credential alongside the grant token */
+  credentialFormat?: 'jwt' | 'vc-jwt' | 'both';
 }
 
 export interface ExchangeTokenResponse {
@@ -177,6 +179,8 @@ export interface ExchangeTokenResponse {
   scopes: string[];
   refreshToken: string;
   grantId: string;
+  /** SD-JWT verifiable credential (present when credentialFormat was requested) */
+  verifiableCredential?: string;
 }
 
 export interface RefreshTokenParams {
@@ -280,6 +284,8 @@ export interface VerifyGrantTokenOptions {
   jwksUri: string;
   requiredScopes?: string[];
   audience?: string;
+  /** Resolve a did:web DID to derive the JWKS URL instead of using jwksUri directly */
+  issuerDid?: string;
   /** @internal override clock for testing */
   clockTolerance?: number;
 }
@@ -725,4 +731,86 @@ export interface ListDomainsResponse {
 export interface VerifyDomainResponse {
   verified: boolean;
   message: string;
+}
+
+// ─── WebAuthn / FIDO ─────────────────────────────────────────────────────────
+
+export interface WebAuthnRegistrationOptions {
+  challengeId: string;
+  publicKey: Record<string, unknown>;
+}
+
+export interface WebAuthnRegistrationVerifyParams {
+  challengeId: string;
+  response: Record<string, unknown>;
+  deviceName?: string;
+}
+
+export interface WebAuthnCredential {
+  id: string;
+  principalId: string;
+  deviceName: string | null;
+  backedUp: boolean;
+  transports: string[];
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface ListWebAuthnCredentialsResponse {
+  credentials: WebAuthnCredential[];
+}
+
+// ─── Verifiable Credentials ─────────────────────────────────────────────────
+
+export interface VerifiableCredentialRecord {
+  id: string;
+  grantId: string;
+  credentialType: string;
+  format: string;
+  credential: string;
+  status: string;
+  issuedAt: string;
+  expiresAt: string;
+}
+
+export interface ListCredentialsParams {
+  grantId?: string;
+  principalId?: string;
+  status?: string;
+}
+
+export interface ListCredentialsResponse {
+  credentials: VerifiableCredentialRecord[];
+}
+
+export interface VCVerificationResult {
+  valid: boolean;
+  credentialType?: string;
+  issuer?: string;
+  subject?: Record<string, unknown>;
+  expiresAt?: string;
+  revoked?: boolean;
+}
+
+export interface SDJWTPresentParams {
+  sdJwt: string;
+  nonce?: string;
+  audience?: string;
+}
+
+export interface SDJWTPresentResult {
+  valid: boolean;
+  disclosedClaims?: Record<string, unknown>;
+  error?: string;
+}
+
+// ─── Developer Settings ──────────────────────────────────────────────────────
+
+export interface UpdateDeveloperSettingsParams {
+  fidoRequired?: boolean;
+  fidoRpName?: string;
+}
+
+export interface UpdateDeveloperSettingsResponse {
+  updated: boolean;
 }

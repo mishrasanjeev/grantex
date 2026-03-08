@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import {
   initKeys, initEdKey, getEdKeyPair, buildJwks, signWithEd25519,
 } from '../src/lib/crypto.js';
-import { jwtVerify } from 'jose';
+import { jwtVerify, generateKeyPair, exportPKCS8 } from 'jose';
+import { config } from '../src/config.js';
 
 beforeAll(async () => {
   process.env['AUTO_GENERATE_KEYS'] = 'true';
@@ -79,5 +80,39 @@ describe('signWithEd25519', () => {
     expect(payload.iss).toBe('https://grantex.dev');
     expect(payload.exp).toBeDefined();
     expect(payload.iat).toBeDefined();
+  });
+});
+
+describe('initEdKey with PEM import', () => {
+  it('initializes Ed25519 key pair from a PKCS8 PEM private key', async () => {
+    // Generate a fresh Ed25519 key pair and export the private key as PEM
+    const { privateKey: generatedPrivate } = await generateKeyPair('EdDSA', { crv: 'Ed25519' });
+    const pem = await exportPKCS8(generatedPrivate);
+
+    // Set the config to use the PEM import path
+    (config as { ed25519PrivateKey: string | null }).ed25519PrivateKey = pem;
+
+    try {
+      // Re-initialize — this should take the PEM import branch (lines 148-162)
+      await initEdKey();
+
+      const kp = getEdKeyPair();
+      expect(kp).not.toBeNull();
+      expect(kp!.privateKey).toBeDefined();
+      expect(kp!.publicKey).toBeDefined();
+      expect(kp!.kid).toMatch(/^grantex-ed25519-\d{4}-\d{2}$/);
+
+      // Verify the imported key can sign and verify a JWT
+      const jwt = await signWithEd25519({ pemTest: true });
+      const { payload } = await jwtVerify(jwt, kp!.publicKey, {
+        algorithms: ['EdDSA'],
+      });
+      expect(payload['pemTest']).toBe(true);
+    } finally {
+      // Reset config so other tests are not affected
+      (config as { ed25519PrivateKey: string | null }).ed25519PrivateKey = null;
+      // Re-initialize with auto-generated key
+      await initEdKey();
+    }
   });
 });

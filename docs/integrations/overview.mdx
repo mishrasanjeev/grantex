@@ -90,6 +90,28 @@ description: "Grantex integrates with every major AI agent framework."
 | Event Destinations | `@grantex/destinations` | `npm install @grantex/destinations` | TypeScript |
 | Terraform Provider | `terraform-provider-grantex` | `source = "mishrasanjeev/grantex"` | Go / HCL |
 
+## Verifiable Intent & Agentic Commerce
+
+Grantex integrates with emerging standards for agentic commerce through W3C Verifiable Credentials and FIDO2/WebAuthn:
+
+<CardGroup cols={2}>
+  <Card title="Verifiable Credentials" icon="certificate" href="/features/verifiable-credentials">
+    Issue W3C VCs alongside grant tokens. Agents present portable, tamper-proof proof of authorization to any verifier -- no Grantex account required.
+  </Card>
+  <Card title="FIDO2 / WebAuthn" icon="fingerprint" href="/features/fido-webauthn">
+    Passkey-based human presence verification. Cryptographic proof that a real human authorized the agent, embedded in grants and VCs.
+  </Card>
+  <Card title="DID Infrastructure" icon="id-card" href="/features/did-infrastructure">
+    W3C DID document at did:web:grantex.dev. Any party can verify Grantex-issued credentials using published public keys.
+  </Card>
+</CardGroup>
+
+These capabilities support the **Mastercard Verifiable Intent** specification and similar agentic commerce frameworks. When an agent needs to prove its authorization to a payment processor, merchant, or third-party API, it presents a Verifiable Credential that the receiving party can verify independently using the Grantex DID document.
+
+<Info>
+Verifiable Credentials are opt-in. Pass `credentialFormat: "vc-jwt"` during token exchange to receive a VC alongside the standard grant token. Existing integrations continue to work unchanged.
+</Info>
+
 ## How Integrations Work
 
 Every integration follows the same pattern:

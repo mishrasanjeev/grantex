@@ -9,7 +9,10 @@ export type EventType =
   | 'budget.threshold'
   | 'budget.exhausted'
   | 'fido.registered'
-  | 'fido.assertion';
+  | 'fido.assertion'
+  | 'vc.issued'
+  | 'sd-jwt.issued'
+  | 'sd-jwt.presented';
 
 export interface GrantexEvent {
   id: string;

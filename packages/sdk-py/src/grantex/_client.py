@@ -5,7 +5,16 @@ import os
 import httpx
 
 from ._http import HttpClient
-from ._types import AuthorizationRequest, AuthorizeParams, RateLimit, RotateKeyResponse, SignupParams, SignupResponse
+from ._types import (
+    AuthorizationRequest,
+    AuthorizeParams,
+    RateLimit,
+    RotateKeyResponse,
+    SignupParams,
+    SignupResponse,
+    UpdateDeveloperSettingsParams,
+    UpdateDeveloperSettingsResponse,
+)
 from .resources._agents import AgentsClient
 from .resources._audit import AuditClient
 from .resources._anomalies import AnomaliesClient
@@ -23,6 +32,8 @@ from .resources._budgets import BudgetsClient
 from .resources._events import EventsClient
 from .resources._usage import UsageClient
 from .resources._domains import DomainsClient
+from .resources._webauthn import WebAuthnClient
+from .resources._credentials import CredentialsClient
 
 _DEFAULT_BASE_URL = "https://api.grantex.dev"
 
@@ -47,6 +58,8 @@ class Grantex:
     events: EventsClient
     usage: UsageClient
     domains: DomainsClient
+    webauthn: WebAuthnClient
+    credentials: CredentialsClient
 
     @property
     def last_rate_limit(self) -> RateLimit | None:
@@ -89,6 +102,8 @@ class Grantex:
         self.events = EventsClient(base_url, resolved_key)
         self.usage = UsageClient(self._http)
         self.domains = DomainsClient(self._http)
+        self.webauthn = WebAuthnClient(self._http)
+        self.credentials = CredentialsClient(self._http)
 
     @staticmethod
     def signup(
@@ -124,6 +139,13 @@ class Grantex:
         """Rotate the current API key. Returns a new key; the old key is invalidated."""
         data = self._http.post("/v1/keys/rotate")
         return RotateKeyResponse.from_dict(data)
+
+    def update_settings(
+        self, params: UpdateDeveloperSettingsParams
+    ) -> UpdateDeveloperSettingsResponse:
+        """Update developer settings (e.g. FIDO/WebAuthn requirements)."""
+        data = self._http.patch("/v1/me", params.to_dict())
+        return UpdateDeveloperSettingsResponse.from_dict(data)
 
     def authorize(self, params: AuthorizeParams) -> AuthorizationRequest:
         """Initiate the delegated authorization flow for a user.
