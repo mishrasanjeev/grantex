@@ -34,6 +34,12 @@ type Client struct {
 	SCIM              *SCIMService
 	SSO               *SSOService
 	PrincipalSessions *PrincipalSessionsService
+	Budgets           *BudgetsService
+	Events            *EventsService
+	Usage             *UsageService
+	Domains           *DomainsService
+	WebAuthn          *WebAuthnService
+	Credentials       *CredentialsService
 
 	http *httpClient
 }
@@ -72,6 +78,12 @@ func NewClient(apiKey string, opts ...Option) *Client {
 	c.SCIM = &SCIMService{http: h}
 	c.SSO = &SSOService{http: h}
 	c.PrincipalSessions = &PrincipalSessionsService{http: h}
+	c.Budgets = &BudgetsService{http: h}
+	c.Events = &EventsService{http: h}
+	c.Usage = &UsageService{http: h}
+	c.Domains = &DomainsService{http: h}
+	c.WebAuthn = &WebAuthnService{http: h}
+	c.Credentials = &CredentialsService{http: h}
 
 	return c
 }
