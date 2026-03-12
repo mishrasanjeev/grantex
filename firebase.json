@@ -4,7 +4,8 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "redirects": [
       { "source": "/docs", "destination": "https://docs.grantex.dev", "type": 301 },
-      { "source": "/docs/:path*", "destination": "https://docs.grantex.dev/:path*", "type": 301 }
+      { "source": "/docs/:path*", "destination": "https://docs.grantex.dev/:path*", "type": 301 },
+      { "source": "/.well-known/did.json", "destination": "https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/did.json", "type": 302 }
     ],
     "rewrites": [
       { "source": "/dashboard/**", "destination": "/dashboard/index.html" },
@@ -25,7 +26,9 @@
         "headers": [
           { "key": "X-Frame-Options",           "value": "DENY" },
           { "key": "X-Content-Type-Options",    "value": "nosniff" },
-          { "key": "Referrer-Policy",           "value": "strict-origin-when-cross-origin" }
+          { "key": "Referrer-Policy",           "value": "strict-origin-when-cross-origin" },
+          { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
+          { "key": "Permissions-Policy",        "value": "camera=(), microphone=(), geolocation=()" }
         ]
       }
     ]
