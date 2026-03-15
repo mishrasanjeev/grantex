@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 320" fill="none">
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
+    .title { font-size: 11px; font-weight: 600; fill: #e2e8f0; }
+    .subtitle { font-size: 9px; fill: #94a3b8; }
+    .arrow { stroke: #6366f1; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+    .arrow-label { font-size: 9px; fill: #a5b4fc; font-weight: 500; }
+    .box { rx: 12; ry: 12; }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#6366f1"/>
+    </marker>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1b4b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f172a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="320" fill="url(#grad1)" rx="16"/>
+
+  <!-- Step 1: Your App -->
+  <rect x="30" y="40" width="140" height="80" class="box" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+  <text x="100" y="72" text-anchor="middle" class="title">Your App</text>
+  <text x="100" y="88" text-anchor="middle" class="subtitle">Requests authorization</text>
+  <text x="100" y="100" text-anchor="middle" class="subtitle">for agent + scopes</text>
+
+  <!-- Arrow 1 -->
+  <path d="M 170 80 L 218 80" class="arrow"/>
+  <text x="194" y="72" text-anchor="middle" class="arrow-label">1</text>
+
+  <!-- Step 2: User Consent -->
+  <rect x="220" y="40" width="140" height="80" class="box" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+  <text x="290" y="68" text-anchor="middle" class="title">User Consent</text>
+  <text x="290" y="84" text-anchor="middle" class="subtitle">Approves scopes</text>
+  <text x="290" y="96" text-anchor="middle" class="subtitle">(optional FIDO2 passkey)</text>
+
+  <!-- Arrow 2 -->
+  <path d="M 360 80 L 408 80" class="arrow"/>
+  <text x="384" y="72" text-anchor="middle" class="arrow-label">2</text>
+
+  <!-- Step 3: Grant Token -->
+  <rect x="410" y="30" width="140" height="100" class="box" fill="#312e81" stroke="#6366f1" stroke-width="2"/>
+  <text x="480" y="60" text-anchor="middle" class="title">Grant Token</text>
+  <text x="480" y="76" text-anchor="middle" class="subtitle">Signed RS256 JWT</text>
+  <text x="480" y="90" text-anchor="middle" class="subtitle">Scoped + time-limited</text>
+  <text x="480" y="104" text-anchor="middle" class="subtitle">Revocable + audited</text>
+
+  <!-- Arrow 3 -->
+  <path d="M 550 80 L 598 80" class="arrow"/>
+  <text x="574" y="72" text-anchor="middle" class="arrow-label">3</text>
+
+  <!-- Step 4: Agent -->
+  <rect x="600" y="40" width="140" height="80" class="box" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+  <text x="670" y="68" text-anchor="middle" class="title">AI Agent</text>
+  <text x="670" y="84" text-anchor="middle" class="subtitle">Acts with scoped</text>
+  <text x="670" y="96" text-anchor="middle" class="subtitle">permissions only</text>
+
+  <!-- Arrow 4 to Service -->
+  <path d="M 740 80 L 788 80" class="arrow"/>
+  <text x="764" y="72" text-anchor="middle" class="arrow-label">4</text>
+
+  <!-- Step 5: Service -->
+  <rect x="790" y="40" width="80" height="80" class="box" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+  <text x="830" y="72" text-anchor="middle" class="title">Service</text>
+  <text x="830" y="88" text-anchor="middle" class="subtitle">Verifies via</text>
+  <text x="830" y="100" text-anchor="middle" class="subtitle">JWKS</text>
+
+  <!-- Bottom row -->
+
+  <!-- Delegation -->
+  <rect x="30" y="180" width="200" height="110" class="box" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+  <text x="130" y="208" text-anchor="middle" class="title">Delegation Chains</text>
+  <text x="130" y="228" text-anchor="middle" class="subtitle">Agent A delegates to Agent B</text>
+  <text x="130" y="244" text-anchor="middle" class="subtitle">Scope narrowing enforced</text>
+  <text x="130" y="260" text-anchor="middle" class="subtitle">Cascade revocation</text>
+  <text x="130" y="276" text-anchor="middle" class="subtitle">Depth limits configurable</text>
+
+  <!-- Budget -->
+  <rect x="260" y="180" width="200" height="110" class="box" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+  <text x="360" y="208" text-anchor="middle" class="title">Budget Controls</text>
+  <text x="360" y="228" text-anchor="middle" class="subtitle">Per-agent spending limits</text>
+  <text x="360" y="244" text-anchor="middle" class="subtitle">Atomic debit (no races)</text>
+  <text x="360" y="260" text-anchor="middle" class="subtitle">402 on overspend</text>
+  <text x="360" y="276" text-anchor="middle" class="subtitle">Threshold alerts at 50%/80%</text>
+
+  <!-- Audit -->
+  <rect x="490" y="180" width="200" height="110" class="box" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+  <text x="590" y="208" text-anchor="middle" class="title">Audit Trail</text>
+  <text x="590" y="228" text-anchor="middle" class="subtitle">Every action logged</text>
+  <text x="590" y="244" text-anchor="middle" class="subtitle">Queryable + exportable</text>
+  <text x="590" y="260" text-anchor="middle" class="subtitle">Real-time event streaming</text>
+  <text x="590" y="276" text-anchor="middle" class="subtitle">SSE + WebSocket</text>
+
+  <!-- Trust -->
+  <rect x="720" y="180" width="150" height="110" class="box" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+  <text x="795" y="208" text-anchor="middle" class="title">Trust Infrastructure</text>
+  <text x="795" y="228" text-anchor="middle" class="subtitle">FIDO2/WebAuthn</text>
+  <text x="795" y="244" text-anchor="middle" class="subtitle">W3C Verifiable Creds</text>
+  <text x="795" y="260" text-anchor="middle" class="subtitle">SD-JWT disclosure</text>
+  <text x="795" y="276" text-anchor="middle" class="subtitle">DID infrastructure</text>
+</svg>
