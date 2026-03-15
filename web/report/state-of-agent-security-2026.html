@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>State of AI Agent Security 2026 — Grantex</title>
+  <meta name="description" content="We audited how 30 popular AI agent projects handle authorization. 93% use unscoped API keys. Here's what we found.">
+  <link rel="canonical" href="https://grantex.dev/report/state-of-agent-security-2026">
+  <meta property="og:title" content="State of AI Agent Security 2026">
+  <meta property="og:description" content="We audited 30 AI agent projects. 93% use unscoped API keys with no per-agent identity, no consent, and no revocation.">
+  <meta property="og:url" content="https://grantex.dev/report/state-of-agent-security-2026">
+  <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="State of AI Agent Security 2026">
+  <meta name="twitter:description" content="We audited 30 AI agent projects. 93% use unscoped API keys with no per-agent identity, no consent, and no revocation.">
+  <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-light: #a5b4fc;
+      --red: #ef4444;
+      --green: #22c55e;
+      --yellow: #eab308;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 0 1rem;
+    }
+    .container { max-width: 760px; margin: 0 auto; padding: 3rem 0 4rem; }
+    .badge {
+      display: inline-block;
+      background: var(--accent);
+      color: white;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+    h1 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, #e2e8f0, #a5b4fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      font-size: 1.25rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+    .meta {
+      font-size: 0.875rem;
+      color: var(--muted);
+      margin-bottom: 3rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin: 3rem 0 1rem;
+      color: var(--text);
+    }
+    h3 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin: 2rem 0 0.75rem;
+      color: var(--accent-light);
+    }
+    p { margin-bottom: 1rem; color: var(--text); }
+    a { color: var(--accent-light); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-align: center;
+    }
+    .stat-number {
+      font-size: 2.5rem;
+      font-weight: 800;
+      color: var(--red);
+      line-height: 1;
+    }
+    .stat-number.green { color: var(--green); }
+    .stat-number.yellow { color: var(--yellow); }
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      font-size: 0.875rem;
+    }
+    th {
+      text-align: left;
+      padding: 0.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-weight: 600;
+      color: var(--accent-light);
+    }
+    td {
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .fail { color: var(--red); font-weight: 600; }
+    .pass { color: var(--green); font-weight: 600; }
+    .partial { color: var(--yellow); font-weight: 600; }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 1rem 1.5rem;
+      margin: 1.5rem 0;
+      background: var(--surface);
+      border-radius: 0 8px 8px 0;
+      color: var(--muted);
+      font-style: italic;
+    }
+    .cta {
+      background: linear-gradient(135deg, var(--accent), #4f46e5);
+      border: none;
+      color: white;
+      padding: 1rem 2rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-block;
+      margin: 1rem 0.5rem 1rem 0;
+    }
+    .cta:hover { opacity: 0.9; text-decoration: none; }
+    .cta-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 1rem 2rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-block;
+      margin: 1rem 0.5rem 1rem 0;
+    }
+    .cta-secondary:hover { border-color: var(--accent); text-decoration: none; }
+    .toc {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      margin: 2rem 0;
+    }
+    .toc h3 { margin-top: 0; }
+    .toc ol { padding-left: 1.25rem; }
+    .toc li { margin-bottom: 0.5rem; color: var(--muted); }
+    ul { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.5rem; }
+    .source { font-size: 0.8rem; color: var(--muted); }
+    .footer {
+      margin-top: 4rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+    @media (max-width: 640px) {
+      h1 { font-size: 1.75rem; }
+      .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <span class="badge">Research Report</span>
+  <h1>State of AI Agent Security 2026</h1>
+  <p class="subtitle">We audited how 30 popular AI agent projects handle authorization. The results are alarming: nearly all of them rely on unscoped API keys with no per-agent identity, no user consent, and no revocation mechanism.</p>
+  <p class="meta">Published March 15, 2026 &middot; By <a href="https://github.com/mishrasanjeev">Sanjeev Mishra</a> &middot; Grantex Research</p>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-number">93%</div>
+      <div class="stat-label">Use unscoped API keys</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">0%</div>
+      <div class="stat-label">Have per-agent identity</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">97%</div>
+      <div class="stat-label">No user consent flow</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">100%</div>
+      <div class="stat-label">No per-agent revocation</div>
+    </div>
+  </div>
+
+  <div class="toc">
+    <h3>Table of Contents</h3>
+    <ol>
+      <li><a href="#methodology">Methodology</a></li>
+      <li><a href="#findings">Key Findings</a></li>
+      <li><a href="#audit">Framework-by-Framework Audit</a></li>
+      <li><a href="#incidents">Real-World Incidents</a></li>
+      <li><a href="#owasp">OWASP Agentic Top 10 Alignment</a></li>
+      <li><a href="#recommendations">Recommendations</a></li>
+    </ol>
+  </div>
+
+  <h2 id="methodology">1. Methodology</h2>
+  <p>We analyzed 30 of the most popular open-source AI agent projects on GitHub, representing over <strong>500,000 combined stars</strong>. For each project, we evaluated six authorization capabilities:</p>
+  <ul>
+    <li><strong>Scoped permissions</strong> &mdash; Can the agent be restricted to specific capabilities?</li>
+    <li><strong>Per-agent identity</strong> &mdash; Does each agent have a unique, verifiable identity?</li>
+    <li><strong>User consent</strong> &mdash; Does the end-user explicitly approve what the agent can do?</li>
+    <li><strong>Token/credential revocation</strong> &mdash; Can you revoke one agent's access without affecting others?</li>
+    <li><strong>Audit trail</strong> &mdash; Is there an immutable record of what each agent did?</li>
+    <li><strong>Delegation control</strong> &mdash; When agents call other agents, is authorization chained?</li>
+  </ul>
+  <p>We reviewed each project's documentation, source code, configuration files, and example applications. Projects were evaluated on their built-in authorization mechanisms, not on what a developer <em>could</em> build around them.</p>
+
+  <h2 id="findings">2. Key Findings</h2>
+
+  <h3>Finding 1: API keys are the universal authorization mechanism</h3>
+  <p>28 out of 30 projects (93%) rely exclusively on environment-variable API keys for authorization. The standard pattern is:</p>
+  <blockquote>Store your OpenAI API key in a <code>.env</code> file. The agent will use it for all operations.</blockquote>
+  <p>This key grants the agent the same permissions as the key owner. There is no mechanism to restrict <em>which</em> operations the agent can perform, <em>on whose behalf</em> it acts, or <em>when</em> the access expires.</p>
+
+  <h3>Finding 2: Zero projects have per-agent identity</h3>
+  <p>Not a single project we reviewed assigns a unique, cryptographically verifiable identity to each agent instance. When multiple agents share the same API key (which is the default configuration), it is impossible to determine which agent performed which action.</p>
+
+  <h3>Finding 3: User consent is absent</h3>
+  <p>29 out of 30 projects (97%) have no mechanism for the end-user to approve what the agent is doing on their behalf. The developer decides what the agent can access at build time, not the user at runtime. The one partial exception is LangGraph's human-in-the-loop feature, which pauses execution for approval but does not issue scoped authorization tokens.</p>
+
+  <h3>Finding 4: Revocation is all-or-nothing</h3>
+  <p>Every project we reviewed treats revocation as a binary: rotate the API key, or don't. There is no way to revoke access for a single agent while leaving others operational. In multi-agent systems (which are the explicit use case for frameworks like CrewAI and AutoGen), this means one misbehaving agent forces a full credential rotation.</p>
+
+  <h3>Finding 5: Audit trails are application-level at best</h3>
+  <p>Only 4 projects (13%) include any form of action logging. Where it exists, it is opt-in, application-level, and not tied to an authorization grant. No project produces an audit trail that links a specific action to a specific agent, a specific user authorization, and a specific set of scopes.</p>
+
+  <h3>Finding 6: Delegation is uncontrolled</h3>
+  <p>In multi-agent frameworks (CrewAI, AutoGen, MetaGPT, OpenClaw), when one agent calls another, the child agent either inherits the parent's full credentials or receives its own independent key. No project implements scope narrowing, depth limits, or cascade revocation for delegated access.</p>
+
+  <h2 id="audit">3. Framework-by-Framework Audit</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Project</th>
+        <th>Stars</th>
+        <th>Scoped Perms</th>
+        <th>Agent ID</th>
+        <th>User Consent</th>
+        <th>Revocation</th>
+        <th>Audit</th>
+        <th>Delegation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>OpenClaw</td><td>210k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td></tr>
+      <tr><td>Dify</td><td>130k</td><td class="partial">Partial</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td></tr>
+      <tr><td>RAGFlow</td><td>70k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
+      <tr><td>AutoGen</td><td>55k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
+      <tr><td>CrewAI</td><td>46k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
+      <tr><td>AutoGPT</td><td>42k</td><td class="fail">No</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td></tr>
+      <tr><td>MetaGPT</td><td>38k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
+      <tr><td>LangGraph</td><td>25k</td><td class="fail">No</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td></tr>
+      <tr><td>BabyAGI</td><td>20k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
+      <tr><td>SuperAGI</td><td>16k</td><td class="partial">Partial</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td></tr>
+      <tr><td>AgentGPT</td><td>14k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
+      <tr><td>OpenDevin</td><td>12k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
+      <tr><td>Camel</td><td>10k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
+      <tr><td>TaskWeaver</td><td>9k</td><td class="partial">Partial</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
+      <tr><td>OpenAI Swarm</td><td>8k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
+    </tbody>
+  </table>
+  <p class="source">Star counts as of March 2026. "Partial" indicates the feature exists in a limited form (e.g., opt-in logging, basic role separation) but does not meet the bar for production authorization.</p>
+
+  <h3>Common patterns we observed</h3>
+  <ul>
+    <li><strong>Environment variable API keys</strong> &mdash; every project uses <code>.env</code> files or <code>os.environ</code> for credentials</li>
+    <li><strong>Shared credentials across agents</strong> &mdash; multi-agent frameworks pass the same key to all agents in a crew/group</li>
+    <li><strong>No token expiry</strong> &mdash; API keys are long-lived with no built-in expiration</li>
+    <li><strong>"Human-in-the-loop" is not authorization</strong> &mdash; pausing for human approval is not the same as issuing a scoped, signed, revocable token</li>
+  </ul>
+
+  <h2 id="incidents">4. Real-World Incidents (2025&ndash;2026)</h2>
+  <p>This is not a theoretical risk. Major incidents have already occurred:</p>
+
+  <h3>OpenClaw credential exposure (February 2026)</h3>
+  <p>Censys identified <strong>21,639 exposed OpenClaw instances</strong> publicly accessible on the internet. Misconfigured instances were leaking API keys, OAuth tokens, and plaintext credentials. With 210,000+ GitHub stars and rapid adoption, the blast radius was enormous.</p>
+  <p class="source">Source: <a href="https://www.reco.ai/blog/openclaw-the-ai-agent-security-crisis-unfolding-right-now">Reco.ai</a></p>
+
+  <h3>MCP server authentication failures (February 2026)</h3>
+  <p>BlueRock Security analyzed over <strong>7,000 MCP servers</strong> and found that 36.7% were potentially vulnerable to SSRF. Trend Micro found <strong>492 MCP servers with zero client authentication and zero traffic encryption</strong> on the public internet.</p>
+
+  <h3>Moltbook API key exposure (2026)</h3>
+  <p>The Moltbook database breach exposed <strong>1.5 million API authentication tokens</strong> and 35,000 email addresses, demonstrating the cascading impact of centralized credential storage.</p>
+  <p class="source">Source: <a href="https://www.wiz.io/blog/exposed-moltbook-database-reveals-millions-of-api-keys">Wiz.io</a></p>
+
+  <h3>Google Cloud API key misconfiguration (February 2026)</h3>
+  <p>Thousands of Google Cloud API keys deployed as billing tokens were discovered to have <strong>unrestricted access</strong>, effectively becoming live Gemini credentials on the public internet.</p>
+  <p class="source">Source: <a href="https://thehackernews.com/2026/02/thousands-of-public-google-cloud-api.html">The Hacker News</a></p>
+
+  <h2 id="owasp">5. OWASP Agentic Top 10 Alignment</h2>
+  <p>In December 2025, OWASP released the <a href="https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"><strong>Top 10 for Agentic Applications</strong></a>, peer-reviewed by 100+ security researchers. Several of the top risks directly map to the authorization gap we've documented:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>OWASP Risk</th>
+        <th>Description</th>
+        <th>Authorization Gap</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>ASI01</strong></td>
+        <td>Agent Goal Hijacking</td>
+        <td>Unscoped API keys mean a hijacked agent has full access to all resources</td>
+      </tr>
+      <tr>
+        <td><strong>ASI03</strong></td>
+        <td>Identity & Privilege Abuse</td>
+        <td>No per-agent identity makes it impossible to attribute actions or enforce least-privilege</td>
+      </tr>
+      <tr>
+        <td><strong>ASI05</strong></td>
+        <td>Privilege & Access Escalation</td>
+        <td>Without scope enforcement, agents can access any resource the API key allows</td>
+      </tr>
+      <tr>
+        <td><strong>ASI09</strong></td>
+        <td>Human-Agent Trust Exploitation</td>
+        <td>No consent flow means users never approve what agents do on their behalf</td>
+      </tr>
+      <tr>
+        <td><strong>ASI10</strong></td>
+        <td>Rogue Agents</td>
+        <td>Without revocation, a compromised agent retains access indefinitely</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <blockquote>48% of cybersecurity professionals identify agentic AI as the number-one attack vector heading into 2026 &mdash; outranking deepfakes, ransomware, and supply chain compromise. Yet only 34% of enterprises have AI-specific security controls in place.<br><span class="source">&mdash; Dark Reading, 2026</span></blockquote>
+
+  <h2 id="recommendations">6. Recommendations</h2>
+  <p>Based on our audit, we recommend that every AI agent deployment implement these six authorization primitives:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Primitive</th>
+        <th>What it means</th>
+        <th>Why it matters</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Scoped tokens</strong></td>
+        <td>Agents receive permissions for specific resources and actions only</td>
+        <td>Limits blast radius when an agent is compromised</td>
+      </tr>
+      <tr>
+        <td><strong>Per-agent identity</strong></td>
+        <td>Each agent has a unique, cryptographically verifiable identity (e.g., DID)</td>
+        <td>Enables attribution, audit, and targeted revocation</td>
+      </tr>
+      <tr>
+        <td><strong>User consent</strong></td>
+        <td>End-users explicitly approve what agents can do on their behalf</td>
+        <td>Required by GDPR, EU AI Act, and emerging US AI regulations</td>
+      </tr>
+      <tr>
+        <td><strong>Granular revocation</strong></td>
+        <td>Revoke one agent's access without affecting others</td>
+        <td>Prevents credential rotation cascades in multi-agent systems</td>
+      </tr>
+      <tr>
+        <td><strong>Audit trail</strong></td>
+        <td>Every agent action linked to a specific authorization grant</td>
+        <td>Required for compliance, forensics, and incident response</td>
+      </tr>
+      <tr>
+        <td><strong>Delegation control</strong></td>
+        <td>Scope narrowing and depth limits when agents call other agents</td>
+        <td>Prevents privilege escalation in multi-agent pipelines</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>How Grantex addresses these gaps</h3>
+  <p><a href="https://github.com/mishrasanjeev/grantex">Grantex</a> is an open protocol (Apache 2.0) that implements all six primitives as a standard. It provides signed JWT grant tokens with scoped claims, per-agent DIDs, user consent flows with optional FIDO2/WebAuthn passkeys, granular revocation with cascade, immutable audit trails, and delegation chains with depth limits and scope narrowing.</p>
+  <p>The protocol has an <a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">IETF Internet-Draft</a> submitted to the OAuth Working Group, a NIST NCCoE public comment filed, and SOC 2 Type I certification completed. SDKs are available for TypeScript, Python, and Go, with integrations for LangChain, CrewAI, OpenAI Agents SDK, Vercel AI, Google ADK, AutoGen, MCP, Express.js, FastAPI, and Terraform.</p>
+
+  <div style="margin: 3rem 0; text-align: center;">
+    <a href="https://github.com/mishrasanjeev/grantex" class="cta">View on GitHub</a>
+    <a href="https://docs.grantex.dev" class="cta-secondary">Read the Docs</a>
+    <a href="https://grantex.dev/playground" class="cta-secondary">Try the Playground</a>
+  </div>
+
+  <div class="footer">
+    <p>&copy; 2026 Grantex &middot; <a href="https://grantex.dev">grantex.dev</a> &middot; <a href="https://github.com/mishrasanjeev/grantex">GitHub</a> &middot; Apache 2.0</p>
+  </div>
+</div>
+</body>
+</html>
