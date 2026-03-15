@@ -4,89 +4,83 @@
 
 ### Delegated Authorization Protocol for AI Agents
 
-**The open standard for granting, scoping, revoking, and auditing AI agent permissions —**
-**what OAuth 2.0 is to humans, Grantex is to agents.**
+**What OAuth 2.0 is to humans, Grantex is to agents.**
 
 <br/>
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Spec Version](https://img.shields.io/badge/spec-v1.0--final-green)](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
-[![GitHub Stars](https://img.shields.io/github/stars/mishrasanjeev/grantex?style=social)](https://github.com/mishrasanjeev/grantex)
+[![IETF Draft](https://img.shields.io/badge/IETF-draft--mishra--oauth--agent--grants-blue)](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
+[![SOC 2 Type I](https://img.shields.io/badge/SOC%202-Type%20I%20Certified-brightgreen)](https://docs.grantex.dev/security)
+[![CI](https://img.shields.io/github/actions/workflow/status/mishrasanjeev/grantex/ci.yml?branch=main&label=CI)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
+[![679+ Tests](https://img.shields.io/badge/tests-679%2B%20passing-brightgreen)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@grantex/sdk)](https://www.npmjs.com/package/@grantex/sdk)
 [![PyPI](https://img.shields.io/pypi/v/grantex)](https://pypi.org/project/grantex/)
-[![CI](https://img.shields.io/github/actions/workflow/status/mishrasanjeev/grantex/ci.yml?branch=main&label=CI)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
+[![npm downloads](https://img.shields.io/npm/dm/@grantex/sdk?label=npm%20downloads)](https://www.npmjs.com/package/@grantex/sdk)
+[![GitHub Stars](https://img.shields.io/github/stars/mishrasanjeev/grantex?style=social)](https://github.com/mishrasanjeev/grantex)
 [![Docs](https://img.shields.io/badge/docs-grantex.dev-3fb950)](https://grantex.dev/docs)
 
 <br/>
 
-> **Status:** Production-ready. Protocol spec finalized (v1.0), auth service, TypeScript & Python SDKs, framework integrations (LangChain, AutoGen, CrewAI, Vercel AI), CLI, developer portal, [interactive playground](https://grantex.dev/playground), enterprise features (policies, anomaly detection, compliance exports), and trust infrastructure (FIDO2/WebAuthn, W3C Verifiable Credentials, DID) — all shipped.
+[Docs](https://docs.grantex.dev) | [Playground](https://grantex.dev/playground) | [Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) | [Dashboard](https://grantex.dev/dashboard) | [IETF Draft](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
+
+<br/>
+
+<img src="docs/images/flow-diagram.svg" alt="Grantex Protocol Flow" width="100%"/>
+
+<br/>
+
+</div>
+
+## Try in 30 seconds
 
 ```bash
-npm install @grantex/sdk        # TypeScript / Node.js
+npm install @grantex/sdk
+```
+
+```typescript
+import { Grantex, verifyGrantToken } from '@grantex/sdk';
+const gx = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// 1. Authorize an agent for a user
+const auth = await gx.authorize({ agentId: 'agent-123', userId: 'user-456', scopes: ['calendar:read', 'email:send'] });
+
+// 2. Exchange code for a scoped, signed JWT
+const { grantToken } = await gx.tokens.exchange({ code: auth.code, agentId: 'agent-123' });
+
+// 3. Verify anywhere — offline, no callback needed
+const grant = await verifyGrantToken(grantToken, { jwksUri: 'https://api.grantex.dev/.well-known/jwks.json' });
+console.log(grant.scopes); // ['calendar:read', 'email:send']
+```
+
+```bash
 pip install grantex             # Python
 go get github.com/mishrasanjeev/grantex-go  # Go
 npm install -g @grantex/cli     # CLI
 ```
 
-</div>
+> **30+ packages** across TypeScript, Python, and Go. Integrations for **LangChain, OpenAI Agents SDK, Google ADK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. 679+ tests. Fully self-hostable. Apache 2.0.
 
 ---
 
 ## The Problem
 
-AI agents are acting in the world — booking travel, sending emails, executing trades, managing files — on behalf of real humans. But the foundational trust infrastructure for this doesn't exist yet:
+AI agents are booking travel, sending emails, deploying code, and spending money — on behalf of real humans. But:
 
-- ❌ No standard way to grant an agent **scoped, time-limited permissions** on your behalf
-- ❌ Services can't verify whether an agent is **genuinely authorized** by the claimed human
-- ❌ No **auditable, tamper-proof record** of what an agent did, when, and under whose authority
-- ❌ Multi-agent pipelines have no way to **chain authorization** — a sub-agent can't prove it was legitimately spawned
+- **No scoping** — agents get the same access as the key owner
+- **No consent** — users never approve what the agent can do
+- **No per-agent identity** — you know the key was used, but not which agent or why
+- **No revocation granularity** — one agent misbehaves, rotate the key, kill everything
+- **No delegation control** — Agent A calls Agent B? Copy-paste credentials
+- **No spending limits** — an agent with a cloud API key can provision unlimited resources
 
-This is exactly where the internet was before OAuth 2.0. **Someone needs to build the standard. That's Grantex.**
+OAuth solved this for web apps. IAM solved it for cloud. **AI agents have nothing. Until now.**
 
 ---
 
 ## How It Works
 
-Grantex introduces three primitives:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         GRANTEX PROTOCOL                        │
-├───────────────────┬─────────────────────┬───────────────────────┤
-│   Agent Identity  │   Delegated Grant   │     Audit Trail       │
-│                   │                     │                       │
-│  Cryptographic    │  Human-approved,    │  Append-only,         │
-│  DID / JWT for    │  scoped, revocable  │  hash-chained log     │
-│  every agent      │  permission tokens  │  of every action      │
-└───────────────────┴─────────────────────┴───────────────────────┘
-```
-
-**The flow in 30 seconds:**
-
-```
-  Developer registers agent → declares required scopes
-          │
-          ▼
-  Agent requests authorization from end-user
-          │
-          ▼
-  User approves via Grantex consent UI (scoped, time-limited)
-          │
-          ▼
-  Grantex issues signed Grant Token (RS256 JWT + custom claims)
-          │
-          ▼
-  Agent presents token to any service → service verifies locally via JWKS
-          │
-          ▼
-  Every action logged to immutable audit trail
-          │
-          ▼
-  User can revoke any grant at any time → effective in < 1 second
-          │
-          ▼
-  End-user permission dashboard → users self-service view & revoke access
-```
+<img src="docs/images/flow-diagram.svg" alt="Grantex Protocol Flow" width="100%"/>
 
 ---
 
@@ -315,6 +309,11 @@ delegated = grantex.grants.delegate(
 
 ---
 
+## Advanced Features
+
+<details>
+<summary><strong>FIDO2 / WebAuthn</strong> — passkey-based consent verification</summary>
+
 ## FIDO2 / WebAuthn
 
 Grantex supports passkey-based human presence verification using the FIDO2/WebAuthn standard. When enabled, end-users prove they are physically present during the consent flow by authenticating with a passkey (biometric, security key, or platform authenticator). This raises the assurance level of every grant from "user clicked approve" to "user was cryptographically verified."
@@ -369,7 +368,10 @@ client.webauthn.delete_credential(credential_id)
 | `POST` | `/v1/webauthn/assert/verify` | Verify assertion during consent |
 | `PATCH` | `/v1/me` | Update developer settings (FIDO config) |
 
----
+</details>
+
+<details>
+<summary><strong>Verifiable Credentials</strong> — W3C VC-JWT issuance and verification</summary>
 
 ## Verifiable Credentials
 
@@ -464,7 +466,10 @@ curl https://api.grantex.dev/.well-known/did.json
 | `GET` | `/v1/credentials/status/:id` | StatusList2021 credential |
 | `GET` | `/.well-known/did.json` | W3C DID document |
 
----
+</details>
+
+<details>
+<summary><strong>SD-JWT Selective Disclosure</strong> — privacy-preserving credential presentation</summary>
 
 ## SD-JWT Selective Disclosure
 
@@ -545,7 +550,10 @@ Each disclosure is a base64url-encoded JSON array `[salt, claim-name, claim-valu
 | `POST` | `/v1/token` | Exchange code for grant token + SD-JWT (with `credentialFormat: "sd-jwt"`) |
 | `POST` | `/v1/credentials/verify` | Verify an SD-JWT presentation |
 
----
+</details>
+
+<details>
+<summary><strong>Budget Controls</strong> — per-agent spending limits with atomic debit</summary>
 
 ## Budget Controls
 
@@ -608,7 +616,10 @@ transactions = client.budgets.transactions("grnt_01HXYZ...")
 | `GET` | `/v1/budget/allocations` | List all budget allocations |
 | `GET` | `/v1/budget/transactions/:grantId` | List transactions and total spend for a grant |
 
----
+</details>
+
+<details>
+<summary><strong>Event Streaming</strong> — real-time SSE and WebSocket</summary>
 
 ## Event Streaming
 
@@ -660,7 +671,10 @@ await client.events.subscribe(handler)
 | `GET` | `/v1/events/stream` | SSE event stream (Bearer auth) |
 | `GET` | `/v1/events/ws` | WebSocket event stream |
 
----
+</details>
+
+<details>
+<summary><strong>Usage Metering</strong> — track API consumption per developer</summary>
 
 ## Usage Metering
 
@@ -697,7 +711,10 @@ for entry in history.entries:
 | `GET` | `/v1/usage` | Current period usage for the authenticated developer |
 | `GET` | `/v1/usage/history?days=N` | Daily usage history for the last N days |
 
----
+</details>
+
+<details>
+<summary><strong>Custom Domains</strong> — white-label consent UI and API endpoints</summary>
 
 ## Custom Domains
 
@@ -745,7 +762,10 @@ client.domains.delete(domain.id)
 | `POST` | `/v1/domains/:id/verify` | Verify domain ownership via DNS TXT |
 | `DELETE` | `/v1/domains/:id` | Remove a custom domain |
 
----
+</details>
+
+<details>
+<summary><strong>Policy-as-Code</strong> — OPA and Cedar policy backends</summary>
 
 ## Policy-as-Code
 
@@ -788,6 +808,8 @@ bundles = client.policies.bundles()
 | `POST` | `/v1/policies/sync` | Upload a policy bundle (OPA or Cedar) |
 | `POST` | `/v1/policies/sync/webhook` | Git webhook trigger for policy sync |
 | `GET` | `/v1/policies/bundles` | List uploaded policy bundles |
+
+</details>
 
 ---
 
@@ -1116,6 +1138,29 @@ Grantex is open-source and welcomes contributions:
 4. **Improve docs** — better examples, tutorials, and translations
 
 Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRIBUTING.md) before submitting a PR.
+
+---
+
+## Standards & Compliance
+
+| | |
+|---|---|
+| **IETF** | Internet-Draft submitted to OAuth Working Group ([draft-mishra-oauth-agent-grants-01](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
+| **NIST** | NCCoE public comment filed |
+| **AuthZEN** | Conformance mapped |
+| **SOC 2** | Type I certification completed |
+| **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, open, Apache 2.0 |
+
+---
+
+## Trusted By
+
+> Using Grantex in production? [Open a PR](https://github.com/mishrasanjeev/grantex/edit/main/README.md) to add your company here.
+
+<!--
+Add your company logo here:
+<a href="https://yourcompany.com"><img src="https://yourcompany.com/logo.svg" height="40" alt="YourCompany"/></a>
+-->
 
 ---
 
