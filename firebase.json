@@ -11,6 +11,7 @@
       { "source": "/playground", "destination": "/playground.html" },
       { "source": "/for/:framework", "destination": "/for/index.html" },
       { "source": "/vs/:topic", "destination": "/vs/index.html" },
+      { "source": "/report/state-of-agent-security-2026", "destination": "/report/state-of-agent-security-2026.html" },
       { "source": "**", "destination": "/index.html" }
     ],
     "headers": [
