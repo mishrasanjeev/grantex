@@ -1,0 +1,51 @@
+name: SEO Sitemap Ping
+
+on:
+  schedule:
+    - cron: '0 8 * * 1' # Every Monday at 8am UTC
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping Search Engines
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Google
+        run: |
+          curl -s "https://www.google.com/ping?sitemap=https://grantex.dev/sitemap.xml"
+          curl -s "https://www.google.com/ping?sitemap=https://docs.grantex.dev/sitemap.xml"
+          echo "Google pinged"
+
+      - name: Ping Bing
+        run: |
+          curl -s "https://www.bing.com/ping?sitemap=https://grantex.dev/sitemap.xml"
+          curl -s "https://www.bing.com/ping?sitemap=https://docs.grantex.dev/sitemap.xml"
+          echo "Bing pinged"
+
+      - name: Ping IndexNow (Bing/Yandex)
+        run: |
+          curl -s -X POST "https://api.indexnow.org/indexnow" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "host": "grantex.dev",
+              "key": "78181e8137ae41ec881a17171a1e9fb2",
+              "urlList": [
+                "https://grantex.dev/",
+                "https://grantex.dev/playground",
+                "https://grantex.dev/report/state-of-agent-security-2026",
+                "https://grantex.dev/for/langchain",
+                "https://grantex.dev/for/crewai",
+                "https://grantex.dev/for/openai-agents",
+                "https://grantex.dev/for/google-adk",
+                "https://grantex.dev/for/vercel-ai",
+                "https://grantex.dev/for/autogen",
+                "https://grantex.dev/for/mcp",
+                "https://grantex.dev/for/express",
+                "https://grantex.dev/for/fastapi",
+                "https://grantex.dev/vs/oauth",
+                "https://grantex.dev/vs/api-keys",
+                "https://grantex.dev/vs/mcp-auth",
+                "https://grantex.dev/vs/securing-ai-agents"
+              ]
+            }' || true
+          echo "IndexNow pinged"
