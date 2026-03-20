@@ -79,10 +79,13 @@ jobs:
           KEY="$GRANTEX_API_KEY"
           AUTH_H="Authorization: Bearer $KEY"
 
-          echo "=== Register agent ==="
-          AGENT_ID=$(curl -sf -X POST "$API/v1/agents" \
-            -H "$AUTH_H" -H "Content-Type: application/json" \
-            -d '{"name":"MPP CI E2E Agent","description":"Automated E2E test"}' | jq -r '.agentId')
+          echo "=== Find or create agent ==="
+          AGENT_ID=$(curl -sf "$API/v1/agents" -H "$AUTH_H" | jq -r '.agents[0].agentId')
+          if [ -z "$AGENT_ID" ] || [ "$AGENT_ID" = "null" ]; then
+            AGENT_ID=$(curl -sf -X POST "$API/v1/agents" \
+              -H "$AUTH_H" -H "Content-Type: application/json" \
+              -d '{"name":"MPP CI E2E Agent","description":"Automated E2E test"}' | jq -r '.agentId')
+          fi
           echo "Agent: $AGENT_ID"
 
           echo "=== Authorize ==="
@@ -157,12 +160,12 @@ jobs:
           const API = process.env.PROD_URL;
           const KEY = process.env.GRANTEX_API_KEY;
 
-          // Register → authorize → consent → token → passport (inline)
-          const agent = await (await fetch(`${API}/v1/agents`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: 'MPP Verify E2E', description: 'Sig verification test' }),
+          // Find existing agent (reuse to avoid plan limits)
+          const agentList = await (await fetch(`${API}/v1/agents`, {
+            headers: { 'Authorization': `Bearer ${KEY}` },
           })).json();
+          const agent = { agentId: agentList.agents[0].agentId };
+          console.log('Using agent:', agent.agentId);
 
           const auth = await (await fetch(`${API}/v1/authorize`, {
             method: 'POST',
