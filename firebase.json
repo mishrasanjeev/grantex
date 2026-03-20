@@ -2,6 +2,8 @@
   "hosting": {
     "public": "web",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "cleanUrls": true,
+    "trailingSlash": false,
     "redirects": [
       { "source": "/docs", "destination": "https://docs.grantex.dev", "type": 301 },
       { "source": "/docs/:path*", "destination": "https://docs.grantex.dev/:path*", "type": 301 }
@@ -11,14 +13,40 @@
       { "source": "/playground", "destination": "/playground.html" },
       { "source": "/for/:framework", "destination": "/for/index.html" },
       { "source": "/vs/:topic", "destination": "/vs/index.html" },
-      { "source": "/report/state-of-agent-security-2026", "destination": "/report/state-of-agent-security-2026.html" },
-      { "source": "**", "destination": "/index.html" }
+      { "source": "/report/state-of-agent-security-2026", "destination": "/report/state-of-agent-security-2026.html" }
     ],
     "headers": [
       {
         "source": "**/*.@(js|css|woff2)",
         "headers": [
-          { "key": "Cache-Control", "value": "max-age=31536000,immutable" }
+          { "key": "Cache-Control", "value": "public,max-age=31536000,immutable" }
+        ]
+      },
+      {
+        "source": "sitemap.xml",
+        "headers": [
+          { "key": "Cache-Control", "value": "public,max-age=3600" },
+          { "key": "Content-Type", "value": "application/xml" }
+        ]
+      },
+      {
+        "source": "robots.txt",
+        "headers": [
+          { "key": "Cache-Control", "value": "public,max-age=86400" }
+        ]
+      },
+      {
+        "source": "public/contexts/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "public,max-age=86400" },
+          { "key": "Content-Type", "value": "application/ld+json" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" }
+        ]
+      },
+      {
+        "source": "**/*.html",
+        "headers": [
+          { "key": "Cache-Control", "value": "public,max-age=300,s-maxage=3600" }
         ]
       },
       {
@@ -26,7 +54,8 @@
         "headers": [
           { "key": "X-Frame-Options",           "value": "DENY" },
           { "key": "X-Content-Type-Options",    "value": "nosniff" },
-          { "key": "Referrer-Policy",           "value": "strict-origin-when-cross-origin" }
+          { "key": "Referrer-Policy",           "value": "strict-origin-when-cross-origin" },
+          { "key": "X-Robots-Tag",              "value": "index,follow" }
         ]
       }
     ]

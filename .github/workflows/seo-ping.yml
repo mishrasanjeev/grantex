@@ -31,7 +31,7 @@ jobs:
               "key": "78181e8137ae41ec881a17171a1e9fb2",
               "urlList": [
                 "https://grantex.dev/",
-                "https://grantex.dev/mpp-demo/",
+                "https://grantex.dev/mpp-demo",
                 "https://grantex.dev/for/mpp",
                 "https://grantex.dev/playground",
                 "https://grantex.dev/report/state-of-agent-security-2026",
