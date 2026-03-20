@@ -37,17 +37,14 @@ We built `AgentPassportCredential` — a W3C Verifiable Credential (VC 2.0) that
 
 Here is the flow:
 
-```
-  ┌─────────┐     ┌──────────────────────┐     ┌─────────┐     ┌──────────┐     ┌───────┐
-  │  Human   │────▶│  AgentPassport       │────▶│  Agent   │────▶│ Merchant  │────▶│ Audit │
-  │Principal │     │  Credential          │     │         │     │          │     │       │
-  │          │     │                      │     │         │     │          │     │       │
-  │ Issues   │     │ W3C VC 2.0           │     │ Attaches│     │ Verifies │     │ Logs  │
-  │ passport │     │ Ed25519 signed       │     │ to MPP  │     │ in <50ms │     │ every │
-  │ via      │     │ Categories + limits  │     │ request │     │ offline  │     │ event │
-  │ Grantex  │     │ StatusList2021 revoke│     │         │     │ via JWKS │     │       │
-  └─────────┘     └──────────────────────┘     └─────────┘     └──────────┘     └───────┘
-```
+| Step | Who | What |
+|------|-----|------|
+| **1. Issue** | Human | Issues `AgentPassportCredential` — W3C VC 2.0, Ed25519 signed, with categories, spending limit, and expiry |
+| **2. Store** | Agent | Receives and stores the passport credential |
+| **3. Pay** | Agent | Makes MPP request with `Authorization: Payment` + `X-Grantex-Passport` headers |
+| **4. Verify** | Merchant | Checks signature, expiry, categories, amount in **<50ms** via cached JWKS |
+| **5. Deliver** | Merchant | Returns resource — knows the human, org, and delegation chain |
+| **6. Audit** | System | Every event logged. Revoke anytime via StatusList2021 bit-flip |
 
 The credential contains everything a merchant needs to make a trust decision:
 

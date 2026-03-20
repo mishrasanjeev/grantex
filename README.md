@@ -483,33 +483,14 @@ Grantex passports are the open, standards-based answer: a W3C VC 2.0 credential 
 
 ### How It Works
 
-```
-  Human Principal          AgentPassportCredential           AI Agent              Merchant              Audit
-  ━━━━━━━━━━━━━━━          ━━━━━━━━━━━━━━━━━━━━━━━           ━━━━━━━━              ━━━━━━━━              ━━━━━
-       │                                                        │                     │                   │
-       │  1. Issue passport                                     │                     │                   │
-       │──────────────────────▶ W3C VC 2.0                      │                     │                   │
-       │                       Ed25519 signed                   │                     │                   │
-       │                       Categories: [inference, compute] │                     │                   │
-       │                       Max: 50 USDC                     │                     │                   │
-       │                       Expiry: 24h                      │                     │                   │
-       │                                  │                     │                     │                   │
-       │                                  │  2. Store           │                     │                   │
-       │                                  └────────────────────▶│                     │                   │
-       │                                                        │                     │                   │
-       │                                                        │  3. MPP payment +   │                   │
-       │                                                        │  X-Grantex-Passport │                   │
-       │                                                        │────────────────────▶│                   │
-       │                                                        │                     │                   │
-       │                                                        │  4. Verify (<50ms)  │                   │
-       │                                                        │                     │──▶ Sig + Expiry   │
-       │                                                        │                     │──▶ Categories     │
-       │                                                        │                     │──▶ Amount limit   │
-       │                                                        │                     │                   │
-       │                                                        │  5. ✓ Deliver       │  6. Log           │
-       │                                                        │◀────────────────────│──────────────────▶│
-       │                                                        │                     │                   │
-```
+| Step | Who | What |
+|------|-----|------|
+| **1. Issue** | Human | Issues `AgentPassportCredential` via Grantex — W3C VC 2.0, Ed25519 signed, with categories (`inference`, `compute`), spending limit (50 USDC), and expiry (24h) |
+| **2. Store** | Agent | Receives and stores the passport credential |
+| **3. Pay** | Agent | Makes MPP payment request with `Authorization: Payment` header + `X-Grantex-Passport: <base64url-credential>` header |
+| **4. Verify** | Merchant | Calls `verifyPassport()` — checks Ed25519 signature, expiry, categories, and amount limit in **<50ms** using cached JWKS (no API roundtrip) |
+| **5. Deliver** | Merchant | Returns the resource — knows the human principal, org, and full delegation chain |
+| **6. Audit** | System | Every issuance, verification, and revocation is logged. Revoke anytime via StatusList2021 bit-flip |
 
 > **Key insight**: The passport is a self-contained W3C VC — merchants verify it offline using cached JWKS. No API call to Grantex needed after the initial key fetch.
 
