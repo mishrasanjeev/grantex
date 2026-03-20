@@ -8,6 +8,7 @@ on:
       - 'apps/portal/**'
       - 'packages/sdk-ts/**'
       - 'packages/sdk-py/**'
+      - 'packages/mpp/**'
       - '.github/workflows/ci.yml'
 
 jobs:
@@ -86,6 +87,38 @@ jobs:
 
       - name: Test
         run: pytest
+
+  mpp:
+    name: MPP Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install SDK (peer dependency)
+        working-directory: packages/sdk-ts
+        run: npm ci
+
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm run build
+
+      - name: Install MPP dependencies
+        working-directory: packages/mpp
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: packages/mpp
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: packages/mpp
+        run: npm test
 
   portal:
     name: Developer Portal

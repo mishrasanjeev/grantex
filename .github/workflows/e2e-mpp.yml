@@ -1,0 +1,240 @@
+name: MPP E2E Tests
+
+on:
+  # Run after auth-service deploys to Cloud Run
+  workflow_run:
+    workflows: ["Deploy to Cloud Run"]
+    types: [completed]
+    branches: [main]
+  # Manual trigger
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: MPP Production E2E
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    env:
+      PROD_URL: https://api.grantex.dev
+      GRANTEX_API_KEY: ${{ secrets.E2E_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install MPP package
+        working-directory: packages/mpp
+        run: npm ci
+
+      - name: Build MPP package
+        working-directory: packages/mpp
+        run: npm run build
+
+      - name: Wait for Cloud Run to stabilize
+        run: sleep 10
+
+      - name: Health check
+        run: |
+          STATUS=$(curl -sf "$PROD_URL/health" | jq -r '.status')
+          echo "Health: $STATUS"
+          [ "$STATUS" = "ok" ] || exit 1
+
+      - name: Test trust registry — seeded orgs
+        run: |
+          for org in grantex.dev pinelabs.com shopify.com doordash.com acme-demo.dev; do
+            LEVEL=$(curl -sf "$PROD_URL/v1/trust-registry/did:web:$org" | jq -r '.trustLevel')
+            echo "did:web:$org → $LEVEL"
+            [ -n "$LEVEL" ] || exit 1
+          done
+
+      - name: Test trust registry — unknown org returns 404
+        run: |
+          HTTP=$(curl -so /dev/null -w "%{http_code}" "$PROD_URL/v1/trust-registry/did:web:unknown-e2e.org")
+          echo "Unknown org: HTTP $HTTP"
+          [ "$HTTP" = "404" ] || exit 1
+
+      - name: Test DNS verify — no TXT record
+        run: |
+          HTTP=$(curl -so /dev/null -w "%{http_code}" -X POST "$PROD_URL/v1/trust-registry/verify-dns" \
+            -H "Authorization: Bearer $GRANTEX_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"domain":"e2e-test-no-record.example.com"}')
+          echo "DNS verify (no record): HTTP $HTTP"
+          [ "$HTTP" = "400" ] || exit 1
+
+      - name: Full passport lifecycle
+        run: |
+          set -e
+          API="$PROD_URL"
+          KEY="$GRANTEX_API_KEY"
+          AUTH_H="Authorization: Bearer $KEY"
+
+          echo "=== Register agent ==="
+          AGENT_ID=$(curl -sf -X POST "$API/v1/agents" \
+            -H "$AUTH_H" -H "Content-Type: application/json" \
+            -d '{"name":"MPP CI E2E Agent","description":"Automated E2E test"}' | jq -r '.agentId')
+          echo "Agent: $AGENT_ID"
+
+          echo "=== Authorize ==="
+          AUTH_REQ=$(curl -sf -X POST "$API/v1/authorize" \
+            -H "$AUTH_H" -H "Content-Type: application/json" \
+            -d "{\"agentId\":\"$AGENT_ID\",\"principalId\":\"user_ci_e2e\",\"scopes\":[\"payments:mpp:inference\",\"payments:mpp:compute\"],\"expiresIn\":\"1h\"}" | jq -r '.authRequestId')
+          echo "Auth: $AUTH_REQ"
+
+          echo "=== Approve ==="
+          CODE=$(curl -sf -X POST "$API/v1/consent/$AUTH_REQ/approve" \
+            -H "Content-Type: application/json" -d '{}' | jq -r '.code')
+          echo "Code: $CODE"
+
+          echo "=== Exchange token ==="
+          GRANT_ID=$(curl -sf -X POST "$API/v1/token" \
+            -H "$AUTH_H" -H "Content-Type: application/json" \
+            -d "{\"code\":\"$CODE\",\"agentId\":\"$AGENT_ID\"}" | jq -r '.grantId')
+          echo "Grant: $GRANT_ID"
+
+          echo "=== Issue passport ==="
+          PASSPORT=$(curl -sf -X POST "$API/v1/passport/issue" \
+            -H "$AUTH_H" -H "Content-Type: application/json" \
+            -d "{\"agentId\":\"$AGENT_ID\",\"grantId\":\"$GRANT_ID\",\"allowedMPPCategories\":[\"inference\",\"compute\"],\"maxTransactionAmount\":{\"amount\":50,\"currency\":\"USDC\"},\"expiresIn\":\"1h\"}")
+          PASSPORT_ID=$(echo "$PASSPORT" | jq -r '.passportId')
+          echo "Passport: $PASSPORT_ID"
+
+          # Verify credential structure
+          TYPE=$(echo "$PASSPORT" | jq -r '.credential.type[1]')
+          [ "$TYPE" = "AgentPassportCredential" ] || { echo "FAIL: wrong type $TYPE"; exit 1; }
+          ISSUER=$(echo "$PASSPORT" | jq -r '.credential.issuer')
+          [ "$ISSUER" = "did:web:grantex.dev" ] || { echo "FAIL: wrong issuer $ISSUER"; exit 1; }
+
+          echo "=== Get passport ==="
+          ENCODED_ID=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$PASSPORT_ID', safe=''))")
+          STATUS=$(curl -sf "$API/v1/passport/$ENCODED_ID" -H "$AUTH_H" | jq -r '.status')
+          echo "Status: $STATUS"
+          [ "$STATUS" = "active" ] || { echo "FAIL: expected active, got $STATUS"; exit 1; }
+
+          echo "=== Validation: scope not in grant ==="
+          HTTP=$(curl -so /dev/null -w "%{http_code}" -X POST "$API/v1/passport/issue" \
+            -H "$AUTH_H" -H "Content-Type: application/json" \
+            -d "{\"agentId\":\"$AGENT_ID\",\"grantId\":\"$GRANT_ID\",\"allowedMPPCategories\":[\"storage\"],\"maxTransactionAmount\":{\"amount\":10,\"currency\":\"USDC\"}}")
+          echo "Scope insufficient: HTTP $HTTP"
+          [ "$HTTP" = "400" ] || { echo "FAIL: expected 400"; exit 1; }
+
+          echo "=== Validation: expiry too long ==="
+          HTTP=$(curl -so /dev/null -w "%{http_code}" -X POST "$API/v1/passport/issue" \
+            -H "$AUTH_H" -H "Content-Type: application/json" \
+            -d "{\"agentId\":\"$AGENT_ID\",\"grantId\":\"$GRANT_ID\",\"allowedMPPCategories\":[\"inference\"],\"maxTransactionAmount\":{\"amount\":10,\"currency\":\"USDC\"},\"expiresIn\":\"999h\"}")
+          echo "Expiry too long: HTTP $HTTP"
+          [ "$HTTP" = "422" ] || { echo "FAIL: expected 422"; exit 1; }
+
+          echo "=== Revoke ==="
+          REVOKED=$(curl -sf -X POST "$API/v1/passport/$ENCODED_ID/revoke" \
+            -H "$AUTH_H" -H "Content-Type: application/json" -d '{}' | jq -r '.revoked')
+          echo "Revoked: $REVOKED"
+          [ "$REVOKED" = "true" ] || { echo "FAIL: expected true"; exit 1; }
+
+          echo "=== Get after revoke ==="
+          STATUS2=$(curl -sf "$API/v1/passport/$ENCODED_ID" -H "$AUTH_H" | jq -r '.status')
+          echo "Status: $STATUS2"
+          [ "$STATUS2" = "revoked" ] || { echo "FAIL: expected revoked, got $STATUS2"; exit 1; }
+
+          echo "=== ALL LIFECYCLE TESTS PASSED ==="
+
+      - name: Client-side verification with prod JWKS
+        working-directory: packages/mpp
+        run: |
+          node --input-type=module <<'SCRIPT'
+          import { verifyPassport } from './dist/index.js';
+
+          const API = process.env.PROD_URL;
+          const KEY = process.env.GRANTEX_API_KEY;
+
+          // Register → authorize → consent → token → passport (inline)
+          const agent = await (await fetch(`${API}/v1/agents`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'MPP Verify E2E', description: 'Sig verification test' }),
+          })).json();
+
+          const auth = await (await fetch(`${API}/v1/authorize`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentId: agent.agentId, principalId: 'user_sig_e2e', scopes: ['payments:mpp:inference'], expiresIn: '1h' }),
+          })).json();
+
+          const consent = await (await fetch(`${API}/v1/consent/${auth.authRequestId}/approve`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+          })).json();
+
+          const token = await (await fetch(`${API}/v1/token`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: consent.code, agentId: agent.agentId }),
+          })).json();
+
+          const passport = await (await fetch(`${API}/v1/passport/issue`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              agentId: agent.agentId,
+              grantId: token.grantId,
+              allowedMPPCategories: ['inference'],
+              maxTransactionAmount: { amount: 25, currency: 'USDC' },
+              expiresIn: '1h',
+            }),
+          })).json();
+
+          console.log('Passport:', passport.passportId);
+
+          // Verify with real JWKS
+          const verified = await verifyPassport(passport.encodedCredential, {
+            jwksUri: `${API}/.well-known/jwks.json`,
+            trustedIssuers: ['did:web:grantex.dev'],
+            requiredCategories: ['inference'],
+          });
+
+          console.log('Verified:', verified.valid);
+          console.log('Agent:', verified.agentDID);
+          console.log('Human:', verified.humanDID);
+          console.log('Issuer:', verified.issuer);
+
+          if (!verified.valid) { process.exit(1); }
+
+          // Test error cases
+          const errors = [
+            ['PASSPORT_EXPIRED', () => {
+              const json = Buffer.from(passport.encodedCredential, 'base64url').toString();
+              const cred = JSON.parse(json);
+              cred.validUntil = '2020-01-01T00:00:00Z';
+              return Buffer.from(JSON.stringify(cred)).toString('base64url');
+            }],
+            ['UNTRUSTED_ISSUER', () => {
+              const json = Buffer.from(passport.encodedCredential, 'base64url').toString();
+              const cred = JSON.parse(json);
+              cred.issuer = 'did:web:evil.com';
+              return Buffer.from(JSON.stringify(cred)).toString('base64url');
+            }],
+            ['MISSING_PASSPORT', () => ''],
+          ];
+
+          for (const [expectedCode, makeInput] of errors) {
+            try {
+              await verifyPassport(makeInput(), { trustedIssuers: ['did:web:grantex.dev'] });
+              console.error(`FAIL: ${expectedCode} should have thrown`);
+              process.exit(1);
+            } catch (err) {
+              if (err.code === expectedCode) {
+                console.log(`Error test ${expectedCode}: PASS`);
+              } else {
+                console.error(`FAIL: expected ${expectedCode}, got ${err.code}`);
+                process.exit(1);
+              }
+            }
+          }
+
+          console.log('ALL VERIFICATION TESTS PASSED');
+          SCRIPT
