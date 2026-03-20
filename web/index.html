@@ -631,6 +631,7 @@
     }
     @media (max-width: 680px) {
       .enterprise-grid { grid-template-columns: 1fr; }
+      #mpp .cards + div + div { grid-template-columns: 1fr !important; }
     }
     .enterprise-features {
       display: flex;
@@ -1028,92 +1029,117 @@
       so merchants know exactly who authorized every payment.
     </p>
 
-    <div class="cards">
-      <div class="card" style="border-left: 3px solid var(--accent);">
-        <span class="card-icon">&#x1F4B3;</span>
-        <h3>AgentPassportCredential</h3>
-        <p>
-          W3C VC 2.0 credential binding agent identity, human delegation, spending limits,
-          and payment categories into a single offline-verifiable document.
-        </p>
-      </div>
-      <div class="card" style="border-left: 3px solid var(--accent2);">
-        <span class="card-icon">&#x26A1;</span>
-        <h3>&lt;50ms Merchant Verification</h3>
-        <p>
-          Merchants verify passports offline using cached JWKS — no API roundtrip needed.
-          Ed25519 signature, expiry, category, and amount checks in a single call.
-        </p>
-      </div>
-      <div class="card" style="border-left: 3px solid #d2a8ff;">
-        <span class="card-icon">&#x1F3E6;</span>
-        <h3>Public Trust Registry</h3>
-        <p>
-          Look up any organization's verified trust level by DID. DNS-TXT, SOC 2,
-          or manual verification — all queryable without authentication.
-        </p>
-      </div>
-    </div>
-
-    <!-- Flow diagram -->
-    <div class="section-label" style="margin-top:48px;margin-bottom:20px;">Payment flow with identity</div>
-    <div class="flow">
-      <div class="flow-step">
-        <div class="step-num">1</div>
-        <div class="step-body">
-          <h3>Human issues passport</h3>
-          <p>Principal authorizes agent via Grantex → receives <code>AgentPassportCredential</code> with
-          spending limit, categories (inference, compute, data), and Ed25519 proof.</p>
+    <!-- ── Visual flow pipeline ───────────────────────────────────────── -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:32px 24px;margin-bottom:48px;overflow-x:auto;">
+      <div style="display:flex;align-items:stretch;gap:0;min-width:900px;">
+        <!-- Step 1: Human -->
+        <div style="flex:1;text-align:center;padding:0 12px;">
+          <div style="font-size:36px;margin-bottom:8px;">&#x1F464;</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">Human Principal</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Issues passport<br>via Grantex dashboard</div>
+          <div style="margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--accent);">did:grantex:user_alice</div>
+          </div>
         </div>
-      </div>
-      <div class="flow-step">
-        <div class="step-num">2</div>
-        <div class="step-body">
-          <h3>Agent makes MPP payment</h3>
-          <p>Agent sends <code>Authorization: Payment</code> header (standard MPP) plus
-          <code>X-Grantex-Passport</code> header with the base64url-encoded credential.</p>
+        <!-- Arrow -->
+        <div style="display:flex;align-items:center;padding:0 4px;color:var(--accent);font-size:22px;flex-shrink:0;">&#x2192;</div>
+        <!-- Step 2: Passport -->
+        <div style="flex:1.2;text-align:center;padding:0 12px;border-left:1px dashed var(--border);border-right:1px dashed var(--border);">
+          <div style="font-size:36px;margin-bottom:8px;">&#x1F4DC;</div>
+          <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:4px;">AgentPassportCredential</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">W3C VC 2.0 &middot; Ed25519 signed<br>Categories + limits + delegation</div>
+          <div style="display:flex;gap:4px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
+            <span style="font-size:10px;font-family:var(--mono);background:rgba(63,185,80,0.15);color:var(--accent);padding:2px 8px;border-radius:10px;">inference</span>
+            <span style="font-size:10px;font-family:var(--mono);background:rgba(88,166,255,0.15);color:var(--accent2);padding:2px 8px;border-radius:10px;">compute</span>
+            <span style="font-size:10px;font-family:var(--mono);background:rgba(210,168,255,0.15);color:#d2a8ff;padding:2px 8px;border-radius:10px;">50 USDC</span>
+          </div>
         </div>
-      </div>
-      <div class="flow-step">
-        <div class="step-num">3</div>
-        <div class="step-body">
-          <h3>Merchant verifies identity</h3>
-          <p>One function call: <code>verifyPassport()</code> checks signature, expiry, categories, and
-          amount in &lt;50ms. Returns the human principal, org DID, and delegation chain.</p>
+        <!-- Arrow -->
+        <div style="display:flex;align-items:center;padding:0 4px;color:var(--accent2);font-size:22px;flex-shrink:0;">&#x2192;</div>
+        <!-- Step 3: Agent -->
+        <div style="flex:1;text-align:center;padding:0 12px;">
+          <div style="font-size:36px;margin-bottom:8px;">&#x1F916;</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">AI Agent</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Attaches passport to<br>MPP payment request</div>
+          <div style="margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--accent2);">X-Grantex-Passport: ey...</div>
+          </div>
         </div>
-      </div>
-      <div class="flow-step">
-        <div class="step-num">4</div>
-        <div class="step-body">
-          <h3>Full audit trail</h3>
-          <p>Every passport issuance, verification, and revocation is logged. Revocation flips a
-          StatusList2021 bit — propagates instantly, no polling.</p>
+        <!-- Arrow -->
+        <div style="display:flex;align-items:center;padding:0 4px;color:var(--accent);font-size:22px;flex-shrink:0;">&#x2192;</div>
+        <!-- Step 4: Merchant -->
+        <div style="flex:1;text-align:center;padding:0 12px;">
+          <div style="font-size:36px;margin-bottom:8px;">&#x1F3EA;</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">Merchant</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Verifies offline<br>in &lt;50ms via JWKS</div>
+          <div style="margin-top:10px;background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.3);border-radius:6px;padding:6px 10px;">
+            <div style="font-family:var(--mono);font-size:10px;color:var(--accent);">&#x2713; valid &middot; alice &middot; acme.com</div>
+          </div>
+        </div>
+        <!-- Arrow -->
+        <div style="display:flex;align-items:center;padding:0 4px;color:#d2a8ff;font-size:22px;flex-shrink:0;">&#x2192;</div>
+        <!-- Step 5: Audit -->
+        <div style="flex:0.8;text-align:center;padding:0 12px;">
+          <div style="font-size:36px;margin-bottom:8px;">&#x1F4CA;</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">Audit</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Every payment logged<br>Revoke anytime</div>
         </div>
       </div>
     </div>
 
-    <!-- Code example -->
-    <div style="margin-top:48px;">
-      <div class="section-label" style="margin-bottom:12px;color:var(--accent2);">Merchant-side verification</div>
-      <div class="code-block" style="border:1px solid var(--border);border-radius:var(--radius);max-width:680px;">
-        <pre><span class="kw">import</span> <span class="op">{</span> <span class="id">requireAgentPassport</span> <span class="op">}</span> <span class="kw">from</span> <span class="str">'@grantex/mpp'</span><span class="op">;</span>
+    <!-- ── Two-column: features + code ────────────────────────────────── -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;">
+      <!-- Left: feature cards -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card" style="border-left:3px solid var(--accent);margin:0;">
+          <span class="card-icon">&#x1F4B3;</span>
+          <h3>AgentPassportCredential</h3>
+          <p>W3C VC 2.0 binding agent identity, human delegation, spending limits, and 9 MPP categories into one credential.</p>
+        </div>
+        <div class="card" style="border-left:3px solid var(--accent2);margin:0;">
+          <span class="card-icon">&#x26A1;</span>
+          <h3>&lt;50ms Offline Verification</h3>
+          <p>Merchants verify via cached JWKS — signature, expiry, category, and amount in a single call. No API roundtrip.</p>
+        </div>
+        <div class="card" style="border-left:3px solid #d2a8ff;margin:0;">
+          <span class="card-icon">&#x1F3E6;</span>
+          <h3>Public Trust Registry</h3>
+          <p>Look up any org by DID — DNS-TXT, SOC 2, or manual verification. Public endpoint, no auth required.</p>
+        </div>
+      </div>
+      <!-- Right: code -->
+      <div>
+        <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:var(--accent2);margin-bottom:10px;">Merchant-side: one line</div>
+        <div class="code-block" style="border:1px solid var(--border);border-radius:var(--radius);margin-top:0;">
+          <pre><span class="kw">import</span> <span class="op">{</span> <span class="id">requireAgentPassport</span> <span class="op">}</span> <span class="kw">from</span> <span class="str">'@grantex/mpp'</span><span class="op">;</span>
 
-<span class="cm">// One line to protect any Express route</span>
+<span class="cm">// One line to protect any route</span>
 <span class="id">app</span><span class="op">.</span><span class="fn">use</span><span class="op">(</span><span class="str">'/api/inference'</span><span class="op">,</span> <span class="fn">requireAgentPassport</span><span class="op">({</span>
   <span class="id">requiredCategories</span><span class="op">:</span> <span class="op">[</span><span class="str">'inference'</span><span class="op">],</span>
   <span class="id">maxAmount</span><span class="op">:</span> <span class="str">10</span><span class="op">,</span>
 <span class="op">}));</span>
 
-<span class="cm">// req.agentPassport is now populated:</span>
-<span class="cm">//   humanDID:    "did:grantex:user_alice"</span>
-<span class="cm">//   orgDID:      "did:web:acme.com"</span>
-<span class="cm">//   categories:  ["inference", "compute"]</span>
+<span class="cm">// req.agentPassport is populated:</span>
+<span class="cm">//   humanDID:    did:grantex:user_alice</span>
+<span class="cm">//   orgDID:      did:web:acme.com</span>
+<span class="cm">//   categories:  [inference, compute]</span>
 <span class="cm">//   maxAmount:   50 USDC</span>
-<span class="cm">//   delegation:  depth 0 (direct grant)</span></pre>
+<span class="cm">//   depth:       0 (direct grant)</span></pre>
+        </div>
+        <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin:20px 0 10px;">Agent-side: issue + attach</div>
+        <div class="code-block" style="border:1px solid var(--border);border-radius:var(--radius);margin-top:0;">
+          <pre><span class="kw">const</span> <span class="id">passport</span> <span class="op">=</span> <span class="kw">await</span> <span class="id">grantex</span><span class="op">.</span><span class="id">passports</span><span class="op">.</span><span class="fn">issue</span><span class="op">({</span>
+  <span class="id">agentId</span><span class="op">:</span> <span class="str">'ag_01HXYZ...'</span><span class="op">,</span>
+  <span class="id">grantId</span><span class="op">:</span> <span class="str">'grnt_01HXYZ...'</span><span class="op">,</span>
+  <span class="id">allowedMPPCategories</span><span class="op">:</span> <span class="op">[</span><span class="str">'inference'</span><span class="op">,</span> <span class="str">'compute'</span><span class="op">],</span>
+  <span class="id">maxTransactionAmount</span><span class="op">:</span> <span class="op">{</span> <span class="id">amount</span><span class="op">:</span> <span class="str">50</span><span class="op">,</span> <span class="id">currency</span><span class="op">:</span> <span class="str">'USDC'</span> <span class="op">},</span>
+<span class="op">});</span>
+<span class="kw">const</span> <span class="id">mw</span> <span class="op">=</span> <span class="fn">createMppPassportMiddleware</span><span class="op">({</span> <span class="id">passport</span> <span class="op">});</span></pre>
+        </div>
       </div>
     </div>
 
-    <!-- Install + CTA -->
+    <!-- ── Install + CTA ──────────────────────────────────────────────── -->
     <div style="margin-top:40px;">
       <div class="install-commands">
         <div class="install-cmd" onclick="navigator.clipboard.writeText('npm install @grantex/mpp')">
@@ -1131,9 +1157,9 @@
            onclick="gtag('event','mpp_demo_click',{event_category:'mpp'})">
           Try the demo
         </a>
-        <a href="https://api.grantex.dev/v1/trust-registry/did:web:grantex.dev" class="btn btn-secondary"
-           onclick="gtag('event','trust_registry_click',{event_category:'mpp'})">
-          Query trust registry
+        <a href="/for/mpp" class="btn btn-secondary"
+           onclick="gtag('event','mpp_learn_click',{event_category:'mpp'})">
+          Learn more
         </a>
       </div>
     </div>
