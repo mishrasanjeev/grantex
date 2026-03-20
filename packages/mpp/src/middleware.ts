@@ -30,7 +30,7 @@ export function createMppPassportMiddleware(
       );
     }
 
-    // TODO: post-hackathon — auto-refresh passport when within threshold
+    // TODO: auto-refresh passport when within threshold
     if (expiresAt - now < _autoRefreshThreshold * 1000) {
       // For now, just warn — auto-refresh requires callback to re-issue
       console.warn(

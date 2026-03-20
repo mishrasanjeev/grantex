@@ -10,7 +10,7 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
       const { orgDID } = request.params;
       const sql = getSql();
 
-      // TODO: implement DNS TXT verification (post-hackathon)
+      // TODO: implement DNS TXT verification
       const rows = await sql`
         SELECT organization_did, domain, verified_at, verification_method, trust_level
         FROM trust_registry
