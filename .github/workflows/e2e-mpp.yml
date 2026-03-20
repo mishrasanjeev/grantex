@@ -28,6 +28,10 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install and build SDK (peer dependency)
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+
       - name: Install MPP package
         working-directory: packages/mpp
         run: npm ci
