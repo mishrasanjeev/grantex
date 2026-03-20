@@ -109,6 +109,7 @@ export interface VerifiedPassport {
 export interface MppPassportMiddlewareOptions {
   passport: IssuedPassport;
   autoRefreshThreshold?: number;
+  onRefresh?: () => Promise<IssuedPassport>;
 }
 
 // ─── Trust Registry ──────────────────────────────────────────────────────────

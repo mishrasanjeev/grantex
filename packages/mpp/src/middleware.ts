@@ -6,9 +6,17 @@ const PASSPORT_HEADER = 'X-Grantex-Passport';
  * Creates a fetch-compatible middleware function that injects the
  * X-Grantex-Passport header into outgoing MPP requests.
  *
+ * When `onRefresh` is provided and the passport is within
+ * `autoRefreshThreshold` seconds of expiry, the middleware will
+ * automatically call `onRefresh()` to obtain a new passport before
+ * attaching it to the request.
+ *
  * Usage:
  * ```ts
- * const middleware = createMppPassportMiddleware({ passport });
+ * const middleware = createMppPassportMiddleware({
+ *   passport,
+ *   onRefresh: () => issuePassport(client, originalOptions),
+ * });
  * const enrichedRequest = await middleware(new Request(url, init));
  * const response = await fetch(enrichedRequest);
  * ```
@@ -16,31 +24,54 @@ const PASSPORT_HEADER = 'X-Grantex-Passport';
 export function createMppPassportMiddleware(
   options: MppPassportMiddlewareOptions,
 ): (request: Request) => Promise<Request> {
-  const { passport } = options;
-  const _autoRefreshThreshold = options.autoRefreshThreshold ?? 300;
+  let currentPassport = options.passport;
+  const autoRefreshThreshold = options.autoRefreshThreshold ?? 300;
+  const onRefresh = options.onRefresh;
+  let refreshInProgress: Promise<IssuedPassport> | null = null;
 
   return async (request: Request): Promise<Request> => {
-    // Check if passport is still valid
     const now = Date.now();
-    const expiresAt = passport.expiresAt.getTime();
+    let expiresAt = currentPassport.expiresAt.getTime();
 
+    // Hard expiry — passport is already expired
     if (now >= expiresAt) {
-      throw new Error(
-        `Agent passport ${passport.passportId} has expired. Issue a new passport before making MPP requests.`,
-      );
+      // Try one last refresh if callback is available
+      if (onRefresh && !refreshInProgress) {
+        try {
+          refreshInProgress = onRefresh();
+          currentPassport = await refreshInProgress;
+          refreshInProgress = null;
+          expiresAt = currentPassport.expiresAt.getTime();
+        } catch {
+          refreshInProgress = null;
+          throw new Error(
+            `Agent passport ${currentPassport.passportId} has expired and refresh failed. Issue a new passport before making MPP requests.`,
+          );
+        }
+      } else {
+        throw new Error(
+          `Agent passport ${currentPassport.passportId} has expired. Issue a new passport before making MPP requests.`,
+        );
+      }
     }
 
-    // TODO: auto-refresh passport when within threshold
-    if (expiresAt - now < _autoRefreshThreshold * 1000) {
-      // For now, just warn — auto-refresh requires callback to re-issue
-      console.warn(
-        `Agent passport ${passport.passportId} expires in ${Math.round((expiresAt - now) / 1000)}s. Consider refreshing.`,
-      );
+    // Approaching expiry — proactively refresh if callback is available
+    if (expiresAt - now < autoRefreshThreshold * 1000 && onRefresh && !refreshInProgress) {
+      refreshInProgress = onRefresh();
+      refreshInProgress
+        .then((newPassport) => {
+          currentPassport = newPassport;
+          refreshInProgress = null;
+        })
+        .catch(() => {
+          // Non-fatal: current passport is still valid, just couldn't refresh early
+          refreshInProgress = null;
+        });
     }
 
     // Clone the request and add the passport header
     const headers = new Headers(request.headers);
-    headers.set(PASSPORT_HEADER, passport.encodedCredential);
+    headers.set(PASSPORT_HEADER, currentPassport.encodedCredential);
 
     const init: RequestInit = {
       method: request.method,
