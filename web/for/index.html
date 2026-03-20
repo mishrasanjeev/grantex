@@ -606,6 +606,59 @@ async def list_emails(
     metaTitle: 'Grantex for FastAPI — JWT Middleware for AI Agent Authorization',
     metaDesc: 'Async FastAPI middleware for Grantex JWT verification. Dependency-injection, per-route scopes, and agent identity. Type-safe, Pythonic. Open source.',
   },
+  mpp: {
+    name: 'MPP (Machine Payments Protocol)',
+    badge: 'MPP + Grantex',
+    title: 'Agent Identity for <span class="highlight">Machine Payments</span>',
+    desc: 'MPP defines how AI agents pay for services. Grantex adds the missing identity layer — verifiable agent passports that let merchants know exactly who authorized every payment, with offline verification in under 50ms.',
+    docsUrl: 'https://docs.grantex.dev/features/mpp-agent-passport',
+    installUrl: 'https://docs.grantex.dev/guides/mpp-integration',
+    install: 'npm install @grantex/mpp @grantex/sdk',
+    problemBad: 'When an agent makes an MPP payment, the source is just a wallet address. No human name, no org, no authorization chain. For $0.10 API calls nobody cares. For $500 B2B procurement, it\'s a compliance blocker.',
+    problemGood: 'Every MPP payment carries an AgentPassportCredential — a W3C VC 2.0 credential with the human principal, org DID, spending limits, and allowed categories. Merchants verify in <50ms, offline.',
+    howTitle: 'How Grantex Works with MPP',
+    steps: [
+      ['Install the package', 'npm install @grantex/mpp — agent-side middleware + merchant-side verification in one package.'],
+      ['Issue an agent passport', 'Call grantex.passports.issue() with categories (inference, compute, data), spending limits, and expiry.'],
+      ['Attach to MPP requests', 'createMppPassportMiddleware() injects the X-Grantex-Passport header on every outgoing fetch.'],
+      ['Verify on the merchant side', 'requireAgentPassport() Express middleware — one line to verify identity, categories, and amounts.'],
+      ['Check the trust registry', 'lookupOrgTrust() returns verified org status (basic, verified, SOC 2) from the public registry.'],
+    ],
+    code: `import { Grantex } from '@grantex/sdk';
+import { createMppPassportMiddleware, requireAgentPassport } from '@grantex/mpp';
+
+// Agent side: issue passport and attach to requests
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+const passport = await grantex.passports.issue({
+  agentId: 'ag_01HXYZ...',
+  grantId: 'grnt_01HXYZ...',
+  allowedMPPCategories: ['inference', 'compute'],
+  maxTransactionAmount: { amount: 50, currency: 'USDC' },
+  expiresIn: '24h',
+});
+
+const middleware = createMppPassportMiddleware({ passport });
+const enriched = await middleware(new Request(url));
+// X-Grantex-Passport header attached
+
+// Merchant side: one-line verification
+app.use('/api/inference', requireAgentPassport({
+  requiredCategories: ['inference'],
+  maxAmount: 10,
+}));
+// req.agentPassport → { humanDID, orgDID, categories, maxAmount, ... }`,
+    features: [
+      ['AgentPassportCredential', 'W3C VC 2.0 with agent DID, human principal, org, categories, spending limits, and delegation depth.'],
+      ['<50ms Verification', 'Offline verification using cached JWKS. No API roundtrip to Grantex servers needed.'],
+      ['9 MPP Categories', 'inference, compute, data, storage, search, media, delivery, browser, general — each maps to a Grantex scope.'],
+      ['StatusList2021 Revocation', 'Revoke any passport instantly. Bit-flip propagation, no polling required.'],
+      ['Trust Registry', 'Public org trust lookup by DID. DNS-TXT, manual, or SOC 2 verification levels.'],
+      ['Auto-Refresh', 'Middleware proactively refreshes passports before expiry via onRefresh callback.'],
+    ],
+    ctaFramework: 'MPP',
+    metaTitle: 'Grantex for MPP — Agent Identity for Machine Payments Protocol',
+    metaDesc: 'Add verifiable agent identity to MPP machine payments. AgentPassportCredential with spending limits, category restrictions, and offline merchant verification in under 50ms. Open source, W3C VC 2.0.',
+  },
 };
 
 // Determine framework from URL

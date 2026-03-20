@@ -6,13 +6,14 @@
 
   <!-- SEO -->
   <title>Grantex — OAuth 2.0 for AI Agents</title>
-  <meta name="description" content="Open delegated authorization protocol for AI agents. W3C Verifiable Credentials, FIDO2/WebAuthn passkeys, SD-JWT selective disclosure, and DID infrastructure — built on JWT and OAuth 2.0.">
+  <meta name="description" content="Open delegated authorization protocol for AI agents. MPP agent identity for machine payments, W3C Verifiable Credentials, FIDO2/WebAuthn passkeys, SD-JWT selective disclosure, and DID infrastructure — built on JWT and OAuth 2.0.">
+  <meta name="keywords" content="Grantex, MPP, Machine Payments Protocol, AI agent identity, OAuth for AI agents, agent authorization, W3C Verifiable Credentials, agent passport, agentic commerce, MPP OAuth, agent delegation, DID, FIDO2, WebAuthn, JWT, machine-to-machine payments, USDC payments, AI agent payments, Tempo payments">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/">
 
   <!-- OpenGraph -->
   <meta property="og:title" content="Grantex — OAuth 2.0 for AI Agents">
-  <meta property="og:description" content="Open delegated authorization protocol for AI agents. W3C Verifiable Credentials, FIDO2/WebAuthn passkeys, SD-JWT selective disclosure, and DID infrastructure — built on JWT and OAuth 2.0.">
+  <meta property="og:description" content="Open delegated authorization protocol for AI agents. MPP agent identity for machine payments, W3C Verifiable Credentials, FIDO2/WebAuthn passkeys — built on JWT and OAuth 2.0.">
   <meta property="og:url" content="https://grantex.dev/">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
   <meta property="og:type" content="website">
@@ -21,7 +22,7 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Grantex — OAuth 2.0 for AI Agents">
-  <meta name="twitter:description" content="Open delegated authorization protocol for AI agents. W3C Verifiable Credentials, FIDO2/WebAuthn passkeys, SD-JWT selective disclosure, and DID infrastructure — built on JWT and OAuth 2.0.">
+  <meta name="twitter:description" content="Open delegated authorization protocol for AI agents. MPP agent identity for machine payments, W3C Verifiable Credentials, FIDO2/WebAuthn passkeys — built on JWT and OAuth 2.0.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
 
   <!-- JSON-LD Structured Data -->
@@ -124,8 +125,51 @@
           "@type": "Answer",
           "text": "SD-JWT allows credential holders to selectively disclose only the claims a verifier needs. Instead of revealing all grant details, agents can present minimal information — for example, showing scopes without revealing the principal's identity."
         }
+      },
+      {
+        "@type": "Question",
+        "name": "What is MPP agent identity?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "MPP (Machine Payments Protocol) defines how AI agents pay for services. Grantex adds the missing identity layer with AgentPassportCredential — a W3C VC 2.0 credential that lets merchants verify who authorized a payment, what the agent can buy, and spending limits. Verification takes under 50ms and works offline."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does Grantex work with MPP machine payments?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "A human issues an AgentPassportCredential for their agent via Grantex. The agent attaches this credential as an X-Grantex-Passport header alongside standard MPP payment headers. Merchants verify the passport in under 50ms using cached JWKS — confirming the human principal, organization, allowed categories (inference, compute, data), and spending limits before fulfilling the request."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is an AgentPassportCredential?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "An AgentPassportCredential is a W3C Verifiable Credential (VC 2.0) that binds agent identity, human delegation, MPP payment categories, and spending limits into a single offline-verifiable document. It includes the agent DID, human principal DID, organization DID, allowed MPP categories, max transaction amount, and StatusList2021 revocation."
+        }
       }
     ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Grantex MPP Agent Identity",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Any",
+    "url": "https://grantex.dev/mpp-demo/",
+    "description": "Agent identity and delegation for the Machine Payments Protocol (MPP). Verifiable agent passports for agentic commerce with offline merchant verification in under 50ms.",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "isPartOf": {
+      "@type": "SoftwareApplication",
+      "name": "Grantex",
+      "url": "https://grantex.dev"
+    }
   }
   </script>
 
