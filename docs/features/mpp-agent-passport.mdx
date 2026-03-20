@@ -1,0 +1,133 @@
+---
+title: "MPP Agent Passport"
+sidebarTitle: "MPP Agent Passport"
+description: "W3C Verifiable Credential for agent identity in machine-to-machine payments via the Machine Payments Protocol (MPP)."
+---
+
+## Overview
+
+The **Machine Payments Protocol (MPP)** defines how AI agents pay for services via HTTP 402 flows and streaming sessions. MPP solves payment mechanics but has a structural gap: **no identity layer**.
+
+When an agent makes an MPP payment, the `source` field is a wallet address — no human name, no organization, no authorization chain. For low-value API calls this is fine. For B2B procurement and regulated transactions, it's a compliance blocker.
+
+Grantex fills this gap with the `AgentPassportCredential` — a W3C VC 2.0 credential that binds agent identity, human delegation, spending limits, and payment categories into a single offline-verifiable document.
+
+<Info>
+  The `@grantex/mpp` package provides both agent-side middleware (attach passports to outgoing requests) and merchant-side verification (validate passports on incoming requests) in a single package.
+</Info>
+
+## How It Works
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  1. Human issues AgentPassportCredential via Grantex             │
+│     → W3C VC 2.0 with Ed25519 proof, StatusList2021 revocation  │
+│     → Contains: agentDID, humanDID, orgDID, categories, limits  │
+└─────────────────────────┬────────────────────────────────────────┘
+                          ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  2. Agent makes MPP request to merchant                          │
+│     → Authorization: Payment <mpp-token>                         │
+│     → X-Grantex-Passport: <base64url-encoded-vc>                │
+└─────────────────────────┬────────────────────────────────────────┘
+                          ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  3. Merchant verifies passport in <50ms (offline-capable)        │
+│     → Checks signature, expiry, categories, amount limits        │
+│     → Returns VerifiedPassport with full identity chain           │
+└─────────────────────────┬────────────────────────────────────────┘
+                          ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  4. Merchant fulfills request — knows exactly who authorized it  │
+│     → Audit entry: passportId, agentDID, humanDID, amount        │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+## AgentPassportCredential Structure
+
+The credential follows the W3C Verifiable Credentials Data Model v2.0:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `@context` | `string[]` | `["https://www.w3.org/ns/credentials/v2", "https://grantex.dev/contexts/mpp/v1"]` |
+| `type` | `string[]` | `["VerifiableCredential", "AgentPassportCredential"]` |
+| `id` | `string` | `urn:grantex:passport:<ulid>` |
+| `issuer` | `string` | `did:web:grantex.dev` |
+| `validFrom` | `string` | ISO 8601 issuance timestamp |
+| `validUntil` | `string` | ISO 8601 expiry (max 30 days) |
+| `credentialSubject.id` | `string` | Agent DID (`did:grantex:ag_...`) |
+| `credentialSubject.humanPrincipal` | `string` | DID of the authorizing human |
+| `credentialSubject.organizationDID` | `string` | Org DID (`did:web:<domain>`) |
+| `credentialSubject.grantId` | `string` | Underlying Grantex grant ID |
+| `credentialSubject.allowedMPPCategories` | `string[]` | Permitted MPP service categories |
+| `credentialSubject.maxTransactionAmount` | `object` | `{ amount: number, currency: string }` |
+| `credentialSubject.paymentRails` | `string[]` | Payment networks (e.g., `["tempo"]`) |
+| `credentialSubject.delegationDepth` | `number` | From grant delegation chain |
+| `credentialStatus` | `object` | StatusList2021 revocation entry |
+| `proof` | `object` | Ed25519Signature2020 |
+
+## MPP Category Scopes
+
+Each MPP category maps to a Grantex scope. The agent's grant must include the corresponding scope:
+
+| MPP Category | Grantex Scope |
+|-------------|---------------|
+| `inference` | `payments:mpp:inference` |
+| `compute` | `payments:mpp:compute` |
+| `data` | `payments:mpp:data` |
+| `storage` | `payments:mpp:storage` |
+| `search` | `payments:mpp:search` |
+| `media` | `payments:mpp:media` |
+| `delivery` | `payments:mpp:delivery` |
+| `browser` | `payments:mpp:browser` |
+| `general` | `payments:mpp:general` |
+
+## Trust Registry
+
+The trust registry is a public endpoint that maps organization DIDs to verified trust records:
+
+```bash
+curl https://api.grantex.dev/v1/trust-registry/did:web:grantex.dev
+```
+
+```json
+{
+  "organizationDID": "did:web:grantex.dev",
+  "verifiedAt": "2026-03-20T03:11:31.447Z",
+  "verificationMethod": "soc2",
+  "trustLevel": "soc2",
+  "domains": ["grantex.dev"]
+}
+```
+
+Trust levels: `basic` (self-declared), `verified` (DNS-TXT proof), `soc2` (SOC 2 audit verified).
+
+## Verification Error Codes
+
+| Code | Description |
+|------|-------------|
+| `PASSPORT_EXPIRED` | Credential `validUntil` has passed |
+| `PASSPORT_REVOKED` | StatusList2021 bit is set |
+| `INVALID_SIGNATURE` | Ed25519/RS256 signature verification failed |
+| `UNTRUSTED_ISSUER` | Issuer DID not in the trusted issuers list |
+| `CATEGORY_MISMATCH` | Passport categories don't cover the required service |
+| `AMOUNT_EXCEEDED` | Passport max amount below required threshold |
+| `MISSING_PASSPORT` | No `X-Grantex-Passport` header provided |
+| `MALFORMED_CREDENTIAL` | Invalid base64url encoding or missing VC fields |
+
+## API Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/v1/passport/issue` | API key | Issue an AgentPassportCredential |
+| `GET` | `/v1/passport/:id` | API key | Retrieve passport by ID |
+| `POST` | `/v1/passport/:id/revoke` | API key | Revoke passport (flips StatusList2021 bit) |
+| `GET` | `/v1/trust-registry/:orgDID` | None | Look up org trust record (public) |
+| `GET` | `/v1/trust-registry` | API key | List all trust records (admin) |
+
+## Next Steps
+
+- **[MPP Integration Guide](/guides/mpp-integration)** — step-by-step setup for agents and merchants
+- **[Verifiable Credentials](/features/verifiable-credentials)** — the underlying VC infrastructure
+- **[DID Infrastructure](/features/did-infrastructure)** — how agent DIDs work
+- **[Delegation](/concepts/delegation)** — multi-agent delegation chains

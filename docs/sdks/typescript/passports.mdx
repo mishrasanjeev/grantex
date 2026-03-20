@@ -1,0 +1,156 @@
+---
+title: "Passports"
+sidebarTitle: "Passports"
+description: "Issue, retrieve, revoke, and list AgentPassportCredentials for MPP agent identity."
+---
+
+## Overview
+
+The `passports` sub-client manages AgentPassportCredentials — W3C VC 2.0 credentials that bind agent identity, human delegation, and spending limits for machine payment flows.
+
+```typescript
+const passport = await grantex.passports.issue({ ... });
+const record   = await grantex.passports.get('urn:grantex:passport:01HXYZ...');
+const result   = await grantex.passports.revoke('urn:grantex:passport:01HXYZ...');
+```
+
+---
+
+## passports.issue()
+
+Issue a new AgentPassportCredential for an agent with an active grant.
+
+```typescript
+const passport = await grantex.passports.issue({
+  agentId: 'ag_01HXYZ...',
+  grantId: 'grnt_01HXYZ...',
+  allowedMPPCategories: ['inference', 'compute'],
+  maxTransactionAmount: { amount: 50, currency: 'USDC' },
+  paymentRails: ['tempo'],
+  expiresIn: '24h',
+});
+
+console.log(passport.passportId);        // "urn:grantex:passport:01HXYZ..."
+console.log(passport.encodedCredential); // base64url for X-Grantex-Passport header
+console.log(passport.expiresAt);         // "2026-03-21T03:13:48.150Z"
+```
+
+### Parameters
+
+<ParamField body="agentId" type="string" required>
+  Grantex agent ID (`ag_...`). Must belong to the developer.
+</ParamField>
+
+<ParamField body="grantId" type="string" required>
+  Active Grantex grant ID (`grnt_...`). Must include `payments:mpp:*` scopes for each requested category.
+</ParamField>
+
+<ParamField body="allowedMPPCategories" type="string[]" required>
+  MPP service categories: `inference`, `compute`, `data`, `storage`, `search`, `media`, `delivery`, `browser`, `general`.
+</ParamField>
+
+<ParamField body="maxTransactionAmount" type="object" required>
+  Maximum per-transaction amount: `{ amount: number, currency: 'USDC' }`.
+</ParamField>
+
+<ParamField body="paymentRails" type="string[]" default="['tempo']">
+  Payment networks to include in the credential.
+</ParamField>
+
+<ParamField body="expiresIn" type="string" default="24h">
+  Expiry duration (e.g., `1h`, `8h`, `24h`, `30d`). Maximum: `720h` (30 days).
+</ParamField>
+
+<ParamField body="parentPassportId" type="string">
+  For delegated sub-agent passports — links to the parent passport.
+</ParamField>
+
+### Response: `IssuedPassportResponse`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `passportId` | `string` | `urn:grantex:passport:<ulid>` |
+| `credential` | `object` | Full AgentPassportCredential JSON |
+| `encodedCredential` | `string` | Base64url-encoded credential for headers |
+| `expiresAt` | `string` | ISO 8601 expiry timestamp |
+
+### Errors
+
+| Code | HTTP | Cause |
+|------|------|-------|
+| `INVALID_AGENT` | 400 | Agent not found or not owned by developer |
+| `INVALID_GRANT` | 400 | Grant not found, revoked, or not owned by agent |
+| `SCOPE_INSUFFICIENT` | 400 | Grant doesn't include required `payments:mpp:*` scopes |
+| `AMOUNT_EXCEEDS_BUDGET` | 400 | Max amount exceeds remaining budget allocation |
+| `INVALID_EXPIRY` | 422 | Expiry exceeds 720 hours |
+
+---
+
+## passports.get()
+
+Retrieve a passport by its ID. Returns the full credential JSON plus current status.
+
+```typescript
+const record = await grantex.passports.get('urn:grantex:passport:01HXYZ...');
+
+console.log(record.status); // "active" | "revoked" | "expired"
+```
+
+### Parameters
+
+<ParamField body="passportId" type="string" required>
+  The passport URN identifier.
+</ParamField>
+
+---
+
+## passports.revoke()
+
+Revoke a passport immediately. Flips the StatusList2021 bit so offline verifiers see the revocation.
+
+```typescript
+const result = await grantex.passports.revoke('urn:grantex:passport:01HXYZ...');
+
+console.log(result.revoked);   // true
+console.log(result.revokedAt); // "2026-03-20T03:14:15.261Z"
+```
+
+### Parameters
+
+<ParamField body="passportId" type="string" required>
+  The passport URN identifier.
+</ParamField>
+
+### Response: `RevokePassportResponse`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `revoked` | `boolean` | Always `true` on success |
+| `revokedAt` | `string` | ISO 8601 revocation timestamp |
+
+---
+
+## passports.list()
+
+List passports with optional filters.
+
+```typescript
+const passports = await grantex.passports.list({
+  agentId: 'ag_01HXYZ...',
+  status: 'active',
+});
+```
+
+### Parameters
+
+<ParamField body="agentId" type="string">
+  Filter by agent ID.
+</ParamField>
+
+<ParamField body="grantId" type="string">
+  Filter by grant ID.
+</ParamField>
+
+<ParamField body="status" type="string">
+  Filter by status: `active`, `revoked`, or `expired`.
+</ParamField>

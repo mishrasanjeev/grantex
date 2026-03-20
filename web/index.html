@@ -974,6 +974,131 @@
   </div>
 </section>
 
+<!-- ── MPP Agent Identity ──────────────────────────────────────────────────── -->
+<section id="mpp" style="background: linear-gradient(180deg, rgba(63,185,80,0.04) 0%, transparent 60%);">
+  <div class="container">
+    <div class="section-label">New — Agentic Commerce</div>
+    <h2 class="section-title">Agent Identity for Machine Payments</h2>
+    <p class="section-sub">
+      MPP defines how agents pay for services. Grantex adds the missing identity layer —
+      so merchants know exactly who authorized every payment.
+    </p>
+
+    <div class="cards">
+      <div class="card" style="border-left: 3px solid var(--accent);">
+        <span class="card-icon">&#x1F4B3;</span>
+        <h3>AgentPassportCredential</h3>
+        <p>
+          W3C VC 2.0 credential binding agent identity, human delegation, spending limits,
+          and payment categories into a single offline-verifiable document.
+        </p>
+      </div>
+      <div class="card" style="border-left: 3px solid var(--accent2);">
+        <span class="card-icon">&#x26A1;</span>
+        <h3>&lt;50ms Merchant Verification</h3>
+        <p>
+          Merchants verify passports offline using cached JWKS — no API roundtrip needed.
+          Ed25519 signature, expiry, category, and amount checks in a single call.
+        </p>
+      </div>
+      <div class="card" style="border-left: 3px solid #d2a8ff;">
+        <span class="card-icon">&#x1F3E6;</span>
+        <h3>Public Trust Registry</h3>
+        <p>
+          Look up any organization's verified trust level by DID. DNS-TXT, SOC 2,
+          or manual verification — all queryable without authentication.
+        </p>
+      </div>
+    </div>
+
+    <!-- Flow diagram -->
+    <div style="max-width:780px;margin:48px auto 0;">
+      <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin-bottom:20px;">Payment flow with identity</div>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h3>Human issues passport</h3>
+            <p>Principal authorizes agent via Grantex → receives <code>AgentPassportCredential</code> with
+            spending limit, categories (inference, compute, data), and Ed25519 proof.</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h3>Agent makes MPP payment</h3>
+            <p>Agent sends <code>Authorization: Payment</code> header (standard MPP) plus
+            <code>X-Grantex-Passport</code> header with the base64url-encoded credential.</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h3>Merchant verifies identity</h3>
+            <p>One function call: <code>verifyPassport()</code> checks signature, expiry, categories, and
+            amount in &lt;50ms. Returns the human principal, org DID, and delegation chain.</p>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <h3>Full audit trail</h3>
+            <p>Every passport issuance, verification, and revocation is logged. Revocation flips a
+            StatusList2021 bit — propagates instantly, no polling.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Code example -->
+    <div style="max-width:680px;margin:48px auto 0;">
+      <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:var(--accent2);margin-bottom:12px;">Merchant-side verification</div>
+      <div class="code-block" style="border:1px solid var(--border);border-radius:var(--radius);">
+        <pre><span class="kw">import</span> <span class="op">{</span> <span class="id">requireAgentPassport</span> <span class="op">}</span> <span class="kw">from</span> <span class="str">'@grantex/mpp'</span><span class="op">;</span>
+
+<span class="cm">// One line to protect any Express route</span>
+<span class="id">app</span><span class="op">.</span><span class="fn">use</span><span class="op">(</span><span class="str">'/api/inference'</span><span class="op">,</span> <span class="fn">requireAgentPassport</span><span class="op">({</span>
+  <span class="id">requiredCategories</span><span class="op">:</span> <span class="op">[</span><span class="str">'inference'</span><span class="op">],</span>
+  <span class="id">maxAmount</span><span class="op">:</span> <span class="str">10</span><span class="op">,</span>
+<span class="op">}));</span>
+
+<span class="cm">// req.agentPassport is now populated:</span>
+<span class="cm">//   humanDID:    "did:grantex:user_alice"</span>
+<span class="cm">//   orgDID:      "did:web:acme.com"</span>
+<span class="cm">//   categories:  ["inference", "compute"]</span>
+<span class="cm">//   maxAmount:   50 USDC</span>
+<span class="cm">//   delegation:  depth 0 (direct grant)</span></pre>
+      </div>
+    </div>
+
+    <!-- Install + CTA -->
+    <div style="text-align:center;margin-top:40px;">
+      <div class="install-commands" style="justify-content:center;margin-bottom:20px;">
+        <div class="install-cmd" onclick="navigator.clipboard.writeText('npm install @grantex/mpp')">
+          <span class="install-label">npm</span>
+          <code>npm install @grantex/mpp</code>
+          <span class="install-copy">Copy</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+        <a href="https://docs.grantex.dev/features/mpp-agent-passport" class="btn btn-primary"
+           onclick="gtag('event','mpp_docs_click',{event_category:'mpp'})">
+          Read the docs &rarr;
+        </a>
+        <a href="/mpp-demo" class="btn btn-secondary"
+           onclick="gtag('event','mpp_demo_click',{event_category:'mpp'})">
+          Try the demo
+        </a>
+        <a href="https://api.grantex.dev/v1/trust-registry/did:web:grantex.dev" class="btn btn-secondary"
+           onclick="gtag('event','trust_registry_click',{event_category:'mpp'})">
+          Query trust registry
+        </a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
 <!-- ── Integrations ───────────────────────────────────────────────────────── -->
 <section id="integrations">
   <div class="container">

@@ -52,7 +52,8 @@
               "features/fido-webauthn",
               "features/verifiable-credentials",
               "features/sd-jwt",
-              "features/did-infrastructure"
+              "features/did-infrastructure",
+              "features/mpp-agent-passport"
             ]
           },
           {
@@ -80,7 +81,8 @@
               "guides/cedar-integration",
               "guides/policy-as-code",
               "guides/usage-metering",
-              "guides/custom-domains"
+              "guides/custom-domains",
+              "guides/mpp-integration"
             ]
           },
           {
@@ -135,7 +137,8 @@
               "sdks/typescript/budgets",
               "sdks/typescript/events",
               "sdks/typescript/usage",
-              "sdks/typescript/domains"
+              "sdks/typescript/domains",
+              "sdks/typescript/passports"
             ]
           },
           {

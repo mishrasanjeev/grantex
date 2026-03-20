@@ -1,0 +1,188 @@
+---
+title: "MPP Integration Guide"
+sidebarTitle: "MPP Integration"
+description: "Step-by-step guide to adding Grantex agent identity to MPP payment flows — for both agents and merchants."
+---
+
+## Overview
+
+This guide walks through integrating Grantex agent passports with the Machine Payments Protocol (MPP). You'll learn how to:
+
+1. **Agent side** — Issue passports and attach them to outgoing MPP requests
+2. **Merchant side** — Verify passports on incoming requests with one line of code
+3. **Trust registry** — Look up organization trust levels before fulfilling requests
+
+## Prerequisites
+
+- A Grantex account with an API key ([sign up free](https://grantex.dev/dashboard/signup))
+- A registered agent with an active grant that includes `payments:mpp:*` scopes
+- Node.js 18+ for the TypeScript SDK
+
+## Installation
+
+```bash
+npm install @grantex/sdk @grantex/mpp
+```
+
+## Agent Side: Issue and Attach Passports
+
+### Step 1: Issue a Passport
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// Issue a passport for your agent
+const passport = await grantex.passports.issue({
+  agentId: 'ag_01HXYZ...',
+  grantId: 'grnt_01HXYZ...',
+  allowedMPPCategories: ['inference', 'compute'],
+  maxTransactionAmount: { amount: 50, currency: 'USDC' },
+  paymentRails: ['tempo'],
+  expiresIn: '24h',  // max: 720h (30 days)
+});
+
+console.log(passport.passportId);
+// "urn:grantex:passport:01HXYZ..."
+```
+
+<Warning>
+  The grant must include the corresponding `payments:mpp:*` scopes for each category.
+  For example, requesting `['inference', 'compute']` requires the grant to have
+  `payments:mpp:inference` and `payments:mpp:compute` scopes.
+</Warning>
+
+### Step 2: Attach to MPP Requests
+
+Use the middleware to automatically inject the `X-Grantex-Passport` header:
+
+```typescript
+import { createMppPassportMiddleware } from '@grantex/mpp';
+
+const middleware = createMppPassportMiddleware({
+  passport,
+  autoRefreshThreshold: 300, // warn 5 min before expiry
+});
+
+// Wrap every outgoing fetch
+const request = new Request('https://merchant.example.com/api/inference', {
+  method: 'GET',
+  headers: { 'Authorization': 'Payment <mpp-token>' },
+});
+
+const enrichedRequest = await middleware(request);
+const response = await fetch(enrichedRequest);
+// enrichedRequest has X-Grantex-Passport header attached
+```
+
+## Merchant Side: Verify Passports
+
+### Option A: Express Middleware (Recommended)
+
+One line to protect any route:
+
+```typescript
+import express from 'express';
+import { requireAgentPassport } from '@grantex/mpp';
+
+const app = express();
+
+// Protect inference endpoints — require inference category
+app.use('/api/inference', requireAgentPassport({
+  requiredCategories: ['inference'],
+  maxAmount: 10,
+}));
+
+app.get('/api/inference', (req, res) => {
+  // req.agentPassport is populated
+  console.log(req.agentPassport.humanDID);        // "did:grantex:user_alice"
+  console.log(req.agentPassport.organizationDID);  // "did:web:acme.com"
+  console.log(req.agentPassport.allowedCategories); // ["inference", "compute"]
+
+  res.json({ result: 'inference complete' });
+});
+```
+
+Invalid passports return `403` with a typed error code:
+
+```json
+{
+  "error": "CATEGORY_MISMATCH",
+  "message": "Passport does not cover required categories: storage"
+}
+```
+
+### Option B: Standalone Verification
+
+```typescript
+import { verifyPassport } from '@grantex/mpp';
+
+const encodedPassport = req.headers['x-grantex-passport'];
+
+try {
+  const verified = await verifyPassport(encodedPassport, {
+    trustedIssuers: ['did:web:grantex.dev'],
+    requiredCategories: ['inference'],
+    maxAmount: 10,
+    checkRevocation: false,  // true for online revocation check
+  });
+
+  console.log(verified.valid);          // true
+  console.log(verified.humanDID);       // "did:grantex:user_alice"
+  console.log(verified.agentDID);       // "did:grantex:ag_01HXYZ..."
+  console.log(verified.grantId);        // "grnt_01HXYZ..."
+  console.log(verified.delegationDepth); // 0
+} catch (err) {
+  // err.code is a typed PassportErrorCode
+  console.error(err.code, err.message);
+}
+```
+
+## Trust Registry Lookup
+
+Before fulfilling a high-value request, check the organization's trust level:
+
+```typescript
+import { lookupOrgTrust } from '@grantex/mpp';
+
+const record = await lookupOrgTrust(verified.organizationDID);
+
+if (!record || record.trustLevel === 'basic') {
+  // Require additional verification for unverified orgs
+  return res.status(403).json({ error: 'ORG_NOT_VERIFIED' });
+}
+
+// record.trustLevel: "basic" | "verified" | "soc2"
+// record.verificationMethod: "dns-txt" | "manual" | "soc2"
+```
+
+Results are cached in-memory for 1 hour by default.
+
+## Revoking Passports
+
+Instantly revoke a passport — flips the StatusList2021 bit:
+
+```typescript
+const result = await grantex.passports.revoke('urn:grantex:passport:01HXYZ...');
+// { revoked: true, revokedAt: "2026-03-20T..." }
+```
+
+After revocation, any `verifyPassport()` call with `checkRevocation: true` will throw `PASSPORT_REVOKED`.
+
+## Verification Options Reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `jwksUri` | `string` | `https://api.grantex.dev/.well-known/jwks.json` | JWKS endpoint for signature verification |
+| `trustedIssuers` | `string[]` | `['did:web:grantex.dev']` | Allowed issuer DIDs |
+| `requiredCategories` | `MPPCategory[]` | `undefined` | Required MPP categories |
+| `maxAmount` | `number` | `undefined` | Minimum passport amount ceiling |
+| `checkRevocation` | `boolean` | `false` | Online revocation check via StatusList2021 |
+| `revocationEndpoint` | `string` | — | Required when `checkRevocation: true` |
+
+## Next Steps
+
+- **[MPP Agent Passport](/features/mpp-agent-passport)** — credential specification and trust registry details
+- **[Budget Controls](/guides/budget-controls)** — combine passports with budget enforcement
+- **[Event Streaming](/guides/event-streaming)** — subscribe to `passport.issued` and `passport.revoked` events
