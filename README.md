@@ -484,10 +484,34 @@ Grantex passports are the open, standards-based answer: a W3C VC 2.0 credential 
 ### How It Works
 
 ```
-Human → issues AgentPassportCredential → Agent stores in wallet
-Agent → makes MPP request + attaches X-Grantex-Passport header
-Merchant → verifyPassport() in <50ms → knows human, org, scopes, limits
+  Human Principal          AgentPassportCredential           AI Agent              Merchant              Audit
+  ━━━━━━━━━━━━━━━          ━━━━━━━━━━━━━━━━━━━━━━━           ━━━━━━━━              ━━━━━━━━              ━━━━━
+       │                                                        │                     │                   │
+       │  1. Issue passport                                     │                     │                   │
+       │──────────────────────▶ W3C VC 2.0                      │                     │                   │
+       │                       Ed25519 signed                   │                     │                   │
+       │                       Categories: [inference, compute] │                     │                   │
+       │                       Max: 50 USDC                     │                     │                   │
+       │                       Expiry: 24h                      │                     │                   │
+       │                                  │                     │                     │                   │
+       │                                  │  2. Store           │                     │                   │
+       │                                  └────────────────────▶│                     │                   │
+       │                                                        │                     │                   │
+       │                                                        │  3. MPP payment +   │                   │
+       │                                                        │  X-Grantex-Passport │                   │
+       │                                                        │────────────────────▶│                   │
+       │                                                        │                     │                   │
+       │                                                        │  4. Verify (<50ms)  │                   │
+       │                                                        │                     │──▶ Sig + Expiry   │
+       │                                                        │                     │──▶ Categories     │
+       │                                                        │                     │──▶ Amount limit   │
+       │                                                        │                     │                   │
+       │                                                        │  5. ✓ Deliver       │  6. Log           │
+       │                                                        │◀────────────────────│──────────────────▶│
+       │                                                        │                     │                   │
 ```
+
+> **Key insight**: The passport is a self-contained W3C VC — merchants verify it offline using cached JWKS. No API call to Grantex needed after the initial key fetch.
 
 ### Credential Structure
 
