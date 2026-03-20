@@ -9,6 +9,7 @@ import { hashApiKey } from './lib/hash.js';
 import { newDeveloperId } from './lib/ids.js';
 import { startWebhookDeliveryWorker } from './workers/webhookDelivery.js';
 import { startAnomalyDetectionWorker } from './workers/anomalyDetection.js';
+import { seedTrustRegistry } from './db/seeds/trust-registry.js';
 
 async function main() {
   // Initialize OpenTelemetry tracing (must be first — hooks module loading)
@@ -59,6 +60,9 @@ async function main() {
       console.log(`Seeded sandbox developer: id=${devId}`);
     }
   }
+
+  // Seed trust registry with demo orgs (idempotent)
+  await seedTrustRegistry();
 
   const app = await buildApp({ logger: true });
 

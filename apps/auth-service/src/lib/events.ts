@@ -12,7 +12,10 @@ export type EventType =
   | 'fido.assertion'
   | 'vc.issued'
   | 'sd-jwt.issued'
-  | 'sd-jwt.presented';
+  | 'sd-jwt.presented'
+  | 'passport.issued'
+  | 'passport.revoked'
+  | 'passport.token-exchange';
 
 export interface GrantexEvent {
   id: string;

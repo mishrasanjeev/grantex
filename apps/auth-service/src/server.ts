@@ -37,6 +37,8 @@ import { policySyncRoutes } from './routes/policy-sync.js';
 import { didRoutes } from './routes/did.js';
 import { webauthnRoutes } from './routes/webauthn.js';
 import { credentialsRoutes } from './routes/credentials.js';
+import { passportRoutes } from './routes/passport.js';
+import { trustRegistryRoutes } from './routes/trust-registry.js';
 import { metricsHookPlugin } from './plugins/metricsHook.js';
 import websocket from '@fastify/websocket';
 
@@ -107,6 +109,8 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(policySyncRoutes);
   await app.register(webauthnRoutes);
   await app.register(credentialsRoutes);
+  await app.register(passportRoutes);
+  await app.register(trustRegistryRoutes);
 
   return app;
 }

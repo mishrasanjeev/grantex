@@ -18,6 +18,7 @@ import { UsageClient } from './resources/usage.js';
 import { DomainsClient } from './resources/domains.js';
 import { WebAuthnClient } from './resources/webauthn.js';
 import { CredentialsClient } from './resources/credentials.js';
+import { PassportsClient } from './resources/passports.js';
 import type {
   AuthorizationRequest,
   AuthorizeParams,
@@ -54,6 +55,7 @@ export class Grantex {
   readonly domains: DomainsClient;
   readonly webauthn: WebAuthnClient;
   readonly credentials: CredentialsClient;
+  readonly passports: PassportsClient;
 
   get lastRateLimit(): RateLimit | undefined {
     return this.#http.lastRateLimit;
@@ -94,6 +96,7 @@ export class Grantex {
     this.domains = new DomainsClient(this.#http);
     this.webauthn = new WebAuthnClient(this.#http);
     this.credentials = new CredentialsClient(this.#http);
+    this.passports = new PassportsClient(this.#http);
   }
 
   /**

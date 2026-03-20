@@ -469,6 +469,61 @@ curl https://api.grantex.dev/.well-known/did.json
 </details>
 
 <details>
+<summary><strong>MPP Agent Identity</strong> — verifiable agent identity for machine payments</summary>
+
+## MPP Agent Identity
+
+MPP (Machine Payments Protocol) defines how AI agents pay for services via HTTP 402 flows. Grantex adds the missing identity layer: an `AgentPassportCredential` (W3C VC 2.0) that lets any merchant verify *who* authorized a payment, *what* the agent is allowed to buy, and *how much* it can spend — all in <50ms, offline-capable.
+
+**Issue a passport:**
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+const passport = await grantex.passports.issue({
+  agentId: 'ag_01HXYZ...',
+  grantId: 'grnt_01HXYZ...',
+  allowedMPPCategories: ['inference', 'compute'],
+  maxTransactionAmount: { amount: 50, currency: 'USDC' },
+  paymentRails: ['tempo'],
+  expiresIn: '24h',
+});
+```
+
+**Attach to MPP requests:**
+
+```typescript
+import { createMppPassportMiddleware } from '@grantex/mpp';
+
+const middleware = createMppPassportMiddleware({ passport });
+const enrichedRequest = await middleware(new Request(url, init));
+// enrichedRequest now has X-Grantex-Passport header
+```
+
+**Verify on the merchant side:**
+
+```typescript
+import { verifyPassport, requireAgentPassport } from '@grantex/mpp';
+
+// Standalone verification
+const verified = await verifyPassport(encodedCredential, {
+  requiredCategories: ['inference'],
+  maxAmount: 10,
+});
+
+// Or as Express middleware
+app.use('/api/paid-resource', requireAgentPassport({
+  requiredCategories: ['inference'],
+}));
+```
+
+See [`packages/mpp/`](packages/mpp/) for full docs. Demo: [grantex.dev/mpp-demo](https://grantex.dev/mpp-demo).
+
+</details>
+
+<details>
 <summary><strong>SD-JWT Selective Disclosure</strong> — privacy-preserving credential presentation</summary>
 
 ## SD-JWT Selective Disclosure

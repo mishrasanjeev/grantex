@@ -1,0 +1,20 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@protected": true,
+    "id": "@id",
+    "type": "@type",
+    "grantex": "https://grantex.dev/vocab#",
+    "AgentPassportCredential": "grantex:AgentPassportCredential",
+    "AIAgent": "grantex:AIAgent",
+    "humanPrincipal": { "@id": "grantex:humanPrincipal", "@type": "@id" },
+    "organizationDID": { "@id": "grantex:organizationDID", "@type": "@id" },
+    "grantId": "grantex:grantId",
+    "allowedMPPCategories": { "@id": "grantex:allowedMPPCategories", "@container": "@set" },
+    "maxTransactionAmount": "grantex:maxTransactionAmount",
+    "paymentRails": { "@id": "grantex:paymentRails", "@container": "@set" },
+    "delegationDepth": { "@id": "grantex:delegationDepth", "@type": "xsd:integer" },
+    "parentPassportId": "grantex:parentPassportId",
+    "xsd": "http://www.w3.org/2001/XMLSchema#"
+  }
+}

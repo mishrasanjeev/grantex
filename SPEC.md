@@ -118,6 +118,20 @@ resource:action[:constraint]
 | `profile:read` | Read profile and identity information |
 | `contacts:read` | Read address book and contacts |
 
+#### MPP Payment Scopes
+
+| Scope | Description |
+|-------|-------------|
+| `payments:mpp:inference` | Pay for AI inference services via MPP |
+| `payments:mpp:compute` | Pay for compute services via MPP |
+| `payments:mpp:data` | Pay for data services via MPP |
+| `payments:mpp:storage` | Pay for storage services via MPP |
+| `payments:mpp:search` | Pay for search services via MPP |
+| `payments:mpp:media` | Pay for media services via MPP |
+| `payments:mpp:delivery` | Pay for delivery services via MPP |
+| `payments:mpp:browser` | Pay for browser services via MPP |
+| `payments:mpp:general` | Pay for general services via MPP |
+
 ### 4.3 Custom Scopes
 
 Services MAY define custom scopes using reverse-domain notation:
@@ -718,6 +732,65 @@ Content-Type: application/json
 - Policy engine MUST evaluate deny rules before allow rules to ensure restrictive policies are not bypassed.
 - Anomaly signals MUST NOT be used to synchronously block token issuance; the detection pipeline is advisory and asynchronous.
 - Consent UIs MUST display: agent name, developer name, all requested scopes with human-readable descriptions, token expiry, and a prominent deny/cancel action.
+
+---
+
+## 15. MPP Agent Passport
+
+The Machine Payments Protocol (MPP) defines how AI agents pay for services via HTTP 402 flows. Grantex extends MPP with a verifiable identity layer via the `AgentPassportCredential`.
+
+### 15.1 AgentPassportCredential
+
+An `AgentPassportCredential` is a W3C Verifiable Credential (VC 2.0) that binds an agent's identity, human delegation, and MPP payment authorization into a single, offline-verifiable credential.
+
+**Type:** `["VerifiableCredential", "AgentPassportCredential"]`
+
+**Credential Subject fields:**
+- `id` — Agent DID (`did:grantex:ag_...`)
+- `type` — `"AIAgent"`
+- `humanPrincipal` — DID of the authorizing human
+- `organizationDID` — DID of the organization (`did:web:<domain>`)
+- `grantId` — Links to the underlying Grantex grant
+- `allowedMPPCategories` — Array of permitted MPP service categories (see §4.2 MPP Payment Scopes)
+- `maxTransactionAmount` — `{ amount, currency }` ceiling per transaction
+- `paymentRails` — Array of payment networks (e.g., `["tempo"]`)
+- `delegationDepth` — Inherited from the grant's delegation chain (§9)
+- `parentPassportId` — (Optional) For delegated sub-agent passports
+
+**Revocation:** Uses StatusList2021 (existing infra). Revoking a passport flips the corresponding bit.
+
+**Maximum expiry:** 720 hours (30 days).
+
+### 15.2 MPP Header Convention
+
+Agents attach passports to outgoing MPP requests via the `X-Grantex-Passport` HTTP header:
+
+```
+X-Grantex-Passport: <base64url-encoded-credential>
+```
+
+### 15.3 Merchant Verification Algorithm
+
+1. Decode base64url → parse JSON → validate W3C VC 2.0 structure
+2. Check `issuer` against trusted issuers list
+3. Check `validUntil > now`
+4. Resolve issuer DID document → fetch JWKS → verify Ed25519/RS256 signature
+5. (Optional) Check revocation via StatusList2021
+6. Validate `allowedMPPCategories` includes the requested service category
+7. Validate `maxTransactionAmount.amount >= transaction amount`
+8. Return `VerifiedPassport` with extracted identity fields
+
+Target: <50ms on warm JWKS cache.
+
+### 15.4 Trust Registry
+
+A public registry mapping organization DIDs to verified trust records. Each record includes:
+- `organizationDID` — e.g., `did:web:acme.com`
+- `verificationMethod` — `dns-txt` | `manual` | `soc2`
+- `trustLevel` — `basic` | `verified` | `soc2`
+- `domains` — Verified domain list
+
+Endpoint: `GET /v1/trust-registry/:orgDID` (public, no auth required).
 
 ---
 

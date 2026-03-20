@@ -22,6 +22,16 @@ export {
 // Event streaming
 export { EventsClient, type GrantexEvent as GrantexStreamEvent, type StreamOptions, type EventHandler } from './resources/events.js';
 
+// Passports (MPP Agent Identity)
+export {
+  PassportsClient,
+  type IssuePassportParams,
+  type IssuedPassportResponse,
+  type GetPassportResponse,
+  type RevokePassportResponse,
+  type ListPassportsParams,
+} from './resources/passports.js';
+
 // Types
 export type {
   RateLimit,
