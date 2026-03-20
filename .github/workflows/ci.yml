@@ -8,6 +8,7 @@ on:
       - 'apps/portal/**'
       - 'packages/sdk-ts/**'
       - 'packages/sdk-py/**'
+      - 'packages/mpp/**'
       - '.github/workflows/ci.yml'
 
 jobs:
@@ -86,6 +87,32 @@ jobs:
 
       - name: Test
         run: pytest
+
+  mpp:
+    name: MPP Package
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/mpp
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: packages/mpp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
 
   portal:
     name: Developer Portal
