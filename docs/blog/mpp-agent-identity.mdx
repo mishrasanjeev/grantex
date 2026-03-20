@@ -1,0 +1,216 @@
+---
+title: "Agent Identity for Machine Payments: Why MPP Needs a Passport Layer"
+description: "MPP solves how agents pay. But who authorized the payment? Grantex adds a verifiable identity layer — W3C credentials that let merchants know exactly who is behind every agent transaction."
+date: "2026-03-20"
+authors:
+  - name: "Sanjeev Kumar"
+---
+
+Machine Payments Protocol shipped on March 18. Within 48 hours, thousands of agents were making HTTP 402 payments for inference, compute, and data services. The payment mechanics work beautifully — streaming sessions, USDC on Tempo, sub-second settlement.
+
+But there is a structural gap that becomes obvious the moment you move beyond $0.10 API calls: **MPP has no identity layer.**
+
+## The Problem: Wallet Addresses Are Not Identity
+
+When an agent makes an MPP payment today, the `source` field is a wallet address. That is it. No human name, no organization, no authorization chain. The merchant knows someone paid, but not:
+
+- **Who sent this agent?** Is there a human behind it, or is it a rogue bot?
+- **Was it authorized?** Does the agent have permission to spend this amount on this category?
+- **By whom?** Which organization is liable if something goes wrong?
+- **For what scope?** Is an inference agent accidentally buying storage?
+
+For $0.10 API calls, nobody cares. For $500 B2B procurement transactions, this is a compliance blocker. And with agents increasingly chaining payments across services, the liability question compounds at every hop.
+
+## The Proprietary Trap
+
+Visa and Mastercard see this gap. Visa's Trusted Agent Protocol and Mastercard's AgentPay are both building agent identity networks. But these are:
+
+- **Closed** — tied to their card networks
+- **Non-interoperable** — a Visa-verified agent cannot present credentials to a Mastercard merchant
+- **Permission-gated** — you need network approval to participate
+
+The crypto rails that MPP uses (Tempo, USDC) need an open, standards-based identity layer. Not another walled garden.
+
+## The Solution: AgentPassportCredential
+
+We built `AgentPassportCredential` — a W3C Verifiable Credential (VC 2.0) that binds agent identity, human delegation, spending limits, and payment categories into a single offline-verifiable document.
+
+Here is the flow:
+
+```
+  ┌─────────┐     ┌──────────────────────┐     ┌─────────┐     ┌──────────┐     ┌───────┐
+  │  Human   │────▶│  AgentPassport       │────▶│  Agent   │────▶│ Merchant  │────▶│ Audit │
+  │Principal │     │  Credential          │     │         │     │          │     │       │
+  │          │     │                      │     │         │     │          │     │       │
+  │ Issues   │     │ W3C VC 2.0           │     │ Attaches│     │ Verifies │     │ Logs  │
+  │ passport │     │ Ed25519 signed       │     │ to MPP  │     │ in <50ms │     │ every │
+  │ via      │     │ Categories + limits  │     │ request │     │ offline  │     │ event │
+  │ Grantex  │     │ StatusList2021 revoke│     │         │     │ via JWKS │     │       │
+  └─────────┘     └──────────────────────┘     └─────────┘     └──────────┘     └───────┘
+```
+
+The credential contains everything a merchant needs to make a trust decision:
+
+| Field | What It Tells the Merchant |
+|-------|---------------------------|
+| `humanPrincipal` | The DID of the human who authorized this agent |
+| `organizationDID` | The org responsible (e.g., `did:web:acme.com`) |
+| `allowedMPPCategories` | What the agent can buy: `inference`, `compute`, `data`, etc. |
+| `maxTransactionAmount` | Spending ceiling per transaction (e.g., 50 USDC) |
+| `delegationDepth` | How many hops from the original human grant (0 = direct) |
+| `grantId` | Links back to the full Grantex audit trail |
+| `credentialStatus` | StatusList2021 revocation — check if passport is still valid |
+
+## What Makes This Different
+
+### 1. Offline Verification in Under 50ms
+
+The passport is a self-contained JWT signed with the issuer's key. Merchants fetch the JWKS once, cache it, and verify every subsequent passport locally. No API call to Grantex. No latency added to the payment flow.
+
+```typescript
+import { requireAgentPassport } from '@grantex/mpp';
+
+// One line. That is the entire integration.
+app.use('/api/inference', requireAgentPassport({
+  requiredCategories: ['inference'],
+  maxAmount: 10,
+}));
+
+// req.agentPassport is now populated:
+//   humanDID:    "did:grantex:user_alice"
+//   orgDID:      "did:web:acme.com"
+//   categories:  ["inference", "compute"]
+//   maxAmount:   50 USDC
+//   delegation:  depth 0 (direct grant)
+```
+
+### 2. Category-Scoped Permissions
+
+MPP defines service categories: inference, compute, data, storage, search, media, delivery, browser, general. Each maps to a Grantex scope (`payments:mpp:inference`, etc.). If an inference agent tries to buy storage, the passport verification fails with `CATEGORY_MISMATCH` before any money moves.
+
+This is not a convention. It is enforced cryptographically. The categories are signed into the credential at issuance time.
+
+### 3. Delegation-Aware
+
+Agents delegate to sub-agents. A "procurement agent" might delegate to a "compute buyer" sub-agent with a narrower budget. The passport carries `delegationDepth` and the full chain is traceable through `grantId`. The four delegation invariants from the DAAP spec apply:
+
+- Sub-agent categories must be a subset of the parent's
+- Spending limits can only narrow, never widen
+- Expiry is bounded by the parent's expiry
+- Revoking a parent cascades to all descendants
+
+### 4. Instant Revocation
+
+Passports use StatusList2021 — a compressed bitstring where each credential has an index. Revoking a passport flips one bit. Merchants checking revocation status can fetch the status list and verify locally. No webhook needed, no polling, no race conditions.
+
+```typescript
+await grantex.passports.revoke('urn:grantex:passport:01HXYZ...');
+// Subsequent verifyPassport() calls → PASSPORT_REVOKED
+```
+
+### 5. Public Trust Registry
+
+Before fulfilling a high-value request, merchants can check the organization's trust level:
+
+```bash
+curl https://api.grantex.dev/v1/trust-registry/did:web:acme.com
+```
+
+```json
+{
+  "organizationDID": "did:web:acme.com",
+  "trustLevel": "verified",
+  "verificationMethod": "dns-txt",
+  "domains": ["acme.com"]
+}
+```
+
+Three trust levels: `basic` (self-declared), `verified` (DNS TXT proof), `soc2` (audited). The endpoint is public — no auth required.
+
+## The Agent-Side Integration
+
+Issuing a passport is three lines:
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+const passport = await grantex.passports.issue({
+  agentId: 'ag_01HXYZ...',
+  grantId: 'grnt_01HXYZ...',
+  allowedMPPCategories: ['inference', 'compute'],
+  maxTransactionAmount: { amount: 50, currency: 'USDC' },
+  paymentRails: ['tempo'],
+  expiresIn: '24h',
+});
+```
+
+Attaching it to outgoing requests is one more line:
+
+```typescript
+import { createMppPassportMiddleware } from '@grantex/mpp';
+
+const middleware = createMppPassportMiddleware({
+  passport,
+  onRefresh: () => grantex.passports.issue(originalOptions),  // auto-refresh before expiry
+});
+
+const request = new Request('https://merchant.example.com/api/inference', {
+  headers: { 'Authorization': 'Payment <mpp-token>' },
+});
+
+const enriched = await middleware(request);
+// X-Grantex-Passport header attached automatically
+```
+
+The middleware handles expiry checking and proactive refresh. When the passport is within 5 minutes of expiry, it automatically calls `onRefresh()` in the background.
+
+## What Happens When Things Go Wrong
+
+Every failure mode has a typed error code:
+
+| Scenario | Error Code | What Happens |
+|----------|-----------|--------------|
+| Passport expired | `PASSPORT_EXPIRED` | 403 — agent must re-issue |
+| Passport revoked by human | `PASSPORT_REVOKED` | 403 — human pulled the plug |
+| Inference agent tries to buy storage | `CATEGORY_MISMATCH` | 403 — wrong category |
+| $100 purchase with $50 limit | `AMOUNT_EXCEEDED` | 403 — over budget |
+| Tampered credential | `INVALID_SIGNATURE` | 403 — cryptographic proof failed |
+| Unknown issuer | `UNTRUSTED_ISSUER` | 403 — not a recognized authority |
+
+No ambiguous error messages. No silent failures. The merchant knows exactly why a passport was rejected, and the agent can surface that to the user.
+
+## Standards Alignment
+
+This is not a proprietary format. The entire stack is built on open standards:
+
+- **W3C Verifiable Credentials Data Model v2.0** — the credential format
+- **Ed25519Signature2020** — the proof type
+- **StatusList2021** — revocation mechanism
+- **did:web** — issuer identity resolution
+- **IETF draft-mishra-oauth-agent-grants-01** — the underlying authorization protocol
+
+Any party can verify a Grantex passport using the published DID document at `did:web:grantex.dev`. No SDK required. No Grantex account required. Just fetch the public key and verify the JWT.
+
+## Try It Now
+
+The entire implementation is open source and live in production.
+
+**Install:**
+
+```bash
+npm install @grantex/mpp @grantex/sdk
+```
+
+**Interactive demo:** [grantex.dev/mpp-demo](https://grantex.dev/mpp-demo) — issue a passport, simulate payment flows, and verify credentials in the browser.
+
+**Trust registry (live):** [api.grantex.dev/v1/trust-registry/did:web:grantex.dev](https://api.grantex.dev/v1/trust-registry/did:web:grantex.dev)
+
+**Documentation:** [docs.grantex.dev/features/mpp-agent-passport](https://docs.grantex.dev/features/mpp-agent-passport)
+
+**GitHub:** [github.com/mishrasanjeev/grantex](https://github.com/mishrasanjeev/grantex) — `packages/mpp/`
+
+---
+
+*MPP solved how agents pay. Grantex solves who authorized the payment. Together, they make agentic commerce auditable, revocable, and compliant — without locking anyone into a proprietary network.*
