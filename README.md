@@ -475,7 +475,39 @@ curl https://api.grantex.dev/.well-known/did.json
 
 MPP (Machine Payments Protocol) defines how AI agents pay for services via HTTP 402 flows. Grantex adds the missing identity layer: an `AgentPassportCredential` (W3C VC 2.0) that lets any merchant verify *who* authorized a payment, *what* the agent is allowed to buy, and *how much* it can spend — all in <50ms, offline-capable.
 
-**Issue a passport:**
+### Why Agent Passports?
+
+When an agent makes an MPP payment today, the `source` field is a wallet address — no human name, no organization, no authorization chain. For $0.10 API calls, nobody cares. For $500 B2B procurement, this is a compliance blocker. Visa and Mastercard are building proprietary agent identity networks (Trusted Agent Protocol, AgentPay), but these are closed and non-interoperable.
+
+Grantex passports are the open, standards-based answer: a W3C VC 2.0 credential signed with Ed25519, carrying the full delegation chain from human to agent, with StatusList2021 revocation and a public trust registry.
+
+### How It Works
+
+```
+Human → issues AgentPassportCredential → Agent stores in wallet
+Agent → makes MPP request + attaches X-Grantex-Passport header
+Merchant → verifyPassport() in <50ms → knows human, org, scopes, limits
+```
+
+### Credential Structure
+
+| Field | Description |
+|-------|-------------|
+| `id` | `urn:grantex:passport:<ulid>` |
+| `issuer` | `did:web:grantex.dev` |
+| `credentialSubject.id` | Agent DID (`did:grantex:ag_...`) |
+| `credentialSubject.humanPrincipal` | DID of the authorizing human |
+| `credentialSubject.organizationDID` | Org DID (`did:web:<domain>`) |
+| `credentialSubject.grantId` | Links to underlying Grantex grant |
+| `credentialSubject.allowedMPPCategories` | `inference`, `compute`, `data`, `storage`, `search`, `media`, `delivery`, `browser`, `general` |
+| `credentialSubject.maxTransactionAmount` | `{ amount, currency }` ceiling per transaction |
+| `credentialSubject.delegationDepth` | Inherited from grant delegation chain |
+| `credentialStatus` | StatusList2021 revocation entry |
+| `proof` | Ed25519Signature2020 |
+
+### Issue a Passport
+
+**TypeScript:**
 
 ```typescript
 import { Grantex } from '@grantex/sdk';
@@ -490,9 +522,26 @@ const passport = await grantex.passports.issue({
   paymentRails: ['tempo'],
   expiresIn: '24h',
 });
+// passport.passportId   → "urn:grantex:passport:01HXYZ..."
+// passport.encodedCredential → base64url for X-Grantex-Passport header
 ```
 
-**Attach to MPP requests:**
+**cURL:**
+
+```bash
+curl -X POST https://api.grantex.dev/v1/passport/issue \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agentId": "ag_01HXYZ...",
+    "grantId": "grnt_01HXYZ...",
+    "allowedMPPCategories": ["inference", "compute"],
+    "maxTransactionAmount": { "amount": 50, "currency": "USDC" },
+    "expiresIn": "24h"
+  }'
+```
+
+### Attach to MPP Requests
 
 ```typescript
 import { createMppPassportMiddleware } from '@grantex/mpp';
@@ -500,26 +549,89 @@ import { createMppPassportMiddleware } from '@grantex/mpp';
 const middleware = createMppPassportMiddleware({ passport });
 const enrichedRequest = await middleware(new Request(url, init));
 // enrichedRequest now has X-Grantex-Passport header
+const response = await fetch(enrichedRequest);
 ```
 
-**Verify on the merchant side:**
+### Verify on the Merchant Side
+
+**Standalone verification:**
 
 ```typescript
-import { verifyPassport, requireAgentPassport } from '@grantex/mpp';
+import { verifyPassport } from '@grantex/mpp';
 
-// Standalone verification
 const verified = await verifyPassport(encodedCredential, {
   requiredCategories: ['inference'],
   maxAmount: 10,
 });
-
-// Or as Express middleware
-app.use('/api/paid-resource', requireAgentPassport({
-  requiredCategories: ['inference'],
-}));
+// verified.humanDID        → "did:grantex:user_alice"
+// verified.organizationDID → "did:web:acme.com"
+// verified.allowedCategories → ["inference", "compute"]
+// verified.maxTransactionAmount → { amount: 50, currency: "USDC" }
 ```
 
-See [`packages/mpp/`](packages/mpp/) for full docs. Demo: [grantex.dev/mpp-demo](https://grantex.dev/mpp-demo).
+**Express middleware (one-liner):**
+
+```typescript
+import { requireAgentPassport } from '@grantex/mpp';
+
+app.use('/api/inference', requireAgentPassport({
+  requiredCategories: ['inference'],
+  maxAmount: 10,
+}));
+// req.agentPassport is populated on valid requests
+// 403 with typed error code on invalid requests
+```
+
+### Trust Registry
+
+Query any organization's verified trust level — no authentication required:
+
+```bash
+curl https://api.grantex.dev/v1/trust-registry/did:web:grantex.dev
+# {"organizationDID":"did:web:grantex.dev","trustLevel":"soc2","domains":["grantex.dev"]}
+```
+
+```typescript
+import { lookupOrgTrust } from '@grantex/mpp';
+
+const record = await lookupOrgTrust('did:web:acme.com');
+// record.trustLevel → "verified" | "soc2" | "basic"
+// record.verificationMethod → "dns-txt" | "manual" | "soc2"
+```
+
+### Revocation
+
+Revoking a passport flips a StatusList2021 bit — propagates instantly:
+
+```typescript
+await grantex.passports.revoke('urn:grantex:passport:01HXYZ...');
+// Subsequent verifyPassport() calls return PASSPORT_REVOKED
+```
+
+### Error Codes
+
+| Code | HTTP | Description |
+|------|------|-------------|
+| `PASSPORT_EXPIRED` | 403 | Credential `validUntil` has passed |
+| `PASSPORT_REVOKED` | 403 | StatusList2021 bit is set |
+| `INVALID_SIGNATURE` | 403 | Signature verification failed |
+| `UNTRUSTED_ISSUER` | 403 | Issuer DID not in trusted list |
+| `CATEGORY_MISMATCH` | 403 | Categories don't cover required service |
+| `AMOUNT_EXCEEDED` | 403 | Max amount below required threshold |
+| `MISSING_PASSPORT` | 403 | No `X-Grantex-Passport` header |
+| `MALFORMED_CREDENTIAL` | 403 | Invalid base64url or missing VC fields |
+
+### MPP Agent Identity API Endpoints
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/v1/passport/issue` | API key | Issue AgentPassportCredential |
+| `GET` | `/v1/passport/:id` | API key | Retrieve passport by ID |
+| `POST` | `/v1/passport/:id/revoke` | API key | Revoke passport (StatusList2021) |
+| `GET` | `/v1/trust-registry/:orgDID` | None | Look up org trust record (public) |
+| `GET` | `/v1/trust-registry` | API key | List all trust records (admin) |
+
+See [`packages/mpp/`](packages/mpp/) for full package docs. Demo: [grantex.dev/mpp-demo](https://grantex.dev/mpp-demo).
 
 </details>
 
