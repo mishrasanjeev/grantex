@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.4-mpp] - 2026-03-20
+
+### Added
+- `@grantex/mpp` package — agent identity and delegation for MPP (Machine Payments Protocol)
+- `AgentPassportCredential` — W3C VC 2.0 credential type for MPP agent identity
+- `POST /v1/passport/issue` — issue an agent passport credential
+- `GET /v1/passport/:id` — retrieve a passport
+- `POST /v1/passport/:id/revoke` — revoke a passport (flips StatusList2021 bit)
+- `GET /v1/trust-registry/:orgDID` — public org trust record lookup
+- `verifyPassport()` — merchant-side offline passport verification (<50ms on warm cache)
+- `requireAgentPassport()` — Express middleware for passport verification
+- `createMppPassportMiddleware()` — fetch middleware to attach passport headers
+- `lookupOrgTrust()` — trust registry client with in-memory caching
+- `grantex.passports` namespace in `@grantex/sdk` (issue, get, revoke, list)
+- `agent-passport` as a valid `credentialFormat` in `POST /v1/token`
+- MPP Payment Scopes (`payments:mpp:*`) in SPEC.md §4.2
+- SPEC.md §15 — MPP Agent Passport specification
+- Trust registry database table with 5 seeded demo orgs
+- MPP demo service (`apps/mpp-demo-service/`) — MPP 402 flow simulator
+- MPP demo UI (`apps/mpp-demo/`) — 3-screen hackathon demo (issue, flow, verify)
+- W3C JSON-LD context document at `grantex.dev/contexts/mpp/v1`
+- E2E test for full MPP passport lifecycle
+
 ## [0.1.3] - 2026-02-28
 
 ### Added

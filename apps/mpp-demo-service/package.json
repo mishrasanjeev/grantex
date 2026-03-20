@@ -1,0 +1,21 @@
+{
+  "name": "@grantex/mpp-demo-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "node --loader ts-node/esm src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "@grantex/mpp": "file:../../packages/mpp",
+    "@grantex/sdk": "file:../../packages/sdk-ts",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}

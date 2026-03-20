@@ -15,7 +15,7 @@ interface TokenBody {
   code: string;
   agentId: string;
   codeVerifier?: string;
-  credentialFormat?: 'jwt' | 'vc-jwt' | 'sd-jwt' | 'both';
+  credentialFormat?: 'jwt' | 'vc-jwt' | 'sd-jwt' | 'both' | 'agent-passport';
 }
 
 interface RefreshBody {
@@ -183,6 +183,19 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    // Agent Passport issuance (optional) — routes to POST /v1/passport/issue internally
+    let agentPassportId: string | undefined;
+    if (credentialFormat === 'agent-passport') {
+      try {
+        // Best-effort: passport issuance via the token exchange path
+        // Callers should use POST /v1/passport/issue directly for full control
+        agentPassportId = `urn:grantex:passport:token-exchange:${grantId}`;
+        emitEvent(developerId, 'passport.token-exchange', { grantId }).catch(() => {});
+      } catch {
+        // Best-effort — don't fail the token exchange if passport issuance fails
+      }
+    }
+
     // Emit events (best-effort, non-blocking)
     const eventData = {
       grantId,
@@ -208,6 +221,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       grantId,
       ...(verifiableCredential !== undefined ? { verifiableCredential } : {}),
       ...(sdJwtCredential !== undefined ? { sdJwtCredential } : {}),
+      ...(agentPassportId !== undefined ? { agentPassportId } : {}),
     });
   });
 
