@@ -29,7 +29,7 @@
     .subtitle { color: var(--muted); font-size: 0.9rem; margin-bottom: 2rem; }
 
     /* Navigation */
-    nav { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
+    nav { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; flex-wrap: wrap; }
     nav button {
       background: none; border: 1px solid var(--border); color: var(--text);
       padding: 0.5rem 1.25rem; border-radius: 6px; cursor: pointer; font-size: 0.9rem;
@@ -65,8 +65,11 @@
     }
     .btn-primary { background: var(--accent); color: #fff; }
     .btn-primary:hover { opacity: 0.9; }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); }
     .btn-danger { background: var(--red); color: #fff; }
     .btn-small { padding: 0.4rem 1rem; font-size: 0.8rem; }
+    .btn-group { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
 
     /* Code block */
     .code-block {
@@ -117,6 +120,16 @@
     .verify-result { margin-top: 1rem; padding: 1rem; border-radius: 8px; }
     .verify-result.valid { background: rgba(34,197,94,0.1); border: 1px solid var(--green); }
     .verify-result.invalid { background: rgba(239,68,68,0.1); border: 1px solid var(--red); }
+    .verify-result p { margin-bottom: 0.35rem; font-size: 0.9rem; }
+
+    /* Verified details panel (inline in feed) */
+    .verified-panel {
+      background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.2); border-radius: 6px;
+      padding: 0.75rem 1rem; margin: 0.5rem 0; font-family: 'Fira Code', monospace; font-size: 0.75rem;
+    }
+    .verified-panel .field { display: flex; gap: 0.5rem; padding: 0.15rem 0; }
+    .verified-panel .field-label { color: var(--muted); min-width: 140px; }
+    .verified-panel .field-value { color: var(--green); }
 
     .trust-section { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
     .row { display: flex; gap: 0.5rem; align-items: end; }
@@ -126,7 +139,7 @@
 <body>
   <div class="container">
     <h1>Grantex × MPP</h1>
-    <p class="subtitle">Agent Identity & Delegation for Agentic Commerce — Hackathon Demo</p>
+    <p class="subtitle">Agent Identity & Delegation for Agentic Commerce</p>
 
     <nav>
       <button class="active" onclick="showScreen('issue')">1. Passport Issuer</button>
@@ -174,6 +187,7 @@
 
       <div id="issue-result" style="display:none">
         <div class="passport-summary" id="issue-summary"></div>
+        <div class="btn-group" id="issue-actions"></div>
         <div class="code-block" id="issue-credential"></div>
       </div>
     </div>
@@ -216,7 +230,7 @@
       <h2>Merchant Verifier</h2>
       <div class="form-group">
         <label>Paste base64url-encoded passport credential</label>
-        <textarea id="verify-input" placeholder="Paste encoded passport here..."></textarea>
+        <textarea id="verify-input" placeholder="Paste encoded passport here, or issue a passport on Screen 1 and click 'Verify this passport'..."></textarea>
       </div>
       <button class="btn btn-primary" onclick="verifyPassportUI()">Verify</button>
       <div id="verify-result"></div>
@@ -236,8 +250,6 @@
     // ── Config ──────────────────────────────────────────────────────────────
     const AUTH_API = window.location.hostname === 'localhost'
       ? 'http://localhost:3001' : 'https://api.grantex.dev';
-    const DEMO_API = window.location.hostname === 'localhost'
-      ? 'http://localhost:3010' : 'https://mpp-demo.grantex.dev';
 
     // ── State ──────────────────────────────────────────────────────────────
     const spendTotals = { inference: 0, compute: 0, data: 0 };
@@ -248,7 +260,10 @@
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
       document.getElementById('screen-' + name).classList.add('active');
-      event.target.classList.add('active');
+      // Highlight the correct nav button
+      const buttons = document.querySelectorAll('nav button');
+      const idx = { issue: 0, flow: 1, verify: 2 }[name];
+      if (buttons[idx]) buttons[idx].classList.add('active');
     }
 
     // ── Screen 1: Issue Passport ───────────────────────────────────────────
@@ -264,7 +279,6 @@
         return;
       }
 
-      // For demo: build a mock passport locally (no auth service needed for UI demo)
       const passportId = 'urn:grantex:passport:' + generateUlid();
       const now = new Date();
       const expiryMs = expiry === '1h' ? 3600000 : expiry === '8h' ? 28800000 : 86400000;
@@ -309,7 +323,6 @@
 
       lastIssuedPassport = { passportId, credential, encodedCredential: encoded, expiresAt };
 
-      // Show result
       const agentName = agentId.replace('ag_', '').replace('_01', '');
       document.getElementById('issue-summary').innerHTML =
         `<p><strong>Passport issued!</strong></p>` +
@@ -319,15 +332,32 @@
         `valid for <strong>${expiry}</strong>.</p>` +
         `<p style="margin-top:0.5rem"><span class="badge badge-green">ID: ${passportId}</span></p>`;
 
+      document.getElementById('issue-actions').innerHTML =
+        `<button class="btn btn-primary btn-small" onclick="sendToVerifier()">Verify this passport</button>` +
+        `<button class="btn btn-secondary btn-small" onclick="copyEncoded()">Copy encoded credential</button>`;
+
       document.getElementById('issue-credential').textContent =
         JSON.stringify(credential, null, 2);
 
       document.getElementById('issue-result').style.display = 'block';
     }
 
-    // ── Screen 2: Payment Flow ────────────────────────────────────────────
-    const agentPassports = {};
+    function sendToVerifier() {
+      if (!lastIssuedPassport) return;
+      document.getElementById('verify-input').value = lastIssuedPassport.encodedCredential;
+      showScreen('verify');
+      verifyPassportUI();
+    }
 
+    function copyEncoded() {
+      if (!lastIssuedPassport) return;
+      navigator.clipboard.writeText(lastIssuedPassport.encodedCredential);
+      const btn = event.target;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy encoded credential'; }, 2000);
+    }
+
+    // ── Screen 2: Payment Flow ────────────────────────────────────────────
     function addFeedItem(html) {
       const feed = document.getElementById('flow-feed');
       const time = new Date().toLocaleTimeString();
@@ -337,50 +367,64 @@
       feed.prepend(item);
     }
 
+    function addVerifiedPanel(category) {
+      const feed = document.getElementById('flow-feed');
+      const panel = document.createElement('div');
+      panel.className = 'verified-panel';
+      panel.innerHTML = `
+        <div style="margin-bottom:0.4rem;font-weight:600;color:var(--green);font-size:0.8rem;">Verified Passport Details</div>
+        <div class="field"><span class="field-label">Human Principal</span><span class="field-value">did:grantex:user_sanjeev</span></div>
+        <div class="field"><span class="field-label">Organization</span><span class="field-value">did:web:grantex.dev</span></div>
+        <div class="field"><span class="field-label">Agent DID</span><span class="field-value">did:grantex:ag_${category}_01</span></div>
+        <div class="field"><span class="field-label">Categories</span><span class="field-value">${category === 'inference' ? 'inference, compute' : category}</span></div>
+        <div class="field"><span class="field-label">Max Amount</span><span class="field-value">${category === 'inference' ? '50' : category === 'compute' ? '100' : '25'} USDC</span></div>
+        <div class="field"><span class="field-label">Delegation Depth</span><span class="field-value">0 (direct grant)</span></div>
+        <div class="field"><span class="field-label">Issuer</span><span class="field-value">did:web:grantex.dev</span></div>
+      `;
+      feed.prepend(panel);
+    }
+
     async function runPayment(category) {
       const resource = category + '-resource';
       const price = { inference: 0.10, compute: 0.25, data: 0.05 }[category] || 0.10;
 
-      // Step 1: Request resource
-      addFeedItem(`<span class="arrow">→</span> Agent requests <strong>/api/${resource}</strong> from merchant`);
+      addFeedItem(`<span class="arrow">&rarr;</span> Agent requests <strong>/api/${resource}</strong> from merchant`);
       await sleep(400);
 
-      // Step 2: 402 Payment Required
-      addFeedItem(`<span class="arrow">←</span> <span class="warn">402 Payment Required</span> — MPP challenge received`);
+      addFeedItem(`<span class="arrow">&larr;</span> <span class="warn">402 Payment Required</span> — MPP challenge received`);
       await sleep(400);
 
-      // Step 3: Agent pays via MPP
-      addFeedItem(`<span class="arrow">→</span> Agent pays <strong>${price} USDC</strong> via MPP (Tempo testnet)`);
+      addFeedItem(`<span class="arrow">&rarr;</span> Agent pays <strong>${price} USDC</strong> via MPP (Tempo testnet)`);
       await sleep(400);
 
-      // Step 4: Attach passport
-      addFeedItem(`<span class="arrow">→</span> Agent attaches <strong>X-Grantex-Passport</strong> header`);
+      addFeedItem(`<span class="arrow">&rarr;</span> Agent attaches <strong>X-Grantex-Passport</strong> header`);
       await sleep(300);
 
-      // Step 5: Verify
-      addFeedItem(`<span class="arrow">←</span> <span class="success">✓</span> Merchant verifies passport: <span class="success">✓ humanDID</span>, <span class="success">✓ category:${category}</span>, <span class="success">✓ amount</span>`);
+      addFeedItem(`<span class="arrow">&larr;</span> <span class="success">&check;</span> Merchant verifies passport: <span class="success">&check; humanDID</span>, <span class="success">&check; category:${category}</span>, <span class="success">&check; amount</span>`);
       await sleep(200);
 
-      // Step 6: Resource delivered
+      // Show verified passport details panel
+      addVerifiedPanel(category);
+
       spendTotals[category] += price;
       document.getElementById('spend-' + category).textContent = '$' + spendTotals[category].toFixed(2);
-      addFeedItem(`<span class="arrow">←</span> <span class="success">✓ Resource delivered</span> — ${resource} (${price} USDC)`);
+      addFeedItem(`<span class="arrow">&larr;</span> <span class="success">&check; Resource delivered</span> — ${resource} (${price} USDC)`);
     }
 
     async function runAnomaly(category) {
-      addFeedItem(`<span class="arrow">→</span> <span class="warn">⚠ Anomaly test:</span> Inference Agent requests <strong>/api/storage-resource</strong> (wrong category!)`);
+      addFeedItem(`<span class="arrow">&rarr;</span> <span class="warn">&#9888; Anomaly test:</span> Inference Agent requests <strong>/api/storage-resource</strong> (wrong category!)`);
       await sleep(400);
 
-      addFeedItem(`<span class="arrow">←</span> <span class="warn">402 Payment Required</span>`);
+      addFeedItem(`<span class="arrow">&larr;</span> <span class="warn">402 Payment Required</span>`);
       await sleep(300);
 
-      addFeedItem(`<span class="arrow">→</span> Agent pays 0.02 USDC, attaches passport (categories: inference, compute)`);
+      addFeedItem(`<span class="arrow">&rarr;</span> Agent pays 0.02 USDC, attaches passport (categories: inference, compute)`);
       await sleep(400);
 
-      addFeedItem(`<span class="arrow">←</span> <span class="error">✗ 403 CATEGORY_MISMATCH</span> — Passport does not cover required category: <strong>storage</strong>`);
+      addFeedItem(`<span class="arrow">&larr;</span> <span class="error">&cross; 403 CATEGORY_MISMATCH</span> — Passport does not cover required category: <strong>storage</strong>`);
       await sleep(200);
 
-      addFeedItem(`<span class="error">✗ Payment blocked — agent passport insufficient for storage resource</span>`);
+      addFeedItem(`<span class="error">&cross; Payment blocked — agent passport insufficient for storage resource</span>`);
     }
 
     // ── Screen 3: Verify ──────────────────────────────────────────────────
@@ -389,17 +433,15 @@
       const resultDiv = document.getElementById('verify-result');
 
       if (!input) {
-        resultDiv.innerHTML = '<div class="verify-result invalid"><strong>Error:</strong> No credential provided</div>';
+        resultDiv.innerHTML = '<div class="verify-result invalid"><strong>Error:</strong> No credential provided. Issue a passport on Screen 1 first, then click "Verify this passport".</div>';
         return;
       }
 
       try {
-        // Decode base64url
         const padded = input.replace(/-/g, '+').replace(/_/g, '/');
         const json = atob(padded);
         const credential = JSON.parse(json);
 
-        // Validate structure
         if (!credential.type?.includes('AgentPassportCredential')) {
           throw new Error('Not an AgentPassportCredential');
         }
@@ -407,7 +449,6 @@
           throw new Error('Missing credentialSubject');
         }
 
-        // Check expiry
         const validUntil = new Date(credential.validUntil);
         if (validUntil <= new Date()) {
           resultDiv.innerHTML = `<div class="verify-result invalid">
@@ -417,7 +458,6 @@
           return;
         }
 
-        // Check issuer
         if (credential.issuer !== 'did:web:grantex.dev') {
           resultDiv.innerHTML = `<div class="verify-result invalid">
             <span class="badge badge-red">UNTRUSTED_ISSUER</span>
@@ -438,8 +478,11 @@
           <p><strong>Max Amount:</strong> ${sub.maxTransactionAmount?.amount} ${sub.maxTransactionAmount?.currency}</p>
           <p><strong>Payment Rails:</strong> ${sub.paymentRails?.join(', ')}</p>
           <p><strong>Delegation Depth:</strong> ${sub.delegationDepth}</p>
+          <p><strong>Valid From:</strong> ${credential.validFrom}</p>
           <p><strong>Valid Until:</strong> ${credential.validUntil}</p>
           <p><strong>Issuer:</strong> ${credential.issuer}</p>
+          <p><strong>Proof Type:</strong> ${credential.proof?.type}</p>
+          <p><strong>Verification Method:</strong> ${credential.proof?.verificationMethod}</p>
         </div>`;
       } catch (err) {
         resultDiv.innerHTML = `<div class="verify-result invalid">

@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - SPEC.md §15 — MPP Agent Passport specification
 - Trust registry database table with 5 seeded demo orgs
 - MPP demo service (`apps/mpp-demo-service/`) — MPP 402 flow simulator
-- MPP demo UI (`apps/mpp-demo/`) — 3-screen hackathon demo (issue, flow, verify)
+- MPP demo UI (`apps/mpp-demo/`) — 3-screen interactive demo (issue, flow, verify)
 - W3C JSON-LD context document at `grantex.dev/contexts/mpp/v1`
 - E2E test for full MPP passport lifecycle
 
