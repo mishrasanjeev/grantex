@@ -1012,48 +1012,46 @@
     </div>
 
     <!-- Flow diagram -->
-    <div style="max-width:780px;margin:48px auto 0;">
-      <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:var(--accent);margin-bottom:20px;">Payment flow with identity</div>
-      <div class="flow">
-        <div class="flow-step">
-          <div class="step-num">1</div>
-          <div class="step-body">
-            <h3>Human issues passport</h3>
-            <p>Principal authorizes agent via Grantex → receives <code>AgentPassportCredential</code> with
-            spending limit, categories (inference, compute, data), and Ed25519 proof.</p>
-          </div>
+    <div class="section-label" style="margin-top:48px;margin-bottom:20px;">Payment flow with identity</div>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Human issues passport</h3>
+          <p>Principal authorizes agent via Grantex → receives <code>AgentPassportCredential</code> with
+          spending limit, categories (inference, compute, data), and Ed25519 proof.</p>
         </div>
-        <div class="flow-step">
-          <div class="step-num">2</div>
-          <div class="step-body">
-            <h3>Agent makes MPP payment</h3>
-            <p>Agent sends <code>Authorization: Payment</code> header (standard MPP) plus
-            <code>X-Grantex-Passport</code> header with the base64url-encoded credential.</p>
-          </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Agent makes MPP payment</h3>
+          <p>Agent sends <code>Authorization: Payment</code> header (standard MPP) plus
+          <code>X-Grantex-Passport</code> header with the base64url-encoded credential.</p>
         </div>
-        <div class="flow-step">
-          <div class="step-num">3</div>
-          <div class="step-body">
-            <h3>Merchant verifies identity</h3>
-            <p>One function call: <code>verifyPassport()</code> checks signature, expiry, categories, and
-            amount in &lt;50ms. Returns the human principal, org DID, and delegation chain.</p>
-          </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Merchant verifies identity</h3>
+          <p>One function call: <code>verifyPassport()</code> checks signature, expiry, categories, and
+          amount in &lt;50ms. Returns the human principal, org DID, and delegation chain.</p>
         </div>
-        <div class="flow-step">
-          <div class="step-num">4</div>
-          <div class="step-body">
-            <h3>Full audit trail</h3>
-            <p>Every passport issuance, verification, and revocation is logged. Revocation flips a
-            StatusList2021 bit — propagates instantly, no polling.</p>
-          </div>
+      </div>
+      <div class="flow-step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h3>Full audit trail</h3>
+          <p>Every passport issuance, verification, and revocation is logged. Revocation flips a
+          StatusList2021 bit — propagates instantly, no polling.</p>
         </div>
       </div>
     </div>
 
     <!-- Code example -->
-    <div style="max-width:680px;margin:48px auto 0;">
-      <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:var(--accent2);margin-bottom:12px;">Merchant-side verification</div>
-      <div class="code-block" style="border:1px solid var(--border);border-radius:var(--radius);">
+    <div style="margin-top:48px;">
+      <div class="section-label" style="margin-bottom:12px;color:var(--accent2);">Merchant-side verification</div>
+      <div class="code-block" style="border:1px solid var(--border);border-radius:var(--radius);max-width:680px;">
         <pre><span class="kw">import</span> <span class="op">{</span> <span class="id">requireAgentPassport</span> <span class="op">}</span> <span class="kw">from</span> <span class="str">'@grantex/mpp'</span><span class="op">;</span>
 
 <span class="cm">// One line to protect any Express route</span>
