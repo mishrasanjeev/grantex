@@ -1,0 +1,19 @@
+{
+  "name": "x402-weather-api-example",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx server.ts",
+    "dev": "tsx watch server.ts"
+  },
+  "dependencies": {
+    "@grantex/x402": "file:../../packages/x402",
+    "express": "^4.21.0",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.0"
+  }
+}

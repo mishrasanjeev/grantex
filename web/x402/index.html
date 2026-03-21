@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grantex x402 — Agent Spend Authorization for HTTP 402 Payment Flows</title>
+<meta name="description" content="Add authorization to x402 payment flows. Grantex Delegation Tokens prove which agent was authorized to spend, with scope, limits, and audit trails.">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0f1a;--surface:#111827;--border:#1f2937;--text:#f9fafb;--text-dim:#9ca3af;--indigo:#6366f1;--emerald:#10b981;--amber:#f59e0b;--code-bg:#1e1e2e;--mono:'Menlo','Monaco','Cascadia Code','Consolas',monospace}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
+a{color:var(--indigo);text-decoration:none}
+a:hover{text-decoration:underline}
+.container{max-width:1100px;margin:0 auto;padding:0 24px}
+
+/* Hero */
+.hero{text-align:center;padding:80px 0 60px}
+.hero-badge{display:inline-block;padding:4px 14px;border-radius:9999px;border:1px solid var(--indigo);color:var(--indigo);font-size:.8rem;font-weight:600;margin-bottom:20px}
+.hero h1{font-size:3.2rem;font-weight:800;background:linear-gradient(135deg,var(--indigo),var(--emerald));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.2}
+.hero .subtitle{font-size:1.3rem;color:var(--text-dim);margin-top:12px;max-width:700px;margin-left:auto;margin-right:auto}
+.hero .desc{font-size:1rem;color:var(--text-dim);margin-top:16px;max-width:650px;margin-left:auto;margin-right:auto}
+.hero-actions{display:flex;gap:12px;justify-content:center;margin-top:32px;flex-wrap:wrap}
+.btn{padding:12px 28px;border-radius:10px;font-weight:600;font-size:1rem;border:none;cursor:pointer;transition:all .15s;text-decoration:none;display:inline-block}
+.btn-primary{background:var(--indigo);color:#fff}
+.btn-primary:hover{background:#4f46e5;text-decoration:none}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
+.btn-outline:hover{border-color:var(--indigo);text-decoration:none}
+.install-badge{margin-top:20px;display:inline-block;background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-family:var(--mono);font-size:.9rem;color:var(--emerald)}
+
+/* Section */
+section{padding:60px 0;border-top:1px solid var(--border)}
+section h2{font-size:2rem;font-weight:700;margin-bottom:12px}
+section .section-desc{color:var(--text-dim);font-size:1.05rem;margin-bottom:32px;max-width:600px}
+
+/* Problem/Solution */
+.comparison{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px}
+.card h3{font-size:1.1rem;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.card p{color:var(--text-dim);font-size:.95rem}
+.card.highlight{border-color:var(--emerald)}
+.icon-circle{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.icon-red{background:rgba(239,68,68,.15);color:#ef4444}
+.icon-green{background:rgba(16,185,129,.15);color:var(--emerald)}
+
+/* Steps */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;counter-reset:step}
+.step{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;position:relative;counter-increment:step}
+.step::before{content:counter(step);position:absolute;top:16px;right:16px;font-size:2rem;font-weight:800;color:var(--border)}
+.step h3{font-size:1rem;margin-bottom:6px;color:var(--indigo)}
+.step p{color:var(--text-dim);font-size:.85rem}
+
+/* Code */
+.code-block{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:20px;font-family:var(--mono);font-size:.82rem;overflow-x:auto;line-height:1.5;position:relative;white-space:pre;color:var(--text-dim)}
+.code-block .kw{color:var(--indigo)}
+.code-block .str{color:var(--emerald)}
+.code-block .fn{color:var(--amber)}
+.code-block .cm{color:#6b7280}
+.code-tabs{display:flex;gap:4px;margin-bottom:-1px;position:relative;z-index:1}
+.code-tab{padding:8px 18px;background:var(--surface);border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;color:var(--text-dim);cursor:pointer;font-size:.85rem;border:1px solid var(--border)}
+.code-tab.active{background:var(--code-bg);color:var(--text);border-bottom-color:var(--code-bg)}
+.code-panel{display:none}
+.code-panel.active{display:block}
+
+/* Token structure */
+.token-json{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:24px;font-family:var(--mono);font-size:.82rem;line-height:1.6;overflow-x:auto}
+.token-json .key{color:var(--indigo)}
+.token-json .val-str{color:var(--emerald)}
+.token-json .val-num{color:var(--amber)}
+.token-annotations{margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.annotation{padding:12px;background:var(--surface);border-radius:8px;border:1px solid var(--border)}
+.annotation strong{color:var(--indigo);font-size:.85rem}
+.annotation p{color:var(--text-dim);font-size:.8rem;margin-top:4px}
+
+/* Features grid */
+.features{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.feature{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px}
+.feature h3{font-size:.95rem;margin-bottom:4px}
+.feature p{color:var(--text-dim);font-size:.85rem}
+
+/* Architecture */
+.arch{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:28px;font-family:var(--mono);font-size:.78rem;line-height:1.7;overflow-x:auto;white-space:pre;text-align:center;color:var(--text-dim)}
+
+/* Footer */
+footer{text-align:center;padding:48px 0;border-top:1px solid var(--border);color:var(--text-dim);font-size:.85rem}
+footer .links{display:flex;gap:24px;justify-content:center;margin-bottom:12px}
+
+@media(max-width:900px){.comparison,.steps,.features,.token-annotations{grid-template-columns:1fr}.hero h1{font-size:2.2rem}.steps{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.steps{grid-template-columns:1fr}.features{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="container">
+<div class="hero">
+<div class="hero-badge">HTTP 402 + Grantex</div>
+<h1>Grantex &times; x402</h1>
+<p class="subtitle">Agent Spend Authorization for HTTP 402 Payment Flows</p>
+<p class="desc">The x402 protocol enables AI agents to pay for APIs with USDC on Base L2. Grantex adds the missing layer: proving the agent was <strong>authorized</strong> to spend. No compromised agents draining wallets. No unauthorized payments.</p>
+<div class="hero-actions">
+<a href="/x402-playground/" class="btn btn-primary">Try the Playground</a>
+<a href="https://github.com/mishrasanjeev/grantex" class="btn btn-outline">View on GitHub</a>
+</div>
+<div class="install-badge">npm install @grantex/x402</div>
+</div>
+</div>
+
+<!-- Problem / Solution -->
+<section>
+<div class="container">
+<h2>The Gap in x402</h2>
+<p class="section-desc">x402 solves payments. Grantex solves authorization.</p>
+<div class="comparison">
+<div class="card">
+<h3><span class="icon-circle icon-red">!</span> Without Grantex</h3>
+<p>x402 proves a payment was made, but not that the paying agent was authorized. A compromised agent can drain a wallet by invoking x402-gated APIs with no scope, no limit, no audit trail, and no kill switch.</p>
+</div>
+<div class="card highlight">
+<h3><span class="icon-circle icon-green">&check;</span> With Grantex</h3>
+<p>Every x402 payment carries a Grantex Delegation Token (GDT) &mdash; a W3C Verifiable Credential that encodes who authorized the spend, what scope it covers, the maximum spend limit, the expiry, and the full delegation chain.</p>
+</div>
+</div>
+</div>
+</section>
+
+<!-- How It Works -->
+<section>
+<div class="container">
+<h2>How It Works</h2>
+<p class="section-desc">Four steps from delegation to data.</p>
+<div class="steps">
+<div class="step"><h3>Issue GDT</h3><p>Principal issues a scoped delegation token: weather:read, $10/day, 24h expiry.</p></div>
+<div class="step"><h3>Attach to Request</h3><p>Agent sends the request with X-Grantex-GDT header containing the signed JWT.</p></div>
+<div class="step"><h3>Pay + Verify</h3><p>API returns 402, agent pays with USDC, API verifies both payment and GDT.</p></div>
+<div class="step"><h3>Audit Trail</h3><p>Every authorization event is logged: who, what, when, how much.</p></div>
+</div>
+</div>
+</section>
+
+<!-- Code Examples -->
+<section>
+<div class="container">
+<h2>Developer Experience</h2>
+<p class="section-desc">Three APIs cover the entire flow.</p>
+<div class="code-tabs">
+<div class="code-tab active" onclick="switchCode(this,0)">Issue a GDT</div>
+<div class="code-tab" onclick="switchCode(this,1)">Agent Fetch</div>
+<div class="code-tab" onclick="switchCode(this,2)">Protect API</div>
+</div>
+<div class="code-panel active"><div class="code-block"><span class="kw">import</span> { <span class="fn">generateKeyPair</span>, <span class="fn">issueGDT</span> } <span class="kw">from</span> <span class="str">'@grantex/x402'</span>;
+
+<span class="kw">const</span> principal = <span class="fn">generateKeyPair</span>();
+<span class="kw">const</span> agent = <span class="fn">generateKeyPair</span>();
+
+<span class="kw">const</span> gdt = <span class="kw">await</span> <span class="fn">issueGDT</span>({
+  agentDID: agent.did,
+  scope: [<span class="str">'weather:read'</span>],
+  spendLimit: { amount: <span class="val-num">10</span>, currency: <span class="str">'USDC'</span>, period: <span class="str">'24h'</span> },
+  expiry: <span class="str">'24h'</span>,
+  signingKey: principal.privateKey,
+});</div></div>
+<div class="code-panel"><div class="code-block"><span class="kw">import</span> { <span class="fn">createX402Agent</span> } <span class="kw">from</span> <span class="str">'@grantex/x402'</span>;
+
+<span class="kw">const</span> x402 = <span class="fn">createX402Agent</span>({
+  gdt: gdtToken,
+  paymentHandler: <span class="kw">async</span> (details) => {
+    <span class="cm">// Sign USDC transfer on Base L2</span>
+    <span class="kw">return await</span> <span class="fn">payOnBase</span>(details);
+  },
+});
+
+<span class="cm">// Automatic: 402 -> pay -> retry with GDT</span>
+<span class="kw">const</span> res = <span class="kw">await</span> x402.<span class="fn">fetch</span>(<span class="str">'https://api.weather.xyz/forecast'</span>);</div></div>
+<div class="code-panel"><div class="code-block"><span class="kw">import</span> express <span class="kw">from</span> <span class="str">'express'</span>;
+<span class="kw">import</span> { <span class="fn">x402Middleware</span> } <span class="kw">from</span> <span class="str">'@grantex/x402'</span>;
+
+<span class="kw">const</span> app = <span class="fn">express</span>();
+
+app.<span class="fn">use</span>(<span class="str">'/api/weather'</span>, <span class="fn">x402Middleware</span>({
+  requiredScopes: [<span class="str">'weather:read'</span>],
+  currency: <span class="str">'USDC'</span>,
+}));
+
+app.<span class="fn">get</span>(<span class="str">'/api/weather/forecast'</span>, (req, res) => {
+  res.<span class="fn">json</span>({
+    forecast: <span class="str">'sunny'</span>,
+    authorizedBy: req.gdt.principalDID,
+  });
+});</div></div>
+</div>
+</section>
+
+<!-- GDT Token Structure -->
+<section>
+<div class="container">
+<h2>GDT Token Structure</h2>
+<p class="section-desc">W3C Verifiable Credential 2.0 encoded as a JWT, signed with Ed25519.</p>
+<div class="token-json">{
+  <span class="key">"iss"</span>: <span class="val-str">"did:key:z6Mk...principal..."</span>,
+  <span class="key">"sub"</span>: <span class="val-str">"did:key:z6Mk...agent..."</span>,
+  <span class="key">"vc"</span>: {
+    <span class="key">"@context"</span>: [<span class="val-str">"https://www.w3.org/ns/credentials/v2"</span>],
+    <span class="key">"type"</span>: [<span class="val-str">"VerifiableCredential"</span>, <span class="val-str">"GrantexDelegationToken"</span>],
+    <span class="key">"credentialSubject"</span>: {
+      <span class="key">"scope"</span>: [<span class="val-str">"weather:read"</span>],
+      <span class="key">"spendLimit"</span>: { <span class="key">"amount"</span>: <span class="val-num">10</span>, <span class="key">"currency"</span>: <span class="val-str">"USDC"</span>, <span class="key">"period"</span>: <span class="val-str">"24h"</span> },
+      <span class="key">"paymentChain"</span>: <span class="val-str">"base"</span>,
+      <span class="key">"delegationChain"</span>: [<span class="val-str">"did:key:...principal..."</span>]
+    }
+  },
+  <span class="key">"exp"</span>: <span class="val-num">1711123200</span>,
+  <span class="key">"jti"</span>: <span class="val-str">"550e8400-e29b-..."</span>
+}</div>
+<div class="token-annotations">
+<div class="annotation"><strong>scope</strong><p>What APIs the agent can access: weather:read, news:*, etc.</p></div>
+<div class="annotation"><strong>spendLimit</strong><p>Maximum spend per period: $10 USDC per 24 hours.</p></div>
+<div class="annotation"><strong>delegationChain</strong><p>Full chain from organization to principal to agent.</p></div>
+<div class="annotation"><strong>paymentChain</strong><p>Target blockchain for payments: Base L2.</p></div>
+</div>
+</div>
+</section>
+
+<!-- Features -->
+<section>
+<div class="container">
+<h2>Features</h2>
+<div class="features">
+<div class="feature"><h3>W3C VC 2.0</h3><p>Standards-compliant Verifiable Credentials for interoperability.</p></div>
+<div class="feature"><h3>Ed25519 Signatures</h3><p>Fast, secure EdDSA cryptographic signatures. Offline verification.</p></div>
+<div class="feature"><h3>Spend Limits</h3><p>Per-period caps prevent wallet drain. $10/day, $100/week, etc.</p></div>
+<div class="feature"><h3>Instant Revocation</h3><p>Revoke a compromised agent's token immediately. Sub-second enforcement.</p></div>
+<div class="feature"><h3>Full Audit Trail</h3><p>Every issuance, verification, and rejection is logged. Exportable for compliance.</p></div>
+<div class="feature"><h3>Base L2 Native</h3><p>Built for USDC on Base L2. Pluggable payment handlers for any chain.</p></div>
+</div>
+</div>
+</section>
+
+<!-- Architecture -->
+<section>
+<div class="container">
+<h2>Architecture</h2>
+<div class="arch">
+Principal ──── issueGDT() ───── GDT (W3C VC 2.0 JWT)
+ (Human)                              |
+                                       v
+  Agent ──── x402Agent.fetch() ──── x402 API
+                                   |        |
+                              402 Payment   GDT Verify
+                                   |        |
+                              Base L2 Pay   Audit Log
+                              (USDC)        (append-only)
+                                   |
+                              Revocation Registry
+</div>
+</div>
+</section>
+
+<!-- Footer -->
+<footer>
+<div class="container">
+<div class="links">
+<a href="https://github.com/mishrasanjeev/grantex">GitHub</a>
+<a href="https://www.npmjs.com/package/@grantex/x402">npm</a>
+<a href="https://grantex.dev">Documentation</a>
+<a href="/x402-playground/">Playground</a>
+</div>
+<p>Built on <strong>Grantex</strong> &mdash; Open delegated authorization for AI agents</p>
+<p style="margin-top:4px">Apache 2.0 License</p>
+</div>
+</footer>
+
+<script>
+function switchCode(el,idx){
+  el.parentElement.querySelectorAll('.code-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  const panels=el.parentElement.parentElement.querySelectorAll('.code-panel');
+  panels.forEach(p=>p.classList.remove('active'));
+  panels[idx].classList.add('active');
+}
+</script>
+</body>
+</html>

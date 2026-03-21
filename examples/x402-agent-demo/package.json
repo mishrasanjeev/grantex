@@ -1,0 +1,17 @@
+{
+  "name": "x402-agent-demo-example",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx agent.ts",
+    "demo": "tsx agent.ts"
+  },
+  "dependencies": {
+    "@grantex/x402": "file:../../packages/x402",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0"
+  }
+}

@@ -57,6 +57,13 @@
             ]
           },
           {
+            "group": "x402 Payment Protocol",
+            "pages": [
+              "features/x402-architecture",
+              "features/x402-gdt-spec"
+            ]
+          },
+          {
             "group": "Guides",
             "pages": [
               "guides/rate-limits",
@@ -280,6 +287,12 @@
             "pages": [
               "integrations/a2a",
               "integrations/a2a-py"
+            ]
+          },
+          {
+            "group": "Payment Protocol",
+            "pages": [
+              "integrations/x402"
             ]
           },
           {

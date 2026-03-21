@@ -763,6 +763,7 @@
                onclick="gtag('event','github_click',{event_category:'nav'})">GitHub</a></li>
         <li><a href="/playground"
                onclick="gtag('event','playground_click',{event_category:'nav'})">Playground</a></li>
+        <li><a href="#x402">x402</a></li>
         <li><a href="#examples">Examples</a></li>
         <li><a href="https://www.npmjs.com/package/@grantex/sdk">npm</a></li>
         <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
@@ -1159,6 +1160,156 @@
         </a>
         <a href="/for/mpp" class="btn btn-secondary"
            onclick="gtag('event','mpp_learn_click',{event_category:'mpp'})">
+          Learn more
+        </a>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── x402 Agent Spend Authorization ──────────────────────────────────────── -->
+<section id="x402" style="background: linear-gradient(180deg, rgba(99,102,241,0.04) 0%, transparent 60%);">
+  <div class="container">
+    <div class="section-label">New — HTTP 402 Payments</div>
+    <h2 class="section-title">Agent Spend Authorization for x402</h2>
+    <p class="section-sub">
+      x402 lets agents pay for APIs with USDC on Base L2. Grantex adds the missing layer —
+      proving the agent was <strong>authorized</strong> to spend before any payment goes through.
+    </p>
+
+    <!-- ── Visual flow pipeline ───────────────────────────────────────── -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:32px 24px;margin-bottom:48px;overflow-x:auto;">
+      <div style="display:flex;align-items:stretch;gap:0;min-width:900px;">
+        <!-- Step 1: Principal -->
+        <div style="flex:1;text-align:center;padding:0 12px;">
+          <div style="font-size:36px;margin-bottom:8px;">&#x1F464;</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">Principal</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Issues delegation<br>scope + spend limit</div>
+          <div style="margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
+            <div style="font-family:var(--mono);font-size:10px;color:#6366f1;">issueGDT()</div>
+          </div>
+        </div>
+        <!-- Arrow -->
+        <div style="display:flex;align-items:center;padding:0 4px;color:#6366f1;font-size:22px;flex-shrink:0;">&#x2192;</div>
+        <!-- Step 2: GDT Token -->
+        <div style="flex:1.2;text-align:center;padding:0 12px;border-left:1px dashed var(--border);border-right:1px dashed var(--border);">
+          <div style="font-size:36px;margin-bottom:8px;">&#x1F4DC;</div>
+          <div style="font-size:13px;font-weight:700;color:#6366f1;margin-bottom:4px;">GDT Token</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">W3C VC 2.0 &middot; Ed25519 signed<br>Scope + spend limit + expiry</div>
+          <div style="display:flex;gap:4px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
+            <span style="font-size:10px;font-family:var(--mono);background:rgba(99,102,241,0.15);color:#6366f1;padding:2px 8px;border-radius:10px;">weather:read</span>
+            <span style="font-size:10px;font-family:var(--mono);background:rgba(16,185,129,0.15);color:#10b981;padding:2px 8px;border-radius:10px;">$10 USDC/24h</span>
+          </div>
+        </div>
+        <!-- Arrow -->
+        <div style="display:flex;align-items:center;padding:0 4px;color:#10b981;font-size:22px;flex-shrink:0;">&#x2192;</div>
+        <!-- Step 3: Agent + 402 -->
+        <div style="flex:1.2;text-align:center;padding:0 12px;">
+          <div style="font-size:36px;margin-bottom:8px;">&#x1F916;</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">AI Agent</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Sends request with GDT<br>Handles 402 &rarr; pay &rarr; retry</div>
+          <div style="margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
+            <div style="font-family:var(--mono);font-size:10px;color:#6366f1;">X-Grantex-GDT: eyJ...</div>
+          </div>
+        </div>
+        <!-- Arrow -->
+        <div style="display:flex;align-items:center;padding:0 4px;color:#f59e0b;font-size:22px;flex-shrink:0;">&#x2192;</div>
+        <!-- Step 4: Base L2 Pay -->
+        <div style="flex:0.9;text-align:center;padding:0 12px;border-left:1px dashed var(--border);border-right:1px dashed var(--border);">
+          <div style="font-size:36px;margin-bottom:8px;">&#x1F4B0;</div>
+          <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:4px;">Base L2 Pay</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">USDC transfer<br>on-chain</div>
+        </div>
+        <!-- Arrow -->
+        <div style="display:flex;align-items:center;padding:0 4px;color:var(--accent);font-size:22px;flex-shrink:0;">&#x2192;</div>
+        <!-- Step 5: API Verifies -->
+        <div style="flex:1;text-align:center;padding:0 12px;">
+          <div style="font-size:36px;margin-bottom:8px;">&#x2705;</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">API Verifies</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Checks GDT signature<br>scope + spend limit</div>
+          <div style="margin-top:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:6px 10px;">
+            <div style="font-family:var(--mono);font-size:10px;color:#10b981;">&#x2713; authorized &middot; $9.999 left</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Two-column: features + code ────────────────────────────────── -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:start;">
+      <!-- Left: problem/solution -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card" style="border-left:3px solid #ef4444;margin:0;">
+          <span class="card-icon">&#x26A0;</span>
+          <h3>The Gap in x402</h3>
+          <p>x402 proves payment was made, but not that the agent was authorized. A compromised agent can drain a wallet with no scope, no limit, and no kill switch.</p>
+        </div>
+        <div class="card" style="border-left:3px solid #10b981;margin:0;">
+          <span class="card-icon">&#x1F6E1;</span>
+          <h3>Grantex Fills the Gap</h3>
+          <p>A GDT (Grantex Delegation Token) is a W3C Verifiable Credential that encodes who authorized the spend, what scope, how much, and when it expires.</p>
+        </div>
+        <div class="card" style="border-left:3px solid #6366f1;margin:0;">
+          <span class="card-icon">&#x1F50D;</span>
+          <h3>Full Audit Trail</h3>
+          <p>Every issuance, verification, and revocation is logged. Instant revocation for compromised agents. Compliance-ready export.</p>
+        </div>
+      </div>
+      <!-- Right: code -->
+      <div>
+        <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:#6366f1;margin-bottom:10px;">Issue a delegation token</div>
+        <div class="code-block" style="border:1px solid var(--border);border-radius:var(--radius);margin-top:0;">
+          <pre><span class="kw">import</span> <span class="op">{</span> <span class="id">generateKeyPair</span><span class="op">,</span> <span class="id">issueGDT</span> <span class="op">}</span> <span class="kw">from</span> <span class="str">'@grantex/x402'</span><span class="op">;</span>
+
+<span class="kw">const</span> <span class="id">principal</span> <span class="op">=</span> <span class="fn">generateKeyPair</span><span class="op">();</span>
+<span class="kw">const</span> <span class="id">agent</span> <span class="op">=</span> <span class="fn">generateKeyPair</span><span class="op">();</span>
+
+<span class="kw">const</span> <span class="id">gdt</span> <span class="op">=</span> <span class="kw">await</span> <span class="fn">issueGDT</span><span class="op">({</span>
+  <span class="id">agentDID</span><span class="op">:</span> <span class="id">agent</span><span class="op">.</span><span class="id">did</span><span class="op">,</span>
+  <span class="id">scope</span><span class="op">:</span> <span class="op">[</span><span class="str">'weather:read'</span><span class="op">],</span>
+  <span class="id">spendLimit</span><span class="op">:</span> <span class="op">{</span> <span class="id">amount</span><span class="op">:</span> <span class="str">10</span><span class="op">,</span> <span class="id">currency</span><span class="op">:</span> <span class="str">'USDC'</span><span class="op">,</span> <span class="id">period</span><span class="op">:</span> <span class="str">'24h'</span> <span class="op">},</span>
+  <span class="id">expiry</span><span class="op">:</span> <span class="str">'24h'</span><span class="op">,</span>
+  <span class="id">signingKey</span><span class="op">:</span> <span class="id">principal</span><span class="op">.</span><span class="id">privateKey</span><span class="op">,</span>
+<span class="op">});</span></pre>
+        </div>
+        <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:#10b981;margin:20px 0 10px;">Protect your API</div>
+        <div class="code-block" style="border:1px solid var(--border);border-radius:var(--radius);margin-top:0;">
+          <pre><span class="kw">import</span> <span class="op">{</span> <span class="id">x402Middleware</span> <span class="op">}</span> <span class="kw">from</span> <span class="str">'@grantex/x402'</span><span class="op">;</span>
+
+<span class="id">app</span><span class="op">.</span><span class="fn">use</span><span class="op">(</span><span class="str">'/api/weather'</span><span class="op">,</span> <span class="fn">x402Middleware</span><span class="op">({</span>
+  <span class="id">requiredScopes</span><span class="op">:</span> <span class="op">[</span><span class="str">'weather:read'</span><span class="op">],</span>
+  <span class="id">currency</span><span class="op">:</span> <span class="str">'USDC'</span><span class="op">,</span>
+<span class="op">}));</span>
+
+<span class="cm">// req.gdt is populated:</span>
+<span class="cm">//   agentDID:       did:key:z6Mk...</span>
+<span class="cm">//   principalDID:   did:key:z6Mk...</span>
+<span class="cm">//   remainingLimit: 9.999</span>
+<span class="cm">//   scopes:         [weather:read]</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Install + CTA ──────────────────────────────────────────────── -->
+    <div style="margin-top:40px;">
+      <div class="install-commands">
+        <div class="install-cmd" onclick="navigator.clipboard.writeText('npm install @grantex/x402')">
+          <span class="install-label">npm</span>
+          <code>npm install @grantex/x402</code>
+          <span class="install-copy">Copy</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;">
+        <a href="https://docs.grantex.dev/integrations/x402" class="btn btn-primary"
+           onclick="gtag('event','x402_docs_click',{event_category:'x402'})">
+          Read the docs &rarr;
+        </a>
+        <a href="/x402-playground/" class="btn btn-secondary"
+           onclick="gtag('event','x402_playground_click',{event_category:'x402'})">
+          Try the playground
+        </a>
+        <a href="/x402/" class="btn btn-secondary"
+           onclick="gtag('event','x402_learn_click',{event_category:'x402'})">
           Learn more
         </a>
       </div>

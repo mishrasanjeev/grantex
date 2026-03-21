@@ -1,0 +1,138 @@
+---
+title: "x402 Architecture"
+sidebarTitle: "x402 Architecture"
+description: "Architecture overview of Grantex x402 agent spend authorization — components, data flow, and security model."
+---
+
+## Architecture Overview
+
+Grantex x402 adds an authorization layer to the x402 HTTP Payment Required protocol. Five components work together to ensure that every agent payment is authorized, scoped, and auditable.
+
+```
+┌───────────────┐     ┌────────────────┐     ┌─────────────────┐
+│   Principal   │────▶│   GDT Issuer   │────▶│   GDT (JWT)     │
+│   (Human)     │     │  issueGDT()    │     │  W3C VC 2.0     │
+└───────────────┘     └────────────────┘     └────────┬────────┘
+                                                       │
+                                                       ▼
+┌───────────────┐     ┌────────────────┐     ┌─────────────────┐
+│     Agent     │────▶│  x402 Adapter  │────▶│   x402 API      │
+│               │     │  fetch + GDT   │     │  + Middleware    │
+└───────────────┘     └────────────────┘     └────────┬────────┘
+                                                       │
+                      ┌────────────────┐              │
+                      │   Revocation   │◀─────────────┤
+                      │   Registry     │              │
+                      └────────────────┘     ┌────────▼────────┐
+                                              │   Audit Log     │
+                      ┌────────────────┐     │   (append-only) │
+                      │   Base L2      │     └─────────────────┘
+                      │   USDC Payment │
+                      └────────────────┘
+```
+
+## Components
+
+### GDT Issuer
+
+The GDT Issuer creates signed W3C Verifiable Credentials that encode the delegation from a principal to an agent. Each GDT specifies:
+
+- **Agent DID** — The identity of the delegated agent
+- **Scope** — What resources/actions the agent can access
+- **Spend Limit** — Maximum amount per time period
+- **Expiry** — When the delegation ends
+- **Delegation Chain** — Parent DIDs for sub-delegation
+
+The issuer uses the principal's Ed25519 private key to sign the credential, producing a compact JWT.
+
+### GDT Verifier
+
+The verifier is embedded in the `x402Middleware` and the `verifyGDT()` function. It performs six checks:
+
+1. **JWT Signature** — Ed25519 (EdDSA) verification using the issuer's public key (resolved from the DID)
+2. **Token Expiry** — Rejects tokens past their `exp` claim
+3. **Revocation Status** — Checks the revocation registry
+4. **Scope Match** — Ensures the requested resource is covered by granted scopes
+5. **Spend Limit** — Ensures the request amount doesn't exceed the authorized limit
+6. **VC Structure** — Validates the W3C VC 2.0 credential format
+
+### x402 Adapter
+
+The adapter wraps the native `fetch()` function to handle the x402 payment flow automatically:
+
+1. Sends the initial request with the `X-Grantex-GDT` header
+2. On `402 Payment Required`, extracts payment details
+3. Executes payment via the configured handler (Base L2 USDC transfer)
+4. Retries the request with both `X-Payment-Proof` and `X-Grantex-GDT` headers
+
+### Revocation Registry
+
+An in-memory registry of revoked token IDs. Tokens are identified by their `jti` (JWT ID) claim. Revocation is instant — a revoked token is rejected on the next verification.
+
+The `RevocationRegistry` interface supports pluggable backends:
+
+```typescript
+interface RevocationRegistry {
+  revoke(tokenId: string, reason?: string): Promise<void>;
+  isRevoked(tokenId: string): Promise<boolean>;
+  listRevoked(): Promise<RevokedEntry[]>;
+}
+```
+
+### Audit Log
+
+An append-only log that records every GDT lifecycle event:
+
+- **Issuance** — When a GDT is created
+- **Verification** — When a GDT is successfully verified
+- **Rejection** — When verification fails (scope mismatch, spend exceeded, revoked)
+- **Payment** — When an x402 payment is processed
+- **Revocation** — When a token is revoked
+
+---
+
+## Security Model
+
+### Threat: Compromised Agent
+
+A compromised agent cannot spend beyond the GDT's scope and limit. If detected, the principal revokes the GDT immediately. The audit log shows exactly what the agent accessed.
+
+### Threat: Token Replay
+
+Each GDT has a unique `jti` claim. The revocation registry prevents reuse after revocation. The spend limit provides a natural cap even without revocation.
+
+### Threat: Scope Escalation
+
+The verifier performs strict scope matching. A `weather:read` token cannot be used for `finance:write`. Wildcard scopes (`weather:*`) are supported but must be explicitly granted.
+
+### Threat: Token Tampering
+
+Ed25519 signatures are verified against the issuer's public key (derived from the DID). Any modification to the JWT payload invalidates the signature.
+
+---
+
+## HTTP Headers
+
+| Header | Direction | Purpose |
+|--------|-----------|---------|
+| `X-Grantex-GDT` | Request | Carries the GDT JWT |
+| `X-Payment-Required` | Response (402) | Indicates payment is needed |
+| `X-Payment-Amount` | Response (402) | Payment amount |
+| `X-Payment-Currency` | Response (402) | Payment currency (USDC/USDT) |
+| `X-Payment-Recipient` | Response (402) | Recipient wallet address |
+| `X-Payment-Chain` | Response (402) | Blockchain (e.g., "base") |
+| `X-Payment-Proof` | Request (retry) | Payment transaction proof |
+
+---
+
+## DID Resolution
+
+GDTs use `did:key` identifiers for both principals and agents. The public key is embedded directly in the DID, enabling offline verification without network calls.
+
+```
+did:key:z6Mk<base58btc(0xed01 + public_key)>
+```
+
+- `z` — multibase prefix for base58btc
+- `6Mk` — start of Ed25519 multicodec-encoded keys
+- Supports offline resolution — no DID resolver network required
