@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grantex x402 Playground</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0f1a;--surface:#111827;--border:#1f2937;--text:#f9fafb;--text-dim:#9ca3af;--indigo:#6366f1;--emerald:#10b981;--amber:#f59e0b;--red:#ef4444;--code-bg:#1e1e2e;--mono:'Menlo','Monaco','Cascadia Code','Consolas',monospace}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.container{max-width:1100px;margin:0 auto;padding:0 24px}
+header{text-align:center;padding:60px 0 40px;border-bottom:1px solid var(--border)}
+h1{font-size:2.4rem;font-weight:700;background:linear-gradient(135deg,var(--indigo),var(--emerald));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{color:var(--text-dim);font-size:1.1rem;margin-top:8px}
+.panels{display:grid;gap:24px;margin:40px 0}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;position:relative}
+.panel h2{font-size:1.2rem;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.panel h2 .badge{font-size:.7rem;background:var(--indigo);padding:2px 8px;border-radius:9999px;font-weight:500}
+label{display:block;font-size:.85rem;color:var(--text-dim);margin-bottom:4px;margin-top:12px}
+label:first-of-type{margin-top:0}
+input,select{width:100%;padding:10px 12px;background:var(--code-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--mono);font-size:.85rem}
+input:focus,select:focus{outline:none;border-color:var(--indigo)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+button{padding:10px 20px;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-primary{background:var(--indigo);color:#fff}
+.btn-primary:hover{background:#4f46e5}
+.btn-sm{padding:6px 12px;font-size:.8rem;border-radius:6px}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text-dim)}
+.btn-outline:hover{border-color:var(--indigo);color:var(--indigo)}
+.output{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:12px;font-family:var(--mono);font-size:.8rem;word-break:break-all;white-space:pre-wrap;max-height:300px;overflow-y:auto;position:relative}
+.output.success{border-color:var(--emerald)}
+.output.error{border-color:var(--red)}
+.copy-btn{position:absolute;top:8px;right:8px;background:var(--border);color:var(--text-dim);border:none;padding:4px 8px;border-radius:4px;font-size:.7rem;cursor:pointer}
+.copy-btn:hover{background:var(--indigo);color:#fff}
+.status{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;font-size:.8rem;font-weight:600}
+.status.pass{background:rgba(16,185,129,.15);color:var(--emerald)}
+.status.fail{background:rgba(239,68,68,.15);color:var(--red)}
+.did-display{font-family:var(--mono);font-size:.8rem;color:var(--indigo);word-break:break-all;padding:8px;background:var(--code-bg);border-radius:6px;margin-top:4px}
+.flow{display:flex;flex-direction:column;gap:4px;margin-top:16px}
+.flow-step{display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;background:var(--code-bg);border:1px solid var(--border);transition:all .3s}
+.flow-step.active{border-color:var(--indigo);background:rgba(99,102,241,.1)}
+.flow-step.done{border-color:var(--emerald);background:rgba(16,185,129,.08)}
+.flow-step .num{width:28px;height:28px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex-shrink:0}
+.flow-step.active .num{background:var(--indigo)}
+.flow-step.done .num{background:var(--emerald)}
+.flow-step .desc{font-size:.85rem}
+.flow-step .desc small{display:block;color:var(--text-dim);font-size:.75rem;margin-top:2px}
+.tabs{display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:0}
+.tab{padding:8px 16px;background:none;border:none;color:var(--text-dim);font-size:.85rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.active{color:var(--indigo);border-bottom-color:var(--indigo)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+.hidden{display:none}
+footer{text-align:center;padding:40px 0;border-top:1px solid var(--border);color:var(--text-dim);font-size:.85rem}
+footer a{color:var(--indigo);text-decoration:none}
+footer a:hover{text-decoration:underline}
+@media(max-width:768px){.row,.row-3{grid-template-columns:1fr}h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>Grantex &times; x402 Playground</h1>
+<p class="subtitle">Interactive demo of agent spend authorization for x402 payment flows</p>
+</header>
+
+<div class="panels">
+
+<!-- Key Generation -->
+<div class="panel">
+<h2>Key Generation <span class="badge">Ed25519</span></h2>
+<button class="btn-primary" onclick="generateKeys()">Generate Principal Key Pair</button>
+<div id="principal-keys" class="hidden">
+<label>Principal DID</label>
+<div class="did-display" id="principal-did"></div>
+<div class="row" style="margin-top:8px">
+<div><label>Public Key (hex)</label><input id="principal-pub" readonly></div>
+<div><label>Private Key (hex) <button class="btn-sm btn-outline" onclick="toggleKey()">show/hide</button></label><input id="principal-priv" type="password" readonly></div>
+</div>
+</div>
+<div style="margin-top:16px">
+<button class="btn-primary" onclick="generateAgentKey()">Generate Agent Key Pair</button>
+</div>
+<div id="agent-keys" class="hidden">
+<label>Agent DID</label>
+<div class="did-display" id="agent-did"></div>
+</div>
+</div>
+
+<!-- GDT Issuance -->
+<div class="panel">
+<h2>GDT Issuance <span class="badge">W3C VC 2.0</span></h2>
+<div class="row">
+<div><label>Agent DID</label><input id="issue-agent" placeholder="Generate keys first"></div>
+<div><label>Scopes (comma-separated)</label><input id="issue-scopes" value="weather:read"></div>
+</div>
+<div class="row-3">
+<div><label>Spend Limit</label><input id="issue-limit" type="number" value="10"></div>
+<div><label>Currency</label><select id="issue-currency"><option>USDC</option><option>USDT</option></select></div>
+<div><label>Period</label><select id="issue-period"><option value="1h">1 hour</option><option value="24h" selected>24 hours</option><option value="7d">7 days</option><option value="30d">30 days</option></select></div>
+</div>
+<label>Expiry</label>
+<input id="issue-expiry" value="24h" placeholder="24h, 7d, PT24H, or ISO datetime">
+<div style="margin-top:16px"><button class="btn-primary" onclick="issueToken()">Issue GDT</button></div>
+<div id="issue-output" class="hidden">
+<label>GDT Token (JWT)</label>
+<div class="output" id="issue-token"><button class="copy-btn" onclick="copyText('issue-token')">copy</button></div>
+<label>Decoded Payload</label>
+<div class="output" id="issue-decoded"></div>
+</div>
+</div>
+
+<!-- GDT Verification -->
+<div class="panel">
+<h2>GDT Verification <span class="badge">Ed25519 + Scope</span></h2>
+<label>GDT Token</label>
+<input id="verify-token" placeholder="Issue a GDT first">
+<div class="row-3">
+<div><label>Resource Scope</label><input id="verify-resource" value="weather:read"></div>
+<div><label>Amount</label><input id="verify-amount" type="number" value="0.001" step="0.001"></div>
+<div><label>Currency</label><select id="verify-currency"><option>USDC</option><option>USDT</option></select></div>
+</div>
+<div style="margin-top:16px"><button class="btn-primary" onclick="verifyToken()">Verify GDT</button></div>
+<div id="verify-output" class="hidden">
+<div class="output" id="verify-result"></div>
+</div>
+</div>
+
+<!-- x402 Flow Simulation -->
+<div class="panel">
+<h2>x402 Flow Simulation <span class="badge">HTTP 402</span></h2>
+<p style="color:var(--text-dim);font-size:.85rem;margin-bottom:12px">Watch the full agent payment flow step by step.</p>
+<button class="btn-primary" onclick="runSimulation()">Run Simulation</button>
+<div class="flow" id="flow-steps">
+<div class="flow-step" id="step-1"><div class="num">1</div><div class="desc">Agent sends GET request with GDT<small>X-Grantex-GDT: eyJ...</small></div></div>
+<div class="flow-step" id="step-2"><div class="num">2</div><div class="desc">API returns HTTP 402 Payment Required<small>X-Payment-Amount: 0.001, X-Payment-Currency: USDC</small></div></div>
+<div class="flow-step" id="step-3"><div class="num">3</div><div class="desc">Agent pays via Base L2 (USDC)<small>Simulating on-chain transfer...</small></div></div>
+<div class="flow-step" id="step-4"><div class="num">4</div><div class="desc">Agent retries with Payment Proof + GDT<small>X-Payment-Proof: base64url(...), X-Grantex-GDT: eyJ...</small></div></div>
+<div class="flow-step" id="step-5"><div class="num">5</div><div class="desc">API verifies GDT (signature, scope, limit)<small>verifyGDT() &rarr; valid, remainingLimit: $9.999</small></div></div>
+<div class="flow-step" id="step-6"><div class="num">6</div><div class="desc">API returns weather data<small>{ forecast: "Partly Cloudy, 68&deg;F" }</small></div></div>
+</div>
+</div>
+
+<!-- Code Examples -->
+<div class="panel">
+<h2>Code Examples <span class="badge">TypeScript</span></h2>
+<div class="tabs">
+<button class="tab active" onclick="showTab(this,'tab-issue')">Issue GDT</button>
+<button class="tab" onclick="showTab(this,'tab-verify')">Verify GDT</button>
+<button class="tab" onclick="showTab(this,'tab-agent')">x402 Agent</button>
+<button class="tab" onclick="showTab(this,'tab-middleware')">Middleware</button>
+</div>
+<div class="tab-content active" id="tab-issue"><div class="output"><button class="copy-btn" onclick="copyEl(this)">copy</button>import { generateKeyPair, issueGDT } from '@grantex/x402';
+
+const principal = generateKeyPair();
+const agent = generateKeyPair();
+
+const gdt = await issueGDT({
+  agentDID: agent.did,
+  scope: ['weather:read', 'news:read'],
+  spendLimit: { amount: 10, currency: 'USDC', period: '24h' },
+  expiry: '24h',
+  signingKey: principal.privateKey,
+});</div></div>
+<div class="tab-content" id="tab-verify"><div class="output"><button class="copy-btn" onclick="copyEl(this)">copy</button>import { verifyGDT } from '@grantex/x402';
+
+const result = await verifyGDT(gdtToken, {
+  resource: 'weather:read',
+  amount: 0.001,
+  currency: 'USDC',
+});
+
+if (result.valid) {
+  console.log('Agent:', result.agentDID);
+  console.log('Remaining:', result.remainingLimit);
+} else {
+  console.error('Rejected:', result.error);
+}</div></div>
+<div class="tab-content" id="tab-agent"><div class="output"><button class="copy-btn" onclick="copyEl(this)">copy</button>import { createX402Agent } from '@grantex/x402';
+
+const x402 = createX402Agent({
+  gdt: gdtToken,
+  paymentHandler: async (details) =&gt; {
+    // Sign USDC transfer on Base L2
+    return await payOnBase(details);
+  },
+});
+
+// Automatic: 402 &rarr; pay &rarr; retry with GDT
+const response = await x402.fetch(
+  'https://api.weather.xyz/forecast'
+);</div></div>
+<div class="tab-content" id="tab-middleware"><div class="output"><button class="copy-btn" onclick="copyEl(this)">copy</button>import express from 'express';
+import { x402Middleware } from '@grantex/x402';
+
+const app = express();
+
+app.use('/api/weather', x402Middleware({
+  requiredScopes: ['weather:read'],
+  currency: 'USDC',
+}));
+
+app.get('/api/weather/forecast', (req, res) =&gt; {
+  const { gdt } = req;
+  res.json({
+    forecast: 'sunny',
+    authorizedBy: gdt.principalDID,
+  });
+});</div></div>
+</div>
+
+</div>
+
+<footer>
+<p><a href="https://github.com/mishrasanjeev/grantex">GitHub</a> &middot; <a href="https://grantex.dev">Docs</a> &middot; <a href="https://www.npmjs.com/package/@grantex/x402">npm</a></p>
+<p style="margin-top:8px">&copy; 2026 Grantex &mdash; Apache 2.0</p>
+</footer>
+</div>
+
+<script>
+// State
+let principalDID='',agentDID='',principalPriv='',currentToken='';
+
+function randomHex(n){const a='0123456789abcdef';let r='';for(let i=0;i<n;i++)r+=a[Math.floor(Math.random()*16)];return r}
+function randomDID(){return'did:key:z6Mk'+randomHex(44)}
+function base64url(s){return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function uuid(){return'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:r&0x3|0x8).toString(16)})}
+
+function generateKeys(){
+  principalDID=randomDID();
+  principalPriv=randomHex(64);
+  document.getElementById('principal-did').textContent=principalDID;
+  document.getElementById('principal-pub').value=randomHex(64);
+  document.getElementById('principal-priv').value=principalPriv;
+  document.getElementById('principal-keys').classList.remove('hidden');
+}
+
+function generateAgentKey(){
+  agentDID=randomDID();
+  document.getElementById('agent-did').textContent=agentDID;
+  document.getElementById('agent-keys').classList.remove('hidden');
+  document.getElementById('issue-agent').value=agentDID;
+}
+
+function toggleKey(){
+  const el=document.getElementById('principal-priv');
+  el.type=el.type==='password'?'text':'password';
+}
+
+function issueToken(){
+  if(!principalDID){generateKeys()}
+  if(!agentDID){generateAgentKey()}
+
+  const scopes=document.getElementById('issue-scopes').value.split(',').map(s=>s.trim());
+  const limit=parseFloat(document.getElementById('issue-limit').value);
+  const currency=document.getElementById('issue-currency').value;
+  const period=document.getElementById('issue-period').value;
+  const expiry=document.getElementById('issue-expiry').value;
+
+  const now=Math.floor(Date.now()/1000);
+  const exp=now+(expiry.includes('d')?parseInt(expiry)*86400:parseInt(expiry)*3600||86400);
+  const jti=uuid();
+
+  const header={alg:'EdDSA',typ:'JWT'};
+  const payload={
+    iss:principalDID,sub:agentDID,
+    vc:{'@context':['https://www.w3.org/ns/credentials/v2','https://grantex.dev/v1/x402'],
+      type:['VerifiableCredential','GrantexDelegationToken'],
+      credentialSubject:{id:agentDID,scope:scopes,
+        spendLimit:{amount:limit,currency,period},
+        paymentChain:'base',delegationChain:[principalDID]}},
+    iat:now,exp,jti
+  };
+
+  currentToken=base64url(JSON.stringify(header))+'.'+base64url(JSON.stringify(payload))+'.'+base64url(randomHex(64));
+
+  document.getElementById('issue-token').innerHTML='<button class="copy-btn" onclick="copyText(\'issue-token\')">copy</button>'+currentToken;
+  document.getElementById('issue-decoded').textContent=JSON.stringify(payload,null,2);
+  document.getElementById('issue-output').classList.remove('hidden');
+  document.getElementById('verify-token').value=currentToken;
+}
+
+function verifyToken(){
+  const token=document.getElementById('verify-token').value||currentToken;
+  if(!token){alert('Issue a GDT first');return}
+
+  const resource=document.getElementById('verify-resource').value;
+  const amount=parseFloat(document.getElementById('verify-amount').value);
+  const currency=document.getElementById('verify-currency').value;
+
+  try{
+    const parts=token.split('.');
+    const payload=JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+    const cs=payload.vc?.credentialSubject;
+    const scopeMatch=cs?.scope?.includes(resource)||cs?.scope?.includes('*')||cs?.scope?.some(s=>s.endsWith(':*')&&resource.startsWith(s.slice(0,-1)));
+    const limitOk=amount<=cs?.spendLimit?.amount;
+    const currencyOk=currency===cs?.spendLimit?.currency;
+    const notExpired=payload.exp>Math.floor(Date.now()/1000);
+    const valid=scopeMatch&&limitOk&&currencyOk&&notExpired;
+
+    let error='';
+    if(!scopeMatch)error='Scope mismatch: '+resource+' not in ['+cs?.scope?.join(', ')+']';
+    else if(!limitOk)error='Spend limit exceeded: '+amount+' > '+cs?.spendLimit?.amount;
+    else if(!currencyOk)error='Currency mismatch: '+currency+' vs '+cs?.spendLimit?.currency;
+    else if(!notExpired)error='Token expired';
+
+    const result={valid,agentDID:payload.sub,principalDID:payload.iss,
+      remainingLimit:valid?(cs.spendLimit.amount-amount):0,
+      scopes:cs?.scope||[],tokenId:payload.jti,
+      expiresAt:new Date(payload.exp*1000).toISOString(),
+      ...(error?{error}:{})};
+
+    const el=document.getElementById('verify-result');
+    el.className='output '+(valid?'success':'error');
+    el.innerHTML=(valid?'<span class="status pass">VALID</span>':'<span class="status fail">INVALID</span>')+'\n\n'+JSON.stringify(result,null,2);
+    document.getElementById('verify-output').classList.remove('hidden');
+  }catch(e){
+    const el=document.getElementById('verify-result');
+    el.className='output error';
+    el.innerHTML='<span class="status fail">ERROR</span>\n\nFailed to decode token: '+e.message;
+    document.getElementById('verify-output').classList.remove('hidden');
+  }
+}
+
+async function runSimulation(){
+  const steps=document.querySelectorAll('.flow-step');
+  steps.forEach(s=>{s.classList.remove('active','done')});
+  for(let i=0;i<steps.length;i++){
+    steps[i].classList.add('active');
+    await new Promise(r=>setTimeout(r,800));
+    steps[i].classList.remove('active');
+    steps[i].classList.add('done');
+  }
+}
+
+function showTab(btn,id){
+  btn.parentElement.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  btn.parentElement.parentElement.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function copyText(id){
+  const el=document.getElementById(id);
+  const text=el.textContent.replace('copy','').trim();
+  navigator.clipboard.writeText(text);
+}
+function copyEl(btn){
+  const text=btn.parentElement.textContent.replace('copy','').trim();
+  navigator.clipboard.writeText(text);
+}
+</script>
+</body>
+</html>

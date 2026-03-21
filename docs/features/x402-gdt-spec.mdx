@@ -1,0 +1,160 @@
+---
+title: "GDT Specification"
+sidebarTitle: "GDT Spec"
+description: "Specification of the Grantex Delegation Token (GDT) — a W3C Verifiable Credential 2.0 for agent spend authorization."
+---
+
+## Grantex Delegation Token (GDT)
+
+A **Grantex Delegation Token** is a W3C Verifiable Credential 2.0 that authorizes an AI agent to make payments on behalf of a human principal. It is encoded as a compact JWT signed with Ed25519 (EdDSA algorithm).
+
+## Token Format
+
+### JWT Header
+
+```json
+{
+  "alg": "EdDSA",
+  "typ": "JWT"
+}
+```
+
+### JWT Payload
+
+```json
+{
+  "iss": "did:key:z6Mk...principal...",
+  "sub": "did:key:z6Mk...agent...",
+  "vc": {
+    "@context": [
+      "https://www.w3.org/ns/credentials/v2",
+      "https://grantex.dev/v1/x402"
+    ],
+    "type": [
+      "VerifiableCredential",
+      "GrantexDelegationToken"
+    ],
+    "credentialSubject": {
+      "id": "did:key:z6Mk...agent...",
+      "scope": ["weather:read", "news:read"],
+      "spendLimit": {
+        "amount": 10,
+        "currency": "USDC",
+        "period": "24h"
+      },
+      "paymentChain": "base",
+      "delegationChain": ["did:key:...principal..."]
+    }
+  },
+  "iat": 1711036800,
+  "exp": 1711123200,
+  "jti": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+## Claim Definitions
+
+### Standard JWT Claims
+
+| Claim | Type | Description |
+|-------|------|-------------|
+| `iss` | `string` | Issuer — the principal's `did:key` who authorized the delegation |
+| `sub` | `string` | Subject — the agent's `did:key` being delegated to |
+| `iat` | `number` | Issued-at timestamp (Unix epoch seconds) |
+| `exp` | `number` | Expiration timestamp (Unix epoch seconds) |
+| `jti` | `string` | Unique token ID (UUID v4) for revocation and audit |
+
+### VC Context
+
+The `vc` claim follows the W3C Verifiable Credentials Data Model 2.0:
+
+| Field | Value | Description |
+|-------|-------|-------------|
+| `@context` | `["https://www.w3.org/ns/credentials/v2", "https://grantex.dev/v1/x402"]` | W3C VC 2.0 context + Grantex x402 context |
+| `type` | `["VerifiableCredential", "GrantexDelegationToken"]` | Credential types |
+
+### Credential Subject
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Agent DID (matches JWT `sub`) |
+| `scope` | `string[]` | Array of authorized `resource:action` patterns |
+| `spendLimit.amount` | `number` | Maximum spend in the given period |
+| `spendLimit.currency` | `string` | `"USDC"` or `"USDT"` |
+| `spendLimit.period` | `string` | Rolling period: `"1h"`, `"24h"`, `"7d"`, `"30d"` |
+| `paymentChain` | `string` | Target blockchain (default: `"base"`) |
+| `delegationChain` | `string[]` | Ordered list of DIDs in the delegation chain |
+
+## Scope Format
+
+Scopes follow the `resource:action` pattern:
+
+```
+weather:read      — Read weather data
+weather:write     — Write/update weather data
+weather:*         — All weather actions (wildcard)
+*                 — All resources and actions (full access)
+```
+
+### Scope Matching Rules
+
+1. **Exact match**: `weather:read` matches `weather:read`
+2. **Action wildcard**: `weather:*` matches `weather:read`, `weather:write`, etc.
+3. **Global wildcard**: `*` matches everything
+4. **No implicit escalation**: `weather:read` does NOT match `weather:write`
+
+## Spend Limit Periods
+
+| Period | Duration | Use Case |
+|--------|----------|----------|
+| `1h` | 1 hour | High-frequency, low-value APIs |
+| `24h` | 24 hours | Standard daily delegation |
+| `7d` | 7 days | Weekly batch operations |
+| `30d` | 30 days | Monthly budgets |
+
+## Expiry Formats
+
+The `expiry` parameter accepts:
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| Shorthand hours | `24h` | 24 hours from now |
+| Shorthand days | `7d` | 7 days from now |
+| ISO 8601 duration | `PT24H` | 24 hours from now |
+| ISO 8601 duration | `P7D` | 7 days from now |
+| ISO 8601 datetime | `2026-03-22T00:00:00Z` | Absolute expiry |
+
+## Delegation Chain
+
+The `delegationChain` field records the full chain of delegation:
+
+```
+Organization (did:key:z6Mk...org...)
+  └── Manager (did:key:z6Mk...mgr...)
+       └── Agent (did:key:z6Mk...agent...)
+```
+
+The delegation chain enables audit of the full authorization path.
+
+## Cryptographic Details
+
+| Property | Value |
+|----------|-------|
+| Algorithm | EdDSA (Ed25519) |
+| Key type | OKP (Octet Key Pair) |
+| Curve | Ed25519 |
+| DID method | `did:key` with multicodec prefix `0xed01` |
+| Multibase encoding | Base58btc (`z` prefix) |
+| Token encoding | Compact JWT serialization |
+
+## Verification Checks
+
+A GDT is considered valid only if ALL of the following pass:
+
+1. The JWT signature is valid for the issuer's Ed25519 public key
+2. The `exp` claim is in the future
+3. The `jti` is not in the revocation registry
+4. The requested resource matches at least one granted scope
+5. The request amount does not exceed the spend limit
+6. The `vc.type` array includes both `VerifiableCredential` and `GrantexDelegationToken`
+7. The `vc.credentialSubject` contains valid scope and spend limit data

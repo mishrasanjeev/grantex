@@ -1082,6 +1082,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **A2A Bridge (Py)** | `grantex-a2a` | `pip install grantex-a2a` | ✅ Shipped |
 | **Event Destinations** | `@grantex/destinations` | `npm install @grantex/destinations` | ✅ Shipped |
 | **Terraform Provider** | `terraform-provider-grantex` | `terraform { required_providers { grantex = { source = "mishrasanjeev/grantex" } } }` | ✅ Shipped |
+| **x402 Payment Protocol** | `@grantex/x402` | `npm install @grantex/x402` | ✅ Shipped |
 
 ### Framework Quick Examples
 

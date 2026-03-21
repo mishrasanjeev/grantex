@@ -1,0 +1,345 @@
+---
+title: "x402 Payment Protocol"
+sidebarTitle: "x402 (HTTP 402)"
+description: "Agent spend authorization for x402 payment flows — Grantex Delegation Tokens for AI agents paying with USDC on Base L2."
+---
+
+## Overview
+
+The [x402 protocol](https://www.x402.org/) enables AI agents to pay for API resources using USDC on Base L2 with no login, no API key, and no subscription. `@grantex/x402` adds the missing authorization layer — a **Grantex Delegation Token (GDT)** that proves the paying agent was authorized to spend.
+
+**What x402 solves:** Machine-to-machine payments.
+**What Grantex adds:** Proof that the payment was authorized — by whom, for what, how much, and when.
+
+## Install
+
+```bash
+npm install @grantex/x402
+```
+
+## Quick Start
+
+### 1. Issue a Delegation Token
+
+A human principal issues a scoped GDT to their agent:
+
+```typescript
+import { generateKeyPair, issueGDT } from '@grantex/x402';
+
+const principal = generateKeyPair();
+const agent = generateKeyPair();
+
+const gdt = await issueGDT({
+  agentDID: agent.did,
+  scope: ['weather:read'],
+  spendLimit: { amount: 10, currency: 'USDC', period: '24h' },
+  expiry: '24h',
+  signingKey: principal.privateKey,
+});
+```
+
+### 2. Agent Makes Authorized Payments
+
+The agent attaches the GDT to x402 payment requests:
+
+```typescript
+import { createX402Agent } from '@grantex/x402';
+
+const x402 = createX402Agent({
+  gdt: gdtToken,
+  paymentHandler: async (details) => {
+    // Sign USDC transfer on Base L2
+    return await payOnBase(details);
+  },
+});
+
+// Automatic: request → 402 → pay → retry with GDT
+const response = await x402.fetch('https://api.weather.xyz/forecast');
+```
+
+### 3. API Verifies Authorization
+
+The API server requires a valid GDT alongside the x402 payment:
+
+```typescript
+import express from 'express';
+import { x402Middleware } from '@grantex/x402';
+
+const app = express();
+
+app.use('/api/weather', x402Middleware({
+  requiredScopes: ['weather:read'],
+  currency: 'USDC',
+}));
+
+app.get('/api/weather/forecast', (req, res) => {
+  const { gdt } = req;
+  res.json({
+    forecast: 'sunny',
+    authorizedBy: gdt.principalDID,
+  });
+});
+```
+
+---
+
+## How It Works
+
+```
+1. Principal ──── issueGDT() ────▶ GDT (W3C VC 2.0 JWT)
+                                         │
+2. Agent ──── x402Agent.fetch() ─────────┤
+                                         ▼
+3. API returns HTTP 402 ◀──── Payment Required
+                                         │
+4. Agent pays via Base L2 ───────────────┤
+                                         ▼
+5. Agent retries with Payment + GDT ─────┤
+                                         ▼
+6. API ──── x402Middleware ──── verifyGDT()
+   │                                     │
+   ▼                                     ▼
+   Response returned              Audit log entry
+```
+
+The GDT is a **W3C Verifiable Credential 2.0** encoded as a JWT, signed with Ed25519. It encodes:
+
+- **Who** authorized the spend (principal DID)
+- **What** the agent can access (scoped permissions)
+- **How much** the agent can spend (spend limit + period)
+- **When** the authorization expires
+- **Chain of delegation** for multi-agent scenarios
+
+---
+
+## GDT Token Structure
+
+```json
+{
+  "iss": "did:key:z6Mk...principal...",
+  "sub": "did:key:z6Mk...agent...",
+  "vc": {
+    "@context": [
+      "https://www.w3.org/ns/credentials/v2",
+      "https://grantex.dev/v1/x402"
+    ],
+    "type": ["VerifiableCredential", "GrantexDelegationToken"],
+    "credentialSubject": {
+      "id": "did:key:z6Mk...agent...",
+      "scope": ["weather:read", "news:read"],
+      "spendLimit": {
+        "amount": 10,
+        "currency": "USDC",
+        "period": "24h"
+      },
+      "paymentChain": "base",
+      "delegationChain": ["did:key:...principal..."]
+    }
+  },
+  "iat": 1711036800,
+  "exp": 1711123200,
+  "jti": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+---
+
+## API Reference
+
+### `issueGDT(params)`
+
+Issue a signed Grantex Delegation Token.
+
+<ParamField body="agentDID" type="string" required>
+  DID of the agent being delegated to.
+</ParamField>
+
+<ParamField body="scope" type="string[]" required>
+  Array of `resource:action` scope strings (e.g., `['weather:read']`).
+</ParamField>
+
+<ParamField body="spendLimit" type="SpendLimit" required>
+  `{ amount: number, currency: 'USDC' | 'USDT', period: '1h' | '24h' | '7d' | '30d' }`
+</ParamField>
+
+<ParamField body="expiry" type="string" required>
+  ISO 8601 duration (`PT24H`, `P7D`) or shorthand (`24h`, `7d`) or datetime.
+</ParamField>
+
+<ParamField body="signingKey" type="Uint8Array" required>
+  32-byte Ed25519 private key seed of the issuing principal.
+</ParamField>
+
+<ParamField body="delegationChain" type="string[]">
+  Parent DIDs for sub-delegation chains.
+</ParamField>
+
+<ParamField body="paymentChain" type="string" default="base">
+  Blockchain for payment authorization.
+</ParamField>
+
+**Returns:** `Promise<string>` — The signed GDT JWT.
+
+---
+
+### `verifyGDT(token, context)`
+
+Verify a GDT against a request context. Checks signature, expiry, revocation, scope, and spend limit.
+
+<ParamField body="token" type="string" required>
+  The GDT JWT to verify.
+</ParamField>
+
+<ParamField body="context.resource" type="string" required>
+  The `resource:action` scope being requested.
+</ParamField>
+
+<ParamField body="context.amount" type="number" required>
+  Spend amount for this request.
+</ParamField>
+
+<ParamField body="context.currency" type="Currency" required>
+  `'USDC'` or `'USDT'`.
+</ParamField>
+
+**Returns:** `Promise<VerifyResult>`:
+
+```typescript
+{
+  valid: boolean;
+  agentDID: string;
+  principalDID: string;
+  remainingLimit: number;
+  scopes: string[];
+  tokenId: string;
+  expiresAt: string;
+  error?: string;
+}
+```
+
+---
+
+### `createX402Agent(config)`
+
+Create an x402 fetch wrapper with automatic 402 → pay → retry handling.
+
+```typescript
+const agent = createX402Agent({
+  gdt: gdtToken,
+  paymentHandler: async (details) => {
+    // details: { amount, currency, recipientAddress, chain, memo? }
+    return paymentProof;
+  },
+});
+
+const response = await agent.fetch('https://api.example.com/data');
+```
+
+---
+
+### `x402Middleware(options)`
+
+Express middleware for GDT verification.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `required` | `boolean` | `true` | Require GDT (403 if missing) |
+| `requiredScopes` | `string[]` | — | Scopes to enforce |
+| `currency` | `Currency` | `'USDC'` | Currency for verification |
+| `extractAmount` | `(req) => number` | — | Custom amount extractor |
+
+---
+
+## Revocation
+
+Instantly revoke a GDT:
+
+```typescript
+import { getRevocationRegistry } from '@grantex/x402';
+
+const registry = getRevocationRegistry();
+await registry.revoke(tokenId, 'agent compromised');
+
+// All subsequent verifications will reject this token
+```
+
+---
+
+## Audit Log
+
+All GDT operations are logged:
+
+```typescript
+import { getAuditLog } from '@grantex/x402';
+
+const log = getAuditLog();
+const entries = await log.query({
+  eventType: 'verification',
+  limit: 50,
+});
+
+// Export for compliance
+const all = await log.export();
+```
+
+---
+
+## Scope Matching
+
+| Granted | Requested | Match |
+|---------|-----------|-------|
+| `weather:read` | `weather:read` | Yes |
+| `weather:read` | `weather:write` | No |
+| `weather:*` | `weather:read` | Yes |
+| `*` | `anything:anything` | Yes |
+
+---
+
+## CLI
+
+```bash
+# Generate Ed25519 key pair
+grantex-x402 keygen
+
+# Issue a GDT
+grantex-x402 issue --agent did:key:z6Mk... --scope weather:read --limit 10 --expiry 24h --key principal.key
+
+# Verify a GDT
+grantex-x402 verify <token> --resource weather:read --amount 0.001
+
+# Revoke a GDT
+grantex-x402 revoke <tokenId>
+
+# Decode (inspect) a GDT
+grantex-x402 decode <token>
+```
+
+---
+
+## Examples
+
+See the [examples directory](https://github.com/mishrasanjeev/grantex/tree/main/examples) for runnable demos:
+
+- **x402-weather-api** — Express server with x402 pricing + GDT enforcement
+- **x402-agent-demo** — Agent client that issues a GDT, pays, and fetches data
+
+---
+
+## Security Considerations
+
+- **Ed25519 signatures** — GDTs are cryptographically signed; tampering invalidates the token
+- **Scope enforcement** — Agents can only access resources explicitly granted
+- **Spend limits** — Per-period spending caps prevent wallet drain
+- **Instant revocation** — Compromised tokens are rejected immediately
+- **Unique token IDs** — Every GDT has a UUID `jti` for replay protection
+- **Audit trail** — All issuance, verification, and revocation events are logged
+
+---
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `@noble/ed25519` | Ed25519 key generation and signing |
+| `@noble/hashes` | SHA-512 for Ed25519 |
+| `jose` | JWT encoding, signing, and verification |
