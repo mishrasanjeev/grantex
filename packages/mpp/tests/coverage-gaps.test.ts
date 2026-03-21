@@ -239,7 +239,7 @@ describe('middleware — concurrent refresh dedup', () => {
     expect(onRefresh).toHaveBeenCalledTimes(1);
 
     // Resolve the pending refresh
-    if (resolveRefresh) resolveRefresh(makePassport({ encodedCredential: 'refreshed' }));
+    if (resolveRefresh) (resolveRefresh as (p: IssuedPassport) => void)(makePassport({ encodedCredential: 'refreshed' }));
     await new Promise((r) => setTimeout(r, 50));
   });
 });
@@ -493,7 +493,7 @@ describe('verifier — validateStructure individual fields', () => {
 
   it('throws MALFORMED_CREDENTIAL when @context is missing', async () => {
     const credential = makeCredential();
-    delete (credential as Record<string, unknown>)['@context'];
+    delete (credential as unknown as Record<string, unknown>)['@context'];
     credential.proof.proofValue = 'dummy';
     const encoded = encodeCredential(credential);
 
@@ -503,7 +503,7 @@ describe('verifier — validateStructure individual fields', () => {
   });
 
   it('throws MALFORMED_CREDENTIAL when type is missing AgentPassportCredential', async () => {
-    const credential = makeCredential({ type: ['VerifiableCredential'] });
+    const credential = makeCredential({ type: ['VerifiableCredential'] as unknown as ['VerifiableCredential', 'AgentPassportCredential'] });
     credential.proof.proofValue = 'dummy';
     const encoded = encodeCredential(credential);
 
@@ -514,7 +514,7 @@ describe('verifier — validateStructure individual fields', () => {
 
   it('throws MALFORMED_CREDENTIAL when credentialSubject is missing', async () => {
     const credential = makeCredential();
-    delete (credential as Record<string, unknown>)['credentialSubject'];
+    delete (credential as unknown as Record<string, unknown>)['credentialSubject'];
     credential.proof.proofValue = 'dummy';
     const encoded = encodeCredential(credential);
 
@@ -525,7 +525,7 @@ describe('verifier — validateStructure individual fields', () => {
 
   it('throws MALFORMED_CREDENTIAL when proof is missing', async () => {
     const credential = makeCredential();
-    delete (credential as Record<string, unknown>)['proof'];
+    delete (credential as unknown as Record<string, unknown>)['proof'];
     const encoded = encodeCredential(credential);
 
     await expect(verifyPassport(encoded)).rejects.toThrow(
@@ -535,7 +535,7 @@ describe('verifier — validateStructure individual fields', () => {
 
   it('throws MALFORMED_CREDENTIAL when id is missing', async () => {
     const credential = makeCredential();
-    delete (credential as Record<string, unknown>)['id'];
+    delete (credential as unknown as Record<string, unknown>)['id'];
     credential.proof.proofValue = 'dummy';
     const encoded = encodeCredential(credential);
 
@@ -546,7 +546,7 @@ describe('verifier — validateStructure individual fields', () => {
 
   it('throws MALFORMED_CREDENTIAL when issuer is missing', async () => {
     const credential = makeCredential();
-    delete (credential as Record<string, unknown>)['issuer'];
+    delete (credential as unknown as Record<string, unknown>)['issuer'];
     credential.proof.proofValue = 'dummy';
     const encoded = encodeCredential(credential);
 
@@ -557,7 +557,7 @@ describe('verifier — validateStructure individual fields', () => {
 
   it('throws MALFORMED_CREDENTIAL when validUntil is missing', async () => {
     const credential = makeCredential();
-    delete (credential as Record<string, unknown>)['validUntil'];
+    delete (credential as unknown as Record<string, unknown>)['validUntil'];
     credential.proof.proofValue = 'dummy';
     const encoded = encodeCredential(credential);
 
