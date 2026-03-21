@@ -13,13 +13,13 @@ const PLANS = [
     name: 'free',
     label: 'Free',
     price: '$0',
-    features: ['5 agents', '100 grants', '1,000 audit entries', 'Community support'],
+    features: ['200 agents', '500 grants', '10,000 audit entries', '10 policies', 'Community support'],
   },
   {
     name: 'pro',
     label: 'Pro',
     price: '$49/mo',
-    features: ['50 agents', '10,000 grants', '100,000 audit entries', 'Priority support', 'SOC 2 evidence packs'],
+    features: ['1,000 agents', '10,000 grants', '500,000 audit entries', '200 policies', 'Priority support', 'SOC 2 evidence packs'],
   },
   {
     name: 'enterprise',
