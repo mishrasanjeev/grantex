@@ -17,7 +17,7 @@ const JWKS_URI = `${BASE_URL}/.well-known/jwks.json`;
 let grantex: Grantex;
 let apiKey: string;
 
-// Shared agents (free plan allows 3 — reuse across suites)
+// Shared agents (free plan allows 200 — reuse across suites)
 let mainAgent: { agentId: string; did: string };
 let delegateAgent: { agentId: string; did: string };
 
@@ -59,7 +59,7 @@ beforeAll(async () => {
   apiKey = account.apiKey;
   grantex = new Grantex({ apiKey, baseUrl: BASE_URL });
 
-  // Pre-register shared agents (stays within free plan limit of 3)
+  // Pre-register shared agents (stays within free plan limit of 200)
   const [agent1, agent2, agent3] = await Promise.all([
     grantex.agents.register({ name: `e2e-main-${Date.now()}`, scopes: ['calendar:read', 'email:send', 'files:read'] }),
     grantex.agents.register({ name: `e2e-parent-${Date.now()}`, scopes: ['calendar:read', 'email:send'] }),

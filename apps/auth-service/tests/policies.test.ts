@@ -47,7 +47,7 @@ describe('POST /v1/policies', () => {
   it('returns 402 when plan policy limit is reached', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ plan: 'free' }]);  // subscription → free plan
-    sqlMock.mockResolvedValueOnce([{ count: '5' }]);    // policy count → at limit
+    sqlMock.mockResolvedValueOnce([{ count: '10' }]);   // policy count → at limit
 
     const res = await app.inject({
       method: 'POST',

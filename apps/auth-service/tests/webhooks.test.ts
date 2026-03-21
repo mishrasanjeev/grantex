@@ -52,7 +52,7 @@ describe('POST /v1/webhooks', () => {
   it('returns 402 when plan webhook limit is reached', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ plan: 'free' }]); // subscription → free plan
-    sqlMock.mockResolvedValueOnce([{ count: '1' }]);    // 1 webhook already (free limit)
+    sqlMock.mockResolvedValueOnce([{ count: '5' }]);    // 5 webhooks already (free limit)
 
     const res = await app.inject({
       method: 'POST',
