@@ -43,7 +43,10 @@
     "protocol",
     "ai-agents",
     "authorization",
-    "oauth"
+    "oauth",
+    "compliance",
+    "grant-token",
+    "jwt"
   ],
   "license": "Apache-2.0",
   "repository": {

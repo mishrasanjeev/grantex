@@ -51,7 +51,11 @@
     "oauth",
     "claude",
     "cursor",
-    "windsurf"
+    "windsurf",
+    "agent-permissions",
+    "delegated-auth",
+    "grant-token",
+    "claude-desktop"
   ],
   "license": "Apache-2.0",
   "repository": {

@@ -48,7 +48,10 @@
     "ai-agents",
     "authorization",
     "oauth",
-    "jwt"
+    "jwt",
+    "agent-tools",
+    "scope-enforcement",
+    "delegated-auth"
   ],
   "license": "Apache-2.0",
   "repository": {

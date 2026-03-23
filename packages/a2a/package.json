@@ -48,7 +48,10 @@
     "authorization",
     "oauth",
     "jwt",
-    "ai-agents"
+    "ai-agents",
+    "delegation",
+    "grant-token",
+    "multi-agent"
   ],
   "license": "Apache-2.0",
   "repository": {

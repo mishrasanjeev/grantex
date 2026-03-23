@@ -68,6 +68,10 @@
     "usdc",
     "base-l2",
     "ai-agents",
-    "w3c-vc"
+    "w3c-vc",
+    "agent-spend",
+    "machine-payments",
+    "agentic-commerce",
+    "coinbase"
   ]
 }

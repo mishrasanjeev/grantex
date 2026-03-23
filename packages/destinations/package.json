@@ -47,7 +47,10 @@
     "s3",
     "bigquery",
     "kafka",
-    "siem"
+    "siem",
+    "audit-trail",
+    "observability",
+    "ai-agents"
   ],
   "repository": {
     "type": "git",

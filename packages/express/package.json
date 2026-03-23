@@ -49,7 +49,10 @@
     "jwt",
     "ai-agents",
     "scope-enforcement",
-    "grant-token"
+    "grant-token",
+    "token-verification",
+    "agent-permissions",
+    "delegated-auth"
   ],
   "license": "Apache-2.0",
   "overrides": {

@@ -1,0 +1,74 @@
+# Grantex
+
+> Delegated authorization protocol for AI agents. What OAuth 2.0 is to humans, Grantex is to agents.
+
+Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, human-approved, revocable permissions via signed JWTs. Any service can verify tokens offline using published JWKS — no runtime dependency on Grantex infrastructure.
+
+## Quick Facts
+
+- Website: https://grantex.dev
+- Docs: https://docs.grantex.dev
+- GitHub: https://github.com/mishrasanjeev/grantex
+- Spec: https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md
+- IETF Draft: https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/
+- License: Apache 2.0
+- Protocol Version: 1.0 (Final, frozen)
+
+## SDKs
+
+- TypeScript: `npm install @grantex/sdk`
+- Python: `pip install grantex`
+- Go: `go get github.com/mishrasanjeev/grantex-go`
+- CLI: `npm install -g @grantex/cli`
+
+## Framework Integrations
+
+- LangChain: `npm install @grantex/langchain`
+- CrewAI: `pip install grantex-crewai`
+- OpenAI Agents SDK: `pip install grantex-openai-agents`
+- Google ADK: `pip install grantex-adk`
+- Vercel AI SDK: `npm install @grantex/vercel-ai`
+- AutoGen: `npm install @grantex/autogen`
+- MCP (Claude Desktop, Cursor, Windsurf): `npm install @grantex/mcp`
+- Express.js middleware: `npm install @grantex/express`
+- FastAPI middleware: `pip install grantex-fastapi`
+- Reverse-proxy gateway: `npm install @grantex/gateway`
+
+## Key Features
+
+- Scoped permissions: `resource:action[:constraint]` format (e.g., `payments:initiate:max_500`)
+- Human consent flow with plain-language UI
+- Offline token verification via JWKS (RS256 JWT)
+- Multi-agent delegation chains with scope narrowing
+- Real-time revocation (single grant or cascade)
+- Hash-chained audit trail
+- FIDO2/WebAuthn passkey-based consent
+- W3C Verifiable Credentials (VC-JWT) issuance
+- SD-JWT selective disclosure
+- DID infrastructure (did:web:grantex.dev)
+- MPP Agent Passport for machine payments
+- x402 agent spend authorization
+- Budget controls with atomic debit
+- Event streaming (SSE + WebSocket)
+- Policy-as-code (OPA, Cedar)
+- Usage metering and custom domains
+- Terraform provider (5 resources, 2 data sources)
+- Conformance test suite
+
+## How It Works (5 Steps)
+
+1. Developer registers an agent → gets a DID (`did:grantex:ag_...`)
+2. Agent requests authorization for specific scopes → user sees consent UI
+3. User approves → authorization code returned via redirect
+4. Code exchanged for signed grant token (RS256 JWT)
+5. Any service verifies the token offline via JWKS
+
+## Comparisons
+
+- vs OAuth 2.0: Grantex adds cryptographic agent identity, delegation chains, action-level audit, and sub-second revocation
+- vs API keys: Grantex provides per-agent scoping, user consent, delegation, and revocation granularity
+- vs MCP Auth: Grantex works across all frameworks, not just MCP; adds VCs, FIDO2, budgets, and delegation
+
+## Documentation
+
+- Full docs: https://docs.grantex.dev/llms-full.txt

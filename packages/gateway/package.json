@@ -58,6 +58,10 @@
     "reverse-proxy",
     "authorization",
     "ai-agents",
-    "grant-tokens"
+    "grant-tokens",
+    "scope-enforcement",
+    "jwt",
+    "oauth",
+    "zero-code"
   ]
 }
