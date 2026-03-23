@@ -49,7 +49,18 @@
     "delegated-auth",
     "sdk",
     "agent-permissions",
-    "grant-token"
+    "grant-token",
+    "agent-identity",
+    "verifiable-credentials",
+    "webauthn",
+    "fido2",
+    "did",
+    "sd-jwt",
+    "mpp",
+    "machine-payments",
+    "agent-delegation",
+    "revocation",
+    "scoped-permissions"
   ],
   "license": "Apache-2.0",
   "repository": {

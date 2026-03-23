@@ -1,0 +1,501 @@
+# Grantex — Full Documentation for LLMs
+
+> Delegated authorization protocol for AI agents. What OAuth 2.0 is to humans, Grantex is to agents.
+
+Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, human-approved, revocable permissions via signed JWTs. Any service can verify tokens offline using published JWKS — no runtime dependency on Grantex infrastructure.
+
+## Quick Facts
+
+- Website: https://grantex.dev
+- Docs: https://docs.grantex.dev
+- GitHub: https://github.com/mishrasanjeev/grantex
+- Spec: https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md
+- IETF Draft: https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/
+- License: Apache 2.0
+- Protocol Version: 1.0 (Final, frozen)
+- Tests: 679+ passing
+- SOC 2 Type I certified
+- Production: Cloud Run at https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+
+---
+
+## The Problem Grantex Solves
+
+AI agents are booking travel, sending emails, deploying code, and spending money — on behalf of real humans. But:
+
+- No scoping — agents get the same access as the key owner
+- No consent — users never approve what the agent can do
+- No per-agent identity — you know the key was used, but not which agent or why
+- No revocation granularity — one agent misbehaves, rotate the key, kill everything
+- No delegation control — Agent A calls Agent B? Copy-paste credentials
+- No spending limits — an agent with a cloud API key can provision unlimited resources
+
+OAuth solved this for web apps. IAM solved it for cloud. Grantex solves it for AI agents.
+
+---
+
+## SDKs and Install Commands
+
+### TypeScript SDK (`@grantex/sdk`)
+```
+npm install @grantex/sdk
+```
+
+### Python SDK (`grantex`)
+```
+pip install grantex
+```
+
+### Go SDK (`grantex-go`)
+```
+go get github.com/mishrasanjeev/grantex-go
+```
+
+### CLI (`@grantex/cli`)
+```
+npm install -g @grantex/cli
+```
+
+---
+
+## TypeScript Quickstart
+
+```typescript
+import { Grantex, verifyGrantToken } from '@grantex/sdk';
+const gx = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// 1. Register an agent
+const agent = await gx.agents.register({
+  name: 'travel-booker',
+  description: 'Books flights and hotels on behalf of users',
+  scopes: ['calendar:read', 'payments:initiate:max_500', 'email:send'],
+});
+// agent.did → did:grantex:ag_01HXYZ123abc...
+
+// 2. Request authorization
+const auth = await gx.authorize({
+  agentId: agent.id,
+  userId: 'user_abc123',
+  scopes: ['calendar:read', 'payments:initiate:max_500'],
+  expiresIn: '24h',
+  redirectUri: 'https://yourapp.com/auth/callback',
+});
+// Redirect user to auth.consentUrl
+
+// 3. Exchange code for grant token
+const token = await gx.tokens.exchange({ code, agentId: agent.id });
+// token.grantToken → RS256 JWT
+// token.scopes → ['calendar:read', 'payments:initiate:max_500']
+
+// 4. Verify offline
+const grant = await verifyGrantToken(token.grantToken, {
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+  requiredScopes: ['calendar:read'],
+});
+// grant.principalId → 'user_abc123'
+// grant.scopes → ['calendar:read', 'payments:initiate:max_500']
+
+// 5. Log actions
+await gx.audit.log({
+  agentId: agent.id,
+  grantId: token.grantId,
+  action: 'payment.initiated',
+  status: 'success',
+  metadata: { amount: 420, currency: 'USD' },
+});
+```
+
+## Python Quickstart
+
+```python
+from grantex import Grantex, ExchangeTokenParams, verify_grant_token, VerifyGrantTokenOptions
+
+client = Grantex(api_key=os.environ["GRANTEX_API_KEY"])
+
+# Register agent
+agent = client.agents.register(
+    name="finance-agent",
+    scopes=["transactions:read", "payments:initiate:max_100"],
+)
+
+# Authorize
+auth = client.authorize(
+    agent_id=agent.id,
+    user_id="user_abc123",
+    scopes=["transactions:read", "payments:initiate:max_100"],
+)
+# Redirect user to auth.consent_url
+
+# Exchange code for grant token
+token = client.tokens.exchange(ExchangeTokenParams(code=code, agent_id=agent.id))
+
+# Verify offline
+grant = verify_grant_token(token.grant_token, VerifyGrantTokenOptions(
+    jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+))
+```
+
+---
+
+## Grant Token (JWT) Format
+
+Grantex tokens are standard JWTs (RS256) with agent-specific claims:
+
+```json
+{
+  "iss": "https://grantex.dev",
+  "sub": "user_abc123",
+  "agt": "did:grantex:ag_01HXYZ123abc",
+  "dev": "org_yourcompany",
+  "scp": ["calendar:read", "payments:initiate:max_500"],
+  "iat": 1709000000,
+  "exp": 1709086400,
+  "jti": "tok_01HXYZ987xyz",
+  "grnt": "grnt_01HXYZ456def"
+}
+```
+
+| Claim | Meaning |
+|-------|---------|
+| `sub` | End-user who authorized this agent |
+| `agt` | Agent DID — cryptographically verifiable identity |
+| `dev` | Developer org that built the agent |
+| `scp` | Scopes granted — services should check these |
+| `jti` | Unique token ID — used for real-time revocation |
+| `grnt` | Grant record ID |
+| `aud` | Intended audience (optional) |
+| `bdg` | Remaining budget amount (optional, when budget allocated) |
+
+### Delegation Claims (on sub-agent tokens)
+
+| Claim | Meaning |
+|-------|---------|
+| `parentAgt` | DID of the parent agent |
+| `parentGrnt` | Parent grant ID — full chain traceable |
+| `delegationDepth` | Hops from root grant (root = 0) |
+
+---
+
+## Scope Naming Convention
+
+Format: `resource:action[:constraint]`
+
+| Scope | Meaning |
+|-------|---------|
+| `calendar:read` | Read calendar events |
+| `calendar:write` | Create and modify events |
+| `email:send` | Send emails on user's behalf |
+| `payments:initiate:max_500` | Initiate payments up to $500 |
+| `files:read` | Read user files |
+| `profile:read` | Read user profile |
+
+---
+
+## Multi-Agent Delegation
+
+Grantex supports multi-agent pipelines where a root agent spawns sub-agents with narrower scopes:
+
+```typescript
+const delegated = await grantex.grants.delegate({
+  parentGrantToken: rootGrantToken,
+  subAgentId: subAgent.id,
+  scopes: ['calendar:read'],     // must be ⊆ parent scopes
+  expiresIn: '1h',               // capped at parent expiry
+});
+```
+
+Constraints:
+- Sub-agent scopes must be a strict subset of parent scopes
+- Sub-agent expiry is min(parent expiry, requested expiry)
+- Revoking a root grant cascades to all descendants atomically
+
+---
+
+## Framework Integrations
+
+### LangChain (`@grantex/langchain`)
+```
+npm install @grantex/langchain
+```
+Wraps LangChain tools with Grantex scope enforcement and audit logging.
+
+### CrewAI (`grantex-crewai`)
+```
+pip install grantex-crewai
+```
+Wraps CrewAI tools with Grantex scope enforcement and audit logging.
+
+### OpenAI Agents SDK (`grantex-openai-agents`)
+```
+pip install grantex-openai-agents
+```
+Wraps OpenAI Agents SDK tools with scope-enforced, audited authorization.
+
+### Google ADK (`grantex-adk`)
+```
+pip install grantex-adk
+```
+Wraps Google ADK tools with Grantex scope enforcement.
+
+### Vercel AI SDK (`@grantex/vercel-ai`)
+```
+npm install @grantex/vercel-ai
+```
+Integrates with Vercel AI SDK tool definitions for Grantex authorization.
+
+### AutoGen (`@grantex/autogen`)
+```
+npm install @grantex/autogen
+```
+AutoGen and OpenAI function-calling integration.
+
+### MCP Server (`@grantex/mcp`)
+```
+npm install @grantex/mcp
+```
+Model Context Protocol server with 13 tools for Claude Desktop, Cursor, and Windsurf.
+
+### Express.js Middleware (`@grantex/express`)
+```
+npm install @grantex/express
+```
+Drop-in Express middleware for grant token verification and scope enforcement.
+
+### FastAPI Middleware (`grantex-fastapi`)
+```
+pip install grantex-fastapi
+```
+FastAPI middleware for grant token verification and scope-based authorization.
+
+### Reverse-Proxy Gateway (`@grantex/gateway`)
+```
+npm install @grantex/gateway
+```
+Zero-code YAML-configured reverse proxy that enforces Grantex grant tokens.
+
+### MCP Auth Server (`@grantex/mcp-auth`)
+```
+npm install @grantex/mcp-auth
+```
+OAuth 2.1 + PKCE authorization server for MCP servers, powered by Grantex.
+
+### Service Provider Adapters (`@grantex/adapters`)
+```
+npm install @grantex/adapters
+```
+Pre-built adapters for: Google Calendar, Gmail, Google Drive, Stripe, Slack, GitHub, Notion, HubSpot, Salesforce, Linear, Jira.
+
+### Event Destinations (`@grantex/destinations`)
+```
+npm install @grantex/destinations
+```
+Event destination connectors: Datadog, Splunk, S3, BigQuery, Kafka.
+
+### A2A Protocol Bridge (`@grantex/a2a` / `grantex-a2a`)
+```
+npm install @grantex/a2a
+pip install grantex-a2a
+```
+Google A2A agent-to-agent protocol bridge with Grantex grant token injection.
+
+### Terraform Provider
+```hcl
+terraform {
+  required_providers {
+    grantex = {
+      source  = "mishrasanjeev/grantex"
+    }
+  }
+}
+```
+5 resources, 2 data sources for infrastructure-as-code agent management.
+
+### Conformance Test Suite (`@grantex/conformance`)
+```
+npm install -g @grantex/conformance
+grantex-conformance --base-url http://localhost:3001
+```
+
+---
+
+## Advanced Features
+
+### FIDO2 / WebAuthn
+Passkey-based human presence verification during consent. When enabled, users authenticate with biometrics, security keys, or platform authenticators instead of clicking "approve". FIDO evidence is embedded in Verifiable Credentials as cryptographic proof of human presence — compatible with Mastercard Verifiable Intent.
+
+### W3C Verifiable Credentials (VC-JWT)
+Issue portable, tamper-proof W3C VCs alongside standard JWTs. Types: `AgentGrantCredential` (direct grants) and `DelegatedGrantCredential` (delegated grants). Verification via published DID document at `did:web:grantex.dev`. Revocation via StatusList2021.
+
+### SD-JWT Selective Disclosure
+Privacy-preserving credential presentation. Holders choose which claims to disclose per verifier. Disclosable claims: principalId, developerId, scopes, agentId, grantId, issuedAt, expiresAt.
+
+### DID Infrastructure
+W3C DID document at `/.well-known/did.json` (`did:web:grantex.dev`). Ed25519 key support. Public keys used to sign Verifiable Credentials — any party can verify without contacting Grantex.
+
+### MPP Agent Passport
+Agent identity layer for Machine Payments Protocol (MPP). Issues `AgentPassportCredential` (W3C VC 2.0, Ed25519 signed) with spending limits, allowed categories, and full delegation chain. Verification in <50ms using cached JWKS. Compatible with Visa Trusted Agent Protocol and Mastercard AgentPay, but open and standards-based.
+
+### x402 Agent Spend Authorization
+Grantex Delegation Tokens for x402 (HTTP 402) payment flows. Verifiable Credentials for agent spend authorization on Base L2 with USDC.
+
+### Budget Controls
+Per-grant budget allocations with atomic debit. 402 INSUFFICIENT_BUDGET on overspend. Threshold alerts at 50% and 80%. Remaining budget in JWT `bdg` claim.
+
+### Event Streaming
+Real-time SSE and WebSocket streams for grant lifecycle events: grant.created, grant.revoked, token.issued, budget.threshold, budget.exhausted.
+
+### Policy-as-Code
+Pluggable policy backends: built-in rule engine, OPA (Open Policy Agent), and Cedar (AWS). Git webhook sync for policy bundles.
+
+### Usage Metering
+Per-developer API usage tracking: token exchanges, authorizations, verifications, total requests. Daily history export.
+
+### Custom Domains
+White-label consent UI and API endpoints. DNS TXT verification.
+
+### Anomaly Detection
+Runtime behavioral monitoring for agent activity. Detects deviations from established baselines.
+
+---
+
+## API Endpoints
+
+### Core Authorization
+- `POST /v1/authorize` → Create authorization request (returns consentUrl)
+- `POST /v1/token` → Exchange code for grant token (RS256 JWT)
+- `POST /v1/token/refresh` → Refresh grant token (rotated refreshToken)
+- `POST /v1/tokens/verify` → Verify a grant token
+- `POST /v1/tokens/revoke` → Revoke a token (body: `{ jti }`)
+
+### Audit
+- `POST /v1/audit/log` → Log an agent action
+- `GET /v1/audit/entries` → List audit entries
+- `GET /v1/audit/:id` → Get audit entry by ID
+
+### Grants
+- `POST /v1/grants/delegate` → Delegate to sub-agent
+
+### Principal Sessions
+- `POST /v1/principal-sessions` → Create session for end-user dashboard
+- `GET /v1/principal/grants` → List grants for principal (session auth)
+- `GET /v1/principal/audit` → List audit entries for principal
+- `DELETE /v1/principal/grants/:id` → Revoke grant (session auth)
+
+### Budgets
+- `POST /v1/budget/allocate` → Allocate budget to grant
+- `POST /v1/budget/debit` → Debit against budget (402 if insufficient)
+- `GET /v1/budget/balance/:grantId` → Get remaining balance
+- `GET /v1/budget/allocations` → List all allocations
+- `GET /v1/budget/transactions/:grantId` → List transactions
+
+### Events
+- `GET /v1/events/stream` → SSE event stream (Bearer auth)
+- `GET /v1/events/ws` → WebSocket event stream
+
+### Usage
+- `GET /v1/usage` → Current period usage
+- `GET /v1/usage/history?days=N` → Daily usage history
+
+### Policies
+- `POST /v1/policies/sync` → Upload policy bundle (OPA/Cedar)
+- `POST /v1/policies/sync/webhook` → Git webhook trigger
+- `GET /v1/policies/bundles` → List policy bundles
+
+### Custom Domains
+- `POST /v1/domains` → Register domain
+- `GET /v1/domains` → List domains
+- `POST /v1/domains/:id/verify` → Verify domain (DNS TXT)
+- `DELETE /v1/domains/:id` → Delete domain
+
+### FIDO2 / WebAuthn
+- `POST /v1/webauthn/register/options` → Registration challenge
+- `POST /v1/webauthn/register/verify` → Verify registration
+- `GET /v1/webauthn/credentials` → List FIDO credentials
+- `DELETE /v1/webauthn/credentials/:id` → Delete credential
+- `POST /v1/webauthn/assert/options` → Assertion challenge
+- `POST /v1/webauthn/assert/verify` → Verify assertion
+
+### Verifiable Credentials
+- `GET /v1/credentials/:id` → Get VC by ID
+- `GET /v1/credentials` → List VCs
+- `POST /v1/credentials/verify` → Verify VC-JWT
+- `POST /v1/credentials/present` → Verify SD-JWT presentation
+- `GET /v1/credentials/status/:listId` → StatusList2021 credential
+
+### MPP Agent Passport
+- `POST /v1/passport/issue` → Issue AgentPassportCredential
+- `GET /v1/passport/:id` → Retrieve passport
+- `POST /v1/passport/:id/revoke` → Revoke passport
+- `GET /v1/trust-registry/:orgDID` → Lookup org trust (public)
+- `GET /v1/trust-registry` → List trust records (admin)
+
+### Infrastructure
+- `GET /.well-known/did.json` → W3C DID document
+- `GET /.well-known/jwks.json` → JSON Web Key Set
+- `GET /permissions` → HTML permissions page (public)
+- `GET /metrics` → Prometheus metrics (public)
+
+---
+
+## Comparisons
+
+### Grantex vs OAuth 2.0
+OAuth 2.0 was designed for human users granting access to apps. Grantex extends that model for AI agents with:
+- Cryptographic agent identity (DID) — OAuth has no concept of agent identity
+- Delegation chains for multi-agent pipelines — OAuth can't handle Agent A spawning Agent B
+- Action-level hash-chained audit trails — OAuth has no audit layer
+- Sub-second revocation — OAuth token revocation is not standardized for cascading delegation
+- Budget controls — OAuth has no spending limits
+- Verifiable Credentials — OAuth tokens are not portable to systems outside the OAuth ecosystem
+
+### Grantex vs API Keys
+API keys give blanket access to an entire account. Grantex provides:
+- Per-agent scoping — each agent gets only the permissions it needs
+- User consent — humans approve specific scopes before agents can act
+- Delegation — secure handoff between agents without credential copying
+- Revocation granularity — revoke one agent without affecting others
+- Audit trail — know which agent did what, when, and on whose behalf
+
+### Grantex vs MCP Auth
+MCP Auth is specific to the Model Context Protocol. Grantex works across all frameworks and adds:
+- W3C Verifiable Credentials for portable proofs
+- FIDO2/WebAuthn for cryptographic human presence
+- Budget controls for spending limits
+- Multi-agent delegation chains
+- Service provider adapters for 11+ platforms
+
+---
+
+## Standards Compliance
+
+- IETF Internet-Draft: draft-mishra-oauth-agent-grants
+- W3C Verifiable Credentials Data Model 2.0
+- W3C Decentralized Identifiers (DIDs)
+- W3C StatusList2021 revocation
+- FIDO2/WebAuthn (FIDO Alliance)
+- SD-JWT (IETF draft-ietf-oauth-selective-disclosure-jwt)
+- OAuth 2.1 + PKCE (RFC 7636)
+- JWT (RFC 7519), JWS (RFC 7515), JWKS (RFC 7517)
+- SOC 2 Type I certified
+
+---
+
+## Local Development
+
+```bash
+git clone https://github.com/mishrasanjeev/grantex.git
+cd grantex
+docker compose up --build
+```
+
+Sandbox mode: `POST /v1/authorize` with sandbox API key returns a `code` directly — no redirect needed.
+
+Developer portal: https://grantex.dev/dashboard
+
+---
+
+## Contact and Community
+
+- GitHub Issues: https://github.com/mishrasanjeev/grantex/issues
+- Documentation: https://docs.grantex.dev
+- Landing page: https://grantex.dev

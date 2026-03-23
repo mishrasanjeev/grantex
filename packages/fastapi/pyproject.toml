@@ -9,7 +9,7 @@ description = "FastAPI middleware for Grantex grant token verification and scope
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.9"
-keywords = ["grantex", "fastapi", "middleware", "authorization", "oauth", "jwt", "ai-agents"]
+keywords = ["grantex", "fastapi", "middleware", "authorization", "oauth", "jwt", "ai-agents", "scope-enforcement", "grant-token", "token-verification", "agent-permissions"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Framework :: FastAPI",

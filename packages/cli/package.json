@@ -44,7 +44,10 @@
     "authorization",
     "oauth",
     "jwt",
-    "developer-tools"
+    "developer-tools",
+    "agent-permissions",
+    "delegated-auth",
+    "grant-token"
   ],
   "license": "Apache-2.0",
   "repository": {

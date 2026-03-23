@@ -53,7 +53,10 @@
     "authorization",
     "oauth",
     "jwt",
-    "agent-tools"
+    "agent-tools",
+    "scope-enforcement",
+    "delegated-auth",
+    "agent-permissions"
   ],
   "license": "Apache-2.0",
   "repository": {

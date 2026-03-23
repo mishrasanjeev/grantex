@@ -50,7 +50,13 @@
     "verifiable-credentials",
     "ai-agents",
     "delegation",
-    "w3c-vc"
+    "w3c-vc",
+    "agent-passport",
+    "usdc",
+    "agentic-commerce",
+    "did",
+    "ed25519",
+    "tempo"
   ],
   "license": "Apache-2.0",
   "overrides": {

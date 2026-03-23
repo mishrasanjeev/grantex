@@ -59,6 +59,9 @@
     "linear",
     "jira",
     "authorization",
-    "ai-agents"
+    "ai-agents",
+    "service-providers",
+    "oauth",
+    "scope-enforcement"
   ]
 }
