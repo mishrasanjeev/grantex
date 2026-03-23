@@ -1,6 +1,6 @@
 {
   "name": "@grantex/mpp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Grantex agent identity and delegation for MPP (Machine Payments Protocol)",
   "homepage": "https://grantex.dev",
   "bugs": {

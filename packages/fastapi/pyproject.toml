@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grantex-fastapi"
-version = "0.1.2"
+version = "0.1.3"
 description = "FastAPI middleware for Grantex grant token verification and scope-based authorization"
 readme = "README.md"
 license = { text = "Apache-2.0" }

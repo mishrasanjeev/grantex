@@ -1,6 +1,6 @@
 {
   "name": "@grantex/conformance",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Conformance test suite for the Grantex protocol",
   "homepage": "https://grantex.dev",
   "bugs": {
