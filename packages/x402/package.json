@@ -1,6 +1,6 @@
 {
   "name": "@grantex/x402",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Grantex Delegation Tokens for x402 payment flows — agent spend authorization with W3C Verifiable Credentials",
   "homepage": "https://grantex.dev/x402",
   "bugs": {
