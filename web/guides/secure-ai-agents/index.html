@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <title>How to Secure AI Agents in Production — A Complete Guide | Grantex</title>
+  <meta name="description" content="Learn how to secure AI agents in production with scoped permissions, cryptographic identity, audit trails, delegation control, and real-time revocation.">
+  <meta name="keywords" content="how to secure AI agents, AI agent security, secure AI agents in production, AI agent permissions, AI agent authorization, agent delegation, AI audit trail, agent identity, AI agent access control, revoke AI agent access">
+  <link rel="canonical" href="https://grantex.dev/guides/secure-ai-agents">
+  <meta property="og:title" content="How to Secure AI Agents in Production — A Complete Guide | Grantex">
+  <meta property="og:description" content="A practical engineering guide to securing AI agents: scoped JWTs, cryptographic identity, delegation chains, audit trails, and real-time revocation.">
+  <meta property="og:url" content="https://grantex.dev/guides/secure-ai-agents">
+  <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Grantex">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="How to Secure AI Agents in Production — A Complete Guide | Grantex">
+  <meta name="twitter:description" content="A practical engineering guide to securing AI agents: scoped JWTs, cryptographic identity, delegation chains, audit trails, and real-time revocation.">
+  <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-DNXYVLS5NY');</script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "How to Secure AI Agents in Production — A Complete Guide",
+    "description": "A practical engineering guide covering the 7 pillars of AI agent security: scoped permissions, cryptographic identity, human consent, audit trails, delegation control, real-time revocation, and budget controls.",
+    "url": "https://grantex.dev/guides/secure-ai-agents",
+    "datePublished": "2026-03-26",
+    "dateModified": "2026-03-26",
+    "author": {
+      "@type": "Organization",
+      "name": "Grantex",
+      "url": "https://grantex.dev"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Grantex",
+      "url": "https://grantex.dev",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://grantex.dev/og-image.png"
+      }
+    },
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": "https://grantex.dev/guides/secure-ai-agents"
+    }
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is AI agent authorization?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "AI agent authorization is the process of granting an AI agent specific, scoped permissions to act on behalf of a user. Unlike traditional API keys that give full access, agent authorization uses scoped JWTs (JSON Web Tokens) to limit what an agent can do. The agent receives a token containing only the permissions it needs — for example, 'email:read' but not 'email:send'. This follows the principle of least privilege and ensures agents cannot exceed their intended capabilities. Grantex implements agent authorization using an OAuth 2.0-compatible consent flow combined with cryptographic agent identity, delegation chains, and real-time revocation."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do you revoke AI agent access?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "With Grantex, you can revoke an AI agent's access in under 1 second by calling tokens.revoke() with the token ID. The revocation propagates immediately — any subsequent API call using that token is rejected. For multi-agent pipelines, cascade revocation is supported: revoking a parent agent's grant automatically invalidates all delegated sub-agent grants. This is critical for incident response — if an agent behaves unexpectedly, you do not have to wait for the token to expire. You can also revoke access through the principal dashboard, the CLI, or the MCP server from Claude Desktop."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between OAuth and agent authorization?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "OAuth 2.0 was designed for humans granting access to applications. Agent authorization extends this model for AI agents. The key differences are: (1) Agent identity — OAuth identifies applications via client IDs, while agent auth gives each agent a cryptographic DID (Decentralized Identifier); (2) Delegation — OAuth has flat scopes, while agent auth supports delegation chains where a parent agent can grant a narrower subset of its permissions to a child agent; (3) Audit — OAuth has no standard audit trail, while agent auth provides hash-chained, tamper-evident logs of every action; (4) Revocation — OAuth depends on token expiry or introspection, while agent auth provides sub-second revocation with cascade support; (5) Budget controls — agent auth can enforce spending limits per grant. Grantex builds on OAuth's proven patterns (consent flows, PKCE, scoped tokens) while adding these agent-specific primitives."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do you audit AI agent actions?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Grantex provides an append-only, hash-chained audit trail for all agent actions. Each audit entry records the agent DID, grant ID, action performed, scopes used, timestamp, and a SHA-256 hash linking to the previous entry — making the log tamper-evident. You can query the audit log via the SDK (audit.list()), the REST API (GET /v1/audit/entries), or the CLI. For real-time monitoring, Grantex supports SSE event streams and WebSocket connections. You can also forward audit events to external destinations like Datadog, Splunk, S3, BigQuery, or Kafka using the @grantex/destinations package. Principal dashboards allow end users to review what agents have done on their behalf."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is agent delegation?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Agent delegation is the process by which a parent agent grants a subset of its permissions to a child agent. In multi-agent pipelines — for example, a travel planner that spawns a flight booker and a hotel finder — delegation ensures each sub-agent only receives the permissions it needs. In Grantex, delegation is enforced at the protocol level: a child agent can never receive broader scopes than its parent. The delegation depth is tracked in the JWT token (delegationDepth claim), and revoking a parent grant automatically cascades to all descendants. This prevents privilege escalation in complex agent topologies and provides a clear chain of authority for audit purposes."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do you set spending limits for AI agents?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Grantex provides built-in budget controls that let you allocate a spending limit per grant. You call budgets.allocate() with a grant ID and an amount — for example, $100.00 USD. Every time the agent performs a billable action, you call budgets.debit() to decrement the budget. When the budget is exhausted, the debit call returns a 402 INSUFFICIENT_BUDGET error, and the agent is effectively cut off. You can query the remaining balance with budgets.balance() and view the transaction history with budgets.transactions(). The remaining budget amount is also embedded in the JWT (the 'bdg' claim), so downstream services can check it without a network call."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    :root {
+      --bg: #0d1117; --surface: #161b22; --border: #30363d;
+      --text: #e6edf3; --muted: #8b949e; --accent: #3fb950; --accent2: #58a6ff;
+      --red: #f85149; --mono: 'JetBrains Mono','Fira Code',monospace;
+      --sans: 'Inter',system-ui,-apple-system,sans-serif; --radius: 8px; --max-w: 860px;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.7}
+    a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+    code{font-family:var(--mono);background:var(--surface);padding:2px 6px;border-radius:4px;font-size:.9em}
+    pre{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;overflow-x:auto;font-family:var(--mono);font-size:.85rem;line-height:1.5;margin:1.5rem 0}
+    pre code{background:none;padding:0}
+
+    .nav{display:flex;align-items:center;justify-content:space-between;max-width:var(--max-w);margin:0 auto;padding:1rem 1.5rem}
+    .nav-logo{font-weight:700;font-size:1.25rem;color:var(--text)}
+    .nav-links{list-style:none;display:flex;gap:1.5rem}
+    .nav-links a{color:var(--muted);font-size:.9rem}.nav-links a:hover{color:var(--text);text-decoration:none}
+
+    .article{max-width:var(--max-w);margin:0 auto;padding:2rem 1.5rem 4rem}
+    .article h1{font-size:2.25rem;line-height:1.2;margin-bottom:.5rem}
+    .article .subtitle{color:var(--muted);font-size:1.05rem;margin-bottom:2rem}
+    .article h2{font-size:1.5rem;margin:2.5rem 0 1rem;padding-top:1rem;border-top:1px solid var(--border)}
+    .article h3{font-size:1.15rem;margin:1.5rem 0 .5rem;color:var(--accent)}
+    .article p{color:var(--muted);margin-bottom:1rem}
+    .article ul,.article ol{color:var(--muted);padding-left:1.5rem;margin-bottom:1rem}
+    .article li{margin-bottom:.5rem}
+    .article strong{color:var(--text)}
+    .article blockquote{border-left:3px solid var(--accent);padding-left:1rem;margin:1.5rem 0;color:var(--muted);font-style:italic}
+
+    .checklist{list-style:none;padding-left:0}
+    .checklist li{padding-left:1.75rem;position:relative;margin-bottom:.65rem}
+    .checklist li::before{content:"\2713";position:absolute;left:0;color:var(--accent);font-weight:700}
+
+    .anti-pattern{background:var(--surface);border:1px solid #f8514933;border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem}
+    .anti-pattern h4{color:var(--red);font-size:1rem;margin-bottom:.5rem}
+    .anti-pattern p{margin-bottom:.5rem}
+
+    .cta-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;text-align:center;margin:2rem 0}
+    .cta-box h3{color:var(--text);margin-bottom:.5rem}
+    .cta-box p{margin-bottom:1rem}
+    .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.25rem;border-radius:var(--radius);font-weight:600;font-size:.9rem;text-decoration:none;transition:all .2s}
+    .btn-primary{background:var(--accent);color:#0d1117}.btn-primary:hover{background:#2ea043;text-decoration:none}
+    .btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{border-color:var(--muted);text-decoration:none}
+
+    .faq-item{margin-bottom:1.5rem}
+    .faq-item h3{color:var(--text);font-size:1.05rem;margin-bottom:.35rem}
+    .faq-item p{font-size:.95rem}
+
+    .footer{max-width:var(--max-w);margin:0 auto;padding:2rem 1.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem}
+    .footer-links{list-style:none;display:flex;gap:1.5rem}
+    .footer-links a{color:var(--muted);font-size:.85rem}
+
+    @media(max-width:640px){
+      .article h1{font-size:1.65rem}
+      .article h2{font-size:1.3rem}
+      .nav-links{gap:1rem}
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="/" class="nav-logo">Grantex</a>
+  <ul class="nav-links">
+    <li><a href="https://docs.grantex.dev">Docs</a></li>
+    <li><a href="/playground">Playground</a></li>
+    <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+  </ul>
+</nav>
+
+<article class="article">
+
+  <h1>How to Secure AI Agents in Production</h1>
+  <p class="subtitle">A practical guide to authorization, identity, audit trails, and delegation control -- with code examples</p>
+
+  <!-- ===== Intro ===== -->
+
+  <p>AI agents are moving from demos to production. They book travel, process invoices, query databases, and interact with third-party APIs on behalf of real users. The capability gap between a prototype and a deployed agent is shrinking rapidly.</p>
+
+  <p>The security gap is not. Most production agents today run on raw <a href="/vs/api-keys">API keys</a> with full service access, no scoping, no audit trail, and no way to revoke a single agent without rotating credentials across the entire fleet. When an agent can read every email in your inbox and send messages as you, the failure mode is not a 500 error -- it is a data breach.</p>
+
+  <p>This guide covers the seven security primitives every production agent deployment needs, the common mistakes teams make, and how to implement each primitive using <a href="https://docs.grantex.dev">Grantex</a>, an open delegated authorization protocol built specifically for AI agents. Every pattern described here works with standard agent frameworks -- <a href="/for/langchain">LangChain</a>, <a href="/for/crewai">CrewAI</a>, <a href="/for/autogen">AutoGen</a>, OpenAI Agents SDK, Google ADK, and <a href="/for/vercel-ai">Vercel AI SDK</a>.</p>
+
+  <!-- ===== 7 Pillars ===== -->
+
+  <h2>The 7 Pillars of AI Agent Security</h2>
+
+  <p>Agent security is not a single feature. It is a set of interlocking primitives that constrain what an agent can do, verify what it did, and allow you to cut off access when something goes wrong. Miss any one of these, and you have a gap that compounds with every agent you add.</p>
+
+  <!-- Pillar 1 -->
+  <h3>1. Scoped Permissions</h3>
+
+  <p>The most fundamental rule of agent security: <strong>never grant an agent more access than it needs for its current task.</strong> This is the principle of least privilege, and it is routinely violated in agent deployments that rely on shared API keys or broad OAuth scopes.</p>
+
+  <p>Scoped permissions mean that each agent receives a token containing an explicit list of allowed actions. A customer support agent gets <code>tickets:read</code> and <code>tickets:respond</code> but not <code>tickets:delete</code>. A reporting agent gets <code>analytics:read</code> but not <code>analytics:export</code>. Enforcement happens at the protocol level -- the service provider checks the token's scopes before executing the request.</p>
+
+  <p>In Grantex, scopes are declared when initiating the authorization flow and encoded in the resulting JWT:</p>
+
+<pre><code>import Grantex from '@grantex/sdk';
+
+const gx = new Grantex({
+  baseUrl: 'https://your-auth-service.example.com',
+  apiKey: process.env.GRANTEX_API_KEY,
+});
+
+// Request authorization with specific scopes
+const authRequest = await gx.authorize({
+  agentId: 'agent_support_bot',
+  userId: 'user_alice',
+  scopes: ['tickets:read', 'tickets:respond'],
+  // NOT 'tickets:*' -- never use wildcards in production
+});
+
+// User approves at authRequest.consentUrl
+// Exchange the code for a scoped JWT
+const { grantToken } = await gx.tokens.exchange({
+  code: authorizationCode,
+  agentId: 'agent_support_bot',
+});</code></pre>
+
+  <p>The resulting JWT contains a <code>scp</code> claim with exactly <code>["tickets:read", "tickets:respond"]</code>. Service providers verify this claim before executing any operation. If the agent attempts an action outside its scopes, the request is rejected with a clear error.</p>
+
+  <p>For Python agents, the same pattern applies:</p>
+
+<pre><code>from grantex import Grantex
+
+gx = Grantex(base_url="https://your-auth-service.example.com", api_key=api_key)
+
+auth = gx.authorize(
+    agent_id="agent_support_bot",
+    user_id="user_alice",
+    scopes=["tickets:read", "tickets:respond"],
+)
+# auth.consent_url -> user approves
+token_resp = gx.tokens.exchange(code=authorization_code, agent_id="agent_support_bot")</code></pre>
+
+  <p>Scoping is the first line of defense. It limits the blast radius of any failure -- a compromised or misbehaving agent can only affect the resources its scopes allow. For more on why API keys fail here, see our <a href="/vs/api-keys">Grantex vs API Keys comparison</a>.</p>
+
+  <!-- Pillar 2 -->
+  <h3>2. Cryptographic Agent Identity</h3>
+
+  <p>When five agents share a single set of credentials, your logs show that "the application" performed an action. You cannot distinguish which agent read a file, which agent sent a message, or which agent initiated a payment. This is the identity problem.</p>
+
+  <p>Grantex solves it by assigning each agent a <strong>DID (Decentralized Identifier)</strong> -- a cryptographic identity that is embedded in every JWT the agent receives. The DID is carried in the <code>agt</code> claim of the token. Every API call made with that token is attributable to a specific agent.</p>
+
+  <p>Agent identity enables three critical capabilities:</p>
+
+  <ul>
+    <li><strong>Per-agent audit</strong> -- filter audit logs by agent DID to see exactly what a specific agent did</li>
+    <li><strong>Per-agent revocation</strong> -- revoke one agent's access without affecting any other agents in the system</li>
+    <li><strong>Per-agent policy</strong> -- apply different rate limits, budget constraints, or compliance rules to different agents</li>
+  </ul>
+
+  <p>Without cryptographic identity, you are flying blind. You cannot investigate an incident ("which agent accessed this record at 3 AM?"), you cannot implement fine-grained revocation, and you cannot enforce per-agent policies. Identity is not optional -- it is the foundation that makes every other security primitive work.</p>
+
+  <!-- Pillar 3 -->
+  <h3>3. Human Consent Flow</h3>
+
+  <p>An agent should never gain access to user resources without the user's explicit approval. This is not just a security best practice -- it is a trust requirement. Users need to see what permissions they are granting, to which agent, and for how long.</p>
+
+  <p>Grantex implements consent using an <a href="/vs/oauth">OAuth 2.0-compatible</a> authorization flow with PKCE (Proof Key for Code Exchange, S256). When an agent requests authorization, Grantex returns a <code>consentUrl</code> that the user visits in their browser. The consent page displays the requested scopes in plain language, the agent's identity, and the expiration time. The user can approve or deny.</p>
+
+  <p>This pattern is familiar to anyone who has used "Sign in with Google" or authorized a GitHub app. The difference is that the entity requesting access is an agent, not a web application, and the scopes are agent-specific (like <code>email:read</code> or <code>flights:book</code>) rather than API-level.</p>
+
+  <p>For sensitive operations, Grantex supports <strong>FIDO2/WebAuthn</strong> gating on the consent flow. This means the user must authenticate with a passkey (biometric or hardware key) before the consent is accepted. This prevents scenarios where an attacker tricks a user into clicking "approve" on a phishing page -- the passkey is bound to the origin and cannot be replayed.</p>
+
+  <p>Consent is not a one-time event. Users can review their active grants through the <a href="https://docs.grantex.dev">principal dashboard</a>, see which agents have access to their resources, and revoke any grant with a single action.</p>
+
+  <!-- Pillar 4 -->
+  <h3>4. Tamper-Evident Audit Trails</h3>
+
+  <p>Authorization controls what an agent <em>can</em> do. Audit trails record what the agent <em>did</em> do. Both are necessary. Authorization without audit means you cannot verify compliance. Audit without authorization means you can observe breaches but cannot prevent them.</p>
+
+  <p>Grantex provides an <strong>append-only, hash-chained audit log</strong>. Each entry contains the agent DID, grant ID, action performed, scopes used, timestamp, and a SHA-256 hash that links to the previous entry. This hash chain makes the log tamper-evident -- if any entry is modified or deleted, the chain breaks and the tampering is detectable.</p>
+
+<pre><code>// Log an agent action to the audit trail
+await gx.audit.log({
+  grantId: grant.id,
+  agentId: 'agent_support_bot',
+  action: 'tickets:respond',
+  resource: 'ticket_4821',
+  metadata: { responseLength: 342 },
+});
+
+// Query the audit trail
+const entries = await gx.audit.list({
+  agentId: 'agent_support_bot',
+  from: '2026-03-25T00:00:00Z',
+  to: '2026-03-26T00:00:00Z',
+});</code></pre>
+
+  <p>For real-time monitoring, Grantex supports SSE (Server-Sent Events) and WebSocket event streams. Your security team can watch agent activity live, trigger alerts on anomalous patterns, and correlate events across agents. The <code>@grantex/destinations</code> package can forward audit events to external observability platforms -- Datadog, Splunk, S3, BigQuery, or Kafka -- so agent activity integrates with your existing security monitoring stack.</p>
+
+  <p>The hash chain is particularly important for compliance. Regulations increasingly require demonstrable proof that AI systems acted within authorized bounds. A hash-chained log provides cryptographic evidence that no entries were added, removed, or modified after the fact.</p>
+
+  <!-- Pillar 5 -->
+  <h3>5. Delegation Control</h3>
+
+  <p>Modern agent architectures are not flat. A travel planner agent spawns a flight booking agent and a hotel search agent. A research agent delegates data collection to specialized sub-agents. A customer service agent escalates complex cases to a supervisor agent. These multi-agent pipelines introduce a critical security question: <strong>what permissions do the sub-agents get?</strong></p>
+
+  <p>The wrong answer is "the same permissions as the parent." If a travel planner has <code>flights:book</code>, <code>hotels:book</code>, and <code>payments:charge</code>, the flight booking sub-agent should only get <code>flights:book</code> -- not the ability to book hotels or charge arbitrary payments. This is the principle of scope narrowing.</p>
+
+  <p>Grantex enforces this at the protocol level. When a parent agent delegates to a child, it can only pass a subset of its own scopes. Attempting to delegate a scope the parent does not hold results in an error:</p>
+
+<pre><code>// Parent agent has: ["flights:book", "hotels:book", "payments:charge"]
+// Delegate ONLY flight booking to the sub-agent:
+const delegated = await gx.grants.delegate({
+  parentGrantToken: parentToken,
+  childAgentId: 'agent_flight_booker',
+  scopes: ['flights:book'],  // strict subset of parent's scopes
+});
+
+// The child agent's JWT contains:
+//   scp: ["flights:book"]
+//   parentAgt: "did:web:travel-planner"
+//   parentGrnt: "grant_abc123"
+//   delegationDepth: 1
+
+// This would FAIL -- parent doesn't have "admin:*":
+// await gx.grants.delegate({
+//   parentGrantToken: parentToken,
+//   childAgentId: 'agent_flight_booker',
+//   scopes: ['admin:*'],  // ERROR: scope escalation blocked
+// });</code></pre>
+
+  <p>The delegation depth is tracked in the JWT (<code>delegationDepth</code> claim). This gives you visibility into how deep the delegation chain goes and lets you set maximum depth limits. More importantly, <strong>revoking a parent grant cascades to all descendants.</strong> If you revoke the travel planner's grant, the flight booker and hotel search agents lose access simultaneously. There is no window where a child agent retains access after its parent has been revoked.</p>
+
+  <p>Delegation control is what prevents privilege escalation in multi-agent systems. Without it, a single compromised agent in a pipeline can spawn sub-agents with arbitrary permissions.</p>
+
+  <!-- Pillar 6 -->
+  <h3>6. Real-Time Revocation</h3>
+
+  <p>Token expiration is not revocation. If your JWTs have a 1-hour expiry and an agent goes rogue at minute 1, you have 59 minutes of unauthorized access. In agent systems, where a single agent can make hundreds of API calls per minute, that window is catastrophic.</p>
+
+  <p>Grantex provides <strong>real-time revocation that takes effect in under 1 second.</strong> When you call <code>tokens.revoke()</code>, the token is added to a revocation list backed by Redis. All subsequent verification checks -- whether performed by the auth service, by <a href="https://docs.grantex.dev/integrations/express">Express middleware</a>, or by <a href="https://docs.grantex.dev/integrations/fastapi">FastAPI middleware</a> -- reject the token immediately.</p>
+
+<pre><code>// Revoke a specific token
+await gx.tokens.revoke(tokenId);
+
+// Verify confirms the token is no longer valid
+const result = await gx.tokens.verify(grantToken);
+// result.valid === false</code></pre>
+
+  <p>For multi-agent pipelines, cascade revocation ensures that revoking a parent automatically kills all delegated children. You do not need to track and revoke each sub-agent individually -- the cascade handles it.</p>
+
+  <p>Revocation also integrates with real-time event streams. When a token is revoked, the event is broadcast to all connected subscribers, allowing downstream services to clear cached tokens without polling.</p>
+
+  <!-- Pillar 7 -->
+  <h3>7. Budget Controls</h3>
+
+  <p>Agents that interact with paid APIs, cloud services, or payment processors need spending limits. Without budget controls, a misconfigured loop or a prompt injection attack can drain your account before anyone notices.</p>
+
+  <p>Grantex provides per-grant budget allocation. You assign a monetary limit to a grant, and every billable action debits from that budget. When the budget is exhausted, the agent is cut off with a <code>402 INSUFFICIENT_BUDGET</code> error. No human intervention required.</p>
+
+<pre><code>// Allocate $50 budget for this agent's grant
+await gx.budgets.allocate({
+  grantId: grant.id,
+  amount: 50.00,
+  currency: 'USD',
+});
+
+// Each billable action debits the budget
+const result = await gx.budgets.debit({
+  grantId: grant.id,
+  amount: 2.50,
+  description: 'OpenAI API call - gpt-4',
+});
+// result.remaining === 47.50
+
+// Check remaining budget at any time
+const balance = await gx.budgets.balance(grant.id);
+// balance.remainingBudget === 47.50
+
+// View transaction history
+const txns = await gx.budgets.transactions(grant.id);</code></pre>
+
+  <p>The remaining budget is embedded in the JWT itself (the <code>bdg</code> claim), so downstream services can check the budget without making a network call to the auth service. This is particularly useful for latency-sensitive agent pipelines where an extra round-trip to check budget availability would add unacceptable delay.</p>
+
+  <p>Budget controls work in concert with delegation. When a parent agent delegates to a child, you can allocate a separate, smaller budget to the child grant. The child cannot exceed its own budget, even if the parent's budget has remaining funds.</p>
+
+  <!-- ===== Common Mistakes ===== -->
+
+  <h2>Common Mistakes</h2>
+
+  <p>These are the anti-patterns we see most frequently in production agent deployments. Each one creates a security gap that is easy to exploit and hard to detect after the fact.</p>
+
+  <div class="anti-pattern">
+    <h4>Shared credentials across agents</h4>
+    <p>Multiple agents using the same API key or service account. When agent A and agent B share credentials, you cannot distinguish their actions in logs, cannot revoke one without affecting the other, and cannot apply different policies. This is the single most common mistake in agent security.</p>
+    <p><strong>Fix:</strong> Give each agent its own cryptographic identity (DID) and its own scoped grant. Use <a href="https://docs.grantex.dev/getting-started/quickstart">Grantex</a> to issue per-agent JWTs.</p>
+  </div>
+
+  <div class="anti-pattern">
+    <h4>Over-scoping "just in case"</h4>
+    <p>Granting <code>*:*</code> or broad wildcards because "the agent might need it later." Over-scoping violates least privilege and maximizes blast radius. If the agent is compromised, the attacker inherits every permission.</p>
+    <p><strong>Fix:</strong> Start with the minimum scopes required for the agent's current task. Add scopes incrementally when the agent's capabilities expand. Review scope usage in audit logs to identify permissions that are granted but never used.</p>
+  </div>
+
+  <div class="anti-pattern">
+    <h4>Relying on token expiry instead of revocation</h4>
+    <p>Setting long-lived tokens (24 hours or more) and treating expiry as the revocation mechanism. In practice, this means a compromised agent has hours of unrestricted access before the token naturally expires.</p>
+    <p><strong>Fix:</strong> Use short-lived tokens (15-60 minutes) combined with refresh token rotation. Implement real-time revocation for incident response. With Grantex, <code>tokens.revoke()</code> takes effect in under 1 second.</p>
+  </div>
+
+  <div class="anti-pattern">
+    <h4>No delegation depth limits</h4>
+    <p>Allowing agents to delegate to sub-agents without any depth restriction. An agent with delegation ability can create an unbounded tree of sub-agents, each inheriting permissions. This creates an unauditable, unrevocable permission sprawl.</p>
+    <p><strong>Fix:</strong> Set maximum delegation depth at the policy level. Grantex tracks <code>delegationDepth</code> in the JWT and enforces configured limits. Most production deployments should cap delegation at 2-3 levels.</p>
+  </div>
+
+  <!-- ===== Security Checklist ===== -->
+
+  <h2>Security Checklist</h2>
+
+  <p>Use this checklist before deploying agents to production. Each item maps to one or more of the seven pillars above.</p>
+
+  <ul class="checklist">
+    <li>Every agent has its own cryptographic identity (not shared credentials)</li>
+    <li>Scopes follow least privilege -- no wildcards, no "just in case" permissions</li>
+    <li>Users explicitly approve agent access through a consent flow</li>
+    <li>Sensitive operations require FIDO2/WebAuthn step-up authentication</li>
+    <li>Audit logging is enabled for all agent actions with hash-chaining</li>
+    <li>Audit events are forwarded to your SIEM or observability platform</li>
+    <li>Real-time revocation is configured and tested (verify sub-second response)</li>
+    <li>Delegation chains enforce scope narrowing (children cannot escalate)</li>
+    <li>Maximum delegation depth is set and enforced</li>
+    <li>Budget limits are allocated for agents that access paid services</li>
+    <li>Token lifetimes are short (15-60 minutes) with refresh rotation</li>
+    <li>Agent verification middleware is deployed on all protected endpoints</li>
+    <li>Anomaly detection is enabled for unusual agent behavior patterns</li>
+    <li>Principal dashboard is available for users to review and revoke grants</li>
+    <li>Incident response runbook includes agent revocation procedures</li>
+  </ul>
+
+  <!-- ===== FAQ ===== -->
+
+  <h2>Frequently Asked Questions</h2>
+
+  <div class="faq-item">
+    <h3>What is AI agent authorization?</h3>
+    <p>AI agent authorization is the process of granting an AI agent specific, scoped permissions to act on behalf of a user. Unlike traditional <a href="/vs/api-keys">API keys</a> that give full access, agent authorization uses scoped JWTs to limit what an agent can do. The agent receives a token containing only the permissions it needs -- for example, <code>email:read</code> but not <code>email:send</code>. Grantex implements agent authorization using an <a href="/vs/oauth">OAuth 2.0-compatible</a> consent flow combined with cryptographic agent identity, delegation chains, and real-time revocation.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>How do you revoke AI agent access?</h3>
+    <p>With Grantex, you revoke an agent's access by calling <code>tokens.revoke(tokenId)</code>. The revocation propagates in under 1 second -- any subsequent API call using that token is rejected. For multi-agent pipelines, cascade revocation is supported: revoking a parent agent's grant automatically invalidates all delegated sub-agent grants. You can also revoke access through the principal dashboard, the <a href="https://docs.grantex.dev/integrations/cli">CLI</a>, or the MCP server from Claude Desktop.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>What is the difference between OAuth and agent authorization?</h3>
+    <p><a href="/vs/oauth">OAuth 2.0</a> was designed for humans granting access to applications. Agent authorization extends this model for AI agents. The key differences: OAuth identifies apps via client IDs, while agent auth gives each agent a cryptographic DID; OAuth has flat scopes, while agent auth supports delegation chains with scope narrowing; OAuth has no standard audit trail, while agent auth provides hash-chained logs; OAuth depends on token expiry for revocation, while agent auth provides sub-second revocation with cascade support. Grantex builds on OAuth's proven patterns while adding these agent-specific primitives.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>How do you audit AI agent actions?</h3>
+    <p>Grantex provides an append-only, hash-chained audit trail. Each entry records the agent DID, grant ID, action performed, scopes used, timestamp, and a SHA-256 hash linking to the previous entry. You can query the log via the SDK, the REST API, or the CLI. For real-time monitoring, Grantex supports SSE and WebSocket event streams. You can forward events to Datadog, Splunk, S3, BigQuery, or Kafka using the <code>@grantex/destinations</code> package.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>What is agent delegation?</h3>
+    <p>Agent delegation is the process by which a parent agent grants a subset of its permissions to a child agent. In multi-agent pipelines -- a travel planner spawning a flight booker and hotel finder, for instance -- delegation ensures each sub-agent only receives the permissions it needs. Grantex enforces that a child can never receive broader scopes than its parent. The delegation depth is tracked in the JWT, and revoking a parent cascades to all descendants.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>How do you set spending limits for AI agents?</h3>
+    <p>Grantex provides per-grant budget allocation. Call <code>budgets.allocate()</code> with a grant ID and monetary amount. Every billable action is debited via <code>budgets.debit()</code>. When the budget is exhausted, the agent receives a <code>402 INSUFFICIENT_BUDGET</code> error and is cut off automatically. The remaining budget is embedded in the JWT (<code>bdg</code> claim), so downstream services can check it without a network call. View balance and transaction history at any time via the SDK or API.</p>
+  </div>
+
+  <!-- ===== CTA ===== -->
+
+  <div class="cta-box">
+    <h3>Ready to secure your AI agents?</h3>
+    <p>Grantex is open source (Apache 2.0) with SDKs for TypeScript, Python, and Go. 14 framework integrations. 174 pages of documentation.</p>
+    <a href="https://docs.grantex.dev/getting-started/quickstart" class="btn btn-primary" style="margin-right:.5rem">Quickstart Guide</a>
+    <a href="/playground" class="btn btn-secondary">Try in Playground</a>
+  </div>
+
+</article>
+
+<footer class="footer">
+  <span style="color:var(--muted);font-size:.85rem">Grantex -- Open authorization for AI agents</span>
+  <ul class="footer-links">
+    <li><a href="https://docs.grantex.dev">Docs</a></li>
+    <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+    <li><a href="/">Home</a></li>
+  </ul>
+</footer>
+
+</body>
+</html>

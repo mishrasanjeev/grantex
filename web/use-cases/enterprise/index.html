@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <title>Enterprise AI Agent Security — Governance, Compliance & Authorization | Grantex</title>
+  <meta name="description" content="Secure AI agents at enterprise scale with SOC 2, SCIM, SSO, FIDO2, audit trails, and policy engine. Self-hosted or cloud. Open-source authorization.">
+  <meta name="keywords" content="enterprise AI agent security, enterprise agent authorization, AI agent compliance, AI agent governance enterprise, AI agent audit trail, SCIM provisioning AI agents, SOC 2 AI agents, AI agent policy engine">
+  <link rel="canonical" href="https://grantex.dev/use-cases/enterprise">
+  <meta property="og:title" content="Enterprise AI Agent Security — Governance, Compliance & Authorization | Grantex">
+  <meta property="og:description" content="Secure AI agents at enterprise scale with SOC 2, SCIM, SSO, FIDO2, audit trails, and policy engine. Self-hosted or cloud. Open-source authorization.">
+  <meta property="og:url" content="https://grantex.dev/use-cases/enterprise">
+  <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Grantex">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Enterprise AI Agent Security — Governance, Compliance & Authorization | Grantex">
+  <meta name="twitter:description" content="Secure AI agents at enterprise scale with SOC 2, SCIM, SSO, FIDO2, audit trails, and policy engine. Self-hosted or cloud. Open-source authorization.">
+  <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-DNXYVLS5NY');</script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Enterprise AI Agent Security — Governance, Compliance & Authorization",
+    "description": "Secure AI agents at enterprise scale with SOC 2, SCIM, SSO, FIDO2, audit trails, and policy engine. Self-hosted or cloud. Open-source authorization.",
+    "author": {
+      "@type": "Organization",
+      "name": "Grantex",
+      "url": "https://grantex.dev"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Grantex",
+      "url": "https://grantex.dev",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://grantex.dev/og-image.png"
+      }
+    },
+    "url": "https://grantex.dev/use-cases/enterprise",
+    "image": "https://grantex.dev/og-image.png",
+    "datePublished": "2026-03-26",
+    "dateModified": "2026-03-26",
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": "https://grantex.dev/use-cases/enterprise"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Is Grantex SOC 2 compliant?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex has completed SOC 2 Type I certification. The platform provides hash-chained, tamper-evident audit trails, anomaly detection, and real-time event streaming for SIEM integration — all designed to satisfy the Trust Services Criteria for security, availability, and confidentiality."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does Grantex support SCIM provisioning and enterprise SSO?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex includes full SCIM 2.0 provisioning support for automated user lifecycle management, plus SSO via both SAML 2.0 and OpenID Connect. This allows enterprises to manage agent identities and developer access through their existing identity provider (Okta, Azure AD, Google Workspace, etc.)."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can Grantex be self-hosted in our own infrastructure?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex is fully open-source under the Apache 2.0 license and can be deployed in your own infrastructure. The project provides a Terraform provider (5 resources, 2 data sources), Helm charts for Kubernetes, Docker images, and deployment configurations for GCP, AWS, and on-premises environments. You retain complete control over your data and authorization plane."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do Grantex audit trails work?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Grantex produces hash-chained, tamper-evident audit logs for every authorization event — grant issuance, token exchange, verification, revocation, and delegation. Each entry is cryptographically linked to the previous one, making retroactive modification detectable. Logs can be streamed in real time via SSE or WebSocket to your SIEM, and exported to destinations including Datadog, Splunk, S3, BigQuery, and Kafka."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does Grantex help with AI agent compliance and governance?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Grantex provides a comprehensive governance layer for AI agents: fine-grained scope management limits what each agent can do, an OPA-compatible policy engine enforces organizational rules, budget controls cap spending per agent or department, cascade revocation instantly disables compromised delegation chains, and W3C Verifiable Credentials provide cryptographic proof of agent identity and authorization. Together, these controls give compliance teams full visibility and enforcement over every AI agent operating in the organization."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    :root {
+      --bg: #0d1117; --surface: #161b22; --border: #30363d;
+      --text: #e6edf3; --muted: #8b949e; --accent: #3fb950; --accent2: #58a6ff;
+      --red: #f85149; --mono: 'JetBrains Mono','Fira Code',monospace;
+      --sans: 'Inter',system-ui,-apple-system,sans-serif; --radius: 8px; --max-w: 860px;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.7}
+    a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+    code{font-family:var(--mono);background:var(--surface);padding:2px 6px;border-radius:4px;font-size:.9em}
+    pre{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;overflow-x:auto;font-family:var(--mono);font-size:.85rem;line-height:1.5;margin:1.5rem 0}
+    pre code{background:none;padding:0}
+
+    .nav{display:flex;align-items:center;justify-content:space-between;max-width:var(--max-w);margin:0 auto;padding:1rem 1.5rem}
+    .nav-logo{font-weight:700;font-size:1.25rem;color:var(--text)}
+    .nav-links{list-style:none;display:flex;gap:1.5rem}
+    .nav-links a{color:var(--muted);font-size:.9rem}.nav-links a:hover{color:var(--text);text-decoration:none}
+
+    .article{max-width:var(--max-w);margin:0 auto;padding:2rem 1.5rem 4rem}
+    .article h1{font-size:2.25rem;line-height:1.2;margin-bottom:.5rem}
+    .article .subtitle{color:var(--muted);font-size:1.05rem;margin-bottom:2rem}
+    .article h2{font-size:1.5rem;margin:2.5rem 0 1rem;padding-top:1rem;border-top:1px solid var(--border)}
+    .article h3{font-size:1.15rem;margin:1.5rem 0 .5rem;color:var(--accent)}
+    .article p{color:var(--muted);margin-bottom:1rem}
+    .article ul,.article ol{color:var(--muted);padding-left:1.5rem;margin-bottom:1rem}
+    .article li{margin-bottom:.5rem}
+    .article strong{color:var(--text)}
+    .article blockquote{border-left:3px solid var(--accent);padding-left:1rem;margin:1.5rem 0;color:var(--muted);font-style:italic}
+
+    .comparison-table{width:100%;border-collapse:collapse;margin:1.5rem 0}
+    .comparison-table th,.comparison-table td{padding:.75rem 1rem;text-align:left;border:1px solid var(--border)}
+    .comparison-table th{background:var(--surface);color:var(--text);font-weight:600}
+    .comparison-table td{color:var(--muted)}
+    .comparison-table .yes{color:var(--accent);font-weight:600}
+    .comparison-table .no{color:var(--red)}
+
+    .checklist{list-style:none;padding-left:0}
+    .checklist li{padding:.5rem 0;padding-left:1.75rem;position:relative;color:var(--muted)}
+    .checklist li::before{content:'';position:absolute;left:0;top:.75rem;width:14px;height:14px;border-radius:3px;background:var(--accent);opacity:.85}
+
+    .cta-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;text-align:center;margin:2rem 0}
+    .cta-box h3{color:var(--text);margin-bottom:.5rem}
+    .cta-box p{margin-bottom:1rem}
+    .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.25rem;border-radius:var(--radius);font-weight:600;font-size:.9rem;text-decoration:none;transition:all .2s}
+    .btn-primary{background:var(--accent);color:#0d1117}.btn-primary:hover{background:#2ea043;text-decoration:none}
+    .btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{border-color:var(--muted);text-decoration:none}
+
+    .feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.5rem 0}
+    .feature-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem}
+    .feature-card h4{color:var(--text);font-size:1rem;margin-bottom:.35rem}
+    .feature-card p{color:var(--muted);font-size:.9rem;margin-bottom:0}
+
+    .footer{max-width:var(--max-w);margin:0 auto;padding:2rem 1.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem}
+    .footer-links{list-style:none;display:flex;gap:1.5rem}
+    .footer-links a{color:var(--muted);font-size:.85rem}
+
+    @media(max-width:640px){
+      .article h1{font-size:1.65rem}
+      .comparison-table{font-size:.85rem}
+      .comparison-table th,.comparison-table td{padding:.5rem}
+      .feature-grid{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a href="/" class="nav-logo">Grantex</a>
+  <ul class="nav-links">
+    <li><a href="https://docs.grantex.dev">Docs</a></li>
+    <li><a href="/playground">Playground</a></li>
+    <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+  </ul>
+</nav>
+
+<article class="article">
+  <h1>Enterprise AI Agent Security</h1>
+  <p class="subtitle">Governance, compliance, and authorization for AI agents at scale</p>
+
+  <p>Organizations are deploying AI agents across every function — customer support, code generation, data analysis, procurement, HR workflows, and financial operations. These agents act autonomously, make API calls on behalf of employees, access sensitive data, and interact with third-party services. The security implications are profound: every agent is an identity, every action is a decision, and every decision needs accountability.</p>
+
+  <p>Grantex is the <a href="/">open delegated authorization protocol</a> built specifically for this problem. Where <a href="/vs/oauth">OAuth 2.0 was designed for users delegating to applications</a>, Grantex is designed for principals — human or machine — delegating authority to AI agents. It provides the full enterprise security stack: SOC 2 compliance, SCIM provisioning, SSO, cryptographic identity, tamper-evident audit trails, a policy engine, and fine-grained delegation controls. All open-source under Apache 2.0, with an <a href="https://datatracker.ietf.org/doc/draft-grantex-protocol/">IETF Internet-Draft</a> formalizing the protocol.</p>
+
+  <h2>The Enterprise Challenge</h2>
+
+  <p>Enterprise AI adoption is accelerating faster than the security infrastructure to support it. Teams across the organization are spinning up agents independently — engineering uses coding assistants with repository access, finance deploys agents that query billing APIs, marketing runs content generation pipelines that publish to CMS platforms. Without a centralized authorization layer, this creates shadow AI: agents operating with over-provisioned credentials, no audit trail, and no mechanism for revocation.</p>
+
+  <p>The risks are concrete. An agent with broad API keys can exfiltrate data. A compromised agent credential can be used to escalate privileges. When an employee leaves, their agents may continue operating indefinitely. Without delegation chains, there is no way to trace which human authorized which agent action. Compliance teams cannot answer the fundamental question: <strong>who authorized this agent to do this, and when?</strong></p>
+
+  <p>Traditional <a href="/vs/api-keys">API key management</a> and OAuth 2.0 were not designed for this. API keys are static, unscoped, and lack identity semantics. OAuth 2.0 models user-to-application delegation, not the multi-tier delegation chains that emerge when agents spawn sub-agents or when a department head grants authority that cascades to team-level agents. Enterprise AI agent security requires a purpose-built authorization protocol.</p>
+
+  <h2>Compliance and Audit</h2>
+
+  <p>Meeting regulatory and internal compliance requirements is non-negotiable for enterprise deployments. Grantex provides the infrastructure to satisfy auditors, compliance teams, and regulators with cryptographic proof rather than procedural assurance.</p>
+
+  <h3>SOC 2 Type I Certified</h3>
+
+  <p>Grantex has completed SOC 2 Type I certification, demonstrating that the platform's security controls meet the Trust Services Criteria for security, availability, and confidentiality. The authorization service, key management, audit infrastructure, and operational procedures have all been independently evaluated. For organizations building on Grantex, this means a shorter path to their own compliance certifications — the authorization layer is already attested.</p>
+
+  <h3>Hash-Chained, Tamper-Evident Audit Trails</h3>
+
+  <p>Every authorization event in Grantex — grant issuance, token exchange, verification, revocation, delegation, budget debit — produces an audit log entry. Each entry is cryptographically linked to the previous one via hash chaining, creating a tamper-evident sequence. If any entry is modified or deleted after the fact, the chain breaks and the tampering is detectable. This is not a best-effort log; it is a cryptographic commitment to the history of every authorization decision.</p>
+
+  <p>Audit entries include the full context: which principal authorized the action, which agent performed it, what scopes were involved, the delegation depth, timestamps, and the cryptographic hash linking to the previous entry. Entries can be queried by grant, agent, principal, time range, or event type through the <code>GET /v1/audit/entries</code> API.</p>
+
+  <h3>Real-Time Event Streaming for SIEM Integration</h3>
+
+  <p>For security operations centers that need real-time visibility, Grantex provides event streaming via both Server-Sent Events (SSE) and WebSocket connections. Authorization events are emitted as they occur, enabling direct integration with SIEM platforms. The <a href="https://docs.grantex.dev">event destination connectors</a> support Datadog, Splunk, Amazon S3, Google BigQuery, and Apache Kafka out of the box — covering the most common enterprise observability stacks.</p>
+
+  <h3>Anomaly Detection</h3>
+
+  <p>Grantex includes built-in anomaly detection that monitors authorization patterns and flags deviations. Unusual token exchange volumes, unexpected scope requests, verification failures from new IP ranges, and other signals are surfaced automatically. This provides an early warning system for compromised credentials or misconfigured agents, supplementing whatever threat detection your SOC already operates.</p>
+
+  <h2>Identity and Access Management</h2>
+
+  <p>Enterprise AI agent security starts with identity. If you cannot reliably identify an agent, you cannot authorize it, audit it, or revoke it. Grantex integrates with enterprise identity infrastructure and extends it to cover AI agents as first-class identities.</p>
+
+  <h3>SCIM 2.0 Provisioning</h3>
+
+  <p>Grantex supports SCIM 2.0 for automated user and agent lifecycle management. When an employee is provisioned in your identity provider, their Grantex developer account is created automatically. When they are deprovisioned, their account is disabled and all associated grants are revoked. This eliminates the orphaned-credential problem that plagues manual agent management and ensures that agent authority is always tied to an active human identity.</p>
+
+  <h3>SSO via SAML 2.0 and OpenID Connect</h3>
+
+  <p>Developers authenticate to Grantex through your existing identity provider. Both SAML 2.0 and OpenID Connect are supported, covering Okta, Azure AD, Google Workspace, Ping Identity, OneLogin, and any standards-compliant IdP. This means no new passwords to manage, no separate MFA enrollment, and centralized session policy enforcement.</p>
+
+  <h3>FIDO2/WebAuthn Passkeys</h3>
+
+  <p>For high-security operations — particularly grant authorization and delegation — Grantex supports FIDO2/WebAuthn passkeys. Developers can register hardware security keys or platform authenticators and require passkey verification for sensitive actions. This provides phishing-resistant authentication at the authorization boundary: even if an attacker compromises a session, they cannot authorize new agent grants without the physical passkey.</p>
+
+  <h3>Cryptographic Agent Identity via DIDs</h3>
+
+  <p>Every agent in Grantex is identified by a Decentralized Identifier (DID). The platform implements <code>did:web</code> infrastructure, publishing DID documents at <code>/.well-known/did.json</code> with Ed25519 public keys. This means agent identity is cryptographically verifiable — any party can resolve an agent's DID and verify that a grant token was issued to that specific agent. There is no reliance on a central authority for identity verification.</p>
+
+  <h2>Policy Engine</h2>
+
+  <p>Authorization without policy enforcement is just permission management. Grantex includes a policy engine that lets enterprises define, deploy, and enforce organizational rules governing agent behavior.</p>
+
+  <h3>OPA-Compatible Policy Bundles</h3>
+
+  <p>Policies are written as OPA-compatible bundles, giving teams access to the full Rego policy language. You can express rules that go far beyond simple scope checks: require manager approval for budget allocations above a threshold, restrict delegation depth for certain agent classes, enforce geographic constraints on data-processing agents, or mandate specific credential types for agents accessing PII. Bundles are uploaded via <code>POST /v1/policies/sync</code> and take effect immediately.</p>
+
+  <h3>Git-Based Policy Sync</h3>
+
+  <p>For teams that manage policy as code, Grantex supports webhook-triggered policy sync from Git repositories. Push a change to your policy repo, and the updated bundle is automatically deployed to the authorization service. This integrates policy management into your existing CI/CD workflows, provides version history and code review for policy changes, and ensures that the running policy always matches what is in source control.</p>
+
+  <h3>Fine-Grained Scope Management</h3>
+
+  <p>Scopes in Grantex are not coarse-grained read/write toggles. They are structured, hierarchical permission descriptors that can express exactly what an agent is permitted to do. Combined with the policy engine, scopes enable rules like: "this agent may read customer records in the EMEA region but not modify them" or "this agent may generate code but not deploy it to production." Grant tokens carry their scopes as JWT claims, enabling <a href="/guides/ai-agent-authorization">offline verification</a> without calling back to the authorization server.</p>
+
+  <h2>Delegation and Control</h2>
+
+  <p>Real-world enterprise AI deployments involve chains of authority. A department head authorizes a team-level orchestrator agent, which delegates specific tasks to specialized sub-agents. Grantex models this natively.</p>
+
+  <h3>Multi-Tier Delegation Chains</h3>
+
+  <p>Grantex supports multi-tier delegation as defined in the <a href="https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md">protocol specification (Section 9)</a>. An authorized agent can delegate a subset of its own authority to another agent via <code>POST /v1/grants/delegate</code>. The delegated grant token includes claims for the parent agent DID, parent grant ID, and delegation depth, creating an auditable chain of authority back to the original human principal. Delegation depth can be limited by policy, preventing unbounded delegation chains.</p>
+
+  <h3>Cascade Revocation</h3>
+
+  <p>When a grant is revoked, all downstream delegations are revoked automatically. If a compromised agent is detected at any point in the delegation chain, a single revocation call disables the entire subtree. This is critical for incident response: security teams can immediately contain a breach by revoking a single grant, with confidence that no child agents retain authority. The revocation propagates through the hash-chained audit trail, creating a complete forensic record.</p>
+
+  <h3>Budget Controls Per Agent and Department</h3>
+
+  <p>For agents that incur costs — calling paid APIs, consuming compute resources, purchasing services — Grantex provides budget controls. Budget allocations are created per grant via <code>POST /v1/budget/allocate</code>, and every cost-incurring action debits the budget via <code>POST /v1/budget/debit</code>. When a budget is exhausted, the agent receives a 402 INSUFFICIENT_BUDGET response and cannot proceed. Budget balances and transaction histories are queryable in real time, giving finance teams and department heads direct visibility into agent spending.</p>
+
+  <h3>Custom Domains</h3>
+
+  <p>Enterprises can serve the Grantex authorization endpoints from their own domain (e.g., <code>auth.yourcompany.com</code>) via the custom domains feature. DNS verification ensures domain ownership, and all authorization flows — consent pages, token endpoints, DID documents — are served under your brand. This is particularly important for enterprises that require all security infrastructure to operate under corporate domain control.</p>
+
+  <h2>Deployment Options</h2>
+
+  <p>Different enterprises have different requirements for where their authorization infrastructure runs. Grantex supports the full spectrum from fully managed cloud to fully self-hosted on-premises.</p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4>Managed Cloud</h4>
+      <p>Production-ready managed service with automatic scaling, high availability, managed key rotation, and zero operational overhead. SOC 2 Type I certified infrastructure.</p>
+    </div>
+    <div class="feature-card">
+      <h4>Self-Hosted (Apache 2.0)</h4>
+      <p>Deploy in your own VPC, on-premises data center, or air-gapped environment. Full source access, no license fees, no phone-home telemetry. You control the data plane entirely.</p>
+    </div>
+    <div class="feature-card">
+      <h4>Terraform Provider</h4>
+      <p>Infrastructure as code with the Grantex Terraform provider: 5 resources and 2 data sources for managing grants, agents, policies, and configuration declaratively.</p>
+    </div>
+    <div class="feature-card">
+      <h4>Helm Charts and Docker</h4>
+      <p>Kubernetes-native deployment via Helm charts with configurable replicas, resource limits, and ingress. Docker images available for standalone or Docker Compose deployments.</p>
+    </div>
+  </div>
+
+  <p>The self-hosted option is particularly relevant for regulated industries — financial services, healthcare, government — where authorization data must remain within specific network boundaries. Because Grantex is Apache 2.0 licensed, there are no restrictions on modification, no dual-licensing traps, and no enterprise tier that withholds critical security features.</p>
+
+  <h2>Security Architecture</h2>
+
+  <p>The cryptographic foundations of Grantex are designed to provide verifiable security guarantees, not just procedural ones.</p>
+
+  <h3>W3C Verifiable Credentials</h3>
+
+  <p>Grantex issues W3C Verifiable Credentials (VCs) as VC-JWTs, providing standards-compliant, portable, and cryptographically verifiable claims about agent identity and authorization. Credentials include StatusList2021 support for revocation checking. Any relying party can verify a credential offline using the issuer's public key, without calling back to the Grantex service. This enables zero-trust architectures where <a href="/guides/secure-ai-agents">agent security</a> does not depend on network connectivity to a central authority.</p>
+
+  <h3>SD-JWT Selective Disclosure</h3>
+
+  <p>For scenarios requiring privacy-preserving credential presentation, Grantex supports SD-JWT (Selective Disclosure JSON Web Tokens). An agent can present a credential that proves it has authorization for a specific scope without revealing its full identity or the complete list of its permissions. This is essential for inter-organizational agent interactions where least-privilege disclosure is a requirement.</p>
+
+  <h3>DID:web Infrastructure</h3>
+
+  <p>Agent and issuer identities are anchored to <code>did:web</code> Decentralized Identifiers. DID documents are published at well-known URLs and contain Ed25519 public keys for signature verification. This decouples identity verification from any single service, enabling cross-organizational trust establishment. An agent's DID is embedded in every grant token (<code>agt</code> claim), creating an unbroken chain from token to identity to public key.</p>
+
+  <h3>Offline Verification via JWKS</h3>
+
+  <p>Grant tokens can be verified entirely offline using the issuer's JSON Web Key Set (JWKS). Services that consume agent tokens do not need to call the Grantex authorization server on every request — they cache the JWKS and verify JWT signatures locally. This eliminates the authorization server as a latency bottleneck and single point of failure, which is critical for high-throughput enterprise deployments. The <a href="https://docs.grantex.dev">TypeScript, Python, and Go SDKs</a> all support JWKS-based offline verification.</p>
+
+  <h2>Enterprise Requirements Checklist</h2>
+
+  <p>The following table maps common enterprise security requirements to Grantex capabilities.</p>
+
+  <table class="comparison-table">
+    <thead>
+      <tr>
+        <th>Requirement</th>
+        <th>Grantex</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>SOC 2 compliance</td>
+        <td class="yes">Type I certified</td>
+        <td>Independent audit completed</td>
+      </tr>
+      <tr>
+        <td>SCIM provisioning</td>
+        <td class="yes">SCIM 2.0</td>
+        <td>Automated user/agent lifecycle</td>
+      </tr>
+      <tr>
+        <td>SSO</td>
+        <td class="yes">SAML + OIDC</td>
+        <td>Any standards-compliant IdP</td>
+      </tr>
+      <tr>
+        <td>Phishing-resistant MFA</td>
+        <td class="yes">FIDO2/WebAuthn</td>
+        <td>Hardware keys + platform authenticators</td>
+      </tr>
+      <tr>
+        <td>Tamper-evident audit trail</td>
+        <td class="yes">Hash-chained logs</td>
+        <td>Cryptographic integrity verification</td>
+      </tr>
+      <tr>
+        <td>SIEM integration</td>
+        <td class="yes">SSE + WebSocket</td>
+        <td>Datadog, Splunk, S3, BigQuery, Kafka</td>
+      </tr>
+      <tr>
+        <td>Policy engine</td>
+        <td class="yes">OPA-compatible</td>
+        <td>Rego policies, git-based sync</td>
+      </tr>
+      <tr>
+        <td>Self-hosted / on-prem</td>
+        <td class="yes">Apache 2.0</td>
+        <td>Full source, no restrictions</td>
+      </tr>
+      <tr>
+        <td>Infrastructure as code</td>
+        <td class="yes">Terraform provider</td>
+        <td>5 resources, 2 data sources</td>
+      </tr>
+      <tr>
+        <td>Cryptographic agent identity</td>
+        <td class="yes">DID:web + Ed25519</td>
+        <td>Verifiable, decentralized identifiers</td>
+      </tr>
+      <tr>
+        <td>Verifiable Credentials</td>
+        <td class="yes">W3C VC-JWT</td>
+        <td>StatusList2021 revocation</td>
+      </tr>
+      <tr>
+        <td>Selective disclosure</td>
+        <td class="yes">SD-JWT</td>
+        <td>Privacy-preserving presentations</td>
+      </tr>
+      <tr>
+        <td>Budget controls</td>
+        <td class="yes">Per-grant budgets</td>
+        <td>Allocate, debit, track in real time</td>
+      </tr>
+      <tr>
+        <td>Delegation management</td>
+        <td class="yes">Multi-tier + cascade</td>
+        <td>Auditable chains, instant revocation</td>
+      </tr>
+      <tr>
+        <td>Anomaly detection</td>
+        <td class="yes">Built-in</td>
+        <td>Pattern monitoring, automated alerts</td>
+      </tr>
+      <tr>
+        <td>Custom domains</td>
+        <td class="yes">DNS-verified</td>
+        <td>Serve auth under your domain</td>
+      </tr>
+      <tr>
+        <td>Offline token verification</td>
+        <td class="yes">JWKS</td>
+        <td>No central server dependency</td>
+      </tr>
+      <tr>
+        <td>Multi-language SDK support</td>
+        <td class="yes">TS, Python, Go</td>
+        <td>14 framework integrations</td>
+      </tr>
+      <tr>
+        <td>Standards-based protocol</td>
+        <td class="yes">IETF Internet-Draft</td>
+        <td>Formal specification submitted</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Integration Breadth</h2>
+
+  <p>Enterprise technology stacks are heterogeneous. Grantex provides SDKs for <strong>TypeScript</strong>, <strong>Python</strong>, and <strong>Go</strong>, plus 14 framework integrations that cover the major AI agent frameworks and web platforms in production use today. This includes dedicated packages for LangChain, OpenAI Agents SDK, Google ADK, AutoGen, CrewAI, Vercel AI SDK, Express.js, FastAPI, and an MCP server for Claude Desktop, Cursor, and Windsurf. An A2A (Agent-to-Agent) protocol bridge supports Google's A2A specification with Grantex authentication.</p>
+
+  <p>For infrastructure teams, the Terraform provider manages Grantex resources declaratively, the CLI provides scripting and automation capabilities, the gateway provides a YAML-configured reverse proxy with built-in authorization enforcement, and the conformance test suite validates that any deployment meets the protocol specification. See the <a href="https://docs.grantex.dev">full documentation</a> for integration guides and API references.</p>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <h3>Is Grantex SOC 2 compliant?</h3>
+  <p>Yes. Grantex has completed SOC 2 Type I certification. The platform provides hash-chained, tamper-evident audit trails, anomaly detection, and real-time event streaming for SIEM integration — all designed to satisfy the Trust Services Criteria for security, availability, and confidentiality.</p>
+
+  <h3>Does Grantex support SCIM provisioning and enterprise SSO?</h3>
+  <p>Yes. Grantex includes full SCIM 2.0 provisioning support for automated user lifecycle management, plus SSO via both SAML 2.0 and OpenID Connect. This allows enterprises to manage agent identities and developer access through their existing identity provider — Okta, Azure AD, Google Workspace, Ping Identity, OneLogin, and others.</p>
+
+  <h3>Can Grantex be self-hosted in our own infrastructure?</h3>
+  <p>Yes. Grantex is fully open-source under the Apache 2.0 license and can be deployed in your own infrastructure. The project provides a Terraform provider (5 resources, 2 data sources), Helm charts for Kubernetes, Docker images, and deployment configurations for GCP, AWS, and on-premises environments. You retain complete control over your data and authorization plane.</p>
+
+  <h3>How do the audit trails work?</h3>
+  <p>Grantex produces hash-chained, tamper-evident audit logs for every authorization event — grant issuance, token exchange, verification, revocation, and delegation. Each entry is cryptographically linked to the previous one, making retroactive modification detectable. Logs can be streamed in real time via SSE or WebSocket to your SIEM, and exported to destinations including Datadog, Splunk, S3, BigQuery, and Kafka.</p>
+
+  <h3>How does Grantex help with AI agent compliance and governance?</h3>
+  <p>Grantex provides a comprehensive governance layer for AI agents: fine-grained scope management limits what each agent can do, an OPA-compatible policy engine enforces organizational rules, budget controls cap spending per agent or department, cascade revocation instantly disables compromised delegation chains, and W3C Verifiable Credentials provide cryptographic proof of agent identity and authorization. Together, these controls give compliance teams full visibility and enforcement over every AI agent operating in the organization.</p>
+
+  <div class="cta-box">
+    <h3>Ready to secure your AI agents?</h3>
+    <p>Get started with the documentation or explore how Grantex compares to existing approaches.</p>
+    <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap">
+      <a href="https://docs.grantex.dev" class="btn btn-primary">Read the Docs</a>
+      <a href="/vs/oauth" class="btn btn-secondary">Compare to OAuth</a>
+      <a href="/use-cases/startups" class="btn btn-secondary">For Startups</a>
+    </div>
+  </div>
+</article>
+
+<footer class="footer">
+  <span style="color:var(--muted);font-size:.85rem">Grantex — Open authorization for AI agents</span>
+  <ul class="footer-links">
+    <li><a href="https://docs.grantex.dev">Docs</a></li>
+    <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+    <li><a href="/">Home</a></li>
+  </ul>
+</footer>
+</body>
+</html>

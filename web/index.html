@@ -1789,6 +1789,51 @@
   </div>
 </section>
 
+<!-- ── Resources & Guides ──────────────────────────────────────────────────── -->
+<section id="resources">
+  <div class="container">
+    <div class="section-label">Resources</div>
+    <h2 class="section-title">Learn more about agent security</h2>
+    <p class="section-sub">
+      Guides, comparisons, and use cases to help you secure your AI agents.
+    </p>
+    <div class="cards" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+      <a href="/guides/secure-ai-agents" class="card" style="text-decoration:none;color:inherit;">
+        <h3 style="color:var(--accent);">How to Secure AI Agents</h3>
+        <p>The 7 pillars of AI agent security — scoped permissions, identity, consent, audit trails, delegation, revocation, and budgets.</p>
+      </a>
+      <a href="/guides/ai-agent-authorization" class="card" style="text-decoration:none;color:inherit;">
+        <h3 style="color:var(--accent);">Agent Authorization Explained</h3>
+        <p>How delegated authorization works for autonomous AI agents — from consent flow to JWT verification.</p>
+      </a>
+      <a href="/vs/oauth" class="card" style="text-decoration:none;color:inherit;">
+        <h3 style="color:var(--accent);">Grantex vs OAuth 2.0</h3>
+        <p>Why OAuth falls short for agents and what Grantex adds — agent identity, delegation chains, and audit trails.</p>
+      </a>
+      <a href="/vs/api-keys" class="card" style="text-decoration:none;color:inherit;">
+        <h3 style="color:var(--accent);">Grantex vs API Keys</h3>
+        <p>Why all-or-nothing API keys are dangerous for AI agents and how scoped grants replace them.</p>
+      </a>
+      <a href="/vs/custom-auth" class="card" style="text-decoration:none;color:inherit;">
+        <h3 style="color:var(--accent);">Buy vs Build</h3>
+        <p>The real cost of rolling custom agent authorization — security risks, maintenance, and missing primitives.</p>
+      </a>
+      <a href="/use-cases/startups" class="card" style="text-decoration:none;color:inherit;">
+        <h3 style="color:var(--accent);">For Startups</h3>
+        <p>Ship AI features fast without compromising security. Free tier, 200 agents, 5-minute setup.</p>
+      </a>
+      <a href="/use-cases/enterprise" class="card" style="text-decoration:none;color:inherit;">
+        <h3 style="color:var(--accent);">For Enterprise</h3>
+        <p>SOC 2, SCIM, SSO, FIDO2, policy engine, self-hosted — governance and compliance at scale.</p>
+      </a>
+      <a href="/vs/mcp-auth" class="card" style="text-decoration:none;color:inherit;">
+        <h3 style="color:var(--accent);">MCP Server Auth</h3>
+        <p>Add OAuth 2.1 + PKCE to any MCP server — secure Claude Desktop, Cursor, and Windsurf tools.</p>
+      </a>
+    </div>
+  </div>
+</section>
+
 <!-- ── Footer ─────────────────────────────────────────────────────────────── -->
 <footer>
   <div class="container">
@@ -1797,7 +1842,9 @@
       <ul class="footer-links">
         <li><a href="https://docs.grantex.dev">Docs</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
-        <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
+        <li><a href="/guides/secure-ai-agents">Security Guide</a></li>
+        <li><a href="/vs/oauth">vs OAuth</a></li>
+        <li><a href="/use-cases/enterprise">Enterprise</a></li>
         <li><a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">IETF Draft</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
       </ul>

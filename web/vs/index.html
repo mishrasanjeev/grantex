@@ -399,6 +399,104 @@ const delegated = await gx.grants.delegate({
         <a href="/playground" class="btn btn-secondary">Try in Playground</a>
       </div>
     `
+  },
+
+  'custom-auth': {
+    metaTitle: 'Grantex vs Building Your Own Agent Auth — Buy vs Build',
+    metaDesc: 'Should you build custom authorization for AI agents or use Grantex? Compare the engineering cost, security risks, and time-to-market of DIY agent auth vs an open protocol.',
+    html: `
+      <h1>Grantex vs Building Your Own Agent Auth</h1>
+      <p class="subtitle">The real cost of rolling custom authorization for AI agents</p>
+
+      <p>Every engineering team building AI agents faces the same question: <strong>should we build our own authorization system or use something purpose-built?</strong></p>
+      <p>This is not a theoretical comparison. We built Grantex because we went through this exercise ourselves — and we know exactly where DIY agent auth breaks down.</p>
+
+      <h2>What You Need to Build</h2>
+      <p>A production-grade agent authorization system requires at minimum:</p>
+      <ol>
+        <li><strong>Token issuance</strong> — signing RS256/Ed25519 JWTs with key rotation</li>
+        <li><strong>Consent flow</strong> — UI for users to approve scoped permissions</li>
+        <li><strong>Scope enforcement</strong> — middleware to verify scopes on every request</li>
+        <li><strong>Revocation</strong> — real-time blocklist (Redis or equivalent), not just token expiry</li>
+        <li><strong>Agent identity</strong> — per-agent credentials, not shared API keys</li>
+        <li><strong>Audit trail</strong> — append-only log with tamper evidence</li>
+        <li><strong>Delegation</strong> — parent-to-child scope narrowing with depth tracking</li>
+        <li><strong>Key management</strong> — JWKS endpoint, key rotation, public key distribution</li>
+        <li><strong>SDKs</strong> — client libraries for every language your agents use</li>
+        <li><strong>Middleware</strong> — Express, FastAPI, etc. for service-side verification</li>
+      </ol>
+      <p>That is a non-trivial system. Most teams underestimate the scope by 3-5x.</p>
+
+      <h2>The Hidden Costs of DIY</h2>
+
+      <h3>1. Security Vulnerabilities</h3>
+      <p>Auth is the one system where bugs become security incidents. JWT signature bypass, scope escalation, revocation race conditions, JWKS poisoning — these are not edge cases, they are <a href="/guides/secure-ai-agents">well-documented attack vectors</a>.</p>
+      <p>Grantex has been through SOC 2 Type I audit and security review. Your internal auth system probably won't get that level of scrutiny.</p>
+
+      <h3>2. Ongoing Maintenance</h3>
+      <p>Auth systems require continuous maintenance: key rotation, library updates, new framework integrations, token format changes. Grantex maintains <strong>14 framework integrations</strong> and <strong>3 SDKs</strong> — that is full-time engineering effort.</p>
+
+      <h3>3. Time to Market</h3>
+      <p>Building custom auth takes 2-6 months of engineering time. Integrating Grantex takes an afternoon:</p>
+      <pre><code>npm install @grantex/sdk
+# or
+pip install grantex</code></pre>
+      <p>Ten lines of code to your first authorized agent.</p>
+
+      <h3>4. Missing Primitives</h3>
+      <p>Most DIY systems start with basic token verification and never build the agent-specific primitives that matter:</p>
+      <ul>
+        <li><strong>Delegation chains</strong> — parent agents narrowing scopes for sub-agents</li>
+        <li><strong>Cascade revocation</strong> — revoking a parent kills all children instantly</li>
+        <li><strong>Budget controls</strong> — per-agent spending limits</li>
+        <li><strong>Anomaly detection</strong> — flagging unusual agent behavior</li>
+        <li><strong>W3C Verifiable Credentials</strong> — portable, third-party-verifiable proofs</li>
+      </ul>
+
+      <h2>Feature Comparison</h2>
+      <table class="comparison-table">
+        <tr><th>Capability</th><th>DIY (Typical)</th><th>Grantex</th></tr>
+        <tr><td>Token issuance (JWT)</td><td class="yes">Buildable</td><td class="yes">Built-in</td></tr>
+        <tr><td>Consent flow UI</td><td class="no">Must build</td><td class="yes">Built-in</td></tr>
+        <tr><td>Scoped permissions</td><td class="yes">Buildable</td><td class="yes">Built-in</td></tr>
+        <tr><td>Agent identity (DID)</td><td class="no">Rarely built</td><td class="yes">Built-in</td></tr>
+        <tr><td>Delegation chains</td><td class="no">Rarely built</td><td class="yes">Depth-tracked</td></tr>
+        <tr><td>Cascade revocation</td><td class="no">Hard to build</td><td class="yes">&lt; 1 second</td></tr>
+        <tr><td>Hash-chained audit trail</td><td class="no">Rarely built</td><td class="yes">Built-in</td></tr>
+        <tr><td>Budget controls</td><td class="no">Must build</td><td class="yes">Built-in</td></tr>
+        <tr><td>Offline verification (JWKS)</td><td class="yes">Buildable</td><td class="yes">Built-in</td></tr>
+        <tr><td>FIDO2/WebAuthn</td><td class="no">Hard to build</td><td class="yes">Built-in</td></tr>
+        <tr><td>Verifiable Credentials</td><td class="no">Rarely built</td><td class="yes">W3C VC 2.0</td></tr>
+        <tr><td>Framework integrations (14+)</td><td class="no">Must build each</td><td class="yes">LangChain, CrewAI, etc.</td></tr>
+        <tr><td>SOC 2 audit</td><td class="no">Expensive</td><td class="yes">Type I certified</td></tr>
+        <tr><td>Time to production</td><td class="no">2-6 months</td><td class="yes">1 afternoon</td></tr>
+      </table>
+
+      <h2>When DIY Makes Sense</h2>
+      <p>There are legitimate reasons to build custom auth:</p>
+      <ul>
+        <li><strong>Unique compliance requirements</strong> that no off-the-shelf solution handles</li>
+        <li><strong>Air-gapped environments</strong> where you cannot use external services (though Grantex can be <a href="/use-cases/enterprise">self-hosted</a>)</li>
+        <li><strong>You ARE building an auth platform</strong> — auth is your product, not a supporting system</li>
+      </ul>
+      <p>For everyone else — teams building AI agents that need authorization — the engineering hours spent on DIY auth are hours not spent on your actual product.</p>
+
+      <h2>The Open Source Advantage</h2>
+      <p>Grantex is Apache 2.0 licensed. You get the benefits of a purpose-built system without vendor lock-in:</p>
+      <ul>
+        <li>Fork and modify if needed</li>
+        <li>Self-host on your own infrastructure</li>
+        <li>Inspect every line of code</li>
+        <li>Use the <a href="https://github.com/mishrasanjeev/grantex">public specification</a> with your own implementation</li>
+      </ul>
+
+      <div class="cta-box">
+        <h3>Skip months of auth engineering</h3>
+        <p>10 lines of code. 14 framework integrations. SOC 2 audited. Apache 2.0.</p>
+        <a href="https://docs.grantex.dev/getting-started/quickstart" class="btn btn-primary" style="margin-right:.5rem">Get Started</a>
+        <a href="/use-cases/startups" class="btn btn-secondary">See startup use case</a>
+      </div>
+    `
   }
 };
 

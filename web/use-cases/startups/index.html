@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <title>AI Agent Security for Startups — Ship Fast, Stay Secure | Grantex</title>
+  <meta name="description" content="Secure your AI agents in minutes. Grantex gives startups scoped permissions, audit trails, and instant revocation — free for up to 200 agents.">
+  <meta name="keywords" content="AI agents for startups, AI agent security startup, AI agent platform for startups, secure AI agents startup, AI agent authorization, AI agent permissions, startup AI security">
+  <link rel="canonical" href="https://grantex.dev/use-cases/startups">
+
+  <meta property="og:title" content="AI Agent Security for Startups — Ship Fast, Stay Secure | Grantex">
+  <meta property="og:description" content="Secure your AI agents in minutes. Grantex gives startups scoped permissions, audit trails, and instant revocation — free for up to 200 agents.">
+  <meta property="og:url" content="https://grantex.dev/use-cases/startups">
+  <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Grantex">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AI Agent Security for Startups — Ship Fast, Stay Secure | Grantex">
+  <meta name="twitter:description" content="Secure your AI agents in minutes. Grantex gives startups scoped permissions, audit trails, and instant revocation — free for up to 200 agents.">
+  <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-DNXYVLS5NY');</script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "AI Agent Security for Startups — Ship Fast, Stay Secure",
+    "description": "Secure your AI agents in minutes. Grantex gives startups scoped permissions, audit trails, and instant revocation — free for up to 200 agents.",
+    "url": "https://grantex.dev/use-cases/startups",
+    "image": "https://grantex.dev/og-image.png",
+    "author": {
+      "@type": "Organization",
+      "name": "Grantex",
+      "url": "https://grantex.dev"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Grantex",
+      "url": "https://grantex.dev",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://grantex.dev/favicon.svg"
+      }
+    },
+    "datePublished": "2026-03-26",
+    "dateModified": "2026-03-26",
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": "https://grantex.dev/use-cases/startups"
+    }
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Is Grantex free for startups?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex is open source under the Apache 2.0 license, and the hosted service includes a free tier that supports up to 200 agents. Most early-stage startups never need to pay."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How long does it take to integrate Grantex into an existing application?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Most developers have a working integration in under 5 minutes. Install the SDK (npm or pip), initialize the client with your API key, and you can start issuing scoped agent tokens immediately. No infrastructure changes required."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does Grantex work with LangChain, CrewAI, and other AI frameworks?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex provides first-class integrations for LangChain, CrewAI, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, and MCP (Model Context Protocol). Each integration is a lightweight wrapper that adds authorization checks without changing your agent logic."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can Grantex help my startup pass SOC 2 or investor security audits?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Grantex provides several controls that map directly to SOC 2 requirements: hash-chained audit trails for every agent action, scoped least-privilege permissions, real-time revocation, and cryptographic agent identity via DIDs. These give you auditable evidence of access control and monitoring."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What happens if an AI agent goes rogue or gets compromised?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Grantex supports real-time token revocation that takes effect in under 1 second. If you revoke a parent agent's grant, all delegated sub-agent grants are automatically revoked via cascade revocation. Budget controls can also cap spending so a compromised agent cannot exceed its allocation."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    :root {
+      --bg: #0d1117; --surface: #161b22; --border: #30363d;
+      --text: #e6edf3; --muted: #8b949e; --accent: #3fb950; --accent2: #58a6ff;
+      --red: #f85149; --mono: 'JetBrains Mono','Fira Code',monospace;
+      --sans: 'Inter',system-ui,-apple-system,sans-serif; --radius: 8px; --max-w: 860px;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.7}
+    a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+    code{font-family:var(--mono);background:var(--surface);padding:2px 6px;border-radius:4px;font-size:.9em}
+    pre{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;overflow-x:auto;font-family:var(--mono);font-size:.85rem;line-height:1.5;margin:1.5rem 0}
+    pre code{background:none;padding:0}
+
+    .nav{display:flex;align-items:center;justify-content:space-between;max-width:var(--max-w);margin:0 auto;padding:1rem 1.5rem}
+    .nav-logo{font-weight:700;font-size:1.25rem;color:var(--text)}
+    .nav-links{list-style:none;display:flex;gap:1.5rem}
+    .nav-links a{color:var(--muted);font-size:.9rem}.nav-links a:hover{color:var(--text);text-decoration:none}
+
+    .article{max-width:var(--max-w);margin:0 auto;padding:2rem 1.5rem 4rem}
+    .article h1{font-size:2.25rem;line-height:1.2;margin-bottom:.5rem}
+    .article .subtitle{color:var(--muted);font-size:1.05rem;margin-bottom:2rem}
+    .article h2{font-size:1.5rem;margin:2.5rem 0 1rem;padding-top:1rem;border-top:1px solid var(--border)}
+    .article h3{font-size:1.15rem;margin:1.5rem 0 .5rem;color:var(--accent)}
+    .article p{color:var(--muted);margin-bottom:1rem}
+    .article ul,.article ol{color:var(--muted);padding-left:1.5rem;margin-bottom:1rem}
+    .article li{margin-bottom:.5rem}
+    .article strong{color:var(--text)}
+    .article blockquote{border-left:3px solid var(--accent);padding-left:1rem;margin:1.5rem 0;color:var(--muted);font-style:italic}
+
+    .feature-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.5rem 0}
+    .feature-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem}
+    .feature-card h3{margin-top:0;margin-bottom:.5rem}
+    .feature-card p{margin-bottom:0;font-size:.95rem}
+
+    .scenario-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin:1rem 0}
+    .scenario-block h3{margin-top:0;margin-bottom:.5rem}
+    .scenario-block p{margin-bottom:.5rem;font-size:.95rem}
+    .scenario-block p:last-child{margin-bottom:0}
+
+    .install-tabs{display:flex;gap:1rem;margin:1.5rem 0 0}
+    .install-tab{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem 1.25rem;flex:1}
+    .install-tab .label{color:var(--muted);font-size:.8rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem}
+    .install-tab code{font-size:.85rem;color:var(--text)}
+
+    .cta-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;text-align:center;margin:2rem 0}
+    .cta-box h3{color:var(--text);margin-bottom:.5rem;font-size:1.3rem}
+    .cta-box p{margin-bottom:1.25rem}
+    .cta-buttons{display:flex;justify-content:center;gap:1rem;flex-wrap:wrap}
+    .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.25rem;border-radius:var(--radius);font-weight:600;font-size:.9rem;text-decoration:none;transition:all .2s}
+    .btn-primary{background:var(--accent);color:#0d1117}.btn-primary:hover{background:#2ea043;text-decoration:none}
+    .btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{border-color:var(--muted);text-decoration:none}
+
+    .faq-item{margin-bottom:1.5rem}
+    .faq-item h3{color:var(--text);font-size:1.05rem;margin-bottom:.25rem}
+    .faq-item p{font-size:.95rem}
+
+    .footer{max-width:var(--max-w);margin:0 auto;padding:2rem 1.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem}
+    .footer-links{list-style:none;display:flex;gap:1.5rem}
+    .footer-links a{color:var(--muted);font-size:.85rem}
+
+    @media(max-width:640px){
+      .article h1{font-size:1.65rem}
+      .feature-grid{grid-template-columns:1fr}
+      .install-tabs{flex-direction:column}
+      .cta-buttons{flex-direction:column;align-items:center}
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="/" class="nav-logo">Grantex</a>
+  <ul class="nav-links">
+    <li><a href="https://docs.grantex.dev">Docs</a></li>
+    <li><a href="/playground">Playground</a></li>
+    <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+  </ul>
+</nav>
+
+<article class="article">
+  <h1>AI Agent Security for Startups</h1>
+  <p class="subtitle">Ship AI features fast without compromising on security. Grantex is the open authorization protocol that grows with you.</p>
+
+  <p>Your startup is building with AI agents. Maybe you have an agent that reads customer data to answer support tickets, or a pipeline of agents that research, draft, and publish content. The pressure to ship is real. But so is the risk of getting agent security wrong.</p>
+
+  <p>Grantex is an <a href="/">open delegated authorization protocol</a> designed specifically for AI agents. Think of it as OAuth 2.0, but built from the ground up for the way agents actually work: delegating tasks, accessing sensitive data, and spending money on your behalf. It is <strong>open source</strong>, <strong>Apache 2.0 licensed</strong>, and <strong>free for up to 200 agents</strong> on the hosted service.</p>
+
+  <h2>The Startup Dilemma</h2>
+
+  <p>Every startup faces the same tension: <strong>move fast or build securely</strong>. When you are trying to hit your next milestone, security infrastructure feels like a luxury. You need to ship the feature, not spend a sprint building an authorization layer.</p>
+
+  <p>So teams cut corners. They hard-code API keys into agent prompts. They give every agent full admin access because scoping permissions "takes too long." They skip audit logging because "we'll add it later." They have no way to revoke an agent's access without redeploying the entire application.</p>
+
+  <p>This works until it does not. A misconfigured agent leaks customer PII. An agent with too-broad permissions modifies production data it was never supposed to touch. A compromised API key gives an attacker full access to every integration your agents use. These are not hypothetical scenarios. They are the <a href="/vs/api-keys">well-documented failure modes</a> of treating agent authorization as an afterthought.</p>
+
+  <p>The good news: you do not have to choose between speed and security. With the right tooling, adding production-grade agent authorization takes minutes, not sprints.</p>
+
+  <h2>Why Startups Cannot Ignore Agent Security</h2>
+
+  <p>If you are building AI-powered features, agent security is not optional. Here is why it matters at the startup stage, not just at enterprise scale.</p>
+
+  <h3>Data Breach Costs Are Existential</h3>
+  <p>For a large company, a data breach is an expensive headache. For a startup, it can be fatal. The average cost of a data breach exceeds $4 million, but the real cost for a startup is lost customer trust and the months of momentum you burn on incident response. When your AI agent has unrestricted access to customer data and something goes wrong, the blast radius is your entire business.</p>
+
+  <h3>Compliance Starts Earlier Than You Think</h3>
+  <p>Your first enterprise customer will ask about SOC 2. Your first healthcare prospect will ask about HIPAA. If you are handling EU data, GDPR applies from day one. Retrofitting access controls and audit trails into a system that was built without them is painful and slow. Starting with proper agent authorization means these conversations become straightforward instead of blockers.</p>
+
+  <h3>Investor Due Diligence</h3>
+  <p>Sophisticated investors increasingly evaluate AI security practices during due diligence. Showing that your agents operate under least-privilege permissions, that every action is auditable, and that you can revoke access instantly signals engineering maturity. It is a differentiator, not overhead.</p>
+
+  <h3>Customer Trust Is Your Moat</h3>
+  <p>Users are cautious about AI agents accessing their data. When you can show a customer exactly what permissions an agent has, provide them with an audit trail of every action taken, and demonstrate that they can revoke access at any time, you earn trust that competitors without these controls cannot match.</p>
+
+  <h2>Grantex: Built for Startup Speed</h2>
+
+  <p>Grantex was designed so that adding agent authorization is the easiest part of your sprint, not the hardest. The <a href="https://docs.grantex.dev/getting-started/quickstart">quickstart</a> takes under 5 minutes. Here is what the integration looks like.</p>
+
+  <h3>Install the SDK</h3>
+
+  <div class="install-tabs">
+    <div class="install-tab">
+      <div class="label">npm</div>
+      <code>npm install @grantex/sdk</code>
+    </div>
+    <div class="install-tab">
+      <div class="label">pip</div>
+      <code>pip install grantex</code>
+    </div>
+  </div>
+
+  <h3>Authorize and Verify in 10 Lines</h3>
+  <pre><code>import { GrantexClient } from '@grantex/sdk';
+
+const grantex = new GrantexClient({
+  baseUrl: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app',
+  apiKey: process.env.GRANTEX_API_KEY,
+});
+
+// Request scoped authorization for an agent
+const auth = await grantex.authorize({
+  agentId: 'did:web:myapp.com:agents:support-bot',
+  scopes: ['tickets:read', 'customer:read'],
+  principal: 'user-123',
+});
+
+// Exchange the code for a scoped JWT
+const { grantToken } = await grantex.tokens.exchange({
+  code: auth.authRequestId,
+  agentId: 'did:web:myapp.com:agents:support-bot',
+});
+
+// Verify the token on every request
+const result = await grantex.tokens.verify(grantToken);
+// result.valid === true, result.scopes === ['tickets:read', 'customer:read']</code></pre>
+
+  <p>That is it. Your agent now operates under scoped, verifiable, revocable permissions. Every token is a signed JWT with the agent's identity, the granted scopes, and an expiration time baked in. No middleware to configure, no database schemas to design, no authorization server to operate.</p>
+
+  <p>If you are using Python, the integration is equally concise:</p>
+
+  <pre><code>from grantex import GrantexClient
+
+client = GrantexClient(
+    base_url="https://grantex-auth-dd4mtrt2gq-uc.a.run.app",
+    api_key=os.environ["GRANTEX_API_KEY"],
+)
+
+auth = client.authorize(
+    agent_id="did:web:myapp.com:agents:support-bot",
+    scopes=["tickets:read", "customer:read"],
+    principal="user-123",
+)
+
+token_response = client.tokens.exchange(
+    code=auth.auth_request_id,
+    agent_id="did:web:myapp.com:agents:support-bot",
+)</code></pre>
+
+  <h2>What You Get Out of the Box</h2>
+
+  <p>Grantex is not a single feature. It is a complete authorization layer purpose-built for AI agents. Here is what ships with every integration.</p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h3>Scoped Permissions</h3>
+      <p>Define exactly what each agent can and cannot do. Agents receive <strong>only the permissions they need</strong> via scoped JWTs. A support agent gets <code>tickets:read</code> but not <code>billing:write</code>. Least privilege by default.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Hash-Chained Audit Trails</h3>
+      <p>Every agent action is recorded in an <strong>append-only, tamper-evident log</strong>. Each entry links to the previous via SHA-256 hash. When compliance asks "what did the agent do?", you have a cryptographic answer.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Instant Revocation</h3>
+      <p>Revoke any agent's access in <strong>under 1 second</strong>. Cascade revocation propagates to all delegated sub-agents automatically. No waiting for tokens to expire, no redeploying your application.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Budget Controls</h3>
+      <p>Set spending limits for agents that call paid APIs. <strong>Allocate a budget, track debits, and enforce hard caps.</strong> If an agent tries to exceed its budget, the request is blocked with a 402 error before any money is spent.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Cryptographic Agent Identity</h3>
+      <p>Every agent gets a <strong>DID (Decentralized Identifier)</strong> embedded in its JWT. You always know which specific agent performed an action, even in multi-agent pipelines with dozens of collaborating agents.</p>
+    </div>
+    <div class="feature-card">
+      <h3>Multi-Framework Support</h3>
+      <p>First-class integrations for <a href="/for/langchain">LangChain</a>, <a href="/for/crewai">CrewAI</a>, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, and MCP. <strong>Drop-in wrappers</strong> that add authorization without changing your agent logic.</p>
+    </div>
+  </div>
+
+  <p>You also get delegation chains (agents delegating to sub-agents with narrower permissions), token refresh with rotation, PKCE (S256), webhook notifications, anomaly detection, real-time event streaming, and a <a href="/playground">browser-based playground</a> for testing flows.</p>
+
+  <h2>Real Startup Scenarios</h2>
+
+  <p>Abstract features only matter when they solve concrete problems. Here are three scenarios that early-stage startups encounter every week.</p>
+
+  <div class="scenario-block">
+    <h3>Scenario 1: AI Customer Support Agent Reading User Data</h3>
+    <p>Your support agent needs to look up a customer's order history and account details to resolve tickets. Without Grantex, the agent typically uses a shared API key with full database access.</p>
+    <p><strong>With Grantex:</strong> The agent receives a scoped token with <code>orders:read</code> and <code>account:read</code> permissions, tied to the specific customer who initiated the conversation. It cannot access other customers' data, cannot modify orders, and cannot touch billing information. Every lookup is logged in the audit trail. If the agent behaves unexpectedly, you revoke its grant instantly and the audit log tells you exactly what it accessed.</p>
+  </div>
+
+  <div class="scenario-block">
+    <h3>Scenario 2: Multi-Agent Content Pipeline</h3>
+    <p>You have a content creation pipeline: a research agent gathers information, a writer agent drafts articles, and a publisher agent posts to your CMS. Each agent needs different permissions, and the writer should not be able to publish directly.</p>
+    <p><strong>With Grantex:</strong> The orchestrator agent holds <code>research:read</code>, <code>content:write</code>, and <code>cms:publish</code> scopes. It <a href="https://docs.grantex.dev/getting-started/quickstart">delegates</a> only <code>research:read</code> to the research agent, only <code>content:write</code> to the writer, and only <code>cms:publish</code> to the publisher. Delegation chains enforce this hierarchy. If you revoke the orchestrator's grant, all three sub-agents lose access simultaneously.</p>
+  </div>
+
+  <div class="scenario-block">
+    <h3>Scenario 3: Agent Spending Money on Paid APIs</h3>
+    <p>Your agent calls third-party APIs that charge per request: translation services, image generation, web search. Without budget controls, a loop bug or prompt injection can rack up thousands of dollars in API charges before anyone notices.</p>
+    <p><strong>With Grantex:</strong> Allocate a budget of $50 to the agent's grant. Every API call debits the budget. When the budget hits zero, subsequent requests return a 402 error and the agent stops spending. You can monitor remaining balances in real time and set up webhook alerts for low-budget thresholds. No surprise invoices.</p>
+  </div>
+
+  <h2>Pricing That Makes Sense</h2>
+
+  <p>Grantex is <strong>open source</strong> under the Apache 2.0 license. You can self-host the entire stack at no cost, forever. The <a href="https://github.com/mishrasanjeev/grantex">source code</a> is on GitHub.</p>
+
+  <p>The hosted service includes a <strong>free tier that supports up to 200 agents</strong>. For most seed-stage and early Series A startups, the free tier is more than enough. You get the full feature set: scoped tokens, audit trails, revocation, budget controls, delegation chains, and all framework integrations.</p>
+
+  <p>When you outgrow the free tier, paid plans scale with your usage. There are no per-seat charges, no feature gates on the free plan, and no surprises. You pay for volume, not capabilities.</p>
+
+  <p>This matters because startup budgets are finite. You should not have to choose between security tooling and your next hire. With Grantex, you do not have to.</p>
+
+  <h2>Get Started in 5 Minutes</h2>
+
+  <p>Here is the fastest path from zero to secured agents:</p>
+
+  <ol>
+    <li><strong><a href="/dashboard/signup">Sign up</a></strong> for a free account and get your API key.</li>
+    <li><strong>Install the SDK</strong> in your language of choice: <code>npm install @grantex/sdk</code> or <code>pip install grantex</code>. A <a href="https://docs.grantex.dev/getting-started/quickstart">Go SDK</a> is also available.</li>
+    <li><strong>Initialize the client</strong> with your API key and base URL.</li>
+    <li><strong>Request authorization</strong> for your agent with the scopes it needs.</li>
+    <li><strong>Verify tokens</strong> on every request to enforce permissions.</li>
+  </ol>
+
+  <p>The <a href="https://docs.grantex.dev/getting-started/quickstart">quickstart guide</a> walks through each step with runnable code examples. The <a href="/playground">playground</a> lets you test authorization flows in the browser before writing any code.</p>
+
+  <p>If you are using a specific AI framework, the integration guides for <a href="/for/langchain">LangChain</a> and <a href="/for/crewai">CrewAI</a> show how to add Grantex authorization as a middleware layer without modifying your existing agent logic.</p>
+
+  <h2>Frequently Asked Questions</h2>
+
+  <div class="faq-item">
+    <h3>Is Grantex free for startups?</h3>
+    <p>Yes. Grantex is open source under the Apache 2.0 license, and the hosted service includes a free tier that supports up to 200 agents. Most early-stage startups never need to pay. You get the full feature set on the free plan, with no artificial limitations on capabilities.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>How long does it take to integrate Grantex?</h3>
+    <p>Most developers have a working integration in under 5 minutes. Install the SDK, initialize the client with your API key, and you can start issuing scoped agent tokens immediately. No infrastructure changes, no database migrations, no separate authorization server to run.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>Does Grantex work with LangChain, CrewAI, and other AI frameworks?</h3>
+    <p>Yes. Grantex provides first-class integrations for <a href="/for/langchain">LangChain</a>, <a href="/for/crewai">CrewAI</a>, AutoGen, OpenAI Agents SDK, Google ADK, Vercel AI SDK, and MCP. Each integration is a lightweight wrapper that adds authorization checks to your existing agent code without requiring architectural changes.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>Can Grantex help my startup pass SOC 2 or investor security audits?</h3>
+    <p>Grantex provides several controls that map directly to SOC 2 requirements: hash-chained audit trails for every agent action, scoped least-privilege permissions, real-time revocation, and cryptographic agent identity via DIDs. These give you auditable, cryptographically verifiable evidence of access control and monitoring that satisfies both compliance frameworks and investor due diligence.</p>
+  </div>
+
+  <div class="faq-item">
+    <h3>What happens if an AI agent goes rogue or gets compromised?</h3>
+    <p>Grantex supports real-time token revocation that takes effect in under 1 second. If you revoke a parent agent's grant, all delegated sub-agent grants are automatically revoked via cascade revocation. Budget controls provide an additional safety net by capping spending so a compromised agent cannot exceed its allocation, even before you detect the issue.</p>
+  </div>
+
+  <div class="cta-box">
+    <h3>Secure Your Agents Today</h3>
+    <p>Free for up to 200 agents. Open source. 5-minute integration. No credit card required.</p>
+    <div class="cta-buttons">
+      <a href="/dashboard/signup" class="btn btn-primary">Sign Up Free</a>
+      <a href="https://docs.grantex.dev/getting-started/quickstart" class="btn btn-secondary">Read Quickstart</a>
+    </div>
+  </div>
+
+  <p style="margin-top:2rem;font-size:.9rem;">Learn more: <a href="/">Grantex Home</a> | <a href="/vs/api-keys">Grantex vs API Keys</a> | <a href="/guides/secure-ai-agents">Guide: Securing AI Agents</a> | <a href="/for/langchain">LangChain Integration</a> | <a href="/for/crewai">CrewAI Integration</a></p>
+
+</article>
+
+<footer class="footer">
+  <span style="color:var(--muted);font-size:.85rem">Grantex — Open authorization for AI agents</span>
+  <ul class="footer-links">
+    <li><a href="https://docs.grantex.dev">Docs</a></li>
+    <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+    <li><a href="/">Home</a></li>
+  </ul>
+</footer>
+
+</body>
+</html>

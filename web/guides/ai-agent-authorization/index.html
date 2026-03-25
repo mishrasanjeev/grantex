@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- SEO -->
+  <title>AI Agent Authorization Explained — How Delegated Auth Works | Grantex</title>
+  <meta name="description" content="Learn how AI agent authorization works with delegated auth, scoped JWTs, agent identity, and delegation chains. A complete guide to securing autonomous AI agents.">
+  <meta name="keywords" content="AI agent authorization, agent authorization protocol, delegated authorization for AI, what is agent authorization, AI agent OAuth, agent permissions, JWT for agents, AI security, agent identity, DID, delegation chains, grant token">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="https://grantex.dev/guides/ai-agent-authorization">
+
+  <!-- OpenGraph -->
+  <meta property="og:title" content="AI Agent Authorization Explained — How Delegated Auth Works | Grantex">
+  <meta property="og:description" content="Learn how AI agent authorization works with delegated auth, scoped JWTs, agent identity, and delegation chains. A complete guide to securing autonomous AI agents.">
+  <meta property="og:url" content="https://grantex.dev/guides/ai-agent-authorization">
+  <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Grantex">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AI Agent Authorization Explained — How Delegated Auth Works | Grantex">
+  <meta name="twitter:description" content="Learn how AI agent authorization works with delegated auth, scoped JWTs, agent identity, and delegation chains. A complete guide to securing autonomous AI agents.">
+  <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+
+  <!-- JSON-LD: Article -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "AI Agent Authorization Explained — How Delegated Auth Works",
+    "description": "Learn how AI agent authorization works with delegated auth, scoped JWTs, agent identity, and delegation chains. A complete guide to securing autonomous AI agents.",
+    "url": "https://grantex.dev/guides/ai-agent-authorization",
+    "datePublished": "2026-03-26",
+    "dateModified": "2026-03-26",
+    "author": {
+      "@type": "Organization",
+      "name": "Grantex",
+      "url": "https://grantex.dev"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Grantex",
+      "url": "https://grantex.dev",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://grantex.dev/favicon.svg"
+      }
+    },
+    "image": "https://grantex.dev/og-image.png",
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": "https://grantex.dev/guides/ai-agent-authorization"
+    }
+  }
+  </script>
+
+  <!-- JSON-LD: FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is AI agent authorization?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "AI agent authorization is the process of granting an autonomous AI agent specific, scoped permissions to act on a human's behalf. Unlike traditional API keys, agent authorization uses signed JWTs with explicit scopes, cryptographic agent identity (DID), and human consent — so you always know which agent did what, with whose approval, and can revoke access in under one second."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does delegated authorization work for AI agents?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Delegated authorization for AI agents follows a consent-based flow: the agent requests specific permissions, a human approves them via a consent URL, and the agent receives a signed JWT (grant token) with only the approved scopes. The agent presents this token when accessing services, and any service can verify it offline using JWKS. This is similar to OAuth 2.0 but adds agent identity, delegation chains, audit trails, and real-time revocation."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is a grant token?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "A grant token is a signed RS256 JWT issued after a human approves an agent's authorization request. It contains claims including the principal (human) ID, agent DID, developer ID, approved scopes, grant ID, and expiration time. Any service can verify the token offline using the issuer's public JWKS endpoint — no network call to the auth server required."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can AI agents authorize other agents?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex supports delegation chains where a parent agent can delegate a narrower subset of its scopes to a child agent. The child's JWT includes delegation claims (parentAgt, parentGrnt, delegationDepth) that track the chain. Children can never have broader permissions than their parent, and revoking the parent's grant automatically cascades to all delegated sub-agents."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How is agent authorization different from API keys?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "API keys grant all-or-nothing access with no identity, scoping, consent, or audit trail. Agent authorization through Grantex provides per-agent scoped permissions, cryptographic identity (DID) for each agent, explicit human consent, hash-chained audit logs, real-time revocation, delegation control, and budget limits. API keys are developer credentials; grant tokens are user-approved, agent-specific, time-limited, and independently verifiable."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-DNXYVLS5NY');</script>
+
+  <style>
+    /* -- Design tokens -- */
+    :root {
+      --bg: #0d1117; --surface: #161b22; --border: #30363d;
+      --text: #e6edf3; --muted: #8b949e; --accent: #3fb950; --accent2: #58a6ff;
+      --red: #f85149; --mono: 'JetBrains Mono','Fira Code',monospace;
+      --sans: 'Inter',system-ui,-apple-system,sans-serif; --radius: 8px; --max-w: 860px;
+    }
+
+    /* -- Reset -- */
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+    a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+    code{font-family:var(--mono);background:var(--surface);padding:2px 6px;border-radius:4px;font-size:.9em}
+    pre{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;overflow-x:auto;font-family:var(--mono);font-size:.85rem;line-height:1.5;margin:1.5rem 0}
+    pre code{background:none;padding:0}
+
+    /* -- Nav -- */
+    .nav{display:flex;align-items:center;justify-content:space-between;max-width:var(--max-w);margin:0 auto;padding:1rem 1.5rem}
+    .nav-logo{font-weight:700;font-size:1.25rem;color:var(--text);font-family:var(--mono)}
+    .nav-logo:hover{text-decoration:none;color:var(--accent)}
+    .nav-links{list-style:none;display:flex;gap:1.5rem}
+    .nav-links a{color:var(--muted);font-size:.9rem}.nav-links a:hover{color:var(--text);text-decoration:none}
+
+    /* -- Article -- */
+    .article{max-width:var(--max-w);margin:0 auto;padding:2rem 1.5rem 4rem}
+    .article h1{font-size:2.25rem;line-height:1.2;margin-bottom:.5rem;letter-spacing:-0.5px}
+    .article .subtitle{color:var(--muted);font-size:1.1rem;margin-bottom:2.5rem;line-height:1.6}
+    .article h2{font-size:1.5rem;margin:2.5rem 0 1rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+    .article h3{font-size:1.15rem;margin:1.5rem 0 .5rem;color:var(--accent)}
+    .article p{color:var(--muted);margin-bottom:1rem}
+    .article ul,.article ol{color:var(--muted);padding-left:1.5rem;margin-bottom:1rem}
+    .article li{margin-bottom:.5rem}
+    .article strong{color:var(--text)}
+    .article blockquote{border-left:3px solid var(--accent);padding-left:1rem;margin:1.5rem 0;color:var(--muted);font-style:italic}
+
+    /* -- Flow diagram -- */
+    .flow-diagram{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin:1.5rem 0;overflow-x:auto}
+    .flow-step{display:flex;align-items:flex-start;gap:1rem;margin-bottom:1rem;color:var(--muted)}
+    .flow-step:last-child{margin-bottom:0}
+    .flow-num{background:var(--accent);color:#0d1117;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0}
+    .flow-content{flex:1}
+    .flow-content strong{color:var(--text);display:block;margin-bottom:2px}
+    .flow-content code{font-size:.8rem}
+    .flow-arrow{text-align:center;color:var(--border);font-size:1.2rem;margin:-.25rem 0;padding-left:5px}
+
+    /* -- JWT box -- */
+    .jwt-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin:1.5rem 0}
+    .jwt-box .jwt-header{color:var(--accent);font-family:var(--mono);font-size:.85rem;margin-bottom:.5rem;font-weight:600}
+    .jwt-claim{display:flex;gap:.75rem;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.9rem}
+    .jwt-claim:last-child{border-bottom:none}
+    .jwt-claim-key{font-family:var(--mono);color:var(--accent2);min-width:60px;font-weight:600}
+    .jwt-claim-val{color:var(--muted)}
+
+    /* -- Comparison table -- */
+    .comparison-table{width:100%;border-collapse:collapse;margin:1.5rem 0}
+    .comparison-table th,.comparison-table td{padding:.75rem 1rem;text-align:left;border:1px solid var(--border)}
+    .comparison-table th{background:var(--surface);color:var(--text);font-weight:600}
+    .comparison-table td{color:var(--muted)}
+    .comparison-table .yes{color:var(--accent)}
+    .comparison-table .no{color:var(--red)}
+
+    /* -- Tabs -- */
+    .code-tabs{margin:1.5rem 0}
+    .tab-buttons{display:flex;gap:0;border-bottom:1px solid var(--border)}
+    .tab-btn{padding:.5rem 1.25rem;background:none;border:none;color:var(--muted);font-family:var(--sans);font-size:.9rem;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+    .tab-btn:hover{color:var(--text)}
+    .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+    .tab-panel pre{margin-top:0;border-top-left-radius:0;border-top-right-radius:0}
+
+    /* -- CTA box -- */
+    .cta-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:2rem;text-align:center;margin:2.5rem 0}
+    .cta-box h3{color:var(--text);margin-bottom:.5rem;font-size:1.25rem}
+    .cta-box p{margin-bottom:1rem}
+    .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.25rem;border-radius:var(--radius);font-weight:600;font-size:.9rem;text-decoration:none;transition:all .2s}
+    .btn:hover{text-decoration:none}
+    .btn-primary{background:var(--accent);color:#0d1117}.btn-primary:hover{background:#2ea043}
+    .btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{border-color:var(--muted)}
+
+    /* -- Footer -- */
+    .footer{max-width:var(--max-w);margin:0 auto;padding:2rem 1.5rem;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem}
+    .footer-links{list-style:none;display:flex;gap:1.5rem}
+    .footer-links a{color:var(--muted);font-size:.85rem}
+
+    /* -- Responsive -- */
+    @media(max-width:640px){
+      .article h1{font-size:1.65rem}
+      .article h2{font-size:1.25rem}
+      .comparison-table{font-size:.85rem}
+      .comparison-table th,.comparison-table td{padding:.5rem}
+      .flow-step{gap:.75rem}
+      .jwt-claim{flex-direction:column;gap:.15rem}
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="/" class="nav-logo">Grantex</a>
+  <ul class="nav-links">
+    <li><a href="https://docs.grantex.dev">Docs</a></li>
+    <li><a href="/playground">Playground</a></li>
+    <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+  </ul>
+</nav>
+
+<article class="article">
+
+  <h1>AI Agent Authorization Explained</h1>
+  <p class="subtitle">How delegated authorization works for autonomous AI agents — the concepts, the protocol, and the code</p>
+
+  <!-- ============================================================ -->
+  <h2>Why AI Agents Need Authorization</h2>
+
+  <p>AI agents are no longer just answering questions. They book flights, process payments, query databases, send emails, and manage infrastructure. They operate autonomously, often chaining together multiple services in a single workflow.</p>
+
+  <p>This creates a fundamental security problem: <strong>how do you give an AI agent access to real services without giving it unrestricted access?</strong></p>
+
+  <p>Traditional approaches fall short. <a href="/vs/api-keys">API keys</a> grant all-or-nothing access with no identity, audit trail, or revocation granularity. <a href="/vs/oauth">OAuth 2.0</a> was designed for human users granting access to applications, not for autonomous agents that spawn sub-agents, delegate tasks, and operate without continuous human oversight.</p>
+
+  <p>AI agent authorization solves this by introducing a delegated authorization model built specifically for agents. The core idea: a human explicitly approves a set of scoped permissions for an agent, the agent receives a cryptographically signed token encoding exactly those permissions, and any downstream service can verify that token independently.</p>
+
+  <p>This is the model that <a href="/">Grantex</a> implements as an open protocol. Think of it as OAuth 2.0 rebuilt from the ground up for agentic workloads, with first-class support for agent identity, delegation chains, hash-chained audit trails, real-time revocation, and budget controls.</p>
+
+  <!-- ============================================================ -->
+  <h2>How Agent Authorization Works</h2>
+
+  <p>The agent authorization protocol follows a five-step flow. If you have worked with OAuth 2.0, the shape will be familiar, but each step carries agent-specific semantics.</p>
+
+  <div class="flow-diagram">
+    <div class="flow-step">
+      <div class="flow-num">1</div>
+      <div class="flow-content">
+        <strong>Authorization Request</strong>
+        The agent (or its host application) sends a <code>POST /v1/authorize</code> request specifying the agent ID, the target scopes, and the principal (human user) who should approve. The server returns an <code>authRequestId</code>, a <code>consentUrl</code>, and an expiration time.
+      </div>
+    </div>
+    <div class="flow-arrow">|</div>
+    <div class="flow-step">
+      <div class="flow-num">2</div>
+      <div class="flow-content">
+        <strong>Human Consent</strong>
+        The principal visits the consent URL and sees exactly what scopes the agent is requesting. They can approve, deny, or narrow the scopes. This step is critical: no agent gets permissions without explicit human approval.
+      </div>
+    </div>
+    <div class="flow-arrow">|</div>
+    <div class="flow-step">
+      <div class="flow-num">3</div>
+      <div class="flow-content">
+        <strong>Token Exchange</strong>
+        After approval, the application exchanges the authorization code for a grant token via <code>POST /v1/token</code>. The response includes a signed RS256 JWT (<code>grantToken</code>), the approved scopes, a refresh token, a grant ID, and the token's expiration.
+      </div>
+    </div>
+    <div class="flow-arrow">|</div>
+    <div class="flow-step">
+      <div class="flow-num">4</div>
+      <div class="flow-content">
+        <strong>Token Verification</strong>
+        Any service that receives the grant token can verify it. Offline verification uses the issuer's public JWKS endpoint to validate the RS256 signature without any network call to the auth server. Alternatively, services can call <code>POST /v1/tokens/verify</code> for online verification that also checks revocation status.
+      </div>
+    </div>
+    <div class="flow-arrow">|</div>
+    <div class="flow-step">
+      <div class="flow-num">5</div>
+      <div class="flow-content">
+        <strong>Revocation</strong>
+        When an agent's access should end, call <code>POST /v1/tokens/revoke</code>. Revocation takes effect in under one second globally. If the revoked grant has delegated child grants, all children are automatically cascade-revoked.
+      </div>
+    </div>
+  </div>
+
+  <p>This flow ensures that every agent action is traceable to a human approval, every token is cryptographically verifiable, and every permission can be revoked instantly.</p>
+
+  <!-- ============================================================ -->
+  <h2>Understanding Grant Tokens</h2>
+
+  <p>The grant token is the central artifact of AI agent authorization. It is a signed RS256 JWT that encodes everything a service needs to make an authorization decision: who approved the access, which agent is acting, what scopes are permitted, and when the token expires.</p>
+
+  <h3>JWT Claims</h3>
+
+  <div class="jwt-box">
+    <div class="jwt-header">Grant Token Payload</div>
+    <div class="jwt-claim"><span class="jwt-claim-key">iss</span><span class="jwt-claim-val">Issuer -- the auth server URL</span></div>
+    <div class="jwt-claim"><span class="jwt-claim-key">sub</span><span class="jwt-claim-val">Principal ID -- the human who approved this grant</span></div>
+    <div class="jwt-claim"><span class="jwt-claim-key">agt</span><span class="jwt-claim-val">Agent DID -- cryptographic identity of the agent</span></div>
+    <div class="jwt-claim"><span class="jwt-claim-key">dev</span><span class="jwt-claim-val">Developer ID -- the developer who registered the agent</span></div>
+    <div class="jwt-claim"><span class="jwt-claim-key">scp</span><span class="jwt-claim-val">Scopes array -- the permissions this agent was granted, e.g. ["email:read", "calendar:write"]</span></div>
+    <div class="jwt-claim"><span class="jwt-claim-key">grnt</span><span class="jwt-claim-val">Grant ID -- unique identifier for this authorization grant</span></div>
+    <div class="jwt-claim"><span class="jwt-claim-key">jti</span><span class="jwt-claim-val">Token ID -- unique identifier for this specific JWT</span></div>
+    <div class="jwt-claim"><span class="jwt-claim-key">iat</span><span class="jwt-claim-val">Issued at -- Unix timestamp of when the token was created</span></div>
+    <div class="jwt-claim"><span class="jwt-claim-key">exp</span><span class="jwt-claim-val">Expiration -- Unix timestamp after which the token is invalid</span></div>
+  </div>
+
+  <p>The key difference from standard OAuth JWTs is the <code>agt</code> claim. This binds the token to a specific agent identity, not just a client application. Combined with <code>sub</code> (the approving human), every token answers two questions: <strong>who approved this?</strong> and <strong>which agent is acting?</strong></p>
+
+  <h3>Offline Verification</h3>
+
+  <p>Services verify grant tokens by fetching the issuer's JWKS (JSON Web Key Set) and validating the RS256 signature locally. This means verification requires zero network calls to the auth server after the initial JWKS fetch (which is cached). A service behind a firewall, in a different cloud region, or operating in an air-gapped environment can all verify tokens independently.</p>
+
+  <!-- ============================================================ -->
+  <h2>Agent Identity (DID)</h2>
+
+  <p>In traditional authorization systems, the identity boundary is the <em>application</em>. OAuth issues tokens to a client ID representing an app. But a single application can run many agents -- a travel planner, a flight booker, a hotel finder, a budget tracker. Under OAuth, they all share the same client credentials. There is no way to distinguish which agent performed an action, scope permissions per agent, or revoke one agent without affecting the others.</p>
+
+  <p>Grantex solves this with <strong>Decentralized Identifiers (DIDs)</strong>. Every registered agent receives its own DID, a globally unique cryptographic identifier that is embedded in the <code>agt</code> claim of every grant token the agent receives.</p>
+
+  <p>This has several concrete consequences:</p>
+
+  <ul>
+    <li><strong>Per-agent scoping</strong> -- different agents under the same developer can have different permission sets</li>
+    <li><strong>Per-agent revocation</strong> -- revoke one agent without touching others</li>
+    <li><strong>Per-agent audit</strong> -- every audit log entry includes the acting agent's DID</li>
+    <li><strong>Per-agent budgets</strong> -- spending limits are bound to individual agents, not shared across an application</li>
+    <li><strong>Verifiable identity</strong> -- the DID can be resolved to a DID Document containing the agent's public key, enabling cryptographic proof of agent identity independent of the auth server</li>
+  </ul>
+
+  <p>Agent identity is what makes the difference between "some API client made this request" and "the flight-booking agent (did:web:grantex.dev:agents:flight-booker) made this request on behalf of Alice, with her approval, using the email:read scope."</p>
+
+  <!-- ============================================================ -->
+  <h2>Delegation Chains</h2>
+
+  <p>Real-world agentic workflows are rarely flat. A manager agent assigns a research task to a researcher agent, which delegates data retrieval to a specialized crawler agent. This creates a chain of delegation that traditional auth systems cannot represent.</p>
+
+  <p>Grantex supports <strong>multi-level delegation</strong> natively. A parent agent can delegate a <em>subset</em> of its scopes to a child agent. The child receives its own grant token with additional claims that track the delegation:</p>
+
+  <ul>
+    <li><code>parentAgt</code> -- the DID of the parent agent that delegated access</li>
+    <li><code>parentGrnt</code> -- the grant ID of the parent's authorization</li>
+    <li><code>delegationDepth</code> -- an integer tracking how many levels deep this delegation is (0 = root, 1 = first delegate, etc.)</li>
+  </ul>
+
+  <p>Two critical rules enforce security in delegation chains:</p>
+
+  <ol>
+    <li><strong>Scope narrowing</strong> -- a child can only receive a subset of its parent's scopes, never additional ones. If the parent has <code>["flights:book", "hotels:book"]</code>, it can delegate <code>["flights:book"]</code> to a child, but it cannot grant the child <code>["payments:process"]</code>.</li>
+    <li><strong>Cascade revocation</strong> -- revoking a parent's grant automatically and immediately revokes all of its children's grants, recursively. This ensures that cutting off a rogue parent agent instantly disables its entire sub-agent tree.</li>
+  </ol>
+
+<pre><code>// Parent agent delegates a narrower scope to a child agent
+const delegated = await gx.grants.delegate({
+  parentGrantToken: parentToken,
+  childAgentId: flightBooker.id,
+  scopes: ['flights:book'],  // subset of parent's scopes
+});
+
+// The child's JWT includes delegation tracking:
+// { parentAgt: "did:web:...:travel-planner",
+//   parentGrnt: "grnt_abc123",
+//   delegationDepth: 1 }</code></pre>
+
+  <!-- ============================================================ -->
+  <h2>The Authorization Lifecycle</h2>
+
+  <p>Agent authorization is not a one-time event. It is a lifecycle with four phases:</p>
+
+  <h3>Create</h3>
+  <p>A human approves scoped permissions for an agent. The agent receives a grant token. This is the consent moment -- the human sees exactly what the agent will be able to do and explicitly approves it.</p>
+
+  <h3>Use</h3>
+  <p>The agent presents its grant token to downstream services. Each service verifies the token's signature, checks the scopes, and allows or denies the request. The agent can refresh its token using the refresh token endpoint (<code>POST /v1/token/refresh</code>) to get a new JWT without requiring the human to re-approve.</p>
+
+  <h3>Audit</h3>
+  <p>Every action the agent performs is logged in a hash-chained, append-only audit trail. Each entry includes the agent DID, grant ID, action performed, scopes used, a timestamp, and a SHA-256 hash linking to the previous entry. This makes the log tamper-evident: altering any past entry breaks the hash chain.</p>
+
+  <p>Principals can review their agents' activity via the <a href="https://docs.grantex.dev">principal dashboard</a>, and developers can query the audit API programmatically.</p>
+
+  <h3>Revoke</h3>
+  <p>When access should end -- the task is complete, the agent misbehaved, or the user simply changed their mind -- the grant is revoked. Revocation propagates globally in under one second. Cascade revocation ensures that revoking a parent kills the entire delegation tree. There is no window where a revoked agent can still operate.</p>
+
+  <!-- ============================================================ -->
+  <h2>Comparing Authorization Approaches</h2>
+
+  <p>How does purpose-built agent authorization compare to the alternatives teams commonly use today?</p>
+
+  <table class="comparison-table">
+    <thead>
+      <tr>
+        <th>Capability</th>
+        <th>API Keys</th>
+        <th>OAuth 2.0</th>
+        <th>Grantex</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Scoped permissions</td>
+        <td class="no">No (all-or-nothing)</td>
+        <td class="yes">Yes</td>
+        <td class="yes">Yes</td>
+      </tr>
+      <tr>
+        <td>Human consent flow</td>
+        <td class="no">No</td>
+        <td class="yes">Yes</td>
+        <td class="yes">Yes</td>
+      </tr>
+      <tr>
+        <td>Agent identity (DID)</td>
+        <td class="no">No</td>
+        <td class="no">No (client ID only)</td>
+        <td class="yes">Yes (per-agent DID)</td>
+      </tr>
+      <tr>
+        <td>Delegation chains</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Yes (depth-tracked)</td>
+      </tr>
+      <tr>
+        <td>Cascade revocation</td>
+        <td class="no">Kills all agents</td>
+        <td class="no">No</td>
+        <td class="yes">Yes (< 1 second)</td>
+      </tr>
+      <tr>
+        <td>Hash-chained audit trail</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Yes (tamper-evident)</td>
+      </tr>
+      <tr>
+        <td>Offline verification</td>
+        <td class="no">No (API call required)</td>
+        <td>Varies</td>
+        <td class="yes">Yes (JWKS, always)</td>
+      </tr>
+      <tr>
+        <td>Budget controls</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Yes (per-grant)</td>
+      </tr>
+      <tr>
+        <td>Token refresh</td>
+        <td class="no">N/A (static key)</td>
+        <td class="yes">Yes</td>
+        <td class="yes">Yes (rotating)</td>
+      </tr>
+      <tr>
+        <td>PKCE (S256)</td>
+        <td class="no">No</td>
+        <td class="yes">Yes</td>
+        <td class="yes">Yes</td>
+      </tr>
+      <tr>
+        <td>WebAuthn / passkeys</td>
+        <td class="no">No</td>
+        <td class="no">No (not standard)</td>
+        <td class="yes">Yes (FIDO2)</td>
+      </tr>
+      <tr>
+        <td>Verifiable Credentials</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Yes (W3C VC-JWT)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>For a deeper dive into each comparison, see <a href="/vs/oauth">Grantex vs OAuth 2.0</a> and <a href="/vs/api-keys">Grantex vs API Keys</a>.</p>
+
+  <!-- ============================================================ -->
+  <h2>Getting Started</h2>
+
+  <p>Grantex is open source (Apache 2.0) with SDKs for TypeScript, Python, and Go. Here is the complete authorization flow in both TypeScript and Python.</p>
+
+  <div class="code-tabs">
+    <div class="tab-buttons">
+      <button class="tab-btn active" onclick="switchTab(event, 'ts')">TypeScript</button>
+      <button class="tab-btn" onclick="switchTab(event, 'py')">Python</button>
+    </div>
+    <div id="tab-ts" class="tab-panel active">
+<pre><code>import { GrantexClient } from '@grantex/sdk';
+
+const gx = new GrantexClient({
+  baseUrl: 'https://your-auth-server.com',
+  apiKey: 'gx_live_...',
+});
+
+// 1. Register an agent
+const agent = await gx.agents.register({
+  name: 'travel-planner',
+  scopes: ['flights:search', 'flights:book', 'email:read'],
+});
+
+// 2. Create an authorization request
+const auth = await gx.authorize({
+  agentId: agent.id,
+  userId: 'user_alice',
+  scopes: ['flights:search', 'flights:book'],
+});
+
+// 3. Direct the user to the consent URL
+console.log('Approve at:', auth.consentUrl);
+
+// 4. After approval, exchange the code for a grant token
+const grant = await gx.tokens.exchange({
+  code: authorizationCode,
+  agentId: agent.id,
+});
+
+// grant.grantToken  -- signed RS256 JWT
+// grant.scopes      -- ["flights:search", "flights:book"]
+// grant.grantId     -- "grnt_..."
+// grant.expiresAt   -- ISO 8601 timestamp
+
+// 5. Verify the token (offline via JWKS or online)
+const result = await gx.tokens.verify(grant.grantToken);
+// result.valid, result.scopes, result.agent, result.principal
+
+// 6. Revoke when done
+await gx.tokens.revoke(grant.grantId);</code></pre>
+    </div>
+    <div id="tab-py" class="tab-panel">
+<pre><code>from grantex import GrantexClient
+
+gx = GrantexClient(
+    base_url="https://your-auth-server.com",
+    api_key="gx_live_...",
+)
+
+# 1. Register an agent
+agent = gx.agents.register(
+    name="travel-planner",
+    scopes=["flights:search", "flights:book", "email:read"],
+)
+
+# 2. Create an authorization request
+auth = gx.authorize(
+    agent_id=agent.id,
+    user_id="user_alice",
+    scopes=["flights:search", "flights:book"],
+)
+
+# 3. Direct the user to the consent URL
+print(f"Approve at: {auth.consent_url}")
+
+# 4. After approval, exchange the code for a grant token
+grant = gx.tokens.exchange(
+    code=authorization_code,
+    agent_id=agent.id,
+)
+
+# grant.grant_token  -- signed RS256 JWT
+# grant.scopes       -- ["flights:search", "flights:book"]
+# grant.grant_id     -- "grnt_..."
+# grant.expires_at   -- ISO 8601 timestamp
+
+# 5. Verify the token
+result = gx.tokens.verify(grant.grant_token)
+# result.valid, result.scopes, result.agent, result.principal
+
+# 6. Revoke when done
+gx.tokens.revoke(grant.grant_id)</code></pre>
+    </div>
+  </div>
+
+  <p>For framework-specific guides, see the integration docs for <a href="/for/langchain">LangChain</a>, CrewAI, AutoGen, OpenAI Agents, Google ADK, and <a href="https://docs.grantex.dev/integrations/overview">14 more integrations</a>.</p>
+
+  <!-- ============================================================ -->
+  <h2>Frequently Asked Questions</h2>
+
+  <h3>What is AI agent authorization?</h3>
+  <p>AI agent authorization is the process of granting an autonomous AI agent specific, scoped permissions to act on a human's behalf. Unlike API keys, agent authorization uses signed JWTs with explicit scopes, cryptographic agent identity (DID), and human consent. This ensures you always know which agent did what, with whose approval, and you can revoke access in under one second.</p>
+
+  <h3>How does delegated authorization work for AI agents?</h3>
+  <p>Delegated authorization for AI agents follows a consent-based flow: the agent requests specific permissions, a human approves them via a consent URL, and the agent receives a signed JWT (grant token) with only the approved scopes. The agent presents this token when accessing services, and any service can verify it offline using JWKS. This is similar to OAuth 2.0 but adds agent identity, delegation chains, audit trails, and real-time revocation.</p>
+
+  <h3>What is a grant token?</h3>
+  <p>A grant token is a signed RS256 JWT issued after a human approves an agent's authorization request. It contains claims including the principal (human) ID, agent DID, developer ID, approved scopes, grant ID, and expiration time. Any service can verify the token offline using the issuer's public JWKS endpoint, requiring zero network calls to the auth server.</p>
+
+  <h3>Can AI agents authorize other agents?</h3>
+  <p>Yes. Grantex supports delegation chains where a parent agent can delegate a narrower subset of its scopes to a child agent. The child's JWT includes delegation claims (<code>parentAgt</code>, <code>parentGrnt</code>, <code>delegationDepth</code>) that track the chain. Children can never exceed their parent's permissions, and revoking the parent's grant automatically cascades to all delegated sub-agents.</p>
+
+  <h3>How is agent authorization different from API keys?</h3>
+  <p>API keys grant all-or-nothing access with no identity, scoping, consent, or audit trail. Agent authorization through Grantex provides per-agent scoped permissions, cryptographic identity for each agent, explicit human consent, hash-chained audit logs, real-time revocation, delegation control, and budget limits. For a detailed comparison, see <a href="/vs/api-keys">Grantex vs API Keys</a>.</p>
+
+  <!-- ============================================================ -->
+  <div class="cta-box">
+    <h3>Ready to add authorization to your AI agents?</h3>
+    <p>Open source, Apache 2.0. SDKs for TypeScript, Python, and Go. Get started in under 5 minutes.</p>
+    <a href="https://docs.grantex.dev/getting-started/quickstart" class="btn btn-primary" style="margin-right:.5rem">Quickstart Guide</a>
+    <a href="/playground" class="btn btn-secondary">Try in Playground</a>
+  </div>
+
+</article>
+
+<footer class="footer">
+  <span style="color:var(--muted);font-size:.85rem">Grantex -- Open authorization for AI agents</span>
+  <ul class="footer-links">
+    <li><a href="https://docs.grantex.dev">Docs</a></li>
+    <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+    <li><a href="/">Home</a></li>
+  </ul>
+</footer>
+
+<script>
+function switchTab(e, lang) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  e.target.classList.add('active');
+  document.getElementById('tab-' + lang).classList.add('active');
+}
+</script>
+
+</body>
+</html>
