@@ -7,7 +7,7 @@ name = "grantex-a2a"
 version = "0.1.2"
 description = "Google A2A protocol bridge for Grantex — inject grant tokens into agent-to-agent communication"
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = { text = "MIT" }
 requires-python = ">=3.9"
 keywords = ["grantex", "a2a", "agent-to-agent", "google-a2a", "authorization", "oauth", "jwt", "ai-agents", "delegation", "grant-token", "multi-agent"]
 classifiers = [

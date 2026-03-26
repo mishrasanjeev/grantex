@@ -122,4 +122,4 @@ docker run -p 8080:8080 -v ./gateway.yaml:/etc/grantex/gateway.yaml grantex-gate
 
 ## License
 
-Apache-2.0
+MIT

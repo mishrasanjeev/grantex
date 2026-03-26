@@ -810,4 +810,4 @@ The following design questions that were open in v0.1-draft have been resolved f
 
 ---
 
-*Grantex Protocol Specification is licensed under [Apache 2.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)*
+*Grantex Protocol Specification is licensed under [MIT](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)*

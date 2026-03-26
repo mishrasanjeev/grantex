@@ -58,7 +58,7 @@
     "ed25519",
     "tempo"
   ],
-  "license": "Apache-2.0",
+  "license": "MIT",
   "overrides": {
     "esbuild": "^0.25.0"
   },

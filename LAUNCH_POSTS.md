@@ -14,7 +14,7 @@ Copy-paste ready posts for each platform. Edit as needed before posting.
 
 Most AI agents today operate with all-or-nothing API keys. If your LangChain agent can read your calendar, it can also delete every event. There's no scoping, no revocation, no audit trail. This is where the web was before OAuth.
 
-Grantex is an open protocol (Apache 2.0) for delegated authorization of AI agents. The core idea: a human approves a scoped, time-limited grant for an agent, and that agent receives a signed JWT it can present to any service. Services verify locally via JWKS — no Grantex account needed.
+Grantex is an open protocol (MIT) for delegated authorization of AI agents. The core idea: a human approves a scoped, time-limited grant for an agent, and that agent receives a signed JWT it can present to any service. Services verify locally via JWKS — no Grantex account needed.
 
 What's different from OAuth 2.0:
 
@@ -63,7 +63,7 @@ I built this because I think the "give agents your API key" pattern is going to 
 
 **Body:**
 
-**TL;DR**: Grantex is an open protocol (Apache 2.0) that gives AI agents scoped, human-approved, revocable permissions instead of all-or-nothing API keys. Think OAuth 2.0, but designed for autonomous agents and multi-agent pipelines.
+**TL;DR**: Grantex is an open protocol (MIT) that gives AI agents scoped, human-approved, revocable permissions instead of all-or-nothing API keys. Think OAuth 2.0, but designed for autonomous agents and multi-agent pipelines.
 
 **The problem**: Most agent frameworks today handle auth with a shared API key. The agent has whatever access the key has — no scoping, no revocation, no record of what it did. For research prototypes this is fine. For agents booking flights, sending emails, or executing trades on behalf of real users, it's a liability.
 
@@ -116,7 +116,7 @@ Quick question: when you give your agent access to your email or calendar, how d
 
 Right now the answer for most people is "I gave it my API key and hoped for the best." That works for experiments, but it's going to be a real problem as agents get more capable and start acting in the real world.
 
-I built **Grantex** to solve this. It's an open protocol (Apache 2.0) — basically OAuth 2.0 redesigned for agents:
+I built **Grantex** to solve this. It's an open protocol (MIT) — basically OAuth 2.0 redesigned for agents:
 
 - Agent requests specific scopes (`email:read`, `calendar:write`, `payments:max_100`)
 - Human approves via consent screen
@@ -184,7 +184,7 @@ Verification is offline via JWKS (`/.well-known/jwks.json`) — receiving servic
 - CLI tool
 - OpenAPI 3.1 spec + Postman collection
 
-Everything is Apache 2.0.
+Everything is MIT.
 
 **Links**:
 
@@ -261,7 +261,7 @@ Plus CLI, dev portal, policies, SCIM/SSO, anomaly detection.
 
 **Tweet 6 — CTA (220 chars):**
 
-Open source. Apache 2.0.
+Open source. MIT.
 
 npm install @grantex/sdk
 pip install grantex
@@ -323,7 +323,7 @@ What's shipping today:
 - Auth service, CLI, developer portal, conformance test suite
 - Enterprise features: policy engine, SCIM/SSO, anomaly detection, compliance exports
 
-Everything is open source under Apache 2.0.
+Everything is open source under MIT.
 
 If you're building with AI agents — whether it's a single-agent tool or a multi-agent pipeline — I'd love your feedback on the protocol design.
 

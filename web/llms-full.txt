@@ -2,7 +2,7 @@
 
 > Delegated authorization protocol for AI agents. What OAuth 2.0 is to humans, Grantex is to agents.
 
-Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, human-approved, revocable permissions via signed JWTs. Any service can verify tokens offline using published JWKS — no runtime dependency on Grantex infrastructure.
+Grantex is an open protocol (MIT) that lets AI agents request scoped, human-approved, revocable permissions via signed JWTs. Any service can verify tokens offline using published JWKS — no runtime dependency on Grantex infrastructure.
 
 ## Quick Facts
 
@@ -11,7 +11,7 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - GitHub: https://github.com/mishrasanjeev/grantex
 - Spec: https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md
 - IETF Draft: https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/
-- License: Apache 2.0
+- License: MIT
 - Protocol Version: 1.0 (Final, frozen)
 - Tests: 679+ passing
 - SOC 2 Type I certified

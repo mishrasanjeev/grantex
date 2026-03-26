@@ -684,4 +684,4 @@ try {
 
 ## License
 
-[Apache 2.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
+[MIT](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)

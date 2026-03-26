@@ -128,4 +128,4 @@ Full documentation at [grantex.dev/docs](https://grantex.dev/docs).
 
 ## License
 
-Apache 2.0
+MIT

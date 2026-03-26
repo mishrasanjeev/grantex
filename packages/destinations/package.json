@@ -2,7 +2,7 @@
   "name": "@grantex/destinations",
   "version": "0.1.2",
   "type": "module",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "description": "Event destination connectors for Grantex (Datadog, Splunk, S3, BigQuery, Kafka)",
   "homepage": "https://grantex.dev",
   "bugs": {

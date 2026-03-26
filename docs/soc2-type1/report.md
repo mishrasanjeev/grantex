@@ -146,7 +146,7 @@ The organization demonstrates a commitment to integrity and ethical values.
 
 | Control | Description | Evidence |
 |---------|-------------|----------|
-| CC1.1.1 Open-source licensing | The protocol specification and all SDKs are published under Apache 2.0, demonstrating a commitment to transparent, ethical operation. | `LICENSE`, `SPEC.md` |
+| CC1.1.1 Open-source licensing | The protocol specification and all SDKs are published under MIT, demonstrating a commitment to transparent, ethical operation. | `LICENSE`, `SPEC.md` |
 | CC1.1.2 Responsible disclosure policy | A formal security disclosure policy is published at `SECURITY.md`, establishing an ethical framework for handling vulnerability reports. | `SECURITY.md` |
 | CC1.1.3 Independent security audit | A third-party security audit (Vestige Security Labs, 2026-02-21) was completed and published, demonstrating commitment to independent oversight. | `docs/security-audit.md` |
 
@@ -316,7 +316,7 @@ The organization demonstrates a commitment to integrity and ethical values.
 | Control | Description | Evidence |
 |---------|-------------|----------|
 | CC9.2.1 Automated dependency CVE monitoring | Dependabot monitors all `package.json` and `pyproject.toml` manifests. Alerts are triaged and patched as a blocking priority (11 CVEs resolved in February 2026, including one High-severity fastify content-type bypass). | `apps/auth-service/package.json`; `packages/sdk-py/pyproject.toml` |
-| CC9.2.2 Licence allow-list | The dependency review workflow enforces an approved licence list, preventing introduction of copyleft-licensed dependencies that could affect the service's Apache 2.0 licensing position. | `.github/workflows/dependency-review.yml` |
+| CC9.2.2 Licence allow-list | The dependency review workflow enforces an approved licence list, preventing introduction of copyleft-licensed dependencies that could affect the service's MIT licensing position. | `.github/workflows/dependency-review.yml` |
 
 ---
 

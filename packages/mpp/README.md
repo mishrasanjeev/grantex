@@ -78,4 +78,4 @@ const record = await lookupOrgTrust('did:web:acme.com');
 
 ## License
 
-Apache-2.0
+MIT

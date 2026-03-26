@@ -8,7 +8,7 @@
 
 <br/>
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Spec Version](https://img.shields.io/badge/spec-v1.0--final-green)](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
 [![IETF Draft](https://img.shields.io/badge/IETF-draft--mishra--oauth--agent--grants-blue)](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
 [![SOC 2 Type I](https://img.shields.io/badge/SOC%202-Type%20I%20Certified-brightgreen)](https://docs.grantex.dev/security)
@@ -59,7 +59,7 @@ go get github.com/mishrasanjeev/grantex-go  # Go
 npm install -g @grantex/cli     # CLI
 ```
 
-> **30+ packages** across TypeScript, Python, and Go. Integrations for **LangChain, OpenAI Agents SDK, Google ADK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. 679+ tests. Fully self-hostable. Apache 2.0.
+> **30+ packages** across TypeScript, Python, and Go. Integrations for **LangChain, OpenAI Agents SDK, Google ADK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. 679+ tests. Fully self-hostable. MIT.
 
 ---
 
@@ -1322,7 +1322,7 @@ Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRI
 | **NIST** | NCCoE public comment filed |
 | **AuthZEN** | Conformance mapped |
 | **SOC 2** | Type I certification completed |
-| **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, open, Apache 2.0 |
+| **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, open, MIT |
 
 ---
 
@@ -1349,7 +1349,7 @@ OAuth 2.0 was designed for "user grants app permission to access their data." Ag
 MCP solves tool connectivity — how agents access data and call functions. Grantex solves trust — proving that an agent is authorized to use those tools on behalf of a specific human. They're complementary. A Grantex-authorized agent uses MCP tools.
 
 **Who owns the standard?**  
-The protocol spec is open (Apache 2.0). Grantex Inc. maintains a hosted reference implementation. Our goal is to contribute the spec to a neutral standards body (W3C, IETF, or CNCF) once it stabilizes.
+The protocol spec is open (MIT). Grantex Inc. maintains a hosted reference implementation. Our goal is to contribute the spec to a neutral standards body (W3C, IETF, or CNCF) once it stabilizes.
 
 **Can I self-host?**  
 Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See the [self-hosting guide](https://grantex.dev/docs/guides/self-hosting).
@@ -1358,7 +1358,7 @@ Yes. The reference implementation is fully open-source. Docker Compose deploy in
 
 ## License
 
-Protocol specification and SDKs: [Apache 2.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
+Protocol specification and SDKs: [MIT](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 
 ---
 

@@ -169,4 +169,4 @@ app.get('/api/me', requireGrantToken({ jwksUri }), (req: GrantexRequest, res: Re
 
 ## License
 
-Apache-2.0
+MIT

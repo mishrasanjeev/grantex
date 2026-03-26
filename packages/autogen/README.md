@@ -146,4 +146,4 @@ This package is part of the [Grantex](https://grantex.dev) ecosystem. See also:
 
 ## License
 
-Apache 2.0
+MIT

@@ -177,4 +177,4 @@ We believe that as agents become more capable, proper authorization becomes more
 
 ---
 
-*Grantex is open source (Apache 2.0). If you're building agent systems and care about authorization, we'd love your feedback -- [open an issue](https://github.com/mishrasanjeev/grantex/issues) or [star the repo](https://github.com/mishrasanjeev/grantex).*
+*Grantex is open source (MIT). If you're building agent systems and care about authorization, we'd love your feedback -- [open an issue](https://github.com/mishrasanjeev/grantex/issues) or [star the repo](https://github.com/mishrasanjeev/grantex).*
