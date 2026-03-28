@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { requireClient } from '../client.js';
-import { printTable, shortDate } from '../format.js';
+import { printTable, shortDate, isJsonMode } from '../format.js';
 import type { WebhookEventType } from '@grantex/sdk';
 
 const VALID_EVENTS: WebhookEventType[] = ['grant.created', 'grant.revoked', 'token.issued'];
@@ -23,6 +23,7 @@ export function webhooksCommand(): Command {
           CREATED: shortDate(w.createdAt),
         })),
         ['ID', 'URL', 'EVENTS', 'CREATED'],
+        webhooks.map((w) => ({ ...w })),
       );
     });
 
@@ -48,6 +49,10 @@ export function webhooksCommand(): Command {
 
       const client = await requireClient();
       const wh = await client.webhooks.create({ url: opts.url, events });
+      if (isJsonMode()) {
+        console.log(JSON.stringify(wh, null, 2));
+        return;
+      }
       console.log(chalk.green('✓') + ` Webhook registered: ${wh.id}`);
       console.log(`Secret: ${chalk.bold(wh.secret)}  (shown once — store it securely)`);
     });
@@ -58,6 +63,10 @@ export function webhooksCommand(): Command {
     .action(async (webhookId: string) => {
       const client = await requireClient();
       await client.webhooks.delete(webhookId);
+      if (isJsonMode()) {
+        console.log(JSON.stringify({ deleted: webhookId }));
+        return;
+      }
       console.log(chalk.green('✓') + ` Webhook ${webhookId} deleted.`);
     });
 

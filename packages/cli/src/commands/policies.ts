@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { requireClient } from '../client.js';
-import { printTable, printRecord, shortDate } from '../format.js';
+import { printTable, printRecord, shortDate, isJsonMode } from '../format.js';
 
 export function policiesCommand(): Command {
   const cmd = new Command('policies').description('Manage authorization policies');
@@ -21,6 +21,7 @@ export function policiesCommand(): Command {
           CREATED: shortDate(p.createdAt),
         })),
         ['ID', 'NAME', 'EFFECT', 'PRIORITY', 'CREATED'],
+        policies.map((p) => ({ ...p })),
       );
     });
 
@@ -30,6 +31,10 @@ export function policiesCommand(): Command {
     .action(async (policyId: string) => {
       const client = await requireClient();
       const p = await client.policies.get(policyId);
+      if (isJsonMode()) {
+        console.log(JSON.stringify(p, null, 2));
+        return;
+      }
       printRecord({
         id: p.id,
         name: p.name,
@@ -76,6 +81,10 @@ export function policiesCommand(): Command {
         ...(opts.timeStart !== undefined ? { timeOfDayStart: opts.timeStart } : {}),
         ...(opts.timeEnd !== undefined ? { timeOfDayEnd: opts.timeEnd } : {}),
       });
+      if (isJsonMode()) {
+        console.log(JSON.stringify(policy, null, 2));
+        return;
+      }
       console.log(chalk.green('✓') + ` Policy created: ${policy.id}`);
     });
 
@@ -92,6 +101,10 @@ export function policiesCommand(): Command {
         ...(opts.effect !== undefined ? { effect: opts.effect as 'allow' | 'deny' } : {}),
         ...(opts.priority !== undefined ? { priority: parseInt(opts.priority, 10) } : {}),
       });
+      if (isJsonMode()) {
+        console.log(JSON.stringify(policy, null, 2));
+        return;
+      }
       console.log(chalk.green('✓') + ` Policy updated: ${policy.id}`);
     });
 
@@ -101,6 +114,10 @@ export function policiesCommand(): Command {
     .action(async (policyId: string) => {
       const client = await requireClient();
       await client.policies.delete(policyId);
+      if (isJsonMode()) {
+        console.log(JSON.stringify({ deleted: policyId }));
+        return;
+      }
       console.log(chalk.green('✓') + ` Policy ${policyId} deleted.`);
     });
 

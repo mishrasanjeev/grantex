@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { requireClient } from '../client.js';
-import { printTable, printRecord, shortDate } from '../format.js';
+import { printTable, printRecord, shortDate, isJsonMode } from '../format.js';
 
 export function scimCommand(): Command {
   const cmd = new Command('scim').description('Manage SCIM provisioning');
@@ -23,6 +23,7 @@ export function scimCommand(): Command {
           'LAST USED': t.lastUsedAt ? shortDate(t.lastUsedAt) : '—',
         })),
         ['ID', 'LABEL', 'CREATED', 'LAST USED'],
+        list.map((t) => ({ ...t })),
       );
     });
 
@@ -33,6 +34,10 @@ export function scimCommand(): Command {
     .action(async (opts: { label: string }) => {
       const client = await requireClient();
       const result = await client.scim.createToken({ label: opts.label });
+      if (isJsonMode()) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
       console.log(chalk.green('✓') + ` SCIM token created: ${result.id}`);
       console.log(`Token: ${chalk.bold(result.token)}  (shown once — store it securely)`);
     });
@@ -43,6 +48,10 @@ export function scimCommand(): Command {
     .action(async (tokenId: string) => {
       const client = await requireClient();
       await client.scim.revokeToken(tokenId);
+      if (isJsonMode()) {
+        console.log(JSON.stringify({ revoked: tokenId }));
+        return;
+      }
       console.log(chalk.green('✓') + ` SCIM token ${tokenId} revoked.`);
     });
 
@@ -70,6 +79,7 @@ export function scimCommand(): Command {
           ACTIVE: u.active ? 'yes' : 'no',
         })),
         ['ID', 'USERNAME', 'DISPLAY', 'ACTIVE'],
+        result.Resources.map((u) => ({ ...u })),
       );
     });
 
@@ -79,6 +89,10 @@ export function scimCommand(): Command {
     .action(async (userId: string) => {
       const client = await requireClient();
       const u = await client.scim.getUser(userId);
+      if (isJsonMode()) {
+        console.log(JSON.stringify(u, null, 2));
+        return;
+      }
       printRecord({
         id: u.id,
         userName: u.userName,
