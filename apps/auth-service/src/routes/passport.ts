@@ -323,14 +323,14 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
       const status = query.status;
 
       const rows = await sql`
-        SELECT p.id, p.agent_id, p.grant_id, p.encoded_credential, p.status, p.expires_at, p.created_at
+        SELECT p.id, p.agent_id, p.grant_id, p.status, p.expires_at, p.issued_at
         FROM mpp_passports p
         JOIN agents a ON a.id = p.agent_id
         WHERE a.developer_id = ${developerId}
         ${agentId ? sql`AND p.agent_id = ${agentId}` : sql``}
         ${grantId ? sql`AND p.grant_id = ${grantId}` : sql``}
         ${status ? sql`AND p.status = ${status}` : sql``}
-        ORDER BY p.created_at DESC
+        ORDER BY p.issued_at DESC
       `;
 
       const passports = rows.map((p) => {
@@ -344,7 +344,7 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
           grantId: p['grant_id'] as string,
           status: effectiveStatus,
           expiresAt: (p['expires_at'] as Date).toISOString(),
-          createdAt: (p['created_at'] as Date).toISOString(),
+          createdAt: (p['issued_at'] as Date).toISOString(),
         };
       });
 
