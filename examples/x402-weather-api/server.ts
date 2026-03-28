@@ -11,6 +11,7 @@
  */
 
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import {
   generateKeyPair,
   issueGDT,
@@ -21,24 +22,7 @@ import {
 
 const app = express();
 app.use(express.json());
-
-// Simple in-memory rate limiter: 100 requests per minute per IP
-const rateLimitMap = new Map<string, { count: number; reset: number }>();
-app.use((req, res, next) => {
-  const ip = req.ip ?? 'unknown';
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.reset) {
-    rateLimitMap.set(ip, { count: 1, reset: now + 60_000 });
-    return next();
-  }
-  if (entry.count >= 100) {
-    res.status(429).json({ error: 'TOO_MANY_REQUESTS' });
-    return;
-  }
-  entry.count++;
-  next();
-});
+app.use(rateLimit({ windowMs: 60_000, max: 100 }));
 
 const PORT = 3402;
 const PRICE = 0.001; // $0.001 USDC per request

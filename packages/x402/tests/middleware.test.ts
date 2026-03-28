@@ -128,31 +128,6 @@ describe('x402Middleware', () => {
     });
   });
 
-  describe('optional mode', () => {
-    it('passes requests without GDT header', async () => {
-      const middleware = x402Middleware({ required: false });
-      const req = mockReq();
-      const res = mockRes();
-      const next = vi.fn();
-
-      await middleware(req as never, res as never, next);
-
-      expect(next).toHaveBeenCalled();
-    });
-
-    it('still validates GDT when present', async () => {
-      const middleware = x402Middleware({ required: false, requiredScopes: ['weather:read'] });
-      const req = mockReq({ 'X-Grantex-GDT': 'bad-token' });
-      const res = mockRes();
-      const next = vi.fn();
-
-      await middleware(req as never, res as never, next);
-
-      expect(res.statusCode).toBe(403);
-      expect(next).not.toHaveBeenCalled();
-    });
-  });
-
   describe('custom extractAmount', () => {
     it('uses custom amount extraction', async () => {
       const middleware = x402Middleware({

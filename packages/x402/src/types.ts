@@ -164,8 +164,6 @@ export interface X402FetchOptions extends RequestInit {
 
 /** Options for the x402 GDT verification middleware. */
 export interface X402MiddlewareOptions {
-  /** Whether a valid GDT is strictly required (rejects if missing). Default: true. */
-  required?: boolean;
   /** Expected scope(s) the request must match. If not set, any scope passes. */
   requiredScopes?: string[];
   /** Extract the spend amount from the request. Default: reads X-Payment-Amount header. */
