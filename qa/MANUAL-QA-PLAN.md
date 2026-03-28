@@ -1033,6 +1033,36 @@ npx grantex --help
 | **CLI-018** | Evidence pack | P2 | `grantex compliance evidence-pack --framework soc2 --output evidence.zip` | ZIP file created. |
 | **CLI-019** | Detect anomalies | P2 | `grantex anomalies detect` | Anomaly detection results. |
 | **CLI-020** | No config error | P1 | Delete config file. Run `grantex agents list`. | Clear error: "Not configured. Run `grantex config set`". |
+| **CLI-021** | Me / whoami | P0 | `grantex me` | Shows developer profile: id, name, email, mode, plan. |
+| **CLI-022** | Authorize command | P0 | `grantex authorize --agent ag_... --principal user@test.com --scopes email:read` | Returns authRequestId, consentUrl (sandbox: code). |
+| **CLI-023** | Token exchange | P0 | `grantex tokens exchange --code {code} --agent-id ag_...` | Returns grantToken, refreshToken, grantId, scopes. |
+| **CLI-024** | Token refresh | P0 | `grantex tokens refresh --refresh-token {token} --agent-id ag_...` | Returns new grantToken, new refreshToken, same grantId. |
+| **CLI-025** | Grants get | P1 | `grantex grants get {grantId}` | Shows full grant details. |
+| **CLI-026** | Grants delegate | P0 | `grantex grants delegate --grant-token {jwt} --agent-id ag_child --scopes email:read` | Returns child grantToken with delegation claims. |
+| **CLI-027** | Audit log | P1 | `grantex audit log --agent-id ag_... --agent-did did:grantex:ag_... --grant-id grnt_... --principal-id user@test.com --action email.read` | Audit entry created with hash. |
+| **CLI-028** | Audit get | P1 | `grantex audit get {entryId}` | Shows full entry with hash chain. |
+| **CLI-029** | Budgets allocate | P1 | `grantex budgets allocate --grant-id grnt_... --amount 100` | Budget allocated. |
+| **CLI-030** | Budgets debit | P1 | `grantex budgets debit --grant-id grnt_... --amount 25 --description "test"` | Debit applied. Remaining shown. |
+| **CLI-031** | Budgets balance | P1 | `grantex budgets balance grnt_...` | Shows remaining budget. |
+| **CLI-032** | Usage current | P2 | `grantex usage current` | Shows current period metrics. |
+| **CLI-033** | Events stream | P2 | `grantex events stream` | Streams events via SSE (Ctrl+C to stop). |
+| **CLI-034** | Domains add | P2 | `grantex domains add --domain auth.example.com` | Domain added with verification instructions. Enterprise plan required. |
+| **CLI-035** | Principal sessions | P2 | `grantex principal-sessions create --principal-id user@test.com` | Returns sessionToken + dashboardUrl. |
+| **CLI-036** | Policies create | P1 | `grantex policies create --name "Allow" --effect allow --scopes email:read` | Policy created. |
+| **CLI-037** | Vault store | P1 | `grantex vault store --principal-id user@test.com --service google --access-token ya29...` | Credential stored (encrypted). |
+| **CLI-038** | Vault list | P1 | `grantex vault list` | Lists stored credentials. |
+| **CLI-039** | Vault exchange | P1 | `grantex vault exchange --grant-token {jwt} --service google` | Returns decrypted access token. |
+| **CLI-040** | WebAuthn list | P2 | `grantex webauthn list user@test.com` | Lists FIDO2 credentials for principal. |
+| **CLI-041** | Credentials list | P2 | `grantex credentials list` | Lists verifiable credentials. |
+| **CLI-042** | Credentials verify | P2 | `grantex credentials verify --vc-jwt eyJ...` | Returns valid/invalid with credential info. |
+| **CLI-043** | Passports issue | P1 | `grantex passports issue --agent-id ag_... --grant-id grnt_... --categories compute --max-amount 100` | Passport issued with credential. |
+| **CLI-044** | Passports list | P1 | `grantex passports list --agent-id ag_...` | Lists passports. |
+| **CLI-045** | Passports revoke | P1 | `grantex passports revoke pp_...` | Passport revoked. |
+| **CLI-046** | JSON output | P0 | `grantex --json agents list` | All output as valid JSON (no ANSI, no tables). |
+| **CLI-047** | SCIM user create | P2 | `grantex scim users create --user-name john@co.com --display-name "John"` | User provisioned. |
+| **CLI-048** | SSO callback | P2 | `grantex sso callback --code CODE --state STATE` | Returns email, name, developerId. |
+| **CLI-049** | Billing status | P2 | `grantex billing status` | Shows current plan. |
+| **CLI-050** | Full workflow (E2E) | P0 | Run: config → me → agents register → authorize → tokens exchange → verify → refresh → delegate → audit log → grants revoke | All steps complete without errors. |
 
 ---
 
@@ -1486,7 +1516,7 @@ Use this table to track test execution across modules. Copy for each test cycle.
 | M27: TypeScript SDK | 10 | | | | | | |
 | M28: Python SDK | 9 | | | | | | |
 | M29: Go SDK | 5 | | | | | | |
-| M30: CLI Tool | 20 | | | | | | |
+| M30: CLI Tool | 50 | | | | | | |
 | M31: Gateway | 10 | | | | | | |
 | M32: Express Middleware | 6 | | | | | | |
 | M33: FastAPI Middleware | 4 | | | | | | |
@@ -1504,7 +1534,7 @@ Use this table to track test execution across modules. Copy for each test cycle.
 | Security (Cross-cutting) | 12 | | | | | | |
 | Error Handling (Cross-cutting) | 5 | | | | | | |
 | Observability (Cross-cutting) | 3 | | | | | | |
-| **TOTAL** | **~380** | | | | | | |
+| **TOTAL** | **~410** | | | | | | |
 
 ---
 

@@ -631,6 +631,7 @@ await grantex.passports.revoke('urn:grantex:passport:01HXYZ...');
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `POST` | `/v1/passport/issue` | API key | Issue AgentPassportCredential |
+| `GET` | `/v1/passports` | API key | List passports (filter by agentId, grantId, status) |
 | `GET` | `/v1/passport/:id` | API key | Retrieve passport by ID |
 | `POST` | `/v1/passport/:id/revoke` | API key | Revoke passport (StatusList2021) |
 | `GET` | `/v1/trust-registry/:orgDID` | None | Look up org trust record (public) |
