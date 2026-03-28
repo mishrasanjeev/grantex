@@ -2,9 +2,9 @@
 
 Command-line tool for the [Grantex](https://grantex.dev) delegated authorization protocol.
 
-Manage agents, grants, audit logs, webhooks, policies, anomalies, and compliance exports from your terminal.
+83 commands covering the full Grantex API — agents, grants, tokens, policies, budgets, audit, compliance, credentials, and more. All commands support `--json` for machine-readable output.
 
-> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+> **[Homepage](https://grantex.dev)** | **[Docs](https://docs.grantex.dev)** | **[CLI Docs](https://docs.grantex.dev/integrations/cli)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 
@@ -14,97 +14,239 @@ npm install -g @grantex/cli
 
 ## Configure
 
-Point the CLI at your Grantex server and set your API key:
-
 ```bash
-# Interactive setup
 grantex config set --url https://grantex-auth-dd4mtrt2gq-uc.a.run.app --key YOUR_API_KEY
 
 # Or use environment variables
 export GRANTEX_URL=https://grantex-auth-dd4mtrt2gq-uc.a.run.app
 export GRANTEX_KEY=YOUR_API_KEY
+
+# Verify your setup
+grantex me
 ```
 
 Config is saved to `~/.grantex/config.json`. Environment variables override the config file.
 
+## JSON Output
+
+All commands support `--json` for machine-readable output — ideal for scripting, `jq`, and AI coding assistants (Claude Code, Cursor, Codex).
+
 ```bash
-# Verify your setup
-grantex config show
+grantex --json agents list | jq '.[0].agentId'
+grantex --json tokens verify <jwt> | jq '.valid'
 ```
 
+Set `NO_COLOR=1` to disable colored output.
+
 ## Commands
+
+### Core Flow
+
+```bash
+# 1. Register an agent
+grantex agents register --name "My Bot" --description "Reads email" --scopes email:read
+
+# 2. Start authorization
+grantex authorize --agent ag_... --principal user@example.com --scopes email:read
+
+# 3. Exchange code for token
+grantex tokens exchange --code <code> --agent-id ag_...
+
+# 4. Verify the token
+grantex tokens verify <jwt>
+
+# 5. Refresh when needed
+grantex tokens refresh --refresh-token <token> --agent-id ag_...
+
+# 6. Revoke when done
+grantex grants revoke grnt_...
+```
 
 ### Agents
 
 ```bash
 grantex agents list
-grantex agents register --name travel-booker --scopes calendar:read,payments:initiate
-grantex agents get ag_01ABC...
-grantex agents update ag_01ABC... --name new-name --scopes calendar:read,email:send
-grantex agents delete ag_01ABC...
+grantex agents register --name bot --description "..." --scopes email:read,calendar:write
+grantex agents get ag_...
+grantex agents update ag_... --name new-name --scopes email:read
+grantex agents delete ag_...
 ```
 
 ### Grants
 
 ```bash
-grantex grants list
-grantex grants list --agent ag_01ABC... --status active
-grantex grants revoke grnt_01XYZ...
+grantex grants list [--agent ag_... --status active]
+grantex grants get grnt_...
+grantex grants revoke grnt_...
+grantex grants delegate --grant-token <jwt> --agent-id ag_child... --scopes email:read
 ```
 
 ### Tokens
 
 ```bash
-grantex tokens verify <jwt-token>
+grantex tokens exchange --code <code> --agent-id ag_...
+grantex tokens verify <jwt>
+grantex tokens refresh --refresh-token <token> --agent-id ag_...
 grantex tokens revoke <jti>
 ```
 
-### Audit Log
+### Authorize
 
 ```bash
-grantex audit list
-grantex audit list --agent ag_01ABC... --action payment.initiated --since 2026-01-01
+grantex authorize --agent ag_... --principal user@example.com --scopes email:read
+grantex authorize --agent ag_... --principal user@example.com --scopes email:read \
+  --code-challenge <S256-challenge> --redirect-uri https://app.com/callback
+```
+
+### Audit
+
+```bash
+grantex audit list [--agent ag_... --grant grnt_... --action email.read --since 2026-01-01]
+grantex audit get alog_...
+grantex audit log --agent-id ag_... --agent-did did:grantex:ag_... --grant-id grnt_... \
+  --principal-id user@example.com --action email.read --status success
+```
+
+### Policies
+
+```bash
+grantex policies list
+grantex policies get pol_...
+grantex policies create --name "Allow Bot" --effect allow --agent-id ag_... --scopes email:read
+grantex policies update pol_... --priority 50
+grantex policies delete pol_...
+```
+
+### Budgets
+
+```bash
+grantex budgets allocate --grant-id grnt_... --amount 100 [--currency USD]
+grantex budgets debit --grant-id grnt_... --amount 25.50 --description "API call"
+grantex budgets balance grnt_...
+grantex budgets transactions grnt_...
+```
+
+### Usage
+
+```bash
+grantex usage current
+grantex usage history [--days 7]
 ```
 
 ### Webhooks
 
 ```bash
 grantex webhooks list
-grantex webhooks create --url https://example.com/hook --events grant.created,grant.revoked
-grantex webhooks delete wh_01XYZ...
+grantex webhooks create --url https://example.com/hook --events grant.created,token.issued
+grantex webhooks delete wh_...
 ```
 
-Supported events: `grant.created`, `grant.revoked`, `token.issued`
+### Events
+
+```bash
+grantex events stream [--types grant.created,token.issued]
+grantex --json events stream  # One JSON object per line
+```
+
+### Domains
+
+```bash
+grantex domains list
+grantex domains add --domain auth.mycompany.com
+grantex domains verify dom_...
+grantex domains delete dom_...
+```
+
+### Vault (Credential Storage)
+
+```bash
+grantex vault list [--principal user@example.com --service google]
+grantex vault get cred_...
+grantex vault store --principal-id user@example.com --service google --access-token ya29...
+grantex vault delete cred_...
+grantex vault exchange --grant-token <jwt> --service google
+```
+
+### WebAuthn / FIDO2
+
+```bash
+grantex webauthn register-options --principal-id user@example.com
+grantex webauthn register-verify --challenge-id ch_... --response '{"id":"..."}' --device-name "MacBook"
+grantex webauthn list user@example.com
+grantex webauthn delete cred_...
+```
+
+### Verifiable Credentials
+
+```bash
+grantex credentials list [--grant-id grnt_... --status active]
+grantex credentials get vc_...
+grantex credentials verify --vc-jwt eyJ...
+grantex credentials present --sd-jwt eyJ... --nonce abc123
+```
+
+### Agent Passports (MPP)
+
+```bash
+grantex passports issue --agent-id ag_... --grant-id grnt_... --categories "compute,storage" --max-amount 100
+grantex passports list [--agent-id ag_...]
+grantex passports get pp_...
+grantex passports revoke pp_...
+```
+
+### Principal Sessions
+
+```bash
+grantex principal-sessions create --principal-id user@example.com [--expires-in 1h]
+```
+
+### Account
+
+```bash
+grantex me
+```
 
 ### Compliance
 
 ```bash
-# Summary stats
-grantex compliance summary
-grantex compliance summary --since 2026-01-01 --until 2026-02-01
-
-# Export grants
+grantex compliance summary [--since 2026-01-01 --until 2026-02-01]
 grantex compliance export grants --format json --output grants.json
-
-# Export audit log
 grantex compliance export audit --format json --output audit.json
-
-# Evidence pack (SOC 2, GDPR, etc.)
 grantex compliance evidence-pack --framework soc2 --output evidence.json
 ```
 
-### Anomaly Detection
+### Anomalies
 
 ```bash
 grantex anomalies detect
-grantex anomalies list
-grantex anomalies list --unacknowledged
-grantex anomalies acknowledge anom_01XYZ...
+grantex anomalies list [--unacknowledged]
+grantex anomalies acknowledge anom_...
+```
+
+### Billing
+
+```bash
+grantex billing status
+grantex billing checkout pro --success-url https://app.com/ok --cancel-url https://app.com/cancel
+grantex billing portal --return-url https://app.com/settings
+```
+
+### SCIM
+
+```bash
+grantex scim tokens list | create --label "Okta" | revoke tok_...
+grantex scim users list | get usr_... | create --user-name john@co.com | update usr_... | delete usr_...
+```
+
+### SSO
+
+```bash
+grantex sso get | configure --issuer-url ... --client-id ... | delete
+grantex sso login-url my-org
+grantex sso callback --code CODE --state STATE
 ```
 
 ## Local Development
-
-For local development with `docker compose`:
 
 ```bash
 grantex config set --url http://localhost:3001 --key dev-api-key-local
@@ -113,23 +255,6 @@ grantex config set --url http://localhost:3001 --key dev-api-key-local
 ## Requirements
 
 - Node.js 18+
-
-## Links
-
-- [Grantex Protocol](https://github.com/mishrasanjeev/grantex)
-- [TypeScript SDK](https://www.npmjs.com/package/@grantex/sdk)
-- [Self-Hosting Guide](https://github.com/mishrasanjeev/grantex/blob/main/docs/self-hosting.md)
-- [Developer Portal](https://grantex.dev/dashboard)
-
-## Grantex Ecosystem
-
-This package is part of the [Grantex](https://grantex.dev) ecosystem. See also:
-
-- [`@grantex/sdk`](https://www.npmjs.com/package/@grantex/sdk) — Core TypeScript SDK
-- [`grantex`](https://pypi.org/project/grantex/) — Python SDK
-- [`@grantex/langchain`](https://www.npmjs.com/package/@grantex/langchain) — LangChain integration
-- [`@grantex/mcp`](https://www.npmjs.com/package/@grantex/mcp) — MCP server for Claude Desktop / Cursor / Windsurf
-- [`@grantex/vercel-ai`](https://www.npmjs.com/package/@grantex/vercel-ai) — Vercel AI SDK integration
 
 ## License
 

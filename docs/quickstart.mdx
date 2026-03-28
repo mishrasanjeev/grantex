@@ -14,6 +14,11 @@ npm install @grantex/sdk
 ```bash pip
 pip install grantex
 ```
+
+```bash CLI
+npm install -g @grantex/cli
+grantex config set --url https://api.grantex.dev --key YOUR_API_KEY
+```
 </CodeGroup>
 
 ## 2. Register your agent
@@ -48,6 +53,13 @@ agent = client.agents.register(
 print(agent.did)
 # → did:grantex:ag_01HXYZ123abc...
 ```
+
+```bash CLI
+grantex agents register \
+  --name travel-booker \
+  --description "Books flights and hotels on behalf of users" \
+  --scopes calendar:read,payments:initiate:max_500,email:send
+```
 </CodeGroup>
 
 ## 3. Request authorization from a user
@@ -76,6 +88,14 @@ auth = client.authorize(
 
 # Redirect user to the consent page
 print(auth.consent_url)
+```
+
+```bash CLI
+grantex authorize \
+  --agent ag_01HXYZ... \
+  --principal user_abc123 \
+  --scopes calendar:read,payments:initiate:max_500
+# Sandbox mode returns the code directly
 ```
 </CodeGroup>
 
@@ -107,6 +127,11 @@ print(token.grant_token)  # RS256 JWT
 print(token.scopes)       # ('calendar:read', 'payments:initiate:max_500')
 print(token.grant_id)     # 'grnt_01HXYZ...'
 ```
+
+```bash CLI
+grantex tokens exchange --code <code> --agent-id ag_01HXYZ...
+# Returns grantToken (JWT), refreshToken, grantId, scopes
+```
 </CodeGroup>
 
 ## 5. Verify the token offline
@@ -134,6 +159,11 @@ grant = verify_grant_token(token.grant_token, VerifyGrantTokenOptions(
 print(grant.principal_id)  # 'user_abc123'
 print(grant.scopes)        # ('calendar:read', 'payments:initiate:max_500')
 ```
+
+```bash CLI
+grantex tokens verify <jwt>
+# Shows: valid, grantId, scopes, principal, agent, expiresAt
+```
 </CodeGroup>
 
 ## 6. Log every action
@@ -158,6 +188,17 @@ client.audit.log(
     metadata={"amount": 420, "currency": "USD", "merchant": "Air India"},
 )
 ```
+
+```bash CLI
+grantex audit log \
+  --agent-id ag_01HXYZ... \
+  --agent-did did:grantex:ag_01HXYZ... \
+  --grant-id grnt_01HXYZ... \
+  --principal-id user_abc123 \
+  --action payment.initiated \
+  --status success \
+  --metadata '{"amount":420,"currency":"USD","merchant":"Air India"}'
+```
 </CodeGroup>
 
 ## Next steps
@@ -174,5 +215,8 @@ client.audit.log(
   </Card>
   <Card title="Python SDK" icon="python" href="/sdks/python/overview">
     Full API reference for the Python SDK.
+  </Card>
+  <Card title="CLI" icon="terminal" href="/integrations/cli">
+    83 commands with --json support for scripting and AI agents.
   </Card>
 </CardGroup>
