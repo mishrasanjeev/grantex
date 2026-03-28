@@ -310,6 +310,48 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  // GET /v1/passports — List passports
+  app.get(
+    '/v1/passports',
+    async (request, reply) => {
+      const developerId = request.developer.id;
+      const sql = getSql();
+      const query = request.query as Record<string, string | undefined>;
+
+      const agentId = query.agentId;
+      const grantId = query.grantId;
+      const status = query.status;
+
+      const rows = await sql`
+        SELECT p.id, p.agent_id, p.grant_id, p.encoded_credential, p.status, p.expires_at, p.created_at
+        FROM mpp_passports p
+        JOIN agents a ON a.id = p.agent_id
+        WHERE a.developer_id = ${developerId}
+        ${agentId ? sql`AND p.agent_id = ${agentId}` : sql``}
+        ${grantId ? sql`AND p.grant_id = ${grantId}` : sql``}
+        ${status ? sql`AND p.status = ${status}` : sql``}
+        ORDER BY p.created_at DESC
+      `;
+
+      const passports = rows.map((p) => {
+        let effectiveStatus = p['status'] as string;
+        if (effectiveStatus === 'active' && new Date(p['expires_at'] as string) < new Date()) {
+          effectiveStatus = 'expired';
+        }
+        return {
+          passportId: p['id'] as string,
+          agentId: p['agent_id'] as string,
+          grantId: p['grant_id'] as string,
+          status: effectiveStatus,
+          expiresAt: (p['expires_at'] as Date).toISOString(),
+          createdAt: (p['created_at'] as Date).toISOString(),
+        };
+      });
+
+      return reply.send(passports);
+    },
+  );
+
   // GET /v1/passport/:id — Retrieve a passport
   app.get<{ Params: { id: string } }>(
     '/v1/passport/:id',

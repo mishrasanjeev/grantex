@@ -10,7 +10,11 @@ function getKey(): Buffer {
   if (!key) {
     throw new Error('VAULT_ENCRYPTION_KEY is not configured');
   }
-  return Buffer.from(key, 'hex');
+  // Support both hex (64 chars) and base64 (44 chars) formats
+  if (/^[0-9a-fA-F]{64}$/.test(key)) {
+    return Buffer.from(key, 'hex');
+  }
+  return Buffer.from(key, 'base64');
 }
 
 export function encrypt(plaintext: string): string {
