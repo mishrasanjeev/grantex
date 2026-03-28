@@ -89,7 +89,8 @@
               "guides/policy-as-code",
               "guides/usage-metering",
               "guides/custom-domains",
-              "guides/mpp-integration"
+              "guides/mpp-integration",
+              "guides/compliance-matrix"
             ]
           },
           {
@@ -530,11 +531,14 @@
           {
             "group": "Posts",
             "pages": [
+              "blog/agent-security-breaches-2025-2026",
+              "blog/owasp-agentic-top-10-compliance",
+              "blog/from-copilot-to-autonomous-agents",
+              "blog/mpp-agent-identity",
               "blog/introducing-grantex",
               "blog/why-ai-agents-need-authorization",
               "blog/grantex-v0-1-whats-included",
-              "blog/grantex-v2-2",
-              "blog/mpp-agent-identity"
+              "blog/grantex-v2-2"
             ]
           }
         ]
