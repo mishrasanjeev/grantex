@@ -12,6 +12,7 @@ import { configCommand } from './commands/config.js';
 import { domainsCommand } from './commands/domains.js';
 import { eventsCommand } from './commands/events.js';
 import { grantsCommand } from './commands/grants.js';
+import { meCommand } from './commands/me.js';
 import { policiesCommand } from './commands/policies.js';
 import { principalSessionsCommand } from './commands/principal-sessions.js';
 import { scimCommand } from './commands/scim.js';
@@ -34,6 +35,7 @@ program
   });
 
 program.addCommand(configCommand());
+program.addCommand(meCommand());
 program.addCommand(agentsCommand());
 program.addCommand(authorizeCommand());
 program.addCommand(grantsCommand());

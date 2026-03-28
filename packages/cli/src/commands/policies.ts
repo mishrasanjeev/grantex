@@ -31,6 +31,10 @@ export function policiesCommand(): Command {
     .action(async (policyId: string) => {
       const client = await requireClient();
       const p = await client.policies.get(policyId);
+      if (isJsonMode()) {
+        console.log(JSON.stringify(p, null, 2));
+        return;
+      }
       printRecord({
         id: p.id,
         name: p.name,

@@ -48,6 +48,10 @@ export function scimCommand(): Command {
     .action(async (tokenId: string) => {
       const client = await requireClient();
       await client.scim.revokeToken(tokenId);
+      if (isJsonMode()) {
+        console.log(JSON.stringify({ revoked: tokenId }));
+        return;
+      }
       console.log(chalk.green('✓') + ` SCIM token ${tokenId} revoked.`);
     });
 
@@ -85,6 +89,10 @@ export function scimCommand(): Command {
     .action(async (userId: string) => {
       const client = await requireClient();
       const u = await client.scim.getUser(userId);
+      if (isJsonMode()) {
+        console.log(JSON.stringify(u, null, 2));
+        return;
+      }
       printRecord({
         id: u.id,
         userName: u.userName,

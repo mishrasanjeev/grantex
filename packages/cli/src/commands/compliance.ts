@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { writeFileSync } from 'fs';
 import { requireClient } from '../client.js';
-import { printRecord, shortDate } from '../format.js';
+import { printRecord, shortDate, isJsonMode } from '../format.js';
 import type { Grant, AuditEntry } from '@grantex/sdk';
 
 export function complianceCommand(): Command {
@@ -18,6 +18,10 @@ export function complianceCommand(): Command {
         ...(opts.since ? { since: opts.since } : {}),
         ...(opts.until ? { until: opts.until } : {}),
       });
+      if (isJsonMode()) {
+        console.log(JSON.stringify(s, null, 2));
+        return;
+      }
       printRecord({
         'Generated at': shortDate(s.generatedAt),
         'Plan':         s.plan,
@@ -55,7 +59,8 @@ export function complianceCommand(): Command {
             : {}),
         });
 
-        const output = renderGrants(result.grants, opts.format);
+        const fmt = isJsonMode() ? 'json' : opts.format;
+        const output = renderGrants(result.grants, fmt);
         writeOutput(output, opts.output);
       },
     );
@@ -88,7 +93,8 @@ export function complianceCommand(): Command {
             : {}),
         });
 
-        const output = renderAudit(result.entries, opts.format);
+        const fmt = isJsonMode() ? 'json' : opts.format;
+        const output = renderAudit(result.entries, fmt);
         writeOutput(output, opts.output);
       },
     );
@@ -110,6 +116,11 @@ export function complianceCommand(): Command {
           ...(opts.since ? { since: opts.since } : {}),
           ...(opts.until ? { until: opts.until } : {}),
         });
+
+        if (isJsonMode()) {
+          console.log(JSON.stringify(pack, null, 2));
+          return;
+        }
 
         const defaultFile = `evidence-pack-${new Date().toISOString().slice(0, 10)}.json`;
         const outFile = opts.output ?? defaultFile;
