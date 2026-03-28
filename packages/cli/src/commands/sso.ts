@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { requireClient } from '../client.js';
-import { printRecord, shortDate } from '../format.js';
+import { printRecord, shortDate, isJsonMode } from '../format.js';
 
 export function ssoCommand(): Command {
   const cmd = new Command('sso').description('Manage SSO configuration');
@@ -12,12 +12,15 @@ export function ssoCommand(): Command {
     .action(async () => {
       const client = await requireClient();
       const config = await client.sso.getConfig();
-      printRecord({
-        issuerUrl: config.issuerUrl,
-        clientId: config.clientId,
-        redirectUri: config.redirectUri,
-        updatedAt: shortDate(config.updatedAt),
-      });
+      printRecord(
+        {
+          issuerUrl: config.issuerUrl,
+          clientId: config.clientId,
+          redirectUri: config.redirectUri,
+          updatedAt: shortDate(config.updatedAt),
+        },
+        { ...config },
+      );
     });
 
   cmd
@@ -53,6 +56,10 @@ export function ssoCommand(): Command {
     .action(async (org: string) => {
       const client = await requireClient();
       const { authorizeUrl } = await client.sso.getLoginUrl(org);
+      if (isJsonMode()) {
+        console.log(JSON.stringify({ authorizeUrl }));
+        return;
+      }
       console.log(authorizeUrl);
     });
 

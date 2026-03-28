@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { requireClient } from '../client.js';
-import { printTable, shortDate } from '../format.js';
+import { printTable, shortDate, isJsonMode } from '../format.js';
 import type { Anomaly } from '@grantex/sdk';
 
 const SEVERITY_COLOR: Record<string, (s: string) => string> = {
@@ -33,6 +33,7 @@ export function anomaliesCommand(): Command {
       printTable(
         result.anomalies.map(formatRow),
         ['ID', 'TYPE', 'SEVERITY', 'AGENT', 'DESCRIPTION'],
+        result.anomalies.map((a) => ({ ...a })),
       );
     });
 
@@ -49,6 +50,7 @@ export function anomaliesCommand(): Command {
       printTable(
         result.anomalies.map(formatRow),
         ['ID', 'TYPE', 'SEVERITY', 'AGENT', 'DESCRIPTION'],
+        result.anomalies.map((a) => ({ ...a })),
       );
     });
 

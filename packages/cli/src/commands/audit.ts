@@ -41,6 +41,7 @@ export function auditCommand(): Command {
             TIMESTAMP: shortDate(e.timestamp),
           })),
           ['ID', 'AGENT', 'ACTION', 'STATUS', 'TIMESTAMP'],
+          entries.map((e) => ({ ...e })),
         );
       },
     );

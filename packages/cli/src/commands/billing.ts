@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { requireClient } from '../client.js';
-import { printRecord } from '../format.js';
+import { printRecord, isJsonMode } from '../format.js';
 
 export function billingCommand(): Command {
   const cmd = new Command('billing').description('Manage subscription and billing');
@@ -12,11 +12,14 @@ export function billingCommand(): Command {
     .action(async () => {
       const client = await requireClient();
       const sub = await client.billing.getSubscription();
-      printRecord({
-        plan: sub.plan,
-        status: sub.status,
-        currentPeriodEnd: sub.currentPeriodEnd ?? '—',
-      });
+      printRecord(
+        {
+          plan: sub.plan,
+          status: sub.status,
+          currentPeriodEnd: sub.currentPeriodEnd ?? '—',
+        },
+        { ...sub },
+      );
     });
 
   cmd
@@ -31,6 +34,10 @@ export function billingCommand(): Command {
         successUrl: opts.successUrl,
         cancelUrl: opts.cancelUrl,
       });
+      if (isJsonMode()) {
+        console.log(JSON.stringify({ checkoutUrl }));
+        return;
+      }
       console.log(chalk.green('✓') + ' Checkout URL:');
       console.log(checkoutUrl);
     });
@@ -42,6 +49,10 @@ export function billingCommand(): Command {
     .action(async (opts: { returnUrl: string }) => {
       const client = await requireClient();
       const { portalUrl } = await client.billing.createPortal({ returnUrl: opts.returnUrl });
+      if (isJsonMode()) {
+        console.log(JSON.stringify({ portalUrl }));
+        return;
+      }
       console.log(chalk.green('✓') + ' Portal URL:');
       console.log(portalUrl);
     });

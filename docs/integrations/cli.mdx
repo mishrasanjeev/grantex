@@ -26,16 +26,66 @@ grantex config show
 
 Config is saved to `~/.grantex/config.json`. Environment variables override the config file.
 
+## JSON Output
+
+All commands support `--json` for machine-readable output. This is useful for scripting, piping into `jq`, or when using the CLI from AI coding assistants (Claude Code, Cursor, Codex, etc.).
+
+```bash
+grantex --json agents list
+grantex --json tokens verify <jwt-token>
+grantex --json grants list --status active | jq '.[].id'
+```
+
+To disable colored output, set the `NO_COLOR=1` environment variable.
+
 ## Commands
+
+### Authorize (Core Flow)
+
+```bash
+# Start an authorization request
+grantex authorize --agent ag_01ABC... --principal user@example.com --scopes email:read,calendar:write
+
+# With PKCE
+grantex authorize --agent ag_01ABC... --principal user@example.com --scopes email:read \
+  --code-challenge <base64url-sha256-challenge>
+
+# With redirect URI
+grantex authorize --agent ag_01ABC... --principal user@example.com --scopes email:read \
+  --redirect-uri https://myapp.com/callback
+
+# With custom expiry
+grantex authorize --agent ag_01ABC... --principal user@example.com --scopes email:read \
+  --expires-in 1h
+```
 
 ### Agents
 
 ```bash
 grantex agents list
-grantex agents register --name travel-booker --scopes calendar:read,payments:initiate
+grantex agents register --name travel-booker --description "Books travel" --scopes calendar:read,payments:initiate
 grantex agents get ag_01ABC...
 grantex agents update ag_01ABC... --name new-name --scopes calendar:read,email:send
 grantex agents delete ag_01ABC...
+```
+
+### Tokens
+
+```bash
+# Exchange authorization code for a grant token
+grantex tokens exchange --code <auth-code> --agent-id ag_01ABC...
+
+# Exchange with PKCE verifier
+grantex tokens exchange --code <auth-code> --agent-id ag_01ABC... --code-verifier <verifier>
+
+# Verify a grant token (online check)
+grantex tokens verify <jwt-token>
+
+# Refresh a grant token
+grantex tokens refresh --refresh-token <token> --agent-id ag_01ABC...
+
+# Revoke a token by JTI
+grantex tokens revoke <jti>
 ```
 
 ### Grants
@@ -43,14 +93,43 @@ grantex agents delete ag_01ABC...
 ```bash
 grantex grants list
 grantex grants list --agent ag_01ABC... --status active
+grantex grants get grnt_01XYZ...
 grantex grants revoke grnt_01XYZ...
+
+# Delegate a grant to a sub-agent
+grantex grants delegate --grant-token <parent-jwt> --agent-id ag_CHILD... --scopes email:read
+grantex grants delegate --grant-token <parent-jwt> --agent-id ag_CHILD... --scopes email:read --expires-in 1h
 ```
 
-### Tokens
+### Budgets
 
 ```bash
-grantex tokens verify <jwt-token>
-grantex tokens revoke <jti>
+grantex budgets allocate --grant-id grnt_01XYZ... --amount 100.00
+grantex budgets allocate --grant-id grnt_01XYZ... --amount 50 --currency EUR
+grantex budgets debit --grant-id grnt_01XYZ... --amount 25.50 --description "API call"
+grantex budgets balance grnt_01XYZ...
+grantex budgets transactions grnt_01XYZ...
+```
+
+### Usage
+
+```bash
+grantex usage current
+grantex usage history
+grantex usage history --days 7
+```
+
+### Events
+
+```bash
+# Stream real-time events (Ctrl+C to stop)
+grantex events stream
+
+# Filter by event type
+grantex events stream --types grant.created,token.issued
+
+# JSON output (one JSON object per line, ideal for piping)
+grantex --json events stream
 ```
 
 ### Audit Log
@@ -58,6 +137,7 @@ grantex tokens revoke <jti>
 ```bash
 grantex audit list
 grantex audit list --agent ag_01ABC... --action payment.initiated --since 2026-01-01
+grantex audit list --grant grnt_01XYZ... --principal user@example.com
 ```
 
 ### Webhooks
@@ -69,6 +149,33 @@ grantex webhooks delete wh_01XYZ...
 ```
 
 Supported events: `grant.created`, `grant.revoked`, `token.issued`.
+
+### Policies
+
+```bash
+grantex policies list
+grantex policies get pol_01ABC...
+grantex policies create --name "Allow Email Bot" --effect allow --agent-id ag_01ABC... --scopes email:read
+grantex policies create --name "Block After Hours" --effect deny --time-start 18:00 --time-end 08:00
+grantex policies update pol_01ABC... --priority 50
+grantex policies delete pol_01ABC...
+```
+
+### Domains
+
+```bash
+grantex domains list
+grantex domains add --domain auth.mycompany.com
+grantex domains verify dom_01ABC...
+grantex domains delete dom_01ABC...
+```
+
+### Principal Sessions
+
+```bash
+grantex principal-sessions create --principal-id user@example.com
+grantex principal-sessions create --principal-id user@example.com --expires-in 1h
+```
 
 ### Compliance
 
@@ -94,6 +201,62 @@ grantex anomalies detect
 grantex anomalies list
 grantex anomalies list --unacknowledged
 grantex anomalies acknowledge anom_01XYZ...
+```
+
+### Billing
+
+```bash
+grantex billing status
+grantex billing checkout pro --success-url https://myapp.com/success --cancel-url https://myapp.com/cancel
+grantex billing portal --return-url https://myapp.com/settings
+```
+
+### SCIM
+
+```bash
+# Token management
+grantex scim tokens list
+grantex scim tokens create --label "Okta Integration"
+grantex scim tokens revoke tok_01ABC...
+
+# User provisioning
+grantex scim users list
+grantex scim users get usr_01ABC...
+```
+
+### SSO
+
+```bash
+grantex sso get
+grantex sso configure --issuer-url https://accounts.google.com --client-id CLIENT_ID \
+  --client-secret CLIENT_SECRET --redirect-uri https://myapp.com/callback
+grantex sso delete
+grantex sso login-url my-org
+```
+
+## Full Workflow Example
+
+```bash
+# 1. Configure
+grantex config set --url http://localhost:3001 --key sandbox-api-key-local
+
+# 2. Register an agent
+grantex agents register --name "Email Reader" --description "Reads emails" --scopes email:read,email:send
+
+# 3. Start authorization (sandbox auto-approves, returns code directly)
+grantex authorize --agent ag_01ABC... --principal user@example.com --scopes email:read
+
+# 4. Exchange the code for a token
+grantex tokens exchange --code <code-from-step-3> --agent-id ag_01ABC...
+
+# 5. Verify the token
+grantex tokens verify <jwt-from-step-4>
+
+# 6. Check audit trail
+grantex audit list --agent ag_01ABC...
+
+# 7. Revoke when done
+grantex grants revoke grnt_01XYZ...
 ```
 
 ## Local Development
