@@ -150,6 +150,30 @@
           "@type": "Answer",
           "text": "An AgentPassportCredential is a W3C Verifiable Credential (VC 2.0) that binds agent identity, human delegation, MPP payment categories, and spending limits into a single offline-verifiable document. It includes the agent DID, human principal DID, organization DID, allowed MPP categories, max transaction amount, and StatusList2021 revocation."
         }
+      },
+      {
+        "@type": "Question",
+        "name": "Is Grantex compliant with the OWASP Agentic Top 10?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex addresses four of the ten OWASP Agentic Security Initiative risks: ASI-01 (agent goal hijacking) via scoped permissions, ASI-03 (identity and privilege abuse) via per-agent cryptographic identity, ASI-05 (privilege escalation) via delegation invariants, and ASI-10 (rogue agents) via instant cascading revocation."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does Grantex help with EU AI Act compliance?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex provides technical controls that map to EU AI Act Articles 9 (risk management via budget controls and anomaly detection), 13 (transparency via human consent flows and Verifiable Credentials), and 14 (human oversight via principal dashboards, real-time event streaming, and one-click cascade revocation)."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does Grantex compare to HashiCorp Vault for AI agents?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Grantex and HashiCorp Vault solve different problems. Vault manages secrets at rest — encryption, rotation, and access control. Grantex provides the agent identity layer: per-agent cryptographic identity, scoped tokens, human consent, instant revocation, and audit trails. They work together — Grantex's Credential Vault lets agents exchange grant tokens for upstream credentials without exposing master keys."
+        }
       }
     ]
   }
@@ -739,6 +763,160 @@
       color: var(--muted);
     }
 
+    /* ── Threat stats ──────────────────────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+      margin-bottom: 48px;
+    }
+    @media (max-width: 680px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      text-align: center;
+    }
+    .stat-number {
+      font-family: var(--mono);
+      font-size: clamp(28px, 3vw, 40px);
+      font-weight: 800;
+      color: #f85149;
+      letter-spacing: -1px;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .incidents-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 800px;
+    }
+    .incident {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+    }
+    .incident-tag {
+      flex-shrink: 0;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #f85149;
+      padding: 3px 10px;
+      border-radius: 4px;
+      background: rgba(248, 81, 73, 0.1);
+      border: 1px solid rgba(248, 81, 73, 0.2);
+      white-space: nowrap;
+    }
+    .incident p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .incident strong { color: var(--text); }
+
+    /* ── Risk scenario ─────────────────────────────────────────────────────── */
+    .risk-scenario {
+      background: var(--surface);
+      border: 1px solid rgba(248, 81, 73, 0.3);
+      border-radius: var(--radius);
+      padding: 32px;
+      margin-bottom: 48px;
+      max-width: 800px;
+    }
+    .risk-scenario-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #f85149;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .risk-scenario p {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+      margin-bottom: 24px;
+    }
+    .risk-questions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .risk-q {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .risk-q h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    .risk-q p { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0; }
+    .risk-q .fix {
+      display: inline-block;
+      margin-top: 8px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    /* ── Alternatives table ─────────────────────────────────────────────────── */
+    .alt-table-wrap {
+      overflow-x: auto;
+      max-width: 900px;
+    }
+    .alt-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .alt-table th {
+      text-align: left;
+      font-size: 12px;
+      font-family: var(--mono);
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      padding: 12px 14px;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+    }
+    .alt-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .alt-table tr:last-child td { border-bottom: none; }
+    .alt-table .tool-name {
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .alt-table .grantex-row td {
+      background: rgba(63, 185, 80, 0.05);
+      color: var(--text);
+      font-weight: 500;
+    }
+    .alt-table .grantex-row .tool-name { color: var(--accent); }
+    .alt-table .check { color: var(--accent); }
+    .alt-table .cross { color: #484f58; }
+    .alt-table .partial { color: #d29922; }
+
     /* ── Responsive ────────────────────────────────────────────────────────── */
     @media (max-width: 640px) {
       section { padding: 56px 0; }
@@ -866,6 +1044,227 @@
         </p>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ── Threat Landscape ────────────────────────────────────────────────── -->
+<section id="threat-landscape">
+  <div class="container">
+    <div class="section-label">The threat</div>
+    <h2 class="section-title">Attackers have already figured this out</h2>
+    <p class="section-sub">
+      Agents use shared secrets with no identity, no scoping, and no revocation.
+      The numbers from 2025 speak for themselves.
+    </p>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number">18.1M</div>
+        <div class="stat-label">API keys stolen<br>in 2025 (SpyCloud)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">29M</div>
+        <div class="stat-label">Secrets on GitHub<br>new in 2025 (+34% YoY)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">29 min</div>
+        <div class="stat-label">Avg. breakout time<br>access &rarr; lateral movement</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">4 min</div>
+        <div class="stat-label">Fastest breach recorded<br>access &rarr; exfiltration</div>
+      </div>
+    </div>
+
+    <h3 style="font-size:16px;font-weight:700;margin-bottom:20px;color:var(--text);">Confirmed 2025&ndash;2026 incidents</h3>
+    <div class="incidents-list">
+      <div class="incident">
+        <span class="incident-tag">CISA ALERT</span>
+        <p><strong>Shai-Hulud worm</strong> &mdash; 500+ npm packages, 2.6B weekly downloads. Stole all cloud credentials from CI runners.</p>
+      </div>
+      <div class="incident">
+        <span class="incident-tag">FEB 2026</span>
+        <p><strong>SANDWORM_MODE</strong> &mdash; 19 malicious npm packages installed rogue MCP servers in Claude Code, Cursor, and Windsurf. Targeted API keys from 9 LLM providers.</p>
+      </div>
+      <div class="incident">
+        <span class="incident-tag">CENSYS</span>
+        <p><strong>OpenClaw</strong> &mdash; 21,639 exposed instances publicly leaking OAuth tokens and plaintext credentials.</p>
+      </div>
+      <div class="incident">
+        <span class="incident-tag">CVE</span>
+        <p><strong>CVE-2026-21852</strong> &mdash; Simply opening a crafted repo in Claude Code was enough to exfiltrate the developer's active Anthropic API key.</p>
+      </div>
+    </div>
+
+    <p style="margin-top:32px;font-size:14px;color:var(--muted);">
+      Read the full analysis: <a href="https://docs.grantex.dev/blog/agent-security-breaches-2025-2026"
+        onclick="gtag('event','blog_click',{event_category:'threat'})">4 Agent Security Breaches That Should Change How You Think About API Keys</a>
+    </p>
+  </div>
+</section>
+
+<!-- ── Business Risk ──────────────────────────────────────────────────────── -->
+<section id="business-risk">
+  <div class="container">
+    <div class="section-label">Business risk</div>
+    <h2 class="section-title">When an agent acts, who is legally responsible?</h2>
+
+    <div class="risk-scenario">
+      <div class="risk-scenario-label">Real scenario</div>
+      <p>
+        Your agent reads an internal doc via MCP, is prompt-injected, and forwards
+        confidential customer PII to an external endpoint. API key used: yours.
+        Action log: empty. Authorization record: none.
+      </p>
+      <div class="risk-questions">
+        <div class="risk-q">
+          <h4>Who authorized it?</h4>
+          <p>No consent record exists. The agent used your master key. You own the liability.</p>
+          <span class="fix">Grantex fixes this &rarr;</span>
+        </div>
+        <div class="risk-q">
+          <h4>What did it access?</h4>
+          <p>Full key = full access. No scope means no blast radius boundary.</p>
+          <span class="fix">Grantex fixes this &rarr;</span>
+        </div>
+        <div class="risk-q">
+          <h4>Can you prove you tried?</h4>
+          <p>No audit trail, no scoped token, no revocation log. The compliance gap is total.</p>
+          <span class="fix">Grantex fixes this &rarr;</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Alternatives ───────────────────────────────────────────────────────── -->
+<section id="alternatives">
+  <div class="container">
+    <div class="section-label">Your current stack</div>
+    <h2 class="section-title">Your security tools have a blind spot</h2>
+    <p class="section-sub">
+      Grantex is not a replacement for Vault or Secrets Manager &mdash; it is the missing
+      agent identity layer that works alongside them.
+    </p>
+
+    <div class="alt-table-wrap">
+      <table class="alt-table">
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>What it solves</th>
+            <th>Secrets at rest</th>
+            <th>Agent identity</th>
+            <th>Scoped tokens</th>
+            <th>Per-agent revoke</th>
+            <th>Audit trail</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="tool-name">HashiCorp Vault</td>
+            <td>Secret storage & rotation</td>
+            <td class="check">&#10003;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+          </tr>
+          <tr>
+            <td class="tool-name">AWS Secrets Manager</td>
+            <td>Encrypted secret storage</td>
+            <td class="check">&#10003;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="partial">partial</td>
+          </tr>
+          <tr>
+            <td class="tool-name">GitGuardian</td>
+            <td>Detects leaked secrets</td>
+            <td class="partial">detect</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+          </tr>
+          <tr>
+            <td class="tool-name">Snyk / Socket</td>
+            <td>Dependency vuln scanning</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+          </tr>
+          <tr>
+            <td class="tool-name">Doppler</td>
+            <td>Secrets injection at deploy</td>
+            <td class="check">&#10003;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+            <td class="cross">&#10005;</td>
+          </tr>
+          <tr class="grantex-row">
+            <td class="tool-name">Grantex</td>
+            <td>Agent authorization protocol</td>
+            <td class="check">vault</td>
+            <td class="check">&#10003;</td>
+            <td class="check">&#10003;</td>
+            <td class="check">&#10003;</td>
+            <td class="check">&#10003;</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ── Compliance ─────────────────────────────────────────────────────────── -->
+<section id="compliance">
+  <div class="container">
+    <div class="section-label">Compliance</div>
+    <h2 class="section-title">The regulatory pressure is already here</h2>
+    <p class="section-sub">
+      OWASP, EU AI Act, and NIST now require agent-level identity, scoping, revocation,
+      and audit trails. Grantex covers every requirement.
+    </p>
+
+    <div class="cards">
+      <div class="card">
+        <span class="card-icon" style="font-size:13px;font-family:var(--mono);color:var(--accent2);">OWASP</span>
+        <h3>Agentic Top 10 <span style="font-weight:400;color:var(--muted);font-size:13px;">&mdash; Dec 2025</span></h3>
+        <p>
+          ASI-01: Goal hijacking &middot; ASI-03: Identity abuse &middot; ASI-05: Privilege escalation &middot; ASI-10: Rogue agents.
+          Grantex addresses all four with scoped grants, per-agent DIDs, delegation invariants, and instant revocation.
+        </p>
+      </div>
+      <div class="card">
+        <span class="card-icon" style="font-size:13px;font-family:var(--mono);color:var(--accent2);">EU AI ACT</span>
+        <h3>Binding Aug 2026</h3>
+        <p>
+          Art. 9: Risk management &middot; Art. 13: Transparency &middot; Art. 14: Human oversight.
+          Grantex provides consent flows, Verifiable Credentials, event streaming, and one-click revocation.
+        </p>
+      </div>
+      <div class="card">
+        <span class="card-icon" style="font-size:13px;font-family:var(--mono);color:var(--accent2);">NIST</span>
+        <h3>AI RMF + EO 14110 <span style="font-weight:400;color:var(--muted);font-size:13px;">&mdash; Active now</span></h3>
+        <p>
+          Govern 1.1: Accountability &middot; Map 5.1: Attribution &middot; Measure 2.5: Audit trails.
+          Every grant token traces to a human principal. Every action is hash-chained and exportable.
+        </p>
+      </div>
+    </div>
+
+    <p style="margin-top:32px;font-size:14px;color:var(--muted);">
+      Full mapping: <a href="https://docs.grantex.dev/guides/compliance-matrix"
+        onclick="gtag('event','compliance_click',{event_category:'compliance'})">Compliance Matrix</a>
+      &middot;
+      <a href="https://docs.grantex.dev/blog/owasp-agentic-top-10-compliance"
+        onclick="gtag('event','blog_click',{event_category:'compliance'})">OWASP deep-dive blog post</a>
+    </p>
   </div>
 </section>
 

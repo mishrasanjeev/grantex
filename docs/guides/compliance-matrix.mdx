@@ -1,0 +1,82 @@
+---
+title: "Compliance Matrix"
+description: "How Grantex maps to OWASP Agentic Top 10, EU AI Act, and NIST AI RMF requirements for AI agent security and authorization."
+---
+
+Grantex provides technical controls that map directly to the three major regulatory frameworks governing AI agent security. This page documents each requirement and the corresponding Grantex feature.
+
+## OWASP Agentic Security Top 10
+
+Published December 2025 — the first industry-standard threat taxonomy for autonomous AI agents.
+
+| Risk | Description | Grantex Control | Implementation |
+|------|------------|----------------|----------------|
+| **ASI-01** | Agent goal hijacking | Scoped permissions | JWT `scp` claim limits actions regardless of agent intent. A hijacked agent cannot exceed its granted scopes. |
+| **ASI-03** | Identity & privilege abuse | Per-agent cryptographic identity | Each agent gets a unique DID. The `agt` claim binds tokens to specific agents. Tokens are non-transferable. |
+| **ASI-05** | Privilege escalation | Delegation invariants | Child scopes must be a strict subset of parent scopes. `delegationDepth` claim enforced at protocol level. |
+| **ASI-10** | Rogue agents (no revocation) | Instant cascading revocation | `POST /v1/tokens/revoke` blocklists the JTI. All child delegations invalidated in the same operation. |
+
+## EU AI Act
+
+Binding August 2026 — the world's first comprehensive AI regulation.
+
+| Article | Requirement | Grantex Control | Implementation |
+|---------|------------|----------------|----------------|
+| **Art. 9** | Risk management per AI system | Budget controls + anomaly detection | `POST /v1/budget/allocate` sets spending limits. Anomaly detection flags unusual patterns. Policy-as-code (OPA, Cedar) for fine-grained rules. |
+| **Art. 13** | Transparency for autonomous actions | Consent flow + Verifiable Credentials | Human sees plain-English consent screen. VC-JWTs provide portable proof of authorization. SD-JWT enables selective disclosure. |
+| **Art. 14** | Human oversight — logged & auditable | Principal dashboard + event streaming + revocation | `GET /v1/events/stream` (SSE) surfaces actions in real time. Principal Sessions dashboard. One-click cascade revocation. |
+
+## NIST AI Risk Management Framework
+
+Active now — required for US government agencies and federal contractors per Executive Order 14110.
+
+| Control | Requirement | Grantex Control | Implementation |
+|---------|------------|----------------|----------------|
+| **Govern 1.1** | AI roles & accountability | Grant-to-human traceability | Every JWT carries `sub` (human principal), `dev` (developer), and `agt` (agent). The accountability chain is unbroken. |
+| **Map 5.1** | Agent action attribution | Audit trail linked to grants | `POST /v1/audit/log` records actions. Each entry references the `grantId` and `agentId`. Entries are hash-chained. |
+| **Measure 2.5** | Audit trails for autonomous operations | Hash-chained, append-only audit | Audit entries are append-only, hash-chained (tamper-evident), filterable by agent/grant/principal/time, and exportable via compliance evidence packs. |
+
+## Full Compliance Matrix
+
+| Requirement | Framework | Grantex Feature | Verification Method |
+|------------|-----------|----------------|-------------------|
+| Scoped permissions | OWASP ASI-01 | JWT `scp` claim | Service verifies scope before executing action |
+| Per-agent identity | OWASP ASI-03 | DID per agent, `agt` claim | Signature verification against agent's public key |
+| Delegation depth limits | OWASP ASI-05 | `delegationDepth` claim | Protocol rejects invariant-violating delegations |
+| Instant revocation | OWASP ASI-10 | Redis blocklist + StatusList2021 | `POST /v1/tokens/verify` returns `valid: false` |
+| Risk management | EU Art. 9 | Budgets, anomaly detection, policies | API endpoints + dashboard monitoring |
+| Transparency | EU Art. 13 | Consent flow, VCs, SD-JWT | Consent URL, credential verification |
+| Human oversight | EU Art. 14 | Events, principal sessions, revocation | SSE stream, dashboard, API |
+| Accountability | NIST Govern 1.1 | `sub` + `dev` + `agt` claims | JWT decode traces action to human |
+| Action attribution | NIST Map 5.1 | Hash-chained audit entries | `GET /v1/audit/entries` with filters |
+| Audit trails | NIST Measure 2.5 | Append-only, exportable audit | Evidence pack export via API |
+
+## Compliance Evidence Pack
+
+Grantex can generate a compliance evidence pack that bundles all relevant data for auditors:
+
+```bash
+# Generate a compliance evidence pack via CLI
+grantex compliance export --format json --from 2026-01-01 --to 2026-03-28
+
+# Or via API
+curl -X POST https://api.grantex.dev/v1/compliance/evidence \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"from": "2026-01-01", "to": "2026-03-28"}'
+```
+
+The evidence pack includes:
+- All grants issued in the period
+- Token issuance and revocation events
+- Audit trail entries (hash-chained)
+- Agent registrations and delegation chains
+- Policy snapshots
+- Anomaly detection findings
+
+## Certifications
+
+- **SOC 2 Type I** — certified. [View report](/security/soc2-report)
+- **IETF Internet-Draft** — submitted. [View submission](/community/ietf-draft)
+- **NIST AI RMF** — public comment submitted. [View comment](/community/nist-comment)
+- **OpenID AuthZEN** — conformance mapping complete. [View mapping](/community/authzen-mapping)

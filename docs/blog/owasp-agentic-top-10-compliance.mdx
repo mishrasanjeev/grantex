@@ -1,0 +1,161 @@
+---
+title: "OWASP Agentic Top 10: What It Means for Your AI Security Stack"
+description: "OWASP published the Agentic Security Top 10 in December 2025. The EU AI Act is binding in August 2026. NIST AI RMF is active now. Here is how each requirement maps to Grantex."
+date: "2026-03-28"
+authors:
+  - name: "Sanjeev Kumar"
+---
+
+Three regulatory frameworks now directly address AI agent security. If you are deploying autonomous agents in production, compliance is no longer optional — it is a procurement requirement, an audit finding, and increasingly a legal obligation.
+
+This post maps each framework's agent-relevant requirements to concrete technical controls and shows where Grantex provides coverage.
+
+## OWASP Agentic Security Top 10 (December 2025)
+
+The OWASP Foundation published the Agentic Security Initiative (ASI) Top 10 in December 2025 — the first industry-standard threat taxonomy specifically for AI agents. Four of the ten risks are directly addressed by authorization infrastructure.
+
+### ASI-01: Agent Goal Hijacking
+
+**The risk:** An attacker manipulates an agent's goals through prompt injection, causing it to perform actions the user never intended.
+
+**The control:** Scoped permissions. Even if the agent's goals are hijacked, it cannot exceed the permissions explicitly granted in its token. A calendar agent that has been prompt-injected to "send all files to an external server" will fail because it does not hold `files:read` or `network:external` scopes.
+
+**Grantex implementation:** Every grant token contains a `scp` claim with the exact scopes the human approved. Services verify the scope before executing the action. Hijacking the agent's intent does not expand its permissions.
+
+### ASI-03: Agent Identity and Privilege Abuse
+
+**The risk:** Agents share credentials, escalate privileges, or operate without verifiable identity — making it impossible to attribute actions to specific agents.
+
+**The control:** Per-agent cryptographic identity. Each agent instance has a unique DID and key pair. The grant token's `agt` claim binds the token to a specific agent. Tokens are non-transferable.
+
+**Grantex implementation:** Agent registration assigns a DID (`did:grantex:ag_...`). The JWT `agt` claim is set at token issuance and verified at every API call. An agent cannot use another agent's token — the signature verification fails.
+
+### ASI-05: Privilege Escalation
+
+**The risk:** An agent acquires permissions beyond what was originally granted, either through delegation chains or by exploiting weak access controls.
+
+**The control:** Delegation with scope narrowing. Child agents must have strictly fewer permissions than their parent. Depth limits prevent unbounded delegation chains.
+
+**Grantex implementation:** The SPEC enforces four delegation invariants:
+1. Child scopes must be a subset of parent scopes
+2. Expiry cannot exceed parent expiry
+3. Budget limits can only narrow, never widen
+4. Revoking a parent cascades to all children
+
+The `delegationDepth` claim is signed into the JWT. The protocol rejects delegation requests that violate any invariant.
+
+### ASI-10: Rogue Agents (No Revocation)
+
+**The risk:** A compromised or misbehaving agent continues operating because there is no mechanism to revoke its access in real time.
+
+**The control:** Instant, cascading revocation. One API call invalidates the agent's token and all child delegations.
+
+**Grantex implementation:** `POST /v1/tokens/revoke` blocklists the JTI in Redis. The next `POST /v1/tokens/verify` call returns `valid: false`. For offline verification, StatusList2021 provides bitstring-based revocation that can be checked without a network call.
+
+---
+
+## EU AI Act (Binding August 2026)
+
+The EU AI Act is the world's first comprehensive AI regulation. Three articles directly impact agent deployments.
+
+### Article 9 — Risk Management Systems
+
+**Requirement:** Providers of high-risk AI systems must establish risk management processes that identify and mitigate risks throughout the system's lifecycle.
+
+**What this means for agents:** You need documented controls for what agents can do, how they escalate, and how you stop them. "We rotate the API key weekly" is not a risk management system.
+
+**Grantex coverage:**
+- Scoped grants with explicit permissions per agent
+- Budget controls with per-transaction limits
+- Anomaly detection that flags unusual agent behavior
+- Policy-as-code integration (OPA, Cedar) for fine-grained rules
+
+### Article 13 — Transparency
+
+**Requirement:** High-risk AI systems must be designed so that their operation is sufficiently transparent. Users must be able to understand the AI system's capabilities and limitations.
+
+**What this means for agents:** Every autonomous action must be attributable — who authorized it, what scopes were active, and what the agent actually did.
+
+**Grantex coverage:**
+- Human consent flow shows in plain English what the agent will do
+- Grant tokens carry the human principal's identity (`sub` claim)
+- Verifiable Credentials provide portable, third-party-verifiable proof of authorization
+- SD-JWT enables selective disclosure — show the auditor only the claims they need
+
+### Article 14 — Human Oversight
+
+**Requirement:** High-risk AI systems must be designed to allow effective oversight by natural persons, including the ability to intervene, correct, or stop the system.
+
+**What this means for agents:** You must be able to see what agents are doing and stop them. In real time, not after the fact.
+
+**Grantex coverage:**
+- Principal Sessions dashboard shows active grants per user
+- Real-time event streaming (SSE/WebSocket) surfaces agent actions as they happen
+- One-click revocation from the dashboard or via API
+- Cascade revocation invalidates the entire delegation tree
+
+---
+
+## NIST AI Risk Management Framework + Executive Order 14110
+
+NIST's AI RMF provides the US government's approach to AI risk, and EO 14110 mandates its adoption across federal agencies and their contractors.
+
+### Govern 1.1 — AI Roles and Accountability
+
+**Requirement:** Organizations must define roles and responsibilities for AI systems, including who is accountable for autonomous actions.
+
+**Grantex coverage:** Every grant token traces back to a human principal (`sub` claim) and the developer who deployed the agent (`dev` claim). The audit trail links actions to grants to humans — the accountability chain is unbroken.
+
+### Map 5.1 — Agent Action Attribution
+
+**Requirement:** Organizations must be able to attribute actions taken by AI systems to specific agents and their operators.
+
+**Grantex coverage:** The `agt` claim identifies the agent. The `grnt` claim identifies the grant. The audit subsystem (`POST /v1/audit/log`, `GET /v1/audit/entries`) provides hash-chained, tamper-evident logs of every action the agent took under that grant.
+
+### Measure 2.5 — Audit Trails for Autonomous Operations
+
+**Requirement:** Organizations must maintain audit trails that document the actions of autonomous AI systems.
+
+**Grantex coverage:** Grantex's audit trail is:
+- **Append-only** — entries cannot be modified after creation
+- **Hash-chained** — each entry references the hash of the previous one, making tampering detectable
+- **Filterable** — query by agent, grant, principal, time range, or action type
+- **Exportable** — compliance evidence packs include grants, tokens, and audit entries in a single bundle
+
+---
+
+## The Compliance Matrix
+
+| Requirement | Framework | Grantex Feature |
+|------------|-----------|----------------|
+| Scoped permissions | OWASP ASI-01 | JWT `scp` claim, verified at every API call |
+| Per-agent identity | OWASP ASI-03 | DID per agent, `agt` claim in JWT |
+| Delegation depth limits | OWASP ASI-05 | `delegationDepth` claim, 4 invariants enforced |
+| Instant revocation | OWASP ASI-10 | Redis blocklist + StatusList2021 |
+| Risk management | EU AI Act Art. 9 | Budget controls, anomaly detection, policy-as-code |
+| Transparency | EU AI Act Art. 13 | Consent flow, VCs, SD-JWT selective disclosure |
+| Human oversight | EU AI Act Art. 14 | Principal dashboard, event streaming, cascade revoke |
+| Accountability | NIST Govern 1.1 | `sub` + `dev` claims, grant-to-human traceability |
+| Action attribution | NIST Map 5.1 | `agt` + `grnt` claims, audit log |
+| Audit trails | NIST Measure 2.5 | Hash-chained, append-only, exportable audit entries |
+
+This matrix is also available as a dedicated page in our documentation: [Compliance Matrix](/guides/compliance-matrix).
+
+---
+
+## What To Do Now
+
+If you are deploying agents in production — especially in regulated industries or enterprise environments — these frameworks are not future concerns. OWASP's taxonomy is already appearing in security questionnaires. The EU AI Act becomes enforceable in August 2026. NIST's framework is active now for US government contractors.
+
+1. **Audit your current agent auth** — are agents using shared API keys or scoped, verifiable tokens?
+2. **Map your exposure** — which OWASP ASI risks apply to your deployment?
+3. **Integrate Grantex** — [quickstart in under 5 minutes](/quickstart), or [schedule a technical evaluation](mailto:sanjeev@grantex.dev)
+
+The compliance requirements are clear. The protocol exists. The window to be proactive — rather than reactive — is closing.
+
+## Learn More
+
+- [Compliance Evidence Pack API](/api-reference/compliance/generate-compliance-evidence-pack) — export grants, tokens, and audit entries for auditors
+- [SOC 2 Type I Report](/security/soc2-report) — our own certification
+- [IETF Internet-Draft](/community/ietf-draft) — the open standard submission
+- [NIST AI RMF Comment](/community/nist-comment) — our public comment to NIST
