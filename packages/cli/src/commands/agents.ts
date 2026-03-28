@@ -3,6 +3,11 @@ import chalk from 'chalk';
 import { requireClient } from '../client.js';
 import { printTable, printRecord, shortDate, isJsonMode } from '../format.js';
 
+// The API returns `agentId` but the SDK type says `id`. Handle both.
+function agentId(a: Record<string, unknown>): string {
+  return String(a.agentId ?? a.id ?? '');
+}
+
 export function agentsCommand(): Command {
   const cmd = new Command('agents').description('Manage registered agents');
 
@@ -14,7 +19,7 @@ export function agentsCommand(): Command {
       const { agents } = await client.agents.list();
       printTable(
         agents.map((a) => ({
-          ID: a.id,
+          ID: agentId(a as unknown as Record<string, unknown>),
           NAME: a.name,
           DID: a.did,
           CREATED: shortDate(a.createdAt),
@@ -41,9 +46,10 @@ export function agentsCommand(): Command {
         console.log(JSON.stringify(agent, null, 2));
         return;
       }
-      console.log(chalk.green('✓') + ` Agent registered: ${agent.id}`);
+      const id = agentId(agent as unknown as Record<string, unknown>);
+      console.log(chalk.green('✓') + ` Agent registered: ${id}`);
       printRecord({
-        id: agent.id,
+        id,
         name: agent.name,
         did: agent.did,
         scopes: agent.scopes.join(', '),
@@ -54,15 +60,15 @@ export function agentsCommand(): Command {
   cmd
     .command('get <agentId>')
     .description('Get details for a single agent')
-    .action(async (agentId: string) => {
+    .action(async (agentIdArg: string) => {
       const client = await requireClient();
-      const agent = await client.agents.get(agentId);
+      const agent = await client.agents.get(agentIdArg);
       if (isJsonMode()) {
         console.log(JSON.stringify(agent, null, 2));
         return;
       }
       printRecord({
-        id: agent.id,
+        id: agentId(agent as unknown as Record<string, unknown>),
         name: agent.name,
         did: agent.did,
         description: agent.description,
@@ -77,31 +83,31 @@ export function agentsCommand(): Command {
     .option('--name <name>', 'New agent name')
     .option('--description <desc>', 'New agent description')
     .option('--scopes <scopes>', 'New comma-separated scopes')
-    .action(async (agentId: string, opts: { name?: string; description?: string; scopes?: string }) => {
+    .action(async (agentIdArg: string, opts: { name?: string; description?: string; scopes?: string }) => {
       const client = await requireClient();
       const updates: Record<string, unknown> = {};
       if (opts.name !== undefined) updates.name = opts.name;
       if (opts.description !== undefined) updates.description = opts.description;
       if (opts.scopes !== undefined) updates.scopes = opts.scopes.split(',').map((s) => s.trim());
-      const agent = await client.agents.update(agentId, updates);
+      const agent = await client.agents.update(agentIdArg, updates);
       if (isJsonMode()) {
         console.log(JSON.stringify(agent, null, 2));
         return;
       }
-      console.log(chalk.green('✓') + ` Agent ${agentId} updated.`);
+      console.log(chalk.green('✓') + ` Agent ${agentIdArg} updated.`);
     });
 
   cmd
     .command('delete <agentId>')
     .description('Delete an agent')
-    .action(async (agentId: string) => {
+    .action(async (agentIdArg: string) => {
       const client = await requireClient();
-      await client.agents.delete(agentId);
+      await client.agents.delete(agentIdArg);
       if (isJsonMode()) {
-        console.log(JSON.stringify({ deleted: agentId }));
+        console.log(JSON.stringify({ deleted: agentIdArg }));
         return;
       }
-      console.log(chalk.green('✓') + ` Agent ${agentId} deleted.`);
+      console.log(chalk.green('✓') + ` Agent ${agentIdArg} deleted.`);
     });
 
   return cmd;

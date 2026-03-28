@@ -3,6 +3,11 @@ import chalk from 'chalk';
 import { requireClient } from '../client.js';
 import { printTable, printRecord, shortDate, isJsonMode } from '../format.js';
 
+// The API returns `grantId` but the SDK type says `id`. Handle both.
+function grantId(g: Record<string, unknown>): string {
+  return String(g.grantId ?? g.id ?? '');
+}
+
 export function grantsCommand(): Command {
   const cmd = new Command('grants').description('View and manage grants');
 
@@ -21,7 +26,7 @@ export function grantsCommand(): Command {
       });
       printTable(
         grants.map((g) => ({
-          ID: g.id,
+          ID: grantId(g as unknown as Record<string, unknown>),
           AGENT: g.agentId,
           PRINCIPAL: g.principalId,
           STATUS: g.status,
@@ -36,15 +41,15 @@ export function grantsCommand(): Command {
   cmd
     .command('get <grantId>')
     .description('Get details for a single grant')
-    .action(async (grantId: string) => {
+    .action(async (grantIdArg: string) => {
       const client = await requireClient();
-      const grant = await client.grants.get(grantId);
+      const grant = await client.grants.get(grantIdArg);
       if (isJsonMode()) {
         console.log(JSON.stringify(grant, null, 2));
         return;
       }
       printRecord({
-        id: grant.id,
+        id: grantId(grant as unknown as Record<string, unknown>),
         agentId: grant.agentId,
         principalId: grant.principalId,
         status: grant.status,

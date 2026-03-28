@@ -26,7 +26,7 @@ export class AgentsClient {
   }
 
   update(agentId: string, params: UpdateAgentParams): Promise<Agent> {
-    return this.#http.post<Agent>(`/v1/agents/${agentId}`, params);
+    return this.#http.patch<Agent>(`/v1/agents/${agentId}`, params);
   }
 
   delete(agentId: string): Promise<void> {
