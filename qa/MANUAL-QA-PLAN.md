@@ -1370,6 +1370,30 @@ npx grantex-conformance --base-url http://localhost:3001 --api-key dev-api-key-l
 | **WEB-004** | Code examples readable | P1 | Scroll to code examples section | Code blocks render correctly with syntax highlighting. |
 | **WEB-005** | External links work | P1 | Click all outbound links (GitHub, Discord, Docs) | All open correct pages. No 404s. |
 | **WEB-006** | SEO metadata | P2 | View page source | JSON-LD, OpenGraph, Twitter Card metadata present and correct. |
+| **WEB-007** | Threat stats section | P1 | Scroll to "Attackers have already figured this out" section | 4 stat cards visible (18.1M, 29M, 29 min, 4 min). 4 incident cards (Shai-Hulud, SANDWORM_MODE, OpenClaw, CVE-2026-21852). Blog link works. |
+| **WEB-008** | Business risk section | P1 | Scroll to "When an agent acts, who is legally responsible?" | Risk scenario card visible. 3 sub-cards ("Who authorized it?", "What did it access?", "Can you prove you tried?") with "Grantex fixes this" CTAs. |
+| **WEB-009** | Alternatives table | P1 | Scroll to "Your security tools have a blind spot" | 6-row comparison table visible (Vault, AWS SM, GitGuardian, Snyk, Doppler, Grantex). No horizontal scrollbar. Grantex row highlighted green. |
+| **WEB-010** | Compliance section | P1 | Scroll to "The regulatory pressure is already here" | 3 cards (OWASP, EU AI Act, NIST). Links to compliance matrix and blog post work. |
+| **WEB-011** | New sections responsive | P1 | Open on 375px viewport | Stat cards stack to 2-col. Risk cards stack. Table readable (may scroll on very small screens). No content overflow. |
+| **WEB-012** | New section anchor links | P2 | Navigate to `#threat-landscape`, `#business-risk`, `#alternatives`, `#compliance` | Each anchor scrolls to correct section. |
+
+### Blog Posts (`https://docs.grantex.dev/blog/`)
+
+| ID | Test Case | Priority | Steps | Expected Result |
+|----|-----------|----------|-------|-----------------|
+| **BLOG-001** | Security breaches post loads | P1 | Open `docs.grantex.dev/blog/agent-security-breaches-2025-2026` | Page loads. Title, date, author visible. All 4 incident sections render. Summary table renders. Internal links work. |
+| **BLOG-002** | OWASP compliance post loads | P1 | Open `docs.grantex.dev/blog/owasp-agentic-top-10-compliance` | Page loads. OWASP, EU AI Act, NIST sections render. Compliance matrix table renders. Links to compliance matrix page work. |
+| **BLOG-003** | Copilot-to-autonomous post loads | P1 | Open `docs.grantex.dev/blog/from-copilot-to-autonomous-agents` | Page loads. 3-phase timeline renders. Phase comparison table renders. Internal doc links work. |
+| **BLOG-004** | Blog navigation updated | P1 | Open Blog tab in docs nav | All 8 blog posts listed. New posts appear at top. |
+| **BLOG-005** | Blog posts in sitemap | P2 | Fetch `grantex.dev/sitemap.xml` | 3 new blog post URLs present with `2026-03-28` lastmod. |
+
+### Compliance Matrix (`https://docs.grantex.dev/guides/compliance-matrix`)
+
+| ID | Test Case | Priority | Steps | Expected Result |
+|----|-----------|----------|-------|-----------------|
+| **COMP-001** | Compliance matrix page loads | P1 | Open `docs.grantex.dev/guides/compliance-matrix` | Page loads. OWASP, EU AI Act, NIST sections visible. All tables render correctly. |
+| **COMP-002** | Compliance matrix in nav | P1 | Navigate to Guides section in docs | "Compliance Matrix" appears as last item in Guides nav group. |
+| **COMP-003** | Cross-links work | P2 | Click links to SOC 2 report, IETF draft, NIST comment, AuthZEN mapping | All linked pages load. No 404s. |
 
 ### Documentation (`https://docs.grantex.dev`)
 
@@ -1529,12 +1553,12 @@ Use this table to track test execution across modules. Copy for each test cycle.
 | M40: Terraform Provider | 7 | | | | | | |
 | M41: Conformance Suite | 6 | | | | | | |
 | M42: Example Applications | 13 | | | | | | |
-| M43: Landing Page & Docs | 12 | | | | | | |
+| M43: Landing Page & Docs | 26 | | | | | | |
 | M44: Deployment | 6 | | | | | | |
 | Security (Cross-cutting) | 12 | | | | | | |
 | Error Handling (Cross-cutting) | 5 | | | | | | |
 | Observability (Cross-cutting) | 3 | | | | | | |
-| **TOTAL** | **~410** | | | | | | |
+| **TOTAL** | **~424** | | | | | | |
 
 ---
 

@@ -1327,11 +1327,15 @@ Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRI
 
 | | |
 |---|---|
+| **OWASP** | Covers ASI-01, ASI-03, ASI-05, ASI-10 from the [Agentic Security Top 10](https://docs.grantex.dev/blog/owasp-agentic-top-10-compliance) (Dec 2025) |
+| **EU AI Act** | Art. 9 (risk management), Art. 13 (transparency), Art. 14 (human oversight) — binding Aug 2026 |
+| **NIST AI RMF** | Govern 1.1, Map 5.1, Measure 2.5 — NCCoE public comment filed |
 | **IETF** | Internet-Draft submitted to OAuth Working Group ([draft-mishra-oauth-agent-grants-01](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
-| **NIST** | NCCoE public comment filed |
 | **AuthZEN** | Conformance mapped |
 | **SOC 2** | Type I certification completed |
 | **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, open, Apache 2.0 |
+
+Full compliance matrix: [docs.grantex.dev/guides/compliance-matrix](https://docs.grantex.dev/guides/compliance-matrix)
 
 ---
 
