@@ -113,19 +113,10 @@ export async function verifyPassport(
     // Verify the JWS — the proofValue is a compact JWS of the credential
     await jose.compactVerify(proofValue, keyStore);
   } catch (err) {
-    // If compact JWS verification fails, try embedded signature verification
-    // For VC-JWT format, the proofValue may be the full JWT itself
-    if (credential.proof.proofValue) {
-      try {
-        const keyStore = jose.createLocalJWKSet(jwks);
-        await jose.jwtVerify(credential.proof.proofValue, keyStore);
-      } catch {
-        throw new PassportVerificationError(
-          'INVALID_SIGNATURE',
-          `Signature verification failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    } else {
+    try {
+      const keyStore = jose.createLocalJWKSet(jwks);
+      await jose.jwtVerify(credential.proof.proofValue, keyStore);
+    } catch {
       throw new PassportVerificationError(
         'INVALID_SIGNATURE',
         `Signature verification failed: ${err instanceof Error ? err.message : String(err)}`,

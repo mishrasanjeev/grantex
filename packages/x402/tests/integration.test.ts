@@ -12,7 +12,6 @@ import {
   getAuditLog,
   x402Middleware,
   createX402Agent,
-  HEADERS,
 } from '../src/index.js';
 
 describe('Integration tests', () => {

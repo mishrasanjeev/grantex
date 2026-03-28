@@ -1,20 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { execSync } from 'node:child_process';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { writeFileSync, unlinkSync, existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateKeyPair } from '../src/crypto.js';
 import { issueGDT } from '../src/gdt.js';
-import { InMemoryAuditLog, setAuditLog } from '../src/audit.js';
-import { InMemoryRevocationRegistry, setRevocationRegistry } from '../src/revocation.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CLI = 'npx tsx src/cli.ts';
 const cwd = join(__dirname, '..');
 
 function run(args: string, env?: Record<string, string>): { stdout: string; exitCode: number } {
   try {
-    const stdout = execSync(`${CLI} ${args}`, {
+    const stdout = execFileSync('npx', ['tsx', 'src/cli.ts', ...args.split(/\s+/).filter(Boolean)], {
       cwd,
       encoding: 'utf8',
       env: { ...process.env, ...env },

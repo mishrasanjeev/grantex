@@ -22,6 +22,24 @@ import {
 const app = express();
 app.use(express.json());
 
+// Simple in-memory rate limiter: 100 requests per minute per IP
+const rateLimitMap = new Map<string, { count: number; reset: number }>();
+app.use((req, res, next) => {
+  const ip = req.ip ?? 'unknown';
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.reset) {
+    rateLimitMap.set(ip, { count: 1, reset: now + 60_000 });
+    return next();
+  }
+  if (entry.count >= 100) {
+    res.status(429).json({ error: 'TOO_MANY_REQUESTS' });
+    return;
+  }
+  entry.count++;
+  next();
+});
+
 const PORT = 3402;
 const PRICE = 0.001; // $0.001 USDC per request
 const RECIPIENT = '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD18'; // mock wallet

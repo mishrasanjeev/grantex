@@ -7,7 +7,7 @@ vi.mock('../src/config.js', () => ({
   resolveConfig: vi.fn(),
 }));
 
-import { saveConfig, loadConfig, resolveConfig, defaultConfigPath } from '../src/config.js';
+import { saveConfig, loadConfig, resolveConfig } from '../src/config.js';
 import { configCommand } from '../src/commands/config.js';
 
 describe('configCommand() actions', () => {

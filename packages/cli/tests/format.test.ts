@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { printTable, printRecord, shortDate, tableToString, setJsonMode, isJsonMode } from '../src/format.js';
 
 afterEach(() => {

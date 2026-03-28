@@ -283,7 +283,7 @@ function issueToken(){
 
 function verifyToken(){
   const token=document.getElementById('verify-token').value||currentToken;
-  if(!token){alert('Issue a GDT first');return}
+  if(!token){alert('Issue a GDT first');return;}
 
   const resource=document.getElementById('verify-resource').value;
   const amount=parseFloat(document.getElementById('verify-amount').value);
@@ -313,12 +313,22 @@ function verifyToken(){
 
     const el=document.getElementById('verify-result');
     el.className='output '+(valid?'success':'error');
-    el.innerHTML=(valid?'<span class="status pass">VALID</span>':'<span class="status fail">INVALID</span>')+'\n\n'+JSON.stringify(result,null,2);
+    el.textContent='';
+    const span=document.createElement('span');
+    span.className='status '+(valid?'pass':'fail');
+    span.textContent=valid?'VALID':'INVALID';
+    el.appendChild(span);
+    el.appendChild(document.createTextNode('\n\n'+JSON.stringify(result,null,2)));
     document.getElementById('verify-output').classList.remove('hidden');
   }catch(e){
     const el=document.getElementById('verify-result');
     el.className='output error';
-    el.innerHTML='<span class="status fail">ERROR</span>\n\nFailed to decode token: '+e.message;
+    el.textContent='';
+    const span=document.createElement('span');
+    span.className='status fail';
+    span.textContent='ERROR';
+    el.appendChild(span);
+    el.appendChild(document.createTextNode('\n\nFailed to decode token: '+e.message));
     document.getElementById('verify-output').classList.remove('hidden');
   }
 }

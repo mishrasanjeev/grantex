@@ -11,8 +11,7 @@
  *   grantex-x402 inspect <token>                 Alias for decode
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { generateKeyPair } from './crypto.js';
 import { issueGDT } from './gdt.js';
 import { verifyGDT, decodeGDT } from './verify.js';
@@ -27,10 +26,6 @@ function getFlag(name: string): string | undefined {
   const idx = args.indexOf(`--${name}`);
   if (idx === -1 || idx + 1 >= args.length) return undefined;
   return args[idx + 1];
-}
-
-function hasFlag(name: string): boolean {
-  return args.includes(`--${name}`);
 }
 
 function printUsage(): void {

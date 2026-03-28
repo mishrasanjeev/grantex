@@ -168,8 +168,6 @@ export interface X402MiddlewareOptions {
   required?: boolean;
   /** Expected scope(s) the request must match. If not set, any scope passes. */
   requiredScopes?: string[];
-  /** Custom verify function (for testing or custom verification logic). */
-  verifyFn?: (token: string, context: VerifyContext) => Promise<VerifyResult>;
   /** Extract the spend amount from the request. Default: reads X-Payment-Amount header. */
   extractAmount?: (req: unknown) => number;
   /** Currency to use for verification. Default: 'USDC'. */

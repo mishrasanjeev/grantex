@@ -5,7 +5,7 @@
  */
 
 import * as ed from '@noble/ed25519';
-import { importJWK, exportJWK, SignJWT, jwtVerify, type JWK, type KeyLike } from 'jose';
+import { importJWK, SignJWT, jwtVerify, type JWK, type KeyLike } from 'jose';
 import { publicKeyToDID, didToPublicKey } from './did.js';
 import type { Ed25519KeyPair } from './types.js';
 

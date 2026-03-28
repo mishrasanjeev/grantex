@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { SignJWT } from 'jose';
 import { getSql } from '../db/client.js';
-import { newVerifiableCredentialId } from '../lib/ids.js';
 import { getKeyPair, getEdKeyPair, parseExpiresIn } from '../lib/crypto.js';
 import { getOrCreateStatusList } from '../lib/vc.js';
 import { emitEvent } from '../lib/events.js';
