@@ -91,4 +91,31 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       });
     },
   );
+
+  // PATCH /v1/admin/developers/:id/plan — Set developer plan (admin only)
+  app.patch<{ Params: { id: string }; Body: { plan: string } }>(
+    '/v1/admin/developers/:id/plan',
+    { config: { skipAuth: true } },
+    async (request, reply) => {
+      if (!checkAdmin(request, reply)) return;
+
+      const { id } = request.params;
+      const { plan } = request.body;
+
+      if (!plan || !['free', 'pro', 'enterprise'].includes(plan)) {
+        return reply.status(400).send({ message: "plan must be 'free', 'pro', or 'enterprise'" });
+      }
+
+      const sql = getSql();
+
+      // Upsert subscription
+      await sql`
+        INSERT INTO subscriptions (id, developer_id, plan, status, created_at, updated_at)
+        VALUES (${`sub_admin_${id}`}, ${id}, ${plan}, 'active', NOW(), NOW())
+        ON CONFLICT (developer_id) DO UPDATE SET plan = ${plan}, updated_at = NOW()
+      `;
+
+      return reply.send({ developerId: id, plan });
+    },
+  );
 }
