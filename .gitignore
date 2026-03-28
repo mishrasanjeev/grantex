@@ -41,6 +41,9 @@ LAUNCH_PLAYBOOK.md
 LAUNCH_POSTS.md
 DEVTO_ARTICLE.md
 
+# Recordings (local only)
+recordings/
+
 # Coverage & caches
 coverage/
 .cache/
