@@ -958,12 +958,18 @@
         <code>pip install grantex</code>
         <span class="install-copy">Copy</span>
       </div>
+      <div class="install-cmd" onclick="copyInstall('npm install -g @grantex/cli', this)">
+        <span class="install-label">CLI</span>
+        <code>npm install -g @grantex/cli</code>
+        <span class="install-copy">Copy</span>
+      </div>
     </div>
 
     <div style="max-width:680px;">
       <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('node', this)">Node.js</button>
         <button class="tab-btn" onclick="switchTab('python', this)">Python</button>
+        <button class="tab-btn" onclick="switchTab('cli', this)">CLI</button>
       </div>
 
       <!-- Node.js -->
@@ -1015,6 +1021,28 @@
 <span class="cm"># 3. Use the token — scopes, grantId, and JWT are all available</span>
 <span class="fn">print</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">scopes</span><span class="op">)</span>      <span class="cm"># ('calendar:read', 'email:send')</span>
 <span class="fn">print</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">grant_token</span><span class="op">)</span> <span class="cm"># RS256-signed JWT</span></pre>
+        </div>
+      </div>
+
+      <!-- CLI -->
+      <div class="tab-panel" id="tab-cli">
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode('code-cli', this, 'cli_copy')">Copy</button>
+          <pre id="code-cli"><span class="cm"># npm install -g @grantex/cli</span>
+<span class="cm"># All commands support --json for AI agent / script use</span>
+
+<span class="cm"># 1. Request authorization (sandbox auto-approves)</span>
+<span class="id">grantex</span> <span class="id">authorize</span> <span class="op">--</span><span class="id">agent</span> <span class="str">ag_01J...</span> <span class="op">--</span><span class="id">principal</span> <span class="str">user@example.com</span> \
+  <span class="op">--</span><span class="id">scopes</span> <span class="str">calendar:read,email:send</span>
+
+<span class="cm"># 2. Exchange the code for a grant token</span>
+<span class="id">grantex</span> <span class="id">tokens</span> <span class="id">exchange</span> <span class="op">--</span><span class="id">code</span> <span class="str">&lt;code&gt;</span> <span class="op">--</span><span class="id">agent-id</span> <span class="str">ag_01J...</span>
+
+<span class="cm"># 3. Verify the token</span>
+<span class="id">grantex</span> <span class="id">tokens</span> <span class="id">verify</span> <span class="str">&lt;jwt&gt;</span>
+
+<span class="cm"># Machine-readable output</span>
+<span class="id">grantex</span> <span class="op">--</span><span class="id">json</span> <span class="id">grants</span> <span class="id">list</span> <span class="op">|</span> <span class="id">jq</span> <span class="str">'.[0].grantId'</span></pre>
         </div>
       </div>
     </div>

@@ -1210,15 +1210,23 @@ read_calendar = create_grantex_tool(
 # Returns a plain function — pass directly to google.adk.Agent(tools=[...])
 ```
 
-**CLI**:
+**CLI** (83 commands, all support `--json` for AI agent / scripting use):
 
 ```bash
 grantex config set --url https://grantex-auth-dd4mtrt2gq-uc.a.run.app --key YOUR_API_KEY
-grantex agents list
-grantex grants list --status active
-grantex audit list --since 2026-01-01
-grantex anomalies detect
-grantex compliance summary
+grantex me                                            # check identity
+grantex agents register --name "Bot" --description "..." --scopes email:read
+grantex authorize --agent ag_... --principal user@example.com --scopes email:read
+grantex tokens exchange --code <code> --agent-id ag_...
+grantex tokens verify <jwt>
+grantex tokens refresh --refresh-token <token> --agent-id ag_...
+grantex grants delegate --grant-token <jwt> --agent-id ag_child... --scopes email:read
+grantex budgets allocate --grant-id grnt_... --amount 100
+grantex audit list --agent ag_...
+grantex grants revoke grnt_...
+
+# Machine-readable output for scripts and AI coding assistants
+grantex --json agents list | jq '.[0].agentId'
 ```
 
 ---

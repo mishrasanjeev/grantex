@@ -211,6 +211,65 @@ grantex billing checkout pro --success-url https://myapp.com/success --cancel-ur
 grantex billing portal --return-url https://myapp.com/settings
 ```
 
+### Account
+
+```bash
+# Show your developer profile and settings
+grantex me
+grantex --json me
+```
+
+### Vault (Credential Storage)
+
+```bash
+grantex vault list
+grantex vault list --principal user@example.com --service google
+grantex vault get cred_01ABC...
+grantex vault store --principal-id user@example.com --service google --access-token ya29... \
+  --refresh-token 1//0e... --token-expires-at 2026-04-01T00:00:00Z
+grantex vault delete cred_01ABC...
+grantex vault exchange --grant-token <jwt> --service google
+```
+
+### WebAuthn / FIDO2
+
+```bash
+# Generate registration challenge
+grantex webauthn register-options --principal-id user@example.com
+
+# Verify registration (pass browser attestation response as JSON)
+grantex webauthn register-verify --challenge-id ch_01ABC... --response '{"id":"...","response":{...}}' \
+  --device-name "MacBook Pro"
+
+# List and delete credentials
+grantex webauthn list user@example.com
+grantex webauthn delete cred_01ABC...
+```
+
+### Verifiable Credentials
+
+```bash
+grantex credentials list
+grantex credentials list --grant-id grnt_01ABC... --status active
+grantex credentials get vc_01ABC...
+
+# Verify a VC-JWT
+grantex credentials verify --vc-jwt eyJ...
+
+# Verify an SD-JWT presentation
+grantex credentials present --sd-jwt eyJ... --nonce abc123
+```
+
+### Agent Passports (MPP)
+
+```bash
+grantex passports issue --agent-id ag_01ABC... --grant-id grnt_01XYZ... \
+  --categories "compute,storage" --max-amount 100 --currency USD
+grantex passports list --agent-id ag_01ABC...
+grantex passports get pp_01ABC...
+grantex passports revoke pp_01ABC...
+```
+
 ### SCIM
 
 ```bash
@@ -222,6 +281,10 @@ grantex scim tokens revoke tok_01ABC...
 # User provisioning
 grantex scim users list
 grantex scim users get usr_01ABC...
+grantex scim users create --user-name john@example.com --display-name "John Doe" --email john@example.com
+grantex scim users update usr_01ABC... --display-name "John D." --active true
+grantex scim users replace usr_01ABC... --user-name john@example.com --display-name "John Doe"
+grantex scim users delete usr_01ABC...
 ```
 
 ### SSO
@@ -232,6 +295,7 @@ grantex sso configure --issuer-url https://accounts.google.com --client-id CLIEN
   --client-secret CLIENT_SECRET --redirect-uri https://myapp.com/callback
 grantex sso delete
 grantex sso login-url my-org
+grantex sso callback --code AUTH_CODE --state STATE_PARAM
 ```
 
 ## Full Workflow Example
