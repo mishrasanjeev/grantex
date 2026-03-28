@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { buildTestApp, seedAuth, authHeader, sqlMock, TEST_DEVELOPER, TEST_AGENT } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
-import { initKeys, getKeyPair } from '../src/lib/crypto.js';
+import { getKeyPair } from '../src/lib/crypto.js';
 import { SignJWT, decodeJwt } from 'jose';
 import { gzipSync } from 'node:zlib';
 

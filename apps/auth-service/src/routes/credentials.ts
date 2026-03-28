@@ -93,7 +93,7 @@ export async function credentialsRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/credentials/verify — verify a VC-JWT (public, skipAuth)
   app.post<{ Body: { credential: string } }>(
     '/v1/credentials/verify',
-    { config: { skipAuth: true } },
+    { config: { skipAuth: true, rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const { credential } = request.body;
       if (!credential) {
@@ -132,7 +132,7 @@ export async function credentialsRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/credentials/present — verify an SD-JWT presentation (public, skipAuth)
   app.post<{ Body: { sdJwt: string; nonce?: string; audience?: string } }>(
     '/v1/credentials/present',
-    { config: { skipAuth: true } },
+    { config: { skipAuth: true, rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const { sdJwt } = request.body;
       if (!sdJwt) {

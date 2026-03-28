@@ -290,7 +290,15 @@ export async function verifySDJWT(sdJwt: string): Promise<SDJWTVerifyResult> {
       return { valid: false, ...vcIdFields, error: 'Disclosure hash not found in _sd array — possible tampering' };
     }
 
-    disclosedClaims[disclosure.claimName] = disclosure.claimValue;
+    if (disclosure.claimName === '__proto__' || disclosure.claimName === 'constructor' || disclosure.claimName === 'prototype') {
+      return { valid: false, ...vcIdFields, error: `Forbidden claim name: ${disclosure.claimName}` };
+    }
+    Object.defineProperty(disclosedClaims, disclosure.claimName, {
+      value: disclosure.claimValue,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
   }
 
   // If a key-binding JWT is present, verify it
