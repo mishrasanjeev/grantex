@@ -876,56 +876,57 @@
       color: var(--accent);
     }
 
-    /* ── Alternatives grid ────────────────────────────────────────────────── */
-    .alt-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-    .alt-card {
+    /* ── Alternatives table ──────────────────────────────────────────────── */
+    .alt-table {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      font-size: 14px;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 24px;
+      overflow: hidden;
     }
-    .alt-card.grantex-card {
-      border-color: var(--accent);
-      background: rgba(63, 185, 80, 0.04);
-      grid-column: 1 / -1;
+    .alt-table th {
+      font-size: 11px;
+      font-family: var(--mono);
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      padding: 14px 10px;
+      border-bottom: 2px solid var(--border);
+      text-align: center;
     }
-    .alt-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
+    .alt-table th:first-child { text-align: left; width: 28%; padding-left: 20px; }
+    .alt-table td {
+      padding: 14px 10px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      text-align: center;
+      font-size: 18px;
     }
-    .alt-card-name {
-      font-size: 16px;
+    .alt-table td:first-child {
+      text-align: left;
+      padding-left: 20px;
+      font-size: 14px;
+    }
+    .alt-table tr:last-child td { border-bottom: none; }
+    .alt-table .tool-name {
       font-weight: 600;
       color: var(--text);
+      display: block;
     }
-    .alt-card.grantex-card .alt-card-name { color: var(--accent); }
-    .alt-card-desc {
-      font-size: 13px;
+    .alt-table .tool-desc {
+      font-size: 12px;
       color: var(--muted);
-      margin-bottom: 14px;
+      font-weight: 400;
     }
-    .alt-caps {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
+    .alt-table .grantex-row td {
+      background: rgba(63, 185, 80, 0.04);
     }
-    .alt-cap {
-      font-family: var(--mono);
-      font-size: 11px;
-      padding: 3px 10px;
-      border-radius: 4px;
-      border: 1px solid var(--border);
-    }
-    .alt-cap.yes { color: var(--accent); border-color: rgba(63, 185, 80, 0.3); background: rgba(63, 185, 80, 0.08); }
-    .alt-cap.no { color: #484f58; border-color: var(--border); background: transparent; text-decoration: line-through; }
-    .alt-cap.partial { color: #d29922; border-color: rgba(210, 153, 34, 0.3); background: rgba(210, 153, 34, 0.08); }
+    .alt-table .grantex-row .tool-name { color: var(--accent); }
+    .alt-table .check { color: var(--accent); }
+    .alt-table .cross { color: #30363d; }
+    .alt-table .partial { color: #d29922; font-size: 12px; }
 
     /* ── Responsive ────────────────────────────────────────────────────────── */
     @media (max-width: 640px) {
@@ -1157,74 +1158,68 @@
       agent identity layer that works alongside them.
     </p>
 
-    <div class="alt-grid">
-      <div class="alt-card">
-        <div class="alt-card-name">HashiCorp Vault</div>
-        <div class="alt-card-desc">Secret storage &amp; rotation</div>
-        <div class="alt-caps">
-          <span class="alt-cap yes">Secrets at rest</span>
-          <span class="alt-cap no">Agent identity</span>
-          <span class="alt-cap no">Scoped tokens</span>
-          <span class="alt-cap no">Per-agent revoke</span>
-          <span class="alt-cap no">Audit trail</span>
-        </div>
-      </div>
-      <div class="alt-card">
-        <div class="alt-card-name">AWS Secrets Manager</div>
-        <div class="alt-card-desc">Encrypted secret storage</div>
-        <div class="alt-caps">
-          <span class="alt-cap yes">Secrets at rest</span>
-          <span class="alt-cap no">Agent identity</span>
-          <span class="alt-cap no">Scoped tokens</span>
-          <span class="alt-cap no">Per-agent revoke</span>
-          <span class="alt-cap partial">Audit trail</span>
-        </div>
-      </div>
-      <div class="alt-card">
-        <div class="alt-card-name">GitGuardian</div>
-        <div class="alt-card-desc">Detects leaked secrets</div>
-        <div class="alt-caps">
-          <span class="alt-cap partial">Secrets at rest</span>
-          <span class="alt-cap no">Agent identity</span>
-          <span class="alt-cap no">Scoped tokens</span>
-          <span class="alt-cap no">Per-agent revoke</span>
-          <span class="alt-cap no">Audit trail</span>
-        </div>
-      </div>
-      <div class="alt-card">
-        <div class="alt-card-name">Snyk / Socket</div>
-        <div class="alt-card-desc">Dependency vuln scanning</div>
-        <div class="alt-caps">
-          <span class="alt-cap no">Secrets at rest</span>
-          <span class="alt-cap no">Agent identity</span>
-          <span class="alt-cap no">Scoped tokens</span>
-          <span class="alt-cap no">Per-agent revoke</span>
-          <span class="alt-cap no">Audit trail</span>
-        </div>
-      </div>
-      <div class="alt-card">
-        <div class="alt-card-name">Doppler</div>
-        <div class="alt-card-desc">Secrets injection at deploy</div>
-        <div class="alt-caps">
-          <span class="alt-cap yes">Secrets at rest</span>
-          <span class="alt-cap no">Agent identity</span>
-          <span class="alt-cap no">Scoped tokens</span>
-          <span class="alt-cap no">Per-agent revoke</span>
-          <span class="alt-cap no">Audit trail</span>
-        </div>
-      </div>
-      <div class="alt-card grantex-card">
-        <div class="alt-card-name">Grantex</div>
-        <div class="alt-card-desc">Agent authorization protocol &mdash; works alongside your existing stack</div>
-        <div class="alt-caps">
-          <span class="alt-cap yes">Credential vault</span>
-          <span class="alt-cap yes">Agent identity</span>
-          <span class="alt-cap yes">Scoped tokens</span>
-          <span class="alt-cap yes">Per-agent revoke</span>
-          <span class="alt-cap yes">Audit trail</span>
-        </div>
-      </div>
-    </div>
+    <table class="alt-table">
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>Secrets</th>
+          <th>Agent ID</th>
+          <th>Scoped</th>
+          <th>Revoke</th>
+          <th>Audit</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tool-name">HashiCorp Vault</span><span class="tool-desc">Secret storage &amp; rotation</span></td>
+          <td class="check">&#10003;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">AWS Secrets Mgr</span><span class="tool-desc">Encrypted secret storage</span></td>
+          <td class="check">&#10003;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+          <td class="partial">~</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">GitGuardian</span><span class="tool-desc">Detects leaked secrets</span></td>
+          <td class="partial">~</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">Snyk / Socket</span><span class="tool-desc">Dependency vuln scanning</span></td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+        </tr>
+        <tr>
+          <td><span class="tool-name">Doppler</span><span class="tool-desc">Secrets injection at deploy</span></td>
+          <td class="check">&#10003;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+          <td class="cross">&#10005;</td>
+        </tr>
+        <tr class="grantex-row">
+          <td><span class="tool-name">Grantex</span><span class="tool-desc">Agent authorization protocol</span></td>
+          <td class="check">&#10003;</td>
+          <td class="check">&#10003;</td>
+          <td class="check">&#10003;</td>
+          <td class="check">&#10003;</td>
+          <td class="check">&#10003;</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
