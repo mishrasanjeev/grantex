@@ -8,7 +8,7 @@
 
 import { verifyGDT } from './verify.js';
 import { HEADERS } from './agent.js';
-import type { X402MiddlewareOptions, VerifyContext, VerifyResult, Currency } from './types.js';
+import type { X402MiddlewareOptions, VerifyContext, VerifyResult } from './types.js';
 
 /** Express-compatible request type (avoids hard dependency). */
 interface ExpressRequest {
@@ -64,7 +64,6 @@ export function x402Middleware(options: X402MiddlewareOptions = {}) {
   const {
     required = true,
     requiredScopes,
-    verifyFn = verifyGDT,
     currency = 'USDC',
   } = options;
 
@@ -112,7 +111,7 @@ export function x402Middleware(options: X402MiddlewareOptions = {}) {
     // Verify GDT
     let result: VerifyResult;
     try {
-      result = await verifyFn(gdtToken, context);
+      result = await verifyGDT(gdtToken, context);
     } catch (err) {
       res.status(403).json({
         error: 'GDT_VERIFICATION_ERROR',

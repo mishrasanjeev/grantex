@@ -264,6 +264,12 @@
     const spendTotals = { inference: 0, compute: 0, data: 0 };
     let lastIssuedPassport = null;
 
+    function escapeHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
     // ── Navigation ─────────────────────────────────────────────────────────
     function showScreen(name) {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -335,11 +341,11 @@
       const agentName = agentId.replace('ag_', '').replace('_01', '');
       document.getElementById('issue-summary').innerHTML =
         `<p><strong>Passport issued!</strong></p>` +
-        `<p>Agent <strong>${agentName}</strong> is authorized to spend up to ` +
-        `<strong>${amount} USDC</strong> on <strong>${categories.join(', ')}</strong> services, ` +
+        `<p>Agent <strong>${escapeHtml(agentName)}</strong> is authorized to spend up to ` +
+        `<strong>${escapeHtml(String(amount))} USDC</strong> on <strong>${escapeHtml(categories.join(', '))}</strong> services, ` +
         `on behalf of <strong>Sanjeev Mishra</strong> (did:grantex:user_sanjeev), ` +
-        `valid for <strong>${expiry}</strong>.</p>` +
-        `<p style="margin-top:0.5rem"><span class="badge badge-green">ID: ${passportId}</span></p>`;
+        `valid for <strong>${escapeHtml(expiry)}</strong>.</p>` +
+        `<p style="margin-top:0.5rem"><span class="badge badge-green">ID: ${escapeHtml(passportId)}</span></p>`;
 
       document.getElementById('issue-actions').innerHTML =
         `<button class="btn btn-primary btn-small" onclick="sendToVerifier()">Verify this passport</button>` +
@@ -512,7 +518,7 @@
         if (res.status === 404) {
           resultDiv.innerHTML = `<div class="verify-result invalid" style="margin-top:1rem">
             <span class="badge badge-yellow">NOT FOUND</span>
-            <p style="margin-top:0.5rem">Organization ${did} is not in the trust registry</p>
+            <p style="margin-top:0.5rem">Organization ${escapeHtml(did)} is not in the trust registry</p>
           </div>`;
           return;
         }

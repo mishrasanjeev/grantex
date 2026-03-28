@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { requireClient } from '../client.js';
-import { printTable, printRecord, shortDate, isJsonMode } from '../format.js';
+import { printTable, shortDate, isJsonMode } from '../format.js';
 
 export function webauthnCommand(): Command {
   const cmd = new Command('webauthn').description('Manage FIDO2/WebAuthn credentials');

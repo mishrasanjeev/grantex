@@ -92,6 +92,7 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/trust-registry/verify-dns — Protected: trigger DNS TXT verification for an org
   app.post<{ Body: { domain: string } }>(
     '/v1/trust-registry/verify-dns',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const { domain } = request.body;
 

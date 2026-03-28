@@ -202,31 +202,4 @@ describe('x402Middleware', () => {
       expect((res.body as Record<string, unknown>)['error']).toBe('INSUFFICIENT_SCOPE');
     });
   });
-
-  describe('custom verifyFn', () => {
-    it('uses custom verify function', async () => {
-      const customVerify = vi.fn().mockResolvedValue({
-        valid: true,
-        agentDID: 'did:key:custom',
-        principalDID: 'did:key:custom-principal',
-        remainingLimit: 100,
-        tokenId: 'custom-token',
-        scopes: ['weather:read'],
-        expiresAt: '2030-01-01T00:00:00Z',
-      });
-
-      const middleware = x402Middleware({
-        requiredScopes: ['weather:read'],
-        verifyFn: customVerify,
-      });
-      const req = mockReq({ 'X-Grantex-GDT': 'any-token', 'X-Payment-Amount': '1' });
-      const res = mockRes();
-      const next = vi.fn();
-
-      await middleware(req as never, res as never, next);
-
-      expect(customVerify).toHaveBeenCalled();
-      expect(next).toHaveBeenCalled();
-    });
-  });
 });

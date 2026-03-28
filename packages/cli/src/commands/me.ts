@@ -18,6 +18,7 @@ export function meCommand(): Command {
       process.exit(1);
     }
 
+    // lgtm[js/file-access-to-http] — intentional: CLI reads API key from config file to authenticate
     const res = await fetch(`${config.baseUrl.replace(/\/$/, '')}/v1/me`, {
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
