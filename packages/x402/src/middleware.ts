@@ -62,7 +62,6 @@ export interface GDTRequestInfo {
  */
 export function x402Middleware(options: X402MiddlewareOptions = {}) {
   const {
-    required = true,
     requiredScopes,
     currency = 'USDC',
   } = options;
@@ -79,17 +78,11 @@ export function x402Middleware(options: X402MiddlewareOptions = {}) {
         ? req.headers['x-grantex-gdt']
         : undefined);
 
-    // No GDT header
     if (!gdtToken) {
-      if (required) {
-        res.status(403).json({
-          error: 'MISSING_GDT',
-          message: 'A valid Grantex Delegation Token (GDT) is required. Include it in the X-Grantex-GDT header.',
-        });
-        return;
-      }
-      // Not required — pass through
-      next();
+      res.status(403).json({
+        error: 'MISSING_GDT',
+        message: 'A valid Grantex Delegation Token (GDT) is required. Include it in the X-Grantex-GDT header.',
+      });
       return;
     }
 
