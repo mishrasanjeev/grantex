@@ -25,44 +25,53 @@ import { vaultCommand } from './commands/vault.js';
 import { webauthnCommand } from './commands/webauthn.js';
 import { webhooksCommand } from './commands/webhooks.js';
 
-const program = new Command();
+export function createProgram(): Command {
+  const program = new Command();
 
-program
-  .name('grantex')
-  .description('CLI for the Grantex delegated authorization protocol')
-  .version('0.1.7')
-  .option('--json', 'Output results as JSON (machine-readable)')
-  .hook('preAction', () => {
-    if (program.opts().json) {
-      setJsonMode(true);
-    }
+  program
+    .name('grantex')
+    .description('CLI for the Grantex delegated authorization protocol')
+    .version('0.1.7')
+    .option('--json', 'Output results as JSON (machine-readable)')
+    .hook('preAction', () => {
+      if (program.opts().json) {
+        setJsonMode(true);
+      }
+    });
+
+  program.addCommand(configCommand());
+  program.addCommand(meCommand());
+  program.addCommand(agentsCommand());
+  program.addCommand(authorizeCommand());
+  program.addCommand(grantsCommand());
+  program.addCommand(tokensCommand());
+  program.addCommand(auditCommand());
+  program.addCommand(webhooksCommand());
+  program.addCommand(policiesCommand());
+  program.addCommand(budgetsCommand());
+  program.addCommand(usageCommand());
+  program.addCommand(domainsCommand());
+  program.addCommand(eventsCommand());
+  program.addCommand(principalSessionsCommand());
+  program.addCommand(credentialsCommand());
+  program.addCommand(passportsCommand());
+  program.addCommand(vaultCommand());
+  program.addCommand(webauthnCommand());
+  program.addCommand(complianceCommand());
+  program.addCommand(anomaliesCommand());
+  program.addCommand(billingCommand());
+  program.addCommand(scimCommand());
+  program.addCommand(ssoCommand());
+
+  return program;
+}
+
+// Only run when executed directly (not when imported in tests)
+/* c8 ignore next 7 */
+if (process.env['VITEST'] === undefined) {
+  const program = createProgram();
+  program.parseAsync(process.argv).catch((err: unknown) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
   });
-
-program.addCommand(configCommand());
-program.addCommand(meCommand());
-program.addCommand(agentsCommand());
-program.addCommand(authorizeCommand());
-program.addCommand(grantsCommand());
-program.addCommand(tokensCommand());
-program.addCommand(auditCommand());
-program.addCommand(webhooksCommand());
-program.addCommand(policiesCommand());
-program.addCommand(budgetsCommand());
-program.addCommand(usageCommand());
-program.addCommand(domainsCommand());
-program.addCommand(eventsCommand());
-program.addCommand(principalSessionsCommand());
-program.addCommand(credentialsCommand());
-program.addCommand(passportsCommand());
-program.addCommand(vaultCommand());
-program.addCommand(webauthnCommand());
-program.addCommand(complianceCommand());
-program.addCommand(anomaliesCommand());
-program.addCommand(billingCommand());
-program.addCommand(scimCommand());
-program.addCommand(ssoCommand());
-
-program.parseAsync(process.argv).catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+}

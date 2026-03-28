@@ -22,7 +22,7 @@
     "dev": "node --loader ts-node/esm src/index.ts"
   },
   "dependencies": {
-    "@grantex/sdk": "^0.1.1",
+    "@grantex/sdk": "^0.2.5",
     "chalk": "^5.3.0",
     "commander": "^12.0.0"
   },
@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "^1.6.1",
     "typescript": "^5.3.3",
     "vitest": "^1.3.1"
   },

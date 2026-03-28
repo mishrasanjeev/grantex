@@ -1,5 +1,18 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { resolveConfig } from '../src/config.js';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
+const mockReadFile = vi.fn();
+const mockWriteFile = vi.fn();
+const mockMkdir = vi.fn();
+
+vi.mock('node:fs/promises', () => ({
+  readFile: (...args: unknown[]) => mockReadFile(...args),
+  writeFile: (...args: unknown[]) => mockWriteFile(...args),
+  mkdir: (...args: unknown[]) => mockMkdir(...args),
+}));
+
+import { resolveConfig, loadConfig, saveConfig, defaultConfigPath } from '../src/config.js';
 import type { CliConfig } from '../src/config.js';
 
 const FILE_CONFIG: CliConfig = {
@@ -9,6 +22,7 @@ const FILE_CONFIG: CliConfig = {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.clearAllMocks();
 });
 
 describe('resolveConfig', () => {
@@ -58,5 +72,52 @@ describe('resolveConfig', () => {
     vi.stubEnv('GRANTEX_KEY', '');
     const result = resolveConfig(null);
     expect(result).toBeNull();
+  });
+});
+
+describe('defaultConfigPath', () => {
+  it('returns a path under the user home directory', () => {
+    const configPath = defaultConfigPath();
+    expect(configPath).toContain('.grantex');
+    expect(configPath).toContain('config.json');
+    expect(configPath).toBe(path.join(os.homedir(), '.grantex', 'config.json'));
+  });
+});
+
+describe('loadConfig', () => {
+  it('returns parsed config when file exists', async () => {
+    const config: CliConfig = { baseUrl: 'http://localhost:3000', apiKey: 'test-key' };
+    mockReadFile.mockResolvedValue(JSON.stringify(config));
+
+    const result = await loadConfig('/tmp/test-config.json');
+    expect(result).toEqual(config);
+    expect(mockReadFile).toHaveBeenCalledWith('/tmp/test-config.json', 'utf8');
+  });
+
+  it('returns null when file does not exist', async () => {
+    mockReadFile.mockRejectedValue(new Error('ENOENT'));
+
+    const result = await loadConfig('/tmp/nonexistent.json');
+    expect(result).toBeNull();
+  });
+});
+
+describe('saveConfig', () => {
+  it('creates directory and writes config file', async () => {
+    mockMkdir.mockResolvedValue(undefined);
+    mockWriteFile.mockResolvedValue(undefined);
+    const config: CliConfig = { baseUrl: 'http://localhost:3000', apiKey: 'test-key' };
+
+    await saveConfig('/home/user/.grantex/config.json', config);
+
+    expect(mockMkdir).toHaveBeenCalledWith(
+      path.dirname('/home/user/.grantex/config.json'),
+      { recursive: true },
+    );
+    expect(mockWriteFile).toHaveBeenCalledWith(
+      '/home/user/.grantex/config.json',
+      JSON.stringify(config, null, 2) + '\n',
+      'utf8',
+    );
   });
 });
