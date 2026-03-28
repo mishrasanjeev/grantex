@@ -63,6 +63,14 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 4. Code exchanged for signed grant token (RS256 JWT)
 5. Any service verifies the token offline via JWKS
 
+## Compliance Coverage
+
+- OWASP Agentic Top 10 (Dec 2025): ASI-01 (goal hijacking), ASI-03 (identity abuse), ASI-05 (privilege escalation), ASI-10 (rogue agents)
+- EU AI Act (binding Aug 2026): Art. 9 (risk management), Art. 13 (transparency), Art. 14 (human oversight)
+- NIST AI RMF + EO 14110: Govern 1.1 (accountability), Map 5.1 (attribution), Measure 2.5 (audit trails)
+- SOC 2 Type I certified
+- Full compliance matrix: https://docs.grantex.dev/guides/compliance-matrix
+
 ## Comparisons
 
 - vs OAuth 2.0: Grantex adds cryptographic agent identity, delegation chains, action-level audit, and sub-second revocation
