@@ -63,5 +63,25 @@ export function ssoCommand(): Command {
       console.log(authorizeUrl);
     });
 
+  cmd
+    .command('callback')
+    .description('Handle an SSO callback (exchange code + state for user info)')
+    .requiredOption('--code <code>', 'Authorization code from SSO provider')
+    .requiredOption('--state <state>', 'State parameter from SSO redirect')
+    .action(async (opts: { code: string; state: string }) => {
+      const client = await requireClient();
+      const res = await client.sso.handleCallback(opts.code, opts.state);
+      if (isJsonMode()) {
+        console.log(JSON.stringify(res, null, 2));
+        return;
+      }
+      printRecord({
+        email: res.email ?? '—',
+        name: res.name ?? '—',
+        sub: res.sub ?? '—',
+        developerId: res.developerId,
+      });
+    });
+
   return cmd;
 }
