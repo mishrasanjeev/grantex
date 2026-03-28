@@ -101,12 +101,12 @@ describe('issueSDJWT', () => {
   });
 
   it('includes delegation depth in selective fields by default', async () => {
-    const { sdJwt, disclosures } = await issueSDJWT({
+    const result = await issueSDJWT({
       ...defaultParams,
       delegationDepth: 2,
     });
 
-    const decoded = disclosures.map(decodeDisclosure);
+    const decoded = result.disclosures.map(decodeDisclosure);
     const depthDisclosure = decoded.find((d) => d.claimName === 'delegationDepth');
     expect(depthDisclosure).toBeDefined();
     expect(depthDisclosure!.claimValue).toBe(2);
@@ -275,7 +275,6 @@ describe('verifySDJWT', () => {
     // Tamper with a disclosure — modify the base64url content
     const parts = sdJwt.split('~');
     const issuerJwt = parts[0]!;
-    const disclosures = parts.slice(1).filter((p) => p.length > 0);
 
     // Create a fake disclosure that does not match any _sd hash
     const fakeDisclosure = Buffer.from(
