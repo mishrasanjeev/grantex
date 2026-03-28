@@ -58,7 +58,7 @@ export function scimCommand(): Command {
   cmd.addCommand(tokens);
 
   // ── scim users ───────────────────────────────────────────────────────────
-  const users = new Command('users').description('View SCIM-provisioned users');
+  const users = new Command('users').description('Manage SCIM-provisioned users');
 
   users
     .command('list')
@@ -100,6 +100,89 @@ export function scimCommand(): Command {
         active: u.active ? 'yes' : 'no',
         emails: u.emails.map((e) => e.value).join(', ') || '—',
       });
+    });
+
+  users
+    .command('create')
+    .description('Create a SCIM user')
+    .requiredOption('--user-name <userName>', 'Unique user name')
+    .option('--display-name <name>', 'Display name')
+    .option('--external-id <id>', 'External system user ID')
+    .option('--email <email>', 'Primary email address')
+    .action(async (opts: { userName: string; displayName?: string; externalId?: string; email?: string }) => {
+      const client = await requireClient();
+      const res = await client.scim.createUser({
+        userName: opts.userName,
+        ...(opts.displayName !== undefined ? { displayName: opts.displayName } : {}),
+        ...(opts.externalId !== undefined ? { externalId: opts.externalId } : {}),
+        ...(opts.email !== undefined ? { emails: [{ value: opts.email, primary: true }] } : {}),
+      });
+      if (isJsonMode()) {
+        console.log(JSON.stringify(res, null, 2));
+        return;
+      }
+      console.log(chalk.green('✓') + ` SCIM user created: ${res.id}`);
+    });
+
+  users
+    .command('update <userId>')
+    .description('Update a SCIM user (PATCH)')
+    .option('--display-name <name>', 'New display name')
+    .option('--active <bool>', 'Set active status (true/false)')
+    .option('--user-name <userName>', 'New user name')
+    .action(async (userId: string, opts: { displayName?: string; active?: string; userName?: string }) => {
+      const client = await requireClient();
+      const operations: Array<{ op: string; path: string; value: unknown }> = [];
+      if (opts.displayName !== undefined) operations.push({ op: 'replace', path: 'displayName', value: opts.displayName });
+      if (opts.active !== undefined) operations.push({ op: 'replace', path: 'active', value: opts.active === 'true' });
+      if (opts.userName !== undefined) operations.push({ op: 'replace', path: 'userName', value: opts.userName });
+
+      if (operations.length === 0) {
+        console.error('Error: provide at least one field to update (--display-name, --active, --user-name).');
+        process.exit(1);
+      }
+
+      const res = await client.scim.updateUser(userId, operations);
+      if (isJsonMode()) {
+        console.log(JSON.stringify(res, null, 2));
+        return;
+      }
+      console.log(chalk.green('✓') + ` SCIM user ${userId} updated.`);
+    });
+
+  users
+    .command('replace <userId>')
+    .description('Replace a SCIM user (PUT)')
+    .requiredOption('--user-name <userName>', 'User name')
+    .option('--display-name <name>', 'Display name')
+    .option('--email <email>', 'Primary email address')
+    .option('--active <bool>', 'Active status (true/false)', 'true')
+    .action(async (userId: string, opts: { userName: string; displayName?: string; email?: string; active: string }) => {
+      const client = await requireClient();
+      const res = await client.scim.replaceUser(userId, {
+        userName: opts.userName,
+        ...(opts.displayName !== undefined ? { displayName: opts.displayName } : {}),
+        ...(opts.email !== undefined ? { emails: [{ value: opts.email, primary: true }] } : {}),
+        active: opts.active === 'true',
+      });
+      if (isJsonMode()) {
+        console.log(JSON.stringify(res, null, 2));
+        return;
+      }
+      console.log(chalk.green('✓') + ` SCIM user ${userId} replaced.`);
+    });
+
+  users
+    .command('delete <userId>')
+    .description('Delete a SCIM user')
+    .action(async (userId: string) => {
+      const client = await requireClient();
+      await client.scim.deleteUser(userId);
+      if (isJsonMode()) {
+        console.log(JSON.stringify({ deleted: userId }));
+        return;
+      }
+      console.log(chalk.green('✓') + ` SCIM user ${userId} deleted.`);
     });
 
   cmd.addCommand(users);
