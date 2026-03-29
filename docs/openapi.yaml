@@ -317,6 +317,126 @@ components:
               type: string
               format: date-time
 
+    SsoConnection:
+      type: object
+      properties:
+        id:
+          type: string
+          description: SSO connection ID
+        developerId:
+          type: string
+        name:
+          type: string
+        protocol:
+          type: string
+          enum: [oidc, saml]
+        issuerUrl:
+          type: string
+        clientId:
+          type: string
+        idpEntityId:
+          type: string
+        idpSsoUrl:
+          type: string
+        spEntityId:
+          type: string
+        spAcsUrl:
+          type: string
+        domains:
+          type: array
+          items:
+            type: string
+        jitProvisioning:
+          type: boolean
+        enforce:
+          type: boolean
+        groupAttribute:
+          type: string
+        groupMappings:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        defaultScopes:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    SsoSession:
+      type: object
+      properties:
+        id:
+          type: string
+          description: SSO session ID
+        developerId:
+          type: string
+        connectionId:
+          type: string
+        protocol:
+          type: string
+          enum: [oidc, saml]
+        email:
+          type: string
+        name:
+          type: string
+        sub:
+          type: string
+          description: Subject identifier from the IdP
+        groups:
+          type: array
+          items:
+            type: string
+        mappedScopes:
+          type: array
+          items:
+            type: string
+        principalId:
+          type: string
+          description: JIT-provisioned principal ID (if applicable)
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    SsoCallbackResult:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          description: SSO session ID
+        email:
+          type: string
+        name:
+          type: string
+        sub:
+          type: string
+          description: Subject identifier from the IdP
+        groups:
+          type: array
+          items:
+            type: string
+        mappedScopes:
+          type: array
+          items:
+            type: string
+        principalId:
+          type: string
+          description: JIT-provisioned principal ID (if applicable)
+        developerId:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+
 security:
   - bearerAuth: []
 
@@ -2690,6 +2810,489 @@ paths:
                 $ref: "#/components/schemas/Error"
         "502":
           description: Token exchange with IdP failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ── Enterprise SSO ─────────────────────────────────────────────────
+  /v1/sso/connections:
+    post:
+      operationId: createSsoConnection
+      tags: [SSO]
+      summary: Create SSO Connection
+      description: Create a new OIDC or SAML 2.0 SSO connection for your organization.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Human-readable connection name
+                protocol:
+                  type: string
+                  enum: [oidc, saml]
+                  description: SSO protocol
+                issuerUrl:
+                  type: string
+                  format: uri
+                  description: OIDC issuer URL (required for OIDC)
+                clientId:
+                  type: string
+                  description: OIDC client ID (required for OIDC)
+                clientSecret:
+                  type: string
+                  description: OIDC client secret (required for OIDC)
+                idpEntityId:
+                  type: string
+                  description: SAML IdP entity ID (required for SAML)
+                idpSsoUrl:
+                  type: string
+                  format: uri
+                  description: SAML IdP SSO URL (required for SAML)
+                idpCertificate:
+                  type: string
+                  description: SAML IdP X.509 certificate PEM (required for SAML)
+                spEntityId:
+                  type: string
+                  description: SAML SP entity ID
+                spAcsUrl:
+                  type: string
+                  format: uri
+                  description: SAML SP Assertion Consumer Service URL
+                domains:
+                  type: array
+                  items:
+                    type: string
+                  description: Email domains to route to this connection
+                jitProvisioning:
+                  type: boolean
+                  description: Enable just-in-time user provisioning
+                  default: false
+                enforce:
+                  type: boolean
+                  description: Enforce SSO for this connection
+                  default: false
+                groupAttribute:
+                  type: string
+                  description: OIDC claim or SAML attribute containing group names
+                groupMappings:
+                  type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string
+                  description: Map of IdP group names to Grantex scope arrays
+                defaultScopes:
+                  type: array
+                  items:
+                    type: string
+                  description: Fallback scopes when no groups match
+              required: [name, protocol]
+      responses:
+        "201":
+          description: SSO connection created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SsoConnection"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      operationId: listSsoConnections
+      tags: [SSO]
+      summary: List SSO Connections
+      description: List all SSO connections for the authenticated developer.
+      responses:
+        "200":
+          description: List of SSO connections
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connections:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SsoConnection"
+
+  /v1/sso/connections/{id}:
+    patch:
+      operationId: updateSsoConnection
+      tags: [SSO]
+      summary: Update SSO Connection
+      description: Update an existing SSO connection. All body parameters are optional.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: SSO connection ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                protocol:
+                  type: string
+                  enum: [oidc, saml]
+                issuerUrl:
+                  type: string
+                  format: uri
+                clientId:
+                  type: string
+                clientSecret:
+                  type: string
+                idpEntityId:
+                  type: string
+                idpSsoUrl:
+                  type: string
+                  format: uri
+                idpCertificate:
+                  type: string
+                spEntityId:
+                  type: string
+                spAcsUrl:
+                  type: string
+                  format: uri
+                domains:
+                  type: array
+                  items:
+                    type: string
+                jitProvisioning:
+                  type: boolean
+                enforce:
+                  type: boolean
+                groupAttribute:
+                  type: string
+                groupMappings:
+                  type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string
+                defaultScopes:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: SSO connection updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SsoConnection"
+        "404":
+          description: Connection not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: deleteSsoConnection
+      tags: [SSO]
+      summary: Delete SSO Connection
+      description: Delete an SSO connection by ID.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: SSO connection ID
+      responses:
+        "204":
+          description: SSO connection deleted
+        "404":
+          description: Connection not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/sso/connections/{id}/test:
+    post:
+      operationId: testSsoConnection
+      tags: [SSO]
+      summary: Test SSO Connection
+      description: Test an SSO connection by verifying connectivity to the identity provider. For OIDC, discovers endpoints via `.well-known/openid-configuration`. For SAML, validates the certificate.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: SSO connection ID
+      responses:
+        "200":
+          description: Connection test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  protocol:
+                    type: string
+                    enum: [oidc, saml]
+                  issuer:
+                    type: string
+                    description: OIDC issuer (present for OIDC connections)
+                  authorizationEndpoint:
+                    type: string
+                    description: OIDC authorization endpoint (present for OIDC connections)
+                  tokenEndpoint:
+                    type: string
+                    description: OIDC token endpoint (present for OIDC connections)
+                  jwksUri:
+                    type: string
+                    description: OIDC JWKS URI (present for OIDC connections)
+                  idpEntityId:
+                    type: string
+                    description: SAML IdP entity ID (present for SAML connections)
+                  certificateValid:
+                    type: boolean
+                    description: Whether the SAML certificate is valid (present for SAML connections)
+                  certificateExpiry:
+                    type: string
+                    format: date-time
+                    description: SAML certificate expiry date (present for SAML connections)
+        "404":
+          description: Connection not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: IdP unreachable or discovery failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/sso/enforce:
+    post:
+      operationId: setSsoEnforcement
+      tags: [SSO]
+      summary: Set SSO Enforcement
+      description: Enable or disable SSO enforcement for your organization. When enabled, all users must authenticate via SSO.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enforce:
+                  type: boolean
+                  description: Whether to enforce SSO for all users
+              required: [enforce]
+      responses:
+        "200":
+          description: SSO enforcement updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enforce:
+                    type: boolean
+                  developerId:
+                    type: string
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/sso/sessions:
+    get:
+      operationId: listSsoSessions
+      tags: [SSO]
+      summary: List SSO Sessions
+      description: List all active SSO sessions for the authenticated developer.
+      responses:
+        "200":
+          description: List of active SSO sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SsoSession"
+
+  /v1/sso/sessions/{id}:
+    delete:
+      operationId: revokeSsoSession
+      tags: [SSO]
+      summary: Revoke SSO Session
+      description: Revoke an active SSO session by ID.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: SSO session ID
+      responses:
+        "204":
+          description: SSO session revoked
+        "404":
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /sso/callback/oidc:
+    post:
+      operationId: oidcCallback
+      tags: [SSO]
+      summary: OIDC Callback
+      description: Handle the OIDC callback after the user authenticates with the identity provider. Exchanges the authorization code for an ID token, verifies the token signature via JWKS, extracts user info, maps groups to scopes, and optionally provisions the user via JIT.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                  description: Authorization code from the IdP
+                state:
+                  type: string
+                  description: State parameter for CSRF protection
+                redirect_uri:
+                  type: string
+                  format: uri
+                  description: Redirect URI (must match the one used in the authorize request)
+              required: [code, state]
+      responses:
+        "200":
+          description: SSO callback result with session and user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SsoCallbackResult"
+        "400":
+          description: Missing or invalid code/state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Token exchange with IdP failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /sso/callback/saml:
+    post:
+      operationId: samlCallback
+      tags: [SSO]
+      summary: SAML Callback
+      description: Handle the SAML 2.0 callback after the user authenticates with the identity provider. Parses the SAML response, verifies the XML signature against the IdP certificate, extracts user attributes, maps groups to scopes, and optionally provisions the user via JIT.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                SAMLResponse:
+                  type: string
+                  description: Base64-encoded SAML response from the IdP
+                RelayState:
+                  type: string
+                  description: RelayState parameter for maintaining application state
+              required: [SAMLResponse, RelayState]
+      responses:
+        "200":
+          description: SSO callback result with session and user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SsoCallbackResult"
+        "400":
+          description: Invalid SAML response or signature verification failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /sso/callback/ldap:
+    post:
+      operationId: ldapCallback
+      tags: [SSO]
+      summary: LDAP Callback
+      description: Authenticate a user via LDAP bind and create an SSO session. Unlike OIDC and SAML which use browser redirects, LDAP authentication performs a direct bind against the directory server using the provided credentials. The user's attributes are read from the directory entry, groups are mapped to scopes, and JIT provisioning is applied if enabled.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: The user's LDAP username (e.g. uid, sAMAccountName, or full DN)
+                  example: alice
+                password:
+                  type: string
+                  format: password
+                  description: The user's LDAP password for bind authentication
+                connectionId:
+                  type: string
+                  description: The SSO connection ID for the LDAP directory
+                  example: sso_conn_03HX...
+                org:
+                  type: string
+                  description: Optional organization identifier for domain-based routing
+                  example: dev_01HXYZ...
+              required: [username, password, connectionId]
+      responses:
+        "200":
+          description: SSO callback result with session and user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SsoCallbackResult"
+        "400":
+          description: Missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: LDAP bind failed (invalid credentials)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: LDAP server unreachable or connection error
           content:
             application/json:
               schema:

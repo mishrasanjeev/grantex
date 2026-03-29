@@ -1,26 +1,687 @@
 ---
-title: "SSO (OIDC)"
+title: "SSO (OIDC + SAML + LDAP)"
 sidebarTitle: "SSO"
-description: "Configure OIDC single sign-on for your organization and handle login flows."
+description: "Enterprise single sign-on with multi-IdP connections, SAML 2.0, OIDC, LDAP, JIT provisioning, and domain-based enforcement."
 ---
 
 ## Overview
 
-The `sso` sub-client configures and manages OIDC (OpenID Connect) single sign-on for your developer organization. It supports any OIDC-compliant identity provider (Okta, Azure AD, Google Workspace, Auth0, etc.).
+The `sso` sub-client provides enterprise-grade single sign-on for your developer organization. It supports multiple identity provider connections (OIDC, SAML 2.0, and LDAP), domain-based enforcement, JIT (just-in-time) provisioning, and session management. Compatible with Okta, Azure AD, Google Workspace, Auth0, OneLogin, PingFederate, OpenLDAP, FreeIPA, and any SAML 2.0, OIDC, or LDAP-compliant provider.
 
 ```typescript
-// Configure SSO
-const config = await grantex.sso.createConfig({
-  issuerUrl: 'https://accounts.google.com',
+// Create an enterprise SSO connection
+const conn = await grantex.sso.createConnection({
+  name: 'Okta Production',
+  protocol: 'oidc',
+  issuerUrl: 'https://mycompany.okta.com',
   clientId: 'your-client-id',
   clientSecret: 'your-client-secret',
-  redirectUri: 'https://yourapp.com/sso/callback',
+  domains: ['mycompany.com'],
+  jitProvisioning: true,
 });
 ```
 
 ---
 
-## sso.createConfig()
+## Enterprise SSO Connections
+
+### sso.createConnection()
+
+Create a new SSO identity provider connection. You can create multiple connections for different domains or providers.
+
+```typescript
+const conn = await grantex.sso.createConnection({
+  name: 'Okta Production',
+  protocol: 'oidc',
+  issuerUrl: 'https://mycompany.okta.com',
+  clientId: 'your-okta-client-id',
+  clientSecret: 'your-okta-client-secret',
+  domains: ['mycompany.com', 'mycompany.org'],
+  jitProvisioning: true,
+  defaultRole: 'member',
+});
+
+console.log(conn.id);              // 'sso_conn_01HX...'
+console.log(conn.name);            // 'Okta Production'
+console.log(conn.protocol);        // 'oidc'
+console.log(conn.status);          // 'active'
+console.log(conn.domains);         // ['mycompany.com', 'mycompany.org']
+console.log(conn.jitProvisioning); // true
+console.log(conn.createdAt);       // '2026-03-29T12:00:00Z'
+```
+
+#### SAML example
+
+```typescript
+const samlConn = await grantex.sso.createConnection({
+  name: 'Azure AD SAML',
+  protocol: 'saml',
+  metadataUrl: 'https://login.microsoftonline.com/.../federationmetadata/2007-06/federationmetadata.xml',
+  assertionConsumerServiceUrl: 'https://yourapp.com/sso/saml/callback',
+  entityId: 'https://yourapp.com/saml/metadata',
+  domains: ['contoso.com'],
+  jitProvisioning: true,
+  attributeMapping: {
+    email: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress',
+    name: 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/displayname',
+  },
+});
+```
+
+#### Parameters
+
+<ParamField body="name" type="string" required>
+  A human-readable name for this connection (e.g. `"Okta Production"`).
+</ParamField>
+
+<ParamField body="protocol" type="'oidc' | 'saml' | 'ldap'" required>
+  The SSO protocol. Use `"oidc"` for OpenID Connect, `"saml"` for SAML 2.0, or `"ldap"` for LDAP directory authentication.
+</ParamField>
+
+<ParamField body="issuerUrl" type="string">
+  The OIDC issuer URL. Required when `protocol` is `"oidc"`.
+</ParamField>
+
+<ParamField body="clientId" type="string">
+  OAuth 2.0 client ID from your identity provider. Required when `protocol` is `"oidc"`.
+</ParamField>
+
+<ParamField body="clientSecret" type="string">
+  OAuth 2.0 client secret from your identity provider. Required when `protocol` is `"oidc"`.
+</ParamField>
+
+<ParamField body="metadataUrl" type="string">
+  The SAML metadata URL. Required when `protocol` is `"saml"`.
+</ParamField>
+
+<ParamField body="assertionConsumerServiceUrl" type="string">
+  The SAML ACS URL where the IdP posts assertions. Required when `protocol` is `"saml"`.
+</ParamField>
+
+<ParamField body="entityId" type="string">
+  The SAML service provider entity ID. Required when `protocol` is `"saml"`.
+</ParamField>
+
+<ParamField body="domains" type="string[]">
+  Email domains to associate with this connection. Users with matching email domains are automatically routed to this IdP.
+</ParamField>
+
+<ParamField body="jitProvisioning" type="boolean">
+  Enable just-in-time user provisioning. When `true`, users are automatically created on first login. Defaults to `false`.
+</ParamField>
+
+<ParamField body="defaultRole" type="string">
+  The default role assigned to JIT-provisioned users (e.g. `"member"`, `"admin"`).
+</ParamField>
+
+<ParamField body="attributeMapping" type="Record<string, string>">
+  Custom attribute mapping for SAML assertions. Maps Grantex fields to IdP attribute names.
+</ParamField>
+
+#### Response: `SsoConnection`
+
+<ResponseField name="id" type="string">
+  Unique connection identifier (e.g. `sso_conn_01HX...`).
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  The connection display name.
+</ResponseField>
+
+<ResponseField name="protocol" type="'oidc' | 'saml' | 'ldap'">
+  The SSO protocol.
+</ResponseField>
+
+<ResponseField name="status" type="'active' | 'inactive' | 'error'">
+  Current connection status.
+</ResponseField>
+
+<ResponseField name="domains" type="string[]">
+  Associated email domains.
+</ResponseField>
+
+<ResponseField name="jitProvisioning" type="boolean">
+  Whether JIT provisioning is enabled.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 creation timestamp.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 last-updated timestamp.
+</ResponseField>
+
+<Note>
+  The `clientSecret` is never returned in responses. It is stored securely on the server.
+</Note>
+
+---
+
+### sso.listConnections()
+
+List all SSO connections for your organization.
+
+```typescript
+const connections = await grantex.sso.listConnections();
+
+for (const conn of connections.connections) {
+  console.log(`${conn.name} (${conn.protocol}) - ${conn.status}`);
+  console.log(`  Domains: ${conn.domains.join(', ')}`);
+}
+```
+
+#### Response: `SsoConnectionList`
+
+<ResponseField name="connections" type="SsoConnection[]">
+  Array of SSO connection objects.
+</ResponseField>
+
+---
+
+### sso.getConnection()
+
+Retrieve a single SSO connection by ID.
+
+```typescript
+const conn = await grantex.sso.getConnection('sso_conn_01HX...');
+
+console.log(conn.name);     // 'Okta Production'
+console.log(conn.protocol); // 'oidc'
+console.log(conn.status);   // 'active'
+```
+
+#### Parameters
+
+<ParamField body="connectionId" type="string" required>
+  The connection ID to retrieve.
+</ParamField>
+
+#### Response
+
+Returns an `SsoConnection` object.
+
+---
+
+### sso.updateConnection()
+
+Update an existing SSO connection.
+
+```typescript
+const updated = await grantex.sso.updateConnection('sso_conn_01HX...', {
+  name: 'Okta Production (updated)',
+  jitProvisioning: false,
+  domains: ['mycompany.com', 'mycompany.org', 'subsidiary.com'],
+});
+
+console.log(updated.name);    // 'Okta Production (updated)'
+console.log(updated.domains); // ['mycompany.com', 'mycompany.org', 'subsidiary.com']
+```
+
+#### Parameters
+
+<ParamField body="connectionId" type="string" required>
+  The connection ID to update.
+</ParamField>
+
+<ParamField body="name" type="string">
+  Updated display name.
+</ParamField>
+
+<ParamField body="domains" type="string[]">
+  Updated list of associated email domains.
+</ParamField>
+
+<ParamField body="jitProvisioning" type="boolean">
+  Enable or disable JIT provisioning.
+</ParamField>
+
+<ParamField body="defaultRole" type="string">
+  Updated default role for JIT-provisioned users.
+</ParamField>
+
+<ParamField body="attributeMapping" type="Record<string, string>">
+  Updated SAML attribute mapping.
+</ParamField>
+
+#### Response
+
+Returns the updated `SsoConnection` object.
+
+---
+
+### sso.deleteConnection()
+
+Delete an SSO connection. Users associated with this connection will no longer be able to log in via SSO.
+
+```typescript
+await grantex.sso.deleteConnection('sso_conn_01HX...');
+// Returns void -- connection is removed
+```
+
+#### Parameters
+
+<ParamField body="connectionId" type="string" required>
+  The connection ID to delete.
+</ParamField>
+
+#### Response
+
+Returns `void`.
+
+<Warning>
+  Deleting a connection immediately disables SSO login for all users routed through it. Ensure you have an alternative authentication method configured before removing a connection.
+</Warning>
+
+---
+
+### sso.testConnection()
+
+Test an SSO connection to verify that the IdP configuration is correct and reachable.
+
+```typescript
+const test = await grantex.sso.testConnection('sso_conn_01HX...');
+
+console.log(test.success);      // true
+console.log(test.message);      // 'Connection verified successfully'
+console.log(test.responseTime); // 142 (ms)
+```
+
+#### Parameters
+
+<ParamField body="connectionId" type="string" required>
+  The connection ID to test.
+</ParamField>
+
+#### Response: `SsoTestResult`
+
+<ResponseField name="success" type="boolean">
+  Whether the connection test passed.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable result message.
+</ResponseField>
+
+<ResponseField name="responseTime" type="number">
+  IdP response time in milliseconds.
+</ResponseField>
+
+---
+
+## Enforcement
+
+### sso.setEnforcement()
+
+Enforce SSO login for your organization. When enabled, all members must authenticate through an SSO connection.
+
+```typescript
+const enforcement = await grantex.sso.setEnforcement({
+  enforced: true,
+  exemptRoles: ['owner'],
+});
+
+console.log(enforcement.enforced);    // true
+console.log(enforcement.exemptRoles); // ['owner']
+```
+
+#### Parameters
+
+<ParamField body="enforced" type="boolean" required>
+  Whether SSO login is enforced for all organization members.
+</ParamField>
+
+<ParamField body="exemptRoles" type="string[]">
+  Roles exempt from SSO enforcement (e.g. `["owner"]`). Exempt users can still log in with API keys.
+</ParamField>
+
+#### Response: `SsoEnforcement`
+
+<ResponseField name="enforced" type="boolean">
+  Whether SSO enforcement is active.
+</ResponseField>
+
+<ResponseField name="exemptRoles" type="string[]">
+  Roles that are exempt from the enforcement policy.
+</ResponseField>
+
+---
+
+## Session Management
+
+### sso.listSessions()
+
+List active SSO sessions for your organization.
+
+```typescript
+const sessions = await grantex.sso.listSessions();
+
+for (const session of sessions.sessions) {
+  console.log(`${session.email} - ${session.connectionName} - expires ${session.expiresAt}`);
+}
+```
+
+#### Response: `SsoSessionList`
+
+<ResponseField name="sessions" type="SsoSession[]">
+  Array of active SSO session objects.
+</ResponseField>
+
+Each `SsoSession` contains:
+
+<ResponseField name="id" type="string">
+  Session identifier.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  The user's email address.
+</ResponseField>
+
+<ResponseField name="connectionId" type="string">
+  The SSO connection used for this session.
+</ResponseField>
+
+<ResponseField name="connectionName" type="string">
+  Display name of the SSO connection.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 session creation timestamp.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO 8601 session expiration timestamp.
+</ResponseField>
+
+---
+
+### sso.revokeSession()
+
+Revoke an active SSO session, forcing the user to re-authenticate.
+
+```typescript
+await grantex.sso.revokeSession('sso_sess_01HX...');
+// Returns void -- session is revoked
+```
+
+#### Parameters
+
+<ParamField body="sessionId" type="string" required>
+  The session ID to revoke.
+</ParamField>
+
+#### Response
+
+Returns `void`.
+
+---
+
+## Enterprise Login Flow
+
+### sso.getLoginUrl() (enterprise)
+
+Get the SSO authorization URL for a user based on their email domain. The domain is matched against configured connections to route the user to the correct IdP.
+
+```typescript
+const login = await grantex.sso.getLoginUrl({
+  domain: 'mycompany.com',
+  redirectUri: 'https://yourapp.com/sso/callback',
+});
+
+console.log(login.authorizeUrl);
+// → 'https://mycompany.okta.com/oauth2/v1/authorize?client_id=...&redirect_uri=...'
+console.log(login.connectionId);  // 'sso_conn_01HX...'
+console.log(login.protocol);     // 'oidc'
+// Redirect the user to login.authorizeUrl
+```
+
+#### Parameters
+
+<ParamField body="domain" type="string" required>
+  The email domain to match against configured SSO connections (e.g. `"mycompany.com"`).
+</ParamField>
+
+<ParamField body="redirectUri" type="string">
+  Override the redirect URI for this login request.
+</ParamField>
+
+#### Response: `SsoLoginResponse`
+
+<ResponseField name="authorizeUrl" type="string">
+  The full authorization URL. Redirect the user here.
+</ResponseField>
+
+<ResponseField name="connectionId" type="string">
+  The matched SSO connection ID.
+</ResponseField>
+
+<ResponseField name="protocol" type="'oidc' | 'saml' | 'ldap'">
+  The protocol of the matched connection.
+</ResponseField>
+
+---
+
+### sso.handleOidcCallback()
+
+Handle the callback from an OIDC identity provider. Exchanges the authorization code for user information and provisions the user if JIT is enabled.
+
+```typescript
+const result = await grantex.sso.handleOidcCallback({
+  code: 'oidc_auth_code',
+  state: 'csrf_state',
+});
+
+console.log(result.email);        // 'alice@mycompany.com'
+console.log(result.name);         // 'Alice Smith'
+console.log(result.sub);          // 'okta|abc123'
+console.log(result.developerId);  // 'dev_01HXYZ...'
+console.log(result.connectionId); // 'sso_conn_01HX...'
+console.log(result.provisioned);  // true (if JIT-created)
+```
+
+#### Parameters
+
+<ParamField body="code" type="string" required>
+  The authorization code from the OIDC callback.
+</ParamField>
+
+<ParamField body="state" type="string" required>
+  The state parameter from the callback (used for CSRF protection).
+</ParamField>
+
+#### Response: `SsoCallbackResponse`
+
+<ResponseField name="email" type="string | null">
+  The user's email address from the IdP.
+</ResponseField>
+
+<ResponseField name="name" type="string | null">
+  The user's display name from the IdP.
+</ResponseField>
+
+<ResponseField name="sub" type="string | null">
+  The user's subject identifier from the IdP.
+</ResponseField>
+
+<ResponseField name="developerId" type="string">
+  The Grantex developer ID that the user has been mapped to.
+</ResponseField>
+
+<ResponseField name="connectionId" type="string">
+  The SSO connection that handled this authentication.
+</ResponseField>
+
+<ResponseField name="provisioned" type="boolean">
+  Whether the user was just-in-time provisioned during this login.
+</ResponseField>
+
+---
+
+### sso.handleSamlCallback()
+
+Handle the callback from a SAML 2.0 identity provider. Validates the SAML assertion and provisions the user if JIT is enabled.
+
+```typescript
+const result = await grantex.sso.handleSamlCallback({
+  samlResponse: req.body.SAMLResponse,
+  relayState: req.body.RelayState,
+});
+
+console.log(result.email);        // 'bob@contoso.com'
+console.log(result.name);         // 'Bob Jones'
+console.log(result.developerId);  // 'dev_01HXYZ...'
+console.log(result.connectionId); // 'sso_conn_02HX...'
+console.log(result.provisioned);  // false
+```
+
+#### Parameters
+
+<ParamField body="samlResponse" type="string" required>
+  The base64-encoded SAML response from the IdP.
+</ParamField>
+
+<ParamField body="relayState" type="string">
+  The RelayState parameter from the SAML callback.
+</ParamField>
+
+#### Response
+
+Returns the same `SsoCallbackResponse` as `handleOidcCallback()`.
+
+---
+
+### sso.handleLdapCallback()
+
+Authenticate a user via LDAP bind. Unlike OIDC and SAML which use browser redirects, LDAP authentication submits credentials directly. Grantex binds to the LDAP directory, verifies the user's password, reads their attributes and group memberships, maps groups to scopes, and provisions the user if JIT is enabled.
+
+```typescript
+const result = await grantex.sso.handleLdapCallback({
+  username: 'alice',
+  password: 'user-password',
+  connectionId: 'sso_conn_03HX...',
+});
+
+console.log(result.email);        // 'alice@mycompany.com'
+console.log(result.name);         // 'Alice Smith'
+console.log(result.developerId);  // 'dev_01HXYZ...'
+console.log(result.connectionId); // 'sso_conn_03HX...'
+console.log(result.provisioned);  // true (if JIT-created)
+```
+
+#### Parameters
+
+<ParamField body="username" type="string" required>
+  The user's LDAP username (e.g. `uid`, `sAMAccountName`, or full DN).
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The user's LDAP password for bind authentication.
+</ParamField>
+
+<ParamField body="connectionId" type="string" required>
+  The SSO connection ID for the LDAP directory.
+</ParamField>
+
+#### Response
+
+Returns the same `SsoCallbackResponse` as `handleOidcCallback()`.
+
+<Note>
+  LDAP credentials are never stored by Grantex. They are used only for the bind operation and discarded immediately after authentication.
+</Note>
+
+---
+
+## Full Enterprise SSO Flow Example
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+import express from 'express';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+const app = express();
+app.use(express.urlencoded({ extended: true }));
+
+// Step 1: Create SSO connections (one-time setup)
+await grantex.sso.createConnection({
+  name: 'Okta Production',
+  protocol: 'oidc',
+  issuerUrl: 'https://mycompany.okta.com',
+  clientId: process.env.OKTA_CLIENT_ID,
+  clientSecret: process.env.OKTA_CLIENT_SECRET,
+  domains: ['mycompany.com'],
+  jitProvisioning: true,
+  defaultRole: 'member',
+});
+
+await grantex.sso.createConnection({
+  name: 'Azure AD SAML',
+  protocol: 'saml',
+  metadataUrl: process.env.AZURE_METADATA_URL,
+  assertionConsumerServiceUrl: 'https://yourapp.com/sso/saml/callback',
+  entityId: 'https://yourapp.com/saml/metadata',
+  domains: ['contoso.com'],
+  jitProvisioning: true,
+});
+
+// Step 2: Enforce SSO for the organization
+await grantex.sso.setEnforcement({
+  enforced: true,
+  exemptRoles: ['owner'],
+});
+
+// Step 3: Redirect user to SSO login based on email domain
+app.get('/sso/login', async (req, res) => {
+  const { domain } = req.query;
+  const login = await grantex.sso.getLoginUrl({
+    domain: domain as string,
+    redirectUri: 'https://yourapp.com/sso/callback',
+  });
+  res.redirect(login.authorizeUrl);
+});
+
+// Step 4a: Handle OIDC callback
+app.get('/sso/callback', async (req, res) => {
+  const { code, state } = req.query;
+  const result = await grantex.sso.handleOidcCallback({
+    code: code as string,
+    state: state as string,
+  });
+
+  console.log(`Welcome, ${result.name} (${result.email})`);
+  if (result.provisioned) {
+    console.log('New user provisioned via JIT');
+  }
+  res.redirect('/dashboard');
+});
+
+// Step 4b: Handle SAML callback
+app.post('/sso/saml/callback', async (req, res) => {
+  const result = await grantex.sso.handleSamlCallback({
+    samlResponse: req.body.SAMLResponse,
+    relayState: req.body.RelayState,
+  });
+
+  console.log(`Welcome, ${result.name} (${result.email})`);
+  res.redirect('/dashboard');
+});
+
+// Admin: List active sessions
+app.get('/admin/sso/sessions', async (req, res) => {
+  const sessions = await grantex.sso.listSessions();
+  res.json(sessions);
+});
+```
+
+---
+
+## Legacy Single-Config Methods
+
+<Note>
+  The following methods manage a single OIDC configuration per organization. They are retained for backward compatibility. For new integrations, use the enterprise connection methods above which support multiple IdPs, SAML, and domain-based routing.
+</Note>
+
+### sso.createConfig()
 
 Create or update the OIDC SSO configuration for your organization.
 
@@ -39,7 +700,7 @@ console.log(config.createdAt);   // '2026-02-28T12:00:00Z'
 console.log(config.updatedAt);   // '2026-02-28T12:00:00Z'
 ```
 
-### Parameters
+#### Parameters
 
 <ParamField body="issuerUrl" type="string" required>
   The OIDC issuer URL (e.g. `https://accounts.google.com`).
@@ -57,7 +718,7 @@ console.log(config.updatedAt);   // '2026-02-28T12:00:00Z'
   The callback URL that your IdP redirects to after authentication.
 </ParamField>
 
-### Response: `SsoConfig`
+#### Response: `SsoConfig`
 
 <ResponseField name="issuerUrl" type="string">
   The OIDC issuer URL.
@@ -85,7 +746,7 @@ console.log(config.updatedAt);   // '2026-02-28T12:00:00Z'
 
 ---
 
-## sso.getConfig()
+### sso.getConfig()
 
 Retrieve the current SSO configuration (without the client secret).
 
@@ -97,13 +758,13 @@ console.log(config.clientId);    // 'your-google-client-id'
 console.log(config.redirectUri); // 'https://yourapp.com/sso/callback'
 ```
 
-### Response
+#### Response
 
 Returns an `SsoConfig` object.
 
 ---
 
-## sso.deleteConfig()
+### sso.deleteConfig()
 
 Remove the SSO configuration. After deletion, SSO login is disabled for the organization.
 
@@ -112,13 +773,13 @@ await grantex.sso.deleteConfig();
 // Returns void -- SSO is now disabled
 ```
 
-### Response
+#### Response
 
 Returns `void`.
 
 ---
 
-## sso.getLoginUrl()
+### sso.getLoginUrl() (legacy)
 
 Get the OIDC authorization URL to redirect the user to for SSO login.
 
@@ -130,13 +791,13 @@ console.log(login.authorizeUrl);
 // Redirect the user to this URL
 ```
 
-### Parameters
+#### Parameters
 
 <ParamField body="org" type="string" required>
   The developer ID of the organization initiating the SSO login.
 </ParamField>
 
-### Response: `SsoLoginResponse`
+#### Response: `SsoLoginResponse`
 
 <ResponseField name="authorizeUrl" type="string">
   The full OIDC authorization URL. Redirect the user here.
@@ -144,7 +805,7 @@ console.log(login.authorizeUrl);
 
 ---
 
-## sso.handleCallback()
+### sso.handleCallback()
 
 Exchange the OIDC authorization code for user information after the identity provider redirects back.
 
@@ -157,7 +818,7 @@ console.log(result.sub);         // 'google-oauth2|12345'
 console.log(result.developerId); // 'dev_01HXYZ...'
 ```
 
-### Parameters
+#### Parameters
 
 <ParamField body="code" type="string" required>
   The authorization code from the IdP callback.
@@ -167,7 +828,7 @@ console.log(result.developerId); // 'dev_01HXYZ...'
   The state parameter from the IdP callback (used for CSRF protection).
 </ParamField>
 
-### Response: `SsoCallbackResponse`
+#### Response: `SsoCallbackResponse`
 
 <ResponseField name="email" type="string | null">
   The user's email address from the IdP.
@@ -187,7 +848,7 @@ console.log(result.developerId); // 'dev_01HXYZ...'
 
 ---
 
-## Full SSO flow example
+### Legacy SSO Flow Example
 
 ```typescript
 import { Grantex } from '@grantex/sdk';

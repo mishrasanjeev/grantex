@@ -312,6 +312,107 @@ delegated = grantex.grants.delegate(
 ## Advanced Features
 
 <details>
+<summary><strong>Enterprise SSO</strong> — OIDC + SAML 2.0 + LDAP with multi-IdP, JIT provisioning, and group mapping</summary>
+
+## Enterprise SSO
+
+Grantex provides full enterprise SSO support with OIDC, SAML 2.0, and LDAP protocols. Organizations can configure multiple identity provider connections, map email domains to specific IdPs, enforce SSO for all users, and automatically provision principals via JIT (Just-in-Time) provisioning.
+
+**Key capabilities:**
+- **Multi-IdP connections** — Configure multiple OIDC, SAML 2.0, and LDAP identity providers per organization
+- **OIDC Discovery + JWKS verification** — Automatic endpoint discovery and cryptographic ID token verification
+- **SAML 2.0** — Full SAML response parsing with certificate-based signature verification
+- **LDAP / Active Directory** — Direct bind authentication against LDAP directories (OpenLDAP, Active Directory, FreeIPA)
+- **Domain-based routing** — Automatically route users to the correct IdP based on their email domain
+- **JIT provisioning** — Auto-create or update principals on first SSO login
+- **Group-to-scope mapping** — Map IdP groups/roles to Grantex scopes
+- **SSO enforcement** — Require SSO authentication for all users in an organization
+- **Session management** — Track, list, and revoke active SSO sessions
+
+### TypeScript
+
+```typescript
+// Create an OIDC connection
+const conn = await grantex.sso.createConnection({
+  name: 'Okta Production',
+  protocol: 'oidc',
+  issuerUrl: 'https://mycompany.okta.com',
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret',
+  domains: ['mycompany.com'],
+  jitProvisioning: true,
+  groupAttribute: 'groups',
+  groupMappings: { Engineering: ['read', 'write', 'deploy'], Admins: ['admin'] },
+  defaultScopes: ['read'],
+});
+
+// Create a SAML 2.0 connection
+await grantex.sso.createConnection({
+  name: 'Azure AD SAML',
+  protocol: 'saml',
+  idpEntityId: 'https://sts.windows.net/tenant-id/',
+  idpSsoUrl: 'https://login.microsoftonline.com/tenant-id/saml2',
+  idpCertificate: '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+  spEntityId: 'urn:grantex:mycompany',
+  spAcsUrl: 'https://myapp.com/sso/callback/saml',
+  domains: ['mycompany.com'],
+});
+
+// Enforce SSO for the organization
+await grantex.sso.setEnforcement({ enforce: true });
+
+// Handle OIDC callback with verified ID token
+const result = await grantex.sso.handleOidcCallback({ code, state });
+console.log(result.email, result.mappedScopes, result.sessionId);
+
+// List and revoke sessions
+const { sessions } = await grantex.sso.listSessions();
+await grantex.sso.revokeSession(sessions[0].id);
+```
+
+### Python
+
+```python
+# Create an OIDC connection
+conn = client.sso.create_connection(CreateSsoConnectionParams(
+    name="Okta Production",
+    protocol="oidc",
+    issuer_url="https://mycompany.okta.com",
+    client_id="your-client-id",
+    client_secret="your-client-secret",
+    domains=["mycompany.com"],
+    jit_provisioning=True,
+    group_attribute="groups",
+    group_mappings={"Engineering": ["read", "write", "deploy"]},
+))
+
+# Handle OIDC callback
+result = client.sso.handle_oidc_callback(SsoOidcCallbackParams(code=code, state=state))
+print(result.email, result.mapped_scopes, result.session_id)
+```
+
+### CLI
+
+```bash
+# Create a connection
+grantex sso connections create --name "Okta" --protocol oidc \
+  --issuer-url https://mycompany.okta.com \
+  --client-id $CLIENT_ID --client-secret $CLIENT_SECRET \
+  --domains mycompany.com --jit-provisioning
+
+# List connections
+grantex sso connections list
+
+# Test connectivity
+grantex sso connections test sso_01HXYZ...
+
+# Enforce SSO
+grantex sso enforce --enable
+```
+
+</details>
+
+<details>
 <summary><strong>FIDO2 / WebAuthn</strong> — passkey-based consent verification</summary>
 
 ## FIDO2 / WebAuthn
@@ -1307,6 +1408,7 @@ All milestones through v1.0 are complete. See [ROADMAP.md](https://github.com/mi
 | **v2.1 — Enterprise Scale** | Event streaming, budget controls, observability, Terraform provider, gateway, conformance | ✅ Complete |
 | **v2.2 — Ecosystem** | OPA/Cedar policy backends, A2A protocol bridge, usage metering, custom domains, policy-as-code | ✅ Complete |
 | **v2.3 — Trust & Identity** | FIDO2/WebAuthn passkeys, W3C Verifiable Credentials, SD-JWT selective disclosure, DID infrastructure, StatusList2021 revocation, Mastercard Verifiable Intent | ✅ Complete |
+| **v2.4 — Enterprise SSO** | OIDC + SAML 2.0 + LDAP multi-IdP connections, OIDC Discovery + JWKS verification, LDAP directory authentication, domain-based routing, JIT provisioning, group-to-scope mapping, SSO enforcement, session management | ✅ Complete |
 
 ---
 

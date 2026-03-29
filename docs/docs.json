@@ -90,6 +90,7 @@
               "guides/usage-metering",
               "guides/custom-domains",
               "guides/mpp-integration",
+              "guides/enterprise-sso",
               "guides/compliance-matrix"
             ]
           },
@@ -447,7 +448,18 @@
               "api-reference/sso/get-sso-configuration",
               "api-reference/sso/remove-sso-configuration",
               "api-reference/sso/initiate-sso-login",
-              "api-reference/sso/sso-callback"
+              "api-reference/sso/sso-callback",
+              "api-reference/sso/create-sso-connection",
+              "api-reference/sso/list-sso-connections",
+              "api-reference/sso/update-sso-connection",
+              "api-reference/sso/delete-sso-connection",
+              "api-reference/sso/test-sso-connection",
+              "api-reference/sso/set-sso-enforcement",
+              "api-reference/sso/list-sso-sessions",
+              "api-reference/sso/revoke-sso-session",
+              "api-reference/sso/oidc-callback",
+              "api-reference/sso/saml-callback",
+              "api-reference/sso/ldap-callback"
             ]
           },
           {

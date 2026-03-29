@@ -601,11 +601,174 @@ type SsoLoginResponse struct {
 }
 
 // SsoCallbackResponse is the response from handling an SSO callback.
+// Deprecated: Use SsoCallbackResult for enterprise SSO.
 type SsoCallbackResponse struct {
 	Email       *string `json:"email"`
 	Name        *string `json:"name"`
 	Sub         *string `json:"sub"`
 	DeveloperID string  `json:"developerId"`
+}
+
+// --- Enterprise SSO ---
+
+// SsoConnection represents an enterprise SSO connection (OIDC, SAML, or LDAP).
+type SsoConnection struct {
+	ID                    string              `json:"id"`
+	DeveloperID           string              `json:"developerId"`
+	Name                  string              `json:"name"`
+	Protocol              string              `json:"protocol"`
+	Status                string              `json:"status"`
+	IssuerURL             string              `json:"issuerUrl,omitempty"`
+	ClientID              string              `json:"clientId,omitempty"`
+	IdpEntityID           string              `json:"idpEntityId,omitempty"`
+	IdpSsoURL             string              `json:"idpSsoUrl,omitempty"`
+	SpEntityID            string              `json:"spEntityId,omitempty"`
+	SpAcsURL              string              `json:"spAcsUrl,omitempty"`
+	LdapURL               string              `json:"ldapUrl,omitempty"`
+	LdapBindDN            string              `json:"ldapBindDn,omitempty"`
+	LdapSearchBase        string              `json:"ldapSearchBase,omitempty"`
+	LdapSearchFilter      string              `json:"ldapSearchFilter,omitempty"`
+	LdapGroupSearchBase   string              `json:"ldapGroupSearchBase,omitempty"`
+	LdapGroupSearchFilter string              `json:"ldapGroupSearchFilter,omitempty"`
+	LdapTlsEnabled        bool                `json:"ldapTlsEnabled,omitempty"`
+	Domains               []string            `json:"domains"`
+	JitProvisioning       bool                `json:"jitProvisioning"`
+	Enforce               bool                `json:"enforce"`
+	GroupAttribute        string              `json:"groupAttribute,omitempty"`
+	GroupMappings         map[string][]string `json:"groupMappings"`
+	DefaultScopes         []string            `json:"defaultScopes"`
+	CreatedAt             string              `json:"createdAt"`
+	UpdatedAt             string              `json:"updatedAt"`
+}
+
+// CreateSsoConnectionParams are the parameters for creating an SSO connection.
+type CreateSsoConnectionParams struct {
+	Name                  string              `json:"name"`
+	Protocol              string              `json:"protocol"`
+	IssuerURL             string              `json:"issuerUrl,omitempty"`
+	ClientID              string              `json:"clientId,omitempty"`
+	ClientSecret          string              `json:"clientSecret,omitempty"`
+	IdpEntityID           string              `json:"idpEntityId,omitempty"`
+	IdpSsoURL             string              `json:"idpSsoUrl,omitempty"`
+	IdpCertificate        string              `json:"idpCertificate,omitempty"`
+	LdapURL               string              `json:"ldapUrl,omitempty"`
+	LdapBindDN            string              `json:"ldapBindDn,omitempty"`
+	LdapBindPassword      string              `json:"ldapBindPassword,omitempty"`
+	LdapSearchBase        string              `json:"ldapSearchBase,omitempty"`
+	LdapSearchFilter      string              `json:"ldapSearchFilter,omitempty"`
+	LdapGroupSearchBase   string              `json:"ldapGroupSearchBase,omitempty"`
+	LdapGroupSearchFilter string              `json:"ldapGroupSearchFilter,omitempty"`
+	LdapTlsEnabled        bool                `json:"ldapTlsEnabled,omitempty"`
+	Domains               []string            `json:"domains,omitempty"`
+	JitProvisioning       bool                `json:"jitProvisioning,omitempty"`
+	GroupAttribute        string              `json:"groupAttribute,omitempty"`
+	GroupMappings         map[string][]string `json:"groupMappings,omitempty"`
+	DefaultScopes         []string            `json:"defaultScopes,omitempty"`
+}
+
+// UpdateSsoConnectionParams are the parameters for updating an SSO connection.
+type UpdateSsoConnectionParams struct {
+	Name                  *string              `json:"name,omitempty"`
+	Status                *string              `json:"status,omitempty"`
+	IssuerURL             *string              `json:"issuerUrl,omitempty"`
+	ClientID              *string              `json:"clientId,omitempty"`
+	ClientSecret          *string              `json:"clientSecret,omitempty"`
+	IdpEntityID           *string              `json:"idpEntityId,omitempty"`
+	IdpSsoURL             *string              `json:"idpSsoUrl,omitempty"`
+	IdpCertificate        *string              `json:"idpCertificate,omitempty"`
+	LdapURL               *string              `json:"ldapUrl,omitempty"`
+	LdapBindDN            *string              `json:"ldapBindDn,omitempty"`
+	LdapBindPassword      *string              `json:"ldapBindPassword,omitempty"`
+	LdapSearchBase        *string              `json:"ldapSearchBase,omitempty"`
+	LdapSearchFilter      *string              `json:"ldapSearchFilter,omitempty"`
+	LdapGroupSearchBase   *string              `json:"ldapGroupSearchBase,omitempty"`
+	LdapGroupSearchFilter *string              `json:"ldapGroupSearchFilter,omitempty"`
+	LdapTlsEnabled        *bool                `json:"ldapTlsEnabled,omitempty"`
+	Domains               []string             `json:"domains,omitempty"`
+	JitProvisioning       *bool                `json:"jitProvisioning,omitempty"`
+	GroupAttribute        *string              `json:"groupAttribute,omitempty"`
+	GroupMappings         *map[string][]string `json:"groupMappings,omitempty"`
+	DefaultScopes         []string             `json:"defaultScopes,omitempty"`
+}
+
+// ListSsoConnectionsResponse is the response from listing SSO connections.
+type ListSsoConnectionsResponse struct {
+	Connections []SsoConnection `json:"connections"`
+}
+
+// SsoConnectionTestResult is the result of testing an SSO connection.
+type SsoConnectionTestResult struct {
+	Success  bool     `json:"success"`
+	Protocol string   `json:"protocol"`
+	Issuer   string   `json:"issuer,omitempty"`
+	Error    string   `json:"error,omitempty"`
+	Details  []string `json:"details,omitempty"`
+}
+
+// SsoEnforcementParams are the parameters for configuring SSO enforcement.
+type SsoEnforcementParams struct {
+	Enforce      bool     `json:"enforce"`
+	ConnectionID string   `json:"connectionId,omitempty"`
+	GracePeriod  string   `json:"gracePeriod,omitempty"`
+	ExemptEmails []string `json:"exemptEmails,omitempty"`
+}
+
+// SsoEnforcementResponse is the response from setting SSO enforcement.
+type SsoEnforcementResponse struct {
+	Enforce      bool     `json:"enforce"`
+	ConnectionID string   `json:"connectionId"`
+	GracePeriod  string   `json:"gracePeriod,omitempty"`
+	ExemptEmails []string `json:"exemptEmails"`
+	UpdatedAt    string   `json:"updatedAt"`
+}
+
+// SsoSession represents an active SSO session.
+type SsoSession struct {
+	ID           string `json:"id"`
+	DeveloperID  string `json:"developerId"`
+	ConnectionID string `json:"connectionId"`
+	Email        string `json:"email"`
+	ExpiresAt    string `json:"expiresAt"`
+	CreatedAt    string `json:"createdAt"`
+}
+
+// ListSsoSessionsResponse is the response from listing SSO sessions.
+type ListSsoSessionsResponse struct {
+	Sessions []SsoSession `json:"sessions"`
+}
+
+// SsoOidcCallbackParams are the parameters for handling an OIDC SSO callback.
+type SsoOidcCallbackParams struct {
+	Code         string `json:"code"`
+	State        string `json:"state"`
+	ConnectionID string `json:"connectionId,omitempty"`
+}
+
+// SsoSamlCallbackParams are the parameters for handling a SAML SSO callback.
+type SsoSamlCallbackParams struct {
+	SAMLResponse string `json:"samlResponse"`
+	RelayState   string `json:"relayState,omitempty"`
+	ConnectionID string `json:"connectionId,omitempty"`
+}
+
+// SsoLdapCallbackParams are the parameters for handling an LDAP SSO callback.
+type SsoLdapCallbackParams struct {
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	ConnectionID string `json:"connectionId"`
+	Org          string `json:"org"`
+}
+
+// SsoCallbackResult is the result from an enterprise SSO callback (OIDC, SAML, or LDAP).
+type SsoCallbackResult struct {
+	Email        string            `json:"email"`
+	Name         string            `json:"name,omitempty"`
+	Sub          string            `json:"sub"`
+	DeveloperID  string            `json:"developerId"`
+	ConnectionID string            `json:"connectionId"`
+	Groups       []string          `json:"groups,omitempty"`
+	Attributes   map[string]string `json:"attributes,omitempty"`
+	SessionID    string            `json:"sessionId"`
 }
 
 // --- Principal Sessions ---

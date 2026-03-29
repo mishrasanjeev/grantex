@@ -138,6 +138,20 @@ vi.mock('../src/lib/domains.js', () => ({
   verifyDomainDns: vi.fn().mockResolvedValue(false),
 }));
 
+// Mock LDAP — prevents real LDAP connections in tests
+vi.mock('../src/lib/ldap.js', () => ({
+  authenticateLdap: vi.fn().mockResolvedValue({
+    dn: 'uid=alice,ou=people,dc=corp,dc=com',
+    uid: 'alice',
+    email: 'alice@corp.com',
+    displayName: 'Alice Smith',
+    groups: ['Engineering', 'VPN-Users'],
+  }),
+  testLdapConnection: vi.fn().mockResolvedValue({ success: true }),
+  setLdapClient: vi.fn(),
+  getLdapClient: vi.fn(),
+}));
+
 // Mock WebAuthn — prevents real crypto operations in tests
 vi.mock('../src/lib/webauthn.js', () => ({
   generateRegOptions: vi.fn().mockResolvedValue({
