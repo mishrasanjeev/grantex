@@ -559,6 +559,8 @@ export interface CreateSsoConfigParams {
 
 export interface SsoLoginResponse {
   authorizeUrl: string;
+  protocol?: 'oidc' | 'saml';
+  connectionId?: string;
 }
 
 export interface SsoCallbackResponse {
@@ -566,6 +568,133 @@ export interface SsoCallbackResponse {
   name: string | null;
   sub: string | null;
   developerId: string;
+}
+
+// ─── Enterprise SSO ──────────────────────────────────────────────────────────
+
+export interface SsoConnection {
+  id: string;
+  developerId: string;
+  name: string;
+  protocol: 'oidc' | 'saml';
+  status: 'active' | 'inactive' | 'testing';
+  issuerUrl?: string;
+  clientId?: string;
+  idpEntityId?: string;
+  idpSsoUrl?: string;
+  spEntityId?: string;
+  spAcsUrl?: string;
+  domains: string[];
+  jitProvisioning: boolean;
+  enforce: boolean;
+  groupAttribute?: string;
+  groupMappings: Record<string, string[]>;
+  defaultScopes: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSsoConnectionParams {
+  name: string;
+  protocol: 'oidc' | 'saml';
+  issuerUrl?: string;
+  clientId?: string;
+  clientSecret?: string;
+  idpEntityId?: string;
+  idpSsoUrl?: string;
+  idpCertificate?: string;
+  spEntityId?: string;
+  spAcsUrl?: string;
+  domains?: string[];
+  jitProvisioning?: boolean;
+  enforce?: boolean;
+  groupAttribute?: string;
+  groupMappings?: Record<string, string[]>;
+  defaultScopes?: string[];
+}
+
+export interface UpdateSsoConnectionParams {
+  name?: string;
+  status?: 'active' | 'inactive' | 'testing';
+  issuerUrl?: string;
+  clientId?: string;
+  clientSecret?: string;
+  idpEntityId?: string;
+  idpSsoUrl?: string;
+  idpCertificate?: string;
+  spEntityId?: string;
+  spAcsUrl?: string;
+  domains?: string[];
+  jitProvisioning?: boolean;
+  enforce?: boolean;
+  groupAttribute?: string;
+  groupMappings?: Record<string, string[]>;
+  defaultScopes?: string[];
+}
+
+export interface SsoConnectionListResponse {
+  connections: SsoConnection[];
+}
+
+export interface SsoConnectionTestResult {
+  success: boolean;
+  protocol: 'oidc' | 'saml';
+  issuer?: string;
+  authorizationEndpoint?: string;
+  tokenEndpoint?: string;
+  jwksUri?: string;
+  idpEntityId?: string;
+  idpSsoUrl?: string;
+  error?: string;
+}
+
+export interface SsoEnforcementParams {
+  enforce: boolean;
+}
+
+export interface SsoEnforcementResponse {
+  enforce: boolean;
+  developerId: string;
+}
+
+export interface SsoSession {
+  id: string;
+  connectionId: string;
+  principalId: string | null;
+  email: string | null;
+  name: string | null;
+  idpSubject: string;
+  groups: string[];
+  mappedScopes: string[];
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface SsoSessionListResponse {
+  sessions: SsoSession[];
+}
+
+export interface SsoOidcCallbackParams {
+  code: string;
+  state: string;
+  redirect_uri?: string;
+}
+
+export interface SsoSamlCallbackParams {
+  SAMLResponse: string;
+  RelayState: string;
+}
+
+export interface SsoCallbackResult {
+  sessionId: string;
+  email: string | null;
+  name: string | null;
+  sub: string | null;
+  groups: string[];
+  mappedScopes: string[];
+  principalId: string | null;
+  developerId: string;
+  expiresAt: string;
 }
 
 // ─── Credential Vault ───────────────────────────────────────────────────────

@@ -1135,10 +1135,16 @@ class CreateSsoConfigParams:
 @dataclass(frozen=True)
 class SsoLoginResponse:
     authorize_url: str
+    protocol: str | None = None
+    connection_id: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SsoLoginResponse":
-        return cls(authorize_url=data["authorizeUrl"])
+        return cls(
+            authorize_url=data["authorizeUrl"],
+            protocol=data.get("protocol"),
+            connection_id=data.get("connectionId"),
+        )
 
 
 @dataclass(frozen=True)
@@ -1155,6 +1161,288 @@ class SsoCallbackResponse:
             email=data.get("email"),
             name=data.get("name"),
             sub=data.get("sub"),
+        )
+
+
+# ─── Enterprise SSO ─────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class SsoConnection:
+    id: str
+    developer_id: str
+    name: str
+    protocol: str
+    status: str
+    domains: tuple[str, ...]
+    jit_provisioning: bool
+    enforce: bool
+    group_mappings: dict[str, list[str]]
+    default_scopes: tuple[str, ...]
+    created_at: str
+    updated_at: str
+    issuer_url: str | None = None
+    client_id: str | None = None
+    idp_entity_id: str | None = None
+    idp_sso_url: str | None = None
+    sp_entity_id: str | None = None
+    sp_acs_url: str | None = None
+    group_attribute: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SsoConnection":
+        return cls(
+            id=data["id"],
+            developer_id=data["developerId"],
+            name=data["name"],
+            protocol=data["protocol"],
+            status=data["status"],
+            domains=tuple(data.get("domains", [])),
+            jit_provisioning=data.get("jitProvisioning", False),
+            enforce=data.get("enforce", False),
+            group_mappings=data.get("groupMappings", {}),
+            default_scopes=tuple(data.get("defaultScopes", [])),
+            created_at=data["createdAt"],
+            updated_at=data["updatedAt"],
+            issuer_url=data.get("issuerUrl"),
+            client_id=data.get("clientId"),
+            idp_entity_id=data.get("idpEntityId"),
+            idp_sso_url=data.get("idpSsoUrl"),
+            sp_entity_id=data.get("spEntityId"),
+            sp_acs_url=data.get("spAcsUrl"),
+            group_attribute=data.get("groupAttribute"),
+        )
+
+
+@dataclass
+class CreateSsoConnectionParams:
+    name: str
+    protocol: str
+    issuer_url: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
+    idp_entity_id: str | None = None
+    idp_sso_url: str | None = None
+    idp_certificate: str | None = None
+    sp_entity_id: str | None = None
+    sp_acs_url: str | None = None
+    domains: list[str] | None = None
+    jit_provisioning: bool | None = None
+    enforce: bool | None = None
+    group_attribute: str | None = None
+    group_mappings: dict[str, list[str]] | None = None
+    default_scopes: list[str] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "protocol": self.protocol,
+            **({"issuerUrl": self.issuer_url} if self.issuer_url is not None else {}),
+            **({"clientId": self.client_id} if self.client_id is not None else {}),
+            **({"clientSecret": self.client_secret} if self.client_secret is not None else {}),
+            **({"idpEntityId": self.idp_entity_id} if self.idp_entity_id is not None else {}),
+            **({"idpSsoUrl": self.idp_sso_url} if self.idp_sso_url is not None else {}),
+            **({"idpCertificate": self.idp_certificate} if self.idp_certificate is not None else {}),
+            **({"spEntityId": self.sp_entity_id} if self.sp_entity_id is not None else {}),
+            **({"spAcsUrl": self.sp_acs_url} if self.sp_acs_url is not None else {}),
+            **({"domains": self.domains} if self.domains is not None else {}),
+            **({"jitProvisioning": self.jit_provisioning} if self.jit_provisioning is not None else {}),
+            **({"enforce": self.enforce} if self.enforce is not None else {}),
+            **({"groupAttribute": self.group_attribute} if self.group_attribute is not None else {}),
+            **({"groupMappings": self.group_mappings} if self.group_mappings is not None else {}),
+            **({"defaultScopes": self.default_scopes} if self.default_scopes is not None else {}),
+        }
+
+
+@dataclass
+class UpdateSsoConnectionParams:
+    name: str | None = None
+    status: str | None = None
+    issuer_url: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
+    idp_entity_id: str | None = None
+    idp_sso_url: str | None = None
+    idp_certificate: str | None = None
+    sp_entity_id: str | None = None
+    sp_acs_url: str | None = None
+    domains: list[str] | None = None
+    jit_provisioning: bool | None = None
+    enforce: bool | None = None
+    group_attribute: str | None = None
+    group_mappings: dict[str, list[str]] | None = None
+    default_scopes: list[str] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            **({"name": self.name} if self.name is not None else {}),
+            **({"status": self.status} if self.status is not None else {}),
+            **({"issuerUrl": self.issuer_url} if self.issuer_url is not None else {}),
+            **({"clientId": self.client_id} if self.client_id is not None else {}),
+            **({"clientSecret": self.client_secret} if self.client_secret is not None else {}),
+            **({"idpEntityId": self.idp_entity_id} if self.idp_entity_id is not None else {}),
+            **({"idpSsoUrl": self.idp_sso_url} if self.idp_sso_url is not None else {}),
+            **({"idpCertificate": self.idp_certificate} if self.idp_certificate is not None else {}),
+            **({"spEntityId": self.sp_entity_id} if self.sp_entity_id is not None else {}),
+            **({"spAcsUrl": self.sp_acs_url} if self.sp_acs_url is not None else {}),
+            **({"domains": self.domains} if self.domains is not None else {}),
+            **({"jitProvisioning": self.jit_provisioning} if self.jit_provisioning is not None else {}),
+            **({"enforce": self.enforce} if self.enforce is not None else {}),
+            **({"groupAttribute": self.group_attribute} if self.group_attribute is not None else {}),
+            **({"groupMappings": self.group_mappings} if self.group_mappings is not None else {}),
+            **({"defaultScopes": self.default_scopes} if self.default_scopes is not None else {}),
+        }
+
+
+@dataclass(frozen=True)
+class ListSsoConnectionsResponse:
+    connections: tuple[SsoConnection, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ListSsoConnectionsResponse":
+        return cls(
+            connections=tuple(SsoConnection.from_dict(c) for c in data.get("connections", [])),
+        )
+
+
+@dataclass(frozen=True)
+class SsoConnectionTestResult:
+    success: bool
+    protocol: str
+    issuer: str | None = None
+    authorization_endpoint: str | None = None
+    token_endpoint: str | None = None
+    jwks_uri: str | None = None
+    idp_entity_id: str | None = None
+    idp_sso_url: str | None = None
+    error: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SsoConnectionTestResult":
+        return cls(
+            success=data["success"],
+            protocol=data["protocol"],
+            issuer=data.get("issuer"),
+            authorization_endpoint=data.get("authorizationEndpoint"),
+            token_endpoint=data.get("tokenEndpoint"),
+            jwks_uri=data.get("jwksUri"),
+            idp_entity_id=data.get("idpEntityId"),
+            idp_sso_url=data.get("idpSsoUrl"),
+            error=data.get("error"),
+        )
+
+
+@dataclass
+class SsoEnforcementParams:
+    enforce: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"enforce": self.enforce}
+
+
+@dataclass(frozen=True)
+class SsoEnforcementResponse:
+    enforce: bool
+    developer_id: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SsoEnforcementResponse":
+        return cls(
+            enforce=data["enforce"],
+            developer_id=data["developerId"],
+        )
+
+
+@dataclass(frozen=True)
+class SsoSession:
+    id: str
+    connection_id: str
+    idp_subject: str
+    groups: tuple[str, ...]
+    mapped_scopes: tuple[str, ...]
+    expires_at: str
+    created_at: str
+    principal_id: str | None = None
+    email: str | None = None
+    name: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SsoSession":
+        return cls(
+            id=data["id"],
+            connection_id=data["connectionId"],
+            idp_subject=data["idpSubject"],
+            groups=tuple(data.get("groups", [])),
+            mapped_scopes=tuple(data.get("mappedScopes", [])),
+            expires_at=data["expiresAt"],
+            created_at=data["createdAt"],
+            principal_id=data.get("principalId"),
+            email=data.get("email"),
+            name=data.get("name"),
+        )
+
+
+@dataclass(frozen=True)
+class ListSsoSessionsResponse:
+    sessions: tuple[SsoSession, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ListSsoSessionsResponse":
+        return cls(
+            sessions=tuple(SsoSession.from_dict(s) for s in data.get("sessions", [])),
+        )
+
+
+@dataclass
+class SsoOidcCallbackParams:
+    code: str
+    state: str
+    redirect_uri: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "state": self.state,
+            **({"redirect_uri": self.redirect_uri} if self.redirect_uri is not None else {}),
+        }
+
+
+@dataclass
+class SsoSamlCallbackParams:
+    saml_response: str
+    relay_state: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "SAMLResponse": self.saml_response,
+            "RelayState": self.relay_state,
+        }
+
+
+@dataclass(frozen=True)
+class SsoCallbackResult:
+    session_id: str
+    groups: tuple[str, ...]
+    mapped_scopes: tuple[str, ...]
+    developer_id: str
+    expires_at: str
+    email: str | None = None
+    name: str | None = None
+    sub: str | None = None
+    principal_id: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SsoCallbackResult":
+        return cls(
+            session_id=data["sessionId"],
+            groups=tuple(data.get("groups", [])),
+            mapped_scopes=tuple(data.get("mappedScopes", [])),
+            developer_id=data["developerId"],
+            expires_at=data["expiresAt"],
+            email=data.get("email"),
+            name=data.get("name"),
+            sub=data.get("sub"),
+            principal_id=data.get("principalId"),
         )
 
 

@@ -24,3 +24,5 @@ export const newWebAuthnChallengeId = (): string => `wac_${ulid()}`;
 export const newVerifiableCredentialId = (): string => `vc_${ulid()}`;
 export const newStatusListId = (): string => `vcsl_${ulid()}`;
 export const newPresentationId = (): string => `pres_${ulid()}`;
+export const newSsoConnectionId = (): string => `sso_${ulid()}`;
+export const newSsoSessionId = (): string => `ssosess_${ulid()}`;

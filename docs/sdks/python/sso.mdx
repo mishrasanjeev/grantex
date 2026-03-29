@@ -1,16 +1,516 @@
 ---
-title: "SSO (OIDC)"
+title: "SSO (OIDC + SAML)"
 sidebarTitle: "SSO"
-description: "Configure OpenID Connect SSO, generate login URLs, and handle callbacks with the Grantex Python SDK."
+description: "Enterprise single sign-on with multi-IdP connections, SAML 2.0, OIDC, JIT provisioning, and domain-based enforcement using the Grantex Python SDK."
 ---
 
 ## Overview
 
-The `sso` client manages OpenID Connect (OIDC) single sign-on configuration. Set up SSO so your organization's members can log in through your identity provider (IdP) instead of using API keys directly.
+The `sso` client provides enterprise-grade single sign-on for your developer organization. It supports multiple identity provider connections (OIDC and SAML 2.0), domain-based enforcement, JIT (just-in-time) provisioning, and session management. Compatible with Okta, Azure AD, Google Workspace, Auth0, OneLogin, PingFederate, and any SAML 2.0 or OIDC-compliant provider.
 
 Access the SSO client via `client.sso`.
 
-## Create Config
+```python
+from grantex import Grantex, CreateSsoConnectionParams
+
+with Grantex(api_key="gx_live_...") as client:
+    conn = client.sso.create_connection(CreateSsoConnectionParams(
+        name="Okta Production",
+        protocol="oidc",
+        issuer_url="https://mycompany.okta.com",
+        client_id="your-client-id",
+        client_secret="your-client-secret",
+        domains=["mycompany.com"],
+        jit_provisioning=True,
+    ))
+```
+
+---
+
+## Enterprise SSO Connections
+
+### Create Connection
+
+Create a new SSO identity provider connection. You can create multiple connections for different domains or providers.
+
+```python
+from grantex import Grantex, CreateSsoConnectionParams
+
+with Grantex(api_key="gx_live_...") as client:
+    conn = client.sso.create_connection(CreateSsoConnectionParams(
+        name="Okta Production",
+        protocol="oidc",
+        issuer_url="https://mycompany.okta.com",
+        client_id="your-okta-client-id",
+        client_secret="your-okta-client-secret",
+        domains=["mycompany.com", "mycompany.org"],
+        jit_provisioning=True,
+        default_role="member",
+    ))
+
+    print(f"ID: {conn.id}")                    # 'sso_conn_01HX...'
+    print(f"Name: {conn.name}")                # 'Okta Production'
+    print(f"Protocol: {conn.protocol}")        # 'oidc'
+    print(f"Status: {conn.status}")            # 'active'
+    print(f"Domains: {conn.domains}")          # ['mycompany.com', 'mycompany.org']
+    print(f"JIT: {conn.jit_provisioning}")     # True
+    print(f"Created: {conn.created_at}")       # '2026-03-29T12:00:00Z'
+```
+
+#### SAML example
+
+```python
+from grantex import CreateSsoConnectionParams
+
+saml_conn = client.sso.create_connection(CreateSsoConnectionParams(
+    name="Azure AD SAML",
+    protocol="saml",
+    metadata_url="https://login.microsoftonline.com/.../federationmetadata/2007-06/federationmetadata.xml",
+    assertion_consumer_service_url="https://yourapp.com/sso/saml/callback",
+    entity_id="https://yourapp.com/saml/metadata",
+    domains=["contoso.com"],
+    jit_provisioning=True,
+    attribute_mapping={
+        "email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+        "name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/displayname",
+    },
+))
+```
+
+#### CreateSsoConnectionParams
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | `str` | Yes | A human-readable name for this connection. |
+| `protocol` | `str` | Yes | `"oidc"` or `"saml"`. |
+| `issuer_url` | `str` | OIDC only | The OIDC issuer URL. |
+| `client_id` | `str` | OIDC only | OAuth 2.0 client ID from your IdP. |
+| `client_secret` | `str` | OIDC only | OAuth 2.0 client secret from your IdP. |
+| `metadata_url` | `str` | SAML only | The SAML metadata URL. |
+| `assertion_consumer_service_url` | `str` | SAML only | The SAML ACS URL. |
+| `entity_id` | `str` | SAML only | The SAML service provider entity ID. |
+| `domains` | `list[str]` | No | Email domains to associate with this connection. |
+| `jit_provisioning` | `bool` | No | Enable just-in-time user provisioning. Defaults to `False`. |
+| `default_role` | `str` | No | Default role for JIT-provisioned users. |
+| `attribute_mapping` | `dict[str, str]` | No | Custom attribute mapping for SAML assertions. |
+
+#### SsoConnection
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `str` | Unique connection identifier. |
+| `name` | `str` | The connection display name. |
+| `protocol` | `str` | `"oidc"` or `"saml"`. |
+| `status` | `str` | `"active"`, `"inactive"`, or `"error"`. |
+| `domains` | `list[str]` | Associated email domains. |
+| `jit_provisioning` | `bool` | Whether JIT provisioning is enabled. |
+| `created_at` | `str` | ISO 8601 creation timestamp. |
+| `updated_at` | `str` | ISO 8601 last-updated timestamp. |
+
+> **Note:** The `client_secret` is never returned in responses. It is stored securely on the server.
+
+---
+
+### List Connections
+
+List all SSO connections for your organization.
+
+```python
+connections = client.sso.list_connections()
+
+for conn in connections.connections:
+    print(f"{conn.name} ({conn.protocol}) - {conn.status}")
+    print(f"  Domains: {', '.join(conn.domains)}")
+```
+
+#### SsoConnectionList
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `connections` | `list[SsoConnection]` | Array of SSO connection objects. |
+
+---
+
+### Get Connection
+
+Retrieve a single SSO connection by ID.
+
+```python
+conn = client.sso.get_connection("sso_conn_01HX...")
+
+print(f"Name: {conn.name}")         # 'Okta Production'
+print(f"Protocol: {conn.protocol}") # 'oidc'
+print(f"Status: {conn.status}")     # 'active'
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `connection_id` | `str` | Yes | The connection ID to retrieve. |
+
+---
+
+### Update Connection
+
+Update an existing SSO connection.
+
+```python
+from grantex import UpdateSsoConnectionParams
+
+updated = client.sso.update_connection("sso_conn_01HX...", UpdateSsoConnectionParams(
+    name="Okta Production (updated)",
+    jit_provisioning=False,
+    domains=["mycompany.com", "mycompany.org", "subsidiary.com"],
+))
+
+print(f"Name: {updated.name}")      # 'Okta Production (updated)'
+print(f"Domains: {updated.domains}") # ['mycompany.com', 'mycompany.org', 'subsidiary.com']
+```
+
+#### UpdateSsoConnectionParams
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | `str` | No | Updated display name. |
+| `domains` | `list[str]` | No | Updated list of associated email domains. |
+| `jit_provisioning` | `bool` | No | Enable or disable JIT provisioning. |
+| `default_role` | `str` | No | Updated default role for JIT-provisioned users. |
+| `attribute_mapping` | `dict[str, str]` | No | Updated SAML attribute mapping. |
+
+---
+
+### Delete Connection
+
+Delete an SSO connection. Users associated with this connection will no longer be able to log in via SSO.
+
+```python
+client.sso.delete_connection("sso_conn_01HX...")
+# Returns None -- connection is removed
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `connection_id` | `str` | Yes | The connection ID to delete. |
+
+> **Warning:** Deleting a connection immediately disables SSO login for all users routed through it. Ensure you have an alternative authentication method configured before removing a connection.
+
+---
+
+### Test Connection
+
+Test an SSO connection to verify that the IdP configuration is correct and reachable.
+
+```python
+test = client.sso.test_connection("sso_conn_01HX...")
+
+print(f"Success: {test.success}")            # True
+print(f"Message: {test.message}")            # 'Connection verified successfully'
+print(f"Response time: {test.response_time}") # 142 (ms)
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `connection_id` | `str` | Yes | The connection ID to test. |
+
+#### SsoTestResult
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | `bool` | Whether the connection test passed. |
+| `message` | `str` | Human-readable result message. |
+| `response_time` | `int` | IdP response time in milliseconds. |
+
+---
+
+## Enforcement
+
+### Set Enforcement
+
+Enforce SSO login for your organization. When enabled, all members must authenticate through an SSO connection.
+
+```python
+from grantex import SsoEnforcementParams
+
+enforcement = client.sso.set_enforcement(SsoEnforcementParams(
+    enforced=True,
+    exempt_roles=["owner"],
+))
+
+print(f"Enforced: {enforcement.enforced}")         # True
+print(f"Exempt roles: {enforcement.exempt_roles}") # ['owner']
+```
+
+#### SsoEnforcementParams
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enforced` | `bool` | Yes | Whether SSO login is enforced for all members. |
+| `exempt_roles` | `list[str]` | No | Roles exempt from SSO enforcement. |
+
+#### SsoEnforcement
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enforced` | `bool` | Whether SSO enforcement is active. |
+| `exempt_roles` | `list[str]` | Roles exempt from the enforcement policy. |
+
+---
+
+## Session Management
+
+### List Sessions
+
+List active SSO sessions for your organization.
+
+```python
+sessions = client.sso.list_sessions()
+
+for session in sessions.sessions:
+    print(f"{session.email} - {session.connection_name} - expires {session.expires_at}")
+```
+
+#### SsoSessionList
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sessions` | `list[SsoSession]` | Array of active SSO session objects. |
+
+#### SsoSession
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `str` | Session identifier. |
+| `email` | `str` | The user's email address. |
+| `connection_id` | `str` | The SSO connection used for this session. |
+| `connection_name` | `str` | Display name of the SSO connection. |
+| `created_at` | `str` | ISO 8601 session creation timestamp. |
+| `expires_at` | `str` | ISO 8601 session expiration timestamp. |
+
+---
+
+### Revoke Session
+
+Revoke an active SSO session, forcing the user to re-authenticate.
+
+```python
+client.sso.revoke_session("sso_sess_01HX...")
+# Returns None -- session is revoked
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `session_id` | `str` | Yes | The session ID to revoke. |
+
+---
+
+## Enterprise Login Flow
+
+### Get Login URL (enterprise)
+
+Get the SSO authorization URL for a user based on their email domain. The domain is matched against configured connections to route the user to the correct IdP.
+
+```python
+from grantex import SsoLoginParams
+
+login = client.sso.get_login_url(SsoLoginParams(
+    domain="mycompany.com",
+    redirect_uri="https://yourapp.com/sso/callback",
+))
+
+print(f"Redirect to: {login.authorize_url}")
+print(f"Connection: {login.connection_id}")  # 'sso_conn_01HX...'
+print(f"Protocol: {login.protocol}")         # 'oidc'
+```
+
+#### SsoLoginParams
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `domain` | `str` | Yes | Email domain to match against SSO connections. |
+| `redirect_uri` | `str` | No | Override the redirect URI for this login request. |
+
+#### SsoLoginResponse
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `authorize_url` | `str` | The full authorization URL. Redirect the user here. |
+| `connection_id` | `str` | The matched SSO connection ID. |
+| `protocol` | `str` | The protocol of the matched connection. |
+
+---
+
+### Handle OIDC Callback
+
+Handle the callback from an OIDC identity provider. Exchanges the authorization code for user information and provisions the user if JIT is enabled.
+
+```python
+from grantex import SsoOidcCallbackParams
+
+result = client.sso.handle_oidc_callback(SsoOidcCallbackParams(
+    code="oidc_auth_code",
+    state="csrf_state",
+))
+
+print(f"Email: {result.email}")               # 'alice@mycompany.com'
+print(f"Name: {result.name}")                 # 'Alice Smith'
+print(f"Subject: {result.sub}")               # 'okta|abc123'
+print(f"Developer ID: {result.developer_id}") # 'dev_01HXYZ...'
+print(f"Connection: {result.connection_id}")  # 'sso_conn_01HX...'
+print(f"Provisioned: {result.provisioned}")   # True (if JIT-created)
+```
+
+#### SsoOidcCallbackParams
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `code` | `str` | Yes | The authorization code from the OIDC callback. |
+| `state` | `str` | Yes | The state parameter for CSRF protection. |
+
+#### SsoCallbackResponse
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `email` | `str \| None` | The user's email address from the IdP. |
+| `name` | `str \| None` | The user's display name from the IdP. |
+| `sub` | `str \| None` | The user's subject identifier from the IdP. |
+| `developer_id` | `str` | The Grantex developer ID. |
+| `connection_id` | `str` | The SSO connection that handled this authentication. |
+| `provisioned` | `bool` | Whether the user was JIT-provisioned during this login. |
+
+---
+
+### Handle SAML Callback
+
+Handle the callback from a SAML 2.0 identity provider. Validates the SAML assertion and provisions the user if JIT is enabled.
+
+```python
+from grantex import SsoSamlCallbackParams
+
+result = client.sso.handle_saml_callback(SsoSamlCallbackParams(
+    saml_response=request.form["SAMLResponse"],
+    relay_state=request.form.get("RelayState"),
+))
+
+print(f"Email: {result.email}")               # 'bob@contoso.com'
+print(f"Name: {result.name}")                 # 'Bob Jones'
+print(f"Developer ID: {result.developer_id}") # 'dev_01HXYZ...'
+print(f"Connection: {result.connection_id}")  # 'sso_conn_02HX...'
+print(f"Provisioned: {result.provisioned}")   # False
+```
+
+#### SsoSamlCallbackParams
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `saml_response` | `str` | Yes | The base64-encoded SAML response from the IdP. |
+| `relay_state` | `str` | No | The RelayState parameter from the SAML callback. |
+
+#### Response
+
+Returns the same `SsoCallbackResponse` as `handle_oidc_callback()`.
+
+---
+
+## Full Enterprise SSO Flow Example
+
+```python
+from flask import Flask, request, redirect
+from grantex import (
+    Grantex,
+    CreateSsoConnectionParams,
+    SsoEnforcementParams,
+    SsoLoginParams,
+    SsoOidcCallbackParams,
+    SsoSamlCallbackParams,
+)
+import os
+
+app = Flask(__name__)
+client = Grantex(api_key=os.environ["GRANTEX_API_KEY"])
+
+# Step 1: Create SSO connections (one-time setup)
+client.sso.create_connection(CreateSsoConnectionParams(
+    name="Okta Production",
+    protocol="oidc",
+    issuer_url="https://mycompany.okta.com",
+    client_id=os.environ["OKTA_CLIENT_ID"],
+    client_secret=os.environ["OKTA_CLIENT_SECRET"],
+    domains=["mycompany.com"],
+    jit_provisioning=True,
+    default_role="member",
+))
+
+client.sso.create_connection(CreateSsoConnectionParams(
+    name="Azure AD SAML",
+    protocol="saml",
+    metadata_url=os.environ["AZURE_METADATA_URL"],
+    assertion_consumer_service_url="https://yourapp.com/sso/saml/callback",
+    entity_id="https://yourapp.com/saml/metadata",
+    domains=["contoso.com"],
+    jit_provisioning=True,
+))
+
+# Step 2: Enforce SSO for the organization
+client.sso.set_enforcement(SsoEnforcementParams(
+    enforced=True,
+    exempt_roles=["owner"],
+))
+
+# Step 3: Redirect user to SSO login based on email domain
+@app.route("/sso/login")
+def sso_login():
+    domain = request.args["domain"]
+    login = client.sso.get_login_url(SsoLoginParams(
+        domain=domain,
+        redirect_uri="https://yourapp.com/sso/callback",
+    ))
+    return redirect(login.authorize_url)
+
+# Step 4a: Handle OIDC callback
+@app.route("/sso/callback")
+def sso_callback():
+    result = client.sso.handle_oidc_callback(SsoOidcCallbackParams(
+        code=request.args["code"],
+        state=request.args["state"],
+    ))
+
+    print(f"Welcome, {result.name} ({result.email})")
+    if result.provisioned:
+        print("New user provisioned via JIT")
+    return redirect("/dashboard")
+
+# Step 4b: Handle SAML callback
+@app.route("/sso/saml/callback", methods=["POST"])
+def sso_saml_callback():
+    result = client.sso.handle_saml_callback(SsoSamlCallbackParams(
+        saml_response=request.form["SAMLResponse"],
+        relay_state=request.form.get("RelayState"),
+    ))
+
+    print(f"Welcome, {result.name} ({result.email})")
+    return redirect("/dashboard")
+
+# Admin: List active sessions
+@app.route("/admin/sso/sessions")
+def sso_sessions():
+    sessions = client.sso.list_sessions()
+    return {"sessions": [s.__dict__ for s in sessions.sessions]}
+```
+
+---
+
+## Legacy Single-Config Methods
+
+> **Note:** The following methods manage a single OIDC configuration per organization. They are retained for backward compatibility. For new integrations, use the enterprise connection methods above which support multiple IdPs, SAML, and domain-based routing.
+
+### Create Config
 
 Create or update the OIDC SSO configuration for your developer organization:
 
@@ -31,7 +531,7 @@ with Grantex(api_key="gx_live_...") as client:
     print(f"Created at: {config.created_at}")
 ```
 
-### CreateSsoConfigParams
+#### CreateSsoConfigParams
 
 | Field           | Type  | Required | Description                                        |
 |-----------------|-------|----------|----------------------------------------------------|
@@ -40,7 +540,7 @@ with Grantex(api_key="gx_live_...") as client:
 | `client_secret` | `str` | Yes      | The OIDC client secret from your IdP.              |
 | `redirect_uri`  | `str` | Yes      | The redirect URI registered with your IdP.         |
 
-## Get Config
+### Get Config
 
 Retrieve the current SSO configuration. The client secret is not included in the response:
 
@@ -53,7 +553,7 @@ print(f"Redirect URI: {config.redirect_uri}")
 print(f"Updated at: {config.updated_at}")
 ```
 
-### SsoConfig
+#### SsoConfig
 
 | Field          | Type  | Description                              |
 |----------------|-------|------------------------------------------|
@@ -63,7 +563,7 @@ print(f"Updated at: {config.updated_at}")
 | `created_at`   | `str` | ISO 8601 creation timestamp.             |
 | `updated_at`   | `str` | ISO 8601 last-updated timestamp.         |
 
-## Delete Config
+### Delete Config
 
 Remove the SSO configuration:
 
@@ -72,7 +572,7 @@ client.sso.delete_config()
 # Returns None on success
 ```
 
-## Get Login URL
+### Get Login URL (legacy)
 
 Generate the OIDC authorization URL to redirect a user to for SSO login:
 
@@ -85,19 +585,19 @@ with Grantex(api_key="gx_live_...") as client:
     print(f"Redirect to: {login.authorize_url}")
 ```
 
-### Parameters
+#### Parameters
 
 | Parameter | Type  | Required | Description                              |
 |-----------|-------|----------|------------------------------------------|
 | `org`     | `str` | Yes      | The organization identifier for SSO lookup. |
 
-### SsoLoginResponse
+#### SsoLoginResponse (legacy)
 
 | Field           | Type  | Description                              |
 |-----------------|-------|------------------------------------------|
 | `authorize_url` | `str` | The OIDC authorization URL to redirect the user to. |
 
-## Handle Callback
+### Handle Callback
 
 Exchange the OIDC authorization code for user information after the IdP redirects back to your application:
 
@@ -116,14 +616,14 @@ with Grantex(api_key="gx_live_...") as client:
     print(f"Subject: {result.sub}")
 ```
 
-### Parameters
+#### Parameters
 
 | Parameter | Type  | Required | Description                                   |
 |-----------|-------|----------|-----------------------------------------------|
 | `code`    | `str` | Yes      | The authorization code from the OIDC callback. |
 | `state`   | `str` | Yes      | The state parameter for CSRF verification.    |
 
-### SsoCallbackResponse
+#### SsoCallbackResponse (legacy)
 
 | Field          | Type          | Description                              |
 |----------------|---------------|------------------------------------------|
@@ -132,7 +632,7 @@ with Grantex(api_key="gx_live_...") as client:
 | `name`         | `str \| None` | The user's display name (if provided by IdP). |
 | `sub`          | `str \| None` | The OIDC subject identifier.             |
 
-## Complete SSO Flow Example
+### Legacy SSO Flow Example
 
 ```python
 from grantex import Grantex, CreateSsoConfigParams

@@ -15,7 +15,11 @@ export type EventType =
   | 'sd-jwt.presented'
   | 'passport.issued'
   | 'passport.revoked'
-  | 'passport.token-exchange';
+  | 'passport.token-exchange'
+  | 'sso.login'
+  | 'sso.connection.created'
+  | 'sso.connection.updated'
+  | 'sso.connection.deleted';
 
 export interface GrantexEvent {
   id: string;

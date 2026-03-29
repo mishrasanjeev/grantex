@@ -119,6 +119,17 @@ These capabilities support the **Mastercard Verifiable Intent** specification an
 Verifiable Credentials are opt-in. Pass `credentialFormat: "vc-jwt"` during token exchange to receive a VC alongside the standard grant token. Existing integrations continue to work unchanged.
 </Info>
 
+## Enterprise Identity & Access
+
+<CardGroup cols={2}>
+  <Card title="Enterprise SSO" icon="key" href="/guides/enterprise-sso">
+    OIDC + SAML 2.0 single sign-on with multi-IdP connections, domain-based routing, JIT provisioning, group-to-scope mapping, and SSO enforcement.
+  </Card>
+  <Card title="SCIM 2.0 Provisioning" icon="users" href="/sdks/typescript/scim">
+    Sync agents and principals from your identity provider automatically via SCIM 2.0.
+  </Card>
+</CardGroup>
+
 ## How Integrations Work
 
 Every integration follows the same pattern:

@@ -1,9 +1,517 @@
 ---
-title: "SSO"
-description: "Configure and manage OpenID Connect SSO"
+title: "SSO (OIDC + SAML)"
+description: "Enterprise single sign-on with multi-IdP connections, SAML 2.0, OIDC, JIT provisioning, and domain-based enforcement using the Grantex Go SDK."
 ---
 
-## Create Config
+## Overview
+
+The `SSO` service provides enterprise-grade single sign-on for your developer organization. It supports multiple identity provider connections (OIDC and SAML 2.0), domain-based enforcement, JIT (just-in-time) provisioning, and session management. Compatible with Okta, Azure AD, Google Workspace, Auth0, OneLogin, PingFederate, and any SAML 2.0 or OIDC-compliant provider.
+
+```go
+conn, err := client.SSO.CreateConnection(ctx, grantex.CreateSsoConnectionParams{
+    Name:            "Okta Production",
+    Protocol:        "oidc",
+    IssuerURL:       "https://mycompany.okta.com",
+    ClientID:        "your-client-id",
+    ClientSecret:    "your-client-secret",
+    Domains:         []string{"mycompany.com"},
+    JitProvisioning: true,
+})
+```
+
+---
+
+## Enterprise SSO Connections
+
+### Create Connection
+
+Create a new SSO identity provider connection. You can create multiple connections for different domains or providers.
+
+```go
+conn, err := client.SSO.CreateConnection(ctx, grantex.CreateSsoConnectionParams{
+    Name:            "Okta Production",
+    Protocol:        "oidc",
+    IssuerURL:       "https://mycompany.okta.com",
+    ClientID:        "your-okta-client-id",
+    ClientSecret:    "your-okta-client-secret",
+    Domains:         []string{"mycompany.com", "mycompany.org"},
+    JitProvisioning: true,
+    DefaultRole:     "member",
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("ID: %s\n", conn.ID)                    // sso_conn_01HX...
+fmt.Printf("Name: %s\n", conn.Name)                // Okta Production
+fmt.Printf("Protocol: %s\n", conn.Protocol)        // oidc
+fmt.Printf("Status: %s\n", conn.Status)            // active
+fmt.Printf("Domains: %v\n", conn.Domains)          // [mycompany.com mycompany.org]
+fmt.Printf("JIT: %v\n", conn.JitProvisioning)      // true
+fmt.Printf("Created: %s\n", conn.CreatedAt)        // 2026-03-29T12:00:00Z
+```
+
+#### SAML example
+
+```go
+samlConn, err := client.SSO.CreateConnection(ctx, grantex.CreateSsoConnectionParams{
+    Name:                        "Azure AD SAML",
+    Protocol:                    "saml",
+    MetadataURL:                 "https://login.microsoftonline.com/.../federationmetadata.xml",
+    AssertionConsumerServiceURL: "https://yourapp.com/sso/saml/callback",
+    EntityID:                    "https://yourapp.com/saml/metadata",
+    Domains:                     []string{"contoso.com"},
+    JitProvisioning:             true,
+    AttributeMapping: map[string]string{
+        "email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+        "name":  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/displayname",
+    },
+})
+```
+
+### `CreateSsoConnectionParams`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `Name` | `string` | Yes | A human-readable name for this connection. |
+| `Protocol` | `string` | Yes | `"oidc"` or `"saml"`. |
+| `IssuerURL` | `string` | OIDC only | The OIDC issuer URL. |
+| `ClientID` | `string` | OIDC only | OAuth 2.0 client ID from your IdP. |
+| `ClientSecret` | `string` | OIDC only | OAuth 2.0 client secret from your IdP. |
+| `MetadataURL` | `string` | SAML only | The SAML metadata URL. |
+| `AssertionConsumerServiceURL` | `string` | SAML only | The SAML ACS URL. |
+| `EntityID` | `string` | SAML only | The SAML service provider entity ID. |
+| `Domains` | `[]string` | No | Email domains to associate with this connection. |
+| `JitProvisioning` | `bool` | No | Enable just-in-time user provisioning. |
+| `DefaultRole` | `string` | No | Default role for JIT-provisioned users. |
+| `AttributeMapping` | `map[string]string` | No | Custom attribute mapping for SAML assertions. |
+
+### `SsoConnection`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | `string` | Unique connection identifier. |
+| `Name` | `string` | The connection display name. |
+| `Protocol` | `string` | `"oidc"` or `"saml"`. |
+| `Status` | `string` | `"active"`, `"inactive"`, or `"error"`. |
+| `Domains` | `[]string` | Associated email domains. |
+| `JitProvisioning` | `bool` | Whether JIT provisioning is enabled. |
+| `CreatedAt` | `string` | ISO 8601 creation timestamp. |
+| `UpdatedAt` | `string` | ISO 8601 last-updated timestamp. |
+
+> **Note:** The `ClientSecret` is never returned in responses. It is stored securely on the server.
+
+---
+
+### List Connections
+
+List all SSO connections for your organization.
+
+```go
+resp, err := client.SSO.ListConnections(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, conn := range resp.Connections {
+    fmt.Printf("%s (%s) - %s\n", conn.Name, conn.Protocol, conn.Status)
+    fmt.Printf("  Domains: %v\n", conn.Domains)
+}
+```
+
+---
+
+### Get Connection
+
+Retrieve a single SSO connection by ID.
+
+```go
+conn, err := client.SSO.GetConnection(ctx, "sso_conn_01HX...")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Name: %s\n", conn.Name)         // Okta Production
+fmt.Printf("Protocol: %s\n", conn.Protocol) // oidc
+fmt.Printf("Status: %s\n", conn.Status)     // active
+```
+
+---
+
+### Update Connection
+
+Update an existing SSO connection.
+
+```go
+updated, err := client.SSO.UpdateConnection(ctx, "sso_conn_01HX...", grantex.UpdateSsoConnectionParams{
+    Name:            "Okta Production (updated)",
+    JitProvisioning: grantex.Bool(false),
+    Domains:         []string{"mycompany.com", "mycompany.org", "subsidiary.com"},
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Name: %s\n", updated.Name)      // Okta Production (updated)
+fmt.Printf("Domains: %v\n", updated.Domains) // [mycompany.com mycompany.org subsidiary.com]
+```
+
+### `UpdateSsoConnectionParams`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Name` | `string` | Updated display name. |
+| `Domains` | `[]string` | Updated list of associated email domains. |
+| `JitProvisioning` | `*bool` | Enable or disable JIT provisioning. |
+| `DefaultRole` | `string` | Updated default role for JIT-provisioned users. |
+| `AttributeMapping` | `map[string]string` | Updated SAML attribute mapping. |
+
+---
+
+### Delete Connection
+
+Delete an SSO connection. Users associated with this connection will no longer be able to log in via SSO.
+
+```go
+err := client.SSO.DeleteConnection(ctx, "sso_conn_01HX...")
+if err != nil {
+    log.Fatal(err)
+}
+// Connection is removed
+```
+
+> **Warning:** Deleting a connection immediately disables SSO login for all users routed through it. Ensure you have an alternative authentication method configured before removing a connection.
+
+---
+
+### Test Connection
+
+Test an SSO connection to verify that the IdP configuration is correct and reachable.
+
+```go
+test, err := client.SSO.TestConnection(ctx, "sso_conn_01HX...")
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Success: %v\n", test.Success)           // true
+fmt.Printf("Message: %s\n", test.Message)            // Connection verified successfully
+fmt.Printf("Response time: %dms\n", test.ResponseTime) // 142
+```
+
+### `SsoTestResult`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Success` | `bool` | Whether the connection test passed. |
+| `Message` | `string` | Human-readable result message. |
+| `ResponseTime` | `int` | IdP response time in milliseconds. |
+
+---
+
+## Enforcement
+
+### Set Enforcement
+
+Enforce SSO login for your organization. When enabled, all members must authenticate through an SSO connection.
+
+```go
+enforcement, err := client.SSO.SetEnforcement(ctx, grantex.SsoEnforcementParams{
+    Enforced:    true,
+    ExemptRoles: []string{"owner"},
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Enforced: %v\n", enforcement.Enforced)       // true
+fmt.Printf("Exempt roles: %v\n", enforcement.ExemptRoles) // [owner]
+```
+
+### `SsoEnforcementParams`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `Enforced` | `bool` | Yes | Whether SSO login is enforced for all members. |
+| `ExemptRoles` | `[]string` | No | Roles exempt from SSO enforcement. |
+
+### `SsoEnforcement`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Enforced` | `bool` | Whether SSO enforcement is active. |
+| `ExemptRoles` | `[]string` | Roles exempt from the enforcement policy. |
+
+---
+
+## Session Management
+
+### List Sessions
+
+List active SSO sessions for your organization.
+
+```go
+sessions, err := client.SSO.ListSessions(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, s := range sessions.Sessions {
+    fmt.Printf("%s - %s - expires %s\n", s.Email, s.ConnectionName, s.ExpiresAt)
+}
+```
+
+### `SsoSession`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `ID` | `string` | Session identifier. |
+| `Email` | `string` | The user's email address. |
+| `ConnectionID` | `string` | The SSO connection used for this session. |
+| `ConnectionName` | `string` | Display name of the SSO connection. |
+| `CreatedAt` | `string` | ISO 8601 session creation timestamp. |
+| `ExpiresAt` | `string` | ISO 8601 session expiration timestamp. |
+
+---
+
+### Revoke Session
+
+Revoke an active SSO session, forcing the user to re-authenticate.
+
+```go
+err := client.SSO.RevokeSession(ctx, "sso_sess_01HX...")
+if err != nil {
+    log.Fatal(err)
+}
+// Session is revoked
+```
+
+---
+
+## Enterprise Login Flow
+
+### Get Login URL (enterprise)
+
+Get the SSO authorization URL for a user based on their email domain. The domain is matched against configured connections to route the user to the correct IdP.
+
+```go
+login, err := client.SSO.GetLoginURL(ctx, grantex.SsoLoginParams{
+    Domain:      "mycompany.com",
+    RedirectURI: "https://yourapp.com/sso/callback",
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Redirect to: %s\n", login.AuthorizeURL)
+fmt.Printf("Connection: %s\n", login.ConnectionID)  // sso_conn_01HX...
+fmt.Printf("Protocol: %s\n", login.Protocol)         // oidc
+```
+
+### `SsoLoginParams`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `Domain` | `string` | Yes | Email domain to match against SSO connections. |
+| `RedirectURI` | `string` | No | Override the redirect URI for this login request. |
+
+### `SsoLoginResponse` (enterprise)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `AuthorizeURL` | `string` | The full authorization URL. Redirect the user here. |
+| `ConnectionID` | `string` | The matched SSO connection ID. |
+| `Protocol` | `string` | The protocol of the matched connection. |
+
+---
+
+### Handle OIDC Callback
+
+Handle the callback from an OIDC identity provider. Exchanges the authorization code for user information and provisions the user if JIT is enabled.
+
+```go
+result, err := client.SSO.HandleOidcCallback(ctx, grantex.SsoOidcCallbackParams{
+    Code:  "oidc_auth_code",
+    State: "csrf_state",
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Email: %s\n", *result.Email)              // alice@mycompany.com
+fmt.Printf("Name: %s\n", *result.Name)                // Alice Smith
+fmt.Printf("Subject: %s\n", *result.Sub)              // okta|abc123
+fmt.Printf("Developer ID: %s\n", result.DeveloperID)  // dev_01HXYZ...
+fmt.Printf("Connection: %s\n", result.ConnectionID)   // sso_conn_01HX...
+fmt.Printf("Provisioned: %v\n", result.Provisioned)   // true
+```
+
+### `SsoOidcCallbackParams`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `Code` | `string` | Yes | The authorization code from the OIDC callback. |
+| `State` | `string` | Yes | The state parameter for CSRF protection. |
+
+### `SsoCallbackResponse`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Email` | `*string` | The user's email address from the IdP. |
+| `Name` | `*string` | The user's display name from the IdP. |
+| `Sub` | `*string` | The user's subject identifier from the IdP. |
+| `DeveloperID` | `string` | The Grantex developer ID. |
+| `ConnectionID` | `string` | The SSO connection that handled this authentication. |
+| `Provisioned` | `bool` | Whether the user was JIT-provisioned during this login. |
+
+---
+
+### Handle SAML Callback
+
+Handle the callback from a SAML 2.0 identity provider. Validates the SAML assertion and provisions the user if JIT is enabled.
+
+```go
+result, err := client.SSO.HandleSamlCallback(ctx, grantex.SsoSamlCallbackParams{
+    SAMLResponse: samlResponseValue,
+    RelayState:   relayStateValue,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Email: %s\n", *result.Email)              // bob@contoso.com
+fmt.Printf("Name: %s\n", *result.Name)                // Bob Jones
+fmt.Printf("Developer ID: %s\n", result.DeveloperID)  // dev_01HXYZ...
+fmt.Printf("Connection: %s\n", result.ConnectionID)   // sso_conn_02HX...
+fmt.Printf("Provisioned: %v\n", result.Provisioned)   // false
+```
+
+### `SsoSamlCallbackParams`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `SAMLResponse` | `string` | Yes | The base64-encoded SAML response from the IdP. |
+| `RelayState` | `string` | No | The RelayState parameter from the SAML callback. |
+
+Returns the same `SsoCallbackResponse` as `HandleOidcCallback()`.
+
+---
+
+## Full Enterprise SSO Flow Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+    "net/http"
+    "os"
+
+    "github.com/mishrasanjeev/grantex-go"
+)
+
+func main() {
+    ctx := context.Background()
+    client := grantex.NewClient(os.Getenv("GRANTEX_API_KEY"))
+
+    // Step 1: Create SSO connections (one-time setup)
+    _, err := client.SSO.CreateConnection(ctx, grantex.CreateSsoConnectionParams{
+        Name:            "Okta Production",
+        Protocol:        "oidc",
+        IssuerURL:       os.Getenv("OKTA_ISSUER_URL"),
+        ClientID:        os.Getenv("OKTA_CLIENT_ID"),
+        ClientSecret:    os.Getenv("OKTA_CLIENT_SECRET"),
+        Domains:         []string{"mycompany.com"},
+        JitProvisioning: true,
+        DefaultRole:     "member",
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    _, err = client.SSO.CreateConnection(ctx, grantex.CreateSsoConnectionParams{
+        Name:                        "Azure AD SAML",
+        Protocol:                    "saml",
+        MetadataURL:                 os.Getenv("AZURE_METADATA_URL"),
+        AssertionConsumerServiceURL: "https://yourapp.com/sso/saml/callback",
+        EntityID:                    "https://yourapp.com/saml/metadata",
+        Domains:                     []string{"contoso.com"},
+        JitProvisioning:             true,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Step 2: Enforce SSO for the organization
+    _, err = client.SSO.SetEnforcement(ctx, grantex.SsoEnforcementParams{
+        Enforced:    true,
+        ExemptRoles: []string{"owner"},
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Step 3: Redirect user to SSO login based on email domain
+    http.HandleFunc("/sso/login", func(w http.ResponseWriter, r *http.Request) {
+        domain := r.URL.Query().Get("domain")
+        login, err := client.SSO.GetLoginURL(ctx, grantex.SsoLoginParams{
+            Domain:      domain,
+            RedirectURI: "https://yourapp.com/sso/callback",
+        })
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+        http.Redirect(w, r, login.AuthorizeURL, http.StatusFound)
+    })
+
+    // Step 4a: Handle OIDC callback
+    http.HandleFunc("/sso/callback", func(w http.ResponseWriter, r *http.Request) {
+        result, err := client.SSO.HandleOidcCallback(ctx, grantex.SsoOidcCallbackParams{
+            Code:  r.URL.Query().Get("code"),
+            State: r.URL.Query().Get("state"),
+        })
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+
+        fmt.Printf("Welcome, %s (%s)\n", *result.Name, *result.Email)
+        if result.Provisioned {
+            fmt.Println("New user provisioned via JIT")
+        }
+        http.Redirect(w, r, "/dashboard", http.StatusFound)
+    })
+
+    // Step 4b: Handle SAML callback
+    http.HandleFunc("/sso/saml/callback", func(w http.ResponseWriter, r *http.Request) {
+        r.ParseForm()
+        result, err := client.SSO.HandleSamlCallback(ctx, grantex.SsoSamlCallbackParams{
+            SAMLResponse: r.FormValue("SAMLResponse"),
+            RelayState:   r.FormValue("RelayState"),
+        })
+        if err != nil {
+            http.Error(w, err.Error(), 500)
+            return
+        }
+
+        fmt.Printf("Welcome, %s (%s)\n", *result.Name, *result.Email)
+        http.Redirect(w, r, "/dashboard", http.StatusFound)
+    })
+
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+---
+
+## Legacy Single-Config Methods
+
+> **Note:** The following methods manage a single OIDC configuration per organization. They are retained for backward compatibility. For new integrations, use the enterprise connection methods above which support multiple IdPs, SAML, and domain-based routing.
+
+### Create Config
 
 ```go
 config, err := client.SSO.CreateConfig(ctx, grantex.CreateSsoConfigParams{
@@ -14,34 +522,34 @@ config, err := client.SSO.CreateConfig(ctx, grantex.CreateSsoConfigParams{
 })
 ```
 
-## Get Config
+### Get Config
 
 ```go
 config, err := client.SSO.GetConfig(ctx)
 fmt.Printf("Issuer: %s\n", config.IssuerURL)
 ```
 
-## Delete Config
+### Delete Config
 
 ```go
 err := client.SSO.DeleteConfig(ctx)
 ```
 
-## Get Login URL
+### Get Login URL (legacy)
 
 ```go
 result, err := client.SSO.GetLoginURL(ctx, "acme-corp")
 // Redirect user to result.AuthorizeURL
 ```
 
-## Handle Callback
+### Handle Callback
 
 ```go
 result, err := client.SSO.HandleCallback(ctx, authCode, state)
 fmt.Printf("User: %s (%s)\n", *result.Name, *result.Email)
 ```
 
-## Types
+## Legacy Types
 
 ### `SsoConfig`
 
