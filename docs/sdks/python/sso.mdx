@@ -1,12 +1,12 @@
 ---
-title: "SSO (OIDC + SAML)"
+title: "SSO (OIDC + SAML + LDAP)"
 sidebarTitle: "SSO"
-description: "Enterprise single sign-on with multi-IdP connections, SAML 2.0, OIDC, JIT provisioning, and domain-based enforcement using the Grantex Python SDK."
+description: "Enterprise single sign-on with multi-IdP connections, SAML 2.0, OIDC, LDAP, JIT provisioning, and domain-based enforcement using the Grantex Python SDK."
 ---
 
 ## Overview
 
-The `sso` client provides enterprise-grade single sign-on for your developer organization. It supports multiple identity provider connections (OIDC and SAML 2.0), domain-based enforcement, JIT (just-in-time) provisioning, and session management. Compatible with Okta, Azure AD, Google Workspace, Auth0, OneLogin, PingFederate, and any SAML 2.0 or OIDC-compliant provider.
+The `sso` client provides enterprise-grade single sign-on for your developer organization. It supports multiple identity provider connections (OIDC, SAML 2.0, and LDAP), domain-based enforcement, JIT (just-in-time) provisioning, and session management. Compatible with Okta, Azure AD, Google Workspace, Auth0, OneLogin, PingFederate, OpenLDAP, FreeIPA, and any SAML 2.0, OIDC, or LDAP-compliant provider.
 
 Access the SSO client via `client.sso`.
 
@@ -82,7 +82,7 @@ saml_conn = client.sso.create_connection(CreateSsoConnectionParams(
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | `str` | Yes | A human-readable name for this connection. |
-| `protocol` | `str` | Yes | `"oidc"` or `"saml"`. |
+| `protocol` | `str` | Yes | `"oidc"`, `"saml"`, or `"ldap"`. |
 | `issuer_url` | `str` | OIDC only | The OIDC issuer URL. |
 | `client_id` | `str` | OIDC only | OAuth 2.0 client ID from your IdP. |
 | `client_secret` | `str` | OIDC only | OAuth 2.0 client secret from your IdP. |
@@ -100,7 +100,7 @@ saml_conn = client.sso.create_connection(CreateSsoConnectionParams(
 |-------|------|-------------|
 | `id` | `str` | Unique connection identifier. |
 | `name` | `str` | The connection display name. |
-| `protocol` | `str` | `"oidc"` or `"saml"`. |
+| `protocol` | `str` | `"oidc"`, `"saml"`, or `"ldap"`. |
 | `status` | `str` | `"active"`, `"inactive"`, or `"error"`. |
 | `domains` | `list[str]` | Associated email domains. |
 | `jit_provisioning` | `bool` | Whether JIT provisioning is enabled. |
@@ -415,6 +415,42 @@ print(f"Provisioned: {result.provisioned}")   # False
 #### Response
 
 Returns the same `SsoCallbackResponse` as `handle_oidc_callback()`.
+
+---
+
+### Handle LDAP Callback
+
+Authenticate a user via LDAP bind. Unlike OIDC and SAML which use browser redirects, LDAP authentication submits credentials directly. Grantex binds to the LDAP directory, verifies the user's password, reads their attributes and group memberships, maps groups to scopes, and provisions the user if JIT is enabled.
+
+```python
+from grantex import SsoLdapCallbackParams
+
+result = client.sso.handle_ldap_callback(SsoLdapCallbackParams(
+    username="alice",
+    password="user-password",
+    connection_id="sso_conn_03HX...",
+))
+
+print(f"Email: {result.email}")               # 'alice@mycompany.com'
+print(f"Name: {result.name}")                 # 'Alice Smith'
+print(f"Developer ID: {result.developer_id}") # 'dev_01HXYZ...'
+print(f"Connection: {result.connection_id}")  # 'sso_conn_03HX...'
+print(f"Provisioned: {result.provisioned}")   # True (if JIT-created)
+```
+
+#### SsoLdapCallbackParams
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `username` | `str` | Yes | The user's LDAP username (e.g. uid, sAMAccountName, or full DN). |
+| `password` | `str` | Yes | The user's LDAP password for bind authentication. |
+| `connection_id` | `str` | Yes | The SSO connection ID for the LDAP directory. |
+
+#### Response
+
+Returns the same `SsoCallbackResponse` as `handle_oidc_callback()`.
+
+> **Note:** LDAP credentials are never stored by Grantex. They are used only for the bind operation and discarded immediately after authentication.
 
 ---
 

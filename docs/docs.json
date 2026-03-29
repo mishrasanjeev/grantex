@@ -458,7 +458,8 @@
               "api-reference/sso/list-sso-sessions",
               "api-reference/sso/revoke-sso-session",
               "api-reference/sso/oidc-callback",
-              "api-reference/sso/saml-callback"
+              "api-reference/sso/saml-callback",
+              "api-reference/sso/ldap-callback"
             ]
           },
           {

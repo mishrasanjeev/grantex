@@ -15,6 +15,7 @@ import type {
   SsoSessionListResponse,
   SsoOidcCallbackParams,
   SsoSamlCallbackParams,
+  SsoLdapCallbackParams,
   SsoCallbackResult,
 } from '../types.js';
 
@@ -93,6 +94,11 @@ export class SsoClient {
   /** Handle a SAML callback with assertion verification. */
   handleSamlCallback(params: SsoSamlCallbackParams): Promise<SsoCallbackResult> {
     return this.#http.post<SsoCallbackResult>('/sso/callback/saml', params);
+  }
+
+  /** Handle an LDAP callback with bind authentication. */
+  handleLdapCallback(params: SsoLdapCallbackParams): Promise<SsoCallbackResult> {
+    return this.#http.post<SsoCallbackResult>('/sso/callback/ldap', params);
   }
 
   // ── Legacy methods (backward compatible) ────────────────────────────────

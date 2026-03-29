@@ -87,6 +87,7 @@ from ._types import (
     ListSsoSessionsResponse,
     SsoOidcCallbackParams,
     SsoSamlCallbackParams,
+    SsoLdapCallbackParams,
     SsoCallbackResult,
     # Budgets
     AllocateBudgetParams,
@@ -222,6 +223,7 @@ __all__ = [
     "ListSsoSessionsResponse",
     "SsoOidcCallbackParams",
     "SsoSamlCallbackParams",
+    "SsoLdapCallbackParams",
     "SsoCallbackResult",
     # Budgets
     "AllocateBudgetParams",

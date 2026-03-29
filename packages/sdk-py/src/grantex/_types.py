@@ -1188,6 +1188,13 @@ class SsoConnection:
     sp_entity_id: str | None = None
     sp_acs_url: str | None = None
     group_attribute: str | None = None
+    ldap_url: str | None = None
+    ldap_bind_dn: str | None = None
+    ldap_search_base: str | None = None
+    ldap_search_filter: str | None = None
+    ldap_group_search_base: str | None = None
+    ldap_group_search_filter: str | None = None
+    ldap_tls_enabled: bool | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SsoConnection":
@@ -1211,6 +1218,13 @@ class SsoConnection:
             sp_entity_id=data.get("spEntityId"),
             sp_acs_url=data.get("spAcsUrl"),
             group_attribute=data.get("groupAttribute"),
+            ldap_url=data.get("ldapUrl"),
+            ldap_bind_dn=data.get("ldapBindDn"),
+            ldap_search_base=data.get("ldapSearchBase"),
+            ldap_search_filter=data.get("ldapSearchFilter"),
+            ldap_group_search_base=data.get("ldapGroupSearchBase"),
+            ldap_group_search_filter=data.get("ldapGroupSearchFilter"),
+            ldap_tls_enabled=data.get("ldapTlsEnabled"),
         )
 
 
@@ -1226,6 +1240,14 @@ class CreateSsoConnectionParams:
     idp_certificate: str | None = None
     sp_entity_id: str | None = None
     sp_acs_url: str | None = None
+    ldap_url: str | None = None
+    ldap_bind_dn: str | None = None
+    ldap_bind_password: str | None = None
+    ldap_search_base: str | None = None
+    ldap_search_filter: str | None = None
+    ldap_group_search_base: str | None = None
+    ldap_group_search_filter: str | None = None
+    ldap_tls_enabled: bool | None = None
     domains: list[str] | None = None
     jit_provisioning: bool | None = None
     enforce: bool | None = None
@@ -1245,6 +1267,14 @@ class CreateSsoConnectionParams:
             **({"idpCertificate": self.idp_certificate} if self.idp_certificate is not None else {}),
             **({"spEntityId": self.sp_entity_id} if self.sp_entity_id is not None else {}),
             **({"spAcsUrl": self.sp_acs_url} if self.sp_acs_url is not None else {}),
+            **({"ldapUrl": self.ldap_url} if self.ldap_url is not None else {}),
+            **({"ldapBindDn": self.ldap_bind_dn} if self.ldap_bind_dn is not None else {}),
+            **({"ldapBindPassword": self.ldap_bind_password} if self.ldap_bind_password is not None else {}),
+            **({"ldapSearchBase": self.ldap_search_base} if self.ldap_search_base is not None else {}),
+            **({"ldapSearchFilter": self.ldap_search_filter} if self.ldap_search_filter is not None else {}),
+            **({"ldapGroupSearchBase": self.ldap_group_search_base} if self.ldap_group_search_base is not None else {}),
+            **({"ldapGroupSearchFilter": self.ldap_group_search_filter} if self.ldap_group_search_filter is not None else {}),
+            **({"ldapTlsEnabled": self.ldap_tls_enabled} if self.ldap_tls_enabled is not None else {}),
             **({"domains": self.domains} if self.domains is not None else {}),
             **({"jitProvisioning": self.jit_provisioning} if self.jit_provisioning is not None else {}),
             **({"enforce": self.enforce} if self.enforce is not None else {}),
@@ -1266,6 +1296,14 @@ class UpdateSsoConnectionParams:
     idp_certificate: str | None = None
     sp_entity_id: str | None = None
     sp_acs_url: str | None = None
+    ldap_url: str | None = None
+    ldap_bind_dn: str | None = None
+    ldap_bind_password: str | None = None
+    ldap_search_base: str | None = None
+    ldap_search_filter: str | None = None
+    ldap_group_search_base: str | None = None
+    ldap_group_search_filter: str | None = None
+    ldap_tls_enabled: bool | None = None
     domains: list[str] | None = None
     jit_provisioning: bool | None = None
     enforce: bool | None = None
@@ -1285,6 +1323,14 @@ class UpdateSsoConnectionParams:
             **({"idpCertificate": self.idp_certificate} if self.idp_certificate is not None else {}),
             **({"spEntityId": self.sp_entity_id} if self.sp_entity_id is not None else {}),
             **({"spAcsUrl": self.sp_acs_url} if self.sp_acs_url is not None else {}),
+            **({"ldapUrl": self.ldap_url} if self.ldap_url is not None else {}),
+            **({"ldapBindDn": self.ldap_bind_dn} if self.ldap_bind_dn is not None else {}),
+            **({"ldapBindPassword": self.ldap_bind_password} if self.ldap_bind_password is not None else {}),
+            **({"ldapSearchBase": self.ldap_search_base} if self.ldap_search_base is not None else {}),
+            **({"ldapSearchFilter": self.ldap_search_filter} if self.ldap_search_filter is not None else {}),
+            **({"ldapGroupSearchBase": self.ldap_group_search_base} if self.ldap_group_search_base is not None else {}),
+            **({"ldapGroupSearchFilter": self.ldap_group_search_filter} if self.ldap_group_search_filter is not None else {}),
+            **({"ldapTlsEnabled": self.ldap_tls_enabled} if self.ldap_tls_enabled is not None else {}),
             **({"domains": self.domains} if self.domains is not None else {}),
             **({"jitProvisioning": self.jit_provisioning} if self.jit_provisioning is not None else {}),
             **({"enforce": self.enforce} if self.enforce is not None else {}),
@@ -1416,6 +1462,22 @@ class SsoSamlCallbackParams:
         return {
             "SAMLResponse": self.saml_response,
             "RelayState": self.relay_state,
+        }
+
+
+@dataclass
+class SsoLdapCallbackParams:
+    username: str
+    password: str
+    connection_id: str
+    org: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "username": self.username,
+            "password": self.password,
+            "connectionId": self.connection_id,
+            "org": self.org,
         }
 
 

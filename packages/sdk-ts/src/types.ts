@@ -559,7 +559,7 @@ export interface CreateSsoConfigParams {
 
 export interface SsoLoginResponse {
   authorizeUrl: string;
-  protocol?: 'oidc' | 'saml';
+  protocol?: 'oidc' | 'saml' | 'ldap';
   connectionId?: string;
 }
 
@@ -576,7 +576,7 @@ export interface SsoConnection {
   id: string;
   developerId: string;
   name: string;
-  protocol: 'oidc' | 'saml';
+  protocol: 'oidc' | 'saml' | 'ldap';
   status: 'active' | 'inactive' | 'testing';
   issuerUrl?: string;
   clientId?: string;
@@ -584,6 +584,13 @@ export interface SsoConnection {
   idpSsoUrl?: string;
   spEntityId?: string;
   spAcsUrl?: string;
+  ldapUrl?: string;
+  ldapBindDn?: string;
+  ldapSearchBase?: string;
+  ldapSearchFilter?: string;
+  ldapGroupSearchBase?: string;
+  ldapGroupSearchFilter?: string;
+  ldapTlsEnabled?: boolean;
   domains: string[];
   jitProvisioning: boolean;
   enforce: boolean;
@@ -596,7 +603,7 @@ export interface SsoConnection {
 
 export interface CreateSsoConnectionParams {
   name: string;
-  protocol: 'oidc' | 'saml';
+  protocol: 'oidc' | 'saml' | 'ldap';
   issuerUrl?: string;
   clientId?: string;
   clientSecret?: string;
@@ -605,6 +612,14 @@ export interface CreateSsoConnectionParams {
   idpCertificate?: string;
   spEntityId?: string;
   spAcsUrl?: string;
+  ldapUrl?: string;
+  ldapBindDn?: string;
+  ldapBindPassword?: string;
+  ldapSearchBase?: string;
+  ldapSearchFilter?: string;
+  ldapGroupSearchBase?: string;
+  ldapGroupSearchFilter?: string;
+  ldapTlsEnabled?: boolean;
   domains?: string[];
   jitProvisioning?: boolean;
   enforce?: boolean;
@@ -624,6 +639,14 @@ export interface UpdateSsoConnectionParams {
   idpCertificate?: string;
   spEntityId?: string;
   spAcsUrl?: string;
+  ldapUrl?: string;
+  ldapBindDn?: string;
+  ldapBindPassword?: string;
+  ldapSearchBase?: string;
+  ldapSearchFilter?: string;
+  ldapGroupSearchBase?: string;
+  ldapGroupSearchFilter?: string;
+  ldapTlsEnabled?: boolean;
   domains?: string[];
   jitProvisioning?: boolean;
   enforce?: boolean;
@@ -636,9 +659,16 @@ export interface SsoConnectionListResponse {
   connections: SsoConnection[];
 }
 
+export interface SsoLdapCallbackParams {
+  username: string;
+  password: string;
+  connectionId: string;
+  org: string;
+}
+
 export interface SsoConnectionTestResult {
   success: boolean;
-  protocol: 'oidc' | 'saml';
+  protocol: 'oidc' | 'saml' | 'ldap';
   issuer?: string;
   authorizationEndpoint?: string;
   tokenEndpoint?: string;

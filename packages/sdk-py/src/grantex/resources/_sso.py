@@ -15,6 +15,7 @@ from .._types import (
     SsoConnectionTestResult,
     SsoEnforcementParams,
     SsoEnforcementResponse,
+    SsoLdapCallbackParams,
     SsoLoginResponse,
     SsoOidcCallbackParams,
     SsoSamlCallbackParams,
@@ -93,6 +94,11 @@ class SsoClient:
     def handle_saml_callback(self, params: SsoSamlCallbackParams) -> SsoCallbackResult:
         """Handle a SAML callback with assertion verification."""
         data = self._http.post("/sso/callback/saml", params.to_dict())
+        return SsoCallbackResult.from_dict(data)
+
+    def handle_ldap_callback(self, params: SsoLdapCallbackParams) -> SsoCallbackResult:
+        """Handle an LDAP callback with bind authentication."""
+        data = self._http.post("/sso/callback/ldap", params.to_dict())
         return SsoCallbackResult.from_dict(data)
 
     # ── Legacy methods (backward compatible) ──────────────────────────────

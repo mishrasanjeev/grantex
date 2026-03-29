@@ -312,16 +312,17 @@ delegated = grantex.grants.delegate(
 ## Advanced Features
 
 <details>
-<summary><strong>Enterprise SSO</strong> — OIDC + SAML 2.0 with multi-IdP, JIT provisioning, and group mapping</summary>
+<summary><strong>Enterprise SSO</strong> — OIDC + SAML 2.0 + LDAP with multi-IdP, JIT provisioning, and group mapping</summary>
 
 ## Enterprise SSO
 
-Grantex provides full enterprise SSO support with both OIDC and SAML 2.0 protocols. Organizations can configure multiple identity provider connections, map email domains to specific IdPs, enforce SSO for all users, and automatically provision principals via JIT (Just-in-Time) provisioning.
+Grantex provides full enterprise SSO support with OIDC, SAML 2.0, and LDAP protocols. Organizations can configure multiple identity provider connections, map email domains to specific IdPs, enforce SSO for all users, and automatically provision principals via JIT (Just-in-Time) provisioning.
 
 **Key capabilities:**
-- **Multi-IdP connections** — Configure multiple OIDC and SAML 2.0 identity providers per organization
+- **Multi-IdP connections** — Configure multiple OIDC, SAML 2.0, and LDAP identity providers per organization
 - **OIDC Discovery + JWKS verification** — Automatic endpoint discovery and cryptographic ID token verification
 - **SAML 2.0** — Full SAML response parsing with certificate-based signature verification
+- **LDAP / Active Directory** — Direct bind authentication against LDAP directories (OpenLDAP, Active Directory, FreeIPA)
 - **Domain-based routing** — Automatically route users to the correct IdP based on their email domain
 - **JIT provisioning** — Auto-create or update principals on first SSO login
 - **Group-to-scope mapping** — Map IdP groups/roles to Grantex scopes
@@ -1407,7 +1408,7 @@ All milestones through v1.0 are complete. See [ROADMAP.md](https://github.com/mi
 | **v2.1 — Enterprise Scale** | Event streaming, budget controls, observability, Terraform provider, gateway, conformance | ✅ Complete |
 | **v2.2 — Ecosystem** | OPA/Cedar policy backends, A2A protocol bridge, usage metering, custom domains, policy-as-code | ✅ Complete |
 | **v2.3 — Trust & Identity** | FIDO2/WebAuthn passkeys, W3C Verifiable Credentials, SD-JWT selective disclosure, DID infrastructure, StatusList2021 revocation, Mastercard Verifiable Intent | ✅ Complete |
-| **v2.4 — Enterprise SSO** | OIDC + SAML 2.0 multi-IdP connections, OIDC Discovery + JWKS verification, domain-based routing, JIT provisioning, group-to-scope mapping, SSO enforcement, session management | ✅ Complete |
+| **v2.4 — Enterprise SSO** | OIDC + SAML 2.0 + LDAP multi-IdP connections, OIDC Discovery + JWKS verification, LDAP directory authentication, domain-based routing, JIT provisioning, group-to-scope mapping, SSO enforcement, session management | ✅ Complete |
 
 ---
 

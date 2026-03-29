@@ -13,19 +13,32 @@ import {
   createSsoSession,
   type SsoConnectionRow,
 } from '../lib/sso.js';
+import { authenticateLdap, testLdapConnection, type LdapConfig } from '../lib/ldap.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 function connectionToResponse(row: SsoConnectionRow) {
+  const protocolFields =
+    row.protocol === 'oidc'
+      ? { issuerUrl: row.issuer_url, clientId: row.client_id }
+      : row.protocol === 'saml'
+        ? { idpEntityId: row.idp_entity_id, idpSsoUrl: row.idp_sso_url, spEntityId: row.sp_entity_id, spAcsUrl: row.sp_acs_url }
+        : {
+            ldapUrl: row.ldap_url,
+            ldapBindDn: row.ldap_bind_dn,
+            ldapSearchBase: row.ldap_search_base,
+            ldapSearchFilter: row.ldap_search_filter,
+            ldapGroupSearchBase: row.ldap_group_search_base,
+            ldapGroupSearchFilter: row.ldap_group_search_filter,
+            ldapTlsEnabled: row.ldap_tls_enabled,
+          };
   return {
     id: row.id,
     developerId: row.developer_id,
     name: row.name,
     protocol: row.protocol,
     status: row.status,
-    ...(row.protocol === 'oidc'
-      ? { issuerUrl: row.issuer_url, clientId: row.client_id }
-      : { idpEntityId: row.idp_entity_id, idpSsoUrl: row.idp_sso_url, spEntityId: row.sp_entity_id, spAcsUrl: row.sp_acs_url }),
+    ...protocolFields,
     domains: row.domains,
     jitProvisioning: row.jit_provisioning,
     enforce: row.enforce,
@@ -48,7 +61,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
   app.post<{
     Body: {
       name: string;
-      protocol: 'oidc' | 'saml';
+      protocol: 'oidc' | 'saml' | 'ldap';
       issuerUrl?: string;
       clientId?: string;
       clientSecret?: string;
@@ -57,6 +70,14 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       idpCertificate?: string;
       spEntityId?: string;
       spAcsUrl?: string;
+      ldapUrl?: string;
+      ldapBindDn?: string;
+      ldapBindPassword?: string;
+      ldapSearchBase?: string;
+      ldapSearchFilter?: string;
+      ldapGroupSearchBase?: string;
+      ldapGroupSearchFilter?: string;
+      ldapTlsEnabled?: boolean;
       domains?: string[];
       jitProvisioning?: boolean;
       enforce?: boolean;
@@ -69,14 +90,17 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     if (!b.name || !b.protocol) {
       return reply.status(400).send({ message: 'name and protocol are required', code: 'BAD_REQUEST', requestId: request.id });
     }
-    if (b.protocol !== 'oidc' && b.protocol !== 'saml') {
-      return reply.status(400).send({ message: 'protocol must be oidc or saml', code: 'BAD_REQUEST', requestId: request.id });
+    if (b.protocol !== 'oidc' && b.protocol !== 'saml' && b.protocol !== 'ldap') {
+      return reply.status(400).send({ message: 'protocol must be oidc, saml, or ldap', code: 'BAD_REQUEST', requestId: request.id });
     }
     if (b.protocol === 'oidc' && (!b.issuerUrl || !b.clientId || !b.clientSecret)) {
       return reply.status(400).send({ message: 'OIDC connections require issuerUrl, clientId, and clientSecret', code: 'BAD_REQUEST', requestId: request.id });
     }
     if (b.protocol === 'saml' && (!b.idpEntityId || !b.idpSsoUrl || !b.idpCertificate)) {
       return reply.status(400).send({ message: 'SAML connections require idpEntityId, idpSsoUrl, and idpCertificate', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    if (b.protocol === 'ldap' && (!b.ldapUrl || !b.ldapBindDn || !b.ldapBindPassword || !b.ldapSearchBase)) {
+      return reply.status(400).send({ message: 'LDAP connections require ldapUrl, ldapBindDn, ldapBindPassword, and ldapSearchBase', code: 'BAD_REQUEST', requestId: request.id });
     }
 
     const sql = getSql();
@@ -87,6 +111,8 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         id, developer_id, name, protocol,
         issuer_url, client_id, client_secret,
         idp_entity_id, idp_sso_url, idp_certificate, sp_entity_id, sp_acs_url,
+        ldap_url, ldap_bind_dn, ldap_bind_password, ldap_search_base, ldap_search_filter,
+        ldap_group_search_base, ldap_group_search_filter, ldap_tls_enabled,
         domains, jit_provisioning, enforce,
         group_attribute, group_mappings, default_scopes
       ) VALUES (
@@ -94,6 +120,10 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         ${b.issuerUrl ?? null}, ${b.clientId ?? null}, ${b.clientSecret ?? null},
         ${b.idpEntityId ?? null}, ${b.idpSsoUrl ?? null}, ${b.idpCertificate ?? null},
         ${b.spEntityId ?? null}, ${b.spAcsUrl ?? null},
+        ${b.ldapUrl ?? null}, ${b.ldapBindDn ?? null}, ${b.ldapBindPassword ?? null},
+        ${b.ldapSearchBase ?? null}, ${b.ldapSearchFilter ?? '(uid={{username}})'},
+        ${b.ldapGroupSearchBase ?? null}, ${b.ldapGroupSearchFilter ?? '(member={{dn}})'},
+        ${b.ldapTlsEnabled ?? false},
         ${b.domains ?? []}, ${b.jitProvisioning ?? false}, ${b.enforce ?? false},
         ${b.groupAttribute ?? null}, ${JSON.stringify(b.groupMappings ?? {})},
         ${b.defaultScopes ?? []}
@@ -144,6 +174,14 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       idpCertificate?: string;
       spEntityId?: string;
       spAcsUrl?: string;
+      ldapUrl?: string;
+      ldapBindDn?: string;
+      ldapBindPassword?: string;
+      ldapSearchBase?: string;
+      ldapSearchFilter?: string;
+      ldapGroupSearchBase?: string;
+      ldapGroupSearchFilter?: string;
+      ldapTlsEnabled?: boolean;
       domains?: string[];
       jitProvisioning?: boolean;
       enforce?: boolean;
@@ -159,6 +197,8 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     const hasUpdates = [
       b.name, b.status, b.issuerUrl, b.clientId, b.clientSecret,
       b.idpEntityId, b.idpSsoUrl, b.idpCertificate, b.spEntityId, b.spAcsUrl,
+      b.ldapUrl, b.ldapBindDn, b.ldapBindPassword, b.ldapSearchBase, b.ldapSearchFilter,
+      b.ldapGroupSearchBase, b.ldapGroupSearchFilter, b.ldapTlsEnabled,
       b.domains, b.jitProvisioning, b.enforce, b.groupAttribute, b.groupMappings, b.defaultScopes,
     ].some((v) => v !== undefined);
 
@@ -188,6 +228,14 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         idp_certificate = ${b.idpCertificate ?? cur.idp_certificate},
         sp_entity_id    = ${b.spEntityId ?? cur.sp_entity_id},
         sp_acs_url      = ${b.spAcsUrl ?? cur.sp_acs_url},
+        ldap_url        = ${b.ldapUrl ?? cur.ldap_url},
+        ldap_bind_dn    = ${b.ldapBindDn ?? cur.ldap_bind_dn},
+        ldap_bind_password = ${b.ldapBindPassword ?? cur.ldap_bind_password},
+        ldap_search_base   = ${b.ldapSearchBase ?? cur.ldap_search_base},
+        ldap_search_filter = ${b.ldapSearchFilter ?? cur.ldap_search_filter},
+        ldap_group_search_base   = ${b.ldapGroupSearchBase ?? cur.ldap_group_search_base},
+        ldap_group_search_filter = ${b.ldapGroupSearchFilter ?? cur.ldap_group_search_filter},
+        ldap_tls_enabled = ${b.ldapTlsEnabled ?? cur.ldap_tls_enabled},
         domains         = ${b.domains ?? cur.domains},
         jit_provisioning = ${b.jitProvisioning ?? cur.jit_provisioning},
         enforce         = ${b.enforce ?? cur.enforce},
@@ -253,25 +301,51 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    // SAML: validate certificate is parseable
-    try {
-      const certPem = conn.idp_certificate!.includes('BEGIN CERTIFICATE')
-        ? conn.idp_certificate!
-        : `-----BEGIN CERTIFICATE-----\n${conn.idp_certificate!}\n-----END CERTIFICATE-----`;
-      new crypto.X509Certificate(certPem);
+    if (conn.protocol === 'saml') {
+      // SAML: validate certificate is parseable
+      try {
+        const certPem = conn.idp_certificate!.includes('BEGIN CERTIFICATE')
+          ? conn.idp_certificate!
+          : `-----BEGIN CERTIFICATE-----\n${conn.idp_certificate!}\n-----END CERTIFICATE-----`;
+        new crypto.X509Certificate(certPem);
+        return reply.send({
+          success: true,
+          protocol: 'saml',
+          idpEntityId: conn.idp_entity_id,
+          idpSsoUrl: conn.idp_sso_url,
+        });
+      } catch {
+        return reply.status(422).send({
+          success: false,
+          protocol: 'saml',
+          error: 'Invalid IdP certificate',
+        });
+      }
+    }
+
+    // LDAP: test connectivity
+    const ldapResult = await testLdapConnection({
+      ldapUrl: conn.ldap_url!,
+      bindDn: conn.ldap_bind_dn!,
+      bindPassword: conn.ldap_bind_password!,
+      searchBase: conn.ldap_search_base!,
+      searchFilter: conn.ldap_search_filter ?? '(uid={{username}})',
+      tlsEnabled: conn.ldap_tls_enabled,
+    });
+    if (ldapResult.success) {
       return reply.send({
         success: true,
-        protocol: 'saml',
-        idpEntityId: conn.idp_entity_id,
-        idpSsoUrl: conn.idp_sso_url,
-      });
-    } catch {
-      return reply.status(422).send({
-        success: false,
-        protocol: 'saml',
-        error: 'Invalid IdP certificate',
+        protocol: 'ldap',
+        ldapUrl: conn.ldap_url,
+        ldapSearchBase: conn.ldap_search_base,
+        ldapTlsEnabled: conn.ldap_tls_enabled,
       });
     }
+    return reply.status(422).send({
+      success: false,
+      protocol: 'ldap',
+      error: ldapResult.error ?? 'LDAP connection failed',
+    });
   });
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -384,24 +458,34 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         return reply.send({ authorizeUrl: authorizeUrl.toString(), protocol: 'oidc', connectionId: conn.id });
       }
 
-      // SAML: return the IdP SSO URL for redirect binding
-      const samlRequest = Buffer.from(
-        `<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"` +
-        ` ID="_${conn.id}"` +
-        ` Version="2.0"` +
-        ` IssueInstant="${new Date().toISOString()}"` +
-        ` AssertionConsumerServiceURL="${conn.sp_acs_url ?? ''}"` +
-        ` Destination="${conn.idp_sso_url}"` +
-        `>` +
-        `<saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">${conn.sp_entity_id ?? ''}</saml:Issuer>` +
-        `</samlp:AuthnRequest>`,
-      ).toString('base64');
+      if (conn.protocol === 'saml') {
+        // SAML: return the IdP SSO URL for redirect binding
+        const samlRequest = Buffer.from(
+          `<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"` +
+          ` ID="_${conn.id}"` +
+          ` Version="2.0"` +
+          ` IssueInstant="${new Date().toISOString()}"` +
+          ` AssertionConsumerServiceURL="${conn.sp_acs_url ?? ''}"` +
+          ` Destination="${conn.idp_sso_url}"` +
+          `>` +
+          `<saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">${conn.sp_entity_id ?? ''}</saml:Issuer>` +
+          `</samlp:AuthnRequest>`,
+        ).toString('base64');
 
-      const samlUrl = new URL(conn.idp_sso_url!);
-      samlUrl.searchParams.set('SAMLRequest', samlRequest);
-      samlUrl.searchParams.set('RelayState', state);
+        const samlUrl = new URL(conn.idp_sso_url!);
+        samlUrl.searchParams.set('SAMLRequest', samlRequest);
+        samlUrl.searchParams.set('RelayState', state);
 
-      return reply.send({ authorizeUrl: samlUrl.toString(), protocol: 'saml', connectionId: conn.id });
+        return reply.send({ authorizeUrl: samlUrl.toString(), protocol: 'saml', connectionId: conn.id });
+      }
+
+      // LDAP: no redirect flow — return connection info for direct credential submission
+      return reply.send({
+        protocol: 'ldap',
+        connectionId: conn.id,
+        ldapUrl: conn.ldap_url,
+        message: 'LDAP connections require direct credential submission to POST /sso/callback/ldap',
+      });
     },
   );
 
@@ -622,6 +706,100 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         mappedScopes,
         principalId: principalId ?? null,
         developerId: stateData.org,
+        expiresAt: session.expires_at,
+      });
+    },
+  );
+
+  /**
+   * POST /sso/callback/ldap — LDAP callback (username + password bind).
+   * Unlike OIDC/SAML, LDAP has no redirect flow; the client submits credentials directly.
+   */
+  app.post(
+    '/sso/callback/ldap',
+    { config: { skipAuth: true } },
+    async (request, reply) => {
+      const body = (request.body ?? {}) as Record<string, string>;
+      const { username, password, connectionId, org } = body;
+
+      if (!username || !password || !connectionId || !org) {
+        return reply.status(400).send({ message: 'username, password, connectionId, and org are required', code: 'BAD_REQUEST' });
+      }
+
+      const sql = getSql();
+      const rows = await sql<SsoConnectionRow[]>`
+        SELECT * FROM sso_connections
+        WHERE id = ${connectionId}
+          AND developer_id = ${org}
+          AND protocol = 'ldap'
+      `;
+      if (!rows[0]) {
+        return reply.status(404).send({ message: 'LDAP connection not found', code: 'NOT_FOUND' });
+      }
+      const conn = rows[0];
+
+      const ldapConfig: LdapConfig = {
+        ldapUrl: conn.ldap_url!,
+        bindDn: conn.ldap_bind_dn!,
+        bindPassword: conn.ldap_bind_password!,
+        searchBase: conn.ldap_search_base!,
+        searchFilter: conn.ldap_search_filter ?? '(uid={{username}})',
+        ...(conn.ldap_group_search_base ? { groupSearchBase: conn.ldap_group_search_base } : {}),
+        ...(conn.ldap_group_search_filter ? { groupSearchFilter: conn.ldap_group_search_filter } : {}),
+        tlsEnabled: conn.ldap_tls_enabled,
+      };
+
+      let userInfo;
+      try {
+        userInfo = await authenticateLdap(ldapConfig, username, password);
+      } catch (err) {
+        return reply.status(401).send({
+          message: err instanceof Error ? err.message : 'LDAP authentication failed',
+          code: 'SSO_AUTH_FAILED',
+        });
+      }
+
+      // Map groups to scopes
+      const mappedScopes = mapGroupsToScopes(userInfo.groups, conn.group_mappings, conn.default_scopes);
+
+      // JIT provisioning
+      let principalId: string | undefined;
+      if (conn.jit_provisioning) {
+        principalId = await jitProvision(org, {
+          sub: userInfo.dn,
+          ...(userInfo.email !== undefined ? { email: userInfo.email } : {}),
+          ...(userInfo.displayName !== undefined ? { name: userInfo.displayName } : {}),
+        });
+      }
+
+      // Create SSO session
+      const session = await createSsoSession({
+        developerId: org,
+        connectionId: conn.id,
+        ...(principalId !== undefined ? { principalId } : {}),
+        ...(userInfo.email !== undefined ? { email: userInfo.email } : {}),
+        ...(userInfo.displayName !== undefined ? { name: userInfo.displayName } : {}),
+        idpSubject: userInfo.dn,
+        groups: userInfo.groups,
+        mappedScopes,
+      });
+
+      await emitEvent(org, 'sso.login', {
+        connectionId: conn.id,
+        protocol: 'ldap',
+        sessionId: session.id,
+        email: userInfo.email ?? null,
+      });
+
+      return reply.send({
+        sessionId: session.id,
+        email: userInfo.email ?? null,
+        name: userInfo.displayName ?? null,
+        sub: userInfo.dn,
+        groups: userInfo.groups,
+        mappedScopes,
+        principalId: principalId ?? null,
+        developerId: org,
         expiresAt: session.expires_at,
       });
     },

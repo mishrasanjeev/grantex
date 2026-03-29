@@ -3241,6 +3241,63 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /sso/callback/ldap:
+    post:
+      operationId: ldapCallback
+      tags: [SSO]
+      summary: LDAP Callback
+      description: Authenticate a user via LDAP bind and create an SSO session. Unlike OIDC and SAML which use browser redirects, LDAP authentication performs a direct bind against the directory server using the provided credentials. The user's attributes are read from the directory entry, groups are mapped to scopes, and JIT provisioning is applied if enabled.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  description: The user's LDAP username (e.g. uid, sAMAccountName, or full DN)
+                  example: alice
+                password:
+                  type: string
+                  format: password
+                  description: The user's LDAP password for bind authentication
+                connectionId:
+                  type: string
+                  description: The SSO connection ID for the LDAP directory
+                  example: sso_conn_03HX...
+                org:
+                  type: string
+                  description: Optional organization identifier for domain-based routing
+                  example: dev_01HXYZ...
+              required: [username, password, connectionId]
+      responses:
+        "200":
+          description: SSO callback result with session and user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SsoCallbackResult"
+        "400":
+          description: Missing or invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: LDAP bind failed (invalid credentials)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: LDAP server unreachable or connection error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   # ── Dashboard ────────────────────────────────────────────────────────
   /dashboard:
     get:

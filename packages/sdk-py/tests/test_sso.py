@@ -10,6 +10,7 @@ from grantex._types import (
     CreateSsoConfigParams,
     CreateSsoConnectionParams,
     SsoEnforcementParams,
+    SsoLdapCallbackParams,
     SsoOidcCallbackParams,
     SsoSamlCallbackParams,
     UpdateSsoConnectionParams,
@@ -541,6 +542,113 @@ def test_sso_saml_callback_params_to_dict() -> None:
     params = SsoSamlCallbackParams(saml_response="PHNhbWw...", relay_state="state123")
     d = params.to_dict()
     assert d == {"SAMLResponse": "PHNhbWw...", "RelayState": "state123"}
+
+
+@respx.mock
+def test_handle_ldap_callback(client: Grantex) -> None:
+    route = respx.post(f"{BASE}/sso/callback/ldap").mock(
+        return_value=httpx.Response(200, json=MOCK_CALLBACK_RESULT)
+    )
+    params = SsoLdapCallbackParams(
+        username="carol",
+        password="secret",
+        connection_id="sso_conn_03",
+        org="dev_TEST",
+    )
+    result = client.sso.handle_ldap_callback(params)
+
+    assert result.session_id == "sso_sess_01"
+    assert result.developer_id == "dev_TEST"
+    body = route.calls[0].request.read()
+    assert b"carol" in body
+    assert b"connectionId" in body
+
+
+@respx.mock
+def test_create_ldap_connection(client: Grantex) -> None:
+    mock_ldap_connection = {
+        **MOCK_CONNECTION,
+        "id": "sso_conn_03",
+        "name": "Corp LDAP",
+        "protocol": "ldap",
+        "ldapUrl": "ldap://ldap.corp.com:389",
+        "ldapBindDn": "cn=admin,dc=corp,dc=com",
+        "ldapSearchBase": "ou=users,dc=corp,dc=com",
+        "ldapSearchFilter": "(uid={{username}})",
+        "ldapTlsEnabled": True,
+    }
+    route = respx.post(f"{BASE}/v1/sso/connections").mock(
+        return_value=httpx.Response(201, json=mock_ldap_connection)
+    )
+    params = CreateSsoConnectionParams(
+        name="Corp LDAP",
+        protocol="ldap",
+        ldap_url="ldap://ldap.corp.com:389",
+        ldap_bind_dn="cn=admin,dc=corp,dc=com",
+        ldap_bind_password="admin_secret",
+        ldap_search_base="ou=users,dc=corp,dc=com",
+        ldap_search_filter="(uid={{username}})",
+        ldap_tls_enabled=True,
+        domains=["corp.com"],
+    )
+    result = client.sso.create_connection(params)
+
+    assert result.id == "sso_conn_03"
+    assert result.protocol == "ldap"
+    assert result.ldap_url == "ldap://ldap.corp.com:389"
+    assert result.ldap_bind_dn == "cn=admin,dc=corp,dc=com"
+    assert result.ldap_search_base == "ou=users,dc=corp,dc=com"
+    assert result.ldap_search_filter == "(uid={{username}})"
+    assert result.ldap_tls_enabled is True
+    body = route.calls[0].request.read()
+    assert b"ldapUrl" in body
+    assert b"ldapBindPassword" in body
+
+
+def test_sso_ldap_callback_params_to_dict() -> None:
+    params = SsoLdapCallbackParams(
+        username="carol",
+        password="secret",
+        connection_id="sso_conn_03",
+        org="dev_TEST",
+    )
+    d = params.to_dict()
+    assert d == {
+        "username": "carol",
+        "password": "secret",
+        "connectionId": "sso_conn_03",
+        "org": "dev_TEST",
+    }
+
+
+def test_create_connection_params_to_dict_ldap() -> None:
+    params = CreateSsoConnectionParams(
+        name="LDAP",
+        protocol="ldap",
+        ldap_url="ldap://ldap.corp.com:389",
+        ldap_bind_dn="cn=admin,dc=corp,dc=com",
+        ldap_bind_password="admin_secret",
+        ldap_search_base="ou=users,dc=corp,dc=com",
+        ldap_search_filter="(uid={{username}})",
+        ldap_group_search_base="ou=groups,dc=corp,dc=com",
+        ldap_group_search_filter="(member={{dn}})",
+        ldap_tls_enabled=True,
+        domains=["corp.com"],
+    )
+    d = params.to_dict()
+    assert d["protocol"] == "ldap"
+    assert d["ldapUrl"] == "ldap://ldap.corp.com:389"
+    assert d["ldapBindDn"] == "cn=admin,dc=corp,dc=com"
+    assert d["ldapBindPassword"] == "admin_secret"
+    assert d["ldapSearchBase"] == "ou=users,dc=corp,dc=com"
+    assert d["ldapSearchFilter"] == "(uid={{username}})"
+    assert d["ldapGroupSearchBase"] == "ou=groups,dc=corp,dc=com"
+    assert d["ldapGroupSearchFilter"] == "(member={{dn}})"
+    assert d["ldapTlsEnabled"] is True
+    assert d["domains"] == ["corp.com"]
+    assert "issuerUrl" not in d
+    assert "clientId" not in d
+    assert "idpEntityId" not in d
 
 
 def test_sso_enforcement_params_to_dict() -> None:

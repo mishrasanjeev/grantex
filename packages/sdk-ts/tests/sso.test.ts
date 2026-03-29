@@ -245,6 +245,74 @@ describe('SsoClient', () => {
     expect(init.method).toBe('POST');
   });
 
+  it('handleLdapCallback() POSTs to /sso/callback/ldap', async () => {
+    const mockResult = {
+      sessionId: 'ssosess_03',
+      email: 'carol@corp.com',
+      name: 'Carol Davis',
+      sub: 'ldap_user_01',
+      groups: ['Engineering'],
+      mappedScopes: ['read', 'write'],
+      principalId: 'scimuser_03',
+      developerId: 'dev_TEST',
+      expiresAt: '2026-03-30T00:00:00Z',
+    };
+    const mockFetch = makeFetch(200, mockResult);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    const result = await grantex.sso.handleLdapCallback({
+      username: 'carol',
+      password: 'secret',
+      connectionId: 'sso_CONN03',
+      org: 'dev_TEST',
+    });
+
+    expect(result.sessionId).toBe('ssosess_03');
+    expect(result.email).toBe('carol@corp.com');
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/sso\/callback\/ldap$/);
+    expect(init.method).toBe('POST');
+  });
+
+  it('createConnection() supports LDAP protocol', async () => {
+    const ldapConnection = {
+      ...MOCK_OIDC_CONNECTION,
+      id: 'sso_CONN03',
+      name: 'Corp LDAP',
+      protocol: 'ldap' as const,
+      ldapUrl: 'ldap://ldap.corp.com:389',
+      ldapBindDn: 'cn=admin,dc=corp,dc=com',
+      ldapSearchBase: 'ou=users,dc=corp,dc=com',
+      ldapSearchFilter: '(uid={{username}})',
+      ldapTlsEnabled: true,
+    };
+    const mockFetch = makeFetch(201, ldapConnection);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    const result = await grantex.sso.createConnection({
+      name: 'Corp LDAP',
+      protocol: 'ldap',
+      ldapUrl: 'ldap://ldap.corp.com:389',
+      ldapBindDn: 'cn=admin,dc=corp,dc=com',
+      ldapBindPassword: 'admin_secret',
+      ldapSearchBase: 'ou=users,dc=corp,dc=com',
+      ldapSearchFilter: '(uid={{username}})',
+      ldapTlsEnabled: true,
+      domains: ['corp.com'],
+    });
+
+    expect(result.id).toBe('sso_CONN03');
+    expect(result.protocol).toBe('ldap');
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/v1\/sso\/connections$/);
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body as string);
+    expect(body.ldapUrl).toBe('ldap://ldap.corp.com:389');
+    expect(body.ldapBindPassword).toBe('admin_secret');
+  });
+
   // ── Legacy methods ───────────────────────────────────────────────────
 
   it('createConfig() POSTs to /v1/sso/config (legacy)', async () => {

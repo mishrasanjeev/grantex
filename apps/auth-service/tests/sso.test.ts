@@ -77,6 +77,17 @@ afterEach(() => {
 
 // ─── Mock DB rows ──────────────────────────────────────────────────────────
 
+const LDAP_NULL_FIELDS = {
+  ldap_url: null,
+  ldap_bind_dn: null,
+  ldap_bind_password: null,
+  ldap_search_base: null,
+  ldap_search_filter: null,
+  ldap_group_search_base: null,
+  ldap_group_search_filter: null,
+  ldap_tls_enabled: false,
+};
+
 const OIDC_CONNECTION_ROW = {
   id: 'sso_CONN01',
   developer_id: 'dev_TEST',
@@ -91,6 +102,7 @@ const OIDC_CONNECTION_ROW = {
   idp_certificate: null,
   sp_entity_id: null,
   sp_acs_url: null,
+  ...LDAP_NULL_FIELDS,
   domains: ['corp.com'],
   jit_provisioning: true,
   enforce: false,
@@ -139,6 +151,25 @@ const SSO_SESSION_ROW = {
   mapped_scopes: ['read', 'write'],
   expires_at: '2026-03-30T00:00:00Z',
   created_at: '2026-03-29T00:00:00Z',
+};
+
+const LDAP_CONNECTION_ROW = {
+  ...OIDC_CONNECTION_ROW,
+  id: 'sso_CONN03',
+  name: 'Corp LDAP',
+  protocol: 'ldap',
+  issuer_url: null,
+  client_id: null,
+  client_secret: null,
+  ldap_url: 'ldap://ldap.corp.com:389',
+  ldap_bind_dn: 'cn=admin,dc=corp,dc=com',
+  ldap_bind_password: 'admin-secret',
+  ldap_search_base: 'ou=people,dc=corp,dc=com',
+  ldap_search_filter: '(uid={{username}})',
+  ldap_group_search_base: 'ou=groups,dc=corp,dc=com',
+  ldap_group_search_filter: '(member={{dn}})',
+  ldap_tls_enabled: false,
+  domains: ['corp.com'],
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -848,5 +879,149 @@ describe('GET /sso/callback (legacy)', () => {
       url: `/sso/callback?code=bad_code&state=${state}`,
     });
     expect(res.statusCode).toBe(502);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LDAP
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('POST /v1/sso/connections (LDAP)', () => {
+  it('creates an LDAP connection and returns 201', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([LDAP_CONNECTION_ROW]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/sso/connections',
+      headers: { ...authHeader(), 'content-type': 'application/json' },
+      payload: {
+        name: 'Corp LDAP',
+        protocol: 'ldap',
+        ldapUrl: 'ldap://ldap.corp.com:389',
+        ldapBindDn: 'cn=admin,dc=corp,dc=com',
+        ldapBindPassword: 'admin-secret',
+        ldapSearchBase: 'ou=people,dc=corp,dc=com',
+        domains: ['corp.com'],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.protocol).toBe('ldap');
+    expect(body.ldapUrl).toBe('ldap://ldap.corp.com:389');
+    expect(body.ldapSearchBase).toBe('ou=people,dc=corp,dc=com');
+  });
+
+  it('returns 400 when LDAP missing required fields', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/sso/connections',
+      headers: { ...authHeader(), 'content-type': 'application/json' },
+      payload: { name: 'Test', protocol: 'ldap', ldapUrl: 'ldap://host' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('ldapBindDn');
+  });
+});
+
+describe('POST /v1/sso/connections/:id/test (LDAP)', () => {
+  it('tests LDAP connectivity', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([LDAP_CONNECTION_ROW]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/sso/connections/sso_CONN03/test',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    expect(res.json().protocol).toBe('ldap');
+  });
+});
+
+describe('GET /sso/login (LDAP)', () => {
+  it('returns LDAP info instead of redirect URL', async () => {
+    mockedResolveConnection.mockResolvedValueOnce(LDAP_CONNECTION_ROW as any);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/sso/login?org=dev_TEST&domain=corp.com',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.protocol).toBe('ldap');
+    expect(body.connectionId).toBe('sso_CONN03');
+    expect(body.ldapUrl).toBe('ldap://ldap.corp.com:389');
+  });
+});
+
+describe('POST /sso/callback/ldap', () => {
+  it('authenticates user via LDAP and creates session', async () => {
+    sqlMock.mockResolvedValueOnce([LDAP_CONNECTION_ROW]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sso/callback/ldap',
+      headers: { 'content-type': 'application/json' },
+      payload: {
+        username: 'alice',
+        password: 'alice-secret',
+        connectionId: 'sso_CONN03',
+        org: 'dev_TEST',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.sessionId).toBe('ssosess_MOCK01');
+    expect(body.email).toBe('alice@corp.com');
+    expect(body.name).toBe('Alice Smith');
+    expect(body.developerId).toBe('dev_TEST');
+    expect(body.mappedScopes).toEqual(['read', 'write']);
+  });
+
+  it('returns 400 when required fields are missing', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sso/callback/ldap',
+      headers: { 'content-type': 'application/json' },
+      payload: { username: 'alice' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 404 when LDAP connection not found', async () => {
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sso/callback/ldap',
+      headers: { 'content-type': 'application/json' },
+      payload: { username: 'alice', password: 'pass', connectionId: 'sso_NOPE', org: 'dev_TEST' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 401 when LDAP auth fails', async () => {
+    sqlMock.mockResolvedValueOnce([LDAP_CONNECTION_ROW]);
+
+    // Mock authenticateLdap to fail (it's mocked in setup.ts, override here)
+    const { authenticateLdap } = await import('../src/lib/ldap.js');
+    vi.mocked(authenticateLdap).mockRejectedValueOnce(new Error('Invalid LDAP credentials'));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sso/callback/ldap',
+      headers: { 'content-type': 'application/json' },
+      payload: { username: 'alice', password: 'wrong', connectionId: 'sso_CONN03', org: 'dev_TEST' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().message).toBe('Invalid LDAP credentials');
   });
 });

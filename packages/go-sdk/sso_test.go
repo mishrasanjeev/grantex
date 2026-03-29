@@ -513,6 +513,149 @@ func TestSSOHandleSamlCallback(t *testing.T) {
 	}
 }
 
+// --- LDAP Tests ---
+
+func TestSSOHandleLdapCallback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/sso/callback/ldap" || r.Method != http.MethodPost {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		var params SsoLdapCallbackParams
+		json.NewDecoder(r.Body).Decode(&params)
+		if params.Username != "carol" {
+			t.Errorf("expected username carol, got %s", params.Username)
+		}
+		if params.Password != "secret" {
+			t.Errorf("expected password secret, got %s", params.Password)
+		}
+		if params.ConnectionID != "sso-conn-3" {
+			t.Errorf("expected connectionId sso-conn-3, got %s", params.ConnectionID)
+		}
+		if params.Org != "acme-corp" {
+			t.Errorf("expected org acme-corp, got %s", params.Org)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(SsoCallbackResult{
+			Email:        "carol@acme.com",
+			Name:         "Carol Davis",
+			Sub:          "ldap-uid-carol",
+			DeveloperID:  "dev-1",
+			ConnectionID: "sso-conn-3",
+			Groups:       []string{"engineering"},
+			SessionID:    "sess-3",
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL))
+	result, err := client.SSO.HandleLdapCallback(context.Background(), SsoLdapCallbackParams{
+		Username:     "carol",
+		Password:     "secret",
+		ConnectionID: "sso-conn-3",
+		Org:          "acme-corp",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Email != "carol@acme.com" {
+		t.Errorf("expected carol@acme.com, got %s", result.Email)
+	}
+	if result.ConnectionID != "sso-conn-3" {
+		t.Errorf("expected connectionId sso-conn-3, got %s", result.ConnectionID)
+	}
+	if len(result.Groups) != 1 || result.Groups[0] != "engineering" {
+		t.Errorf("expected groups [engineering], got %v", result.Groups)
+	}
+	if result.SessionID != "sess-3" {
+		t.Errorf("expected sessionId sess-3, got %s", result.SessionID)
+	}
+}
+
+func TestSSOCreateLdapConnection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/sso/connections" || r.Method != http.MethodPost {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		var params CreateSsoConnectionParams
+		json.NewDecoder(r.Body).Decode(&params)
+		if params.Name != "Corp LDAP" {
+			t.Errorf("expected name 'Corp LDAP', got %s", params.Name)
+		}
+		if params.Protocol != "ldap" {
+			t.Errorf("expected protocol 'ldap', got %s", params.Protocol)
+		}
+		if params.LdapURL != "ldap://ldap.corp.com:389" {
+			t.Errorf("expected ldapUrl, got %s", params.LdapURL)
+		}
+		if params.LdapBindDN != "cn=admin,dc=corp,dc=com" {
+			t.Errorf("expected ldapBindDn, got %s", params.LdapBindDN)
+		}
+		if params.LdapBindPassword != "admin_secret" {
+			t.Errorf("expected ldapBindPassword, got %s", params.LdapBindPassword)
+		}
+		if params.LdapSearchBase != "ou=users,dc=corp,dc=com" {
+			t.Errorf("expected ldapSearchBase, got %s", params.LdapSearchBase)
+		}
+		if !params.LdapTlsEnabled {
+			t.Error("expected ldapTlsEnabled to be true")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(SsoConnection{
+			ID:               "sso-conn-3",
+			DeveloperID:      "dev-1",
+			Name:             "Corp LDAP",
+			Protocol:         "ldap",
+			Status:           "active",
+			LdapURL:          "ldap://ldap.corp.com:389",
+			LdapBindDN:       "cn=admin,dc=corp,dc=com",
+			LdapSearchBase:   "ou=users,dc=corp,dc=com",
+			LdapSearchFilter: "(uid={{username}})",
+			LdapTlsEnabled:   true,
+			Domains:          []string{"corp.com"},
+			CreatedAt:        "2026-03-29T00:00:00Z",
+			UpdatedAt:        "2026-03-29T00:00:00Z",
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL))
+	conn, err := client.SSO.CreateConnection(context.Background(), CreateSsoConnectionParams{
+		Name:             "Corp LDAP",
+		Protocol:         "ldap",
+		LdapURL:          "ldap://ldap.corp.com:389",
+		LdapBindDN:       "cn=admin,dc=corp,dc=com",
+		LdapBindPassword: "admin_secret",
+		LdapSearchBase:   "ou=users,dc=corp,dc=com",
+		LdapSearchFilter: "(uid={{username}})",
+		LdapTlsEnabled:   true,
+		Domains:          []string{"corp.com"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if conn.ID != "sso-conn-3" {
+		t.Errorf("expected id sso-conn-3, got %s", conn.ID)
+	}
+	if conn.Protocol != "ldap" {
+		t.Errorf("expected protocol ldap, got %s", conn.Protocol)
+	}
+	if conn.LdapURL != "ldap://ldap.corp.com:389" {
+		t.Errorf("expected ldapUrl, got %s", conn.LdapURL)
+	}
+	if conn.LdapBindDN != "cn=admin,dc=corp,dc=com" {
+		t.Errorf("expected ldapBindDn, got %s", conn.LdapBindDN)
+	}
+	if conn.LdapSearchBase != "ou=users,dc=corp,dc=com" {
+		t.Errorf("expected ldapSearchBase, got %s", conn.LdapSearchBase)
+	}
+	if !conn.LdapTlsEnabled {
+		t.Error("expected ldapTlsEnabled to be true")
+	}
+	if conn.Status != "active" {
+		t.Errorf("expected status active, got %s", conn.Status)
+	}
+}
+
 // --- Legacy Tests (backward compatibility) ---
 
 func TestSSOCreateConfig(t *testing.T) {

@@ -1,11 +1,11 @@
 ---
-title: "SSO (OIDC + SAML)"
-description: "Enterprise single sign-on with multi-IdP connections, SAML 2.0, OIDC, JIT provisioning, and domain-based enforcement using the Grantex Go SDK."
+title: "SSO (OIDC + SAML + LDAP)"
+description: "Enterprise single sign-on with multi-IdP connections, SAML 2.0, OIDC, LDAP, JIT provisioning, and domain-based enforcement using the Grantex Go SDK."
 ---
 
 ## Overview
 
-The `SSO` service provides enterprise-grade single sign-on for your developer organization. It supports multiple identity provider connections (OIDC and SAML 2.0), domain-based enforcement, JIT (just-in-time) provisioning, and session management. Compatible with Okta, Azure AD, Google Workspace, Auth0, OneLogin, PingFederate, and any SAML 2.0 or OIDC-compliant provider.
+The `SSO` service provides enterprise-grade single sign-on for your developer organization. It supports multiple identity provider connections (OIDC, SAML 2.0, and LDAP), domain-based enforcement, JIT (just-in-time) provisioning, and session management. Compatible with Okta, Azure AD, Google Workspace, Auth0, OneLogin, PingFederate, OpenLDAP, FreeIPA, and any SAML 2.0, OIDC, or LDAP-compliant provider.
 
 ```go
 conn, err := client.SSO.CreateConnection(ctx, grantex.CreateSsoConnectionParams{
@@ -74,7 +74,7 @@ samlConn, err := client.SSO.CreateConnection(ctx, grantex.CreateSsoConnectionPar
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `Name` | `string` | Yes | A human-readable name for this connection. |
-| `Protocol` | `string` | Yes | `"oidc"` or `"saml"`. |
+| `Protocol` | `string` | Yes | `"oidc"`, `"saml"`, or `"ldap"`. |
 | `IssuerURL` | `string` | OIDC only | The OIDC issuer URL. |
 | `ClientID` | `string` | OIDC only | OAuth 2.0 client ID from your IdP. |
 | `ClientSecret` | `string` | OIDC only | OAuth 2.0 client secret from your IdP. |
@@ -92,7 +92,7 @@ samlConn, err := client.SSO.CreateConnection(ctx, grantex.CreateSsoConnectionPar
 |-------|------|-------------|
 | `ID` | `string` | Unique connection identifier. |
 | `Name` | `string` | The connection display name. |
-| `Protocol` | `string` | `"oidc"` or `"saml"`. |
+| `Protocol` | `string` | `"oidc"`, `"saml"`, or `"ldap"`. |
 | `Status` | `string` | `"active"`, `"inactive"`, or `"error"`. |
 | `Domains` | `[]string` | Associated email domains. |
 | `JitProvisioning` | `bool` | Whether JIT provisioning is enabled. |
@@ -394,6 +394,41 @@ fmt.Printf("Provisioned: %v\n", result.Provisioned)   // false
 | `RelayState` | `string` | No | The RelayState parameter from the SAML callback. |
 
 Returns the same `SsoCallbackResponse` as `HandleOidcCallback()`.
+
+---
+
+### Handle LDAP Callback
+
+Authenticate a user via LDAP bind. Unlike OIDC and SAML which use browser redirects, LDAP authentication submits credentials directly. Grantex binds to the LDAP directory, verifies the user's password, reads their attributes and group memberships, maps groups to scopes, and provisions the user if JIT is enabled.
+
+```go
+result, err := client.SSO.HandleLdapCallback(ctx, grantex.SsoLdapCallbackParams{
+    Username:     "alice",
+    Password:     "user-password",
+    ConnectionID: "sso_conn_03HX...",
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Email: %s\n", *result.Email)              // alice@mycompany.com
+fmt.Printf("Name: %s\n", *result.Name)                // Alice Smith
+fmt.Printf("Developer ID: %s\n", result.DeveloperID)  // dev_01HXYZ...
+fmt.Printf("Connection: %s\n", result.ConnectionID)   // sso_conn_03HX...
+fmt.Printf("Provisioned: %v\n", result.Provisioned)   // true
+```
+
+### `SsoLdapCallbackParams`
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `Username` | `string` | Yes | The user's LDAP username (e.g. uid, sAMAccountName, or full DN). |
+| `Password` | `string` | Yes | The user's LDAP password for bind authentication. |
+| `ConnectionID` | `string` | Yes | The SSO connection ID for the LDAP directory. |
+
+Returns the same `SsoCallbackResponse` as `HandleOidcCallback()`.
+
+> **Note:** LDAP credentials are never stored by Grantex. They are used only for the bind operation and discarded immediately after authentication.
 
 ---
 

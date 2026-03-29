@@ -611,61 +611,84 @@ type SsoCallbackResponse struct {
 
 // --- Enterprise SSO ---
 
-// SsoConnection represents an enterprise SSO connection (OIDC or SAML).
+// SsoConnection represents an enterprise SSO connection (OIDC, SAML, or LDAP).
 type SsoConnection struct {
-	ID              string              `json:"id"`
-	DeveloperID     string              `json:"developerId"`
-	Name            string              `json:"name"`
-	Protocol        string              `json:"protocol"`
-	Status          string              `json:"status"`
-	IssuerURL       string              `json:"issuerUrl,omitempty"`
-	ClientID        string              `json:"clientId,omitempty"`
-	IdpEntityID     string              `json:"idpEntityId,omitempty"`
-	IdpSsoURL       string              `json:"idpSsoUrl,omitempty"`
-	SpEntityID      string              `json:"spEntityId,omitempty"`
-	SpAcsURL        string              `json:"spAcsUrl,omitempty"`
-	Domains         []string            `json:"domains"`
-	JitProvisioning bool                `json:"jitProvisioning"`
-	Enforce         bool                `json:"enforce"`
-	GroupAttribute  string              `json:"groupAttribute,omitempty"`
-	GroupMappings   map[string][]string `json:"groupMappings"`
-	DefaultScopes   []string            `json:"defaultScopes"`
-	CreatedAt       string              `json:"createdAt"`
-	UpdatedAt       string              `json:"updatedAt"`
+	ID                    string              `json:"id"`
+	DeveloperID           string              `json:"developerId"`
+	Name                  string              `json:"name"`
+	Protocol              string              `json:"protocol"`
+	Status                string              `json:"status"`
+	IssuerURL             string              `json:"issuerUrl,omitempty"`
+	ClientID              string              `json:"clientId,omitempty"`
+	IdpEntityID           string              `json:"idpEntityId,omitempty"`
+	IdpSsoURL             string              `json:"idpSsoUrl,omitempty"`
+	SpEntityID            string              `json:"spEntityId,omitempty"`
+	SpAcsURL              string              `json:"spAcsUrl,omitempty"`
+	LdapURL               string              `json:"ldapUrl,omitempty"`
+	LdapBindDN            string              `json:"ldapBindDn,omitempty"`
+	LdapSearchBase        string              `json:"ldapSearchBase,omitempty"`
+	LdapSearchFilter      string              `json:"ldapSearchFilter,omitempty"`
+	LdapGroupSearchBase   string              `json:"ldapGroupSearchBase,omitempty"`
+	LdapGroupSearchFilter string              `json:"ldapGroupSearchFilter,omitempty"`
+	LdapTlsEnabled        bool                `json:"ldapTlsEnabled,omitempty"`
+	Domains               []string            `json:"domains"`
+	JitProvisioning       bool                `json:"jitProvisioning"`
+	Enforce               bool                `json:"enforce"`
+	GroupAttribute        string              `json:"groupAttribute,omitempty"`
+	GroupMappings         map[string][]string `json:"groupMappings"`
+	DefaultScopes         []string            `json:"defaultScopes"`
+	CreatedAt             string              `json:"createdAt"`
+	UpdatedAt             string              `json:"updatedAt"`
 }
 
 // CreateSsoConnectionParams are the parameters for creating an SSO connection.
 type CreateSsoConnectionParams struct {
-	Name            string              `json:"name"`
-	Protocol        string              `json:"protocol"`
-	IssuerURL       string              `json:"issuerUrl,omitempty"`
-	ClientID        string              `json:"clientId,omitempty"`
-	ClientSecret    string              `json:"clientSecret,omitempty"`
-	IdpEntityID     string              `json:"idpEntityId,omitempty"`
-	IdpSsoURL       string              `json:"idpSsoUrl,omitempty"`
-	IdpCertificate  string              `json:"idpCertificate,omitempty"`
-	Domains         []string            `json:"domains,omitempty"`
-	JitProvisioning bool                `json:"jitProvisioning,omitempty"`
-	GroupAttribute  string              `json:"groupAttribute,omitempty"`
-	GroupMappings   map[string][]string `json:"groupMappings,omitempty"`
-	DefaultScopes   []string            `json:"defaultScopes,omitempty"`
+	Name                  string              `json:"name"`
+	Protocol              string              `json:"protocol"`
+	IssuerURL             string              `json:"issuerUrl,omitempty"`
+	ClientID              string              `json:"clientId,omitempty"`
+	ClientSecret          string              `json:"clientSecret,omitempty"`
+	IdpEntityID           string              `json:"idpEntityId,omitempty"`
+	IdpSsoURL             string              `json:"idpSsoUrl,omitempty"`
+	IdpCertificate        string              `json:"idpCertificate,omitempty"`
+	LdapURL               string              `json:"ldapUrl,omitempty"`
+	LdapBindDN            string              `json:"ldapBindDn,omitempty"`
+	LdapBindPassword      string              `json:"ldapBindPassword,omitempty"`
+	LdapSearchBase        string              `json:"ldapSearchBase,omitempty"`
+	LdapSearchFilter      string              `json:"ldapSearchFilter,omitempty"`
+	LdapGroupSearchBase   string              `json:"ldapGroupSearchBase,omitempty"`
+	LdapGroupSearchFilter string              `json:"ldapGroupSearchFilter,omitempty"`
+	LdapTlsEnabled        bool                `json:"ldapTlsEnabled,omitempty"`
+	Domains               []string            `json:"domains,omitempty"`
+	JitProvisioning       bool                `json:"jitProvisioning,omitempty"`
+	GroupAttribute        string              `json:"groupAttribute,omitempty"`
+	GroupMappings         map[string][]string `json:"groupMappings,omitempty"`
+	DefaultScopes         []string            `json:"defaultScopes,omitempty"`
 }
 
 // UpdateSsoConnectionParams are the parameters for updating an SSO connection.
 type UpdateSsoConnectionParams struct {
-	Name            *string              `json:"name,omitempty"`
-	Status          *string              `json:"status,omitempty"`
-	IssuerURL       *string              `json:"issuerUrl,omitempty"`
-	ClientID        *string              `json:"clientId,omitempty"`
-	ClientSecret    *string              `json:"clientSecret,omitempty"`
-	IdpEntityID     *string              `json:"idpEntityId,omitempty"`
-	IdpSsoURL       *string              `json:"idpSsoUrl,omitempty"`
-	IdpCertificate  *string              `json:"idpCertificate,omitempty"`
-	Domains         []string             `json:"domains,omitempty"`
-	JitProvisioning *bool                `json:"jitProvisioning,omitempty"`
-	GroupAttribute  *string              `json:"groupAttribute,omitempty"`
-	GroupMappings   *map[string][]string `json:"groupMappings,omitempty"`
-	DefaultScopes   []string             `json:"defaultScopes,omitempty"`
+	Name                  *string              `json:"name,omitempty"`
+	Status                *string              `json:"status,omitempty"`
+	IssuerURL             *string              `json:"issuerUrl,omitempty"`
+	ClientID              *string              `json:"clientId,omitempty"`
+	ClientSecret          *string              `json:"clientSecret,omitempty"`
+	IdpEntityID           *string              `json:"idpEntityId,omitempty"`
+	IdpSsoURL             *string              `json:"idpSsoUrl,omitempty"`
+	IdpCertificate        *string              `json:"idpCertificate,omitempty"`
+	LdapURL               *string              `json:"ldapUrl,omitempty"`
+	LdapBindDN            *string              `json:"ldapBindDn,omitempty"`
+	LdapBindPassword      *string              `json:"ldapBindPassword,omitempty"`
+	LdapSearchBase        *string              `json:"ldapSearchBase,omitempty"`
+	LdapSearchFilter      *string              `json:"ldapSearchFilter,omitempty"`
+	LdapGroupSearchBase   *string              `json:"ldapGroupSearchBase,omitempty"`
+	LdapGroupSearchFilter *string              `json:"ldapGroupSearchFilter,omitempty"`
+	LdapTlsEnabled        *bool                `json:"ldapTlsEnabled,omitempty"`
+	Domains               []string             `json:"domains,omitempty"`
+	JitProvisioning       *bool                `json:"jitProvisioning,omitempty"`
+	GroupAttribute        *string              `json:"groupAttribute,omitempty"`
+	GroupMappings         *map[string][]string `json:"groupMappings,omitempty"`
+	DefaultScopes         []string             `json:"defaultScopes,omitempty"`
 }
 
 // ListSsoConnectionsResponse is the response from listing SSO connections.
@@ -728,7 +751,15 @@ type SsoSamlCallbackParams struct {
 	ConnectionID string `json:"connectionId,omitempty"`
 }
 
-// SsoCallbackResult is the result from an enterprise SSO callback (OIDC or SAML).
+// SsoLdapCallbackParams are the parameters for handling an LDAP SSO callback.
+type SsoLdapCallbackParams struct {
+	Username     string `json:"username"`
+	Password     string `json:"password"`
+	ConnectionID string `json:"connectionId"`
+	Org          string `json:"org"`
+}
+
+// SsoCallbackResult is the result from an enterprise SSO callback (OIDC, SAML, or LDAP).
 type SsoCallbackResult struct {
 	Email        string            `json:"email"`
 	Name         string            `json:"name,omitempty"`

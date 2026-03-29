@@ -1,12 +1,12 @@
 ---
-title: "SSO (OIDC + SAML)"
+title: "SSO (OIDC + SAML + LDAP)"
 sidebarTitle: "SSO"
-description: "Enterprise single sign-on with multi-IdP connections, SAML 2.0, OIDC, JIT provisioning, and domain-based enforcement."
+description: "Enterprise single sign-on with multi-IdP connections, SAML 2.0, OIDC, LDAP, JIT provisioning, and domain-based enforcement."
 ---
 
 ## Overview
 
-The `sso` sub-client provides enterprise-grade single sign-on for your developer organization. It supports multiple identity provider connections (OIDC and SAML 2.0), domain-based enforcement, JIT (just-in-time) provisioning, and session management. Compatible with Okta, Azure AD, Google Workspace, Auth0, OneLogin, PingFederate, and any SAML 2.0 or OIDC-compliant provider.
+The `sso` sub-client provides enterprise-grade single sign-on for your developer organization. It supports multiple identity provider connections (OIDC, SAML 2.0, and LDAP), domain-based enforcement, JIT (just-in-time) provisioning, and session management. Compatible with Okta, Azure AD, Google Workspace, Auth0, OneLogin, PingFederate, OpenLDAP, FreeIPA, and any SAML 2.0, OIDC, or LDAP-compliant provider.
 
 ```typescript
 // Create an enterprise SSO connection
@@ -74,8 +74,8 @@ const samlConn = await grantex.sso.createConnection({
   A human-readable name for this connection (e.g. `"Okta Production"`).
 </ParamField>
 
-<ParamField body="protocol" type="'oidc' | 'saml'" required>
-  The SSO protocol. Use `"oidc"` for OpenID Connect or `"saml"` for SAML 2.0.
+<ParamField body="protocol" type="'oidc' | 'saml' | 'ldap'" required>
+  The SSO protocol. Use `"oidc"` for OpenID Connect, `"saml"` for SAML 2.0, or `"ldap"` for LDAP directory authentication.
 </ParamField>
 
 <ParamField body="issuerUrl" type="string">
@@ -128,7 +128,7 @@ const samlConn = await grantex.sso.createConnection({
   The connection display name.
 </ResponseField>
 
-<ResponseField name="protocol" type="'oidc' | 'saml'">
+<ResponseField name="protocol" type="'oidc' | 'saml' | 'ldap'">
   The SSO protocol.
 </ResponseField>
 
@@ -455,7 +455,7 @@ console.log(login.protocol);     // 'oidc'
   The matched SSO connection ID.
 </ResponseField>
 
-<ResponseField name="protocol" type="'oidc' | 'saml'">
+<ResponseField name="protocol" type="'oidc' | 'saml' | 'ldap'">
   The protocol of the matched connection.
 </ResponseField>
 
@@ -547,6 +547,48 @@ console.log(result.provisioned);  // false
 #### Response
 
 Returns the same `SsoCallbackResponse` as `handleOidcCallback()`.
+
+---
+
+### sso.handleLdapCallback()
+
+Authenticate a user via LDAP bind. Unlike OIDC and SAML which use browser redirects, LDAP authentication submits credentials directly. Grantex binds to the LDAP directory, verifies the user's password, reads their attributes and group memberships, maps groups to scopes, and provisions the user if JIT is enabled.
+
+```typescript
+const result = await grantex.sso.handleLdapCallback({
+  username: 'alice',
+  password: 'user-password',
+  connectionId: 'sso_conn_03HX...',
+});
+
+console.log(result.email);        // 'alice@mycompany.com'
+console.log(result.name);         // 'Alice Smith'
+console.log(result.developerId);  // 'dev_01HXYZ...'
+console.log(result.connectionId); // 'sso_conn_03HX...'
+console.log(result.provisioned);  // true (if JIT-created)
+```
+
+#### Parameters
+
+<ParamField body="username" type="string" required>
+  The user's LDAP username (e.g. `uid`, `sAMAccountName`, or full DN).
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The user's LDAP password for bind authentication.
+</ParamField>
+
+<ParamField body="connectionId" type="string" required>
+  The SSO connection ID for the LDAP directory.
+</ParamField>
+
+#### Response
+
+Returns the same `SsoCallbackResponse` as `handleOidcCallback()`.
+
+<Note>
+  LDAP credentials are never stored by Grantex. They are used only for the bind operation and discarded immediately after authentication.
+</Note>
 
 ---
 

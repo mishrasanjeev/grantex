@@ -85,6 +85,11 @@ func (s *SSOService) HandleSamlCallback(ctx context.Context, params SsoSamlCallb
 	return unmarshal[SsoCallbackResult](s.http.post(ctx, "/v1/sso/callback/saml", params))
 }
 
+// HandleLdapCallback processes an LDAP SSO callback with bind authentication.
+func (s *SSOService) HandleLdapCallback(ctx context.Context, params SsoLdapCallbackParams) (*SsoCallbackResult, error) {
+	return unmarshal[SsoCallbackResult](s.http.post(ctx, "/v1/sso/callback/ldap", params))
+}
+
 // --- Legacy (kept for backward compatibility) ---
 
 // CreateConfig creates an SSO configuration.

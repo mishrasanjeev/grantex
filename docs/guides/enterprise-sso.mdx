@@ -1,21 +1,22 @@
 ---
 title: "Enterprise SSO"
 sidebarTitle: "Enterprise SSO"
-description: "Set up OIDC and SAML 2.0 single sign-on with multi-IdP connections, domain-based routing, JIT provisioning, and group-to-scope mapping."
+description: "Set up OIDC, SAML 2.0, and LDAP single sign-on with multi-IdP connections, domain-based routing, JIT provisioning, and group-to-scope mapping."
 ---
 
 ## Overview
 
-Grantex provides enterprise-grade SSO that supports both **OIDC** and **SAML 2.0** protocols. You can configure multiple identity provider connections per organization, automatically route users to the correct IdP by email domain, and map IdP groups to Grantex scopes.
+Grantex provides enterprise-grade SSO that supports **OIDC**, **SAML 2.0**, and **LDAP** protocols. You can configure multiple identity provider connections per organization, automatically route users to the correct IdP by email domain, and map IdP groups to Grantex scopes.
 
 **Key capabilities:**
 
 | Feature | Description |
 |---------|-------------|
-| Multi-IdP connections | Configure multiple OIDC and SAML 2.0 providers per org |
+| Multi-IdP connections | Configure multiple OIDC, SAML 2.0, and LDAP providers per org |
 | OIDC Discovery | Automatic endpoint discovery via `.well-known/openid-configuration` |
 | ID token verification | Cryptographic JWT signature verification via JWKS |
 | SAML 2.0 | Response parsing with X.509 certificate-based signature verification |
+| LDAP / Active Directory | Direct bind authentication against LDAP directories |
 | Domain routing | Route users to the correct IdP based on email domain |
 | JIT provisioning | Auto-create principals on first SSO login |
 | Group mapping | Map IdP groups/roles to Grantex scopes |
@@ -132,6 +133,72 @@ const result = await grantex.sso.handleSamlCallback({
 
 ---
 
+## Setting up LDAP
+
+LDAP authentication differs from OIDC and SAML in that there is no browser redirect. Instead, the user submits their credentials directly to your application, and Grantex performs a **direct bind** against the LDAP directory server to verify them. This makes LDAP ideal for backend services, CLI tools, and environments where browser-based flows are not practical.
+
+### Step 1: Gather LDAP server details
+
+You will need the following from your directory administrator:
+
+- **LDAP URL** — The server address (e.g. `ldaps://ldap.mycompany.com:636` for TLS or `ldap://ldap.mycompany.com:389`)
+- **Bind DN** — The distinguished name used for the initial bind to search for users (e.g. `cn=readonly,dc=mycompany,dc=com`)
+- **Bind password** — The password for the bind DN
+- **Search base** — The base DN to search for user entries (e.g. `ou=people,dc=mycompany,dc=com`)
+- **User attribute** — The attribute used to match the username (e.g. `uid` for OpenLDAP, `sAMAccountName` for Active Directory)
+- **Group search base** — (Optional) The base DN for group lookups (e.g. `ou=groups,dc=mycompany,dc=com`)
+
+<Warning>
+  Always use `ldaps://` (LDAP over TLS) in production. Unencrypted LDAP transmits passwords in plaintext.
+</Warning>
+
+### Step 2: Create the LDAP connection
+
+```typescript
+const connection = await grantex.sso.createConnection({
+  name: 'Corporate LDAP',
+  protocol: 'ldap',
+  ldapUrl: 'ldaps://ldap.mycompany.com:636',
+  ldapBindDn: 'cn=readonly,dc=mycompany,dc=com',
+  ldapBindPassword: 'bind-password',
+  ldapSearchBase: 'ou=people,dc=mycompany,dc=com',
+  ldapUserAttribute: 'uid',
+  ldapGroupSearchBase: 'ou=groups,dc=mycompany,dc=com',
+  domains: ['mycompany.com'],
+  jitProvisioning: true,
+  groupMappings: {
+    'cn=engineering,ou=groups,dc=mycompany,dc=com': ['read', 'write', 'deploy'],
+    'cn=admins,ou=groups,dc=mycompany,dc=com': ['admin', 'read', 'write'],
+  },
+  defaultScopes: ['read'],
+});
+```
+
+### Step 3: Handle LDAP authentication
+
+Since LDAP does not use browser redirects, the user submits credentials directly to your application. Your backend then calls the LDAP callback endpoint:
+
+```typescript
+// User submits username/password via your login form
+const result = await grantex.sso.handleLdapCallback({
+  username: req.body.username,
+  password: req.body.password,
+  connectionId: connection.id,
+});
+
+console.log(result.email);        // 'alice@mycompany.com'
+console.log(result.name);         // 'Alice Smith'
+console.log(result.mappedScopes); // ['read', 'write', 'deploy']
+console.log(result.sessionId);    // 'ssosess_01HXYZ...'
+console.log(result.principalId);  // 'scimuser_01HXYZ...' (JIT-provisioned)
+```
+
+<Note>
+  LDAP authentication performs a two-step process: first, the service account binds and searches for the user entry by the configured user attribute; then, a second bind is attempted with the user's own DN and password to verify their credentials.
+</Note>
+
+---
+
 ## Domain-based routing
 
 When you assign domains to connections, Grantex automatically routes users to the correct IdP:
@@ -239,6 +306,15 @@ grantex sso connections create --name "Azure AD" --protocol saml \
   --sp-entity-id "urn:grantex:mycompany" \
   --sp-acs-url "https://myapp.com/sso/callback/saml"
 
+# Create an LDAP connection
+grantex sso connections create --name "Corporate LDAP" --protocol ldap \
+  --ldap-url ldaps://ldap.mycompany.com:636 \
+  --ldap-bind-dn "cn=readonly,dc=mycompany,dc=com" \
+  --ldap-bind-password "$LDAP_BIND_PW" \
+  --ldap-search-base "ou=people,dc=mycompany,dc=com" \
+  --ldap-user-attribute uid \
+  --domains mycompany.com --jit-provisioning
+
 # List all connections
 grantex sso connections list
 
@@ -259,17 +335,21 @@ grantex sso sessions revoke ssosess_01HXYZ...
 
 ## Supported identity providers
 
-| Provider | OIDC | SAML 2.0 |
-|----------|------|----------|
-| Okta | Yes | Yes |
-| Azure AD / Entra ID | Yes | Yes |
-| Google Workspace | Yes | Yes |
-| Auth0 | Yes | Yes |
-| OneLogin | Yes | Yes |
-| PingFederate | Yes | Yes |
-| JumpCloud | Yes | Yes |
-| Any OIDC-compliant IdP | Yes | - |
-| Any SAML 2.0-compliant IdP | - | Yes |
+| Provider | OIDC | SAML 2.0 | LDAP |
+|----------|------|----------|------|
+| Okta | Yes | Yes | Yes |
+| Azure AD / Entra ID | Yes | Yes | Yes |
+| Google Workspace | Yes | Yes | - |
+| Auth0 | Yes | Yes | - |
+| OneLogin | Yes | Yes | Yes |
+| PingFederate | Yes | Yes | Yes |
+| JumpCloud | Yes | Yes | Yes |
+| OpenLDAP | - | - | Yes |
+| FreeIPA | - | - | Yes |
+| Apache Directory Server | - | - | Yes |
+| Any OIDC-compliant IdP | Yes | - | - |
+| Any SAML 2.0-compliant IdP | - | Yes | - |
+| Any LDAPv3-compliant server | - | - | Yes |
 
 ---
 
@@ -289,3 +369,4 @@ grantex sso sessions revoke ssosess_01HXYZ...
 | `/sso/login` | GET | Get IdP authorization URL |
 | `/sso/callback/oidc` | POST | OIDC callback (with verification) |
 | `/sso/callback/saml` | POST | SAML callback |
+| `/sso/callback/ldap` | POST | LDAP bind authentication |

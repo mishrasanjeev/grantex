@@ -23,7 +23,7 @@ export interface SsoConnectionRow {
   id: string;
   developer_id: string;
   name: string;
-  protocol: 'oidc' | 'saml';
+  protocol: 'oidc' | 'saml' | 'ldap';
   status: 'active' | 'inactive' | 'testing';
   issuer_url: string | null;
   client_id: string | null;
@@ -33,6 +33,14 @@ export interface SsoConnectionRow {
   idp_certificate: string | null;
   sp_entity_id: string | null;
   sp_acs_url: string | null;
+  ldap_url: string | null;
+  ldap_bind_dn: string | null;
+  ldap_bind_password: string | null;
+  ldap_search_base: string | null;
+  ldap_search_filter: string | null;
+  ldap_group_search_base: string | null;
+  ldap_group_search_filter: string | null;
+  ldap_tls_enabled: boolean;
   domains: string[];
   jit_provisioning: boolean;
   enforce: boolean;

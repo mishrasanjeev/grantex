@@ -35,7 +35,7 @@ export function ssoCommand(): Command {
     .command('create')
     .description('Create a new SSO connection')
     .requiredOption('--name <name>', 'Connection name')
-    .requiredOption('--protocol <protocol>', 'Protocol: oidc or saml')
+    .requiredOption('--protocol <protocol>', 'Protocol: oidc, saml, or ldap')
     .option('--issuer-url <url>', 'OIDC issuer URL')
     .option('--client-id <id>', 'OIDC client ID')
     .option('--client-secret <secret>', 'OIDC client secret')
@@ -44,6 +44,14 @@ export function ssoCommand(): Command {
     .option('--idp-certificate <cert>', 'SAML IdP certificate (PEM)')
     .option('--sp-entity-id <id>', 'SAML SP entity ID')
     .option('--sp-acs-url <url>', 'SAML SP ACS URL')
+    .option('--ldap-url <url>', 'LDAP server URL')
+    .option('--ldap-bind-dn <dn>', 'LDAP service account bind DN')
+    .option('--ldap-bind-password <password>', 'LDAP service account password')
+    .option('--ldap-search-base <base>', 'LDAP user search base DN')
+    .option('--ldap-search-filter <filter>', 'LDAP user search filter (default: (uid={{username}}))')
+    .option('--ldap-group-search-base <base>', 'LDAP group search base DN')
+    .option('--ldap-group-search-filter <filter>', 'LDAP group search filter (default: (member={{dn}}))')
+    .option('--ldap-tls-enabled', 'Enable TLS for LDAP connection')
     .option('--domains <domains>', 'Comma-separated email domains')
     .option('--jit-provisioning', 'Enable just-in-time user provisioning')
     .option('--enforce', 'Enforce SSO for matched domains')
@@ -61,6 +69,14 @@ export function ssoCommand(): Command {
       idpCertificate?: string;
       spEntityId?: string;
       spAcsUrl?: string;
+      ldapUrl?: string;
+      ldapBindDn?: string;
+      ldapBindPassword?: string;
+      ldapSearchBase?: string;
+      ldapSearchFilter?: string;
+      ldapGroupSearchBase?: string;
+      ldapGroupSearchFilter?: string;
+      ldapTlsEnabled?: true;
       domains?: string;
       jitProvisioning?: true;
       enforce?: true;
@@ -81,6 +97,14 @@ export function ssoCommand(): Command {
       if (opts.idpCertificate !== undefined) params.idpCertificate = opts.idpCertificate;
       if (opts.spEntityId !== undefined) params.spEntityId = opts.spEntityId;
       if (opts.spAcsUrl !== undefined) params.spAcsUrl = opts.spAcsUrl;
+      if (opts.ldapUrl !== undefined) params.ldapUrl = opts.ldapUrl;
+      if (opts.ldapBindDn !== undefined) params.ldapBindDn = opts.ldapBindDn;
+      if (opts.ldapBindPassword !== undefined) params.ldapBindPassword = opts.ldapBindPassword;
+      if (opts.ldapSearchBase !== undefined) params.ldapSearchBase = opts.ldapSearchBase;
+      if (opts.ldapSearchFilter !== undefined) params.ldapSearchFilter = opts.ldapSearchFilter;
+      if (opts.ldapGroupSearchBase !== undefined) params.ldapGroupSearchBase = opts.ldapGroupSearchBase;
+      if (opts.ldapGroupSearchFilter !== undefined) params.ldapGroupSearchFilter = opts.ldapGroupSearchFilter;
+      if (opts.ldapTlsEnabled !== undefined) params.ldapTlsEnabled = true;
       if (opts.domains !== undefined) params.domains = opts.domains.split(',').map((d) => d.trim());
       if (opts.jitProvisioning !== undefined) params.jitProvisioning = true;
       if (opts.enforce !== undefined) params.enforce = true;
@@ -141,6 +165,14 @@ export function ssoCommand(): Command {
     .option('--idp-certificate <cert>', 'SAML IdP certificate (PEM)')
     .option('--sp-entity-id <id>', 'SAML SP entity ID')
     .option('--sp-acs-url <url>', 'SAML SP ACS URL')
+    .option('--ldap-url <url>', 'LDAP server URL')
+    .option('--ldap-bind-dn <dn>', 'LDAP service account bind DN')
+    .option('--ldap-bind-password <password>', 'LDAP service account password')
+    .option('--ldap-search-base <base>', 'LDAP user search base DN')
+    .option('--ldap-search-filter <filter>', 'LDAP user search filter')
+    .option('--ldap-group-search-base <base>', 'LDAP group search base DN')
+    .option('--ldap-group-search-filter <filter>', 'LDAP group search filter')
+    .option('--ldap-tls-enabled <bool>', 'Enable TLS for LDAP connection (true/false)')
     .option('--domains <domains>', 'Comma-separated email domains')
     .option('--jit-provisioning <bool>', 'Enable just-in-time provisioning (true/false)')
     .option('--enforce <bool>', 'Enforce SSO for matched domains (true/false)')
@@ -158,6 +190,14 @@ export function ssoCommand(): Command {
       idpCertificate?: string;
       spEntityId?: string;
       spAcsUrl?: string;
+      ldapUrl?: string;
+      ldapBindDn?: string;
+      ldapBindPassword?: string;
+      ldapSearchBase?: string;
+      ldapSearchFilter?: string;
+      ldapGroupSearchBase?: string;
+      ldapGroupSearchFilter?: string;
+      ldapTlsEnabled?: string;
       domains?: string;
       jitProvisioning?: string;
       enforce?: string;
@@ -177,6 +217,14 @@ export function ssoCommand(): Command {
       if (opts.idpCertificate !== undefined) params.idpCertificate = opts.idpCertificate;
       if (opts.spEntityId !== undefined) params.spEntityId = opts.spEntityId;
       if (opts.spAcsUrl !== undefined) params.spAcsUrl = opts.spAcsUrl;
+      if (opts.ldapUrl !== undefined) params.ldapUrl = opts.ldapUrl;
+      if (opts.ldapBindDn !== undefined) params.ldapBindDn = opts.ldapBindDn;
+      if (opts.ldapBindPassword !== undefined) params.ldapBindPassword = opts.ldapBindPassword;
+      if (opts.ldapSearchBase !== undefined) params.ldapSearchBase = opts.ldapSearchBase;
+      if (opts.ldapSearchFilter !== undefined) params.ldapSearchFilter = opts.ldapSearchFilter;
+      if (opts.ldapGroupSearchBase !== undefined) params.ldapGroupSearchBase = opts.ldapGroupSearchBase;
+      if (opts.ldapGroupSearchFilter !== undefined) params.ldapGroupSearchFilter = opts.ldapGroupSearchFilter;
+      if (opts.ldapTlsEnabled !== undefined) params.ldapTlsEnabled = opts.ldapTlsEnabled === 'true';
       if (opts.domains !== undefined) params.domains = opts.domains.split(',').map((d) => d.trim());
       if (opts.jitProvisioning !== undefined) params.jitProvisioning = opts.jitProvisioning === 'true';
       if (opts.enforce !== undefined) params.enforce = opts.enforce === 'true';

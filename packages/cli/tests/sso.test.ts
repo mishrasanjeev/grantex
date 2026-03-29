@@ -204,6 +204,74 @@ describe('ssoCommand()', () => {
       });
     });
 
+    it('creates an LDAP connection with all LDAP options', async () => {
+      const ldapConn = { ...ssoConnection, protocol: 'ldap' as const, id: 'sso_conn_3', name: 'Corp LDAP' };
+      mockClient.sso.createConnection.mockResolvedValue(ldapConn);
+      const cmd = ssoCommand();
+      cmd.exitOverride();
+      await cmd.parseAsync([
+        'node', 'test', 'connections', 'create',
+        '--name', 'Corp LDAP',
+        '--protocol', 'ldap',
+        '--ldap-url', 'ldap://ldap.corp.com:389',
+        '--ldap-bind-dn', 'cn=admin,dc=corp,dc=com',
+        '--ldap-bind-password', 'secret123',
+        '--ldap-search-base', 'ou=users,dc=corp,dc=com',
+        '--ldap-search-filter', '(uid={{username}})',
+        '--ldap-group-search-base', 'ou=groups,dc=corp,dc=com',
+        '--ldap-group-search-filter', '(member={{dn}})',
+        '--ldap-tls-enabled',
+        '--domains', 'corp.com',
+        '--jit-provisioning',
+        '--enforce',
+      ]);
+      expect(mockClient.sso.createConnection).toHaveBeenCalledWith({
+        name: 'Corp LDAP',
+        protocol: 'ldap',
+        ldapUrl: 'ldap://ldap.corp.com:389',
+        ldapBindDn: 'cn=admin,dc=corp,dc=com',
+        ldapBindPassword: 'secret123',
+        ldapSearchBase: 'ou=users,dc=corp,dc=com',
+        ldapSearchFilter: '(uid={{username}})',
+        ldapGroupSearchBase: 'ou=groups,dc=corp,dc=com',
+        ldapGroupSearchFilter: '(member={{dn}})',
+        ldapTlsEnabled: true,
+        domains: ['corp.com'],
+        jitProvisioning: true,
+        enforce: true,
+      });
+      const allOutput = (console.log as ReturnType<typeof vi.fn>).mock.calls
+        .map((c: unknown[]) => c.join(' '))
+        .join('\n');
+      expect(allOutput).toContain('SSO connection created');
+    });
+
+    it('includes LDAP-specific options in the payload', async () => {
+      const ldapConn = { ...ssoConnection, protocol: 'ldap' as const, id: 'sso_conn_4' };
+      mockClient.sso.createConnection.mockResolvedValue(ldapConn);
+      const cmd = ssoCommand();
+      cmd.exitOverride();
+      await cmd.parseAsync([
+        'node', 'test', 'connections', 'create',
+        '--name', 'Minimal LDAP',
+        '--protocol', 'ldap',
+        '--ldap-url', 'ldaps://ldap.corp.com:636',
+        '--ldap-bind-dn', 'cn=svc,dc=corp,dc=com',
+        '--ldap-bind-password', 'pw',
+        '--ldap-search-base', 'dc=corp,dc=com',
+      ]);
+      const payload = mockClient.sso.createConnection.mock.calls[0][0];
+      expect(payload.ldapUrl).toBe('ldaps://ldap.corp.com:636');
+      expect(payload.ldapBindDn).toBe('cn=svc,dc=corp,dc=com');
+      expect(payload.ldapBindPassword).toBe('pw');
+      expect(payload.ldapSearchBase).toBe('dc=corp,dc=com');
+      // optional LDAP fields should not be present
+      expect(payload.ldapSearchFilter).toBeUndefined();
+      expect(payload.ldapGroupSearchBase).toBeUndefined();
+      expect(payload.ldapGroupSearchFilter).toBeUndefined();
+      expect(payload.ldapTlsEnabled).toBeUndefined();
+    });
+
     it('outputs JSON in json mode', async () => {
       mockClient.sso.createConnection.mockResolvedValue(ssoConnection);
       setJsonMode(true);
