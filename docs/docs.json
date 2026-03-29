@@ -14,15 +14,6 @@
   },
   "openapi": "openapi.yaml",
   "navigation": {
-    "global": {
-      "tabs": [
-        { "tab": "Documentation", "href": "/introduction" },
-        { "tab": "TypeScript SDK", "href": "/sdks/typescript/overview" },
-        { "tab": "Python SDK", "href": "/sdks/python/overview" },
-        { "tab": "Go SDK", "href": "/sdks/go/overview" },
-        { "tab": "Integrations", "href": "/integrations/overview" }
-      ]
-    },
     "tabs": [
       {
         "tab": "Documentation",
