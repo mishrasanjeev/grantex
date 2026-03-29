@@ -4,7 +4,8 @@
  * mapping, domain-based connection resolution, and session management.
  */
 import * as jose from 'jose';
-import { createVerify, X509Certificate } from 'node:crypto';
+import { createVerify } from 'node:crypto';
+import crypto from 'node:crypto';
 import { getSql } from '../db/client.js';
 import { newSsoSessionId, newScimUserId } from './ids.js';
 
@@ -182,7 +183,7 @@ export function parseSamlResponse(
     : `-----BEGIN CERTIFICATE-----\n${idpCertificate}\n-----END CERTIFICATE-----`;
 
   try {
-    const x509 = new X509Certificate(certPem);
+    const x509 = new crypto.X509Certificate(certPem);
     // Basic certificate validity check
     if (new Date(x509.validTo) < new Date()) {
       throw new Error('IdP certificate has expired');

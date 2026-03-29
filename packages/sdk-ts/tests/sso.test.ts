@@ -88,7 +88,7 @@ describe('SsoClient', () => {
     const result = await grantex.sso.listConnections();
 
     expect(result.connections).toHaveLength(1);
-    expect(result.connections[0].name).toBe('Okta OIDC');
+    expect(result.connections[0]!.name).toBe('Okta OIDC');
   });
 
   it('getConnection() GETs /v1/sso/connections/:id', async () => {
@@ -166,7 +166,7 @@ describe('SsoClient', () => {
     const result = await grantex.sso.listSessions();
 
     expect(result.sessions).toHaveLength(1);
-    expect(result.sessions[0].email).toBe('alice@corp.com');
+    expect(result.sessions[0]!.email).toBe('alice@corp.com');
   });
 
   it('revokeSession() DELETEs /v1/sso/sessions/:id', async () => {

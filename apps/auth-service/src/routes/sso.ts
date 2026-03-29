@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import crypto from 'node:crypto';
 import { getSql } from '../db/client.js';
 import { newSsoConnectionId } from '../lib/ids.js';
 import { emitEvent } from '../lib/events.js';
@@ -257,7 +258,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       const certPem = conn.idp_certificate!.includes('BEGIN CERTIFICATE')
         ? conn.idp_certificate!
         : `-----BEGIN CERTIFICATE-----\n${conn.idp_certificate!}\n-----END CERTIFICATE-----`;
-      new X509Certificate(certPem);
+      new crypto.X509Certificate(certPem);
       return reply.send({
         success: true,
         protocol: 'saml',
@@ -487,12 +488,15 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       const mappedScopes = mapGroupsToScopes(groups, conn.group_mappings, conn.default_scopes);
 
       // JIT provisioning
+      const claimEmail = typeof claims['email'] === 'string' ? claims['email'] : undefined;
+      const claimName = typeof claims['name'] === 'string' ? claims['name'] : undefined;
+
       let principalId: string | undefined;
       if (conn.jit_provisioning) {
         principalId = await jitProvision(stateData.org, {
           sub: String(claims['sub']),
-          email: claims['email'] as string | undefined,
-          name: claims['name'] as string | undefined,
+          ...(claimEmail !== undefined ? { email: claimEmail } : {}),
+          ...(claimName !== undefined ? { name: claimName } : {}),
         });
       }
 
@@ -500,9 +504,9 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       const session = await createSsoSession({
         developerId: stateData.org,
         connectionId: conn.id,
-        principalId,
-        email: (claims['email'] as string) ?? undefined,
-        name: (claims['name'] as string) ?? undefined,
+        ...(principalId !== undefined ? { principalId } : {}),
+        ...(claimEmail !== undefined ? { email: claimEmail } : {}),
+        ...(claimName !== undefined ? { name: claimName } : {}),
         idpSubject: String(claims['sub']),
         groups,
         mappedScopes,
@@ -585,8 +589,8 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       if (conn.jit_provisioning) {
         principalId = await jitProvision(stateData.org, {
           sub: attributes.sub,
-          email: attributes.email,
-          name: attributes.name,
+          ...(attributes.email !== undefined ? { email: attributes.email } : {}),
+          ...(attributes.name !== undefined ? { name: attributes.name } : {}),
         });
       }
 
@@ -594,9 +598,9 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       const session = await createSsoSession({
         developerId: stateData.org,
         connectionId: conn.id,
-        principalId,
-        email: attributes.email,
-        name: attributes.name,
+        ...(principalId !== undefined ? { principalId } : {}),
+        ...(attributes.email !== undefined ? { email: attributes.email } : {}),
+        ...(attributes.name !== undefined ? { name: attributes.name } : {}),
         idpSubject: attributes.sub,
         groups,
         mappedScopes,
