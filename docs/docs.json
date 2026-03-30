@@ -267,6 +267,7 @@
               "integrations/express",
               "integrations/fastapi",
               "integrations/mcp",
+              "integrations/anthropic",
               "integrations/langchain",
               "integrations/vercel-ai",
               "integrations/autogen",
