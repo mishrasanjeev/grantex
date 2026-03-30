@@ -33,6 +33,8 @@ describe('GrantexAuditHandler', () => {
     const handler = new GrantexAuditHandler({
       client: mockClient,
       agentId: 'ag_01',
+      agentDid: 'did:key:z6Mk_01',
+      principalId: 'user_01',
       grantToken: GRANT_TOKEN,
     });
 
@@ -40,7 +42,9 @@ describe('GrantexAuditHandler', () => {
 
     expect(mockLog).toHaveBeenCalledWith({
       agentId: 'ag_01',
+      agentDid: 'did:key:z6Mk_01',
       grantId: 'grnt_01',
+      principalId: 'user_01',
       action: 'tool:read_calendar',
       metadata: { input: 'show me today' },
       status: 'success',
@@ -51,6 +55,8 @@ describe('GrantexAuditHandler', () => {
     const handler = new GrantexAuditHandler({
       client: mockClient,
       agentId: 'ag_01',
+      agentDid: 'did:key:z6Mk_01',
+      principalId: 'user_01',
       grantToken: GRANT_TOKEN,
     });
 
@@ -58,7 +64,9 @@ describe('GrantexAuditHandler', () => {
 
     expect(mockLog).toHaveBeenCalledWith({
       agentId: 'ag_01',
+      agentDid: 'did:key:z6Mk_01',
       grantId: 'grnt_01',
+      principalId: 'user_01',
       action: 'tool:error',
       metadata: { error: 'API connection timed out' },
       status: 'failure',
@@ -69,6 +77,8 @@ describe('GrantexAuditHandler', () => {
     const handler = new GrantexAuditHandler({
       client: mockClient,
       agentId: 'ag_01',
+      agentDid: 'did:key:z6Mk_01',
+      principalId: 'user_01',
       grantToken: TOKEN_JTI_ONLY,
     });
 
@@ -85,6 +95,8 @@ describe('GrantexAuditHandler', () => {
         new GrantexAuditHandler({
           client: mockClient,
           agentId: 'ag_01',
+          agentDid: 'did:key:z6Mk_01',
+          principalId: 'user_01',
           grantToken: TOKEN_NO_ID,
         }),
     ).toThrow('grantId');

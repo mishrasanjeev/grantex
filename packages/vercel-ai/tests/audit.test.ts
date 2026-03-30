@@ -53,7 +53,9 @@ describe('withAuditLogging', () => {
     const client = makeClient();
     const t = withAuditLogging(baseTool(async ({ item }) => `done:${item}`), client, {
       agentId: 'ag_01',
+      agentDid: 'did:key:z6Mk_01',
       grantId: 'grnt_01',
+      principalId: 'user_01',
     });
 
     const result = await t.execute({ item: 'widget' }, EXEC_OPTIONS);
@@ -62,7 +64,9 @@ describe('withAuditLogging', () => {
     expect(client.audit.log).toHaveBeenCalledOnce();
     expect(client.audit.log).toHaveBeenCalledWith({
       agentId: 'ag_01',
+      agentDid: 'did:key:z6Mk_01',
       grantId: 'grnt_01',
+      principalId: 'user_01',
       action: 'tool:test_tool',
       metadata: { args: { item: 'widget' } },
       status: 'success',
@@ -76,7 +80,7 @@ describe('withAuditLogging', () => {
         throw new Error('something broke');
       }),
       client,
-      { agentId: 'ag_01', grantId: 'grnt_01' },
+      { agentId: 'ag_01', agentDid: 'did:key:z6Mk_01', grantId: 'grnt_01', principalId: 'user_01' },
     );
 
     await expect(t.execute({ item: 'widget' }, EXEC_OPTIONS)).rejects.toThrow(
@@ -95,7 +99,7 @@ describe('withAuditLogging', () => {
     const t = withAuditLogging(
       baseTool(async () => 'ok'),
       client,
-      { agentId: 'ag_01', grantId: 'grnt_01', toolName: 'custom_name' },
+      { agentId: 'ag_01', agentDid: 'did:key:z6Mk_01', grantId: 'grnt_01', principalId: 'user_01', toolName: 'custom_name' },
     );
 
     await t.execute({ item: 'x' }, EXEC_OPTIONS);
@@ -109,7 +113,9 @@ describe('withAuditLogging', () => {
     const original = baseTool(async () => 'ok');
     const wrapped = withAuditLogging(original, client, {
       agentId: 'ag_01',
+      agentDid: 'did:key:z6Mk_01',
       grantId: 'grnt_01',
+      principalId: 'user_01',
     });
 
     expect(wrapped.description).toBe(original.description);

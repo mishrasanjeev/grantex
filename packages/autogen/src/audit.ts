@@ -2,10 +2,14 @@ import type { Grantex } from '@grantex/sdk';
 import type { GrantexFunction } from './types.js';
 
 export interface AuditLoggingOptions {
-  /** Agent DID or identifier to record in audit entries. */
+  /** Agent ID to record in audit entries. */
   agentId: string;
+  /** Agent DID (e.g. `'did:key:z6Mk...'`). */
+  agentDid: string;
   /** Grant ID associated with the function invocation. */
   grantId: string;
+  /** Principal ID that granted authorization. */
+  principalId: string;
 }
 
 /**
@@ -27,7 +31,7 @@ export function withAuditLogging<T extends Record<string, unknown>>(
   client: Grantex,
   options: AuditLoggingOptions,
 ): GrantexFunction<T> {
-  const { agentId, grantId } = options;
+  const { agentId, agentDid, grantId, principalId } = options;
   const fnName = fn.definition.function.name;
 
   return {
@@ -37,7 +41,9 @@ export function withAuditLogging<T extends Record<string, unknown>>(
         const result = await fn.execute(args);
         await client.audit.log({
           agentId,
+          agentDid,
           grantId,
+          principalId,
           action: `function:${fnName}`,
           metadata: { args },
           status: 'success' as const,
@@ -46,7 +52,9 @@ export function withAuditLogging<T extends Record<string, unknown>>(
       } catch (err) {
         await client.audit.log({
           agentId,
+          agentDid,
           grantId,
+          principalId,
           action: `function:${fnName}`,
           metadata: {
             args,
