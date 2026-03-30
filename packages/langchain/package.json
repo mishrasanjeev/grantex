@@ -1,6 +1,6 @@
 {
   "name": "@grantex/langchain",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "LangChain integration for the Grantex delegated authorization protocol",
   "homepage": "https://grantex.dev/for/langchain",
   "bugs": {

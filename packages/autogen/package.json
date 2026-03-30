@@ -1,6 +1,6 @@
 {
   "name": "@grantex/autogen",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "AutoGen / OpenAI function-calling integration for the Grantex delegated authorization protocol",
   "homepage": "https://grantex.dev/for/autogen",
   "bugs": {
