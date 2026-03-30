@@ -1,0 +1,60 @@
+{
+  "name": "@grantex/anthropic",
+  "version": "0.1.0",
+  "description": "Anthropic SDK integration for the Grantex delegated authorization protocol",
+  "homepage": "https://grantex.dev/for/anthropic",
+  "bugs": {
+    "url": "https://github.com/mishrasanjeev/grantex/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "@grantex/sdk": ">=0.1.0",
+    "@anthropic-ai/sdk": ">=0.30.0"
+  },
+  "devDependencies": {
+    "@grantex/sdk": "file:../sdk-ts",
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.3.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "grantex",
+    "anthropic",
+    "claude",
+    "ai-agents",
+    "authorization",
+    "oauth",
+    "jwt",
+    "agent-tools",
+    "scope-enforcement",
+    "delegated-auth",
+    "tool-use"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mishrasanjeev/grantex"
+  }
+}
