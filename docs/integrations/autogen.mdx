@@ -82,7 +82,9 @@ const client = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
 
 const audited = withAuditLogging(readCalendar, client, {
   agentId: 'ag_01ABC...',
+  agentDid: 'did:key:z6Mk...',
   grantId: 'grnt_01XYZ...',
+  principalId: 'user_01',
 });
 // Use audited.execute() — logs success/failure automatically
 ```
@@ -115,7 +117,9 @@ Returns `{ definition, execute }`.
 | Option | Type | Description |
 |--------|------|-------------|
 | `agentId` | `string` | Agent ID for audit attribution |
+| `agentDid` | `string` | Agent DID (e.g. `did:key:z6Mk...`) |
 | `grantId` | `string` | Grant ID for the session |
+| `principalId` | `string` | Principal ID that granted authorization |
 
 ## Requirements
 
