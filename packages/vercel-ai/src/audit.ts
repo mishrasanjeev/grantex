@@ -29,7 +29,7 @@ export function withAuditLogging<PARAMETERS extends z.ZodTypeAny, RESULT>(
   client: Grantex,
   options: AuditLoggingOptions,
 ): GrantexTool<PARAMETERS, RESULT> {
-  const { agentId, grantId } = options;
+  const { agentId, agentDid, grantId, principalId } = options;
   const toolName = options.toolName ?? grantexTool[TOOL_NAME_KEY];
   const action = `tool:${toolName}`;
   const originalExecute = grantexTool.execute;
@@ -39,7 +39,9 @@ export function withAuditLogging<PARAMETERS extends z.ZodTypeAny, RESULT>(
       const result = await originalExecute(args, execOptions);
       await client.audit.log({
         agentId,
+        agentDid,
         grantId,
+        principalId,
         action,
         metadata: { args: args as Record<string, unknown> },
         status: 'success' as const,
@@ -48,7 +50,9 @@ export function withAuditLogging<PARAMETERS extends z.ZodTypeAny, RESULT>(
     } catch (err) {
       await client.audit.log({
         agentId,
+        agentDid,
         grantId,
+        principalId,
         action,
         metadata: {
           args: args as Record<string, unknown>,
