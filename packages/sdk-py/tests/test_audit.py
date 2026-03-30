@@ -24,7 +24,9 @@ def test_log_body_fields(client: Grantex) -> None:
     )
     entry = client.audit.log(
         agent_id="ag_01HXYZ123abc",
+        agent_did="did:grantex:ag_01HXYZ123abc",
         grant_id="grant_01HXYZ",
+        principal_id="user_01",
         action="payment.initiated",
         metadata={"amount": 420, "currency": "USD"},
         status="success",
@@ -37,7 +39,9 @@ def test_log_body_fields(client: Grantex) -> None:
 
     body = json.loads(route.calls[0].request.content)
     assert body["agentId"] == "ag_01HXYZ123abc"
+    assert body["agentDid"] == "did:grantex:ag_01HXYZ123abc"
     assert body["grantId"] == "grant_01HXYZ"
+    assert body["principalId"] == "user_01"
     assert body["action"] == "payment.initiated"
     assert body["metadata"] == {"amount": 420, "currency": "USD"}
     assert body["status"] == "success"
@@ -50,7 +54,9 @@ def test_log_without_metadata(client: Grantex) -> None:
     )
     client.audit.log(
         agent_id="ag_01HXYZ123abc",
+        agent_did="did:grantex:ag_01HXYZ123abc",
         grant_id="grant_01HXYZ",
+        principal_id="user_01",
         action="data.read",
     )
     body = json.loads(route.calls[0].request.content)
