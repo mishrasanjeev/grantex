@@ -326,6 +326,60 @@ agent = Agent(
     metaTitle: 'Grantex for OpenAI Agents SDK — Enterprise Agent Authorization',
     metaDesc: 'Add scoped permissions, audit trails, and real-time revocation to OpenAI Agents SDK. Enterprise-grade authorization for AI agents. Open source.',
   },
+  anthropic: {
+    name: 'Anthropic SDK',
+    badge: 'Anthropic + Grantex',
+    title: 'Authorization for <span class="highlight">Anthropic SDK</span> Tool Use',
+    desc: 'Enforce scoped permissions on Claude tool calls. Offline JWT verification, automatic audit logging, and instant revocation for Anthropic SDK apps.',
+    docsUrl: 'https://docs.grantex.dev/integrations/anthropic',
+    installUrl: 'https://docs.grantex.dev/integrations/anthropic',
+    install: 'npm install @grantex/anthropic @grantex/sdk',
+    problemBad: 'Your Claude-powered agents call tools with no authorization layer. Any tool can be invoked with full access. No scoping, no consent, no audit trail of what the agent did.',
+    problemGood: 'Grantex wraps each tool with scope enforcement. The agent\'s JWT is checked offline before execution. Every tool call is audit-logged. Revoke access in under 1 second.',
+    howTitle: 'How Grantex Works with the Anthropic SDK',
+    steps: [
+      ['Install the integration', 'npm install @grantex/anthropic — wraps Anthropic tool definitions with authorization.'],
+      ['Create scoped tools', 'Use createGrantexTool() to define tools with required scopes and JSON Schema input.'],
+      ['Pass tools to Claude', 'tool.definition is type-compatible with client.messages.create({ tools }).'],
+      ['Dispatch tool_use blocks', 'Use GrantexToolRegistry or handleToolCall() to execute with automatic audit logging.'],
+      ['Monitor everything', 'Hash-chained audit trail of every tool call. Revoke access in under 1 second.'],
+    ],
+    code: `import Anthropic from '@anthropic-ai/sdk';
+import { createGrantexTool, GrantexToolRegistry } from '@grantex/anthropic';
+
+const client = new Anthropic();
+
+const readFile = createGrantexTool({
+  name: 'read_file',
+  description: 'Read a file from disk',
+  inputSchema: {
+    type: 'object',
+    properties: { path: { type: 'string' } },
+    required: ['path'],
+  },
+  grantToken,
+  requiredScope: 'file:read',
+  execute: async ({ path }) => fs.readFile(path, 'utf-8'),
+});
+
+const response = await client.messages.create({
+  model: 'claude-sonnet-4-6',
+  max_tokens: 1024,
+  tools: [readFile.definition],
+  messages,
+});`,
+    features: [
+      ['Anthropic SDK Native', 'Type-compatible with client.messages.create(). tool.definition drops in directly.'],
+      ['Offline Scope Checks', 'JWT scp claim verified locally. No network call to Grantex during execution.'],
+      ['Tool Registry', 'GrantexToolRegistry manages multiple tools and dispatches tool_use blocks by name.'],
+      ['Audit Logging', 'withAuditLogging() and handleToolCall() log every success/failure automatically.'],
+      ['GrantexScopeError', 'Typed error with requiredScope and grantedScopes for clean error handling.'],
+      ['Budget Controls', 'Per-agent spending limits with automatic cutoff at thresholds.'],
+    ],
+    ctaFramework: 'Anthropic SDK',
+    metaTitle: 'Grantex for Anthropic SDK — Secure Claude Tool Use Authorization',
+    metaDesc: 'Add scoped permissions and audit trails to Claude tool use. Offline JWT verification, tool registry, and instant revocation. Open source.',
+  },
   'google-adk': {
     name: 'Google ADK',
     badge: 'Google ADK + Grantex',
