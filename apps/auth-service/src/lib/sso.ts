@@ -169,15 +169,20 @@ export function parseSamlResponse(
   samlResponseB64: string,
   idpCertificate: string,
 ): SamlAttributes {
+  // Limit input size to prevent ReDoS on large payloads (1 MB max)
+  if (samlResponseB64.length > 1_048_576) {
+    throw new Error('SAML Response exceeds maximum size');
+  }
+
   const xml = Buffer.from(samlResponseB64, 'base64').toString('utf-8');
 
-  // Extract NameID (subject)
+  // Extract NameID (subject) — linear regex, no backtracking risk
   const nameIdMatch = xml.match(/<(?:saml2?:)?NameID[^>]*>([^<]+)<\/(?:saml2?:)?NameID>/);
   if (!nameIdMatch) {
     throw new Error('SAML Response missing NameID');
   }
 
-  // Verify the signature exists
+  // Verify the signature exists — linear regex
   const sigValueMatch = xml.match(
     /<(?:ds:)?SignatureValue[^>]*>([^<]+)<\/(?:ds:)?SignatureValue>/,
   );
@@ -192,7 +197,6 @@ export function parseSamlResponse(
 
   try {
     const x509 = new crypto.X509Certificate(certPem);
-    // Basic certificate validity check
     if (new Date(x509.validTo) < new Date()) {
       throw new Error('IdP certificate has expired');
     }
@@ -202,16 +206,25 @@ export function parseSamlResponse(
   }
 
   // Verify the SignedInfo digest using the IdP certificate
-  const signedInfoMatch = xml.match(
-    /<(?:ds:)?SignedInfo[^>]*>[\s\S]*?<\/(?:ds:)?SignedInfo>/,
-  );
-  if (signedInfoMatch) {
-    const signatureValue = Buffer.from(sigValueMatch[1]!.replace(/\s/g, ''), 'base64');
-    const verifier = createVerify('RSA-SHA256');
-    verifier.update(signedInfoMatch[0]);
-    const valid = verifier.verify(certPem, signatureValue);
-    if (!valid) {
-      throw new Error('SAML Response signature verification failed');
+  // Use indexOf+indexOf instead of regex with [\s\S]*? to avoid ReDoS
+  const signedInfoStart = xml.indexOf('<SignedInfo');
+  const dsSignedInfoStart = xml.indexOf('<ds:SignedInfo');
+  const siStart = signedInfoStart >= 0 ? signedInfoStart : dsSignedInfoStart;
+
+  if (siStart >= 0) {
+    const siEndTag = xml.indexOf('</SignedInfo>', siStart);
+    const dsSiEndTag = xml.indexOf('</ds:SignedInfo>', siStart);
+    const siEnd = siEndTag >= 0 ? siEndTag + '</SignedInfo>'.length : (dsSiEndTag >= 0 ? dsSiEndTag + '</ds:SignedInfo>'.length : -1);
+
+    if (siEnd > siStart) {
+      const signedInfoXml = xml.slice(siStart, siEnd);
+      const signatureValue = Buffer.from(sigValueMatch[1]!.replace(/\s/g, ''), 'base64');
+      const verifier = createVerify('RSA-SHA256');
+      verifier.update(signedInfoXml);
+      const valid = verifier.verify(certPem, signatureValue);
+      if (!valid) {
+        throw new Error('SAML Response signature verification failed');
+      }
     }
   }
 
@@ -220,32 +233,50 @@ export function parseSamlResponse(
     sub: nameIdMatch[1]!,
   };
 
+  // Use a helper to extract SAML attribute values by name — avoids ReDoS-prone [\s\S]*? patterns
+  const extractAttrValue = (attrName: string): string | undefined => {
+    const idx = xml.indexOf(`Name="${attrName}"`);
+    if (idx < 0) return undefined;
+    const afterAttr = xml.indexOf('<', idx + attrName.length + 7);
+    if (afterAttr < 0) return undefined;
+    const valueTagEnd = xml.indexOf('>', afterAttr);
+    if (valueTagEnd < 0) return undefined;
+    const valueStart = valueTagEnd + 1;
+    const valueEnd = xml.indexOf('<', valueStart);
+    if (valueEnd < 0) return undefined;
+    const value = xml.slice(valueStart, valueEnd).trim();
+    return value || undefined;
+  };
+
   // Extract email
-  const emailMatch =
-    xml.match(/Name="email"[^>]*>[\s\S]*?<(?:saml2?:)?AttributeValue[^>]*>([^<]+)/) ??
-    xml.match(/Name="http:\/\/schemas\.xmlsoap\.org\/ws\/2005\/05\/identity\/claims\/emailaddress"[^>]*>[\s\S]*?<(?:saml2?:)?AttributeValue[^>]*>([^<]+)/);
-  if (emailMatch) attributes.email = emailMatch[1]!;
+  const email = extractAttrValue('email')
+    ?? extractAttrValue('http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress');
+  if (email) attributes.email = email;
 
   // Extract name / displayName
-  const nameMatch =
-    xml.match(/Name="displayName"[^>]*>[\s\S]*?<(?:saml2?:)?AttributeValue[^>]*>([^<]+)/) ??
-    xml.match(/Name="http:\/\/schemas\.xmlsoap\.org\/ws\/2005\/05\/identity\/claims\/name"[^>]*>[\s\S]*?<(?:saml2?:)?AttributeValue[^>]*>([^<]+)/);
-  if (nameMatch) attributes.name = nameMatch[1]!;
+  const name = extractAttrValue('displayName')
+    ?? extractAttrValue('http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name');
+  if (name) attributes.name = name;
 
-  // Extract groups
-  const groupMatches = [
-    ...xml.matchAll(
-      /Name="groups?"[^>]*>[\s\S]*?<(?:saml2?:)?AttributeValue[^>]*>([^<]+)/gi,
-    ),
-    ...xml.matchAll(
-      /Name="http:\/\/schemas\.microsoft\.com\/ws\/2008\/06\/identity\/claims\/groups?"[^>]*>[\s\S]*?<(?:saml2?:)?AttributeValue[^>]*>([^<]+)/gi,
-    ),
-  ];
-  if (groupMatches.length > 0) {
-    attributes.groups = groupMatches.map((m) => m[1]!);
+  // Extract groups — use indexOf-based iteration instead of regex with [\s\S]*?
+  const groups: string[] = [];
+  for (const groupAttrName of [
+    'group', 'groups',
+    'http://schemas.microsoft.com/ws/2008/06/identity/claims/group',
+    'http://schemas.microsoft.com/ws/2008/06/identity/claims/groups',
+  ]) {
+    let searchFrom = 0;
+    while (true) {
+      const idx = xml.indexOf(`Name="${groupAttrName}"`, searchFrom);
+      if (idx < 0) break;
+      const val = extractAttrValue(groupAttrName);
+      if (val) groups.push(val);
+      searchFrom = idx + 1;
+    }
   }
+  if (groups.length > 0) attributes.groups = groups;
 
-  // Check assertion conditions (NotOnOrAfter)
+  // Check assertion conditions (NotOnOrAfter) — linear regex
   const conditionsMatch = xml.match(/NotOnOrAfter="([^"]+)"/);
   if (conditionsMatch) {
     const notOnOrAfter = new Date(conditionsMatch[1]!);

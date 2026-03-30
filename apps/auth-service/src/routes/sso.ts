@@ -495,7 +495,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post(
     '/sso/callback/oidc',
-    { config: { skipAuth: true } },
+    { config: { skipAuth: true, rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const body = (request.body ?? {}) as Record<string, string>;
       const { code, state, redirect_uri: redirectUri } = body;
@@ -717,7 +717,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post(
     '/sso/callback/ldap',
-    { config: { skipAuth: true } },
+    { config: { skipAuth: true, rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const body = (request.body ?? {}) as Record<string, string>;
       const { username, password, connectionId, org } = body;
