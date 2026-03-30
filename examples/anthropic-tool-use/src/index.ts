@@ -56,9 +56,11 @@ async function main(): Promise<void> {
     description: 'Demo Anthropic SDK agent with Grantex authorization',
     scopes: ['calendar:read', 'email:send'],
   });
-  console.log('Agent registered:', agent.id);
+  // API returns agentId, SDK types say id — handle both
+  const agentId = agent.id ?? (agent as unknown as Record<string, string>)['agentId'];
+  console.log('Agent registered:', agentId);
 
-  const { grantToken, grantId } = await getGrantToken(grantex, agent.id);
+  const { grantToken, grantId } = await getGrantToken(grantex, agentId);
   console.log('Grant token received, grantId:', grantId);
 
   // ── 2. Create scoped tools with JSON Schema ──────────────────────
@@ -121,8 +123,8 @@ async function main(): Promise<void> {
 
   // ── 4. Invoke tools ────────────────────────────────────────────────
   const auditOpts = {
-    agentId: agent.id,
-    agentDid: `did:key:${agent.id}`,
+    agentId: agentId,
+    agentDid: `did:key:${agentId}`,
     grantId,
     principalId: 'test-user-001',
   };
@@ -227,7 +229,7 @@ async function main(): Promise<void> {
 
   // ── 7. Inspect audit trail ─────────────────────────────────────────
   console.log('\n--- Audit trail ---');
-  const auditLog = await grantex.audit.list({ agentId: agent.id, grantId });
+  const auditLog = await grantex.audit.list({ agentId: agentId, grantId });
   for (const entry of auditLog.entries) {
     console.log(`  [${entry.status}] ${entry.action} — ${entry.timestamp}`);
   }
