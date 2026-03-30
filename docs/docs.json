@@ -96,7 +96,8 @@
               "examples/crewai-agent",
               "examples/openai-agents",
               "examples/google-adk",
-              "examples/anthropic-tool-use"
+              "examples/anthropic-tool-use",
+              "examples/multi-agent-email-flow"
             ]
           }
         ]
