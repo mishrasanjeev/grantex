@@ -97,7 +97,9 @@
               "examples/openai-agents",
               "examples/google-adk",
               "examples/anthropic-tool-use",
-              "examples/multi-agent-email-flow"
+              "examples/multi-agent-email-flow",
+              "examples/token-expiry-refresh",
+              "examples/audit-dashboard"
             ]
           }
         ]
