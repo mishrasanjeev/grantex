@@ -23,6 +23,7 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 
 ## Framework Integrations
 
+- Anthropic SDK: `npm install @grantex/anthropic @grantex/sdk`
 - LangChain: `npm install @grantex/langchain`
 - CrewAI: `pip install grantex-crewai`
 - OpenAI Agents SDK: `pip install grantex-openai-agents`
