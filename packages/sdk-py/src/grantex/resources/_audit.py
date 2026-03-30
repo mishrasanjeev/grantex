@@ -15,14 +15,18 @@ class AuditClient:
         self,
         *,
         agent_id: str,
+        agent_did: str,
         grant_id: str,
+        principal_id: str,
         action: str,
         metadata: dict[str, Any] | None = None,
         status: str = "success",
     ) -> AuditEntry:
         params = LogAuditParams(
             agent_id=agent_id,
+            agent_did=agent_did,
             grant_id=grant_id,
+            principal_id=principal_id,
             action=action,
             metadata=metadata,
             status=status,
