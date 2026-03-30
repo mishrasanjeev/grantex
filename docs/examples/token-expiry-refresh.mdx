@@ -1,0 +1,88 @@
+---
+title: "Token Expiry & Refresh"
+sidebarTitle: "Token Expiry"
+description: "Time-bound grants with expiry detection and refresh token rotation."
+---
+
+## What it does
+
+This example demonstrates the complete token expiry and refresh lifecycle:
+
+1. **Authorize with a short-lived token** (10 seconds) using the `expiresIn` parameter
+2. **Use the token** successfully before it expires (offline + online verification)
+3. **Wait for expiry** — observe the token becoming invalid
+4. **Detect expiry** — offline verification throws, online returns `valid: false`
+5. **Refresh the token** — get a new JWT with the same `grantId` and fresh expiry
+6. **Use the refreshed token** — verify it works with full scope access
+7. **Refresh token rotation** — demonstrate that old refresh tokens are single-use
+
+## Prerequisites
+
+- **Node.js 18+**
+- **Docker** (Docker Desktop or Docker Engine with Compose)
+
+## Run
+
+Start the local Grantex stack from the repository root:
+
+```bash
+docker compose up --build
+```
+
+In a separate terminal, run the example:
+
+```bash
+cd examples/token-expiry-refresh
+npm install
+npm start
+```
+
+## Expected output
+
+```text
+=== Token Expiry & Refresh Demo ===
+
+Agent registered: ag_01HXYZ...
+
+--- Authorizing with 10s TTL ---
+Grant token received:
+  expiresAt: 2026-03-30T12:00:10.000Z
+  refreshToken: ref_01HXYZ...
+
+--- Using token before expiry ---
+Offline verification: PASSED
+Online verification:  valid = true
+
+--- Waiting 12s for token to expire ---
+  Token should now be expired.
+
+--- Detecting expiry ---
+Offline verification: EXPIRED
+Online verification:  valid = false (expected: false)
+
+--- Refreshing token ---
+Token refreshed successfully!
+  grantId: grnt_01... (same as original)
+
+--- Using refreshed token ---
+Offline verification: PASSED
+Online verification:  valid = true
+
+--- Refresh token rotation (single-use enforcement) ---
+Blocked! Old refresh token rejected.
+  Reason: Refresh tokens are single-use and rotate on each refresh.
+
+Done! Token expiry and refresh lifecycle complete.
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GRANTEX_URL` | `http://localhost:3001` | Base URL of the Grantex auth service |
+| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key. Use a sandbox key for auto-approval |
+| `TOKEN_TTL` | `10s` | Grant token time-to-live (e.g. `10s`, `1m`, `1h`) |
+
+## Source code
+
+The full source is in [`examples/token-expiry-refresh/src/index.ts`](https://github.com/mishrasanjeev/grantex/tree/main/examples/token-expiry-refresh).
