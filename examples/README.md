@@ -37,6 +37,7 @@ All examples use the sandbox key by default.
 | [`nextjs-starter`](./nextjs-starter/) | Next.js interactive consent flow with callback handling | `@grantex/sdk` |
 | [`openai-agents`](./openai-agents/) | OpenAI Agents SDK with scope enforcement | `grantex`, `grantex-openai-agents` |
 | [`google-adk`](./google-adk/) | Google ADK with scoped function tools | `grantex`, `grantex-adk` |
+| [`multi-agent-email-flow`](./multi-agent-email-flow/) | Multi-agent delegation with failure handling and audit trail | `@grantex/sdk` |
 
 ## Running an example
 
