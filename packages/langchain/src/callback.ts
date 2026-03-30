@@ -7,6 +7,10 @@ export interface GrantexAuditHandlerOptions {
   client: Grantex;
   /** The Grantex agent ID (e.g. `ag_01XYZ`) to attribute audit entries to. */
   agentId: string;
+  /** Agent DID (e.g. `'did:key:z6Mk...'`). */
+  agentDid: string;
+  /** Principal ID that granted authorization. */
+  principalId: string;
   /** Grantex grant token — the grantId is decoded from the `grnt` (or `jti`) claim. */
   grantToken: string;
 }
@@ -32,12 +36,16 @@ export class GrantexAuditHandler extends BaseCallbackHandler {
 
   readonly #client: Grantex;
   readonly #agentId: string;
+  readonly #agentDid: string;
   readonly #grantId: string;
+  readonly #principalId: string;
 
   constructor(options: GrantexAuditHandlerOptions) {
     super();
     this.#client = options.client;
     this.#agentId = options.agentId;
+    this.#agentDid = options.agentDid;
+    this.#principalId = options.principalId;
 
     const payload = decodeJwtPayload(options.grantToken);
     const grantId = payload['grnt'] ?? payload['jti'];
@@ -60,7 +68,9 @@ export class GrantexAuditHandler extends BaseCallbackHandler {
     const toolName = tool.name ?? 'unknown';
     await this.#client.audit.log({
       agentId: this.#agentId,
+      agentDid: this.#agentDid,
       grantId: this.#grantId,
+      principalId: this.#principalId,
       action: `tool:${toolName}`,
       metadata: { input },
       status: 'success' as const,
@@ -73,7 +83,9 @@ export class GrantexAuditHandler extends BaseCallbackHandler {
   override async handleToolError(err: Error): Promise<void> {
     await this.#client.audit.log({
       agentId: this.#agentId,
+      agentDid: this.#agentDid,
       grantId: this.#grantId,
+      principalId: this.#principalId,
       action: 'tool:error',
       metadata: { error: err.message },
       status: 'failure' as const,

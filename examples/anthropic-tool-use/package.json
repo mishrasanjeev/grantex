@@ -1,0 +1,18 @@
+{
+  "name": "grantex-anthropic-tool-use",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npx tsx src/index.ts"
+  },
+  "dependencies": {
+    "@grantex/sdk": "^0.2.0",
+    "@grantex/anthropic": "^0.1.0",
+    "@anthropic-ai/sdk": "^0.39.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}

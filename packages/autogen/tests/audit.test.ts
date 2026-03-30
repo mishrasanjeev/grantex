@@ -27,7 +27,7 @@ describe('withAuditLogging', () => {
   it('logs a success entry when execute resolves', async () => {
     const client = makeClient();
     const fn = makeFn('fetch_data', async () => ({ rows: 3 }));
-    const audited = withAuditLogging(fn, client, { agentId: 'agent_1', grantId: 'grnt_1' });
+    const audited = withAuditLogging(fn, client, { agentId: 'agent_1', agentDid: 'did:key:z6Mk_1', grantId: 'grnt_1', principalId: 'user_1' });
 
     const result = await audited.execute({ q: 'test' });
 
@@ -48,7 +48,7 @@ describe('withAuditLogging', () => {
     const fn = makeFn('fetch_data', async () => {
       throw new Error('database offline');
     });
-    const audited = withAuditLogging(fn, client, { agentId: 'agent_1', grantId: 'grnt_1' });
+    const audited = withAuditLogging(fn, client, { agentId: 'agent_1', agentDid: 'did:key:z6Mk_1', grantId: 'grnt_1', principalId: 'user_1' });
 
     await expect(audited.execute({})).rejects.toThrow('database offline');
     expect(client.audit.log).toHaveBeenCalledWith(
@@ -63,7 +63,7 @@ describe('withAuditLogging', () => {
   it('preserves the original definition unchanged', () => {
     const client = makeClient();
     const fn = makeFn('my_fn', async () => null);
-    const audited = withAuditLogging(fn, client, { agentId: 'a', grantId: 'g' });
+    const audited = withAuditLogging(fn, client, { agentId: 'a', agentDid: 'did:key:a', grantId: 'g', principalId: 'p' });
 
     expect(audited.definition).toBe(fn.definition);
   });
@@ -71,7 +71,7 @@ describe('withAuditLogging', () => {
   it('passes args through to the underlying function', async () => {
     const client = makeClient();
     const fn = makeFn('my_fn', async () => 'done');
-    const audited = withAuditLogging(fn, client, { agentId: 'a', grantId: 'g' });
+    const audited = withAuditLogging(fn, client, { agentId: 'a', agentDid: 'did:key:a', grantId: 'g', principalId: 'p' });
     const args = { x: 1, y: 2 };
 
     await audited.execute(args);

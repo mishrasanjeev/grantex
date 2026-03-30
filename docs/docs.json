@@ -96,6 +96,7 @@
               "examples/crewai-agent",
               "examples/openai-agents",
               "examples/google-adk",
+              "examples/anthropic-tool-use",
               "examples/multi-agent-email-flow"
             ]
           }
@@ -273,7 +274,8 @@
               "integrations/autogen",
               "integrations/crewai",
               "integrations/openai-agents",
-              "integrations/google-adk"
+              "integrations/google-adk",
+              "integrations/anthropic"
             ]
           },
           {

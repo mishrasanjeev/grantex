@@ -1,6 +1,6 @@
 {
   "name": "@grantex/mcp",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "MCP server for Grantex delegated agent authorization",
   "homepage": "https://grantex.dev/for/mcp",
   "bugs": {
@@ -27,7 +27,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@grantex/sdk": "^0.1.6",
+    "@grantex/sdk": ">=0.2.0",
     "@modelcontextprotocol/sdk": "^1.9.0",
     "zod": "^3.22.0"
   },

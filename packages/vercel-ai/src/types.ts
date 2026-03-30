@@ -37,8 +37,12 @@ export interface CreateGrantexToolOptions<
 export interface AuditLoggingOptions {
   /** Grantex agent ID to record in audit entries. */
   agentId: string;
+  /** Agent DID (e.g. `'did:key:z6Mk...'`). */
+  agentDid: string;
   /** Grant ID associated with tool invocations. */
   grantId: string;
+  /** Principal ID that granted authorization. */
+  principalId: string;
   /**
    * The tool name used as the audit action label
    * (e.g. `"tool:fetch_data"`). Inferred from the tool's `_grantexName`
