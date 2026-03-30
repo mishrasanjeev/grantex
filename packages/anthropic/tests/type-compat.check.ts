@@ -8,19 +8,16 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources/messages/messages';
 import {
   createGrantexTool,
-  getGrantScopes,
   handleToolCall,
   GrantexToolRegistry,
-  GrantexScopeError,
-  type GrantexTool,
-  type AnthropicToolUseBlock,
 } from '../src/index.js';
 import type { Grantex } from '@grantex/sdk';
 
 // ─── Scenario 1: Pass tool.definition to client.messages.create ──────────────
 
-function testToolDefinitionCompat() {
+export function testToolDefinitionCompat() {
   const client = new Anthropic();
+  void client;
 
   const tool = createGrantexTool({
     name: 'read_file',
@@ -46,9 +43,10 @@ function testToolDefinitionCompat() {
 
 // ─── Scenario 2: Pass SDK ToolUseBlock to registry.execute ───────────────────
 
-async function testToolUseBlockCompat() {
+export async function testToolUseBlockCompat() {
   const client = new Anthropic();
   const registry = new GrantexToolRegistry();
+  void client;
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
@@ -67,7 +65,7 @@ async function testToolUseBlockCompat() {
 
 // ─── Scenario 3: Pass SDK ToolUseBlock to handleToolCall ─────────────────────
 
-async function testHandleToolCallCompat() {
+export async function testHandleToolCallCompat() {
   const client = new Anthropic();
   const grantex = {} as Grantex;
 
@@ -106,8 +104,9 @@ async function testHandleToolCallCompat() {
 
 // ─── Scenario 4: Registry definitions back to SDK ────────────────────────────
 
-async function testRegistryDefinitionsCompat() {
+export async function testRegistryDefinitionsCompat() {
   const client = new Anthropic();
+  void client;
   const registry = new GrantexToolRegistry();
 
   // Registry definitions MUST be assignable to the SDK's tools parameter

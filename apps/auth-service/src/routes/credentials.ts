@@ -112,7 +112,7 @@ export async function credentialsRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/credentials/status/:listId — StatusList2021 credential (public, skipAuth)
   app.get<{ Params: { listId: string } }>(
     '/v1/credentials/status/:listId',
-    { config: { skipAuth: true } },
+    { config: { skipAuth: true, rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const { listId } = request.params;
       const statusListCredential = await buildStatusListCredential(listId);

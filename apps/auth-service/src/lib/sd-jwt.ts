@@ -267,12 +267,12 @@ export async function verifySDJWT(sdJwt: string): Promise<SDJWTVerifyResult> {
 
   const sdDigests = credentialSubject['_sd'] as string[] | undefined;
 
-  // Decode and verify disclosures
-  const disclosedClaims: Record<string, unknown> = {};
+  // Decode and verify disclosures — use null-prototype object to prevent prototype pollution
+  const disclosedClaims: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
 
   // Start with visible (non-selective) claims from credentialSubject
   for (const [key, value] of Object.entries(credentialSubject)) {
-    if (key !== '_sd') {
+    if (key !== '_sd' && !Object.prototype.hasOwnProperty.call(Object.prototype, key)) {
       disclosedClaims[key] = value;
     }
   }
@@ -290,15 +290,11 @@ export async function verifySDJWT(sdJwt: string): Promise<SDJWTVerifyResult> {
       return { valid: false, ...vcIdFields, error: 'Disclosure hash not found in _sd array — possible tampering' };
     }
 
+    // Block prototype pollution vectors
     if (disclosure.claimName === '__proto__' || disclosure.claimName === 'constructor' || disclosure.claimName === 'prototype') {
       return { valid: false, ...vcIdFields, error: `Forbidden claim name: ${disclosure.claimName}` };
     }
-    Object.defineProperty(disclosedClaims, disclosure.claimName, {
-      value: disclosure.claimValue,
-      writable: true,
-      enumerable: true,
-      configurable: true,
-    });
+    disclosedClaims[disclosure.claimName] = disclosure.claimValue;
   }
 
   // If a key-binding JWT is present, verify it

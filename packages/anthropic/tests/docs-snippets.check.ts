@@ -18,7 +18,7 @@ import {
 
 // ─── Docs: "Scope-Enforced Tools" section ────────────────────────────────────
 
-async function docsSnippet_scopeEnforcedTools() {
+export async function docsSnippet_scopeEnforcedTools() {
   const client = new Anthropic();
   const grantToken = 'placeholder';
 
@@ -48,14 +48,14 @@ async function docsSnippet_scopeEnforcedTools() {
   // Handle tool_use blocks
   for (const block of response.content) {
     if (block.type === 'tool_use') {
-      const result = await readFileTool.execute(block.input as { path: string });
+      void await readFileTool.execute(block.input as { path: string });
     }
   }
 }
 
 // ─── Docs: "Tool Registry" section ───────────────────────────────────────────
 
-async function docsSnippet_toolRegistry() {
+export async function docsSnippet_toolRegistry() {
   const client = new Anthropic();
   const grantToken = 'placeholder';
   const messages: Anthropic.MessageParam[] = [];
@@ -93,23 +93,22 @@ async function docsSnippet_toolRegistry() {
   // Dispatch tool_use blocks
   for (const block of response.content) {
     if (block.type === 'tool_use') {
-      const result = await registry.execute(block);
+      void await registry.execute(block);
     }
   }
 }
 
 // ─── Docs: "Inspect Grant Scopes" section ────────────────────────────────────
 
-function docsSnippet_inspectScopes() {
+export function docsSnippet_inspectScopes() {
   const grantToken = 'placeholder';
-  const scopes = getGrantScopes(grantToken);
-  // scopes is string[]
-  const _check: string[] = scopes;
+  const scopes: string[] = getGrantScopes(grantToken);
+  void scopes;
 }
 
 // ─── Docs: "Audit Logging — Wrap a tool" section ────────────────────────────
 
-async function docsSnippet_auditWrap() {
+export async function docsSnippet_auditWrap() {
   const grantToken = 'placeholder';
   const grantex = new Grantex({ apiKey: 'test' });
 
@@ -130,12 +129,12 @@ async function docsSnippet_auditWrap() {
   });
 
   // audited.execute() logs success/failure automatically
-  const _result = await audited.execute({ path: '/test' });
+  void await audited.execute({ path: '/test' });
 }
 
 // ─── Docs: "Handle a tool_use block directly" section ────────────────────────
 
-async function docsSnippet_handleToolCall() {
+export async function docsSnippet_handleToolCall() {
   const client = new Anthropic();
   const grantex = new Grantex({ apiKey: 'test' });
   const grantToken = 'placeholder';
@@ -158,7 +157,7 @@ async function docsSnippet_handleToolCall() {
 
   for (const block of response.content) {
     if (block.type === 'tool_use') {
-      const result = await handleToolCall(readFileTool, block, grantex, {
+      void await handleToolCall(readFileTool, block, grantex, {
         agentId: 'ag_01ABC',
         agentDid: 'did:key:z6Mk...',
         grantId: 'grnt_01XYZ',
@@ -170,7 +169,7 @@ async function docsSnippet_handleToolCall() {
 
 // ─── Docs: GrantexScopeError catch pattern ───────────────────────────────────
 
-async function docsSnippet_errorHandling() {
+export async function docsSnippet_errorHandling() {
   const grantToken = 'placeholder';
 
   const tool = createGrantexTool({
@@ -187,8 +186,8 @@ async function docsSnippet_errorHandling() {
   } catch (err) {
     if (err instanceof GrantexScopeError) {
       // Both properties must be accessible
-      const _required: string = err.requiredScope;
-      const _granted: string[] = err.grantedScopes;
+      void (err.requiredScope satisfies string);
+      void (err.grantedScopes satisfies string[]);
     }
   }
 }
