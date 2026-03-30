@@ -1,0 +1,185 @@
+---
+title: "Anthropic SDK"
+sidebarTitle: "Anthropic"
+description: "Scope-enforced tool use, registry, and audit logging for Claude models."
+---
+
+## Install
+
+```bash
+npm install @grantex/anthropic @grantex/sdk @anthropic-ai/sdk
+```
+
+## Scope-Enforced Tools
+
+Create Anthropic tool definitions with built-in Grantex scope enforcement:
+
+```typescript
+import Anthropic from '@anthropic-ai/sdk';
+import { createGrantexTool } from '@grantex/anthropic';
+
+const client = new Anthropic();
+
+const readFileTool = createGrantexTool({
+  name: 'read_file',
+  description: 'Read a file from disk',
+  inputSchema: {
+    type: 'object',
+    properties: { path: { type: 'string', description: 'File path' } },
+    required: ['path'],
+  },
+  grantToken,                 // JWT from Grantex token exchange
+  requiredScope: 'file:read', // must be in token's scp claim
+  execute: async ({ path }) => {
+    return await fs.readFile(path as string, 'utf-8');
+  },
+});
+
+// Pass definition to Claude
+const response = await client.messages.create({
+  model: 'claude-sonnet-4-6',
+  max_tokens: 1024,
+  tools: [readFileTool.definition],
+  messages: [{ role: 'user', content: 'Read config.json' }],
+});
+
+// Handle tool_use blocks
+for (const block of response.content) {
+  if (block.type === 'tool_use') {
+    const result = await readFileTool.execute(block.input as { path: string });
+  }
+}
+```
+
+The scope check is **offline** — the grant token's `scp` claim is decoded from the JWT without any network call. If the required scope is missing, `execute()` throws a `GrantexScopeError` before your function runs.
+
+## Tool Registry
+
+Use `GrantexToolRegistry` to manage multiple tools and dispatch `tool_use` blocks by name:
+
+```typescript
+import { createGrantexTool, GrantexToolRegistry } from '@grantex/anthropic';
+
+const registry = new GrantexToolRegistry();
+registry.register(readFileTool);
+registry.register(writeFileTool);
+
+// Pass all definitions to Claude
+const response = await client.messages.create({
+  model: 'claude-sonnet-4-6',
+  max_tokens: 1024,
+  tools: registry.definitions,
+  messages,
+});
+
+// Dispatch tool_use blocks
+for (const block of response.content) {
+  if (block.type === 'tool_use') {
+    const result = await registry.execute(block);
+  }
+}
+```
+
+## Inspect Grant Scopes
+
+Decode the scopes from a grant token offline:
+
+```typescript
+import { getGrantScopes } from '@grantex/anthropic';
+
+const scopes = getGrantScopes(grantToken);
+// ['file:read', 'file:write']
+```
+
+## Audit Logging
+
+### Wrap a tool
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+import { withAuditLogging } from '@grantex/anthropic';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+const audited = withAuditLogging(readFileTool, grantex, {
+  agentId: 'ag_01ABC...',
+  agentDid: 'did:key:z6Mk...',
+  grantId: 'grnt_01XYZ...',
+  principalId: 'user_01',
+});
+// audited.execute() logs success/failure automatically
+```
+
+### Handle a tool_use block directly
+
+```typescript
+import { handleToolCall } from '@grantex/anthropic';
+
+for (const block of response.content) {
+  if (block.type === 'tool_use') {
+    const result = await handleToolCall(readFileTool, block, grantex, {
+      agentId: 'ag_01ABC...',
+      agentDid: 'did:key:z6Mk...',
+      grantId: 'grnt_01XYZ...',
+      principalId: 'user_01',
+    });
+  }
+}
+```
+
+## API Reference
+
+### `createGrantexTool(options)`
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `name` | `string` | Tool name (matches `^[a-zA-Z0-9_-]+$`) |
+| `description` | `string` | Description shown to the model |
+| `inputSchema` | `JsonSchema` | JSON Schema for tool input |
+| `grantToken` | `string` | Grantex JWT from token exchange |
+| `requiredScope` | `string` | Scope required to invoke this tool |
+| `execute` | `(args: T) => Promise<unknown>` | Tool implementation |
+
+Returns `{ definition, execute }`.
+
+### `GrantexToolRegistry`
+
+| Method | Description |
+|--------|-------------|
+| `register(tool)` | Register a tool (chainable) |
+| `definitions` | All registered Anthropic tool definitions |
+| `execute(block)` | Execute a tool from a `tool_use` block |
+
+### `withAuditLogging(tool, client, options)`
+
+Returns a wrapped `GrantexTool` that automatically logs success/failure to the audit trail on every `execute()` call.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `agentId` | `string` | Agent ID for audit attribution |
+| `agentDid` | `string` | Agent DID (e.g. `did:key:z6Mk...`) |
+| `grantId` | `string` | Grant ID for the session |
+| `principalId` | `string` | Principal ID that granted authorization |
+
+### `handleToolCall(tool, block, client, options)`
+
+Same options as `withAuditLogging`. Executes the tool with `block.input` and logs the result.
+
+### `getGrantScopes(grantToken)`
+
+Returns `string[]` — the scopes from the token's `scp` claim.
+
+### `GrantexScopeError`
+
+Thrown when a grant token is missing a required scope.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `requiredScope` | `string` | The scope that was required |
+| `grantedScopes` | `string[]` | The scopes the token actually has |
+
+## Requirements
+
+- Node.js 18+
+- `@grantex/sdk` >= 0.1.0
+- `@anthropic-ai/sdk` >= 0.30.0

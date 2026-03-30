@@ -59,7 +59,7 @@ go get github.com/mishrasanjeev/grantex-go  # Go
 npm install -g @grantex/cli     # CLI
 ```
 
-> **30+ packages** across TypeScript, Python, and Go. Integrations for **LangChain, OpenAI Agents SDK, Google ADK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. 679+ tests. Fully self-hostable. Apache 2.0.
+> **30+ packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. 679+ tests. Fully self-hostable. Apache 2.0.
 
 ---
 
@@ -1174,6 +1174,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **CrewAI** | `grantex-crewai` | `pip install grantex-crewai` | ✅ Shipped |
 | **OpenAI Agents SDK** | `grantex-openai-agents` | `pip install grantex-openai-agents` | ✅ Shipped |
 | **Google ADK** | `grantex-adk` | `pip install grantex-adk` | ✅ Shipped |
+| **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | ✅ Shipped |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | ✅ Shipped |
 | **TypeScript SDK** | `@grantex/sdk` | `npm install @grantex/sdk` | ✅ Shipped |
 | **Python SDK** | `grantex` | `pip install grantex` | ✅ Shipped |
@@ -1351,6 +1352,7 @@ Walk through all 7 steps of the protocol: register an agent, authorize, exchange
 | [`quickstart-py`](examples/quickstart-py) | Same flow in Python | `python main.py` |
 | [`nextjs-starter`](examples/nextjs-starter) | **Interactive Next.js app** — full consent UI flow in the browser | `npm run dev` |
 | [`langchain-agent`](examples/langchain-agent) | LangChain agent with scope-enforced tools | `npm start` |
+| [`anthropic-tool-use`](examples/anthropic-tool-use) | Anthropic SDK tool use with scope enforcement | `npm start` |
 | [`vercel-ai-chatbot`](examples/vercel-ai-chatbot) | Vercel AI SDK chatbot with Grantex tools | `npm start` |
 | [`crewai-agent`](examples/crewai-agent) | CrewAI agent with Grantex authorization | `python main.py` |
 | [`openai-agents`](examples/openai-agents) | OpenAI Agents SDK integration | `python main.py` |

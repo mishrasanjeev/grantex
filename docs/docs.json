@@ -95,7 +95,8 @@
               "examples/vercel-ai-chatbot",
               "examples/crewai-agent",
               "examples/openai-agents",
-              "examples/google-adk"
+              "examples/google-adk",
+              "examples/anthropic-tool-use"
             ]
           }
         ]
@@ -272,7 +273,8 @@
               "integrations/autogen",
               "integrations/crewai",
               "integrations/openai-agents",
-              "integrations/google-adk"
+              "integrations/google-adk",
+              "integrations/anthropic"
             ]
           },
           {
