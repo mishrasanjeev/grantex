@@ -82,8 +82,8 @@ class Agent:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Agent:
         return cls(
-            id=data["id"],
-            did=data["did"],
+            id=data.get("id") or data.get("agentId", ""),
+            did=data.get("did", ""),
             name=data["name"],
             description=data.get("description", ""),
             scopes=tuple(data.get("scopes", [])),
@@ -152,19 +152,21 @@ class AuthorizationRequest:
     expires_at: str
     status: str
     created_at: str
+    code: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuthorizationRequest:
         return cls(
-            request_id=data["authRequestId"],
-            consent_url=data["consentUrl"],
-            agent_id=data["agentId"],
-            principal_id=data["principalId"],
+            request_id=data.get("authRequestId", ""),
+            consent_url=data.get("consentUrl", ""),
+            agent_id=data.get("agentId", ""),
+            principal_id=data.get("principalId", ""),
             scopes=tuple(data.get("scopes", [])),
-            expires_in=data["expiresIn"],
-            expires_at=data["expiresAt"],
-            status=data["status"],
-            created_at=data["createdAt"],
+            expires_in=data.get("expiresIn", ""),
+            expires_at=data.get("expiresAt", ""),
+            status=data.get("status", ""),
+            created_at=data.get("createdAt", ""),
+            code=data.get("code"),
         )
 
 
@@ -187,15 +189,15 @@ class Grant:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Grant:
         return cls(
-            id=data["id"],
-            agent_id=data["agentId"],
-            agent_did=data["agentDid"],
-            principal_id=data["principalId"],
-            developer_id=data["developerId"],
+            id=data.get("id") or data.get("grantId", ""),
+            agent_id=data.get("agentId", ""),
+            agent_did=data.get("agentDid", ""),
+            principal_id=data.get("principalId", ""),
+            developer_id=data.get("developerId", ""),
             scopes=tuple(data.get("scopes", [])),
-            status=data["status"],
-            issued_at=data["issuedAt"],
-            expires_at=data["expiresAt"],
+            status=data.get("status", ""),
+            issued_at=data.get("issuedAt", ""),
+            expires_at=data.get("expiresAt", ""),
             revoked_at=data.get("revokedAt"),
         )
 
@@ -234,9 +236,9 @@ class ListGrantsResponse:
     def from_dict(cls, data: dict[str, Any]) -> ListGrantsResponse:
         return cls(
             grants=tuple(Grant.from_dict(g) for g in data.get("grants", [])),
-            total=data["total"],
-            page=data["page"],
-            page_size=data["pageSize"],
+            total=data.get("total", 0),
+            page=data.get("page", 1),
+            page_size=data.get("pageSize", 50),
         )
 
 
@@ -362,7 +364,9 @@ class PrincipalSessionResponse:
 @dataclass
 class LogAuditParams:
     agent_id: str
+    agent_did: str
     grant_id: str
+    principal_id: str
     action: str
     metadata: dict[str, Any] | None = None
     status: str = "success"
@@ -370,7 +374,9 @@ class LogAuditParams:
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {
             "agentId": self.agent_id,
+            "agentDid": self.agent_did,
             "grantId": self.grant_id,
+            "principalId": self.principal_id,
             "action": self.action,
             "status": self.status,
         }
@@ -453,9 +459,9 @@ class ListAuditResponse:
     def from_dict(cls, data: dict[str, Any]) -> ListAuditResponse:
         return cls(
             entries=tuple(AuditEntry.from_dict(e) for e in data.get("entries", [])),
-            total=data["total"],
-            page=data["page"],
-            page_size=data["pageSize"],
+            total=data.get("total", 0),
+            page=data.get("page", 1),
+            page_size=data.get("pageSize", 50),
         )
 
 
