@@ -1,0 +1,91 @@
+---
+title: "Multi-Agent Email Flow"
+sidebarTitle: "Email Flow"
+description: "Multi-agent delegation with failure handling, cascade revocation, and audit trail."
+---
+
+## What it does
+
+This example demonstrates a realistic two-agent email automation workflow with comprehensive failure handling:
+
+1. **Register two agents** — a planner (Agent A) and an executor (Agent B)
+2. **Agent A reads calendar events** after offline scope verification
+3. **Agent A delegates `email:send`** to Agent B (subset of its own scopes)
+4. **Agent B sends an email** using the delegated, scoped permission
+5. **Failure: unauthorized scope** — Agent B tries `calendar:read` (not delegated) and is rejected immediately
+6. **Failure: cascade revocation** — Agent A's grant is revoked, which automatically invalidates Agent B's delegated token
+7. **Recovery pattern** — Agent B detects the revoked token and reports that a new delegation is needed
+8. **Audit trail inspection** — shows a timeline of all success and failure events across both agents
+
+## Prerequisites
+
+- **Node.js 18+**
+- **Docker** (Docker Desktop or Docker Engine with Compose)
+
+## Run
+
+Start the local Grantex stack from the repository root:
+
+```bash
+docker compose up --build
+```
+
+In a separate terminal, run the example:
+
+```bash
+cd examples/multi-agent-email-flow
+npm install
+npm start
+```
+
+## Expected output
+
+```text
+=== Multi-Agent Email Flow ===
+
+Agent A (planner) registered: ag_01HXYZ...
+Agent B (executor) registered: ag_01HXYZ...
+
+Agent A grant token:
+  grantId: grnt_01HXYZ...
+  scopes:  calendar:read, email:send
+
+--- Agent A: Reading calendar ---
+Scope verified offline: calendar:read
+Calendar events found: 3
+
+--- Agent A: Delegating email:send to Agent B ---
+Delegated token issued:
+  scopes:  email:send
+  delegationDepth: 1
+
+--- Agent B: Sending email ---
+Email sent: msg_1234567890
+
+--- Failure: Agent B tries calendar:read (not delegated) ---
+Blocked! Agent B cannot read calendar.
+
+--- Failure: Revoking Agent A's grant (cascade to Agent B) ---
+After revocation:
+  Agent A token valid: false (revoked)
+  Agent B token valid: false (cascade revoked)
+
+--- Audit trail ---
+  [+] Agent A calendar:read — success
+  [+] Agent B email:send — success
+  [x] Agent B calendar:read — failure
+  [x] Agent B email:send — failure
+
+Done! Multi-agent email flow with failure handling complete.
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GRANTEX_URL` | `http://localhost:3001` | Base URL of the Grantex auth service |
+| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key. Use a sandbox key for auto-approval |
+
+## Source code
+
+The full source is in [`examples/multi-agent-email-flow/src/index.ts`](https://github.com/mishrasanjeev/grantex/tree/main/examples/multi-agent-email-flow).

@@ -95,7 +95,8 @@
               "examples/vercel-ai-chatbot",
               "examples/crewai-agent",
               "examples/openai-agents",
-              "examples/google-adk"
+              "examples/google-adk",
+              "examples/multi-agent-email-flow"
             ]
           }
         ]
