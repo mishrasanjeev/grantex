@@ -1,0 +1,82 @@
+---
+title: "Audit Dashboard"
+sidebarTitle: "Audit Dashboard"
+description: "Query, filter, and analyze the Grantex audit trail with metrics and hash chain verification."
+---
+
+## What it does
+
+This example demonstrates how to use the Grantex audit trail as a rich data source:
+
+1. **Set up two agents** with different scopes and generate grant tokens
+2. **Generate audit entries** — a mix of success, failure, and blocked statuses across agents
+3. **Display full audit timeline** — formatted table with status icons, agent names, and timestamps
+4. **Filter by agent** — show entries for each agent separately
+5. **Filter by action** — show only specific actions (e.g. `email:send`) with metadata
+6. **Compute metrics** — success rate, failure rate, entries per agent, top actions by frequency
+7. **Verify hash chain integrity** — walk the cryptographic chain to confirm tamper evidence
+
+## Prerequisites
+
+- **Node.js 18+**
+- **Docker** (Docker Desktop or Docker Engine with Compose)
+
+## Run
+
+Start the local Grantex stack from the repository root:
+
+```bash
+docker compose up --build
+```
+
+In a separate terminal, run the example:
+
+```bash
+cd examples/audit-dashboard
+npm install
+npm start
+```
+
+## Expected output
+
+```text
+=== Audit Dashboard Demo ===
+
+Agent A (data-reader) registered: ag_01HXYZ...
+Agent B (notifier) registered: ag_01HXYZ...
+Both agents authorized.
+
+--- Generating audit entries ---
+Generated 9 audit entries.
+
+--- Full Audit Timeline ---
+
+  #  Status    Agent          Action              Time
+   1 [+] success data-reader    data:read           12:00:01
+   2 [+] success data-reader    calendar:read       12:00:01
+   ...
+   8 [!] blocked notifier       email:send          12:00:02
+   9 [x] failure data-reader    calendar:write      12:00:02
+
+--- Metrics Summary ---
+  Total entries:  9
+  Success:        6 (67%)
+  Failure:        2 (22%)
+  Blocked:        1 (11%)
+
+--- Hash Chain Integrity Check ---
+  All hash chains verified: integrity PASSED
+
+Done! Audit dashboard demo complete.
+```
+
+## Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GRANTEX_URL` | `http://localhost:3001` | Base URL of the Grantex auth service |
+| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key. Use a sandbox key for auto-approval |
+
+## Source code
+
+The full source is in [`examples/audit-dashboard/src/index.ts`](https://github.com/mishrasanjeev/grantex/tree/main/examples/audit-dashboard).
