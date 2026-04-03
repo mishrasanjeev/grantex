@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -17,14 +20,20 @@
     "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^4.1.2",
     "autoprefixer": "^10.4.20",
+    "jsdom": "^29.0.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.0.0",
-    "@tailwindcss/vite": "^4.0.0",
     "typescript": "^5.7.3",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "vitest": "^4.1.2"
   }
 }
