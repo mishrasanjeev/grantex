@@ -1,0 +1,4 @@
+10015	IGNORE	(Incomplete or No Cache-control Header Set)
+10037	IGNORE	(Server Leaks Information via "X-Powered-By")
+10049	IGNORE	(Storable and Cacheable Content)
+10021	IGNORE	(X-Content-Type-Options Header Missing)

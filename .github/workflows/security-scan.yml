@@ -1,0 +1,58 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 2 * * 1'   # Weekly full scan Mondays 02:00 UTC
+
+jobs:
+  zap-baseline:
+    name: OWASP ZAP Baseline Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/auth-service/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix apps/auth-service
+
+      - name: Build auth service
+        run: npm run build --prefix apps/auth-service
+
+      - name: Start test server
+        run: |
+          AUTO_GENERATE_KEYS=true \
+          DATABASE_URL=postgresql://localhost/test \
+          REDIS_URL=redis://localhost \
+          npm start --prefix apps/auth-service &
+          sleep 5
+        env:
+          NODE_ENV: production
+
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.11.0
+        with:
+          target: 'http://localhost:3001'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+
+  zap-full:
+    name: OWASP ZAP Full Scan
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: OWASP ZAP Full Scan
+        uses: zaproxy/action-full-scan@v0.9.0
+        with:
+          target: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app'
+          rules_file_name: '.zap/rules.tsv'
