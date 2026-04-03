@@ -1,0 +1,232 @@
+---
+title: "Anomaly Detection Setup"
+sidebarTitle: "Anomaly Setup"
+description: "Configure anomaly detection rules and notification channels for your AI agents."
+---
+
+## Prerequisites
+
+- A Grantex account (free tier or above)
+- At least one registered agent
+- Your API key (`GRANTEX_API_KEY`)
+
+## Step 1: Verify Built-in Rules Are Active
+
+Anomaly detection is enabled by default for all accounts. Verify the built-in rules are active:
+
+<CodeGroup>
+```typescript TypeScript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+const rules = await grantex.anomalies.listRules();
+console.log(`${rules.length} rules loaded`);
+
+for (const rule of rules) {
+  console.log(`${rule.ruleId}: ${rule.enabled ? 'enabled' : 'disabled'} (${rule.severity})`);
+}
+```
+
+```python Python
+from grantex import Grantex
+
+client = Grantex(api_key="gx_...")
+
+rules = client.anomalies.list_rules()
+print(f"{len(rules)} rules loaded")
+
+for rule in rules:
+    status = "enabled" if rule.enabled else "disabled"
+    print(f"{rule.rule_id}: {status} ({rule.severity})")
+```
+
+```bash cURL
+curl -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  https://api.grantex.dev/v1/anomalies/rules
+```
+</CodeGroup>
+
+You should see 10 built-in rules. All are enabled by default. To disable a rule you do not need:
+
+```bash
+curl -X PATCH https://api.grantex.dev/v1/anomalies/rules/off_hours_activity \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+```
+
+## Step 2: Configure a Slack Channel
+
+Create a Slack incoming webhook, then register it as a notification channel:
+
+<CodeGroup>
+```typescript TypeScript
+await grantex.anomalies.createChannel({
+  type: 'slack',
+  name: 'slack-security',
+  config: {
+    webhookUrl: 'https://hooks.slack.com/services/T00000/B00000/xxxxxxxx',
+  },
+  severities: ['critical', 'high'],
+});
+```
+
+```python Python
+client.anomalies.create_channel(
+    type="slack",
+    name="slack-security",
+    config={"webhookUrl": "https://hooks.slack.com/services/T00000/B00000/xxxxxxxx"},
+    severities=["critical", "high"],
+)
+```
+
+```bash cURL
+curl -X POST https://api.grantex.dev/v1/anomalies/channels \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "slack",
+    "name": "slack-security",
+    "config": {
+      "webhookUrl": "https://hooks.slack.com/services/T00000/B00000/xxxxxxxx"
+    },
+    "severities": ["critical", "high"]
+  }'
+```
+</CodeGroup>
+
+The `severities` array filters which alerts reach this channel. Only `critical` and `high` alerts will post to Slack in the example above.
+
+### Other Channel Types
+
+| Type | Required Config |
+|------|----------------|
+| `slack` | `webhookUrl` |
+| `pagerduty` | `routingKey` |
+| `datadog` | `apiKey`, `site` (e.g., `datadoghq.com`) |
+| `email` | `to` (email address), `from` (optional) |
+| `webhook` | `url`, `secret` (for HMAC verification) |
+
+## Step 3: Create a Custom Rule
+
+Built-in rules cover common patterns. Create custom rules for your specific needs:
+
+<CodeGroup>
+```typescript TypeScript
+await grantex.anomalies.createRule({
+  ruleId: 'billing_agent_write_surge',
+  name: 'Billing Agent Write Surge',
+  description: 'Billing agent writing more than 20 invoices in 10 minutes',
+  severity: 'high',
+  condition: {
+    agentIds: ['ag_billing_01'],
+    scopes: ['invoices:write'],
+    timeWindow: '10m',
+    threshold: 20,
+  },
+  channels: ['slack-security', 'pagerduty-oncall'],
+});
+```
+
+```python Python
+client.anomalies.create_rule(
+    rule_id="billing_agent_write_surge",
+    name="Billing Agent Write Surge",
+    description="Billing agent writing more than 20 invoices in 10 minutes",
+    severity="high",
+    condition={
+        "agentIds": ["ag_billing_01"],
+        "scopes": ["invoices:write"],
+        "timeWindow": "10m",
+        "threshold": 20,
+    },
+    channels=["slack-security", "pagerduty-oncall"],
+)
+```
+</CodeGroup>
+
+### Condition Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `agentIds` | `string[]` | Only monitor these agents. Omit to monitor all. |
+| `scopes` | `string[]` | Trigger when these scopes are accessed. Omit for any scope. |
+| `timeWindow` | `string` | Sliding window. Options: `5m`, `15m`, `1h`, `6h`, `24h`. |
+| `threshold` | `number` | Event count in the window that triggers the alert. |
+
+## Step 4: Stream Events in Real Time
+
+For automated responses, connect to the SSE event stream:
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// Stream anomaly events
+for await (const event of grantex.events.stream({
+  types: ['anomaly.detected'],
+})) {
+  const { alertId, ruleName, severity, agentId, context } = event.data;
+  console.log(`[${severity}] ${ruleName} — agent: ${agentId}`);
+
+  // Auto-revoke on critical alerts
+  if (severity === 'critical' && context.grantId) {
+    await grantex.grants.revoke(context.grantId);
+    await grantex.anomalies.resolveAlert(alertId, 'Auto-revoked by SSE handler');
+  }
+}
+```
+
+Or with `curl`:
+
+```bash
+curl -N -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  "https://api.grantex.dev/v1/events/stream?types=anomaly.detected"
+```
+
+## Step 5: Monitor via Dashboard
+
+Open the developer portal at `/dashboard/anomalies` to see:
+
+1. **Severity overview** -- Color-coded counts of open alerts by severity
+2. **Activity chart** -- 14-day bar chart showing alert volume trends
+3. **Alert list** -- Filter by status (open / acknowledged / resolved) and severity
+4. **Rule builder** -- View, create, and toggle rules at `/dashboard/anomalies/rules`
+
+Click any alert to see its full detail view: context data, timeline, and resolution note field.
+
+## Troubleshooting
+
+### No alerts are firing
+
+1. **Check that rules are enabled** -- `GET /v1/anomalies/rules` and verify `enabled: true`
+2. **Check that agents are active** -- Anomaly detection only monitors active agents
+3. **Check the time window** -- Rules only fire when the threshold is exceeded within the configured window
+4. **Verify grant activity** -- At least some authorization events must occur for rules to evaluate
+
+### Slack notifications not arriving
+
+1. **Verify the webhook URL** -- Test it with a manual `curl` POST
+2. **Check channel severities** -- The alert severity must match the channel's `severities` filter
+3. **Check channel status** -- `GET /v1/anomalies/channels` and verify `enabled: true`
+
+### Too many false positives
+
+1. **Increase thresholds** -- Raise the `threshold` value for noisy rules
+2. **Narrow scope filters** -- Add `agentIds` or `scopes` to limit which events the rule evaluates
+3. **Disable low-value rules** -- Toggle off rules like `off_hours_activity` if your agents intentionally run 24/7
+
+### Custom rule not creating
+
+1. **Rule ID must be unique** -- Check it does not conflict with a built-in rule ID
+2. **Valid time window** -- Must be one of `5m`, `15m`, `1h`, `6h`, `24h`
+3. **Threshold must be positive** -- Must be an integer >= 1
+
+## Related
+
+- [Anomaly Detection Overview](/features/anomaly-detection) -- Full feature reference
+- [Event Streaming](/guides/event-streaming) -- SSE and WebSocket endpoints
+- [Budget Controls](/guides/budget-controls) -- Financial guardrails for agents
+- [Security Best Practices](/guides/security-best-practices) -- Defense-in-depth for agents

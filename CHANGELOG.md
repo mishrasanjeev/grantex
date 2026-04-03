@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+#### Anomaly Detection Dashboard & Custom Rules
+- Anomaly detection dashboard with severity overview, activity chart, and alert management
+- Alert detail page with timeline, context viewer, and resolution notes
+- Rule builder page: view built-in rules, create custom rules, toggle enable/disable
+- Anomaly detection landing page (`/anomaly`) with built-in rules table, integration logos, custom rule DSL example
+- Mintlify docs: `features/anomaly-detection.mdx` (full reference) and `guides/anomaly-detection-setup.mdx` (setup guide)
+- Expanded portal API client: alert CRUD, metrics, rules, channels
+- 10 built-in anomaly detection rules: velocity spike, scope escalation, unknown agent, token replay, off-hours activity, high failure rate, concurrent sessions, delegation depth, budget overspend, geographic anomaly
+- Alert lifecycle: open, acknowledged, resolved with audit trail
+- Multi-channel notifications: Slack, PagerDuty, Datadog, email, webhook
+- Custom rule DSL with agent filters, scope filters, time windows, and thresholds
+
 #### Trust Registry Portal & Documentation
 - Trust Registry portal screens (search, org detail, registration wizard) in developer portal
 - `src/api/registry.ts` — API client for registry endpoints

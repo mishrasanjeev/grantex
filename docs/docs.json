@@ -45,7 +45,8 @@
               "features/verifiable-credentials",
               "features/sd-jwt",
               "features/did-infrastructure",
-              "features/mpp-agent-passport"
+              "features/mpp-agent-passport",
+              "features/anomaly-detection"
             ]
           },
           {
@@ -107,6 +108,7 @@
               "guides/mcp-certification",
               "guides/enterprise-sso",
               "guides/compliance-matrix",
+              "guides/anomaly-detection-setup",
               "guides/raspberry-pi",
               "guides/android-gemma4",
               "guides/ios-gemma4"

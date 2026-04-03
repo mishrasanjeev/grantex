@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- SEO -->
+  <title>Grantex Anomaly Detection — Real-time AI Agent Security Monitoring</title>
+  <meta name="description" content="Know when your AI agents misbehave. Real-time detection for velocity spikes, scope escalation, unknown agents, and token replay. Integrates with Slack, PagerDuty, Datadog.">
+  <meta name="keywords" content="AI agent anomaly detection, AI agent security monitoring, real-time anomaly detection, agent behavior monitoring, velocity spike detection, scope escalation, token replay detection, Grantex anomaly, AI agent alerting, PagerDuty AI agents">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="https://grantex.dev/anomaly">
+
+  <!-- OpenGraph -->
+  <meta property="og:title" content="Grantex Anomaly Detection — Real-time AI Agent Security Monitoring">
+  <meta property="og:description" content="Know when your AI agents misbehave. Real-time detection for velocity spikes, scope escalation, unknown agents, and token replay. Integrates with Slack, PagerDuty, Datadog.">
+  <meta property="og:url" content="https://grantex.dev/anomaly">
+  <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Grantex">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Grantex Anomaly Detection — Real-time AI Agent Security Monitoring">
+  <meta name="twitter:description" content="Know when your AI agents misbehave. Real-time detection for velocity spikes, scope escalation, unknown agents, and token replay.">
+  <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Grantex Anomaly Detection",
+    "applicationCategory": "SecurityApplication",
+    "operatingSystem": "Any",
+    "url": "https://grantex.dev/anomaly",
+    "description": "Real-time anomaly detection and alerting for AI agent authorization. 10 built-in rules, custom rule DSL, Slack/PagerDuty/Datadog integration.",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "isPartOf": {
+      "@type": "SoftwareApplication",
+      "name": "Grantex",
+      "url": "https://grantex.dev"
+    },
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What anomalies does Grantex detect for AI agents?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Grantex detects 10 types of anomalies out of the box: velocity spikes, scope escalation attempts, unknown agent activity, token replay attacks, off-hours activity, high failure rates, concurrent sessions from different IPs, delegation chain depth violations, budget overspend, and geographic anomalies. You can also create custom rules."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does Grantex anomaly detection integrate with Slack?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Configure a Slack notification channel with your webhook URL. Grantex sends real-time alerts to any Slack channel when anomalies are detected. You can filter by severity level so critical alerts go to #incidents while low-severity alerts go to a monitoring channel."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I create custom anomaly detection rules?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex provides a custom rule DSL where you specify agent filters, scope filters, time windows, thresholds, and severity levels. Custom rules are evaluated alongside built-in rules and trigger the same alert lifecycle (open, acknowledged, resolved) and notification channels."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    /* ── Design tokens ─────────────────────────────────────────────────────── */
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --accent:   #3fb950;
+      --accent2:  #58a6ff;
+      --danger:   #f85149;
+      --warning:  #f0883e;
+      --yellow:   #d29922;
+      --mono:     'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --sans:     'Inter', system-ui, -apple-system, sans-serif;
+      --radius:   8px;
+      --max-w:    1100px;
+    }
+
+    /* ── Reset ─────────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Layout ────────────────────────────────────────────────────────────── */
+    .container {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    section { padding: 80px 0; }
+    section + section { border-top: 1px solid var(--border); }
+
+    /* ── Nav ───────────────────────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(13, 17, 23, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+    .nav-logo {
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    .nav-logo span { color: var(--text); }
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+      font-size: 14px;
+    }
+    .nav-links a { color: var(--muted); transition: color 0.15s; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* ── Hero ──────────────────────────────────────────────────────────────── */
+    .hero {
+      padding: 96px 0 80px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(36px, 5vw, 56px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      max-width: 640px;
+      margin: 0 auto 36px;
+      font-size: 18px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .hero-ctas {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.15s;
+      border: none;
+    }
+    .btn:hover { opacity: 0.88; transform: translateY(-1px); text-decoration: none; }
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--muted); }
+
+    /* ── Section headers ──────────────────────────────────────────────────── */
+    .section-label {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(24px, 3vw, 36px);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+    .section-sub {
+      color: var(--muted);
+      font-size: 17px;
+      max-width: 600px;
+      margin-bottom: 48px;
+    }
+
+    /* ── Dashboard mockup ─────────────────────────────────────────────────── */
+    .dashboard-mockup {
+      max-width: 800px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .mockup-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .mockup-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .mockup-dot.red { background: #f85149; }
+    .mockup-dot.yellow { background: #d29922; }
+    .mockup-dot.green { background: #3fb950; }
+    .mockup-url {
+      flex: 1;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .mockup-body {
+      padding: 24px;
+    }
+    .mockup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .mockup-header h3 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .mockup-header .status-badge {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 4px;
+      background: rgba(63, 185, 80, 0.12);
+      color: var(--accent);
+    }
+    .mockup-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .mockup-stat {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+    }
+    .mockup-stat .num {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .mockup-stat .label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .mockup-alerts {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .mockup-alert {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .mockup-alert .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .mockup-alert .rule { color: var(--text); font-weight: 500; flex: 1; }
+    .mockup-alert .time {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .mockup-alert .sev-badge {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      padding: 2px 8px;
+      border-radius: 3px;
+    }
+
+    /* ── Rules table ──────────────────────────────────────────────────────── */
+    .rules-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .rules-table th {
+      text-align: left;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-family: var(--mono);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .rules-table td {
+      padding: 14px 16px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .rules-table tr:last-child td { border-bottom: none; }
+    .rules-table .rule-id {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--accent2);
+    }
+    .rules-table .rule-name {
+      font-weight: 500;
+      color: var(--text);
+    }
+    .sev {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+    }
+    .sev-critical { background: rgba(248, 81, 73, 0.12); color: var(--danger); }
+    .sev-high { background: rgba(240, 136, 62, 0.12); color: var(--warning); }
+    .sev-medium { background: rgba(210, 153, 34, 0.12); color: var(--yellow); }
+    .sev-low { background: rgba(139, 148, 158, 0.12); color: var(--muted); }
+
+    /* ── Integration logos ─────────────────────────────────────────────────── */
+    .integrations-row {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .int-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 28px 36px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      transition: border-color 0.2s;
+      min-width: 140px;
+    }
+    .int-card:hover { border-color: var(--accent2); }
+    .int-icon { font-size: 32px; }
+    .int-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .int-desc {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* ── Code block ───────────────────────────────────────────────────────── */
+    .code-block {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      max-width: 700px;
+    }
+    .code-block pre {
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.7;
+      padding: 24px;
+      overflow-x: auto;
+      color: var(--text);
+    }
+    .code-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--accent);
+      padding: 10px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .copy-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-family: var(--mono);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    /* Syntax highlight */
+    .kw  { color: #ff7b72; }
+    .str { color: #a5d6ff; }
+    .fn  { color: #d2a8ff; }
+    .cm  { color: #8b949e; }
+    .id  { color: #79c0ff; }
+
+    /* ── CTA section ──────────────────────────────────────────────────────── */
+    .cta-section {
+      text-align: center;
+      padding: 80px 0;
+    }
+    .cta-section h2 {
+      font-size: clamp(24px, 3vw, 40px);
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+    .cta-section p {
+      max-width: 520px;
+      margin: 0 auto 32px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.7;
+    }
+
+    /* ── Alert lifecycle ──────────────────────────────────────────────────── */
+    .lifecycle {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      max-width: 700px;
+      margin: 0 auto;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .lifecycle-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 20px 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      min-width: 130px;
+    }
+    .lifecycle-step .step-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .lifecycle-step .step-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .lifecycle-step .step-desc {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .lifecycle-arrow {
+      font-size: 20px;
+      color: var(--border);
+      padding: 0 8px;
+    }
+
+    /* ── Feature cards ────────────────────────────────────────────────────── */
+    .feature-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: border-color 0.2s;
+    }
+    .feature-card:hover { border-color: var(--accent2); }
+    .feature-card .card-icon {
+      font-size: 28px;
+      margin-bottom: 16px;
+      display: block;
+    }
+    .feature-card h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .feature-card p { color: var(--muted); font-size: 14px; line-height: 1.65; }
+
+    /* ── Footer ────────────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .footer-logo {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .footer-links {
+      display: flex;
+      gap: 20px;
+      list-style: none;
+      font-size: 13px;
+    }
+    .footer-links a { color: var(--muted); }
+    .footer-links a:hover { color: var(--text); text-decoration: none; }
+    .footer-copy {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ── Responsive ────────────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .mockup-stats { grid-template-columns: repeat(2, 1fr); }
+      .lifecycle { flex-direction: column; }
+      .lifecycle-arrow { transform: rotate(90deg); }
+      .hero { padding: 64px 0 56px; }
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+    }
+    @media (max-width: 480px) {
+      .mockup-stats { grid-template-columns: 1fr 1fr; }
+      .integrations-row { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Nav ───────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="container">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo" style="text-decoration:none;">
+        grant<span>ex</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="https://docs.grantex.dev">Docs</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+        <li><a href="/playground">Playground</a></li>
+        <li><a href="/#examples">Examples</a></li>
+        <li><a href="https://www.npmjs.com/package/@grantex/sdk">npm</a></li>
+        <li><a href="/dashboard" style="color:var(--accent);font-weight:600;">Dashboard</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ──────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <h1>Know When Your Agents Misbehave</h1>
+    <p>
+      Real-time anomaly detection for AI agent authorization. 10 built-in rules catch
+      velocity spikes, scope escalation, token replay, and more. Alert to Slack,
+      PagerDuty, or Datadog in seconds.
+    </p>
+    <div class="hero-ctas">
+      <a href="https://docs.grantex.dev/features/anomaly-detection" class="btn btn-primary">
+        Read the docs &rarr;
+      </a>
+      <a href="/dashboard/signup" class="btn btn-secondary">
+        Get started free
+      </a>
+    </div>
+
+    <!-- Dashboard mockup -->
+    <div class="dashboard-mockup">
+      <div class="mockup-toolbar">
+        <div class="mockup-dot red"></div>
+        <div class="mockup-dot yellow"></div>
+        <div class="mockup-dot green"></div>
+        <div class="mockup-url">grantex.dev/dashboard/anomalies</div>
+      </div>
+      <div class="mockup-body">
+        <div class="mockup-header">
+          <h3>Anomaly Detection</h3>
+          <span class="status-badge">Monitoring active</span>
+        </div>
+        <div class="mockup-stats">
+          <div class="mockup-stat">
+            <div class="num" style="color:var(--danger)">3</div>
+            <div class="label">Critical</div>
+          </div>
+          <div class="mockup-stat">
+            <div class="num" style="color:var(--warning)">7</div>
+            <div class="label">High</div>
+          </div>
+          <div class="mockup-stat">
+            <div class="num" style="color:var(--yellow)">12</div>
+            <div class="label">Medium</div>
+          </div>
+          <div class="mockup-stat">
+            <div class="num" style="color:var(--muted)">4</div>
+            <div class="label">Low</div>
+          </div>
+        </div>
+        <div class="mockup-alerts">
+          <div class="mockup-alert">
+            <div class="dot" style="background:var(--danger)"></div>
+            <span class="rule">Token replay detected for ag_crm_bot</span>
+            <span class="sev-badge sev-critical">CRITICAL</span>
+            <span class="time">2m ago</span>
+          </div>
+          <div class="mockup-alert">
+            <div class="dot" style="background:var(--warning)"></div>
+            <span class="rule">Velocity spike: 340 req/min for ag_data_sync</span>
+            <span class="sev-badge sev-high">HIGH</span>
+            <span class="time">8m ago</span>
+          </div>
+          <div class="mockup-alert">
+            <div class="dot" style="background:var(--yellow)"></div>
+            <span class="rule">Scope escalation attempt: email:send requested</span>
+            <span class="sev-badge sev-medium">MEDIUM</span>
+            <span class="time">14m ago</span>
+          </div>
+          <div class="mockup-alert">
+            <div class="dot" style="background:var(--muted)"></div>
+            <span class="rule">Off-hours activity for ag_billing_agent</span>
+            <span class="sev-badge sev-low">LOW</span>
+            <span class="time">1h ago</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Why anomaly detection ─────────────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="section-label">Why it matters</div>
+    <h2 class="section-title">AI Agents Operate Unsupervised</h2>
+    <p class="section-sub">
+      Agents run 24/7, make thousands of API calls, and delegate to sub-agents.
+      Without real-time monitoring, compromised or misbehaving agents go unnoticed.
+    </p>
+    <div class="feature-cards">
+      <div class="feature-card">
+        <span class="card-icon">&#x26A1;</span>
+        <h3>Sub-second Detection</h3>
+        <p>Anomalies are detected as events flow through Grantex. No batch processing delay. Alerts fire within 1 second of the triggering event.</p>
+      </div>
+      <div class="feature-card">
+        <span class="card-icon">&#x1F50D;</span>
+        <h3>Pattern-based Analysis</h3>
+        <p>10 built-in detection rules cover the most common agent misbehavior patterns. Each rule is battle-tested and tuned to minimize false positives.</p>
+      </div>
+      <div class="feature-card">
+        <span class="card-icon">&#x1F6E0;</span>
+        <h3>Custom Rule DSL</h3>
+        <p>Write your own rules with agent filters, scope filters, time windows, and thresholds. Deploy custom rules via the API or dashboard.</p>
+      </div>
+      <div class="feature-card">
+        <span class="card-icon">&#x1F514;</span>
+        <h3>Multi-channel Alerts</h3>
+        <p>Route alerts to Slack, PagerDuty, Datadog, or email. Filter by severity so critical alerts page on-call while low-severity alerts log quietly.</p>
+      </div>
+      <div class="feature-card">
+        <span class="card-icon">&#x1F504;</span>
+        <h3>Alert Lifecycle</h3>
+        <p>Every alert has a clear lifecycle: open, acknowledged, resolved. Track who responded, when, and what action was taken. Full audit trail.</p>
+      </div>
+      <div class="feature-card">
+        <span class="card-icon">&#x1F6AB;</span>
+        <h3>One-click Revocation</h3>
+        <p>Revoke a misbehaving agent's grant directly from the alert. Cascading revocation stops all sub-agents immediately.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Built-in rules ────────────────────────────────────────────────────── -->
+<section id="rules">
+  <div class="container">
+    <div class="section-label">Built-in rules</div>
+    <h2 class="section-title">10 Rules, Zero Configuration</h2>
+    <p class="section-sub">
+      Every Grantex account ships with 10 anomaly detection rules that cover
+      the most common agent security threats. Enable, disable, or tune them
+      from the dashboard.
+    </p>
+    <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;">
+      <table class="rules-table">
+        <thead>
+          <tr>
+            <th>Rule ID</th>
+            <th>Name</th>
+            <th>Trigger</th>
+            <th>Severity</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="rule-id">velocity_spike</td>
+            <td class="rule-name">Velocity Spike</td>
+            <td>Request rate exceeds 3x the rolling 1-hour average</td>
+            <td><span class="sev sev-high">HIGH</span></td>
+          </tr>
+          <tr>
+            <td class="rule-id">scope_escalation</td>
+            <td class="rule-name">Scope Escalation</td>
+            <td>Agent requests scopes beyond its registered set</td>
+            <td><span class="sev sev-critical">CRITICAL</span></td>
+          </tr>
+          <tr>
+            <td class="rule-id">unknown_agent</td>
+            <td class="rule-name">Unknown Agent</td>
+            <td>Token presented by an unregistered agent DID</td>
+            <td><span class="sev sev-critical">CRITICAL</span></td>
+          </tr>
+          <tr>
+            <td class="rule-id">token_replay</td>
+            <td class="rule-name">Token Replay</td>
+            <td>Same token JTI used from multiple IP addresses</td>
+            <td><span class="sev sev-critical">CRITICAL</span></td>
+          </tr>
+          <tr>
+            <td class="rule-id">off_hours_activity</td>
+            <td class="rule-name">Off-Hours Activity</td>
+            <td>Agent active outside its configured operating window</td>
+            <td><span class="sev sev-low">LOW</span></td>
+          </tr>
+          <tr>
+            <td class="rule-id">high_failure_rate</td>
+            <td class="rule-name">High Failure Rate</td>
+            <td>More than 30% of requests fail in a 15-minute window</td>
+            <td><span class="sev sev-high">HIGH</span></td>
+          </tr>
+          <tr>
+            <td class="rule-id">concurrent_sessions</td>
+            <td class="rule-name">Concurrent Sessions</td>
+            <td>Same grant token used from 3+ distinct IPs simultaneously</td>
+            <td><span class="sev sev-high">HIGH</span></td>
+          </tr>
+          <tr>
+            <td class="rule-id">delegation_depth</td>
+            <td class="rule-name">Delegation Depth</td>
+            <td>Delegation chain exceeds configured max depth</td>
+            <td><span class="sev sev-medium">MEDIUM</span></td>
+          </tr>
+          <tr>
+            <td class="rule-id">budget_overspend</td>
+            <td class="rule-name">Budget Overspend</td>
+            <td>Agent consumes more than 90% of budget in a single burst</td>
+            <td><span class="sev sev-high">HIGH</span></td>
+          </tr>
+          <tr>
+            <td class="rule-id">geo_anomaly</td>
+            <td class="rule-name">Geographic Anomaly</td>
+            <td>Agent makes requests from unexpected geographic regions</td>
+            <td><span class="sev sev-medium">MEDIUM</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ── Alert lifecycle ───────────────────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="section-label">Alert lifecycle</div>
+    <h2 class="section-title">From Detection to Resolution</h2>
+    <p class="section-sub">
+      Every anomaly follows a clear lifecycle with full traceability. Know
+      who responded, when, and what action was taken.
+    </p>
+    <div class="lifecycle">
+      <div class="lifecycle-step">
+        <div class="step-icon" style="background:rgba(248,81,73,0.12)">&#x1F6A8;</div>
+        <div class="step-label">Detected</div>
+        <div class="step-desc">Rule triggers, alert created</div>
+      </div>
+      <div class="lifecycle-arrow">&rarr;</div>
+      <div class="lifecycle-step">
+        <div class="step-icon" style="background:rgba(88,166,255,0.12)">&#x1F514;</div>
+        <div class="step-label">Notified</div>
+        <div class="step-desc">Slack, PagerDuty, email</div>
+      </div>
+      <div class="lifecycle-arrow">&rarr;</div>
+      <div class="lifecycle-step">
+        <div class="step-icon" style="background:rgba(210,153,34,0.12)">&#x1F44D;</div>
+        <div class="step-label">Acknowledged</div>
+        <div class="step-desc">Responder takes ownership</div>
+      </div>
+      <div class="lifecycle-arrow">&rarr;</div>
+      <div class="lifecycle-step">
+        <div class="step-icon" style="background:rgba(63,185,80,0.12)">&#x2705;</div>
+        <div class="step-label">Resolved</div>
+        <div class="step-desc">Issue fixed, note attached</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Integrations ──────────────────────────────────────────────────────── -->
+<section id="integrations">
+  <div class="container">
+    <div class="section-label">Notification channels</div>
+    <h2 class="section-title">Alert Where Your Team Already Works</h2>
+    <p class="section-sub">
+      Route anomaly alerts to the tools your team uses. Filter by severity
+      to keep noise low and signal high.
+    </p>
+    <div class="integrations-row">
+      <div class="int-card">
+        <div class="int-icon">&#x1F4AC;</div>
+        <div class="int-label">Slack</div>
+        <div class="int-desc">Incoming webhook</div>
+      </div>
+      <div class="int-card">
+        <div class="int-icon">&#x1F6A8;</div>
+        <div class="int-label">PagerDuty</div>
+        <div class="int-desc">Events API v2</div>
+      </div>
+      <div class="int-card">
+        <div class="int-icon">&#x1F4CA;</div>
+        <div class="int-label">Datadog</div>
+        <div class="int-desc">Events API</div>
+      </div>
+      <div class="int-card">
+        <div class="int-icon">&#x2709;</div>
+        <div class="int-label">Email</div>
+        <div class="int-desc">SMTP / SES</div>
+      </div>
+      <div class="int-card">
+        <div class="int-icon">&#x1F310;</div>
+        <div class="int-label">Webhook</div>
+        <div class="int-desc">Custom HTTP POST</div>
+      </div>
+      <div class="int-card">
+        <div class="int-icon">&#x1F4E1;</div>
+        <div class="int-label">SSE Stream</div>
+        <div class="int-desc">Real-time events</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Custom rules ──────────────────────────────────────────────────────── -->
+<section id="custom-rules">
+  <div class="container">
+    <div class="section-label">Custom rules</div>
+    <h2 class="section-title">Write Rules That Match Your Threat Model</h2>
+    <p class="section-sub">
+      Built-in rules cover the common cases. Custom rules let you encode
+      your organization's specific security policies.
+    </p>
+    <div class="code-block">
+      <div class="code-label">Custom Rule — TypeScript SDK</div>
+      <button class="copy-btn" onclick="copyCode('custom-rule-code', this)">Copy</button>
+      <pre id="custom-rule-code"><span class="kw">import</span> { Grantex } <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
+
+<span class="kw">const</span> grantex = <span class="kw">new</span> <span class="fn">Grantex</span>({ <span class="id">apiKey</span>: process.env.GRANTEX_API_KEY });
+
+<span class="cm">// Create a custom rule that fires when any agent</span>
+<span class="cm">// makes more than 50 email:send requests in 5 minutes</span>
+<span class="kw">await</span> grantex.anomalies.<span class="fn">createRule</span>({
+  <span class="id">ruleId</span>: <span class="str">'email_flood'</span>,
+  <span class="id">name</span>: <span class="str">'Email Flood Detection'</span>,
+  <span class="id">description</span>: <span class="str">'Too many email sends in a short window'</span>,
+  <span class="id">severity</span>: <span class="str">'critical'</span>,
+  <span class="id">condition</span>: {
+    <span class="id">scopes</span>: [<span class="str">'email:send'</span>],
+    <span class="id">timeWindow</span>: <span class="str">'5m'</span>,
+    <span class="id">threshold</span>: <span class="id">50</span>,
+  },
+  <span class="id">channels</span>: [<span class="str">'slack-incidents'</span>, <span class="str">'pagerduty-oncall'</span>],
+});
+
+<span class="cm">// Configure a Slack notification channel</span>
+<span class="kw">await</span> grantex.anomalies.<span class="fn">createChannel</span>({
+  <span class="id">type</span>: <span class="str">'slack'</span>,
+  <span class="id">name</span>: <span class="str">'slack-incidents'</span>,
+  <span class="id">config</span>: {
+    <span class="id">webhookUrl</span>: <span class="str">'https://hooks.slack.com/services/...'</span>,
+  },
+  <span class="id">severities</span>: [<span class="str">'critical'</span>, <span class="str">'high'</span>],
+});
+
+<span class="cm">// Stream anomaly events in real time</span>
+<span class="kw">for await</span> (<span class="kw">const</span> event <span class="kw">of</span> grantex.events.<span class="fn">stream</span>({
+  <span class="id">types</span>: [<span class="str">'anomaly.detected'</span>],
+})) {
+  console.<span class="fn">log</span>(<span class="str">'Alert:'</span>, event.data.ruleName, event.data.severity);
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ── Metrics & SSE ─────────────────────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="section-label">Observability</div>
+    <h2 class="section-title">Metrics, SSE, and Prometheus</h2>
+    <p class="section-sub">
+      Query anomaly metrics via the API, stream events over SSE, or scrape
+      Prometheus-format counters from the <code>/metrics</code> endpoint.
+    </p>
+    <div class="feature-cards">
+      <div class="feature-card">
+        <span class="card-icon">&#x1F4C8;</span>
+        <h3>Metrics API</h3>
+        <p>
+          <code>GET /v1/anomalies/metrics</code> returns alert counts by severity,
+          by rule, and a 14-day activity histogram. Filter by agent or time window.
+        </p>
+      </div>
+      <div class="feature-card">
+        <span class="card-icon">&#x1F4E1;</span>
+        <h3>SSE Stream</h3>
+        <p>
+          <code>GET /v1/events/stream?types=anomaly.detected</code> pushes
+          anomaly events in real time. Use with <code>@grantex/destinations</code>
+          to forward to Datadog, Splunk, or S3.
+        </p>
+      </div>
+      <div class="feature-card">
+        <span class="card-icon">&#x1F527;</span>
+        <h3>Prometheus Counters</h3>
+        <p>
+          <code>GET /metrics</code> exposes <code>grantex_anomalies_total</code>,
+          <code>grantex_alerts_open</code>, and <code>grantex_alerts_resolved</code>
+          counters for Grafana dashboards.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ────────────────────────────────────────────────────────────────── -->
+<section class="cta-section">
+  <div class="container">
+    <h2>Start Monitoring Your Agents Today</h2>
+    <p>
+      Anomaly detection is available on all plans, including the free tier.
+      10 built-in rules. No configuration required.
+    </p>
+    <div class="hero-ctas">
+      <a href="/dashboard/signup" class="btn btn-primary">
+        Create free account &rarr;
+      </a>
+      <a href="https://docs.grantex.dev/guides/anomaly-detection-setup" class="btn btn-secondary">
+        Setup guide
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ─────────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <span class="footer-logo">grantex</span>
+      <ul class="footer-links">
+        <li><a href="https://docs.grantex.dev">Docs</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+        <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
+        <li><a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">IETF Draft</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
+      </ul>
+      <span class="footer-copy">&copy; 2026 Grantex</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ── Scripts ────────────────────────────────────────────────────────────── -->
+<script>
+  function copyCode(id, btn) {
+    const text = document.getElementById(id).innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+    });
+  }
+</script>
+
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-DNXYVLS5NY');
+</script>
+
+</body>
+</html>
