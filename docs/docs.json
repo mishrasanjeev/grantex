@@ -292,7 +292,9 @@
             "group": "Service Providers",
             "pages": [
               "integrations/adapters",
-              "integrations/gateway"
+              "integrations/gateway",
+              "integrations/mcp-auth",
+              "integrations/registry"
             ]
           },
           {
@@ -313,7 +315,14 @@
           {
             "group": "On-Device",
             "pages": [
-              "sdks/gemma"
+              "sdks/gemma",
+              "integrations/gemma"
+            ]
+          },
+          {
+            "group": "Compliance",
+            "pages": [
+              "integrations/dpdp"
             ]
           },
           {

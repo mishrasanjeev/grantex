@@ -1,0 +1,76 @@
+---
+title: "Gemma 4 (On-Device)"
+sidebarTitle: "Gemma 4"
+description: "Offline authorization for Gemma 4 on-device AI agents — consent bundles, JWT verification, and tamper-evident audit logging without network calls."
+---
+
+<Info>Full SDK reference: [Gemma 4 SDK](/sdks/gemma)</Info>
+
+## Overview
+
+`@grantex/gemma` brings Grantex authorization to edge devices running Google Gemma models. Agents fetch a consent bundle while online, then verify permissions and log actions entirely offline.
+
+### Key Capabilities
+
+- **Consent bundles** — fetch signed grant tokens + JWKS keys, encrypt locally with AES-256-GCM
+- **Offline JWT verification** — verify scopes on-device using embedded JWKS snapshot, zero network calls
+- **Tamper-evident audit logging** — hash-chained, Ed25519-signed JSONL logs, sync to cloud when connectivity returns
+- **Framework adapters** — wraps Google ADK and LangChain tools with automatic auth enforcement
+
+## Install
+
+<CodeGroup>
+
+```bash TypeScript
+npm install @grantex/gemma
+```
+
+```bash Python
+pip install grantex-gemma
+```
+
+</CodeGroup>
+
+## Quick Start
+
+```typescript
+import {
+  createConsentBundle,
+  createOfflineVerifier,
+  createOfflineAuditLog,
+} from '@grantex/gemma';
+
+// 1. Fetch bundle while online
+const bundle = await createConsentBundle({
+  apiKey: process.env.GRANTEX_API_KEY!,
+  agentId: 'ag_01HXYZ...',
+  userId: 'user_abc123',
+  scopes: ['calendar:read', 'email:send'],
+});
+
+// 2. Verify offline — no network needed
+const verifier = createOfflineVerifier({
+  jwksSnapshot: bundle.jwksSnapshot,
+  requireScopes: ['calendar:read'],
+});
+const grant = await verifier.verify(bundle.grantToken);
+
+// 3. Log actions with tamper-evident audit trail
+const auditLog = createOfflineAuditLog({
+  signingKey: bundle.offlineAuditKey,
+  logPath: './audit.jsonl',
+});
+await auditLog.append({
+  action: 'calendar.read',
+  agentDID: grant.agentDID,
+  grantId: grant.grantId,
+  scopes: grant.scopes,
+  result: 'success',
+});
+```
+
+## Links
+
+- [Full SDK Reference](/sdks/gemma) — complete API docs for all functions
+- [npm: @grantex/gemma](https://npmjs.com/package/@grantex/gemma)
+- [Blog: Offline Authorization for Gemma 4 Agents](/blog/gemma-4-offline-agents-security)

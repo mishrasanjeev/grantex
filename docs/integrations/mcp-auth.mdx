@@ -1,0 +1,45 @@
+---
+title: "MCP Auth Server"
+sidebarTitle: "MCP Auth"
+description: "Drop-in OAuth 2.1 + PKCE authorization server for any MCP server. Powered by Grantex."
+---
+
+<Info>Full feature guide: [MCP Auth Server](/features/mcp-auth-server)</Info>
+
+## Overview
+
+`@grantex/mcp-auth` is a production-ready OAuth 2.1 + PKCE authorization server that adds delegated auth to any MCP (Model Context Protocol) server. Works with Claude Desktop, Cursor, Windsurf, and any MCP-compatible client.
+
+## Install
+
+```bash
+npm install @grantex/mcp-auth
+```
+
+## Quick Start
+
+```typescript
+import { createMcpAuthServer } from '@grantex/mcp-auth';
+
+const auth = createMcpAuthServer({
+  grantexApiKey: process.env.GRANTEX_API_KEY!,
+  issuer: 'https://auth.myapp.com',
+  scopes: ['calendar:read', 'email:send'],
+});
+
+// Mount on Express
+app.use('/oauth', auth.routes());
+```
+
+### What You Get
+
+- **OAuth 2.1 + PKCE** — authorization code flow with S256 challenge
+- **Client registration** — dynamic or pre-registered MCP clients
+- **Token introspection** — validate tokens issued by this server
+- **Token revocation** — revoke access at any time
+- **Grantex-backed** — tokens are Grantex grant tokens with full audit trail
+
+## Links
+
+- [Full Feature Guide](/features/mcp-auth-server)
+- [npm: @grantex/mcp-auth](https://npmjs.com/package/@grantex/mcp-auth)

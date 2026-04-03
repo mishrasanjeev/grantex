@@ -1,0 +1,34 @@
+---
+title: "Trust Registry"
+sidebarTitle: "Trust Registry"
+description: "Public directory of verified AI agent publishers with DID-based identity and compliance badges."
+---
+
+<Info>Full feature guide: [Trust Registry](/features/trust-registry) | Setup guide: [Trust Registry Setup](/guides/trust-registry-setup)</Info>
+
+## Overview
+
+The Grantex Trust Registry is a public directory where organizations register their AI agents with verifiable identity. It enables consumers to look up agent publishers, verify their compliance status, and make trust decisions before granting access.
+
+### Key Capabilities
+
+- **Organization profiles** — register with DID-based identity, description, website, and compliance info
+- **DNS verification** — prove domain ownership via TXT records
+- **Compliance badges** — SOC 2, ISO 27001, GDPR, DPDP Act attestations
+- **Agent catalog** — list published agents with scopes, categories, and ratings
+- **Public search API** — query organizations by name, verification status, or badge
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/trust-registry/orgs` | List registered organizations |
+| `GET` | `/v1/trust-registry/orgs/:did` | Get organization by DID |
+| `POST` | `/v1/trust-registry/register` | Register your organization |
+| `POST` | `/v1/trust-registry/orgs/:id/verify-dns` | Verify domain ownership |
+
+## Links
+
+- [Full Feature Guide](/features/trust-registry)
+- [Setup Guide](/guides/trust-registry-setup)
+- [Portal: Trust Registry](https://grantex.dev/dashboard/registry)
