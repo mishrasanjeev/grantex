@@ -332,7 +332,8 @@
           {
             "group": "CLI",
             "pages": [
-              "integrations/cli"
+              "integrations/cli",
+              "cli/verify"
             ]
           },
           {
