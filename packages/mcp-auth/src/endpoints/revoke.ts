@@ -32,6 +32,7 @@ export function registerRevokeEndpoint(
   config: McpAuthConfig,
   clientStore: ClientStore,
 ): void {
+  // Rate limited via @fastify/rate-limit plugin config (20 req/min)
   app.post<{ Body: RevokeBody }>(
     '/revoke',
     {

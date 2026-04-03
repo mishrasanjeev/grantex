@@ -42,6 +42,7 @@ export function registerIntrospectEndpoint(
     return jwks;
   }
 
+  // Rate limited via @fastify/rate-limit plugin config (20 req/min)
   app.post<{ Body: IntrospectBody }>(
     '/introspect',
     {
