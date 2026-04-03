@@ -7,7 +7,7 @@
   <!-- SEO -->
   <title>Grantex — OAuth 2.0 for AI Agents</title>
   <meta name="description" content="Open delegated authorization protocol for AI agents. MPP agent identity for machine payments, W3C Verifiable Credentials, FIDO2/WebAuthn passkeys, SD-JWT selective disclosure, and DID infrastructure — built on JWT and OAuth 2.0.">
-  <meta name="keywords" content="Grantex, MPP, Machine Payments Protocol, AI agent identity, OAuth for AI agents, agent authorization, W3C Verifiable Credentials, agent passport, agentic commerce, MPP OAuth, agent delegation, DID, FIDO2, WebAuthn, JWT, machine-to-machine payments, USDC payments, AI agent payments, Tempo payments">
+  <meta name="keywords" content="Grantex, AI agent authorization, OAuth for AI agents, Gemma 4 authorization, MCP server OAuth, DPDP Act AI agents, AI agent trust registry, anomaly detection AI agents, offline agent verification, agent delegation, DID, FIDO2, WebAuthn, JWT, W3C Verifiable Credentials, EU AI Act compliance, OWASP agentic security, MPP, agent passport">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/">
   <link rel="llms-txt" href="/llms.txt">
@@ -953,10 +953,11 @@
                onclick="gtag('event','github_click',{event_category:'nav'})">GitHub</a></li>
         <li><a href="/playground"
                onclick="gtag('event','playground_click',{event_category:'nav'})">Playground</a></li>
-        <li><a href="#x402">x402</a></li>
+        <li><a href="/gemma">Gemma 4</a></li>
+        <li><a href="/mcp">MCP Auth</a></li>
+        <li><a href="/dpdp">DPDP</a></li>
+        <li><a href="/registry">Registry</a></li>
         <li><a href="#examples">Examples</a></li>
-        <li><a href="https://www.npmjs.com/package/@grantex/sdk">npm</a></li>
-        <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
         <li><a href="/dashboard" style="color:var(--accent);font-weight:600;">Dashboard</a></li>
       </ul>
     </div>
@@ -1013,6 +1014,65 @@
       <span class="badge"><span class="dot"></span> SOC 2 Type I</span>
       <span class="badge"><span class="dot"></span> Apache 2.0</span>
       <span class="badge"><span class="dot"></span> v1.0</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── What's New in v2.5 ─────────────────────────────────────────────────── -->
+<section id="whats-new" style="padding:48px 0;border-bottom:1px solid var(--border);">
+  <div class="container">
+    <div class="section-label">What's new</div>
+    <h2 class="section-title" style="font-size:clamp(24px,4vw,36px);">Grantex v2.5 — April 2026</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:32px;">
+
+      <a href="/gemma" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#3fb950;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">NEW</span>
+          <span style="color:var(--text);font-weight:600;">@grantex/gemma</span>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Day-zero Gemma 4 integration — offline consent bundles, &lt;5ms verification on Raspberry Pi, Google ADK adapter.</p>
+      </a>
+
+      <a href="/mcp" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#3fb950;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">GA</span>
+          <span style="color:var(--text);font-weight:600;">MCP Auth Server v2.0</span>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">OAuth 2.1 + PKCE for any MCP server. Managed + self-hosted. Bronze/Silver/Gold certification program.</p>
+      </a>
+
+      <a href="/dpdp" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#3fb950;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">NEW</span>
+          <span style="color:var(--text);font-weight:600;">@grantex/dpdp</span>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">DPDP Act 2023 &amp; EU AI Act compliance. Structured consent records, purpose limitation, audit-ready exports.</p>
+      </a>
+
+      <a href="/registry" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#58a6ff;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">LAUNCH</span>
+          <span style="color:var(--text);font-weight:600;">Trust Registry</span>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Public DID-based directory of verified AI agent publishers. DNS verification, SOC 2 badges, embeddable widget.</p>
+      </a>
+
+      <a href="/anomaly" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#58a6ff;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">EXPANDED</span>
+          <span style="color:var(--text);font-weight:600;">Anomaly Detection</span>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">10 built-in rules, custom rule DSL, Slack/PagerDuty/Datadog alerts, real-time SSE streaming.</p>
+      </a>
+
+      <a href="https://docs.grantex.dev/cli/verify" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#58a6ff;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">NEW</span>
+          <span style="color:var(--text);font-weight:600;">grantex verify</span>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">One command to inspect any grant token. Scopes, expiry, delegation chain, revocation status. Works offline.</p>
+      </a>
+
     </div>
   </div>
 </section>
@@ -2230,7 +2290,11 @@
       <ul class="footer-links">
         <li><a href="https://docs.grantex.dev">Docs</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
-        <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
+        <li><a href="/gemma">Gemma 4</a></li>
+        <li><a href="/mcp">MCP Auth</a></li>
+        <li><a href="/dpdp">DPDP</a></li>
+        <li><a href="/registry">Registry</a></li>
+        <li><a href="/anomaly">Anomaly</a></li>
         <li><a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">IETF Draft</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
       </ul>
