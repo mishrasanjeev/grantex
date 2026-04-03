@@ -10,12 +10,10 @@ import {
   buildTestApp,
   seedAuth,
   authHeader,
-  sqlMock,
-  mockRedis,
 } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 import { getKeyPair, signGrantToken } from '../src/lib/crypto.js';
-import { exportJWK, generateKeyPair, SignJWT, importJWK } from 'jose';
+import { generateKeyPair, SignJWT } from 'jose';
 
 let app: FastifyInstance;
 

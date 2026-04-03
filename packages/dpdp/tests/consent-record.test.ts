@@ -50,14 +50,6 @@ function mockFetchSuccess(data: unknown) {
   });
 }
 
-function mockFetchError(status: number, message: string) {
-  return vi.fn().mockResolvedValue({
-    ok: false,
-    status,
-    json: () => Promise.resolve({ message }),
-  });
-}
-
 function makeOptions(overrides?: Partial<CreateConsentRecordOptions>): CreateConsentRecordOptions {
   return {
     grantId: 'grant_abc',
@@ -206,7 +198,7 @@ describe('consent-record', () => {
 
     vi.stubGlobal('fetch', mockFetchSuccess(serverResponse));
 
-    const record = await createConsentRecord(
+    await createConsentRecord(
       makeOptions({ consentNoticeContent: noticeContent }),
     );
 

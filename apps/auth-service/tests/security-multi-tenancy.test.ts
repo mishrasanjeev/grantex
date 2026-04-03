@@ -13,7 +13,6 @@ import {
   mockRedis,
   TEST_DEVELOPER,
   TEST_AGENT,
-  TEST_GRANT,
 } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 import { signGrantToken } from '../src/lib/crypto.js';
@@ -26,10 +25,6 @@ beforeAll(async () => {
 
 // A second developer to test cross-org isolation
 const TEST_DEVELOPER_B = { id: 'dev_other_org', name: 'Other Org', mode: 'live' };
-
-function seedAuthAsB() {
-  sqlMock.mockResolvedValueOnce([TEST_DEVELOPER_B]);
-}
 
 describe('Multi-tenancy isolation', () => {
   // ── Agents ──────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@
 
 import type { DPDPConsentRecord } from '../types.js';
 import type { PurposeRegistry } from './purpose-registry.js';
-import { PurposeViolationError, ConsentRequiredError, DpdpError } from '../errors.js';
+import { PurposeViolationError, DpdpError } from '../errors.js';
 
 /**
  * Enforce that a grant's scopes satisfy a named purpose.

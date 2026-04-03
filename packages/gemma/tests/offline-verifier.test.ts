@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import * as jose from 'jose';
 import { createOfflineVerifier } from '../src/verifier/offline-verifier.js';
 import type { JWKSSnapshot } from '../src/verifier/jwks-cache.js';
