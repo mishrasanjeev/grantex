@@ -33,6 +33,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `grantex registry lookup`: registry DID lookup from CLI
 - `grantex registry verify-dns`: DNS verification from CLI
 
+#### @grantex/mcp-auth GA — OAuth 2.1 + PKCE for MCP Servers
+- `@grantex/mcp-auth` GA release — OAuth 2.1 + PKCE authorization server for any MCP server
+- `createMcpAuthServer()` — single function call to register six RFC-compliant endpoints
+- OAuth 2.1 authorization endpoint with mandatory PKCE S256 (no `plain`, no implicit grant)
+- Dynamic Client Registration (RFC 7591) at `/register`
+- Server metadata discovery (RFC 8414) at `/.well-known/oauth-authorization-server`
+- Token introspection (RFC 7662) at `/introspect` with Grantex-specific claims
+- Token revocation (RFC 7009) at `/revoke` with per-RFC 200 OK semantics
+- Express.js middleware (`requireMcpAuth`) for JWT validation with scope enforcement
+- Hono middleware (`requireMcpAuth`) with the same API surface
+- `McpGrant` decoded token type with `sub`, `agentDid`, `scopes`, `grantId`, `delegationDepth`
+- Custom `ClientStore` interface for persistent client registrations (Postgres, Redis, etc.)
+- Consent UI customization (`appName`, `appLogo`, `privacyUrl`, `termsUrl`)
+- Lifecycle hooks (`onTokenIssued`, `onRevocation`) for audit logging
+- Per-endpoint rate limiting (10/min authorize, 20/min token, 30/min introspect)
+- MCP Server Certification program — Bronze, Silver, and Gold tiers
+- MCP Server Registry with certification badges and scope listings
+- 13 automated conformance checks for MCP auth compliance
+- Landing page at `grantex.dev/mcp`
+- Mintlify docs: `features/mcp-auth-server` and `guides/mcp-certification`
+
 ### Changed
 - Dashboard: New Bundles section for consent bundle management
 - API: `POST /v1/authorize` accepts optional `offlineTTL` parameter

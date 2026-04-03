@@ -62,6 +62,12 @@
             ]
           },
           {
+            "group": "MCP Authorization",
+            "pages": [
+              "features/mcp-auth-server"
+            ]
+          },
+          {
             "group": "Guides",
             "pages": [
               "guides/rate-limits",
@@ -88,6 +94,7 @@
               "guides/usage-metering",
               "guides/custom-domains",
               "guides/mpp-integration",
+              "guides/mcp-certification",
               "guides/enterprise-sso",
               "guides/compliance-matrix",
               "guides/raspberry-pi",

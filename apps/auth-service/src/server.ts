@@ -40,6 +40,7 @@ import { credentialsRoutes } from './routes/credentials.js';
 import { passportRoutes } from './routes/passport.js';
 import { trustRegistryRoutes } from './routes/trust-registry.js';
 import { consentBundlesRoutes } from './routes/consent-bundles.js';
+import { mcpServersRoutes } from './routes/mcp-servers.js';
 import { metricsHookPlugin } from './plugins/metricsHook.js';
 import websocket from '@fastify/websocket';
 
@@ -113,6 +114,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(passportRoutes);
   await app.register(trustRegistryRoutes);
   await app.register(consentBundlesRoutes);
+  await app.register(mcpServersRoutes);
 
   return app;
 }

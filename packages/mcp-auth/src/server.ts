@@ -7,6 +7,8 @@ import { registerMetadataEndpoint } from './endpoints/metadata.js';
 import { registerRegisterEndpoint } from './endpoints/register.js';
 import { registerAuthorizeEndpoint } from './endpoints/authorize.js';
 import { registerTokenEndpoint } from './endpoints/token.js';
+import { registerIntrospectEndpoint } from './endpoints/introspect.js';
+import { registerRevokeEndpoint } from './endpoints/revoke.js';
 import type { McpAuthConfig } from './types.js';
 
 export async function createMcpAuthServer(
@@ -23,6 +25,8 @@ export async function createMcpAuthServer(
   registerRegisterEndpoint(app, clientStore);
   registerAuthorizeEndpoint(app, config, clientStore, codeStore);
   registerTokenEndpoint(app, config, clientStore, codeStore);
+  registerIntrospectEndpoint(app, config, clientStore);
+  registerRevokeEndpoint(app, config, clientStore);
 
   return app;
 }

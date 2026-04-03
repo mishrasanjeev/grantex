@@ -11,6 +11,14 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./express": {
+      "import": "./dist/middleware/express.js",
+      "types": "./dist/middleware/express.d.ts"
+    },
+    "./hono": {
+      "import": "./dist/middleware/hono.js",
+      "types": "./dist/middleware/hono.d.ts"
     }
   },
   "files": [
@@ -26,7 +34,8 @@
   "dependencies": {
     "@fastify/rate-limit": "^10.2.1",
     "@grantex/sdk": "^0.1.8",
-    "fastify": "^5.2.1"
+    "fastify": "^5.2.1",
+    "jose": "^5.10.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

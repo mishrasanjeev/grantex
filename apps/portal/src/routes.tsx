@@ -30,6 +30,9 @@ import { EventList } from './pages/events/EventList';
 import { BundleList } from './pages/bundles/BundleList';
 import { BundleForm } from './pages/bundles/BundleForm';
 import { BundleDetail } from './pages/bundles/BundleDetail';
+import { McpServerList } from './pages/mcp/McpServerList';
+import { McpServerForm } from './pages/mcp/McpServerForm';
+import { McpServerDetail } from './pages/mcp/McpServerDetail';
 import { AdminPage } from './pages/admin/AdminPage';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './RequireAuth';
@@ -71,6 +74,9 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/webauthn', element: <WebAuthnList /> },
       { path: '/dashboard/credentials', element: <CredentialList /> },
       { path: '/dashboard/events', element: <EventList /> },
+      { path: '/dashboard/mcp', element: <McpServerList /> },
+      { path: '/dashboard/mcp/new', element: <McpServerForm /> },
+      { path: '/dashboard/mcp/:serverId', element: <McpServerDetail /> },
       { path: '/dashboard/billing', element: <BillingPage /> },
       { path: '/dashboard/settings', element: <SettingsPage /> },
       { path: '/dashboard/settings/sso', element: <SsoConfigPage /> },
