@@ -1,0 +1,9 @@
+name: "Grantex CodeQL Config"
+
+# Fastify uses declarative rate limiting via route config objects:
+#   app.post('/path', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, handler)
+# CodeQL's js/missing-rate-limiting rule only recognizes Express-style rateLimit() middleware.
+# Disable this rule to avoid false positives on Fastify endpoints.
+query-filters:
+  - exclude:
+      id: js/missing-rate-limiting
