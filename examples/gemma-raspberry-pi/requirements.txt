@@ -1,0 +1,3 @@
+grantex-gemma>=0.1.0
+httpx>=0.27
+python-dotenv>=1.0

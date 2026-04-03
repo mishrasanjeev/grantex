@@ -1,0 +1,407 @@
+---
+title: "Android + Gemma 4 Guide"
+sidebarTitle: "Android"
+description: "Integrate Grantex offline authorization into Android apps running Gemma 4 agents."
+---
+
+## Overview
+
+Android apps running Gemma 4 via Google AI Edge SDK (formerly MediaPipe LLM) can use Grantex consent bundles for offline authorization. This guide covers secure bundle storage with EncryptedSharedPreferences, JWT verification with Nimbus JOSE, and audit logging in Kotlin.
+
+## Prerequisites
+
+- **Android Studio** Ladybug or later
+- **Android SDK 26+** (minSdk) -- required for Jetpack Security
+- **Kotlin 1.9+**
+- **A Grantex account** with API key and registered agent
+
+## Step 1: Gradle Setup
+
+Add the dependencies to your app's `build.gradle.kts`:
+
+```kotlin
+dependencies {
+    // Grantex offline auth
+    implementation("com.nimbusds:nimbus-jose-jwt:9.37")
+
+    // Secure storage
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // JSON parsing
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
+    // HTTP client (for provisioning and sync only)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+}
+```
+
+Add the serialization plugin to your project-level `build.gradle.kts`:
+
+```kotlin
+plugins {
+    kotlin("plugin.serialization") version "1.9.22"
+}
+```
+
+## Step 2: Define the ConsentBundle Model
+
+```kotlin
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class JWKSSnapshot(
+    val keys: List<Map<String, String>>,
+    val fetchedAt: String,
+    val validUntil: String,
+)
+
+@Serializable
+data class OfflineAuditKey(
+    val publicKey: String,
+    val privateKey: String,
+    val algorithm: String,
+)
+
+@Serializable
+data class ConsentBundle(
+    val bundleId: String,
+    val grantToken: String,
+    val jwksSnapshot: JWKSSnapshot,
+    val offlineAuditKey: OfflineAuditKey,
+    val checkpointAt: Long,
+    val syncEndpoint: String,
+    val offlineExpiresAt: String,
+)
+```
+
+## Step 3: Secure Storage with EncryptedSharedPreferences
+
+Use Jetpack Security to store the consent bundle. The encryption key is managed by Android Keystore, backed by hardware on supported devices.
+
+```kotlin
+import android.content.Context
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKeys
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+
+class BundleStore(context: Context) {
+    private val masterKeyAlias = MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC)
+
+    private val prefs = EncryptedSharedPreferences.create(
+        "grantex_bundles",
+        masterKeyAlias,
+        context,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+    )
+
+    fun store(bundle: ConsentBundle) {
+        val json = Json.encodeToString(bundle)
+        prefs.edit().putString("active_bundle", json).apply()
+    }
+
+    fun load(): ConsentBundle? {
+        val json = prefs.getString("active_bundle", null) ?: return null
+        return Json.decodeFromString(json)
+    }
+
+    fun clear() {
+        prefs.edit().remove("active_bundle").apply()
+    }
+}
+```
+
+## Step 4: Offline JWT Verification
+
+Use Nimbus JOSE to verify the grant token against the JWKS snapshot. This runs entirely on-device.
+
+```kotlin
+import com.nimbusds.jose.JWSAlgorithm
+import com.nimbusds.jose.JWSVerifier
+import com.nimbusds.jose.crypto.RSASSAVerifier
+import com.nimbusds.jose.jwk.JWK
+import com.nimbusds.jose.jwk.RSAKey
+import com.nimbusds.jwt.SignedJWT
+import java.security.interfaces.RSAPublicKey
+import java.util.Date
+
+data class VerifiedGrant(
+    val agentDID: String,
+    val principalDID: String,
+    val scopes: List<String>,
+    val expiresAt: Date,
+    val grantId: String,
+    val depth: Int,
+)
+
+class OfflineVerifier(
+    private val jwksSnapshot: JWKSSnapshot,
+    private val requiredScopes: List<String> = emptyList(),
+    private val clockSkewMs: Long = 30_000,
+    private val maxDelegationDepth: Int? = null,
+) {
+    private val blockedAlgorithms = setOf("none", "HS256")
+
+    fun verify(token: String): VerifiedGrant {
+        val jwt = SignedJWT.parse(token)
+        val header = jwt.header
+
+        // Block insecure algorithms
+        val alg = header.algorithm.name
+        require(alg !in blockedAlgorithms) {
+            "Blocked algorithm: $alg"
+        }
+
+        // Find the signing key by kid
+        val kid = header.keyID
+            ?: throw IllegalArgumentException("JWT header missing kid")
+
+        val jwk = jwksSnapshot.keys.find { it["kid"] == kid }
+            ?: throw IllegalArgumentException("No key found for kid=$kid")
+
+        // Parse JWK and verify
+        val rsaKey = JWK.parse(jwk).toRSAKey()
+        val verifier: JWSVerifier = RSASSAVerifier(rsaKey.toRSAPublicKey())
+
+        require(jwt.verify(verifier)) { "JWT signature verification failed" }
+
+        // Check expiry with clock skew
+        val claims = jwt.jwtClaimsSet
+        val now = Date()
+        val adjustedNow = Date(now.time + clockSkewMs)
+        val expiresAt = claims.expirationTime
+            ?: throw IllegalArgumentException("JWT missing exp claim")
+
+        require(expiresAt.after(Date(now.time - clockSkewMs))) {
+            "Token expired at ${expiresAt}"
+        }
+
+        // Extract Grantex claims
+        val scopes = (claims.getStringListClaim("scp") ?: emptyList())
+        val agentDID = claims.getStringClaim("agt") ?: ""
+        val principalDID = claims.subject ?: ""
+        val jti = claims.jwtid ?: ""
+        val grantId = claims.getStringClaim("grnt") ?: jti
+        val depth = claims.getIntegerClaim("delegationDepth") ?: 0
+
+        // Scope enforcement
+        if (requiredScopes.isNotEmpty()) {
+            val missing = requiredScopes.filter { it !in scopes }
+            require(missing.isEmpty()) {
+                "Scope violation: required $requiredScopes but grant has $scopes"
+            }
+        }
+
+        // Delegation depth enforcement
+        if (maxDelegationDepth != null) {
+            require(depth <= maxDelegationDepth) {
+                "Delegation depth $depth exceeds maximum $maxDelegationDepth"
+            }
+        }
+
+        return VerifiedGrant(
+            agentDID = agentDID,
+            principalDID = principalDID,
+            scopes = scopes,
+            expiresAt = expiresAt,
+            grantId = grantId,
+            depth = depth,
+        )
+    }
+}
+```
+
+## Step 5: Audit Logging
+
+Implement a simplified audit log with hash chaining and Ed25519 signing.
+
+```kotlin
+import java.io.File
+import java.security.KeyFactory
+import java.security.MessageDigest
+import java.security.Signature
+import java.security.spec.PKCS8EncodedKeySpec
+import java.time.Instant
+import java.util.Base64
+
+data class AuditEntry(
+    val seq: Int,
+    val timestamp: String,
+    val action: String,
+    val agentDID: String,
+    val grantId: String,
+    val scopes: List<String>,
+    val result: String,
+    val prevHash: String,
+    val hash: String,
+    val signature: String,
+)
+
+class OfflineAuditLog(
+    private val signingKeyPem: String,
+    private val logFile: File,
+) {
+    private var seq = 0
+    private var prevHash = "0000000000000000" // GENESIS_HASH
+
+    init {
+        // Resume from existing log
+        if (logFile.exists()) {
+            val lines = logFile.readLines().filter { it.isNotBlank() }
+            if (lines.isNotEmpty()) {
+                val last = Json.decodeFromString<AuditEntry>(lines.last())
+                seq = last.seq
+                prevHash = last.hash
+            }
+        }
+    }
+
+    fun append(
+        action: String,
+        agentDID: String,
+        grantId: String,
+        scopes: List<String>,
+        result: String,
+    ): AuditEntry {
+        val nextSeq = ++seq
+        val timestamp = Instant.now().toString()
+
+        // Compute hash
+        val hashInput = "$nextSeq|$timestamp|$action|$agentDID|$grantId|${scopes.joinToString(",")}|$result||$prevHash"
+        val hash = sha256Hex(hashInput)
+
+        // Sign the hash with Ed25519
+        val signature = signEd25519(hash, signingKeyPem)
+
+        val entry = AuditEntry(
+            seq = nextSeq,
+            timestamp = timestamp,
+            action = action,
+            agentDID = agentDID,
+            grantId = grantId,
+            scopes = scopes,
+            result = result,
+            prevHash = prevHash,
+            hash = hash,
+            signature = signature,
+        )
+
+        logFile.appendText(Json.encodeToString(entry) + "\n")
+        prevHash = hash
+
+        return entry
+    }
+
+    private fun sha256Hex(input: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(input.toByteArray()).joinToString("") {
+            "%02x".format(it)
+        }
+    }
+
+    private fun signEd25519(data: String, pem: String): String {
+        val keyBytes = Base64.getDecoder().decode(
+            pem.replace("-----BEGIN PRIVATE KEY-----", "")
+                .replace("-----END PRIVATE KEY-----", "")
+                .replace("\\s".toRegex(), "")
+        )
+        val keySpec = PKCS8EncodedKeySpec(keyBytes)
+        val keyFactory = KeyFactory.getInstance("Ed25519")
+        val privateKey = keyFactory.generatePrivate(keySpec)
+
+        val sig = Signature.getInstance("Ed25519")
+        sig.initSign(privateKey)
+        sig.update(data.toByteArray())
+        return sig.sign().joinToString("") { "%02x".format(it) }
+    }
+}
+```
+
+## Step 6: Putting It Together
+
+```kotlin
+class GemmaAgentActivity : AppCompatActivity() {
+    private lateinit var bundleStore: BundleStore
+    private lateinit var verifier: OfflineVerifier
+    private lateinit var auditLog: OfflineAuditLog
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        bundleStore = BundleStore(this)
+
+        val bundle = bundleStore.load()
+            ?: throw IllegalStateException("No consent bundle. Run provisioning first.")
+
+        verifier = OfflineVerifier(
+            jwksSnapshot = bundle.jwksSnapshot,
+            requiredScopes = listOf("camera:read", "location:read"),
+        )
+
+        auditLog = OfflineAuditLog(
+            signingKeyPem = bundle.offlineAuditKey.privateKey,
+            logFile = File(filesDir, "audit.jsonl"),
+        )
+
+        // Verify and run agent
+        val grant = verifier.verify(bundle.grantToken)
+        Log.i("Grantex", "Verified: ${grant.agentDID}, scopes: ${grant.scopes}")
+
+        auditLog.append(
+            action = "camera.read",
+            agentDID = grant.agentDID,
+            grantId = grant.grantId,
+            scopes = grant.scopes,
+            result = "success",
+        )
+    }
+}
+```
+
+## Provisioning the Bundle
+
+Call the Grantex API from your backend or a one-time setup activity. Do not embed your API key in the APK.
+
+```kotlin
+suspend fun provisionBundle(apiKey: String, agentId: String): ConsentBundle {
+    val client = OkHttpClient()
+
+    val body = """
+        {
+            "agentId": "$agentId",
+            "userId": "android-user-001",
+            "scopes": ["camera:read", "location:read"],
+            "offlineTTL": "72h"
+        }
+    """.trimIndent()
+
+    val request = Request.Builder()
+        .url("https://api.grantex.dev/v1/consent-bundles")
+        .addHeader("Authorization", "Bearer $apiKey")
+        .addHeader("Content-Type", "application/json")
+        .post(body.toRequestBody("application/json".toMediaType()))
+        .build()
+
+    val response = client.newCall(request).execute()
+    require(response.isSuccessful) { "HTTP ${response.code}: ${response.body?.string()}" }
+
+    return Json.decodeFromString(response.body!!.string())
+}
+```
+
+## Security Considerations
+
+- **Never embed API keys in the APK**. Provision bundles from your backend.
+- **EncryptedSharedPreferences** uses AES-256-GCM with keys in Android Keystore (hardware-backed on most devices).
+- **ProGuard / R8** should keep Nimbus JOSE and kotlinx-serialization classes. Add keep rules if verification fails in release builds.
+- **Root detection** is recommended for high-security use cases. A rooted device can extract the bundle from SharedPreferences.
+- **Certificate pinning** on OkHttp for the provisioning and sync calls prevents MITM attacks.
+
+## Next Steps
+
+- [iOS Guide](/guides/ios-gemma4) -- integrate on iOS with CryptoKit
+- [Raspberry Pi Guide](/guides/raspberry-pi) -- run on Pi 5
+- [Offline Authorization](/features/offline-authorization) -- architecture and security model
+- [Gemma 4 SDK Reference](/sdks/gemma) -- complete API reference

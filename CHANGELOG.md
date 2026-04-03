@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.5.0] — April 2026
+
+### Added
+
+#### @grantex/gemma — Offline Authorization for Gemma 4
+- `createConsentBundle()`: Issue offline-capable consent bundles (online, once)
+- `createOfflineVerifier()`: < 5ms JWT verification with zero network calls
+- `createOfflineAuditLog()`: Ed25519-signed, hash-chained local audit log
+- `auditLog.sync()`: Batch sync offline entries when connectivity restores
+- `withGrantexAuth()` adapter for Google ADK tool wrapping
+- LangChain adapter
+- New backend endpoints: POST /v1/consent-bundles, POST /v1/audit/offline-sync,
+  GET /v1/consent-bundles/:bundleId/revocation-status
+- Examples: Android (Kotlin), Raspberry Pi (Python), iOS (Swift bridging)
+- `grantex init gemma` CLI scaffold command
+
+#### grantex verify CLI enhancement
+- Full token inspection: scopes, expiry, delegation chain, signature
+- `--check-revocation`: live revocation status check
+- `--json`: machine-readable JSON output for scripting
+- `--verbose`: full JWT header and claims display
+- `--jwks-file`: offline verification from local JWKS file
+- `--stdin`: pipe token from stdin
+- `grantex decode`: decode without verify (jwt.io equivalent)
+- `grantex audit inspect`: local audit log viewer
+- `grantex audit verify`: hash chain integrity check
+- `grantex registry lookup`: registry DID lookup from CLI
+- `grantex registry verify-dns`: DNS verification from CLI
+
+### Changed
+- Dashboard: New Bundles section for consent bundle management
+- API: `POST /v1/authorize` accepts optional `offlineTTL` parameter
+
+### Security
+- Offline verifier: algorithm confusion attack (alg:none, HS256) blocked
+- PKCE code_verifier comparison: timing-safe across all runtimes
+
 ## [0.2.4-mpp] - 2026-03-20
 
 ### Added

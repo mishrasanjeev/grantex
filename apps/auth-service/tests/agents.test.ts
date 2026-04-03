@@ -32,7 +32,7 @@ describe('POST /v1/agents', () => {
   it('returns 402 when plan agent limit is reached', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ plan: 'free' }]); // subscription → free plan
-    sqlMock.mockResolvedValueOnce([{ count: '200' }]);   // 200 agents already (free limit)
+    sqlMock.mockResolvedValueOnce([{ count: '500' }]);   // 500 agents already (free limit)
 
     const res = await app.inject({
       method: 'POST',

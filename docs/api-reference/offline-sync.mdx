@@ -1,0 +1,221 @@
+---
+title: "Offline Sync API"
+sidebarTitle: "Offline Sync"
+description: "API reference for syncing offline audit log entries to the Grantex cloud."
+---
+
+## Overview
+
+The offline sync endpoint receives audit log entries produced by on-device agents operating with consent bundles. The server verifies the Ed25519 signatures and hash chain integrity, then reconciles entries with the cloud audit log.
+
+---
+
+## Sync Offline Audit Entries
+
+Upload a batch of offline audit log entries to the Grantex cloud.
+
+```
+POST /v1/audit/offline-sync
+```
+
+### Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+| `Content-Type` | `application/json` |
+
+### Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `bundleId` | `string` | Yes | The consent bundle ID that authorized these entries |
+| `entries` | `SignedAuditEntry[]` | Yes | Array of signed, hash-chained audit entries |
+
+### SignedAuditEntry Schema
+
+| Field | Type | Description |
+|---|---|---|
+| `seq` | `number` | Monotonically increasing sequence number |
+| `timestamp` | `string` | ISO-8601 timestamp of the action |
+| `action` | `string` | Action identifier (e.g. `"calendar.read"`) |
+| `agentDID` | `string` | DID of the agent that performed the action |
+| `grantId` | `string` | Grant ID authorizing the action |
+| `scopes` | `string[]` | Scopes on the grant at the time of the action |
+| `result` | `string` | Outcome: `"success"`, `"auth_failure"`, `"scope_violation"`, `"execution_error"` |
+| `metadata` | `object` | Optional arbitrary metadata |
+| `prevHash` | `string` | SHA-256 hash of the previous entry (or `"0000000000000000"` for the first entry) |
+| `hash` | `string` | SHA-256 hash of this entry |
+| `signature` | `string` | Ed25519 signature of the `hash` field (hex-encoded) |
+
+### Example Request
+
+```bash
+curl -X POST https://api.grantex.dev/v1/audit/offline-sync \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bundleId": "cb_01HXYZ...",
+    "entries": [
+      {
+        "seq": 1,
+        "timestamp": "2026-04-03T12:00:00.000Z",
+        "action": "calendar.read",
+        "agentDID": "did:grantex:ag_01HXYZ...",
+        "grantId": "grnt_01HXYZ...",
+        "scopes": ["calendar:read"],
+        "result": "success",
+        "metadata": {"eventCount": 12},
+        "prevHash": "0000000000000000",
+        "hash": "a3f29c81b4e2f1a7d8c3e5b6a9f0d1c2e4b7a8c9d0e1f2a3b4c5d6e7f8a9b0c1",
+        "signature": "4d5e6f7a8b9c0d1e..."
+      }
+    ]
+  }'
+```
+
+### Response -- 200 OK
+
+```json
+{
+  "accepted": 1,
+  "rejected": 0,
+  "revocationStatus": "active",
+  "revokedAt": null,
+  "errors": []
+}
+```
+
+### Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `accepted` | `number` | Number of entries successfully stored |
+| `rejected` | `number` | Number of entries rejected |
+| `revocationStatus` | `string` | Current grant revocation status: `"active"` or `"revoked"` |
+| `revokedAt` | `string \| null` | ISO-8601 timestamp of revocation, or `null` if active |
+| `errors` | `object[]` | Details of rejected entries |
+
+### Error Array Schema
+
+Each element in the `errors` array:
+
+| Field | Type | Description |
+|---|---|---|
+| `seq` | `number` | Sequence number of the rejected entry |
+| `code` | `string` | Error code |
+| `message` | `string` | Human-readable error message |
+
+### Error Codes for Rejected Entries
+
+| Code | Description |
+|---|---|
+| `INVALID_HASH` | Recomputed hash does not match the entry's `hash` field |
+| `INVALID_SIGNATURE` | Ed25519 signature does not verify against the bundle's public key |
+| `BROKEN_CHAIN` | Entry's `prevHash` does not match the previous entry's `hash` |
+| `DUPLICATE_SEQ` | Sequence number already exists (entry already synced) |
+| `SEQ_GAP` | Non-consecutive sequence number (entries are missing) |
+
+### Error Responses (HTTP Level)
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `INVALID_REQUEST` | Missing or malformed request body |
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 404 | `BUNDLE_NOT_FOUND` | The specified bundle does not exist |
+| 413 | `PAYLOAD_TOO_LARGE` | Batch exceeds maximum size (1000 entries per request) |
+| 429 | `RATE_LIMITED` | Too many requests |
+
+---
+
+## Batch Processing
+
+The endpoint processes entries in order. If an entry fails validation, subsequent entries in the same batch may still be accepted if their hash chain is internally consistent.
+
+**Recommended batch sizes:**
+
+| Scenario | Batch Size |
+|---|---|
+| Mobile device, metered connection | 50 |
+| Raspberry Pi, Wi-Fi | 100 (default) |
+| Server, reliable connection | 500 |
+
+Maximum entries per request: **1000**.
+
+---
+
+## Sync Flow
+
+The recommended sync flow:
+
+```
+Device                                      Grantex API
+  │                                             │
+  │── POST /v1/audit/offline-sync ─────────────►│
+  │   { bundleId, entries[1..100] }              │
+  │                                             │
+  │◄── 200 { accepted: 98, rejected: 2, ... } ──│
+  │                                             │
+  │   (check revocationStatus)                  │
+  │   if "revoked" → stop, delete bundle        │
+  │   if "active" → mark entries synced          │
+  │                                             │
+  │── POST /v1/audit/offline-sync ─────────────►│
+  │   { bundleId, entries[101..150] }            │
+  │                                             │
+  │◄── 200 { accepted: 50, rejected: 0, ... } ──│
+  │                                             │
+  │   (all entries synced)                       │
+  │                                             │
+```
+
+---
+
+## Idempotency
+
+Syncing the same entries multiple times is safe. The server deduplicates by `(bundleId, seq)` pair. If an entry with the same sequence number already exists and has a matching hash, it is silently accepted. If the hash differs, it is rejected with `DUPLICATE_SEQ`.
+
+---
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import { syncAuditLog } from '@grantex/gemma';
+
+const result = await syncAuditLog(auditLog, {
+  endpoint: 'https://api.grantex.dev',
+  apiKey: 'gx_...',
+  bundleId: 'cb_01HXYZ...',
+  batchSize: 100,
+});
+
+console.log(`Synced: ${result.syncedCount}`);
+if (result.hasErrors) {
+  console.warn('Errors:', result.errors);
+}
+```
+
+```python Python
+result = audit_log.sync(
+    api_key="gx_...",
+    bundle_id="cb_01HXYZ...",
+)
+
+print(f"Accepted: {result.accepted}")
+print(f"Rejected: {result.rejected}")
+print(f"Revocation: {result.revocation_status}")
+```
+
+</CodeGroup>
+
+---
+
+## Rate Limits
+
+| Endpoint | Limit |
+|---|---|
+| `POST /v1/audit/offline-sync` | 20 requests/minute |
+
+The rate limit applies per API key. If you need higher throughput, use larger batch sizes rather than more frequent requests.

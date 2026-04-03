@@ -1,0 +1,531 @@
+---
+title: "iOS + Gemma 4 Guide"
+sidebarTitle: "iOS"
+description: "Integrate Grantex offline authorization into iOS apps running Gemma 4 agents using Swift and CryptoKit."
+---
+
+## Overview
+
+iOS apps running Gemma 4 via Google AI Edge SDK can use Grantex consent bundles for offline authorization. This guide covers Keychain storage, RS256 JWT verification with CryptoKit and Security framework, Ed25519 audit signing, and hash-chained audit logging in Swift.
+
+## Prerequisites
+
+- **Xcode 15+** with iOS 16+ deployment target
+- **Swift 5.9+**
+- **A Grantex account** with API key and registered agent
+
+## Step 1: SwiftPM Setup
+
+Add the following dependencies to your `Package.swift` or via Xcode's package manager:
+
+```swift
+// Package.swift
+dependencies: [
+    .package(url: "https://github.com/nicklama/jose-swift.git", from: "3.0.0"),
+]
+```
+
+Alternatively, for a lighter approach, use Apple's CryptoKit and Security framework directly (no third-party JWT library needed). This guide shows both approaches.
+
+## Step 2: Define the ConsentBundle Model
+
+```swift
+import Foundation
+
+struct JWKSSnapshot: Codable {
+    let keys: [[String: String]]
+    let fetchedAt: String
+    let validUntil: String
+}
+
+struct OfflineAuditKey: Codable {
+    let publicKey: String
+    let privateKey: String
+    let algorithm: String
+}
+
+struct ConsentBundle: Codable {
+    let bundleId: String
+    let grantToken: String
+    let jwksSnapshot: JWKSSnapshot
+    let offlineAuditKey: OfflineAuditKey
+    let checkpointAt: Int64
+    let syncEndpoint: String
+    let offlineExpiresAt: String
+}
+```
+
+## Step 3: Keychain Storage
+
+Store the consent bundle in the iOS Keychain, which provides hardware-backed encryption on devices with Secure Enclave.
+
+```swift
+import Security
+import Foundation
+
+enum BundleStore {
+    private static let service = "dev.grantex.bundle"
+    private static let account = "active_bundle"
+
+    static func store(_ bundle: ConsentBundle) throws {
+        let data = try JSONEncoder().encode(bundle)
+
+        // Delete existing item
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        // Add new item
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+        ]
+
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            throw BundleStoreError.keychainWriteFailed(status)
+        }
+    }
+
+    static func load() throws -> ConsentBundle? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess, let data = result as? Data else {
+            if status == errSecItemNotFound { return nil }
+            throw BundleStoreError.keychainReadFailed(status)
+        }
+
+        return try JSONDecoder().decode(ConsentBundle.self, from: data)
+    }
+
+    static func clear() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
+}
+
+enum BundleStoreError: Error {
+    case keychainWriteFailed(OSStatus)
+    case keychainReadFailed(OSStatus)
+}
+```
+
+## Step 4: JWT Verification with Security Framework
+
+Verify RS256 JWTs using Apple's Security framework. This avoids third-party dependencies and runs entirely on-device.
+
+```swift
+import Foundation
+import Security
+import CryptoKit
+
+struct VerifiedGrant {
+    let agentDID: String
+    let principalDID: String
+    let scopes: [String]
+    let expiresAt: Date
+    let grantId: String
+    let depth: Int
+}
+
+enum VerificationError: Error {
+    case malformedToken
+    case blockedAlgorithm(String)
+    case missingKid
+    case kidNotFound(String)
+    case signatureInvalid
+    case tokenExpired(Date)
+    case scopeViolation(required: [String], granted: [String])
+    case delegationDepthExceeded(Int, max: Int)
+}
+
+class OfflineVerifier {
+    private let jwksSnapshot: JWKSSnapshot
+    private let requiredScopes: [String]
+    private let clockSkewSeconds: TimeInterval
+    private let maxDelegationDepth: Int?
+    private let blockedAlgorithms: Set<String> = ["none", "HS256"]
+
+    init(
+        jwksSnapshot: JWKSSnapshot,
+        requiredScopes: [String] = [],
+        clockSkewSeconds: TimeInterval = 30,
+        maxDelegationDepth: Int? = nil
+    ) {
+        self.jwksSnapshot = jwksSnapshot
+        self.requiredScopes = requiredScopes
+        self.clockSkewSeconds = clockSkewSeconds
+        self.maxDelegationDepth = maxDelegationDepth
+    }
+
+    func verify(_ token: String) throws -> VerifiedGrant {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else {
+            throw VerificationError.malformedToken
+        }
+
+        // Decode header
+        guard let headerData = base64urlDecode(String(parts[0])),
+              let header = try? JSONSerialization.jsonObject(with: headerData) as? [String: Any] else {
+            throw VerificationError.malformedToken
+        }
+
+        // Check algorithm
+        let alg = header["alg"] as? String ?? ""
+        guard !blockedAlgorithms.contains(alg) else {
+            throw VerificationError.blockedAlgorithm(alg)
+        }
+
+        // Get kid
+        guard let kid = header["kid"] as? String else {
+            throw VerificationError.missingKid
+        }
+
+        // Find key in snapshot
+        guard let jwk = jwksSnapshot.keys.first(where: { $0["kid"] == kid }) else {
+            throw VerificationError.kidNotFound(kid)
+        }
+
+        // Build RSA public key from JWK
+        let publicKey = try rsaPublicKey(from: jwk)
+
+        // Verify RS256 signature
+        let signedInput = "\(parts[0]).\(parts[1])"
+        guard let signatureData = base64urlDecode(String(parts[2])),
+              let signedData = signedInput.data(using: .utf8) else {
+            throw VerificationError.malformedToken
+        }
+
+        let verified = SecKeyVerifySignature(
+            publicKey,
+            .rsaSignatureMessagePKCS1v15SHA256,
+            signedData as CFData,
+            signatureData as CFData,
+            nil
+        )
+
+        guard verified else {
+            throw VerificationError.signatureInvalid
+        }
+
+        // Decode payload
+        guard let payloadData = base64urlDecode(String(parts[1])),
+              let payload = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any] else {
+            throw VerificationError.malformedToken
+        }
+
+        // Check expiry
+        guard let exp = payload["exp"] as? TimeInterval else {
+            throw VerificationError.malformedToken
+        }
+        let expiresAt = Date(timeIntervalSince1970: exp)
+        let now = Date()
+        guard expiresAt.addingTimeInterval(clockSkewSeconds) > now else {
+            throw VerificationError.tokenExpired(expiresAt)
+        }
+
+        // Extract claims
+        let scopes = payload["scp"] as? [String] ?? []
+        let agentDID = payload["agt"] as? String ?? ""
+        let principalDID = payload["sub"] as? String ?? ""
+        let jti = payload["jti"] as? String ?? ""
+        let grantId = payload["grnt"] as? String ?? jti
+        let depth = payload["delegationDepth"] as? Int ?? 0
+
+        // Enforce scopes
+        if !requiredScopes.isEmpty {
+            let missing = requiredScopes.filter { !scopes.contains($0) }
+            guard missing.isEmpty else {
+                throw VerificationError.scopeViolation(
+                    required: requiredScopes, granted: scopes
+                )
+            }
+        }
+
+        // Enforce delegation depth
+        if let max = maxDelegationDepth, depth > max {
+            throw VerificationError.delegationDepthExceeded(depth, max: max)
+        }
+
+        return VerifiedGrant(
+            agentDID: agentDID,
+            principalDID: principalDID,
+            scopes: scopes,
+            expiresAt: expiresAt,
+            grantId: grantId,
+            depth: depth
+        )
+    }
+
+    // MARK: - Helpers
+
+    private func base64urlDecode(_ string: String) -> Data? {
+        var base64 = string
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let remainder = base64.count % 4
+        if remainder > 0 {
+            base64 += String(repeating: "=", count: 4 - remainder)
+        }
+        return Data(base64Encoded: base64)
+    }
+
+    private func rsaPublicKey(from jwk: [String: String]) throws -> SecKey {
+        guard let n = jwk["n"], let e = jwk["e"],
+              let nData = base64urlDecode(n),
+              let eData = base64urlDecode(e) else {
+            throw VerificationError.malformedToken
+        }
+
+        // Build DER-encoded RSA public key
+        let keyData = buildRSAPublicKeyDER(modulus: nData, exponent: eData)
+
+        let attributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPublic,
+            kSecAttrKeySizeInBits as String: nData.count * 8,
+        ]
+
+        var error: Unmanaged<CFError>?
+        guard let key = SecKeyCreateWithData(
+            keyData as CFData, attributes as CFDictionary, &error
+        ) else {
+            throw VerificationError.malformedToken
+        }
+
+        return key
+    }
+
+    private func buildRSAPublicKeyDER(modulus: Data, exponent: Data) -> Data {
+        // ASN.1 DER encoding for RSA public key
+        var modBytes = [UInt8](modulus)
+        if modBytes[0] >= 0x80 { modBytes.insert(0x00, at: 0) }
+
+        var expBytes = [UInt8](exponent)
+        if expBytes[0] >= 0x80 { expBytes.insert(0x00, at: 0) }
+
+        let modEncoded = asn1Integer(modBytes)
+        let expEncoded = asn1Integer(expBytes)
+        let sequence = asn1Sequence(modEncoded + expEncoded)
+
+        return Data(sequence)
+    }
+
+    private func asn1Integer(_ bytes: [UInt8]) -> [UInt8] {
+        return [0x02] + asn1Length(bytes.count) + bytes
+    }
+
+    private func asn1Sequence(_ bytes: [UInt8]) -> [UInt8] {
+        return [0x30] + asn1Length(bytes.count) + bytes
+    }
+
+    private func asn1Length(_ length: Int) -> [UInt8] {
+        if length < 0x80 { return [UInt8(length)] }
+        if length < 0x100 { return [0x81, UInt8(length)] }
+        return [0x82, UInt8(length >> 8), UInt8(length & 0xFF)]
+    }
+}
+```
+
+## Step 5: Audit Logging with CryptoKit
+
+Use CryptoKit for SHA-256 hashing and Ed25519 signing.
+
+```swift
+import CryptoKit
+import Foundation
+
+struct SignedAuditEntry: Codable {
+    let seq: Int
+    let timestamp: String
+    let action: String
+    let agentDID: String
+    let grantId: String
+    let scopes: [String]
+    let result: String
+    let prevHash: String
+    let hash: String
+    let signature: String
+}
+
+class OfflineAuditLog {
+    private let privateKey: Curve25519.Signing.PrivateKey
+    private let logURL: URL
+    private var seq = 0
+    private var prevHash = "0000000000000000"
+
+    init(signingKeyPem: String, logURL: URL) throws {
+        // Parse Ed25519 private key from PEM
+        let base64 = signingKeyPem
+            .replacingOccurrences(of: "-----BEGIN PRIVATE KEY-----", with: "")
+            .replacingOccurrences(of: "-----END PRIVATE KEY-----", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+
+        guard let keyData = Data(base64Encoded: base64) else {
+            throw AuditLogError.invalidSigningKey
+        }
+
+        // Ed25519 private key is the last 32 bytes of the PKCS#8 DER
+        let seed = keyData.suffix(32)
+        self.privateKey = try Curve25519.Signing.PrivateKey(rawRepresentation: seed)
+        self.logURL = logURL
+
+        // Resume from existing log
+        if let data = try? String(contentsOf: logURL, encoding: .utf8) {
+            let lines = data.split(separator: "\n").filter { !$0.isEmpty }
+            if let lastLine = lines.last,
+               let lastEntry = try? JSONDecoder().decode(
+                   SignedAuditEntry.self,
+                   from: Data(lastLine.utf8)
+               ) {
+                seq = lastEntry.seq
+                prevHash = lastEntry.hash
+            }
+        }
+    }
+
+    func append(
+        action: String,
+        agentDID: String,
+        grantId: String,
+        scopes: [String],
+        result: String
+    ) throws -> SignedAuditEntry {
+        seq += 1
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+
+        // Compute hash
+        let hashInput = "\(seq)|\(timestamp)|\(action)|\(agentDID)|\(grantId)|\(scopes.joined(separator: ","))|\(result)||\(prevHash)"
+        let hashData = SHA256.hash(data: Data(hashInput.utf8))
+        let hash = hashData.map { String(format: "%02x", $0) }.joined()
+
+        // Sign the hash
+        let sigData = try privateKey.signature(for: Data(hash.utf8))
+        let signature = sigData.map { String(format: "%02x", $0) }.joined()
+
+        let entry = SignedAuditEntry(
+            seq: seq,
+            timestamp: timestamp,
+            action: action,
+            agentDID: agentDID,
+            grantId: grantId,
+            scopes: scopes,
+            result: result,
+            prevHash: prevHash,
+            hash: hash,
+            signature: signature
+        )
+
+        // Append to log file
+        let json = try JSONEncoder().encode(entry)
+        let line = String(data: json, encoding: .utf8)! + "\n"
+        let handle = try FileHandle(forWritingTo: logURL)
+        handle.seekToEndOfFile()
+        handle.write(Data(line.utf8))
+        handle.closeFile()
+
+        prevHash = hash
+        return entry
+    }
+}
+
+enum AuditLogError: Error {
+    case invalidSigningKey
+}
+```
+
+## Step 6: Usage in a SwiftUI App
+
+```swift
+import SwiftUI
+
+struct AgentView: View {
+    @State private var status = "Initializing..."
+    @State private var entries: [String] = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Gemma 4 Agent").font(.title)
+            Text(status).foregroundColor(.secondary)
+
+            List(entries, id: \.self) { entry in
+                Text(entry).font(.caption)
+            }
+        }
+        .padding()
+        .task { await runAgent() }
+    }
+
+    func runAgent() async {
+        do {
+            guard let bundle = try BundleStore.load() else {
+                status = "No bundle. Provision first."
+                return
+            }
+
+            let verifier = OfflineVerifier(
+                jwksSnapshot: bundle.jwksSnapshot,
+                requiredScopes: ["sensor:read"]
+            )
+
+            let grant = try verifier.verify(bundle.grantToken)
+            status = "Verified: \(grant.agentDID)"
+
+            let logURL = FileManager.default
+                .urls(for: .documentDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("audit.jsonl")
+
+            let auditLog = try OfflineAuditLog(
+                signingKeyPem: bundle.offlineAuditKey.privateKey,
+                logURL: logURL
+            )
+
+            let entry = try auditLog.append(
+                action: "sensor.read",
+                agentDID: grant.agentDID,
+                grantId: grant.grantId,
+                scopes: grant.scopes,
+                result: "success"
+            )
+
+            entries.append("#\(entry.seq): \(entry.action) [\(entry.hash.prefix(12))...]")
+        } catch {
+            status = "Error: \(error.localizedDescription)"
+        }
+    }
+}
+```
+
+## Security Considerations
+
+- **Keychain protection class**: `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` prevents backup extraction and access when locked.
+- **App Transport Security**: ATS is enabled by default. The provisioning and sync calls to `api.grantex.dev` use HTTPS.
+- **Jailbreak detection**: Consider using frameworks like IOSSecuritySuite for high-security use cases. Jailbroken devices can extract Keychain items.
+- **Background execution**: If the agent runs in the background, ensure the Keychain item is accessible. Use `kSecAttrAccessibleAfterFirstUnlock` instead.
+- **Biometric gate**: Add `kSecAccessControlBiometryCurrentSet` to the Keychain item for Face ID / Touch ID protection before accessing the bundle.
+
+## Next Steps
+
+- [Android Guide](/guides/android-gemma4) -- integrate on Android
+- [Raspberry Pi Guide](/guides/raspberry-pi) -- run on Pi 5
+- [Offline Authorization](/features/offline-authorization) -- architecture and security model
+- [Gemma 4 SDK Reference](/sdks/gemma) -- complete API reference

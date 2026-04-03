@@ -27,6 +27,9 @@ import { DomainList } from './pages/domains/DomainList';
 import { WebAuthnList } from './pages/webauthn/WebAuthnList';
 import { CredentialList } from './pages/credentials/CredentialList';
 import { EventList } from './pages/events/EventList';
+import { BundleList } from './pages/bundles/BundleList';
+import { BundleForm } from './pages/bundles/BundleForm';
+import { BundleDetail } from './pages/bundles/BundleDetail';
 import { AdminPage } from './pages/admin/AdminPage';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './RequireAuth';
@@ -49,6 +52,9 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/agents/:id/edit', element: <AgentForm /> },
       { path: '/dashboard/grants', element: <GrantList /> },
       { path: '/dashboard/grants/:id', element: <GrantDetail /> },
+      { path: '/dashboard/bundles', element: <BundleList /> },
+      { path: '/dashboard/bundles/new', element: <BundleForm /> },
+      { path: '/dashboard/bundles/:bundleId', element: <BundleDetail /> },
       { path: '/dashboard/audit', element: <AuditLog /> },
       { path: '/dashboard/audit/:id', element: <AuditDetail /> },
       { path: '/dashboard/webhooks', element: <WebhookList /> },

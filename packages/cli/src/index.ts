@@ -24,6 +24,11 @@ import { usageCommand } from './commands/usage.js';
 import { vaultCommand } from './commands/vault.js';
 import { webauthnCommand } from './commands/webauthn.js';
 import { webhooksCommand } from './commands/webhooks.js';
+import { verifyCommand } from './commands/verify.js';
+import { decodeCommand } from './commands/decode.js';
+import { auditCmdCommand } from './commands/audit-cmd.js';
+import { registryCommand } from './commands/registry-cmd.js';
+import { initCommand } from './commands/init.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -62,6 +67,11 @@ export function createProgram(): Command {
   program.addCommand(billingCommand());
   program.addCommand(scimCommand());
   program.addCommand(ssoCommand());
+  program.addCommand(verifyCommand());
+  program.addCommand(decodeCommand());
+  program.addCommand(auditCmdCommand());
+  program.addCommand(registryCommand());
+  program.addCommand(initCommand());
 
   return program;
 }

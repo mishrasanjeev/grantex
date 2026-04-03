@@ -1,0 +1,269 @@
+---
+title: "Quickstart: Gemma 4 Offline Auth"
+sidebarTitle: "Quickstart (Gemma 4)"
+description: "Get offline authorization working with Gemma 4 agents in under 5 minutes. Install @grantex/gemma, create a consent bundle, and verify tokens offline."
+---
+
+## What You'll Build
+
+This quickstart walks you through the full offline authorization lifecycle for a Gemma 4 on-device agent:
+
+1. **Create a consent bundle** while online (one API call)
+2. **Verify grant tokens offline** using the JWKS snapshot in the bundle
+3. **Log actions to a tamper-evident audit log** (hash-chained, Ed25519-signed)
+4. **Sync the audit log** back to the Grantex cloud when connectivity returns
+
+The entire verification path runs locally with zero network calls.
+
+## Prerequisites
+
+- **Node.js 18+** (TypeScript) or **Python 3.10+** (Python)
+- A Grantex developer account and API key ([sign up free](https://grantex.dev))
+- A registered agent with the scopes your Gemma 4 model needs
+
+## Step 1: Install
+
+<CodeGroup>
+
+```bash TypeScript
+npm install @grantex/gemma
+```
+
+```bash Python
+pip install grantex-gemma
+```
+
+</CodeGroup>
+
+## Step 2: Create a Consent Bundle (Online)
+
+The consent bundle packages everything the device needs to operate offline: a signed grant token, a JWKS snapshot for signature verification, and an Ed25519 key pair for audit signing.
+
+<CodeGroup>
+
+```typescript TypeScript
+import {
+  createConsentBundle,
+  storeBundle,
+} from '@grantex/gemma';
+
+const bundle = await createConsentBundle({
+  apiKey: process.env.GRANTEX_API_KEY!,
+  agentId: 'ag_01HXYZ...',
+  userId: 'user_abc123',
+  scopes: ['calendar:read', 'email:send'],
+  offlineTTL: '72h',
+});
+
+// Encrypt and persist to disk for offline use
+await storeBundle(bundle, './consent-bundle.enc', process.env.BUNDLE_KEY!);
+
+console.log('Bundle created:', bundle.bundleId);
+console.log('Offline until:', bundle.offlineExpiresAt);
+```
+
+```python Python
+import os
+from grantex_gemma import create_consent_bundle, store_bundle
+
+bundle = create_consent_bundle(
+    api_key=os.environ["GRANTEX_API_KEY"],
+    agent_id="ag_01HXYZ...",
+    user_id="user_abc123",
+    scopes=["calendar:read", "email:send"],
+    offline_ttl="72h",
+)
+
+# Encrypt and persist to disk for offline use
+store_bundle(bundle, "./consent-bundle.enc", os.environ["BUNDLE_KEY"])
+
+print(f"Bundle created: {bundle.bundle_id}")
+print(f"Offline until: {bundle.offline_expires_at}")
+```
+
+</CodeGroup>
+
+<Note>
+This is the only step that requires network connectivity. Everything after this runs entirely on-device.
+</Note>
+
+## Step 3: Create an Offline Verifier
+
+Load the bundle and create a verifier that uses the embedded JWKS snapshot.
+
+<CodeGroup>
+
+```typescript TypeScript
+import {
+  loadBundle,
+  createOfflineVerifier,
+} from '@grantex/gemma';
+
+const bundle = await loadBundle('./consent-bundle.enc', process.env.BUNDLE_KEY!);
+
+const verifier = createOfflineVerifier({
+  jwksSnapshot: bundle.jwksSnapshot,
+  requireScopes: ['calendar:read'],
+  clockSkewSeconds: 30,
+});
+```
+
+```python Python
+from grantex_gemma import load_bundle, create_offline_verifier
+
+bundle = load_bundle("./consent-bundle.enc", os.environ["BUNDLE_KEY"])
+
+verifier = create_offline_verifier(
+    jwks_snapshot=bundle.jwks_snapshot,
+    require_scopes=["calendar:read"],
+    clock_skew_seconds=30,
+)
+```
+
+</CodeGroup>
+
+## Step 4: Verify a Token Offline
+
+Every time the Gemma 4 agent attempts an action, verify the grant token before allowing it. No network call is made.
+
+<CodeGroup>
+
+```typescript TypeScript
+try {
+  const grant = await verifier.verify(bundle.grantToken);
+
+  console.log('Agent DID:', grant.agentDID);
+  console.log('Principal:', grant.principalDID);
+  console.log('Scopes:', grant.scopes.join(', '));
+  console.log('Expires:', grant.expiresAt.toISOString());
+} catch (err) {
+  console.error('Verification failed:', err);
+}
+```
+
+```python Python
+try:
+    grant = verifier.verify(bundle.grant_token)
+
+    print(f"Agent DID: {grant.agent_did}")
+    print(f"Principal: {grant.principal_did}")
+    print(f"Scopes: {', '.join(grant.scopes)}")
+    print(f"Expires: {grant.expires_at.isoformat()}")
+except Exception as err:
+    print(f"Verification failed: {err}")
+```
+
+</CodeGroup>
+
+## Step 5: Create an Offline Audit Log
+
+Every authorized action should be recorded. The audit log is append-only, Ed25519-signed, and hash-chained so tampering is detectable at sync time.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { createOfflineAuditLog } from '@grantex/gemma';
+
+const auditLog = createOfflineAuditLog({
+  signingKey: bundle.offlineAuditKey,
+  logPath: './audit-log.jsonl',
+});
+
+// Log an action
+const entry = await auditLog.append({
+  action: 'calendar.read',
+  agentDID: grant.agentDID,
+  grantId: grant.grantId,
+  scopes: grant.scopes,
+  result: 'success',
+  metadata: { eventCount: 12 },
+});
+
+console.log(`Audit entry #${entry.seq} — hash: ${entry.hash.slice(0, 12)}...`);
+```
+
+```python Python
+from grantex_gemma import create_offline_audit_log
+
+audit_log = create_offline_audit_log(
+    signing_key=bundle.offline_audit_key,
+    log_path="./audit-log.jsonl",
+)
+
+# Log an action
+entry = audit_log.append(
+    action="calendar.read",
+    agent_did=grant.agent_did,
+    grant_id=grant.grant_id,
+    scopes=grant.scopes,
+    result="success",
+    metadata={"event_count": 12},
+)
+
+print(f"Audit entry #{entry.seq} - hash: {entry.hash[:12]}...")
+```
+
+</CodeGroup>
+
+## Step 6: Sync When Back Online
+
+When connectivity returns, upload the offline audit entries to the Grantex cloud. The server verifies the hash chain and Ed25519 signatures, then reconciles the entries with the cloud audit log.
+
+<CodeGroup>
+
+```typescript TypeScript
+import { syncAuditLog } from '@grantex/gemma';
+
+const result = await syncAuditLog(auditLog, {
+  endpoint: 'https://api.grantex.dev',
+  apiKey: process.env.GRANTEX_API_KEY!,
+  bundleId: bundle.bundleId,
+  batchSize: 100,
+});
+
+console.log(`Synced ${result.syncedCount} entries`);
+if (result.hasErrors) {
+  console.warn('Sync errors:', result.errors);
+}
+```
+
+```python Python
+result = audit_log.sync(
+    api_key=os.environ["GRANTEX_API_KEY"],
+    bundle_id=bundle.bundle_id,
+)
+
+print(f"Synced: {result.accepted} accepted, {result.rejected} rejected")
+print(f"Revocation status: {result.revocation_status}")
+```
+
+</CodeGroup>
+
+## Expected Output
+
+```text
+Bundle created: cb_01HXYZ...
+Offline until: 2026-04-06T12:00:00.000Z
+Agent DID: did:grantex:ag_01HXYZ...
+Principal: user_abc123
+Scopes: calendar:read, email:send
+Expires: 2026-04-04T00:00:00.000Z
+Audit entry #1 — hash: a3f29c81b4e2...
+Synced 1 entries
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `GRANTEX_API_KEY` | -- | Developer API key from the Grantex portal |
+| `BUNDLE_KEY` | -- | Passphrase for AES-256-GCM bundle encryption |
+
+## Next Steps
+
+- [Offline Authorization](/features/offline-authorization) -- architecture deep-dive and security model
+- [Consent Bundles](/features/consent-bundles) -- full ConsentBundle reference and lifecycle
+- [Gemma 4 SDK Reference](/sdks/gemma) -- complete API docs for every export
+- [Raspberry Pi Guide](/guides/raspberry-pi) -- run a Gemma 4 agent on a Pi 5 with offline auth
+- [Android Guide](/guides/android-gemma4) -- integrate into an Android app
+- [iOS Guide](/guides/ios-gemma4) -- integrate into an iOS app with CryptoKit

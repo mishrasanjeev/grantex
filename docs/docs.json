@@ -48,6 +48,13 @@
             ]
           },
           {
+            "group": "Offline Authorization",
+            "pages": [
+              "features/offline-authorization",
+              "features/consent-bundles"
+            ]
+          },
+          {
             "group": "x402 Payment Protocol",
             "pages": [
               "features/x402-architecture",
@@ -82,7 +89,10 @@
               "guides/custom-domains",
               "guides/mpp-integration",
               "guides/enterprise-sso",
-              "guides/compliance-matrix"
+              "guides/compliance-matrix",
+              "guides/raspberry-pi",
+              "guides/android-gemma4",
+              "guides/ios-gemma4"
             ]
           },
           {
@@ -99,7 +109,8 @@
               "examples/anthropic-tool-use",
               "examples/multi-agent-email-flow",
               "examples/token-expiry-refresh",
-              "examples/audit-dashboard"
+              "examples/audit-dashboard",
+              "examples/quickstart-gemma"
             ]
           }
         ]
@@ -278,6 +289,12 @@
               "integrations/openai-agents",
               "integrations/google-adk",
               "integrations/anthropic"
+            ]
+          },
+          {
+            "group": "On-Device",
+            "pages": [
+              "sdks/gemma"
             ]
           },
           {
@@ -488,6 +505,13 @@
             ]
           },
           {
+            "group": "Offline",
+            "pages": [
+              "api-reference/consent-bundles",
+              "api-reference/offline-sync"
+            ]
+          },
+          {
             "group": "Verifiable Credentials",
             "pages": [
               "api-reference/credentials/get-credential",
@@ -546,7 +570,8 @@
               "blog/introducing-grantex",
               "blog/why-ai-agents-need-authorization",
               "blog/grantex-v0-1-whats-included",
-              "blog/grantex-v2-2"
+              "blog/grantex-v2-2",
+              "blog/gemma-4-offline-agents-security"
             ]
           }
         ]

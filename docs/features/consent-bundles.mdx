@@ -1,0 +1,227 @@
+---
+title: "Consent Bundles"
+sidebarTitle: "Consent Bundles"
+description: "Consent bundles package a grant token, JWKS snapshot, and audit signing key for offline-capable authorization."
+---
+
+## What is a Consent Bundle?
+
+A consent bundle is a self-contained package that enables offline authorization. It bundles everything a device needs to verify grant tokens, enforce scopes, and produce tamper-evident audit logs without any network connectivity.
+
+Consent bundles are issued by the Grantex API after a standard authorization flow completes. The end-user must have already consented to the requested scopes before a bundle can be created.
+
+## ConsentBundle Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `bundleId` | `string` | Unique identifier for this bundle (e.g. `cb_01HXYZ...`) |
+| `grantToken` | `string` | RS256-signed Grantex grant token (JWT) |
+| `jwksSnapshot` | `JWKSSnapshot` | Server's public keys for offline verification |
+| `offlineAuditKey` | `OfflineAuditKey` | Ed25519 key pair for signing audit entries |
+| `checkpointAt` | `number` | Unix timestamp (ms) of last successful cloud sync |
+| `syncEndpoint` | `string` | URL for uploading audit entries when reconnected |
+| `offlineExpiresAt` | `string` | ISO-8601 timestamp after which offline operation is disallowed |
+
+### JWKSSnapshot
+
+| Field | Type | Description |
+|---|---|---|
+| `keys` | `JWK[]` | Array of JSON Web Keys from the server's JWKS endpoint |
+| `fetchedAt` | `string` | ISO-8601 timestamp when keys were fetched |
+| `validUntil` | `string` | ISO-8601 timestamp after which the snapshot should be refreshed |
+
+### OfflineAuditKey
+
+| Field | Type | Description |
+|---|---|---|
+| `publicKey` | `string` | PEM-encoded Ed25519 public key (also stored server-side) |
+| `privateKey` | `string` | PEM-encoded Ed25519 private key (device-only) |
+| `algorithm` | `string` | Algorithm identifier (default `'Ed25519'`) |
+
+## Lifecycle
+
+A consent bundle follows a four-stage lifecycle:
+
+```
+ CREATE ──► USE ──► SYNC ──► REFRESH/EXPIRE
+   │          │       │          │
+ online    offline  online    online
+```
+
+### 1. Create (Online)
+
+The developer calls `POST /v1/consent-bundles` (or `createConsentBundle()` in the SDK) while the device is online. The server:
+
+1. Validates the API key and agent registration
+2. Verifies the end-user has consented to the requested scopes
+3. Issues a fresh grant token
+4. Snapshots the current JWKS
+5. Generates an Ed25519 key pair (public key stored server-side, both keys returned)
+6. Returns the complete `ConsentBundle`
+
+<CodeGroup>
+
+```typescript TypeScript
+import { createConsentBundle, storeBundle } from '@grantex/gemma';
+
+const bundle = await createConsentBundle({
+  apiKey: 'gx_...',
+  agentId: 'ag_01HXYZ...',
+  userId: 'user_abc123',
+  scopes: ['calendar:read', 'email:send'],
+  offlineTTL: '72h',
+});
+
+await storeBundle(bundle, '/data/bundle.enc', process.env.BUNDLE_KEY!);
+```
+
+```python Python
+from grantex_gemma import create_consent_bundle, store_bundle
+
+bundle = create_consent_bundle(
+    api_key="gx_...",
+    agent_id="ag_01HXYZ...",
+    user_id="user_abc123",
+    scopes=["calendar:read", "email:send"],
+    offline_ttl="72h",
+)
+
+store_bundle(bundle, "/data/bundle.enc", os.environ["BUNDLE_KEY"])
+```
+
+</CodeGroup>
+
+### 2. Use (Offline)
+
+While offline, the device loads the bundle and uses its contents:
+
+- **`grantToken`** is passed to `createOfflineVerifier` for JWT verification
+- **`jwksSnapshot`** provides the signing keys for signature validation
+- **`offlineAuditKey`** signs each audit entry for tamper evidence
+- **`offlineExpiresAt`** is checked before each operation; the device must stop operating after this time
+
+### 3. Sync (Online)
+
+When connectivity returns, the device uploads its offline audit entries via `POST /v1/audit/offline-sync`. The server:
+
+1. Validates the Ed25519 signatures using the stored public key
+2. Verifies the hash chain integrity
+3. Checks grant revocation status
+4. Stores accepted entries in the cloud audit log
+5. Returns a `SyncResult` with acceptance/rejection counts and revocation status
+
+### 4. Refresh or Expire
+
+Bundles have a finite lifetime controlled by `offlineTTL`. When the TTL is running low:
+
+- **`shouldRefresh(bundle)`** returns `true` when less than 20% of the TTL remains
+- **`refreshBundle(bundle, apiKey)`** calls the server to get a fresh bundle with extended `offlineExpiresAt`, a new JWKS snapshot, and rotated audit keys
+
+If the device cannot refresh before the bundle expires, it must stop offline operations and wait for connectivity to create a new bundle.
+
+```typescript
+import { shouldRefresh, refreshBundle, storeBundle } from '@grantex/gemma';
+
+// Check periodically when connectivity is available
+if (shouldRefresh(bundle)) {
+  const fresh = await refreshBundle(bundle, apiKey);
+  await storeBundle(fresh, '/data/bundle.enc', encryptionKey);
+  bundle = fresh;
+}
+```
+
+## Storage Options
+
+### Encrypted File (Default)
+
+AES-256-GCM encryption with a passphrase. The encryption key is derived from the passphrase via SHA-256. File format:
+
+```
+[12-byte IV][16-byte GCM auth tag][ciphertext]
+```
+
+Best for: servers, Raspberry Pi, Linux devices, CI environments.
+
+### Keychain (macOS / iOS)
+
+On Apple platforms, use the system Keychain for hardware-backed storage. The `storage: 'keychain'` option (when supported) stores the bundle in the Keychain with `kSecAttrAccessibleWhenUnlocked` protection.
+
+Best for: macOS and iOS applications.
+
+### Secure Enclave
+
+On devices with hardware security modules, the `storage: 'secure-enclave'` option stores the bundle encryption key in the Secure Enclave and only the ciphertext on disk. Requires platform-specific setup.
+
+Best for: iOS devices with Secure Enclave, Android devices with StrongBox.
+
+### Android EncryptedSharedPreferences
+
+Android applications should use `EncryptedSharedPreferences` from the Jetpack Security library. See the [Android guide](/guides/android-gemma4) for details.
+
+## Encryption
+
+The bundle contains sensitive material (grant token, Ed25519 private key). It must always be encrypted at rest.
+
+**What is encrypted:**
+- The entire `ConsentBundle` JSON is serialized and encrypted as a single unit
+- AES-256-GCM provides both confidentiality and integrity
+- The GCM auth tag detects any modification to the ciphertext
+
+**What is NOT encrypted:**
+- The file path on disk is not hidden
+- The file size is visible (reveals approximate bundle size)
+- The encryption key derivation uses SHA-256 of the passphrase -- use a strong passphrase or a hardware-generated key
+
+**`BundleTamperedError`** is thrown if:
+- The file is too short (missing IV or auth tag)
+- The GCM auth tag does not match (wrong key or modified file)
+- The decrypted JSON is malformed
+
+## Refresh Logic
+
+The `shouldRefresh()` function uses a simple heuristic: if less than 20% of the total TTL remains, it is time to refresh.
+
+```
+Total TTL = offlineExpiresAt - checkpointAt
+Remaining = offlineExpiresAt - now
+shouldRefresh = (remaining / totalTTL) < 0.2
+```
+
+For a 72-hour TTL, this triggers a refresh at approximately the 57.6-hour mark (14.4 hours remaining).
+
+**Refresh strategy recommendations:**
+
+| Scenario | `offlineTTL` | Refresh strategy |
+|---|---|---|
+| Mobile app with intermittent connectivity | `24h` | Check `shouldRefresh` on each app foreground |
+| Raspberry Pi with daily Wi-Fi window | `72h` | Cron job during expected connectivity window |
+| Laptop with frequent connectivity | `8h` | Background timer every 30 minutes |
+| Air-gapped with weekly data transfer | `168h` | Include refresh in data transfer protocol |
+
+## Bundle Revocation
+
+Bundles can be revoked server-side via `POST /v1/consent-bundles/:id/revoke`. Revocation is checked at:
+
+1. **Bundle creation** -- a revoked grant cannot be bundled
+2. **Sync time** -- the sync response includes `revocation_status`
+3. **Status check** -- `GET /v1/consent-bundles/:id/revocation-status` returns the current status
+
+A revoked bundle's grant token remains cryptographically valid (the signature still verifies), but the device should stop using it once it learns about the revocation at sync time.
+
+## Listing Bundles
+
+Developers can list all bundles for their account:
+
+```bash
+curl -H "Authorization: Bearer gx_..." \
+  https://api.grantex.dev/v1/consent-bundles
+```
+
+The response includes bundle metadata (ID, agent, scopes, expiry, revocation status) but does not include the grant token or private keys.
+
+## Next Steps
+
+- [Offline Authorization](/features/offline-authorization) -- architecture and security model
+- [Quickstart: Gemma 4](/examples/quickstart-gemma) -- hands-on tutorial
+- [Consent Bundles API](/api-reference/consent-bundles) -- REST API endpoints
+- [Gemma 4 SDK Reference](/sdks/gemma) -- full API reference

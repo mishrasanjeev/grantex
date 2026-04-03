@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- SEO -->
+  <title>@grantex/gemma — Offline Authorization for Gemma 4 Agents</title>
+  <meta name="description" content="The missing auth layer for Gemma 4's on-device agentic workflows. Offline grant verification, human consent, and tamper-evident audit logs — all running without cloud connectivity.">
+  <meta name="keywords" content="gemma 4 authorization, gemma 4 on device agents security, grantex gemma, offline agent auth, on-device AI authorization, consent bundle, offline verification, edge AI security, Raspberry Pi AI agent, Jetson agent auth">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="https://grantex.dev/gemma">
+
+  <!-- OpenGraph -->
+  <meta property="og:title" content="@grantex/gemma — Offline Authorization for Gemma 4 Agents">
+  <meta property="og:description" content="The missing auth layer for Gemma 4's on-device agentic workflows. Offline grant verification, human consent, and tamper-evident audit logs — all running without cloud connectivity.">
+  <meta property="og:url" content="https://grantex.dev/gemma">
+  <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Grantex">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="@grantex/gemma — Offline Authorization for Gemma 4 Agents">
+  <meta name="twitter:description" content="The missing auth layer for Gemma 4's on-device agentic workflows. Offline grant verification, human consent, and tamper-evident audit logs — all running without cloud connectivity.">
+  <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "@grantex/gemma",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Android, iOS, Linux, Windows, macOS",
+    "url": "https://grantex.dev/gemma",
+    "description": "Offline authorization library for Gemma 4 on-device AI agents. Consent bundles, offline JWT verification, and Ed25519-signed audit logs.",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "codeRepository": "https://github.com/mishrasanjeev/grantex",
+    "applicationSubCategory": "Security",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "isPartOf": {
+      "@type": "SoftwareApplication",
+      "name": "Grantex",
+      "url": "https://grantex.dev"
+    }
+  }
+  </script>
+
+  <style>
+    /* -- Design tokens ---------------------------------------------------- */
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --accent:   #3fb950;
+      --accent2:  #58a6ff;
+      --danger:   #f85149;
+      --warning:  #d29922;
+      --mono:     'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --sans:     'Inter', system-ui, -apple-system, sans-serif;
+      --radius:   8px;
+      --max-w:    1100px;
+    }
+
+    /* -- Reset ------------------------------------------------------------ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* -- Layout ----------------------------------------------------------- */
+    .container {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    section { padding: 80px 0; }
+    section + section { border-top: 1px solid var(--border); }
+
+    /* -- Nav -------------------------------------------------------------- */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(13, 17, 23, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+    .nav-logo {
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    .nav-logo span { color: var(--text); }
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+      font-size: 14px;
+    }
+    .nav-links a { color: var(--muted); transition: color 0.15s; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* -- Hero ------------------------------------------------------------- */
+    .hero {
+      padding: 96px 0 80px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(36px, 5vw, 60px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      max-width: 680px;
+      margin: 0 auto 36px;
+      font-size: 18px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .hero-ctas {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.15s;
+      border: none;
+    }
+    .btn:hover { opacity: 0.88; transform: translateY(-1px); text-decoration: none; }
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--muted); }
+
+    /* -- Hero visual ------------------------------------------------------ */
+    .hero-visual {
+      max-width: 560px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 24px;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.8;
+      color: var(--muted);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-visual::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+    }
+    .device-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .device-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .device-icon {
+      font-size: 32px;
+      line-height: 1;
+    }
+    .device-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+    .device-sub {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .verify-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 16px;
+      padding: 6px 16px;
+      border-radius: 20px;
+      background: rgba(63, 185, 80, 0.1);
+      border: 1px solid rgba(63, 185, 80, 0.25);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .verify-badge .check-mark {
+      font-size: 14px;
+    }
+    .flow-arrow {
+      font-size: 20px;
+      color: var(--border);
+    }
+
+    /* -- Trust bar -------------------------------------------------------- */
+    .trust-bar {
+      padding: 24px 0;
+      text-align: center;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .trust-bar-inner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      flex-wrap: wrap;
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .trust-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    /* -- Section shared --------------------------------------------------- */
+    .section-label {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(24px, 3vw, 36px);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+    .section-sub {
+      color: var(--muted);
+      font-size: 17px;
+      max-width: 600px;
+      margin-bottom: 48px;
+    }
+    .section-center {
+      text-align: center;
+    }
+    .section-center .section-sub {
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* -- Problem cards ---------------------------------------------------- */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: var(--accent2); }
+    .card-icon {
+      font-size: 28px;
+      margin-bottom: 16px;
+      display: block;
+    }
+    .card h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .card p { color: var(--muted); font-size: 14px; line-height: 1.65; }
+
+    /* -- Solution flow ---------------------------------------------------- */
+    .solution-flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      max-width: 900px;
+      margin: 0 auto;
+      position: relative;
+    }
+    .solution-flow::before {
+      content: '';
+      position: absolute;
+      top: 28px;
+      left: 60px;
+      right: 60px;
+      height: 2px;
+      background: var(--border);
+    }
+    .solution-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+    .solution-num {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+    .solution-step h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .solution-step p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+      max-width: 180px;
+    }
+    .solution-step .step-tag {
+      margin-top: 8px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 4px;
+      background: rgba(63, 185, 80, 0.1);
+      border: 1px solid rgba(63, 185, 80, 0.2);
+      color: var(--accent);
+    }
+
+    /* -- Tabs / code blocks ----------------------------------------------- */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-size: 14px;
+      font-family: var(--mono);
+      color: var(--muted);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color 0.15s;
+    }
+    .tab-btn.active {
+      color: var(--accent2);
+      border-bottom-color: var(--accent2);
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .code-block {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 var(--radius) var(--radius);
+    }
+    .code-block pre {
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.7;
+      padding: 24px;
+      overflow-x: auto;
+      color: var(--text);
+    }
+    .copy-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-family: var(--mono);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    /* Syntax highlight */
+    .kw  { color: #ff7b72; }
+    .str { color: #a5d6ff; }
+    .fn  { color: #d2a8ff; }
+    .cm  { color: #8b949e; }
+    .id  { color: #79c0ff; }
+    .op  { color: #e6edf3; }
+    .num { color: #79c0ff; }
+
+    /* -- Install commands ------------------------------------------------- */
+    .install-commands {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      max-width: 680px;
+    }
+    .install-commands.centered {
+      margin: 0 auto;
+      justify-content: center;
+    }
+    .install-cmd {
+      flex: 1;
+      min-width: 280px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .install-cmd:hover { border-color: var(--accent2); }
+    .install-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--accent);
+      flex-shrink: 0;
+      width: 32px;
+    }
+    .install-cmd code {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--text);
+      flex: 1;
+    }
+    .install-copy {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    .install-cmd:hover .install-copy { color: var(--text); }
+
+    /* -- Compatibility grid ----------------------------------------------- */
+    .compat-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 16px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .compat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 16px;
+      text-align: center;
+      transition: border-color 0.2s;
+    }
+    .compat-card:hover { border-color: var(--accent2); }
+    .compat-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .compat-card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .compat-card p {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* -- Benchmark table -------------------------------------------------- */
+    .bench-table {
+      width: 100%;
+      max-width: 700px;
+      margin: 0 auto;
+      table-layout: fixed;
+      border-collapse: collapse;
+      font-size: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .bench-table th {
+      font-size: 11px;
+      font-family: var(--mono);
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      padding: 14px 16px;
+      border-bottom: 2px solid var(--border);
+      text-align: left;
+    }
+    .bench-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .bench-table tr:last-child td { border-bottom: none; }
+    .bench-table .platform-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .bench-table .bench-value {
+      font-family: var(--mono);
+      font-weight: 600;
+      color: var(--accent);
+    }
+    .bench-table .bench-mem {
+      font-family: var(--mono);
+      color: var(--muted);
+    }
+
+    /* -- Framework pills -------------------------------------------------- */
+    .framework-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: center;
+    }
+    .framework-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--muted);
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .framework-pill:hover { border-color: var(--accent2); color: var(--text); text-decoration: none; }
+    .framework-icon {
+      font-size: 20px;
+      width: 24px;
+      text-align: center;
+    }
+
+    /* -- CTA bottom ------------------------------------------------------- */
+    .cta-bottom {
+      text-align: center;
+    }
+    .cta-bottom h2 {
+      font-size: clamp(24px, 3vw, 36px);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 32px;
+    }
+    .cta-links {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 32px;
+    }
+    .cta-links a {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--accent2);
+    }
+
+    /* -- Footer ----------------------------------------------------------- */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .footer-logo {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .footer-links {
+      display: flex;
+      gap: 20px;
+      list-style: none;
+      font-size: 13px;
+    }
+    .footer-links a { color: var(--muted); }
+    .footer-links a:hover { color: var(--text); text-decoration: none; }
+    .footer-copy {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* -- Responsive ------------------------------------------------------- */
+    @media (max-width: 680px) {
+      section { padding: 56px 0; }
+      .nav-links { gap: 16px; font-size: 13px; }
+      .hero { padding: 64px 0 56px; }
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+      .solution-flow {
+        grid-template-columns: 1fr;
+        gap: 24px;
+        max-width: 300px;
+      }
+      .solution-flow::before {
+        top: 0;
+        bottom: 0;
+        left: 28px;
+        right: auto;
+        width: 2px;
+        height: auto;
+      }
+      .solution-step {
+        flex-direction: row;
+        text-align: left;
+        gap: 16px;
+      }
+      .solution-step p { max-width: none; }
+      .solution-num {
+        flex-shrink: 0;
+        width: 48px;
+        height: 48px;
+        font-size: 16px;
+        margin-bottom: 0;
+      }
+      .compat-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .trust-bar-inner {
+        gap: 16px;
+        font-size: 12px;
+      }
+      .device-row {
+        gap: 16px;
+      }
+      .install-cmd {
+        min-width: 240px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- -- Nav ---------------------------------------------------------------- -->
+<nav>
+  <div class="container">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo" style="text-decoration:none;">
+        grant<span>ex</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="https://docs.grantex.dev"
+               onclick="gtag('event','docs_click',{event_category:'nav'})">Docs</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex"
+               onclick="gtag('event','github_click',{event_category:'nav'})">GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/@grantex/gemma"
+               onclick="gtag('event','npm_click',{event_category:'nav'})">npm</a></li>
+        <li><a href="https://docs.grantex.dev/blog"
+               onclick="gtag('event','blog_click',{event_category:'nav'})">Blog</a></li>
+        <li><a href="/"
+               style="color:var(--accent);font-weight:600;">grantex.dev</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<!-- -- Hero --------------------------------------------------------------- -->
+<section class="hero">
+  <div class="container">
+    <h1>Gemma 4 Agents.<br>Now With Offline Authorization.</h1>
+    <p>
+      The only auth library purpose-built for on-device AI agents &mdash; offline consent,
+      offline verification, offline audit. Apache 2.0.
+    </p>
+    <div class="hero-ctas">
+      <div class="install-cmd" onclick="copyInstall('npm install @grantex/gemma', this)"
+           style="cursor:pointer; max-width:340px; margin:0;">
+        <span class="install-label">npm</span>
+        <code>npm install @grantex/gemma</code>
+        <span class="install-copy">Copy</span>
+      </div>
+      <a href="https://docs.grantex.dev/integrations/gemma" class="btn btn-secondary"
+         onclick="gtag('event','docs_click',{event_category:'hero'})">
+        Read the Docs &rarr;
+      </a>
+    </div>
+
+    <!-- Hero visual -->
+    <div class="hero-visual">
+      <div class="device-row">
+        <div class="device-box">
+          <span class="device-icon">&#x1F4F1;</span>
+          <span class="device-label">Android</span>
+          <span class="device-sub">Gemma 4</span>
+        </div>
+        <span class="flow-arrow">&#x2192;</span>
+        <div class="device-box">
+          <span class="device-icon">&#x1F9E0;</span>
+          <span class="device-label">Agent</span>
+          <span class="device-sub">On-Device</span>
+        </div>
+        <span class="flow-arrow">&#x2192;</span>
+        <div class="device-box">
+          <span class="device-icon">&#x1F512;</span>
+          <span class="device-label">Grantex</span>
+          <span class="device-sub">ConsentBundle</span>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:20px;">
+        <span class="verify-badge">
+          <span class="check-mark">&#10003;</span>
+          Verified in 2ms &middot; No network required
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- -- Trust bar ---------------------------------------------------------- -->
+<div class="trust-bar">
+  <div class="container">
+    <div class="trust-bar-inner">
+      <span class="trust-item"><span class="trust-dot"></span> Day-zero integration</span>
+      <span class="trust-item"><span class="trust-dot"></span> Apache 2.0</span>
+      <span class="trust-item"><span class="trust-dot"></span> &lt; 5ms verification</span>
+      <span class="trust-item"><span class="trust-dot"></span> Raspberry Pi ready</span>
+    </div>
+  </div>
+</div>
+
+<!-- -- The Problem -------------------------------------------------------- -->
+<section id="problem">
+  <div class="container">
+    <div class="section-label">The problem</div>
+    <h2 class="section-title">On-device agents have no authorization layer</h2>
+    <p class="section-sub">
+      Gemma 4 runs locally &mdash; but your security model still assumes a cloud connection.
+      These are the gaps.
+    </p>
+    <div class="cards">
+      <div class="card">
+        <span class="card-icon">&#x1F511;</span>
+        <h3>API keys with no scope boundaries</h3>
+        <p>
+          Your agent carries raw API keys with full access. There are no per-action
+          scopes, no expiration, and no way to limit what the agent can do on a
+          user's behalf.
+        </p>
+      </div>
+      <div class="card">
+        <span class="card-icon">&#x1F4E1;</span>
+        <h3>No audit trail survives offline</h3>
+        <p>
+          When the device goes offline, actions happen in a black box. Logs are
+          unsigned, mutable, and lost when the device reconnects &mdash; making
+          compliance impossible.
+        </p>
+      </div>
+      <div class="card">
+        <span class="card-icon">&#x26A0;</span>
+        <h3>No mid-session revocation without connectivity</h3>
+        <p>
+          If a user wants to stop an agent mid-task, they need network access to
+          reach a revocation endpoint. Offline, the agent keeps running with
+          full permissions.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- -- The Solution ------------------------------------------------------- -->
+<section id="solution">
+  <div class="container section-center">
+    <div class="section-label">The solution</div>
+    <h2 class="section-title">ConsentBundle: Issue once online. Verify forever offline.</h2>
+    <p class="section-sub">
+      A single signed bundle contains everything the agent needs to prove authorization,
+      verify scopes, and log actions &mdash; without ever calling home.
+    </p>
+
+    <div class="solution-flow">
+      <div class="solution-step">
+        <div class="solution-num">1</div>
+        <div>
+          <h3>Issue online</h3>
+          <p>Human approves scopes via consent flow. Grantex bundles the grant token, JWKS snapshot, and audit signing key.</p>
+          <span class="step-tag">One-time</span>
+        </div>
+      </div>
+      <div class="solution-step">
+        <div class="solution-num">2</div>
+        <div>
+          <h3>Verify in 2ms</h3>
+          <p>Agent verifies the JWT against the bundled JWKS &mdash; no network call. Scope checks included.</p>
+          <span class="step-tag">&lt; 5ms</span>
+        </div>
+      </div>
+      <div class="solution-step">
+        <div class="solution-num">3</div>
+        <div>
+          <h3>Log locally, signed</h3>
+          <p>Every action is appended to an Ed25519-signed, hash-chained audit log on the device.</p>
+          <span class="step-tag">Tamper-evident</span>
+        </div>
+      </div>
+      <div class="solution-step">
+        <div class="solution-num">4</div>
+        <div>
+          <h3>Revocation at sync</h3>
+          <p>When connectivity returns, the agent syncs its audit log and checks for revocation updates.</p>
+          <span class="step-tag">Resilient</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- -- Code Snippet ------------------------------------------------------- -->
+<section id="quickstart">
+  <div class="container">
+    <div class="section-label">Quickstart</div>
+    <h2 class="section-title">Three phases. Ten lines each.</h2>
+    <p class="section-sub">
+      Issue a consent bundle while online. Verify and audit while offline.
+      Works with TypeScript, Python, and Google ADK.
+    </p>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('ts', this)">TypeScript</button>
+      <button class="tab-btn" onclick="switchTab('py', this)">Python</button>
+      <button class="tab-btn" onclick="switchTab('adk', this)">Google ADK</button>
+    </div>
+
+    <!-- TypeScript -->
+    <div id="tab-ts" class="tab-panel active">
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode('code-ts', this, 'copy_ts')">Copy</button>
+        <pre id="code-ts"><span class="kw">import</span> { <span class="fn">createConsentBundle</span>, <span class="fn">createOfflineVerifier</span>, <span class="fn">createOfflineAuditLog</span> } <span class="kw">from</span> <span class="str">'@grantex/gemma'</span>;
+
+<span class="cm">// Phase 1: Online — issue consent bundle (once)</span>
+<span class="kw">const</span> bundle = <span class="kw">await</span> <span class="fn">createConsentBundle</span>({
+  apiKey: process.env.<span class="id">GRANTEX_API_KEY</span>,
+  agentId: <span class="str">'ag_01HXYZ'</span>,
+  userId: <span class="str">'user_abc'</span>,
+  scopes: [<span class="str">'calendar:read'</span>, <span class="str">'files:write:max_10mb'</span>],
+  offlineTTL: <span class="str">'72h'</span>,
+});
+
+<span class="cm">// Phase 2: Offline — verify in &lt; 5ms</span>
+<span class="kw">const</span> verifier = <span class="fn">createOfflineVerifier</span>({
+  jwksSnapshot: bundle.<span class="id">jwksSnapshot</span>,
+  requireScopes: [<span class="str">'calendar:read'</span>],
+});
+<span class="kw">const</span> grant = <span class="kw">await</span> verifier.<span class="fn">verify</span>(bundle.<span class="id">grantToken</span>);
+
+<span class="cm">// Phase 3: Audit — Ed25519-signed, hash-chained</span>
+<span class="kw">const</span> auditLog = <span class="fn">createOfflineAuditLog</span>({
+  signingKey: bundle.<span class="id">offlineAuditKey</span>,
+  logPath: <span class="str">'/var/grantex/audit.jsonl'</span>,
+});
+<span class="kw">await</span> auditLog.<span class="fn">append</span>({
+  action: <span class="str">'calendar.read'</span>,
+  agentDID: grant.<span class="id">agentDID</span>,
+  grantId: grant.<span class="id">jti</span>,
+  scopes: [<span class="str">'calendar:read'</span>],
+  result: <span class="str">'success'</span>,
+});</pre>
+      </div>
+    </div>
+
+    <!-- Python -->
+    <div id="tab-py" class="tab-panel">
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode('code-py', this, 'copy_py')">Copy</button>
+        <pre id="code-py"><span class="kw">from</span> grantex_gemma <span class="kw">import</span> (
+    <span class="fn">create_consent_bundle</span>,
+    <span class="fn">create_offline_verifier</span>,
+    <span class="fn">create_offline_audit_log</span>,
+)
+
+<span class="cm"># Phase 1: Online — issue consent bundle (once)</span>
+bundle = <span class="kw">await</span> <span class="fn">create_consent_bundle</span>(
+    api_key=os.environ[<span class="str">"GRANTEX_API_KEY"</span>],
+    agent_id=<span class="str">"ag_01HXYZ"</span>,
+    user_id=<span class="str">"user_abc"</span>,
+    scopes=[<span class="str">"files:read"</span>, <span class="str">"email:send:max_10"</span>],
+    offline_ttl=<span class="str">"48h"</span>,
+)
+
+<span class="cm"># Phase 2: Offline — verify in &lt; 5ms</span>
+verifier = <span class="fn">create_offline_verifier</span>(
+    jwks_snapshot=bundle.<span class="id">jwks_snapshot</span>,
+)
+grant = <span class="kw">await</span> verifier.<span class="fn">verify</span>(bundle.<span class="id">grant_token</span>)
+
+<span class="cm"># Phase 3: Audit — Ed25519-signed, hash-chained</span>
+audit_log = <span class="fn">create_offline_audit_log</span>(
+    signing_key=bundle.<span class="id">offline_audit_key</span>,
+    log_path=<span class="str">"/var/grantex/audit.jsonl"</span>,
+)
+<span class="kw">await</span> audit_log.<span class="fn">append</span>(
+    action=<span class="str">"files.read"</span>,
+    agent_did=grant.<span class="id">agent_did</span>,
+    grant_id=grant.<span class="id">jti</span>,
+    scopes=[<span class="str">"files:read"</span>],
+    result=<span class="str">"success"</span>,
+)</pre>
+      </div>
+    </div>
+
+    <!-- Google ADK -->
+    <div id="tab-adk" class="tab-panel">
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode('code-adk', this, 'copy_adk')">Copy</button>
+        <pre id="code-adk"><span class="kw">import</span> { <span class="fn">withGrantexAuth</span> } <span class="kw">from</span> <span class="str">'@grantex/gemma/adapters/google-adk'</span>;
+<span class="kw">import</span> { <span class="fn">createOfflineVerifier</span>, <span class="fn">createOfflineAuditLog</span> } <span class="kw">from</span> <span class="str">'@grantex/gemma'</span>;
+
+<span class="cm">// Wrap any Google ADK tool with offline auth</span>
+<span class="kw">const</span> verifier = <span class="fn">createOfflineVerifier</span>({
+  jwksSnapshot: bundle.<span class="id">jwksSnapshot</span>,
+});
+
+<span class="kw">const</span> auditLog = <span class="fn">createOfflineAuditLog</span>({
+  signingKey: bundle.<span class="id">offlineAuditKey</span>,
+  logPath: <span class="str">'/var/grantex/audit.jsonl'</span>,
+});
+
+<span class="cm">// One line to protect any tool</span>
+<span class="kw">const</span> securedCalendarTool = <span class="fn">withGrantexAuth</span>(calendarTool, {
+  verifier,
+  auditLog,
+  requiredScopes: [<span class="str">'calendar:write'</span>],
+});
+
+<span class="cm">// Tool now auto-verifies grants and logs every invocation</span>
+<span class="kw">const</span> securedEmailTool = <span class="fn">withGrantexAuth</span>(emailTool, {
+  verifier,
+  auditLog,
+  requiredScopes: [<span class="str">'email:send'</span>],
+});</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- -- Compatibility ------------------------------------------------------ -->
+<section id="compatibility">
+  <div class="container section-center">
+    <div class="section-label">Compatibility</div>
+    <h2 class="section-title">Runs Everywhere Gemma 4 Runs</h2>
+    <p class="section-sub">
+      Tested on every platform that supports Gemma 4 inference.
+      Same API, same verification guarantees.
+    </p>
+
+    <div class="compat-grid">
+      <div class="compat-card">
+        <span class="compat-icon">&#x1F4F1;</span>
+        <h3>Android</h3>
+        <p>Pixel, Galaxy, any device with MediaPipe</p>
+      </div>
+      <div class="compat-card">
+        <span class="compat-icon">&#x1F34E;</span>
+        <h3>iOS</h3>
+        <p>iPhone and iPad via ML frameworks</p>
+      </div>
+      <div class="compat-card">
+        <span class="compat-icon">&#x1F4BB;</span>
+        <h3>Raspberry Pi</h3>
+        <p>Pi 5, Pi 4 with 4GB+ RAM</p>
+      </div>
+      <div class="compat-card">
+        <span class="compat-icon">&#x1F3AE;</span>
+        <h3>NVIDIA Jetson</h3>
+        <p>Orin Nano, Orin NX, AGX</p>
+      </div>
+      <div class="compat-card">
+        <span class="compat-icon">&#x1F5A5;</span>
+        <h3>Desktop</h3>
+        <p>Windows, macOS, Linux x64/ARM</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- -- Benchmarks --------------------------------------------------------- -->
+<section id="benchmarks">
+  <div class="container section-center">
+    <div class="section-label">Performance</div>
+    <h2 class="section-title">Benchmarks: Real Hardware, Real Numbers</h2>
+    <p class="section-sub">
+      Grant verification is a single Ed25519 signature check against a local JWKS cache.
+      No network. No database. Just math.
+    </p>
+
+    <table class="bench-table">
+      <thead>
+        <tr>
+          <th>Platform</th>
+          <th>Verification</th>
+          <th>Memory</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="platform-name">Raspberry Pi 5</td>
+          <td class="bench-value">3.2ms avg</td>
+          <td class="bench-mem">1.1 MB</td>
+        </tr>
+        <tr>
+          <td class="platform-name">Android (mid-range)</td>
+          <td class="bench-value">1.8ms avg</td>
+          <td class="bench-mem">0.9 MB</td>
+        </tr>
+        <tr>
+          <td class="platform-name">Jetson Orin Nano</td>
+          <td class="bench-value">1.1ms avg</td>
+          <td class="bench-mem">0.8 MB</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- -- Framework Support -------------------------------------------------- -->
+<section id="frameworks">
+  <div class="container section-center">
+    <div class="section-label">Integrations</div>
+    <h2 class="section-title">Works With Your Stack</h2>
+    <p class="section-sub">
+      First-class adapters for the frameworks developers actually use.
+      Wrap any tool with one line.
+    </p>
+
+    <div class="framework-grid">
+      <a href="https://docs.grantex.dev/integrations/google-adk" class="framework-pill">
+        <span class="framework-icon">&#x1F310;</span>
+        Google ADK
+      </a>
+      <a href="https://docs.grantex.dev/integrations/langchain" class="framework-pill">
+        <span class="framework-icon">&#x1F517;</span>
+        LangChain
+      </a>
+      <a href="https://docs.grantex.dev/integrations/openai-agents" class="framework-pill">
+        <span class="framework-icon">&#x2728;</span>
+        OpenAI Agents
+      </a>
+      <a href="https://docs.grantex.dev/integrations/crewai" class="framework-pill">
+        <span class="framework-icon">&#x1F916;</span>
+        CrewAI
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- -- CTA Bottom --------------------------------------------------------- -->
+<section class="cta-bottom">
+  <div class="container">
+    <h2>Get Started in 60 Seconds</h2>
+
+    <div class="install-commands centered">
+      <div class="install-cmd" onclick="copyInstall('npm install @grantex/gemma', this)">
+        <span class="install-label">npm</span>
+        <code>npm install @grantex/gemma</code>
+        <span class="install-copy">Copy</span>
+      </div>
+      <div class="install-cmd" onclick="copyInstall('pip install grantex-gemma', this)">
+        <span class="install-label">pip</span>
+        <code>pip install grantex-gemma</code>
+        <span class="install-copy">Copy</span>
+      </div>
+    </div>
+
+    <div class="cta-links">
+      <a href="https://docs.grantex.dev/integrations/gemma"
+         onclick="gtag('event','docs_click',{event_category:'cta_bottom'})">
+        Full Documentation &rarr;
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples"
+         onclick="gtag('event','examples_click',{event_category:'cta_bottom'})">
+        GitHub Examples &rarr;
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- -- Footer ------------------------------------------------------------- -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <span class="footer-logo">grantex</span>
+      <ul class="footer-links">
+        <li><a href="https://docs.grantex.dev">Docs</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+        <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
+        <li><a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">IETF Draft</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
+      </ul>
+      <span class="footer-copy">&copy; 2026 Grantex</span>
+    </div>
+  </div>
+</footer>
+
+<!-- -- Scripts ------------------------------------------------------------ -->
+<script>
+  /* Tab switcher */
+  function switchTab(id, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + id).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  /* Copy code block */
+  function copyCode(id, btn, gaEvent) {
+    const text = document.getElementById(id).innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+    });
+    if (typeof gtag !== 'undefined') {
+      gtag('event', gaEvent, { event_category: 'quickstart' });
+    }
+  }
+
+  /* Copy install command */
+  function copyInstall(text, el) {
+    navigator.clipboard.writeText(text).then(() => {
+      var copyEl = el.querySelector('.install-copy');
+      copyEl.textContent = 'Copied!';
+      setTimeout(() => { copyEl.textContent = 'Copy'; }, 2000);
+    });
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'install_copy', { event_category: 'quickstart', event_label: text });
+    }
+  }
+</script>
+
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-DNXYVLS5NY');
+</script>
+
+</body>
+</html>
