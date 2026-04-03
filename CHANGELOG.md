@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+#### Trust Registry Portal & Documentation
+- Trust Registry portal screens (search, org detail, registration wizard) in developer portal
+- `src/api/registry.ts` — API client for registry endpoints
+- `RegistrySearch` page — filterable org card grid with verification badges and stats
+- `RegistryOrgDetail` page — org profile with compliance grid, agent table, public keys, and DNS verify
+- `RegisterOrgForm` page — 4-step wizard (details, contact, verification method, review)
+- Trust Registry sidebar link in portal navigation
+- `web/registry.html` — landing page with live search, featured orgs, verification methods, embeddable trust badge demo
+- `docs/features/trust-registry.mdx` — feature documentation (data model, API endpoints, SDK usage, embeddable widget)
+- `docs/guides/trust-registry-setup.mdx` — step-by-step registration and verification guide
+
 #### @grantex/dpdp — DPDP Act 2023 & EU AI Act Compliance
 - `@grantex/dpdp` package — DPDP Act 2023, GDPR, and EU AI Act compliance module for AI agent deployments
 - `DPDPConsentRecord` — structured consent records with purpose mapping, retention periods, and DPDP section references

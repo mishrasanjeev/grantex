@@ -1,0 +1,271 @@
+---
+title: "Trust Registry Setup"
+sidebarTitle: "Registry Setup"
+description: "Register your organization in the Grantex Trust Registry and get verified."
+---
+
+## Overview
+
+This guide walks you through registering your organization in the Grantex Trust Registry, verifying your DID, earning compliance badges, and embedding a trust badge on your website.
+
+<Info>
+  The entire process typically takes under 10 minutes for DNS TXT verification.
+</Info>
+
+## Prerequisites
+
+- A Grantex account with an API key
+- A domain you control (for DID and verification)
+- Access to your domain's DNS settings (for DNS TXT method)
+
+## Step 1: Choose Your DID
+
+Your organization's **Decentralized Identifier (DID)** is the primary key in the Trust Registry. We recommend `did:web` for most organizations:
+
+```
+did:web:your-domain.com
+```
+
+The `did:web` method ties your DID to your domain, making verification straightforward. If you already have a DID from another method (e.g., `did:key`, `did:ion`), you can use that instead.
+
+<Warning>
+  Your DID cannot be changed after registration. Choose carefully.
+</Warning>
+
+## Step 2: Register via Portal
+
+The easiest way to register is through the [portal wizard](/dashboard/registry/register):
+
+1. Navigate to **Trust Registry** in the sidebar
+2. Click **Register Your Organization**
+3. Enter your DID, organization name, description, and website
+4. Provide security contact email (required) and DPO email (optional)
+5. Select your verification method
+6. Review and submit
+
+## Step 2 (Alternative): Register via API
+
+```bash
+curl -X POST https://api.grantex.dev/v1/registry/orgs \
+  -H "Authorization: Bearer $GRANTEX_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "did": "did:web:your-domain.com",
+    "name": "Your Organization",
+    "description": "Brief description of your organization",
+    "website": "https://your-domain.com",
+    "contact": {
+      "security": "security@your-domain.com",
+      "dpo": "dpo@your-domain.com"
+    },
+    "requestVerification": true,
+    "verificationMethod": "dns-txt"
+  }'
+```
+
+The response includes your verification token:
+
+```json
+{
+  "did": "did:web:your-domain.com",
+  "name": "Your Organization",
+  "verificationLevel": "pending",
+  "verificationToken": "grantex-verify-abc123def456",
+  "badges": [],
+  "stats": { "totalAgents": 0, "weeklyActiveGrants": 0, "averageRating": 0 }
+}
+```
+
+## Step 3: Verify Domain Ownership
+
+### Option A: DNS TXT Record (Recommended)
+
+Add a TXT record to your DNS:
+
+| Field | Value |
+|-------|-------|
+| **Name/Host** | `_grantex.your-domain.com` |
+| **Type** | `TXT` |
+| **Value** | `grantex-verify-abc123def456` |
+| **TTL** | `300` (or default) |
+
+After adding the record, trigger verification:
+
+```bash
+curl -X POST https://api.grantex.dev/v1/registry/orgs/did:web:your-domain.com/verify-dns \
+  -H "Authorization: Bearer $GRANTEX_KEY"
+```
+
+<Tip>
+  DNS propagation typically takes 1-5 minutes. If verification fails, wait a few minutes and try again.
+</Tip>
+
+### Option B: .well-known Endpoint
+
+Create a JSON file at `https://your-domain.com/.well-known/grantex-verification`:
+
+```json
+{
+  "did": "did:web:your-domain.com",
+  "token": "grantex-verify-abc123def456"
+}
+```
+
+Ensure the endpoint:
+- Returns `Content-Type: application/json`
+- Is accessible over HTTPS
+- Returns a 200 status code
+
+### Option C: SOC 2 Attestation
+
+Upload your SOC 2 Type II report through the portal. The Grantex compliance team reviews submissions within 2 business days. This method earns both DID verification and the SOC 2 compliance badge.
+
+### Option D: Manual Review
+
+Submit a manual review request through the portal or API. Include any supporting documentation. Typical turnaround is 3-5 business days.
+
+## Step 4: Earn Compliance Badges
+
+After verification, you can apply for compliance badges:
+
+### SOC 2 Type II
+
+Upload your SOC 2 Type II audit report. Our team verifies the report's validity and scope.
+
+### GDPR
+
+Requirements:
+- DPO email provided during registration
+- Data processing agreement available
+- Privacy policy URL accessible
+
+### DPDP (India)
+
+Requirements:
+- Compliance documentation for India's Digital Personal Data Protection Act
+- Consent management practices documented
+- Data localization compliance (if applicable)
+
+### ISO 27001
+
+Upload your ISO 27001 certification. We verify the issuing body and certification scope.
+
+## Step 5: Embed Trust Badge
+
+Add the trust badge to your website or documentation:
+
+```html
+<!-- Minimal -->
+<grantex-trust-badge did="did:web:your-domain.com" />
+
+<!-- With options -->
+<grantex-trust-badge
+  did="did:web:your-domain.com"
+  theme="dark"
+  size="lg"
+  show-agents="true"
+/>
+
+<!-- Load the web component -->
+<script src="https://cdn.grantex.dev/trust-badge.js"></script>
+```
+
+The badge automatically reflects your current verification status, compliance badges, and agent count.
+
+## Step 6: Register Agents
+
+Once your organization is verified, agents you register via the standard Grantex API are automatically linked to your organization in the Trust Registry.
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const gx = new Grantex({ apiKey: process.env.GRANTEX_KEY });
+
+// This agent will appear in your org's registry profile
+const agent = await gx.agents.create({
+  name: 'Data Analyst Agent',
+  description: 'Automated data analysis and reporting',
+  scopes: ['data:read', 'reports:write'],
+});
+```
+
+## SDK Reference
+
+### TypeScript
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const gx = new Grantex({ apiKey: process.env.GRANTEX_KEY });
+
+// Search (public, no auth required)
+const results = await gx.registry.search({ q: 'acme', verified: true });
+
+// Get organization detail
+const org = await gx.registry.get('did:web:acme.com');
+
+// Register
+await gx.registry.register({
+  did: 'did:web:your-domain.com',
+  name: 'Your Org',
+  contact: { security: 'security@your-domain.com' },
+  verificationMethod: 'dns-txt',
+});
+
+// Verify DNS
+await gx.registry.verifyDns('did:web:your-domain.com');
+```
+
+### Python
+
+```python
+from grantex import Grantex
+
+gx = Grantex(api_key="your-key")
+
+# Search (public)
+results = gx.registry.search(q="acme", verified=True)
+
+# Get organization detail
+org = gx.registry.get("did:web:acme.com")
+
+# Register
+gx.registry.register(
+    did="did:web:your-domain.com",
+    name="Your Org",
+    contact={"security": "security@your-domain.com"},
+    verification_method="dns-txt",
+)
+
+# Verify DNS
+gx.registry.verify_dns("did:web:your-domain.com")
+```
+
+## Troubleshooting
+
+### DNS verification fails
+
+- Verify the TXT record is set on `_grantex.your-domain.com` (note the underscore prefix)
+- Check that the value exactly matches the token (no extra spaces or quotes)
+- Wait 5-10 minutes for DNS propagation
+- Use `dig TXT _grantex.your-domain.com` to confirm the record is live
+
+### .well-known endpoint not found
+
+- Ensure the file is served at the exact path: `/.well-known/grantex-verification`
+- Check that your server returns `Content-Type: application/json`
+- Verify the endpoint is accessible over HTTPS (not HTTP)
+- Test with `curl https://your-domain.com/.well-known/grantex-verification`
+
+### Badge application pending
+
+- SOC 2 and manual review take 2-5 business days
+- GDPR and DPDP badges require a DPO email to be set
+- Check the portal for status updates
+
+## Next Steps
+
+- Browse the [Trust Registry](/dashboard/registry) to see verified organizations
+- Read the [Trust Registry feature docs](/features/trust-registry) for API details
+- Learn about [MPP Agent Passports](/features/mpp-agent-passport) for payment identity
+- Set up [custom domains](/guides/custom-domains) for your API endpoints
