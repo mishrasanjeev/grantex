@@ -101,8 +101,8 @@ export function requireMcpAuth(
       return;
     }
 
-    const match = /^Bearer\s+(.+)$/i.exec(header);
-    if (!match?.[1]) {
+    const lowerHeader = header.toLowerCase();
+    if (!lowerHeader.startsWith('bearer ')) {
       res.writeHead(401, { 'Content-Type': 'application/json' });
       res.end(
         JSON.stringify({
@@ -112,8 +112,17 @@ export function requireMcpAuth(
       );
       return;
     }
-
-    const token = match[1];
+    const token = header.slice(7).trim();
+    if (!token) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          error: 'unauthorized',
+          error_description: 'Invalid Authorization header format',
+        }),
+      );
+      return;
+    }
 
     try {
       const jwks = getJwks(options.issuer);

@@ -17,9 +17,11 @@ function parseBasicAuth(
   authHeader: string | undefined,
 ): [string, string] | undefined {
   if (!authHeader) return undefined;
-  const match = /^Basic\s+(.+)$/i.exec(authHeader);
-  if (!match?.[1]) return undefined;
-  const decoded = Buffer.from(match[1], 'base64').toString('utf-8');
+  const lower = authHeader.toLowerCase();
+  if (!lower.startsWith('basic ')) return undefined;
+  const b64 = authHeader.slice(6).trim();
+  if (!b64) return undefined;
+  const decoded = Buffer.from(b64, 'base64').toString('utf-8');
   const colonIdx = decoded.indexOf(':');
   if (colonIdx < 0) return undefined;
   return [decoded.slice(0, colonIdx), decoded.slice(colonIdx + 1)];
