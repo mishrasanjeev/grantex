@@ -35,3 +35,5 @@ export const newNoticeId = (): string => `notice_${ulid()}`;
 export const newGrievanceId = (): string => `grv_${ulid()}`;
 export const newExportId = (): string => `exp_${ulid()}`;
 export const newRegistryAgentId = (): string => `ragent_${ulid()}`;
+export const newAnomalyRuleId = (): string => `arule_${ulid()}`;
+export const newAnomalyChannelId = (): string => `achan_${ulid()}`;

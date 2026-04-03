@@ -1,0 +1,296 @@
+---
+title: "Anomaly Detection"
+sidebarTitle: "Anomaly Detection"
+description: "Real-time detection and alerting for unusual AI agent grant activity."
+---
+
+## Overview
+
+Grantex monitors all authorization events in real time and fires alerts when agent behavior deviates from expected patterns. Anomaly detection ships with 10 built-in rules that cover the most common threats, a custom rule DSL for organization-specific policies, and multi-channel alerting to Slack, PagerDuty, Datadog, email, and webhooks.
+
+Every alert follows a clear lifecycle -- **open**, **acknowledged**, **resolved** -- with full traceability of who responded and what action was taken.
+
+Anomaly detection is available on **all plans** including the free tier.
+
+## Built-in Rules
+
+Grantex ships with 10 detection rules that require zero configuration:
+
+| Rule ID | Name | Trigger | Severity |
+|---------|------|---------|----------|
+| `velocity_spike` | Velocity Spike | Request rate exceeds 3x the rolling 1-hour average | High |
+| `scope_escalation` | Scope Escalation | Agent requests scopes beyond its registered set | Critical |
+| `unknown_agent` | Unknown Agent | Token presented by an unregistered agent DID | Critical |
+| `token_replay` | Token Replay | Same token JTI used from multiple IP addresses | Critical |
+| `off_hours_activity` | Off-Hours Activity | Agent active outside its configured operating window | Low |
+| `high_failure_rate` | High Failure Rate | More than 30% of requests fail in a 15-minute window | High |
+| `concurrent_sessions` | Concurrent Sessions | Same grant token used from 3+ distinct IPs | High |
+| `delegation_depth` | Delegation Depth | Delegation chain exceeds configured max depth | Medium |
+| `budget_overspend` | Budget Overspend | Agent consumes more than 90% of budget in a single burst | High |
+| `geo_anomaly` | Geographic Anomaly | Requests from unexpected geographic regions | Medium |
+
+Enable or disable individual rules via the dashboard or API:
+
+<CodeGroup>
+```typescript TypeScript
+await grantex.anomalies.toggleRule('velocity_spike', false); // disable
+await grantex.anomalies.toggleRule('velocity_spike', true);  // re-enable
+```
+
+```python Python
+client.anomalies.toggle_rule("velocity_spike", enabled=False)
+client.anomalies.toggle_rule("velocity_spike", enabled=True)
+```
+
+```bash cURL
+curl -X PATCH https://api.grantex.dev/v1/anomalies/rules/velocity_spike \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true}'
+```
+</CodeGroup>
+
+## Custom Rules
+
+Create rules tailored to your threat model. Custom rules support agent filters, scope filters, time windows, and thresholds.
+
+<CodeGroup>
+```typescript TypeScript
+const rule = await grantex.anomalies.createRule({
+  ruleId: 'email_flood',
+  name: 'Email Flood Detection',
+  description: 'Too many email sends in a short window',
+  severity: 'critical',
+  condition: {
+    scopes: ['email:send'],
+    timeWindow: '5m',
+    threshold: 50,
+  },
+  channels: ['slack-incidents'],
+});
+```
+
+```python Python
+rule = client.anomalies.create_rule(
+    rule_id="email_flood",
+    name="Email Flood Detection",
+    description="Too many email sends in a short window",
+    severity="critical",
+    condition={
+        "scopes": ["email:send"],
+        "timeWindow": "5m",
+        "threshold": 50,
+    },
+    channels=["slack-incidents"],
+)
+```
+
+```bash cURL
+curl -X POST https://api.grantex.dev/v1/anomalies/rules \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ruleId": "email_flood",
+    "name": "Email Flood Detection",
+    "description": "Too many email sends in a short window",
+    "severity": "critical",
+    "condition": {
+      "scopes": ["email:send"],
+      "timeWindow": "5m",
+      "threshold": 50
+    },
+    "channels": ["slack-incidents"]
+  }'
+```
+</CodeGroup>
+
+### Condition Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agentIds` | `string[]` | Limit rule to specific agent IDs. Empty = all agents. |
+| `scopes` | `string[]` | Trigger only when these scopes are involved. |
+| `timeWindow` | `string` | Sliding window: `5m`, `15m`, `1h`, `6h`, `24h`. |
+| `threshold` | `number` | Number of events in the time window that triggers the alert. |
+
+## Alert Lifecycle
+
+Every anomaly alert moves through a defined lifecycle:
+
+```
+┌──────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────┐
+│  Open    │ ──► │ Acknowledged │ ──► │  Resolved    │     │ (closed) │
+└──────────┘     └──────────────┘     └──────────────┘     └──────────┘
+     │                                                           ▲
+     └───────────────────────────────────────────────────────────┘
+                        (can resolve directly)
+```
+
+**Open** -- The alert was just detected. Notification channels fire immediately.
+
+**Acknowledged** -- A responder claims ownership. The alert is no longer unattended.
+
+**Resolved** -- The issue is fixed. A resolution note is attached for the audit trail.
+
+### Managing Alerts
+
+<CodeGroup>
+```typescript TypeScript
+// List open alerts
+const alerts = await grantex.anomalies.listAlerts({ status: 'open' });
+
+// Acknowledge
+await grantex.anomalies.acknowledgeAlert(alerts[0].alertId, 'Investigating');
+
+// Resolve
+await grantex.anomalies.resolveAlert(alerts[0].alertId, 'False positive — test agent');
+```
+
+```python Python
+alerts = client.anomalies.list_alerts(status="open")
+
+client.anomalies.acknowledge_alert(alerts[0].alert_id, note="Investigating")
+
+client.anomalies.resolve_alert(alerts[0].alert_id, note="False positive")
+```
+
+```bash cURL
+# Acknowledge
+curl -X POST https://api.grantex.dev/v1/anomalies/alerts/alert_01.../acknowledge \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"note": "Investigating"}'
+
+# Resolve
+curl -X POST https://api.grantex.dev/v1/anomalies/alerts/alert_01.../resolve \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"note": "False positive — test agent"}'
+```
+</CodeGroup>
+
+## Notification Channels
+
+Route alerts to the tools your team uses:
+
+| Channel | Type | Config |
+|---------|------|--------|
+| Slack | `slack` | `webhookUrl` |
+| PagerDuty | `pagerduty` | `routingKey` |
+| Datadog | `datadog` | `apiKey`, `site` |
+| Email | `email` | `to`, `from` |
+| Webhook | `webhook` | `url`, `secret` |
+
+### Creating a Channel
+
+<CodeGroup>
+```typescript TypeScript
+await grantex.anomalies.createChannel({
+  type: 'slack',
+  name: 'slack-incidents',
+  config: {
+    webhookUrl: 'https://hooks.slack.com/services/T00.../B00.../xxx',
+  },
+  severities: ['critical', 'high'],
+});
+```
+
+```python Python
+client.anomalies.create_channel(
+    type="slack",
+    name="slack-incidents",
+    config={"webhookUrl": "https://hooks.slack.com/services/..."},
+    severities=["critical", "high"],
+)
+```
+</CodeGroup>
+
+Each channel has a `severities` filter. Only alerts matching the configured severities are sent to that channel. This lets you route critical alerts to PagerDuty while sending low-severity alerts to a Slack monitoring channel.
+
+## SSE Event Stream
+
+Subscribe to real-time anomaly events via Server-Sent Events:
+
+```typescript
+for await (const event of grantex.events.stream({
+  types: ['anomaly.detected'],
+})) {
+  console.log('Alert:', event.data.ruleName, event.data.severity);
+  // Auto-revoke critical alerts
+  if (event.data.severity === 'critical') {
+    await grantex.grants.revoke(event.data.context.grantId);
+  }
+}
+```
+
+Or use `curl`:
+
+```bash
+curl -N -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  "https://api.grantex.dev/v1/events/stream?types=anomaly.detected"
+```
+
+## Metrics API
+
+Query aggregate anomaly metrics:
+
+```bash
+GET /v1/anomalies/metrics?window=7d
+```
+
+Response:
+
+```json
+{
+  "totalAlerts": 142,
+  "openAlerts": 3,
+  "bySeverity": {
+    "critical": 1,
+    "high": 2,
+    "medium": 0,
+    "low": 0
+  },
+  "byRule": {
+    "velocity_spike": 45,
+    "high_failure_rate": 38,
+    "off_hours_activity": 30,
+    "scope_escalation": 15,
+    "token_replay": 8,
+    "unknown_agent": 6
+  },
+  "recentActivity": [
+    { "date": "2026-03-27", "count": 4 },
+    { "date": "2026-03-28", "count": 7 },
+    { "date": "2026-03-29", "count": 2 }
+  ]
+}
+```
+
+### Prometheus Metrics
+
+The `GET /metrics` endpoint exposes Prometheus-format counters:
+
+```
+grantex_anomalies_total{severity="critical"} 12
+grantex_anomalies_total{severity="high"} 45
+grantex_alerts_open 3
+grantex_alerts_acknowledged 7
+grantex_alerts_resolved 132
+```
+
+## Dashboard
+
+The developer portal includes a full anomaly detection dashboard at `/dashboard/anomalies`:
+
+- **Severity overview** -- Open alert counts by severity with color-coded indicators
+- **Activity chart** -- 14-day bar chart of alert volume
+- **Alert list** -- Filterable by status and severity with inline acknowledge/resolve/revoke actions
+- **Alert detail** -- Full context, timeline, and resolution notes
+- **Rule builder** -- View built-in rules, create custom rules, toggle enable/disable
+
+## Related
+
+- [Anomaly Detection Setup Guide](/guides/anomaly-detection-setup) -- Step-by-step configuration
+- [Event Streaming](/guides/event-streaming) -- SSE and WebSocket endpoints
+- [Metrics & Observability](/guides/metrics-observability) -- Prometheus, Grafana, OpenTelemetry
+- [Budget Controls](/guides/budget-controls) -- Financial guardrails for agents

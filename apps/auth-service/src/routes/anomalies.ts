@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
-import { newAnomalyId } from '../lib/ids.js';
+import { newAnomalyId, newAnomalyRuleId, newAnomalyChannelId } from '../lib/ids.js';
 
 type AnomalyType = 'rate_spike' | 'high_failure_rate' | 'new_principal' | 'off_hours_activity';
-type AnomalySeverity = 'low' | 'medium' | 'high';
+type AnomalySeverity = 'low' | 'medium' | 'high' | 'critical';
 
 interface AnomalyInsert {
   id: string;
@@ -15,6 +15,23 @@ interface AnomalyInsert {
   description: string;
   metadata: Record<string, unknown>;
 }
+
+// ─── Built-in detection rules ──────────────────────────────────────────────────
+
+export const BUILTIN_RULES = [
+  { ruleId: 'AD-001', name: 'Velocity spike', severity: 'high', description: '> 10x normal grant issuance rate in 5 min' },
+  { ruleId: 'AD-002', name: 'Scope escalation attempt', severity: 'critical', description: 'Agent requests scopes beyond registered max' },
+  { ruleId: 'AD-003', name: 'Unusual geography', severity: 'medium', description: 'Grant token verified from unexpected country' },
+  { ruleId: 'AD-004', name: 'Off-hours activity', severity: 'low', description: 'Agent active outside configured normal hours' },
+  { ruleId: 'AD-005', name: 'Delegation depth spike', severity: 'high', description: 'Suddenly higher A2A delegation depth detected' },
+  { ruleId: 'AD-006', name: 'Rapid revocation', severity: 'critical', description: '> 5 grants revoked in 60 seconds' },
+  { ruleId: 'AD-007', name: 'Budget cliff', severity: 'high', description: 'Scope budget 90%+ consumed in < 1 hour' },
+  { ruleId: 'AD-008', name: 'Unknown agent', severity: 'critical', description: 'Token presented from unregistered agent DID' },
+  { ruleId: 'AD-009', name: 'Replay attempt', severity: 'critical', description: 'Same JTI presented twice' },
+  { ruleId: 'AD-010', name: 'Offline bundle stale', severity: 'medium', description: 'Bundle last synced beyond configured threshold' },
+] as const;
+
+// ─── Legacy response mapper ────────────────────────────────────────────────────
 
 function toResponse(row: Record<string, unknown>) {
   return {
@@ -30,7 +47,34 @@ function toResponse(row: Record<string, unknown>) {
   };
 }
 
+// ─── Alert response mapper (new format) ────────────────────────────────────────
+
+function toAlertResponse(row: Record<string, unknown>) {
+  return {
+    alertId: row['id'],
+    ruleId: row['rule_id'] ?? null,
+    ruleName: row['rule_name'] ?? row['type'],
+    severity: row['severity'],
+    status: row['status'] ?? 'open',
+    agentId: row['agent_id'] ?? null,
+    detectedAt: row['detected_at'],
+    description: row['description'],
+    context: row['context'] ?? row['metadata'] ?? {},
+    acknowledgedAt: row['acknowledged_at'] ?? null,
+    resolvedAt: row['resolved_at'] ?? null,
+  };
+}
+
+const VALID_ALERT_STATUSES = ['open', 'acknowledged', 'resolved'];
+const VALID_SEVERITIES = ['critical', 'high', 'medium', 'low'];
+const VALID_CHANNEL_TYPES = ['slack', 'webhook', 'email'];
+const VALID_WINDOWS = ['1h', '6h', '24h'];
+
 export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
+  // ═════════════════════════════════════════════════════════════════════════════
+  // Legacy endpoints (backward compatible)
+  // ═════════════════════════════════════════════════════════════════════════════
+
   // POST /v1/anomalies/detect — run detection, persist results, return them
   app.post('/v1/anomalies/detect', async (request, reply) => {
     const sql = getSql();
@@ -224,6 +268,380 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ message: 'Anomaly not found', code: 'NOT_FOUND', requestId: request.id });
       }
       return reply.send(toResponse(rows[0] as Record<string, unknown>));
+    },
+  );
+
+  // ═════════════════════════════════════════════════════════════════════════════
+  // New alert lifecycle endpoints
+  // ═════════════════════════════════════════════════════════════════════════════
+
+  // GET /v1/anomaly/alerts — list alerts with filters
+  app.get('/v1/anomaly/alerts', async (request, reply) => {
+    const sql = getSql();
+    const query = request.query as Record<string, string>;
+    const developerId = request.developer.id;
+
+    const status = query['status'] ?? null;
+    const severity = query['severity'] ?? null;
+    const agentId = query['agentId'] ?? null;
+    const limit = Math.min(Math.max(parseInt(query['limit'] ?? '100', 10) || 100, 1), 1000);
+
+    if (status && !VALID_ALERT_STATUSES.includes(status)) {
+      return reply.status(400).send({
+        message: `Invalid status. Must be one of: ${VALID_ALERT_STATUSES.join(', ')}`,
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
+    if (severity && !VALID_SEVERITIES.includes(severity)) {
+      return reply.status(400).send({
+        message: `Invalid severity. Must be one of: ${VALID_SEVERITIES.join(', ')}`,
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
+    const rows = await sql`
+      SELECT id, type, severity, status, rule_id, rule_name, agent_id,
+             description, context, metadata, detected_at, acknowledged_at, resolved_at
+      FROM anomalies
+      WHERE developer_id = ${developerId}
+        AND (${status === null} OR status = ${status ?? ''})
+        AND (${severity === null} OR severity = ${severity ?? ''})
+        AND (${agentId === null} OR agent_id = ${agentId ?? ''})
+      ORDER BY detected_at DESC
+      LIMIT ${limit}
+    `;
+
+    const data = (rows as Array<Record<string, unknown>>).map(toAlertResponse);
+    return reply.send({ data });
+  });
+
+  // POST /v1/anomaly/alerts/:alertId/acknowledge — acknowledge an alert
+  app.post<{ Params: { alertId: string }; Body: { note?: string } }>(
+    '/v1/anomaly/alerts/:alertId/acknowledge',
+    async (request, reply) => {
+      const sql = getSql();
+      const { alertId } = request.params;
+      const body = (request.body ?? {}) as { note?: string };
+      const note = body.note ?? null;
+
+      const rows = await sql`
+        UPDATE anomalies
+        SET status = 'acknowledged',
+            acknowledged_at = NOW(),
+            resolution_note = COALESCE(${note}, resolution_note)
+        WHERE id = ${alertId}
+          AND developer_id = ${request.developer.id}
+        RETURNING *
+      `;
+
+      if (!rows[0]) {
+        return reply.status(404).send({ message: 'Alert not found', code: 'NOT_FOUND', requestId: request.id });
+      }
+
+      return reply.send(toAlertResponse(rows[0] as Record<string, unknown>));
+    },
+  );
+
+  // POST /v1/anomaly/alerts/:alertId/resolve — resolve an alert
+  app.post<{ Params: { alertId: string }; Body: { note?: string } }>(
+    '/v1/anomaly/alerts/:alertId/resolve',
+    async (request, reply) => {
+      const sql = getSql();
+      const { alertId } = request.params;
+      const body = (request.body ?? {}) as { note?: string };
+      const note = body.note ?? null;
+
+      const rows = await sql`
+        UPDATE anomalies
+        SET status = 'resolved',
+            resolved_at = NOW(),
+            resolution_note = COALESCE(${note}, resolution_note)
+        WHERE id = ${alertId}
+          AND developer_id = ${request.developer.id}
+        RETURNING *
+      `;
+
+      if (!rows[0]) {
+        return reply.status(404).send({ message: 'Alert not found', code: 'NOT_FOUND', requestId: request.id });
+      }
+
+      return reply.send(toAlertResponse(rows[0] as Record<string, unknown>));
+    },
+  );
+
+  // GET /v1/anomaly/metrics — real-time anomaly metrics
+  app.get('/v1/anomaly/metrics', async (request, reply) => {
+    const sql = getSql();
+    const query = request.query as Record<string, string>;
+    const developerId = request.developer.id;
+
+    const agentId = query['agentId'] ?? null;
+    const window = query['window'] ?? '24h';
+
+    if (!VALID_WINDOWS.includes(window)) {
+      return reply.status(400).send({
+        message: `Invalid window. Must be one of: ${VALID_WINDOWS.join(', ')}`,
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
+    const intervalMap: Record<string, string> = { '1h': '1 hour', '6h': '6 hours', '24h': '24 hours' };
+    const interval = intervalMap[window]!;
+
+    const rows = await sql`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE status = 'open')::int AS open,
+        COUNT(*) FILTER (WHERE status = 'acknowledged')::int AS acknowledged,
+        COUNT(*) FILTER (WHERE status = 'resolved')::int AS resolved,
+        COUNT(*) FILTER (WHERE severity = 'critical')::int AS critical,
+        COUNT(*) FILTER (WHERE severity = 'high')::int AS high,
+        COUNT(*) FILTER (WHERE severity = 'medium')::int AS medium,
+        COUNT(*) FILTER (WHERE severity = 'low')::int AS low
+      FROM anomalies
+      WHERE developer_id = ${developerId}
+        AND detected_at >= NOW() - CAST(${interval} AS INTERVAL)
+        AND (${agentId === null} OR agent_id = ${agentId ?? ''})
+    `;
+
+    const r = (rows[0] ?? {}) as Record<string, unknown>;
+    return reply.send({
+      window,
+      total: Number(r['total'] ?? 0),
+      byStatus: {
+        open: Number(r['open'] ?? 0),
+        acknowledged: Number(r['acknowledged'] ?? 0),
+        resolved: Number(r['resolved'] ?? 0),
+      },
+      bySeverity: {
+        critical: Number(r['critical'] ?? 0),
+        high: Number(r['high'] ?? 0),
+        medium: Number(r['medium'] ?? 0),
+        low: Number(r['low'] ?? 0),
+      },
+    });
+  });
+
+  // ═════════════════════════════════════════════════════════════════════════════
+  // Custom detection rules
+  // ═════════════════════════════════════════════════════════════════════════════
+
+  // POST /v1/anomaly/rules — create custom rule
+  app.post('/v1/anomaly/rules', async (request, reply) => {
+    const sql = getSql();
+    const developerId = request.developer.id;
+    const body = (request.body ?? {}) as Record<string, unknown>;
+
+    const ruleId = body['ruleId'] as string | undefined;
+    const name = body['name'] as string | undefined;
+    const description = (body['description'] as string | undefined) ?? null;
+    const condition = body['condition'] as Record<string, unknown> | undefined;
+    const severity = (body['severity'] as string | undefined) ?? 'medium';
+    const alertChannels = (body['alertChannels'] as string[] | undefined) ?? [];
+
+    if (!ruleId || !name) {
+      return reply.status(400).send({
+        message: 'ruleId and name are required',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
+    if (!condition || typeof condition !== 'object') {
+      return reply.status(400).send({
+        message: 'condition is required and must be an object',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
+    if (!VALID_SEVERITIES.includes(severity)) {
+      return reply.status(400).send({
+        message: `Invalid severity. Must be one of: ${VALID_SEVERITIES.join(', ')}`,
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
+    const id = newAnomalyRuleId();
+
+    await sql`
+      INSERT INTO anomaly_rules (id, developer_id, rule_id, name, description, condition, severity, alert_channels)
+      VALUES (${id}, ${developerId}, ${ruleId}, ${name}, ${description},
+              ${JSON.stringify(condition)}, ${severity}, ${alertChannels})
+    `;
+
+    return reply.status(201).send({
+      id,
+      ruleId,
+      name,
+      description,
+      condition,
+      severity,
+      alertChannels,
+      enabled: true,
+    });
+  });
+
+  // GET /v1/anomaly/rules — list built-in + custom rules
+  app.get('/v1/anomaly/rules', async (request, reply) => {
+    const sql = getSql();
+    const developerId = request.developer.id;
+
+    const rows = await sql`
+      SELECT id, rule_id, name, description, condition, severity, alert_channels, enabled, created_at
+      FROM anomaly_rules
+      WHERE developer_id = ${developerId}
+      ORDER BY created_at DESC
+    `;
+
+    const builtIn = BUILTIN_RULES.map((r) => ({
+      ruleId: r.ruleId,
+      name: r.name,
+      severity: r.severity,
+      description: r.description,
+      builtIn: true,
+      enabled: true,
+    }));
+
+    const custom = (rows as Array<Record<string, unknown>>).map((r) => ({
+      id: r['id'],
+      ruleId: r['rule_id'],
+      name: r['name'],
+      description: r['description'] ?? null,
+      condition: r['condition'],
+      severity: r['severity'],
+      alertChannels: r['alert_channels'] ?? [],
+      enabled: r['enabled'] ?? true,
+      builtIn: false,
+      createdAt: r['created_at'],
+    }));
+
+    return reply.send({ rules: [...builtIn, ...custom] });
+  });
+
+  // DELETE /v1/anomaly/rules/:ruleId — delete a custom rule
+  app.delete<{ Params: { ruleId: string } }>(
+    '/v1/anomaly/rules/:ruleId',
+    async (request, reply) => {
+      const sql = getSql();
+      const rows = await sql`
+        DELETE FROM anomaly_rules
+        WHERE id = ${request.params.ruleId}
+          AND developer_id = ${request.developer.id}
+        RETURNING id
+      `;
+
+      if (!rows[0]) {
+        return reply.status(404).send({ message: 'Rule not found', code: 'NOT_FOUND', requestId: request.id });
+      }
+
+      return reply.status(204).send();
+    },
+  );
+
+  // ═════════════════════════════════════════════════════════════════════════════
+  // Notification channels
+  // ═════════════════════════════════════════════════════════════════════════════
+
+  // POST /v1/anomaly/channels — create notification channel
+  app.post('/v1/anomaly/channels', async (request, reply) => {
+    const sql = getSql();
+    const developerId = request.developer.id;
+    const body = (request.body ?? {}) as Record<string, unknown>;
+
+    const type = body['type'] as string | undefined;
+    const name = body['name'] as string | undefined;
+    const config = body['config'] as Record<string, unknown> | undefined;
+    const severities = (body['severities'] as string[] | undefined) ?? ['critical', 'high'];
+
+    if (!type || !VALID_CHANNEL_TYPES.includes(type)) {
+      return reply.status(400).send({
+        message: `type is required and must be one of: ${VALID_CHANNEL_TYPES.join(', ')}`,
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
+    if (!name) {
+      return reply.status(400).send({
+        message: 'name is required',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
+    if (!config || typeof config !== 'object') {
+      return reply.status(400).send({
+        message: 'config is required and must be an object',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
+    const id = newAnomalyChannelId();
+
+    await sql`
+      INSERT INTO anomaly_channels (id, developer_id, type, name, config, severities)
+      VALUES (${id}, ${developerId}, ${type}, ${name}, ${JSON.stringify(config)}, ${severities})
+    `;
+
+    return reply.status(201).send({
+      id,
+      type,
+      name,
+      config,
+      severities,
+      enabled: true,
+    });
+  });
+
+  // GET /v1/anomaly/channels — list notification channels
+  app.get('/v1/anomaly/channels', async (request, reply) => {
+    const sql = getSql();
+    const developerId = request.developer.id;
+
+    const rows = await sql`
+      SELECT id, type, name, config, severities, enabled, created_at
+      FROM anomaly_channels
+      WHERE developer_id = ${developerId}
+      ORDER BY created_at DESC
+    `;
+
+    const channels = (rows as Array<Record<string, unknown>>).map((r) => ({
+      id: r['id'],
+      type: r['type'],
+      name: r['name'],
+      config: r['config'],
+      severities: r['severities'] ?? [],
+      enabled: r['enabled'] ?? true,
+      createdAt: r['created_at'],
+    }));
+
+    return reply.send({ channels });
+  });
+
+  // DELETE /v1/anomaly/channels/:channelId — delete notification channel
+  app.delete<{ Params: { channelId: string } }>(
+    '/v1/anomaly/channels/:channelId',
+    async (request, reply) => {
+      const sql = getSql();
+      const rows = await sql`
+        DELETE FROM anomaly_channels
+        WHERE id = ${request.params.channelId}
+          AND developer_id = ${request.developer.id}
+        RETURNING id
+      `;
+
+      if (!rows[0]) {
+        return reply.status(404).send({ message: 'Channel not found', code: 'NOT_FOUND', requestId: request.id });
+      }
+
+      return reply.status(204).send();
     },
   );
 }

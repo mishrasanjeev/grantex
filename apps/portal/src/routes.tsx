@@ -13,6 +13,8 @@ import { AuditDetail } from './pages/audit/AuditDetail';
 import { PolicyList } from './pages/policies/PolicyList';
 import { PolicyForm } from './pages/policies/PolicyForm';
 import { AnomalyList } from './pages/anomalies/AnomalyList';
+import { AlertDetail } from './pages/anomalies/AlertDetail';
+import { RuleBuilder } from './pages/anomalies/RuleBuilder';
 import { ComplianceDashboard } from './pages/compliance/ComplianceDashboard';
 import { BillingPage } from './pages/billing/BillingPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
@@ -73,6 +75,8 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/policies/new', element: <PolicyForm /> },
       { path: '/dashboard/policies/:id/edit', element: <PolicyForm /> },
       { path: '/dashboard/anomalies', element: <AnomalyList /> },
+      { path: '/dashboard/anomalies/rules', element: <RuleBuilder /> },
+      { path: '/dashboard/anomalies/:alertId', element: <AlertDetail /> },
       { path: '/dashboard/compliance', element: <ComplianceDashboard /> },
       { path: '/dashboard/budgets', element: <BudgetList /> },
       { path: '/dashboard/budgets/:grantId', element: <BudgetDetail /> },
