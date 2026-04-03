@@ -1,0 +1,170 @@
+---
+title: "grantex verify"
+sidebarTitle: "verify"
+description: "Inspect any Grantex grant token from the command line. See scopes, expiry, delegation chain, and revocation status. Works offline — no account needed."
+---
+
+## Overview
+
+`grantex verify` is a single command that lets any developer paste a grant token and instantly see everything about it: who issued it, scopes, expiry, delegation chain, revocation status. Works as a standalone tool — no Grantex account needed.
+
+```bash
+npm install -g @grantex/cli
+```
+
+## Usage
+
+```bash
+# Basic verify (offline, no auth needed)
+grantex verify eyJhbGciOiJSUzI1NiIs...
+
+# Verbose: show full JWT header + claims
+grantex verify eyJ... --verbose
+
+# Check live revocation status (requires network)
+grantex verify eyJ... --check-revocation
+
+# Machine-readable JSON output
+grantex verify eyJ... --json
+
+# Verify from file
+grantex verify --file ./token.jwt
+
+# Verify against specific JWKS URL
+grantex verify eyJ... --jwks https://api.grantex.dev/.well-known/jwks.json
+
+# Verify offline with local JWKS file
+grantex verify eyJ... --jwks-file ./jwks.json
+
+# Read token from stdin pipe
+echo "eyJ..." | grantex verify --stdin
+```
+
+## Output
+
+### Default (Pretty)
+
+```
+  Grantex Grant Token
+  ───────────────────────────────────────────
+
+  Status         ✓ Valid
+  Grant ID       grnt_01HXYZ
+  Agent DID      did:grantex:ag_01HXYZ (travel-booker)
+  Principal      user_abc @ acme.com
+
+  Issued         Apr 3, 2026 09:00 UTC (4h ago)
+  Expires        Apr 4, 2026 09:00 UTC (in 20h)
+
+  Scopes (3)
+  ├ calendar:read
+  ├ email:send:max_10  (6 remaining)
+  └ payments:initiate:max_500  (₹500 cap)
+
+  Delegation
+  └ depth: 0 (direct grant, no sub-delegation)
+
+  Signature      RS256 ✓  kid: grantex-2026-01
+  Revocation     ○ Not checked (use --check-revocation)
+
+  ─────────────────────────────────────────────
+  Verified in 2ms (offline)
+```
+
+### JSON Output (`--json`)
+
+```json
+{
+  "valid": true,
+  "grantId": "grnt_01HXYZ",
+  "agentDID": "did:grantex:ag_01HXYZ",
+  "principalDID": "did:grantex:user_01HABC",
+  "issuedAt": "2026-04-03T09:00:00Z",
+  "expiresAt": "2026-04-04T09:00:00Z",
+  "scopes": ["calendar:read", "email:send:max_10", "payments:initiate:max_500"],
+  "delegationDepth": 0,
+  "signatureValid": true,
+  "algorithm": "RS256",
+  "keyId": "grantex-2026-01",
+  "revocationStatus": "not_checked",
+  "verifiedInMs": 2,
+  "errors": []
+}
+```
+
+### Verbose (`--verbose`)
+
+Includes everything above plus raw JWT header and claims:
+
+```
+  JWT Header
+  {
+    "alg": "RS256",
+    "kid": "grantex-2026-01",
+    "typ": "JWT"
+  }
+
+  JWT Claims
+  {
+    "iss": "https://api.grantex.dev",
+    "sub": "ag_01HXYZ",
+    "agt": "did:grantex:ag_01HXYZ",
+    "dev": "dev_acme",
+    "scp": ["calendar:read", "email:send:max_10"],
+    "iat": 1743674400,
+    "exp": 1743760800,
+    "jti": "grnt_01HXYZ",
+    "delegationDepth": 0
+  }
+```
+
+## Error States
+
+**Expired token:**
+```
+  Status         ✗ Expired
+  Expired        2h ago (Apr 3, 2026 08:00 UTC)
+
+  ✗ This token cannot be used.
+  To issue a new grant: grantex authorize --agent ag_01HABC
+```
+
+**Invalid signature:**
+```
+  Status         ✗ Invalid Signature
+
+  ⚠ WARNING: This token may have been tampered with.
+  The RS256 signature does not match any key in the JWKS.
+
+  ✗ Do not accept this token.
+```
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `--verbose` | Show full JWT header and claims JSON |
+| `--json` | Output machine-readable JSON (for scripting) |
+| `--check-revocation` | Make a network call to check live revocation status |
+| `--jwks <url>` | Verify against a specific JWKS URL |
+| `--jwks-file <path>` | Verify offline using a local JWKS JSON file |
+| `--file <path>` | Read token from a file instead of CLI argument |
+| `--stdin` | Read token from stdin (for piping) |
+
+## Related Commands
+
+| Command | Description |
+|---------|-------------|
+| `grantex decode <token>` | Decode JWT without signature verification (like jwt.io) |
+| `grantex audit inspect <file>` | View entries in an offline audit log (JSONL) |
+| `grantex audit verify <file>` | Verify hash chain integrity of an audit log |
+| `grantex registry lookup <did>` | Look up an organization in the Trust Registry |
+| `grantex init gemma` | Scaffold a new Gemma 4 + Grantex project |
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Token is valid |
+| `1` | Token is invalid (expired, bad signature, malformed) |
+| `2` | Usage error (missing arguments) |
