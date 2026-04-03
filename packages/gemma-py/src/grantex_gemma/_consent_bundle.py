@@ -43,7 +43,7 @@ async def create_consent_bundle(
         "agentId": agent_id,
         "userId": user_id,
         "scopes": scopes,
-        "offlineTtl": offline_ttl,
+        "offlineTTL": offline_ttl,
     }
     headers = {
         "Authorization": f"Bearer {api_key}",

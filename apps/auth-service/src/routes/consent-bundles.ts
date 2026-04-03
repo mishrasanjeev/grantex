@@ -140,20 +140,18 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
       const checkpointAt = Math.floor(offlineExpiresAt.getTime() / 1000);
       const bundleId = newConsentBundleId();
 
-      // Insert consent bundle
+      // Insert consent bundle (columns match 025_consent_bundles.sql)
       await sql`
         INSERT INTO consent_bundles (
-          id, developer_id, agent_id, grant_id, principal_id,
-          scopes, grant_token, jwks_snapshot, offline_audit_public_key,
-          offline_audit_algorithm, device_id, device_platform,
-          offline_expires_at, checkpoint_at, status
+          id, developer_id, agent_id, grant_id, user_id,
+          scopes, audit_public_key, device_id, device_platform,
+          offline_ttl, offline_expires_at, checkpoint_at, status
         )
         VALUES (
           ${bundleId}, ${developerId}, ${agentId}, ${grantId}, ${userId},
-          ${scopes}, ${grantToken}, ${JSON.stringify(jwksSnapshot)},
-          ${JSON.stringify(auditPublicJwk)}, ${offlineAuditKeyAlgorithm},
+          ${scopes}, ${JSON.stringify(auditPublicJwk)},
           ${deviceId}, ${devicePlatform},
-          ${offlineExpiresAt}, ${offlineExpiresAt}, 'active'
+          ${offlineTTL}, ${offlineExpiresAt}, NOW(), 'active'
         )
       `;
 
@@ -337,7 +335,7 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
       const cursor = query['cursor'];
 
       const rows = await sql`
-        SELECT id, agent_id, grant_id, principal_id, scopes, status,
+        SELECT id, agent_id, grant_id, user_id, scopes, status,
                device_id, device_platform, offline_expires_at,
                audit_entry_count, last_sync_at, created_at
         FROM consent_bundles
@@ -353,7 +351,7 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
         bundleId: r['id'] as string,
         agentId: r['agent_id'] as string,
         grantId: r['grant_id'] as string,
-        principalId: r['principal_id'] as string,
+        userId: r['user_id'] as string,
         scopes: r['scopes'] as string[],
         status: r['status'] as string,
         deviceId: r['device_id'] ?? null,
@@ -375,6 +373,65 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
           bundles,
           ...(nextCursor !== null ? { nextCursor } : {}),
         },
+      });
+    },
+  );
+
+  // POST /v1/consent-bundles/:bundleId/refresh — Refresh an expiring bundle
+  app.post<{ Params: { bundleId: string } }>(
+    '/v1/consent-bundles/:bundleId/refresh',
+    async (request, reply) => {
+      const { bundleId } = request.params;
+      const developerId = request.developer.id;
+      const sql = getSql();
+
+      const rows = await sql`
+        SELECT id, agent_id, grant_id, user_id, scopes, offline_ttl, status
+        FROM consent_bundles
+        WHERE id = ${bundleId} AND developer_id = ${developerId}
+      `;
+
+      const bundle = rows[0];
+      if (!bundle) {
+        return reply.status(404).send({
+          message: 'Bundle not found',
+          code: 'NOT_FOUND',
+          requestId: request.id,
+        });
+      }
+
+      if (bundle['status'] !== 'active') {
+        return reply.status(400).send({
+          message: 'Cannot refresh a non-active bundle',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+
+      const offlineTTL = bundle['offline_ttl'] as string;
+      const ttlSeconds = parseExpiresIn(offlineTTL);
+      const offlineExpiresAt = new Date(Date.now() + ttlSeconds * 1000);
+
+      const jwksSnapshot = {
+        keys: (await buildJwks()).keys,
+        fetchedAt: new Date().toISOString(),
+        validUntil: new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString(),
+      };
+
+      await sql`
+        UPDATE consent_bundles
+        SET offline_expires_at = ${offlineExpiresAt},
+            checkpoint_at = NOW()
+        WHERE id = ${bundleId}
+      `;
+
+      return reply.send({
+        bundleId,
+        grantToken: null,
+        jwksSnapshot,
+        offlineExpiresAt: offlineExpiresAt.toISOString(),
+        checkpointAt: Math.floor(Date.now() / 1000),
+        syncEndpoint: `${config.jwtIssuer}/v1/audit/offline-sync`,
       });
     },
   );

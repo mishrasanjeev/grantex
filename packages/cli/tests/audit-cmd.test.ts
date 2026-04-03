@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
-import { writeFileSync, unlinkSync } from 'node:fs';
+import { writeFileSync, unlinkSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+
+const testDir = mkdtempSync(join(tmpdir(), 'grantex-audit-test-'));
 import { auditCmdCommand } from '../src/commands/audit-cmd.js';
 import { setJsonMode } from '../src/format.js';
 
@@ -41,7 +43,7 @@ describe('auditCmdCommand()', () => {
   let tmpFiles: string[] = [];
 
   function writeTmpFile(content: string): string {
-    const filePath = join(tmpdir(), `grantex-audit-test-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`);
+    const filePath = join(testDir, `audit-${Date.now()}-${Math.random().toString(36).slice(2)}.jsonl`);
     writeFileSync(filePath, content, 'utf8');
     tmpFiles.push(filePath);
     return filePath;

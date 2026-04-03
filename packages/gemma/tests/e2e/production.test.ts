@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as jose from 'jose';
-import { createHash, generateKeyPairSync } from 'node:crypto';
-import { writeFile, unlink, mkdtemp } from 'node:fs/promises';
+import { generateKeyPairSync } from 'node:crypto';
+import { unlink, mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -95,7 +95,7 @@ describe('Live Production', () => {
       expect(res.ok).toBe(true);
       expect(res.status).toBe(200);
 
-      const body = await res.json();
+      const body = (await res.json()) as { keys: jose.JWK[] };
       expect(body).toHaveProperty('keys');
       expect(Array.isArray(body.keys)).toBe(true);
       expect(body.keys.length).toBeGreaterThanOrEqual(1);
@@ -108,15 +108,15 @@ describe('Live Production', () => {
 
       // Expect at least one RSA key (RS256, kid: grantex-2026-04)
       const rsaKeys = body.keys.filter(
-        (k: { kty: string }) => k.kty === 'RSA',
+        (k) => k.kty === 'RSA',
       );
       expect(rsaKeys.length).toBeGreaterThanOrEqual(1);
 
       const primaryKey = body.keys.find(
-        (k: { kid: string }) => k.kid === 'grantex-2026-04',
+        (k) => k.kid === 'grantex-2026-04',
       );
       expect(primaryKey).toBeDefined();
-      expect(primaryKey.kty).toBe('RSA');
+      expect(primaryKey!.kty).toBe('RSA');
     },
     { timeout: 30_000 },
   );
@@ -125,7 +125,7 @@ describe('Live Production', () => {
     'creates an OfflineVerifier from production JWKS snapshot',
     async () => {
       const res = await fetch(JWKS_URL);
-      const body = await res.json();
+      const body = (await res.json()) as { keys: jose.JWK[] };
 
       const snapshot: JWKSSnapshot = {
         keys: body.keys,
@@ -176,7 +176,7 @@ describe('Live Production', () => {
     async () => {
       // Fetch production JWKS
       const res = await fetch(JWKS_URL);
-      const body = await res.json();
+      const body = (await res.json()) as { keys: jose.JWK[] };
 
       const snapshot: JWKSSnapshot = {
         keys: body.keys,

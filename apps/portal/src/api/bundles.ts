@@ -58,29 +58,29 @@ export async function listBundles(params?: { status?: string; agentId?: string }
   if (params?.status) q.set('status', params.status);
   if (params?.agentId) q.set('agentId', params.agentId);
   const qs = q.toString();
-  const res = await api.get<{ bundles: ConsentBundle[] }>(`/v1/bundles${qs ? `?${qs}` : ''}`);
+  const res = await api.get<{ bundles: ConsentBundle[] }>(`/v1/consent-bundles${qs ? `?${qs}` : ''}`);
   return res.bundles;
 }
 
 export function getBundle(bundleId: string): Promise<ConsentBundle> {
-  return api.get<ConsentBundle>(`/v1/bundles/${encodeURIComponent(bundleId)}`);
+  return api.get<ConsentBundle>(`/v1/consent-bundles/${encodeURIComponent(bundleId)}`);
 }
 
 export function createBundle(params: CreateBundleParams): Promise<CreateBundleResponse> {
-  return api.post<CreateBundleResponse>('/v1/bundles', params);
+  return api.post<CreateBundleResponse>('/v1/consent-bundles', params);
 }
 
 export function revokeBundle(bundleId: string): Promise<void> {
-  return api.post<void>(`/v1/bundles/${encodeURIComponent(bundleId)}/revoke`);
+  return api.post<void>(`/v1/consent-bundles/${encodeURIComponent(bundleId)}/revoke`);
 }
 
 export async function getBundleAuditEntries(bundleId: string): Promise<OfflineAuditEntry[]> {
   const res = await api.get<{ entries: OfflineAuditEntry[] }>(
-    `/v1/bundles/${encodeURIComponent(bundleId)}/audit`,
+    `/v1/consent-bundles/${encodeURIComponent(bundleId)}/audit`,
   );
   return res.entries;
 }
 
 export function getRevocationStatus(bundleId: string): Promise<RevocationStatus> {
-  return api.get<RevocationStatus>(`/v1/bundles/${encodeURIComponent(bundleId)}/revocation`);
+  return api.get<RevocationStatus>(`/v1/consent-bundles/${encodeURIComponent(bundleId)}/revocation`);
 }

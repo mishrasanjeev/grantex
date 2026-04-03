@@ -74,7 +74,7 @@ export async function createConsentBundle(
   } = options;
 
   const res = await fetch(
-    `${baseUrl.replace(/\/+$/, '')}/v1/consent-bundles`,
+    `${baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl}/v1/consent-bundles`,
     {
       method: 'POST',
       headers: {

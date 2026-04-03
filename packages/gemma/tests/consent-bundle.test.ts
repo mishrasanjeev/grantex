@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { randomBytes } from 'node:crypto';
 import { createConsentBundle, type ConsentBundle } from '../src/consent/consent-bundle.js';
 import { storeBundle, loadBundle } from '../src/consent/bundle-storage.js';
 import { refreshBundle, shouldRefresh } from '../src/consent/bundle-refresh.js';

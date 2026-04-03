@@ -52,8 +52,6 @@ export async function syncAuditLog(
   // we just post everything and let markSynced handle dedup.
   // But for efficiency, read the synced marker to skip already-sent entries.
   const unsyncedEntries: SignedAuditEntry[] = [];
-  let syncedMarkerSeq = -1;
-
   // We walk all entries; the log internally tracks syncedUpTo.
   // For simplicity, just use unsyncedCount as a hint and send the tail.
   const totalUnsynced = await auditLog.unsyncedCount();
@@ -81,7 +79,7 @@ export async function syncAuditLog(
     while (attempt < maxRetries && !success) {
       try {
         const res = await fetch(
-          `${endpoint.replace(/\/+$/, '')}/v1/audit/offline-sync`,
+          `${endpoint.endsWith('/') ? endpoint.slice(0, -1) : endpoint}/v1/audit/offline-sync`,
           {
             method: 'POST',
             headers: {

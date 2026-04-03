@@ -27,7 +27,7 @@ export async function refreshBundle(
   baseUrl = 'https://api.grantex.dev',
 ): Promise<ConsentBundle> {
   const res = await fetch(
-    `${baseUrl.replace(/\/+$/, '')}/v1/consent-bundles/${bundle.bundleId}/refresh`,
+    `${baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl}/v1/consent-bundles/${bundle.bundleId}/refresh`,
     {
       method: 'POST',
       headers: {
