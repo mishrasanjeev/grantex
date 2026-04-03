@@ -1,0 +1,271 @@
+---
+title: "DPDP Act 2023 Compliance"
+sidebarTitle: "DPDP Act 2023"
+description: "How Grantex maps to India's Digital Personal Data Protection Act 2023 for AI agent deployments."
+---
+
+## Overview
+
+The **Digital Personal Data Protection Act 2023** (DPDP Act) is India's comprehensive data protection legislation. It establishes rights for **data principals** (individuals whose data is processed), obligations for **data fiduciaries** (organizations that determine the purpose and means of processing), and a regulatory framework enforced by the **Data Protection Board of India**.
+
+For AI agent deployments, the DPDP Act creates specific obligations that go beyond traditional application compliance. When an AI agent reads emails, accesses calendars, processes documents, or takes actions on behalf of a user, it is processing digital personal data — and the developer deploying that agent is the data fiduciary.
+
+<Warning>
+  This documentation explains how Grantex features map to DPDP Act requirements. It is not legal advice. Consult qualified legal counsel for your specific compliance obligations.
+</Warning>
+
+## Which Sections Apply to AI Agents?
+
+Not every section of the DPDP Act is relevant to AI agent deployments. The following sections create direct obligations:
+
+| Section | Topic | Why It Applies to AI Agents |
+|---------|-------|----------------------------|
+| **S.4** | Lawful purpose | Agents must only process data for declared, specific purposes |
+| **S.5** | Notice | Users must receive clear notice before an agent processes their data |
+| **S.6** | Consent | Agent access must be based on free, specific, informed consent |
+| **S.6(6)** | Withdrawal | Users must be able to withdraw consent as easily as they granted it |
+| **S.8** | Fiduciary obligations | Accuracy, storage limitation, and security safeguards |
+| **S.8(7)** | Grievance redressal | A mechanism for users to raise data processing complaints |
+| **S.9** | Children's data | Additional protections when agents process data of minors |
+| **S.11** | Data principal rights | Access, correction, erasure, and portability rights |
+| **S.13** | Grievance mechanism | Respond to grievances within the prescribed period |
+| **S.16** | Cross-border transfer | Restrictions on transferring data outside India |
+| **S.17** | Data Protection Board | Regulatory oversight, audits, and penalties |
+
+## How Grantex Maps to Each Section
+
+### Section 4 — Lawful Purpose
+
+**Obligation:** Personal data shall be processed only for a lawful purpose for which the data principal has given consent, or for certain legitimate uses.
+
+**Grantex implementation:**
+
+Every Grantex consent record includes explicit `purposes` with DPDP section tags. The grant token's `scp` (scopes) claim maps directly to the declared purposes. At every API call, the service verifies that the requested action falls within the token's scopes. An agent cannot exceed its declared purposes — the protocol enforces it cryptographically.
+
+```typescript
+const consent = await dpdp.createConsentRecord({
+  principalId: 'user_123',
+  agentId: 'ag_calendar',
+  purposes: [
+    {
+      code: 'calendar:read',
+      description: 'Read your calendar events to find available slots',
+      dpdpSection: 'S.4',
+      retention: '30d',
+    },
+  ],
+});
+```
+
+### Section 5 — Notice
+
+**Obligation:** The data fiduciary must give the data principal a notice containing a description of personal data being processed, the purpose, and how to exercise rights.
+
+**Grantex implementation:**
+
+The `consentNotice` field in the DPDPConsentRecord stores the notice text in the user's language. The Grantex consent UI renders this notice before the user approves. The notice is stored immutably alongside the consent record — auditors can verify the exact text the user saw.
+
+```typescript
+consentNotice: {
+  language: 'en',
+  text: 'This agent will read your calendar events to suggest meeting times. It will not modify or delete any events.',
+},
+```
+
+### Section 6 — Consent
+
+**Obligation:** Consent must be free, specific, informed, unconditional, and unambiguous. It must relate to a specific purpose. Bundled consent across unrelated purposes is not valid.
+
+**Grantex implementation:**
+
+Each purpose in a consent record is a separate, specific scope. The consent UI shows each purpose individually with its description. The user can see exactly what access they are granting. The consent record is immutable and timestamped, providing evidence that consent was obtained before processing began.
+
+### Section 6(6) — Right to Withdraw
+
+**Obligation:** The data principal may withdraw consent at any time. Withdrawal must be as easy as giving consent.
+
+**Grantex implementation:**
+
+Every consent record includes a `withdrawUrl` that the data principal can visit to revoke consent. The data principal portal provides a one-click withdrawal button next to each active consent. Withdrawal triggers:
+
+1. Instant revocation of the underlying Grantex grant token
+2. Cascade revocation to all delegated sub-agent tokens
+3. Immutable audit entry recording the withdrawal timestamp
+4. Notification to the agent developer via webhook
+
+```typescript
+// Withdraw consent programmatically
+await dpdp.withdrawConsent(consentId);
+
+// Or the data principal clicks "Withdraw" in the portal
+// Same result: grant revoked, sub-agents revoked, audit logged
+```
+
+### Section 8 — Data Fiduciary Obligations
+
+**Obligation:** The data fiduciary must ensure accuracy, implement storage limitation (delete data when purpose is fulfilled), and maintain security safeguards.
+
+**Grantex implementation:**
+
+- **Retention periods:** Each purpose in the consent record has a `retention` field. Grantex tracks expiry and can auto-revoke grants when retention periods lapse.
+- **Storage limitation:** Grant tokens have `exp` claims. The consent record's retention period is enforced independently.
+- **Security:** All data encrypted at rest, TLS in transit, HMAC-SHA256 webhook signatures, hash-chained audit trail.
+
+### Section 8(7) — Grievance Redressal
+
+**Obligation:** The data fiduciary must publish contact details of a Data Protection Officer or person responsible for grievance redressal.
+
+**Grantex implementation:**
+
+The data principal portal includes a grievance submission form that routes to the developer's configured DPO contact. Grievances are tracked with SLA timers per Section 13 requirements.
+
+### Section 11 — Data Principal Rights
+
+**Obligation:** Data principals have the right to access information about processing, seek correction or erasure of data, and nominate another person to exercise rights.
+
+**Grantex implementation:**
+
+The data principal portal provides:
+- **Access:** View all active consents, scopes, purposes, and processing history
+- **Correction:** Request corrections to personal data associated with consent records
+- **Erasure:** Withdraw consent and request deletion of processed data
+- **Portability:** Export consent records and audit history in machine-readable JSON
+- **Nomination:** Delegate rights management to another principal
+
+### Section 16 — Cross-Border Transfer
+
+**Obligation:** Personal data may only be transferred outside India to countries or territories notified by the Central Government.
+
+**Grantex implementation:**
+
+Consent records include a `crossBorder` flag. When set to `false`, the grant token signals that data must not leave India. Service providers can check this flag before processing requests that involve cross-border data movement.
+
+## Step-by-Step: Enabling DPDP Compliance
+
+### 1. Install the package
+
+```bash
+npm install @grantex/dpdp
+```
+
+### 2. Configure the client
+
+```typescript
+import { DPDPClient } from '@grantex/dpdp';
+
+const dpdp = new DPDPClient({
+  apiKey: process.env.GRANTEX_API_KEY,
+  dpoContact: {
+    name: 'Data Protection Officer',
+    email: 'dpo@yourcompany.com',
+  },
+  defaultRetention: '90d',
+  grievanceSla: '72h',
+});
+```
+
+### 3. Create consent records for agent access
+
+```typescript
+const consent = await dpdp.createConsentRecord({
+  principalId: 'user_123',
+  agentId: 'ag_email_summarizer',
+  purposes: [
+    {
+      code: 'email:read',
+      description: 'Read email subjects and bodies to generate daily summaries',
+      dpdpSection: 'S.4',
+      retention: '7d',
+    },
+  ],
+  consentNotice: {
+    language: 'en',
+    text: 'This agent reads your emails to create daily summaries. Emails are processed but not stored beyond 7 days.',
+  },
+  dataCategories: ['communications'],
+  crossBorder: false,
+});
+```
+
+### 4. Generate audit exports
+
+```typescript
+const auditPack = await dpdp.exportAudit({
+  framework: 'dpdp',
+  dateRange: { from: '2026-01-01', to: '2026-04-01' },
+  format: 'json',
+});
+```
+
+## Consent Notice Requirements
+
+Under Section 5, a valid consent notice must include:
+
+1. **Description of personal data** being processed
+2. **Purpose of processing** — specific, not vague
+3. **How to exercise rights** — link to portal or contact
+4. **Grievance mechanism** — how to file a complaint
+5. **Language** — in a language the data principal understands
+
+Grantex's consent UI enforces these requirements. The `consentNotice` field is validated to include mandatory elements before the consent record is created.
+
+## Audit Export Format
+
+The DPDP audit export includes:
+
+```json
+{
+  "exportType": "dpdp",
+  "generatedAt": "2026-04-03T10:00:00Z",
+  "period": { "from": "2026-01-01", "to": "2026-04-01" },
+  "summary": {
+    "totalConsents": 847,
+    "activeConsents": 812,
+    "withdrawals": 23,
+    "grievances": 2,
+    "crossBorderTransfers": 0
+  },
+  "consentRecords": [...],
+  "withdrawalLog": [...],
+  "grievanceLog": [...],
+  "processingActivities": [...],
+  "retentionCompliance": {
+    "compliant": 845,
+    "overdue": 2
+  }
+}
+```
+
+## FAQs
+
+### Does Grantex replace a Data Protection Officer?
+
+No. Grantex provides the technical infrastructure for consent management, audit trails, and data principal rights. You still need a DPO (or designated person) to handle grievances, make compliance decisions, and interface with the Data Protection Board. Grantex routes grievances to your DPO and provides the audit evidence they need.
+
+### What happens if a data principal withdraws consent?
+
+The underlying Grantex grant is revoked instantly. All delegated sub-agent tokens are cascade-revoked. The agent can no longer access the data principal's resources. A withdrawal audit entry is created. The developer receives a webhook notification.
+
+### Does the DPDP Act apply if my users are outside India?
+
+The DPDP Act applies to processing of digital personal data of individuals within India, regardless of where the data fiduciary is located. If your AI agents serve users in India, you need to comply.
+
+### How does this work with GDPR?
+
+Grantex consent records support multiple regulatory frameworks simultaneously. A single consent record can reference both DPDP sections and GDPR articles. The export system generates framework-specific reports from the same underlying data.
+
+### What are the penalties for non-compliance?
+
+The DPDP Act provides for penalties up to INR 250 crore (approximately USD 30 million) for significant data breaches and non-compliance. The Data Protection Board has the authority to impose penalties after due process.
+
+<Warning>
+  This documentation is for educational purposes. The DPDP Act's enforcement mechanisms and penalty structures may evolve as the Data Protection Board issues regulations and guidance. Always consult qualified legal counsel for your specific situation.
+</Warning>
+
+## Related Resources
+
+- [DPDP Compliance Module](/features/dpdp-compliance) — feature overview and SDK reference
+- [EU AI Act Compliance](/compliance/eu-ai-act) — EU AI Act mapping
+- [Compliance Evidence Pack API](/api-reference/compliance/generate-compliance-evidence-pack) — export API reference
+- [Compliance Matrix](/guides/compliance-matrix) — cross-framework compliance mapping
+- [Blog: DPDP Act and AI Agents](/blog/dpdp-act-ai-agents) — what engineering teams need to know

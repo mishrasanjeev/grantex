@@ -1,0 +1,65 @@
+{
+  "name": "@grantex/dpdp",
+  "version": "0.1.0",
+  "description": "DPDP Act 2023 & EU AI Act compliance module for AI agents using the Grantex authorization protocol",
+  "homepage": "https://grantex.dev/for/dpdp",
+  "bugs": {
+    "url": "https://github.com/mishrasanjeev/grantex/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "peerDependencies": {
+    "@grantex/sdk": ">=0.1.0"
+  },
+  "devDependencies": {
+    "@grantex/sdk": "file:../sdk-ts",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.3.1"
+  },
+  "overrides": {
+    "esbuild": ">=0.25.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "grantex",
+    "dpdp",
+    "dpdp-act",
+    "eu-ai-act",
+    "gdpr",
+    "compliance",
+    "data-protection",
+    "consent-management",
+    "ai-agents",
+    "authorization",
+    "privacy",
+    "india-data-protection",
+    "data-principal-rights",
+    "grievance-redressal",
+    "purpose-limitation"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mishrasanjeev/grantex"
+  }
+}

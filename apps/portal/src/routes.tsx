@@ -34,6 +34,10 @@ import { McpServerList } from './pages/mcp/McpServerList';
 import { McpServerForm } from './pages/mcp/McpServerForm';
 import { McpServerDetail } from './pages/mcp/McpServerDetail';
 import { AdminPage } from './pages/admin/AdminPage';
+import { ConsentRecordList } from './pages/dpdp/ConsentRecordList';
+import { ConsentRecordDetail } from './pages/dpdp/ConsentRecordDetail';
+import { GrievanceList } from './pages/dpdp/GrievanceList';
+import { ExportPage } from './pages/dpdp/ExportPage';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './RequireAuth';
 
@@ -79,6 +83,10 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/mcp/:serverId', element: <McpServerDetail /> },
       { path: '/dashboard/billing', element: <BillingPage /> },
       { path: '/dashboard/settings', element: <SettingsPage /> },
+      { path: '/dashboard/dpdp/records', element: <ConsentRecordList /> },
+      { path: '/dashboard/dpdp/records/:recordId', element: <ConsentRecordDetail /> },
+      { path: '/dashboard/dpdp/grievances', element: <GrievanceList /> },
+      { path: '/dashboard/dpdp/exports', element: <ExportPage /> },
       { path: '/dashboard/settings/sso', element: <SsoConfigPage /> },
       { path: '/dashboard/settings/scim', element: <ScimTokensPage /> },
       { path: '/dashboard/*', element: <NotFound /> },

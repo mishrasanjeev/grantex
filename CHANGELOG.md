@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+#### @grantex/dpdp — DPDP Act 2023 & EU AI Act Compliance
+- `@grantex/dpdp` package — DPDP Act 2023, GDPR, and EU AI Act compliance module for AI agent deployments
+- `DPDPConsentRecord` — structured consent records with purpose mapping, retention periods, and DPDP section references
+- `DPDPClient.createConsentRecord()` — create DPDP-compliant consent records linked to Grantex grants
+- `DPDPClient.withdrawConsent()` — one-click consent withdrawal with instant grant revocation and cascade
+- `DPDPClient.checkPurposeAdherence()` — verify agents stay within declared processing purposes
+- `DPDPClient.exportAudit()` — generate framework-specific audit exports (DPDP, GDPR, EU AI Act)
+- `DPDPClient.submitGrievance()` — data principal grievance mechanism with SLA tracking
+- `DPDPClient.exportPrincipalData()` — data principal data export (DPDP S.11 / GDPR Art.20)
+- Data principal portal with consent management, activity history, and grievance submission
+- Compliance dashboard with consent status, purpose adherence, and withdrawal metrics
+- DPDP Act 2023 section-by-section compliance mapping documentation
+- EU AI Act article-by-article compliance mapping documentation
+- DPDP compliance landing page at `grantex.dev/dpdp`
+- Blog post: "DPDP Act 2023 and AI Agents: What Your Engineering Team Must Know"
+
 #### @grantex/gemma — Offline Authorization for Gemma 4
 - `createConsentBundle()`: Issue offline-capable consent bundles (online, once)
 - `createOfflineVerifier()`: < 5ms JWT verification with zero network calls

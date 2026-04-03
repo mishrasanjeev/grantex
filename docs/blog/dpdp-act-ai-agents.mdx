@@ -1,0 +1,169 @@
+---
+title: "DPDP Act 2023 and AI Agents: What Your Engineering Team Must Know"
+description: "India's DPDP Act creates specific obligations for AI agent deployments. Here's what engineering teams need to implement."
+date: "2026-04-03"
+authors:
+  - name: "Sanjeev Kumar"
+---
+
+India's Digital Personal Data Protection Act 2023 is not a future concern. It is active law. And if your AI agents process personal data of Indian residents — reading emails, accessing calendars, analyzing documents, managing contacts — your engineering team has specific obligations to meet.
+
+This post breaks down what the DPDP Act requires for AI agent deployments, why agents create unique compliance risks, and what you need to build.
+
+## What DPDP Requires
+
+The DPDP Act establishes a framework around three roles:
+
+1. **Data Principal** — the individual whose personal data is processed (your end user)
+2. **Data Fiduciary** — the organization that determines how and why data is processed (you, the developer)
+3. **Data Processor** — anyone processing data on behalf of the fiduciary (your AI agent)
+
+The Act creates obligations in six areas that directly affect AI agent deployments:
+
+- **Consent (S.6):** Processing must be based on free, specific, informed consent. Bundling unrelated purposes into a single consent is invalid.
+- **Purpose limitation (S.4):** Data can only be processed for the specific purpose the user consented to. An email-reading agent cannot start accessing files without separate consent.
+- **Notice (S.5):** Before processing begins, the user must receive a clear description of what data will be processed and why.
+- **Withdrawal (S.6(6)):** The user must be able to withdraw consent at any time, and withdrawal must be as easy as granting consent.
+- **Data principal rights (S.11):** Users can request access to their data, corrections, and erasure.
+- **Grievance mechanism (S.8(7), S.13):** You must provide a way for users to file complaints about data processing.
+
+## Why AI Agents Are a Risk Vector
+
+Traditional web applications have a relatively bounded compliance surface. The user fills out a form, the backend processes it, data is stored in a database. The data flow is predictable and auditable.
+
+AI agents are fundamentally different:
+
+**Agents are autonomous.** Once authorized, an agent makes decisions about what data to access and what actions to take. A calendar agent might read 500 events to find a free slot. An email summarizer processes every email in the inbox. The scope of data access is determined at runtime by the agent, not at design time by the developer.
+
+**Agents delegate.** Multi-agent pipelines mean one agent hands off tasks to sub-agents. The email summarizer might call a translation agent, which calls a formatting agent. Each delegation extends the data processing chain — and each link must maintain the original consent boundaries.
+
+**Agents are opaque.** LLM-based agents make non-deterministic decisions. You cannot predict exactly which data an agent will access or what actions it will take. This makes traditional "data processing inventory" approaches insufficient.
+
+**Agents scale horizontally.** A single deployment might serve thousands of users simultaneously, each with different consent profiles. Manual consent tracking does not work at this scale.
+
+These characteristics mean that compliance cannot be bolted on after the agent is built. The authorization infrastructure must enforce consent boundaries at the protocol level.
+
+## Four Obligations Your Engineering Team Must Implement
+
+### 1. Structured Consent Records
+
+Every agent authorization must create a structured consent record that captures:
+
+- **Who** gave consent (the data principal)
+- **What** was consented to (specific purposes, not vague descriptions)
+- **When** consent was given (immutable timestamp)
+- **How** the user was informed (the exact consent notice text)
+- **How long** data will be retained (per-purpose retention periods)
+
+This is not a checkbox in your terms of service. It is a per-agent, per-user, per-purpose record that maps to specific DPDP sections.
+
+```typescript
+import { DPDPClient } from '@grantex/dpdp';
+
+const dpdp = new DPDPClient({ apiKey: process.env.GRANTEX_API_KEY });
+
+const consent = await dpdp.createConsentRecord({
+  principalId: 'user_123',
+  agentId: 'ag_email_summarizer',
+  purposes: [
+    {
+      code: 'email:read',
+      description: 'Read email subjects and bodies to generate daily summaries',
+      dpdpSection: 'S.4',
+      retention: '7d',
+    },
+  ],
+  consentNotice: {
+    language: 'en',
+    text: 'This agent reads your emails to create daily summaries. Email content is processed in memory and not stored beyond 7 days.',
+  },
+  dataCategories: ['communications'],
+  crossBorder: false,
+});
+```
+
+The consent record links to the underlying Grantex grant. The grant token's scopes match the declared purposes exactly. The agent cannot exceed its declared purposes because the protocol enforces it.
+
+### 2. Purpose Enforcement
+
+Consent without enforcement is just documentation. The DPDP Act requires that data is processed only for the consented purpose (S.4). For AI agents, this means:
+
+- The agent's grant token contains only the scopes from the declared purposes
+- Every API call verifies the token's scopes before executing
+- If the agent tries to access data outside its scope, the request is denied
+- The attempt is logged as a potential violation
+
+This is where Grantex's architecture is critical. The grant token is a signed JWT with a `scp` claim. Services verify the scope before executing any action. An email-reading agent cannot access files, calendar entries, or contacts — the token does not contain those scopes, and the verification will fail.
+
+### 3. Right to Withdrawal
+
+Section 6(6) requires that withdrawal of consent is "as easy as" giving consent. If granting consent takes one click, withdrawal must also take one click. You cannot bury the withdrawal mechanism in a settings page behind three navigation levels.
+
+Grantex provides this out of the box:
+
+- Every consent record includes a `withdrawUrl`
+- The data principal portal shows a "Withdraw consent" button next to each active consent
+- Withdrawal triggers instant revocation of the grant token
+- All delegated sub-agent tokens are cascade-revoked
+- The withdrawal is logged with an immutable timestamp
+
+```typescript
+// One API call to withdraw
+await dpdp.withdrawConsent(consentId);
+// Grant revoked, sub-agents revoked, audit entry created
+```
+
+### 4. Audit-Ready Exports
+
+The Data Protection Board of India can request evidence of your compliance at any time. You need to be able to produce:
+
+- All consent records with their original consent notices
+- Withdrawal history with timestamps
+- Data processing logs (what did each agent actually do?)
+- Grievance records with response times
+- Retention compliance status (are you deleting data on time?)
+- Cross-border transfer declarations
+
+Generating this manually is not feasible if you have hundreds of agents and thousands of users. Grantex's export system produces framework-formatted packages from a single API call:
+
+```typescript
+const auditPack = await dpdp.exportAudit({
+  framework: 'dpdp',
+  dateRange: { from: '2026-01-01', to: '2026-04-01' },
+  format: 'json',
+});
+```
+
+## The EU AI Act Is Next
+
+While you are building DPDP compliance, consider that the EU AI Act becomes binding in August 2026. If your agents serve users in the EU, you will need the same infrastructure plus:
+
+- **Risk management documentation** (Art. 9) — what controls limit what your agents can do?
+- **Transparency evidence** (Art. 13) — can you prove users understood what they were authorizing?
+- **Human oversight mechanisms** (Art. 14) — can operators see what agents are doing and stop them in real time?
+
+The good news: if you build DPDP compliance properly, most of the EU AI Act requirements are already covered. Consent records provide transparency evidence. Grant revocation provides human oversight. Audit exports provide quality management documentation.
+
+Grantex's export system supports `'dpdp'`, `'gdpr'`, and `'eu-ai-act'` framework targets from the same underlying data. One integration, three compliance frameworks.
+
+## What To Do Now
+
+1. **Audit your current agent authorization.** Are your agents using shared API keys or structured, scoped, consent-backed tokens? If it is the former, you are not DPDP compliant.
+
+2. **Map your data processing purposes.** For each agent, document exactly what personal data it accesses and why. This becomes your consent record schema.
+
+3. **Implement structured consent.** Install `@grantex/dpdp` (or `grantex-dpdp` for Python) and create consent records for every agent authorization. This is the foundational step.
+
+4. **Enable the data principal portal.** Your users need to see their consents, withdraw them, and file grievances. Grantex provides this as an embeddable UI via Principal Sessions.
+
+5. **Set up audit exports.** Run a test export now. Do not wait until the regulator asks. Verify that your export includes all mandatory fields.
+
+The DPDP Act is not waiting for your roadmap. The obligations are active now, penalties are defined (up to INR 250 crore), and the Data Protection Board has enforcement authority. The engineering work is straightforward if you start with the right infrastructure.
+
+## Learn More
+
+- [DPDP Act 2023 Compliance Guide](/compliance/dpdp-act-2023) — detailed section-by-section mapping
+- [EU AI Act Compliance Guide](/compliance/eu-ai-act) — article-by-article mapping
+- [DPDP Compliance Module](/features/dpdp-compliance) — SDK reference and API
+- [Compliance Matrix](/guides/compliance-matrix) — cross-framework mapping table
+- [OWASP Agentic Top 10 and Compliance](/blog/owasp-agentic-top-10-compliance) — security framework mapping

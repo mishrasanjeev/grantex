@@ -30,3 +30,7 @@ export const newConsentBundleId = (): string => `bundle_${ulid()}`;
 export const newOfflineAuditEntryId = (): string => `oae_${ulid()}`;
 export const newMcpServerId = (): string => `mcp_srv_${ulid()}`;
 export const newCertificationId = (): string => `cert_${ulid()}`;
+export const newConsentRecordId = (): string => `crec_${ulid()}`;
+export const newNoticeId = (): string => `notice_${ulid()}`;
+export const newGrievanceId = (): string => `grv_${ulid()}`;
+export const newExportId = (): string => `exp_${ulid()}`;
