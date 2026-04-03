@@ -68,7 +68,7 @@ def test_400_on_webhook_creation(client: Grantex) -> None:
         )
     )
     with pytest.raises(GrantexApiError) as exc_info:
-        client.webhooks.create(CreateWebhookParams(url="", events=[]))
+        client.webhooks.create(url="", events=[])
     assert exc_info.value.status_code == 400
 
 
@@ -137,7 +137,7 @@ def test_401_on_compliance_summary(client: Grantex) -> None:
         )
     )
     with pytest.raises(GrantexAuthError):
-        client.compliance.summary()
+        client.compliance.get_summary()
 
 
 @respx.mock
@@ -559,13 +559,11 @@ def test_write_timeout_raises_network_error(client: Grantex) -> None:
 
     with pytest.raises(GrantexNetworkError):
         client.audit.log(
-            LogAuditParams(
-                agent_id="ag_01",
-                agent_did="did:grantex:ag_01",
-                grant_id="grnt_01",
-                principal_id="user_01",
-                action="test",
-            )
+            agent_id="ag_01",
+            agent_did="did:grantex:ag_01",
+            grant_id="grnt_01",
+            principal_id="user_01",
+            action="test",
         )
 
 
