@@ -51,7 +51,7 @@ const jwksCache = new Map<string, ReturnType<typeof jose.createRemoteJWKSet>>();
 function getJwks(
   issuer: string,
 ): ReturnType<typeof jose.createRemoteJWKSet> {
-  const issuerBase = issuer.replace(/\/$/, '');
+  const issuerBase = issuer.endsWith('/') ? issuer.slice(0, -1) : issuer;
   let jwks = jwksCache.get(issuerBase);
   if (!jwks) {
     jwks = jose.createRemoteJWKSet(

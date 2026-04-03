@@ -3,7 +3,7 @@ import type { McpAuthConfig } from '../types.js';
 
 export function registerMetadataEndpoint(app: FastifyInstance, config: McpAuthConfig): void {
   app.get('/.well-known/oauth-authorization-server', async (_request, reply) => {
-    const issuer = config.issuer.replace(/\/$/, '');
+    const issuer = config.issuer.endsWith('/') ? config.issuer.slice(0, -1) : config.issuer;
 
     const consentUi = config.consentUi;
 

@@ -48,7 +48,6 @@ export function registerRevokeEndpoint(
 
       // Authenticate client — Basic auth or body credentials
       const basicCreds = parseBasicAuth(request.headers.authorization);
-      let authenticatedClientId: string | undefined;
 
       if (basicCreds) {
         const [clientId, clientSecret] = basicCreds;
@@ -59,7 +58,6 @@ export function registerRevokeEndpoint(
             error_description: 'Invalid client credentials',
           });
         }
-        authenticatedClientId = clientId;
       } else if (body.client_id) {
         const client = await clientStore.get(body.client_id);
         if (!client) {
@@ -77,7 +75,6 @@ export function registerRevokeEndpoint(
             error_description: 'Invalid client credentials',
           });
         }
-        authenticatedClientId = body.client_id;
       } else {
         return reply.status(401).send({
           error: 'invalid_client',

@@ -33,7 +33,7 @@ export function registerIntrospectEndpoint(
 
   function getJwks(): ReturnType<typeof jose.createRemoteJWKSet> {
     if (!jwks) {
-      const issuerBase = config.issuer.replace(/\/$/, '');
+      const issuerBase = config.issuer.endsWith('/') ? config.issuer.slice(0, -1) : config.issuer;
       const jwksUrl = new URL(`${issuerBase}/.well-known/jwks.json`);
       jwks = jose.createRemoteJWKSet(jwksUrl);
     }
@@ -43,7 +43,7 @@ export function registerIntrospectEndpoint(
   app.post<{ Body: IntrospectBody }>(
     '/introspect',
     {
-      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
       const body = request.body ?? {};
