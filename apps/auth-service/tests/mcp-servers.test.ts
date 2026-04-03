@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { buildTestApp, seedAuth, authHeader, sqlMock, TEST_DEVELOPER } from './helpers.js';
+import { buildTestApp, seedAuth, authHeader, sqlMock } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
