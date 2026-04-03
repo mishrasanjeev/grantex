@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- SEO -->
+  <title>Grantex Trust Registry — Verify AI Agent Identity</title>
+  <meta name="description" content="The public directory of verified AI agent publishers. Look up any organization by DID. Get your agents certified. Build trust before authorization.">
+  <meta name="keywords" content="Grantex, Trust Registry, AI agent identity, DID verification, agent publisher directory, verified agents, SOC 2, GDPR, DPDP, Decentralized Identifier, agent trust, AI security">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="https://grantex.dev/registry">
+
+  <!-- OpenGraph -->
+  <meta property="og:title" content="Grantex Trust Registry — Verify AI Agent Identity">
+  <meta property="og:description" content="The public directory of verified AI agent publishers. Look up any organization by DID. Get your agents certified. Build trust before authorization.">
+  <meta property="og:url" content="https://grantex.dev/registry">
+  <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Grantex">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Grantex Trust Registry — Verify AI Agent Identity">
+  <meta name="twitter:description" content="The public directory of verified AI agent publishers. Look up any organization by DID. Get your agents certified. Build trust before authorization.">
+  <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Grantex Trust Registry",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Any",
+    "url": "https://grantex.dev/registry",
+    "description": "Public directory of verified AI agent publishers with DID-based identity, compliance badges, and real-time reputation scoring.",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "isPartOf": {
+      "@type": "SoftwareApplication",
+      "name": "Grantex",
+      "url": "https://grantex.dev"
+    }
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is the Grantex Trust Registry?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The Grantex Trust Registry is a public directory of verified AI agent publishers. Organizations register with their Decentralized Identifier (DID), verify domain ownership, and earn compliance badges. Any developer can look up an organization before authorizing its agents."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I get verified in the Trust Registry?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Register your organization with your DID, then verify ownership via DNS TXT record, .well-known endpoint, SOC 2 attestation, or manual review. DNS TXT verification is the fastest method and typically completes in under 5 minutes."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What compliance badges are available?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The Trust Registry supports SOC 2 Type II, GDPR, DPDP (India's Digital Personal Data Protection Act), and ISO 27001 compliance badges. Each badge is independently verified and displayed on your organization's public profile."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I embed a trust badge on my website?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. After verification, you can embed a trust badge using the <grantex-trust-badge> web component. The badge displays your verification status, compliance badges, and agent count in real time."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
+
+  <style>
+    /* ── Design tokens ─────────────────────────────────────────────────────── */
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --accent:   #3fb950;
+      --accent2:  #58a6ff;
+      --mono:     'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --sans:     'Inter', system-ui, -apple-system, sans-serif;
+      --radius:   8px;
+      --max-w:    1100px;
+    }
+
+    /* ── Reset ─────────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    img { max-width: 100%; }
+
+    /* ── Layout ────────────────────────────────────────────────────────────── */
+    .container {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    section { padding: 80px 0; }
+    section + section { border-top: 1px solid var(--border); }
+
+    /* ── Nav ───────────────────────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(13, 17, 23, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+    .nav-logo {
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    .nav-logo span { color: var(--text); }
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+      font-size: 14px;
+    }
+    .nav-links a { color: var(--muted); transition: color 0.15s; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-links a.active { color: var(--accent); }
+
+    /* ── Hero ──────────────────────────────────────────────────────────────── */
+    .hero {
+      padding: 96px 0 80px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(36px, 5vw, 60px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      max-width: 640px;
+      margin: 0 auto 36px;
+      font-size: 18px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .hero-ctas {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+
+    /* ── Buttons ───────────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.15s;
+      border: none;
+    }
+    .btn:hover { opacity: 0.88; transform: translateY(-1px); text-decoration: none; }
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--muted); }
+
+    /* ── Section labels ────────────────────────────────────────────────────── */
+    .section-label {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(24px, 3vw, 36px);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+    .section-sub {
+      color: var(--muted);
+      font-size: 17px;
+      max-width: 560px;
+      margin-bottom: 48px;
+    }
+
+    /* ── Search bar ────────────────────────────────────────────────────────── */
+    .search-bar {
+      max-width: 680px;
+      margin: 0 auto 48px;
+      position: relative;
+    }
+    .search-bar input {
+      width: 100%;
+      padding: 16px 20px 16px 52px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 16px;
+      font-family: var(--sans);
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .search-bar input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.15);
+    }
+    .search-bar input::placeholder { color: var(--muted); opacity: 0.5; }
+    .search-icon {
+      position: absolute;
+      left: 18px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 20px;
+      height: 20px;
+      color: var(--muted);
+    }
+    .search-hint {
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+
+    /* ── Org cards ─────────────────────────────────────────────────────────── */
+    .org-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      margin-bottom: 48px;
+    }
+    .org-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: border-color 0.2s;
+    }
+    .org-card:hover { border-color: var(--accent2); }
+    .org-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .org-logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .org-name {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .org-did {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent2);
+    }
+    .org-badges {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .org-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--muted);
+      background: var(--bg);
+    }
+    .org-badge.verified {
+      border-color: rgba(63, 185, 80, 0.3);
+      color: var(--accent);
+      background: rgba(63, 185, 80, 0.08);
+    }
+    .org-badge .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .org-desc {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .org-stats {
+      display: flex;
+      gap: 20px;
+      font-size: 13px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+    .org-stat-val {
+      font-weight: 700;
+      color: var(--text);
+      font-family: var(--mono);
+    }
+
+    /* ── Stats bar ─────────────────────────────────────────────────────────── */
+    .stats-bar {
+      display: flex;
+      gap: 48px;
+      justify-content: center;
+      padding: 32px 0;
+    }
+    .stats-bar-item {
+      text-align: center;
+    }
+    .stats-bar-num {
+      font-family: var(--mono);
+      font-size: clamp(28px, 3.5vw, 44px);
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -1px;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .stats-bar-label {
+      font-size: 14px;
+      color: var(--muted);
+    }
+    @media (max-width: 600px) {
+      .stats-bar { gap: 24px; flex-wrap: wrap; }
+    }
+
+    /* ── Verification methods ──────────────────────────────────────────────── */
+    .methods-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .method-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: border-color 0.2s;
+    }
+    .method-card:hover { border-color: var(--accent2); }
+    .method-icon {
+      font-size: 28px;
+      margin-bottom: 16px;
+      display: block;
+    }
+    .method-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .method-card p {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    .method-tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-top: 12px;
+    }
+    .method-tag.recommended {
+      background: rgba(63, 185, 80, 0.1);
+      color: var(--accent);
+      border: 1px solid rgba(63, 185, 80, 0.2);
+    }
+    .method-tag.automated {
+      background: rgba(88, 166, 255, 0.1);
+      color: var(--accent2);
+      border: 1px solid rgba(88, 166, 255, 0.2);
+    }
+
+    /* ── Trust badge demo ──────────────────────────────────────────────────── */
+    .badge-demo {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+    @media (max-width: 680px) {
+      .badge-demo { grid-template-columns: 1fr; }
+    }
+    .badge-preview {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .badge-widget {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      font-size: 14px;
+    }
+    .badge-widget-shield {
+      width: 32px;
+      height: 32px;
+      color: var(--accent);
+    }
+    .badge-widget-name {
+      font-weight: 600;
+      color: var(--text);
+      font-size: 14px;
+    }
+    .badge-widget-status {
+      font-size: 12px;
+      color: var(--accent);
+      font-family: var(--mono);
+    }
+    .badge-widget-agents {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .code-snippet {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      position: relative;
+    }
+    .code-snippet pre {
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.7;
+      padding: 24px;
+      overflow-x: auto;
+      color: var(--text);
+    }
+    .copy-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-family: var(--mono);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    /* Syntax highlight — minimal */
+    .kw  { color: #ff7b72; }
+    .str { color: #a5d6ff; }
+    .fn  { color: #d2a8ff; }
+    .cm  { color: #8b949e; }
+    .tag { color: #7ee787; }
+    .attr { color: #79c0ff; }
+    .val { color: #a5d6ff; }
+
+    /* ── CTA ───────────────────────────────────────────────────────────────── */
+    .cta-section {
+      text-align: center;
+      padding: 96px 0;
+    }
+    .cta-section h2 {
+      font-size: clamp(28px, 3.5vw, 42px);
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+    .cta-section p {
+      max-width: 560px;
+      margin: 0 auto 36px;
+      font-size: 17px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    /* ── Flow steps ────────────────────────────────────────────────────────── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      max-width: 680px;
+    }
+    .flow-step {
+      display: flex;
+      gap: 20px;
+      position: relative;
+      padding-bottom: 32px;
+    }
+    .flow-step:last-child { padding-bottom: 0; }
+    .flow-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 19px;
+      top: 40px;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+      position: relative;
+      z-index: 1;
+    }
+    .step-body h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      padding-top: 8px;
+    }
+    .step-body p { color: var(--muted); font-size: 14px; }
+
+    /* ── Footer ────────────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .footer-logo {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .footer-links {
+      display: flex;
+      gap: 20px;
+      list-style: none;
+      font-size: 13px;
+    }
+    .footer-links a { color: var(--muted); }
+    .footer-links a:hover { color: var(--text); text-decoration: none; }
+    .footer-copy {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ── How it works section ──────────────────────────────────────────────── */
+    .how-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: start;
+    }
+    @media (max-width: 768px) {
+      .how-grid { grid-template-columns: 1fr; }
+    }
+    .how-visual {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+    }
+    .how-visual-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .how-visual-row:last-child { border-bottom: none; }
+    .how-visual-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .how-visual-icon.dns   { background: rgba(63, 185, 80, 0.12); }
+    .how-visual-icon.badge { background: rgba(88, 166, 255, 0.12); }
+    .how-visual-icon.key   { background: rgba(210, 168, 255, 0.12); }
+    .how-visual-text {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .how-visual-text strong { color: var(--text); }
+    .how-visual-check {
+      margin-left: auto;
+      color: var(--accent);
+      font-size: 18px;
+    }
+
+    /* ── Responsive nav ────────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .nav-links { gap: 16px; font-size: 13px; }
+    }
+    @media (max-width: 560px) {
+      .nav-links { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Nav ──────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="container">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo" style="text-decoration:none;">
+        grant<span>ex</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="https://docs.grantex.dev"
+               onclick="gtag('event','docs_click',{event_category:'nav'})">Docs</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex"
+               onclick="gtag('event','github_click',{event_category:'nav'})">GitHub</a></li>
+        <li><a href="/playground">Playground</a></li>
+        <li><a href="/registry" class="active">Trust Registry</a></li>
+        <li><a href="https://www.npmjs.com/package/@grantex/sdk">npm</a></li>
+        <li><a href="/dashboard" style="color:var(--accent);font-weight:600;">Dashboard</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ──────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <h1>Trust Before Authorization</h1>
+    <p>
+      The public directory of verified AI agent publishers. Look up any organization by DID,
+      check compliance badges, and verify the humans behind the agents &mdash; before you authorize anything.
+    </p>
+    <div class="hero-ctas">
+      <a href="/dashboard/registry/register" class="btn btn-primary"
+         onclick="gtag('event','register_org_click',{event_category:'cta'})">
+        Register Your Organization
+      </a>
+      <a href="https://docs.grantex.dev/features/trust-registry" class="btn btn-secondary">
+        Read the Docs
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Live Search ──────────────────────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div style="text-align:center;">
+      <div class="section-label">Public Directory</div>
+      <h2 class="section-title">Look up any organization</h2>
+      <p class="section-sub" style="margin:0 auto 36px;">
+        Search by name, DID, or domain. Every lookup is public &mdash; no account required.
+      </p>
+    </div>
+
+    <div class="search-bar">
+      <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+      </svg>
+      <input type="text" placeholder="Search organizations by name or DID..." id="registry-search" />
+      <span class="search-hint">Enter</span>
+    </div>
+
+    <!-- Featured Org Cards -->
+    <div class="org-grid" id="org-results">
+      <!-- Acme AI -->
+      <div class="org-card">
+        <div class="org-header">
+          <div class="org-logo">A</div>
+          <div>
+            <div class="org-name">Acme AI Labs</div>
+            <div class="org-did">did:web:acme-ai.com</div>
+          </div>
+        </div>
+        <div class="org-badges">
+          <span class="org-badge verified"><span class="dot"></span> Verified</span>
+          <span class="org-badge">SOC 2</span>
+          <span class="org-badge">GDPR</span>
+        </div>
+        <div class="org-desc">Enterprise AI automation platform with code generation, data analysis, and workflow orchestration agents.</div>
+        <div class="org-stats">
+          <span><span class="org-stat-val">12</span> agents</span>
+          <span><span class="org-stat-val">8.4K</span> grants/wk</span>
+          <span><span class="org-stat-val">4.8</span> rating</span>
+        </div>
+      </div>
+
+      <!-- NovaMind -->
+      <div class="org-card">
+        <div class="org-header">
+          <div class="org-logo">N</div>
+          <div>
+            <div class="org-name">NovaMind Technologies</div>
+            <div class="org-did">did:web:novamind.dev</div>
+          </div>
+        </div>
+        <div class="org-badges">
+          <span class="org-badge verified"><span class="dot"></span> Verified</span>
+          <span class="org-badge">SOC 2</span>
+          <span class="org-badge">DPDP</span>
+          <span class="org-badge">ISO 27001</span>
+        </div>
+        <div class="org-desc">Research-grade AI agents for scientific computing, literature review, and experimental design automation.</div>
+        <div class="org-stats">
+          <span><span class="org-stat-val">8</span> agents</span>
+          <span><span class="org-stat-val">3.2K</span> grants/wk</span>
+          <span><span class="org-stat-val">4.9</span> rating</span>
+        </div>
+      </div>
+
+      <!-- Helios -->
+      <div class="org-card">
+        <div class="org-header">
+          <div class="org-logo">H</div>
+          <div>
+            <div class="org-name">Helios Finance</div>
+            <div class="org-did">did:web:helios.finance</div>
+          </div>
+        </div>
+        <div class="org-badges">
+          <span class="org-badge verified"><span class="dot"></span> Verified</span>
+          <span class="org-badge">SOC 2</span>
+          <span class="org-badge">GDPR</span>
+          <span class="org-badge">DPDP</span>
+        </div>
+        <div class="org-desc">Fintech AI agents for portfolio analysis, risk assessment, compliance reporting, and trade execution.</div>
+        <div class="org-stats">
+          <span><span class="org-stat-val">6</span> agents</span>
+          <span><span class="org-stat-val">1.8K</span> grants/wk</span>
+          <span><span class="org-stat-val">4.7</span> rating</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="stats-bar">
+      <div class="stats-bar-item">
+        <div class="stats-bar-num">89</div>
+        <div class="stats-bar-label">Verified Organizations</div>
+      </div>
+      <div class="stats-bar-item">
+        <div class="stats-bar-num">234</div>
+        <div class="stats-bar-label">Registered Agents</div>
+      </div>
+      <div class="stats-bar-item">
+        <div class="stats-bar-num">1.2M</div>
+        <div class="stats-bar-label">Grants per Week</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── How Verification Works ───────────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="section-label">Verification</div>
+    <h2 class="section-title">How Verification Works</h2>
+    <p class="section-sub">Four methods to prove you own your DID and meet compliance standards.</p>
+
+    <div class="methods-grid">
+      <!-- DNS-TXT -->
+      <div class="method-card">
+        <span class="method-icon">&#127760;</span>
+        <h3>DNS TXT Record</h3>
+        <p>Add a TXT record at <code style="font-size:13px;color:var(--accent2);">_grantex.your-domain.com</code> with the token we provide. We verify automatically in under 5 minutes.</p>
+        <span class="method-tag recommended">Recommended</span>
+      </div>
+
+      <!-- Well-Known -->
+      <div class="method-card">
+        <span class="method-icon">&#128279;</span>
+        <h3>.well-known Endpoint</h3>
+        <p>Serve a JSON document at <code style="font-size:13px;color:var(--accent2);">/.well-known/grantex-verification</code> on your domain. Ideal for organizations with restricted DNS access.</p>
+        <span class="method-tag automated">Automated</span>
+      </div>
+
+      <!-- SOC 2 -->
+      <div class="method-card">
+        <span class="method-icon">&#128220;</span>
+        <h3>SOC 2 Attestation</h3>
+        <p>Upload your SOC 2 Type II report for automated compliance verification. Earns the SOC 2 badge alongside DID verification.</p>
+        <span class="method-tag automated">2 Business Days</span>
+      </div>
+
+      <!-- Manual Review -->
+      <div class="method-card">
+        <span class="method-icon">&#128101;</span>
+        <h3>Manual Review</h3>
+        <p>Request a manual review by the Grantex trust team. Best for organizations with unique structures or non-standard DIDs.</p>
+        <span class="method-tag" style="background:rgba(210,168,255,0.1);color:#d2a8ff;border:1px solid rgba(210,168,255,0.2);">3-5 Business Days</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── How It Works: Step by Step ───────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="how-grid">
+      <div>
+        <div class="section-label">Getting Started</div>
+        <h2 class="section-title">Register in minutes</h2>
+        <p class="section-sub">Three steps from unregistered to verified. Most organizations complete the process in under 10 minutes.</p>
+
+        <div class="flow">
+          <div class="flow-step">
+            <div class="step-num">1</div>
+            <div class="step-body">
+              <h3>Register your DID</h3>
+              <p>Enter your organization's Decentralized Identifier (did:web recommended), name, and contact information in the dashboard.</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="step-num">2</div>
+            <div class="step-body">
+              <h3>Verify domain ownership</h3>
+              <p>Add a DNS TXT record or serve a .well-known endpoint. We check automatically and mark you as verified.</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="step-num">3</div>
+            <div class="step-body">
+              <h3>Earn compliance badges</h3>
+              <p>Upload attestations for SOC 2, GDPR, DPDP, or ISO 27001. Badges appear on your public profile and in search results.</p>
+            </div>
+          </div>
+          <div class="flow-step">
+            <div class="step-num">4</div>
+            <div class="step-body">
+              <h3>Embed your trust badge</h3>
+              <p>Add the trust badge web component to your site. Shows real-time verification status, badges, and agent count.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="how-visual">
+        <div style="font-family:var(--mono);font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;">Live Verification Status</div>
+        <div class="how-visual-row">
+          <div class="how-visual-icon dns">&#127760;</div>
+          <div class="how-visual-text"><strong>DNS TXT</strong> &mdash; _grantex.acme-ai.com</div>
+          <div class="how-visual-check">&#10003;</div>
+        </div>
+        <div class="how-visual-row">
+          <div class="how-visual-icon badge">&#128220;</div>
+          <div class="how-visual-text"><strong>SOC 2 Type II</strong> &mdash; 2026-01-15</div>
+          <div class="how-visual-check">&#10003;</div>
+        </div>
+        <div class="how-visual-row">
+          <div class="how-visual-icon badge">&#127987;</div>
+          <div class="how-visual-text"><strong>GDPR</strong> &mdash; DPO: dpo@acme-ai.com</div>
+          <div class="how-visual-check">&#10003;</div>
+        </div>
+        <div class="how-visual-row">
+          <div class="how-visual-icon key">&#128273;</div>
+          <div class="how-visual-text"><strong>Public Keys</strong> &mdash; 2 JWK entries</div>
+          <div class="how-visual-check">&#10003;</div>
+        </div>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);"></span>
+          <span style="font-size:13px;font-weight:600;color:var(--accent);">Fully Verified</span>
+          <span style="font-size:12px;color:var(--muted);margin-left:auto;">Verified 2026-02-10</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Embeddable Trust Badge ───────────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="section-label">Embed</div>
+    <h2 class="section-title">Embeddable Trust Badge</h2>
+    <p class="section-sub">Show developers your verified status with a single HTML tag. Updates in real time.</p>
+
+    <div class="badge-demo">
+      <!-- Preview -->
+      <div class="badge-preview">
+        <div class="badge-widget">
+          <svg class="badge-widget-shield" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+          </svg>
+          <div>
+            <div class="badge-widget-name">Acme AI Labs</div>
+            <div class="badge-widget-status">Verified</div>
+            <div class="badge-widget-agents">12 agents &middot; SOC 2 &middot; GDPR</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Code snippet -->
+      <div>
+        <p style="font-size:14px;color:var(--muted);margin-bottom:16px;">Add a single line to your HTML:</p>
+        <div class="code-snippet">
+          <button class="copy-btn" onclick="copyBadgeSnippet(this)">Copy</button>
+          <pre><span class="cm">&lt;!-- Grantex Trust Badge --&gt;</span>
+<span class="tag">&lt;grantex-trust-badge</span>
+  <span class="attr">did</span>=<span class="val">"did:web:acme-ai.com"</span>
+  <span class="attr">theme</span>=<span class="val">"dark"</span>
+<span class="tag">/&gt;</span>
+
+<span class="cm">&lt;!-- Load the web component --&gt;</span>
+<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="val">"https://cdn.grantex.dev/trust-badge.js"</span><span class="tag">&gt;&lt;/script&gt;</span></pre>
+        </div>
+        <p style="font-size:13px;color:var(--muted);margin-top:12px;">
+          The badge auto-updates when your verification status or badge count changes.
+          Supports <code style="font-size:12px;color:var(--accent2);">light</code> and <code style="font-size:12px;color:var(--accent2);">dark</code> themes.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── API Access ───────────────────────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="section-label">API</div>
+    <h2 class="section-title">Programmatic Access</h2>
+    <p class="section-sub">Look up organizations and verify agents programmatically. The search endpoint is public &mdash; no API key required.</p>
+
+    <div class="badge-demo">
+      <div class="code-snippet">
+        <button class="copy-btn" onclick="copyCodeSnippet(this, 'api-ts')">Copy</button>
+        <pre id="api-ts"><span class="cm">// Search the registry (no auth needed)</span>
+<span class="kw">const</span> res = <span class="kw">await</span> <span class="fn">fetch</span>(
+  <span class="str">'https://api.grantex.dev/v1/registry/orgs?q=acme'</span>
+);
+<span class="kw">const</span> { data, meta } = <span class="kw">await</span> res.<span class="fn">json</span>();
+
+<span class="cm">// Or use the SDK</span>
+<span class="kw">import</span> { Grantex } <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
+<span class="kw">const</span> gx = <span class="kw">new</span> <span class="fn">Grantex</span>();
+<span class="kw">const</span> orgs = <span class="kw">await</span> gx.registry.<span class="fn">search</span>({
+  q: <span class="str">'acme'</span>,
+  verified: <span class="kw">true</span>
+});</pre>
+      </div>
+
+      <div class="code-snippet">
+        <button class="copy-btn" onclick="copyCodeSnippet(this, 'api-py')">Copy</button>
+        <pre id="api-py"><span class="cm"># Search the registry (no auth needed)</span>
+<span class="kw">import</span> httpx
+
+res = httpx.<span class="fn">get</span>(
+    <span class="str">"https://api.grantex.dev/v1/registry/orgs"</span>,
+    params={<span class="str">"q"</span>: <span class="str">"acme"</span>}
+)
+orgs = res.<span class="fn">json</span>()[<span class="str">"data"</span>]
+
+<span class="cm"># Or use the SDK</span>
+<span class="kw">from</span> grantex <span class="kw">import</span> Grantex
+gx = <span class="fn">Grantex</span>()
+orgs = gx.registry.<span class="fn">search</span>(q=<span class="str">"acme"</span>, verified=<span class="kw">True</span>)</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ──────────────────────────────────────────────────────────────── -->
+<section class="cta-section">
+  <div class="container">
+    <h2>Build Trust Into Your Agent Infrastructure</h2>
+    <p>
+      Register your organization, get verified, and let every developer in the ecosystem know
+      your agents are legitimate &mdash; before a single grant is issued.
+    </p>
+    <div class="hero-ctas">
+      <a href="/dashboard/registry/register" class="btn btn-primary"
+         onclick="gtag('event','register_org_click',{event_category:'cta_bottom'})">
+        Register Your Organization
+      </a>
+      <a href="/dashboard/registry" class="btn btn-secondary">
+        Browse the Registry
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <span class="footer-logo">grantex</span>
+      <ul class="footer-links">
+        <li><a href="https://docs.grantex.dev">Docs</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+        <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
+        <li><a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">IETF Draft</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
+      </ul>
+      <span class="footer-copy">&copy; 2026 Grantex</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ── Scripts ────────────────────────────────────────────────────────────── -->
+<script>
+  /* Search bar interaction */
+  const searchInput = document.getElementById('registry-search');
+  searchInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      const q = searchInput.value.trim();
+      if (q) {
+        window.location.href = '/dashboard/registry?q=' + encodeURIComponent(q);
+      }
+    }
+  });
+
+  /* Copy badge snippet */
+  function copyBadgeSnippet(btn) {
+    const snippet = `<grantex-trust-badge did="did:web:acme.com" theme="dark" />\n<script src="https://cdn.grantex.dev/trust-badge.js"><\/script>`;
+    navigator.clipboard.writeText(snippet);
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+  }
+
+  /* Copy code snippet */
+  function copyCodeSnippet(btn, id) {
+    const el = document.getElementById(id);
+    navigator.clipboard.writeText(el.textContent);
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+  }
+</script>
+
+</body>
+</html>

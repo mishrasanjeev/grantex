@@ -33,6 +33,9 @@ import { BundleDetail } from './pages/bundles/BundleDetail';
 import { McpServerList } from './pages/mcp/McpServerList';
 import { McpServerForm } from './pages/mcp/McpServerForm';
 import { McpServerDetail } from './pages/mcp/McpServerDetail';
+import { RegistrySearch } from './pages/registry/RegistrySearch';
+import { RegistryOrgDetail } from './pages/registry/RegistryOrgDetail';
+import { RegisterOrgForm } from './pages/registry/RegisterOrgForm';
 import { AdminPage } from './pages/admin/AdminPage';
 import { ConsentRecordList } from './pages/dpdp/ConsentRecordList';
 import { ConsentRecordDetail } from './pages/dpdp/ConsentRecordDetail';
@@ -81,6 +84,9 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/mcp', element: <McpServerList /> },
       { path: '/dashboard/mcp/new', element: <McpServerForm /> },
       { path: '/dashboard/mcp/:serverId', element: <McpServerDetail /> },
+      { path: '/dashboard/registry', element: <RegistrySearch /> },
+      { path: '/dashboard/registry/register', element: <RegisterOrgForm /> },
+      { path: '/dashboard/registry/:did', element: <RegistryOrgDetail /> },
       { path: '/dashboard/billing', element: <BillingPage /> },
       { path: '/dashboard/settings', element: <SettingsPage /> },
       { path: '/dashboard/dpdp/records', element: <ConsentRecordList /> },

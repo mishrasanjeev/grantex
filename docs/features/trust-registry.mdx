@@ -1,0 +1,313 @@
+---
+title: "Trust Registry"
+sidebarTitle: "Trust Registry"
+description: "Public directory of verified AI agent publishers with DID-based identity and compliance badges."
+---
+
+## Overview
+
+The **Grantex Trust Registry** is a public, searchable directory of organizations that publish AI agents. It answers a fundamental question: _who is behind this agent?_
+
+Before authorizing an agent, developers and end-users can look up the publishing organization, verify its DID, check compliance badges (SOC 2, GDPR, DPDP, ISO 27001), and review its agent portfolio — all without creating an account.
+
+<Info>
+  The registry search endpoint (`GET /v1/registry/orgs`) is public and requires no authentication. Registration and verification endpoints require a Grantex API key.
+</Info>
+
+## Why a Trust Registry?
+
+OAuth 2.0 has no concept of publisher identity. When you authorize an app, you trust the OAuth provider — but you know nothing about who built the app.
+
+In the AI agent world, this gap is dangerous. An agent requesting `email:send` could be published by a Fortune 500 company or a single anonymous developer. The Trust Registry closes this gap by binding every agent to a verified organization with:
+
+- **DID-based identity** — cryptographically verifiable, decentralized
+- **Domain ownership proof** — DNS TXT or .well-known verification
+- **Compliance badges** — SOC 2, GDPR, DPDP, ISO 27001
+- **Public contact information** — security email, DPO
+- **Agent portfolio** — all agents published by the organization
+- **Reputation metrics** — weekly active grants, average rating
+
+## Data Model
+
+### Registry Organization
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `did` | `string` | Decentralized Identifier (e.g., `did:web:acme.com`) |
+| `name` | `string` | Organization name |
+| `description` | `string?` | Brief description |
+| `verificationLevel` | `string` | `unverified`, `pending`, or `verified` |
+| `badges` | `string[]` | Compliance badges earned |
+| `stats.totalAgents` | `number` | Number of registered agents |
+| `stats.weeklyActiveGrants` | `number` | Active grants issued per week |
+| `stats.averageRating` | `number` | Average agent rating (0-5) |
+| `website` | `string?` | Organization website URL |
+| `logoUrl` | `string?` | Organization logo URL |
+| `compliance` | `object` | Compliance flags (SOC 2, DPDP, GDPR) |
+| `contact.security` | `string` | Security contact email |
+| `contact.dpo` | `string?` | Data Protection Officer email |
+| `publicKeys` | `JWK[]` | Public key entries for DID verification |
+| `agents` | `RegistryAgent[]` | Agents published by this organization |
+
+### Registry Agent
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agentDID` | `string` | Agent's Decentralized Identifier |
+| `name` | `string` | Agent name |
+| `description` | `string?` | Agent description |
+| `category` | `string` | Category (e.g., `automation`, `analytics`, `finance`) |
+| `scopes` | `string[]` | Scopes the agent typically requests |
+| `weeklyActiveGrants` | `number` | Active grants per week |
+| `rating` | `number` | Agent reputation rating (0-5) |
+| `npmPackage` | `string?` | npm package name if published |
+
+## Verification Methods
+
+Organizations can verify their DID through four methods:
+
+### 1. DNS TXT Record (Recommended)
+
+Add a TXT record to your domain's DNS:
+
+```
+_grantex.your-domain.com  TXT  "grantex-verify-<token>"
+```
+
+This is the fastest method — verification completes automatically in under 5 minutes.
+
+### 2. .well-known Endpoint
+
+Serve a JSON file at `https://your-domain.com/.well-known/grantex-verification`:
+
+```json
+{
+  "did": "did:web:your-domain.com",
+  "token": "grantex-verify-<token>"
+}
+```
+
+Best for organizations with restricted DNS access.
+
+### 3. SOC 2 Attestation
+
+Upload your SOC 2 Type II report. The Grantex compliance team reviews it within 2 business days. This method earns both DID verification and the SOC 2 badge.
+
+### 4. Manual Review
+
+Submit your organization for manual review by the Grantex trust team. Typical turnaround is 3-5 business days.
+
+## Compliance Badges
+
+| Badge | Requirements |
+|-------|-------------|
+| **SOC 2 Type II** | Valid SOC 2 Type II report uploaded and reviewed |
+| **GDPR** | DPO email provided, data processing documentation |
+| **DPDP** | Compliance with India's Digital Personal Data Protection Act |
+| **ISO 27001** | Valid ISO 27001 certification uploaded |
+
+Badges appear on the organization's public profile, in search results, and in the embeddable trust badge widget.
+
+## API Endpoints
+
+### Search Organizations (Public)
+
+```bash
+GET /v1/registry/orgs?q=acme&verified=true&badge=soc2
+```
+
+No authentication required. Returns matching organizations with stats and badges.
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `q` | `string` | Search by name or DID |
+| `verified` | `boolean` | Filter to verified organizations only |
+| `badge` | `string` | Filter by compliance badge |
+
+**Response:**
+
+```json
+{
+  "data": [
+    {
+      "did": "did:web:acme-ai.com",
+      "name": "Acme AI Labs",
+      "description": "Enterprise AI automation platform",
+      "verificationLevel": "verified",
+      "badges": ["soc2", "gdpr"],
+      "stats": {
+        "totalAgents": 12,
+        "weeklyActiveGrants": 8400,
+        "averageRating": 4.8
+      },
+      "website": "https://acme-ai.com",
+      "logoUrl": "https://acme-ai.com/logo.png"
+    }
+  ],
+  "meta": { "total": 1 }
+}
+```
+
+### Get Organization Detail (Public)
+
+```bash
+GET /v1/registry/orgs/:did
+```
+
+Returns full organization detail including agents, public keys, compliance info, and contact.
+
+### Register Organization (Authenticated)
+
+```bash
+POST /v1/registry/orgs
+Authorization: Bearer <api-key>
+
+{
+  "did": "did:web:your-domain.com",
+  "name": "Your Org",
+  "description": "Brief description",
+  "website": "https://your-domain.com",
+  "contact": {
+    "security": "security@your-domain.com",
+    "dpo": "dpo@your-domain.com"
+  },
+  "requestVerification": true,
+  "verificationMethod": "dns-txt"
+}
+```
+
+### Verify DNS (Authenticated)
+
+```bash
+POST /v1/registry/orgs/:did/verify-dns
+Authorization: Bearer <api-key>
+```
+
+Triggers DNS verification for the organization. Returns `{ "verified": true }` on success.
+
+## SDK Usage
+
+### TypeScript
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const gx = new Grantex({ apiKey: process.env.GRANTEX_KEY });
+
+// Search (no auth needed)
+const { data: orgs } = await gx.registry.search({
+  q: 'acme',
+  verified: true,
+});
+
+// Get org detail
+const org = await gx.registry.get('did:web:acme-ai.com');
+console.log(org.agents);      // RegistryAgent[]
+console.log(org.compliance);   // { soc2Type2: true, ... }
+console.log(org.publicKeys);   // JWK[]
+
+// Register your org
+await gx.registry.register({
+  did: 'did:web:your-domain.com',
+  name: 'Your Org',
+  contact: { security: 'security@your-domain.com' },
+  verificationMethod: 'dns-txt',
+});
+
+// Verify DNS
+const result = await gx.registry.verifyDns('did:web:your-domain.com');
+console.log(result.verified); // true
+```
+
+### Python
+
+```python
+from grantex import Grantex
+
+gx = Grantex(api_key="your-key")
+
+# Search (no auth needed)
+result = gx.registry.search(q="acme", verified=True)
+for org in result.data:
+    print(org.name, org.badges)
+
+# Get org detail
+org = gx.registry.get("did:web:acme-ai.com")
+print(org.agents)
+print(org.compliance)
+
+# Register your org
+gx.registry.register(
+    did="did:web:your-domain.com",
+    name="Your Org",
+    contact={"security": "security@your-domain.com"},
+    verification_method="dns-txt",
+)
+
+# Verify DNS
+result = gx.registry.verify_dns("did:web:your-domain.com")
+print(result.verified)  # True
+```
+
+## Embeddable Trust Badge
+
+After verification, embed a trust badge on your website:
+
+```html
+<grantex-trust-badge
+  did="did:web:your-domain.com"
+  theme="dark"
+/>
+<script src="https://cdn.grantex.dev/trust-badge.js"></script>
+```
+
+The badge displays:
+
+- Organization name and verification status
+- Compliance badges (SOC 2, GDPR, DPDP, ISO 27001)
+- Agent count
+- Real-time updates when status changes
+
+**Attributes:**
+
+| Attribute | Values | Default | Description |
+|-----------|--------|---------|-------------|
+| `did` | DID string | Required | Organization DID to display |
+| `theme` | `light`, `dark` | `light` | Color theme |
+| `size` | `sm`, `md`, `lg` | `md` | Badge size |
+| `show-agents` | `true`, `false` | `true` | Show agent count |
+
+## Integration with Agent Passports
+
+The Trust Registry works seamlessly with [MPP Agent Passports](/features/mpp-agent-passport). When a merchant verifies an `AgentPassportCredential`, it can look up the issuing organization in the Trust Registry to check compliance status and verification level.
+
+```typescript
+import { verifyPassport } from '@grantex/mpp';
+
+const result = await verifyPassport(passportJwt);
+if (result.valid) {
+  // Look up the issuing org
+  const org = await gx.registry.get(result.credential.orgDID);
+  if (org.verificationLevel === 'verified' && org.badges.includes('soc2')) {
+    // Proceed with high confidence
+  }
+}
+```
+
+## Portal
+
+The Trust Registry is accessible in the [Grantex Portal](/dashboard/registry):
+
+- **Browse** — Search and filter verified organizations
+- **Register** — Step-by-step wizard to register your organization
+- **Verify** — Trigger DNS verification from the org detail page
+- **View** — Full organization profiles with agents, keys, and compliance
+
+## Next Steps
+
+- [Register your organization](/dashboard/registry/register) in the portal
+- Follow the [Trust Registry Setup Guide](/guides/trust-registry-setup) for step-by-step instructions
+- Learn about [MPP Agent Passports](/features/mpp-agent-passport) for payment identity
+- Review the [DID Infrastructure](/features/did-infrastructure) documentation

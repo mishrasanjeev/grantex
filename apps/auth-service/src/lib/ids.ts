@@ -34,3 +34,4 @@ export const newConsentRecordId = (): string => `crec_${ulid()}`;
 export const newNoticeId = (): string => `notice_${ulid()}`;
 export const newGrievanceId = (): string => `grv_${ulid()}`;
 export const newExportId = (): string => `exp_${ulid()}`;
+export const newRegistryAgentId = (): string => `ragent_${ulid()}`;
