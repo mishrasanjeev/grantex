@@ -16,14 +16,14 @@ export interface RegistryOrg {
 export interface RegistryOrgDetail extends RegistryOrg {
   agents: RegistryAgent[];
   publicKeys: Record<string, unknown>[];
-  compliance: { soc2Type2: boolean; dpdpCompliant: boolean; gdprCompliant: boolean };
+  compliance: { soc2: boolean; iso27001: boolean; dpdp: boolean; gdpr: boolean };
   contact: { security: string; dpo?: string };
   verifiedAt: string | null;
   verificationMethod: string | null;
 }
 
 export interface RegistryAgent {
-  agentDID: string;
+  agentDid: string;
   name: string;
   description: string | null;
   category: string;

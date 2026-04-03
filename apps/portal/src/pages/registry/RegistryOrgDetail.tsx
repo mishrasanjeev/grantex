@@ -148,9 +148,9 @@ export function RegistryOrgDetail() {
         <Card>
           <h2 className="text-sm font-semibold text-gx-text mb-4">Compliance</h2>
           <div className="space-y-3">
-            <ComplianceRow label="SOC 2 Type II" passed={org.compliance.soc2Type2} />
-            <ComplianceRow label="DPDP Compliant" passed={org.compliance.dpdpCompliant} />
-            <ComplianceRow label="GDPR Compliant" passed={org.compliance.gdprCompliant} />
+            <ComplianceRow label="SOC 2 Type II" passed={org.compliance.soc2} />
+            <ComplianceRow label="DPDP Compliant" passed={org.compliance.dpdp} />
+            <ComplianceRow label="GDPR Compliant" passed={org.compliance.gdpr} />
           </div>
         </Card>
 
@@ -202,7 +202,7 @@ export function RegistryOrgDetail() {
           <div className="p-4">
             <Table
               data={org.agents}
-              rowKey={(a) => a.agentDID}
+              rowKey={(a) => a.agentDid}
               columns={[
                 {
                   key: 'name',
@@ -216,7 +216,7 @@ export function RegistryOrgDetail() {
                   header: 'DID',
                   render: (a) => (
                     <span className="font-mono text-xs text-gx-accent2">
-                      {truncateId(a.agentDID, 20)}
+                      {truncateId(a.agentDid, 20)}
                     </span>
                   ),
                 },

@@ -455,6 +455,7 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
     };
   }>(
     '/v1/registry/orgs',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const { did, name, description, website, contact, requestVerification, verificationMethod } = request.body;
       const developerId = request.developer.id;
@@ -517,7 +518,7 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
       const rows = await sql`
         SELECT id, domain, organization_did, developer_id
         FROM trust_registry
-        WHERE id = ${orgId}
+        WHERE id = ${orgId} OR organization_did = ${orgId}
       `;
 
       const record = rows[0];
@@ -561,7 +562,7 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
               'dns-verified'
             ),
             updated_at = ${now}
-        WHERE id = ${orgId} AND NOT ('dns-verified' = ANY(badges))
+        WHERE id = ${record['id']} AND NOT ('dns-verified' = ANY(badges))
       `;
 
       // Also update if badges already contained it (just update times)
@@ -571,7 +572,7 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
             trust_level = 'verified',
             verified_at = ${now},
             updated_at = ${now}
-        WHERE id = ${orgId} AND 'dns-verified' = ANY(badges)
+        WHERE id = ${record['id']} AND 'dns-verified' = ANY(badges)
       `;
 
       return reply.send({
