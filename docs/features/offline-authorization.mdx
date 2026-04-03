@@ -1,0 +1,199 @@
+---
+title: "Offline Authorization"
+sidebarTitle: "Offline Authorization"
+description: "How Grantex enables offline authorization for on-device AI agents. Architecture, security model, and limitations."
+---
+
+## Why Offline Auth Matters
+
+On-device AI models like Gemma 4 run locally -- on phones, Raspberry Pis, laptops, and edge servers. These devices are frequently disconnected: airplane mode, poor cellular coverage, air-gapped environments, or simply cost-conscious users who limit data usage.
+
+Without offline authorization, agents on these devices face two bad options:
+
+1. **No auth at all** -- the agent runs unchecked while offline, then syncs results later with no accountability trail
+2. **Block until online** -- the agent refuses to operate without connectivity, defeating the purpose of on-device inference
+
+Grantex offline authorization provides a third option: **pre-authorized operation with cryptographic accountability**. The agent receives a consent bundle while online, then verifies tokens, enforces scopes, and logs actions locally until connectivity returns.
+
+## Architecture
+
+Offline authorization operates in three phases:
+
+```
+Phase 1: PROVISIONING (online)
+┌─────────┐         ┌──────────┐         ┌──────────────┐
+│  Device  │──POST──►│ Grantex  │──issue──►│   Consent    │
+│          │◄────────│   API    │         │   Bundle     │
+│          │ bundle  │          │         │              │
+└─────────┘         └──────────┘         │ • grantToken │
+                                          │ • JWKS snap  │
+                                          │ • audit keys │
+                                          │ • sync URL   │
+                                          │ • expiry     │
+                                          └──────────────┘
+
+Phase 2: OFFLINE OPERATION (no network)
+┌─────────────────────────────────────────────────────┐
+│  Device                                             │
+│                                                     │
+│  Agent action                                       │
+│    │                                                │
+│    ├── verify(grantToken) ← JWKS snapshot (local)   │
+│    ├── enforceScopes(['calendar:read'])              │
+│    ├── execute action                               │
+│    └── auditLog.append({action, result, ...})       │
+│         │                                           │
+│         └── hash-chain + Ed25519 signature           │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+
+Phase 3: SYNC (reconnected)
+┌─────────┐         ┌──────────┐
+│  Device  │──POST──►│ Grantex  │  verify hash chain
+│          │ entries │   API    │  verify signatures
+│          │◄────────│          │  check revocation
+│          │ status  │          │  reconcile audit log
+└─────────┘         └──────────┘
+```
+
+### Phase 1: Provisioning
+
+While the device has connectivity, the developer's application calls `POST /v1/consent-bundles` to create a consent bundle. This is a standard Grantex authorization flow -- the end-user must have already consented to the requested scopes.
+
+The bundle contains:
+- **Grant token** (RS256 JWT) -- the same token format used online
+- **JWKS snapshot** -- the server's public keys at the time of issuance, used to verify the token signature offline
+- **Ed25519 audit key pair** -- used to sign offline audit entries so the server can verify they originated from this device
+- **Sync endpoint** -- the URL for uploading audit entries when reconnected
+- **Offline expiry** -- the point after which the bundle is no longer valid
+
+The bundle is encrypted with AES-256-GCM and stored locally.
+
+### Phase 2: Offline Operation
+
+Every time the agent performs an action, the offline verifier:
+
+1. Decodes the JWT header and resolves the signing key from the JWKS snapshot by `kid`
+2. Verifies the RS256 signature -- blocks `none` and `HS256` algorithms
+3. Checks `exp` with configurable clock skew tolerance
+4. Checks `iat` is not in the future
+5. Extracts Grantex claims (`agt`, `sub`, `scp`, `grnt`, `delegationDepth`)
+6. Enforces required scopes (configurable: throw or log)
+7. Enforces maximum delegation depth
+
+If all checks pass, the action proceeds and an audit entry is appended to the local log.
+
+### Phase 3: Sync
+
+When connectivity returns, the device uploads its audit entries via `POST /v1/audit/offline-sync`. The server:
+
+1. Verifies the hash chain -- each entry's `prevHash` must match the previous entry's `hash`
+2. Verifies Ed25519 signatures using the public key stored when the bundle was created
+3. Checks whether the grant has been revoked since the device went offline
+4. Reconciles entries with the cloud audit log
+
+If the grant was revoked while offline, the sync response indicates `revocation_status: 'revoked'` and includes the revocation timestamp so the device can determine which actions were authorized and which occurred after revocation.
+
+## ConsentBundle Reference
+
+See [Consent Bundles](/features/consent-bundles) for the complete type reference and lifecycle documentation.
+
+## Security Model
+
+### Guarantees
+
+| Property | Guarantee |
+|---|---|
+| **Token authenticity** | RS256 signature verified against JWKS snapshot. Forged tokens are rejected. |
+| **Scope enforcement** | The verifier checks `scp` claims against required scopes before every action. |
+| **Audit integrity** | Hash chain + Ed25519 signatures make tampering detectable at sync time. |
+| **Time-bounded** | Bundles expire after a configurable TTL (default 72 hours). |
+| **Delegation control** | `maxDelegationDepth` prevents unbounded sub-delegation chains. |
+| **Encryption at rest** | Bundles are stored with AES-256-GCM encryption. |
+
+### Limitations
+
+| Limitation | Explanation |
+|---|---|
+| **No real-time revocation** | If a grant is revoked while the device is offline, the device will not learn about it until sync. Actions between revocation and sync are logged but the agent continues operating. |
+| **JWKS key rotation** | If the server rotates its signing keys while the device is offline, the JWKS snapshot becomes stale. The `validUntil` field on the snapshot helps detect this. |
+| **Clock drift** | The verifier uses a clock-skew tolerance (default 30 seconds), but devices with significantly drifted clocks may incorrectly accept or reject tokens. |
+| **No online budget enforcement** | Budget debits require a network call. Offline agents cannot enforce budgets in real time. |
+| **Bundle theft** | If an attacker obtains both the encrypted bundle file and the encryption key, they can use the grant token until it expires. Use hardware-backed storage (Keychain, Secure Enclave) on supported platforms. |
+
+### Threat Model
+
+The offline authorization system is designed to defend against:
+
+- **Token forgery** -- RS256 signatures cannot be forged without the server's private key
+- **Audit log tampering** -- breaking the hash chain or forging Ed25519 signatures is detectable at sync
+- **Scope escalation** -- the verifier enforces the scopes embedded in the token at issuance
+- **Replay attacks** -- each token has a unique `jti` and expiry; each audit entry has a monotonic sequence number
+
+It does **not** defend against an attacker with root access to the device who can modify the verification logic itself. This is a fundamental limitation of client-side security.
+
+## Sync Behavior
+
+### Batch Upload
+
+Audit entries are uploaded in configurable batches (default 100 entries). Each batch is retried up to 3 times with exponential back-off (200ms, 400ms, 800ms). Failed batches are reported in the `SyncResult.errors` array but do not block subsequent batches.
+
+### Idempotency
+
+Each entry has a monotonic `seq` number. The device tracks `syncedUpTo` in a local marker file. Re-syncing the same entries is safe -- the server deduplicates by sequence number within a bundle.
+
+### Conflict Resolution
+
+The server is the authority. If the server already has entries for a given bundle and sequence range, it compares hashes. Matching hashes are accepted; mismatched hashes are flagged as conflicts and included in the audit trail.
+
+## Revocation While Offline
+
+Grant revocation is a server-side operation. When a grant is revoked:
+
+1. The device continues operating with the cached bundle until sync
+2. At sync time, the server returns `revocation_status: 'revoked'` with the revocation timestamp
+3. The device should stop using the bundle and delete the local copy
+4. Actions that occurred after the revocation timestamp are flagged in the audit log
+
+To minimize the window of exposure, use short `offlineTTL` values for sensitive operations. For example, a medical device agent might use `1h` while a home automation agent could use `72h`.
+
+## Audit Log Integrity
+
+The offline audit log uses two complementary integrity mechanisms:
+
+### Hash Chain
+
+Each entry includes a SHA-256 hash computed from:
+
+```
+seq|timestamp|action|agentDID|grantId|scopes|result|metadata|prevHash
+```
+
+The `prevHash` field links to the previous entry's hash, forming a chain. The first entry uses the sentinel value `GENESIS_HASH` (`0000000000000000`). Breaking any entry invalidates all subsequent hashes.
+
+### Ed25519 Signatures
+
+Each entry's hash is signed with the Ed25519 private key from the consent bundle. The server holds the corresponding public key and verifies signatures at sync time. This proves that entries were produced by the device that received the original bundle.
+
+### Verification
+
+Use `verifyChain()` to check the integrity of a log locally:
+
+```typescript
+import { verifyChain } from '@grantex/gemma';
+
+const entries = await auditLog.entries();
+const result = verifyChain(entries);
+
+if (!result.valid) {
+  console.error(`Integrity breach at entry ${result.brokenAt}`);
+}
+```
+
+## Next Steps
+
+- [Consent Bundles](/features/consent-bundles) -- full ConsentBundle reference and lifecycle
+- [Quickstart: Gemma 4](/examples/quickstart-gemma) -- hands-on tutorial
+- [Gemma 4 SDK Reference](/sdks/gemma) -- complete API reference
+- [Consent Bundles API](/api-reference/consent-bundles) -- REST API endpoints
+- [Offline Sync API](/api-reference/offline-sync) -- sync endpoint reference

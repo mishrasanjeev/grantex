@@ -35,6 +35,11 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - FastAPI middleware: `pip install grantex-fastapi`
 - Reverse-proxy gateway: `npm install @grantex/gateway`
 
+## Key Packages (New in v2.5)
+- @grantex/gemma: Offline authorization for Gemma 4 on-device agents
+- @grantex/mcp-auth: OAuth 2.1 auth server for MCP servers
+- @grantex/dpdp: DPDP Act 2023 + EU AI Act compliance module
+
 ## Key Features
 
 - Scoped permissions: `resource:action[:constraint]` format (e.g., `payments:initiate:max_500`)

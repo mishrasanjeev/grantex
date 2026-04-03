@@ -1,0 +1,176 @@
+---
+title: "Gemma 4 Just Shipped Offline AI Agents. Here's How to Secure Them."
+description: "Gemma 4 enables offline agentic workflows on-device. But offline agents with no auth story are a security gap. Here's how @grantex/gemma closes it."
+date: "2026-04-03"
+authors:
+  - name: "Sanjeev Kumar"
+---
+
+Google just shipped Gemma 4, and it changes the agent security landscape in a way that existing authorization protocols are not prepared for.
+
+Gemma 4's headline feature is on-device agentic execution. A model small enough to run on a Raspberry Pi 5 or a mid-range Android phone can now call tools, chain reasoning steps, and execute multi-step workflows -- all without touching the cloud. The model handles function calling natively, generates structured tool invocations, and supports multi-turn interactions with local context.
+
+This is a significant shift. Until now, AI agents were cloud-hosted by definition. Authorization meant verifying a token on each API call, revoking access in real time, and logging every action to a cloud audit trail. The agent was always one HTTP hop away from the authorization server.
+
+On-device agents break all three assumptions.
+
+## The Security Gap
+
+Consider a concrete example: a home automation agent running Gemma 4 on a Raspberry Pi. The user has consented to let the agent read temperature sensors and control the thermostat. The Pi connects to Wi-Fi daily but operates offline most of the time.
+
+With a cloud-hosted agent, authorization is straightforward:
+
+1. The agent calls the thermostat API
+2. The API verifies the grant token with Grantex
+3. If the token is valid and the scopes match, the action proceeds
+4. An audit entry is logged in the cloud
+
+Every step requires connectivity. Now remove the network:
+
+1. The agent calls the thermostat API (local network, or direct GPIO)
+2. **Who verifies the grant token?** The Grantex API is unreachable
+3. **Who checks whether the grant has been revoked?** The revocation list is on the server
+4. **Who logs the action?** The cloud audit log is unreachable
+
+The obvious workaround is to skip authorization while offline. The agent just runs. When it reconnects, it syncs results. But this creates an accountability gap: there is no record of what happened, no proof that the user consented, and no mechanism to enforce scope boundaries.
+
+For home automation, the stakes are modest. For medical devices, industrial controllers, or financial agents, the gap is a compliance failure.
+
+## Consent Bundles: The Missing Piece
+
+The core insight is that offline authorization does not need a live server -- it needs a **pre-authorized cryptographic package** that the device can verify locally.
+
+We call this a **consent bundle**. It contains:
+
+- **A signed grant token** (RS256 JWT) -- the same token format Grantex uses online, with all the standard claims (`agt`, `sub`, `scp`, `grnt`, `exp`)
+- **A JWKS snapshot** -- the server's public keys at the time of issuance, used to verify the token's RSA signature without a network call
+- **An Ed25519 key pair** -- used to sign every offline audit entry, so the server can verify their authenticity at sync time
+- **An offline expiry** -- a hard deadline after which the bundle is no longer valid, separate from the token's own `exp` claim
+
+The bundle is created in a single API call while the device is online. After that, the device operates independently.
+
+## How It Works
+
+Here is the complete flow on a Raspberry Pi running the Python SDK:
+
+```python
+from grantex_gemma import (
+    create_consent_bundle,
+    store_bundle,
+    load_bundle,
+    create_offline_verifier,
+    create_offline_audit_log,
+)
+
+# ---- Phase 1: Provisioning (online) ----
+
+bundle = create_consent_bundle(
+    api_key=os.environ["GRANTEX_API_KEY"],
+    agent_id="ag_thermostat_01",
+    user_id="user_alice",
+    scopes=["sensor:read", "thermostat:write"],
+    offline_ttl="72h",
+)
+
+# Encrypt and save to disk
+store_bundle(bundle, "/data/bundle.enc", os.environ["BUNDLE_KEY"])
+
+# ---- Phase 2: Offline operation ----
+
+bundle = load_bundle("/data/bundle.enc", os.environ["BUNDLE_KEY"])
+
+verifier = create_offline_verifier(
+    jwks_snapshot=bundle.jwks_snapshot,
+    require_scopes=["sensor:read"],
+)
+
+audit_log = create_offline_audit_log(
+    signing_key=bundle.offline_audit_key,
+    log_path="/data/audit.jsonl",
+)
+
+# Before every agent action:
+grant = verifier.verify(bundle.grant_token)  # ~3ms on Pi 5
+# grant.scopes == ["sensor:read", "thermostat:write"]
+
+# After the action:
+audit_log.append(
+    action="sensor.read",
+    agent_did=grant.agent_did,
+    grant_id=grant.grant_id,
+    scopes=grant.scopes,
+    result="success",
+    metadata={"temperature": 22.5},
+)
+```
+
+The `verifier.verify()` call runs in under 5ms on a Pi 5. It decodes the JWT, resolves the signing key from the JWKS snapshot by `kid`, verifies the RS256 signature, checks expiry with clock-skew tolerance, and enforces required scopes. No network call. No latency spike.
+
+The audit log appends a JSONL entry with a SHA-256 hash chain linking each entry to the previous one, plus an Ed25519 signature from the key pair in the bundle. Tampering with any entry breaks the chain and invalidates all subsequent signatures.
+
+## What Happens at Sync Time
+
+When the Pi reconnects, it uploads the offline audit entries:
+
+```python
+result = audit_log.sync(
+    api_key=os.environ["GRANTEX_API_KEY"],
+    bundle_id=bundle.bundle_id,
+)
+
+print(result.accepted)           # 47
+print(result.rejected)           # 0
+print(result.revocation_status)  # "active"
+```
+
+The server does three things:
+
+1. **Verifies the hash chain** -- each entry's `prevHash` must match the previous entry's `hash`. If any entry has been modified, inserted, or deleted, the chain breaks.
+
+2. **Verifies Ed25519 signatures** -- the server stored the public key when the bundle was created. It verifies that each entry was signed by the corresponding private key. This proves the entries came from the device that received the original bundle.
+
+3. **Checks revocation** -- if the grant was revoked while the device was offline, the response includes `revocation_status: "revoked"` with a timestamp. The device learns that it should stop operating and can determine which actions occurred before versus after the revocation.
+
+Entries that pass all checks are stored in the cloud audit log alongside online entries. The offline entries are tagged with the bundle ID so they can be distinguished from real-time entries in queries and compliance exports.
+
+## What About Revocation?
+
+This is the honest limitation: if a grant is revoked while the device is offline, the device will not know until it syncs. During that window, the agent continues operating with the cached token.
+
+This is inherent to any offline system. Even certificate revocation in TLS has the same problem: if you cannot reach the CRL or OCSP responder, you are working with stale revocation data.
+
+The mitigation is straightforward: use short `offlineTTL` values for sensitive operations. A medical device agent should use `1h`, not `72h`. A home automation agent with daily Wi-Fi connectivity can safely use `72h`.
+
+The `shouldRefresh()` function alerts when 80% of the TTL has elapsed, giving the device time to refresh the bundle during the next connectivity window.
+
+## Platform Coverage
+
+`@grantex/gemma` (TypeScript) and `grantex-gemma` (Python) ship today. They work anywhere Gemma 4 runs:
+
+| Platform | SDK | Storage | Notes |
+|---|---|---|---|
+| Raspberry Pi | Python | AES-256-GCM encrypted file | ~3ms verify on Pi 5 |
+| Linux / macOS | TypeScript or Python | Encrypted file | Server-side agents with intermittent connectivity |
+| Android | Kotlin (Nimbus JOSE) | EncryptedSharedPreferences | Hardware-backed Keystore |
+| iOS | Swift (CryptoKit) | Keychain | Secure Enclave on supported devices |
+
+The TypeScript SDK also includes adapters for Google ADK and LangChain -- wrap any tool with `withGrantexAuth()` to add offline verification and audit logging automatically.
+
+## Try It
+
+Install the SDK:
+
+```bash
+npm install @grantex/gemma    # TypeScript
+pip install grantex-gemma      # Python
+```
+
+Follow the [quickstart guide](/examples/quickstart-gemma) for a step-by-step walkthrough, or jump to the platform-specific guides:
+
+- [Raspberry Pi](/guides/raspberry-pi)
+- [Android](/guides/android-gemma4)
+- [iOS](/guides/ios-gemma4)
+
+The full API reference is at [Gemma 4 SDK](/sdks/gemma).
+
+The security model, architecture diagram, and limitation analysis are documented in [Offline Authorization](/features/offline-authorization). If you are evaluating this for a compliance-sensitive use case, start there.

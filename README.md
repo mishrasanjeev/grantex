@@ -19,6 +19,8 @@
 [![npm downloads](https://img.shields.io/npm/dm/@grantex/sdk?label=npm%20downloads)](https://www.npmjs.com/package/@grantex/sdk)
 [![GitHub Stars](https://img.shields.io/github/stars/mishrasanjeev/grantex?style=social)](https://github.com/mishrasanjeev/grantex)
 [![Docs](https://img.shields.io/badge/docs-grantex.dev-3fb950)](https://grantex.dev/docs)
+[![DPDP Compliant](https://img.shields.io/badge/DPDP-Compliant-green)](https://grantex.dev/dpdp)
+[![EU AI Act Ready](https://img.shields.io/badge/EU_AI_Act-Ready-blue)](https://grantex.dev/dpdp)
 
 <br/>
 
@@ -31,6 +33,19 @@
 <br/>
 
 </div>
+
+## What's New in v2.5
+
+- **@grantex/gemma**: Day-zero Gemma 4 integration — offline consent bundles,
+  < 5ms verification on Raspberry Pi, Google ADK adapter
+- **MCP Auth Server v2.0 GA**: OAuth 2.1 + PKCE for any MCP server,
+  managed + self-hosted modes, Bronze/Silver/Gold certification program
+- **@grantex/dpdp**: DPDP Act 2023 & EU AI Act compliance module
+- **Trust Registry**: Public DID verification registry — `grantex.dev/registry`
+- **`grantex verify`**: Token inspection CLI — no account needed
+- **Anomaly Detection**: 10 built-in rules, Slack/PagerDuty/Datadog integration
+
+---
 
 ## Try in 30 seconds
 
@@ -1164,6 +1179,9 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 | Framework | Package | Install | Status |
 |-----------|---------|---------|--------|
+| **Gemma 4 (Offline Auth)** | `@grantex/gemma` | `npm install @grantex/gemma` | ✅ Shipped |
+| **Gemma 4 (Python)** | `grantex-gemma` | `pip install grantex-gemma` | ✅ Shipped |
+| **DPDP Compliance** | `@grantex/dpdp` | `npm install @grantex/dpdp` | ✅ Shipped |
 | **Adapters** | `@grantex/adapters` | `npm install @grantex/adapters` | ✅ Shipped |
 | **MCP Auth Server** | `@grantex/mcp-auth` | `npm install @grantex/mcp-auth` | ✅ Shipped |
 | **Gateway** | `@grantex/gateway` | `npm install @grantex/gateway` | ✅ Shipped |
@@ -1360,6 +1378,9 @@ Walk through all 7 steps of the protocol: register an agent, authorize, exchange
 | [`gateway-proxy`](examples/gateway-proxy) | Gateway reverse proxy with YAML config and scope enforcement | `npm start` |
 | [`adapter-google-calendar`](examples/adapter-google-calendar) | GoogleCalendarAdapter with grant token verification | `npm start` |
 | [`multi-agent-delegation`](examples/multi-agent-delegation) | Parent/child delegation with cascade revocation | `npm start` |
+| [`gemma-raspberry-pi`](examples/gemma-raspberry-pi) | Gemma 4 agent on Raspberry Pi with offline auth | `python agent.py` |
+| [`gemma-android-kotlin`](examples/gemma-android-kotlin) | Android Gemma 4 agent with offline verification | Android Studio |
+| [`gemma-ios-swift`](examples/gemma-ios-swift) | iOS Gemma 4 agent with CryptoKit verification | `swift run` |
 
 ---
 

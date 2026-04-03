@@ -40,6 +40,9 @@ All examples use the sandbox key by default.
 | [`token-expiry-refresh`](./token-expiry-refresh/) | Time-bound grants with expiry detection and refresh token rotation | `@grantex/sdk` |
 | [`audit-dashboard`](./audit-dashboard/) | Audit trail querying, filtering, metrics, and hash chain verification | `@grantex/sdk` |
 | [`multi-agent-email-flow`](./multi-agent-email-flow/) | Multi-agent delegation with failure handling and audit trail | `@grantex/sdk` |
+| [`gemma-raspberry-pi`](./gemma-raspberry-pi/) | Gemma 4 smart home agent on Raspberry Pi with offline auth | `grantex-gemma` |
+| [`gemma-android-kotlin`](./gemma-android-kotlin/) | Gemma 4 Android agent with offline auth in Kotlin | `nimbus-jose-jwt` |
+| [`gemma-ios-swift`](./gemma-ios-swift/) | Gemma 4 iOS/macOS agent with offline auth in Swift | CryptoKit |
 
 ## Running an example
 

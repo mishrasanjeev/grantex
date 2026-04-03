@@ -26,3 +26,5 @@ export const newStatusListId = (): string => `vcsl_${ulid()}`;
 export const newPresentationId = (): string => `pres_${ulid()}`;
 export const newSsoConnectionId = (): string => `sso_${ulid()}`;
 export const newSsoSessionId = (): string => `ssosess_${ulid()}`;
+export const newConsentBundleId = (): string => `bundle_${ulid()}`;
+export const newOfflineAuditEntryId = (): string => `oae_${ulid()}`;

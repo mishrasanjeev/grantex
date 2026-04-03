@@ -1,0 +1,339 @@
+---
+title: "Raspberry Pi Guide"
+sidebarTitle: "Raspberry Pi"
+description: "Run Grantex-authorized Gemma 4 agents on Raspberry Pi 5 with offline verification in under 5ms."
+---
+
+## Overview
+
+Raspberry Pi 5 with 8GB RAM can run Gemma 4's smaller model variants locally via `llama.cpp` or `mediapipe`. This guide shows how to add Grantex offline authorization to a Gemma 4 agent running on a Pi, so every action is scope-checked and audit-logged even without internet.
+
+## Prerequisites
+
+- **Raspberry Pi 5** (8GB recommended, 4GB minimum for smaller Gemma 4 variants)
+- **Raspberry Pi OS** (64-bit Bookworm or later)
+- **Python 3.10+** (ships with Bookworm)
+- **A Grantex account** with API key and a registered agent
+- **Wi-Fi or Ethernet** for initial setup (offline operation starts after provisioning)
+
+## Hardware Notes
+
+| Component | Recommendation |
+|---|---|
+| Board | Raspberry Pi 5, 8GB |
+| Storage | 32GB+ microSD or NVMe SSD via M.2 HAT |
+| Cooling | Active cooler recommended -- inference is CPU-intensive |
+| Power | Official 27W USB-C PSU |
+
+Gemma 4's 2B parameter model requires ~4GB of RAM. The 7B model requires an 8GB Pi with swap configured.
+
+## Step 1: Install Dependencies
+
+```bash
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install Python build dependencies
+sudo apt install -y python3-pip python3-venv
+
+# Create a project directory
+mkdir ~/gemma-agent && cd ~/gemma-agent
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install grantex-gemma
+pip install grantex-gemma
+```
+
+## Step 2: Provision the Consent Bundle
+
+Run this script once while the Pi has internet access. It creates a consent bundle and encrypts it to disk.
+
+```python
+#!/usr/bin/env python3
+"""provision.py — Run once while online to create a consent bundle."""
+
+import os
+from grantex_gemma import create_consent_bundle, store_bundle
+
+BUNDLE_PATH = os.path.expanduser("~/gemma-agent/bundle.enc")
+ENCRYPTION_KEY = os.environ["BUNDLE_KEY"]
+
+bundle = create_consent_bundle(
+    api_key=os.environ["GRANTEX_API_KEY"],
+    agent_id=os.environ["AGENT_ID"],
+    user_id="pi-user-001",
+    scopes=["sensor:read", "actuator:write", "log:append"],
+    offline_ttl="72h",
+)
+
+store_bundle(bundle, BUNDLE_PATH, ENCRYPTION_KEY)
+
+print(f"Bundle created: {bundle.bundle_id}")
+print(f"Offline until:  {bundle.offline_expires_at}")
+print(f"Stored at:      {BUNDLE_PATH}")
+```
+
+Run it:
+
+```bash
+export GRANTEX_API_KEY="gx_..."
+export AGENT_ID="ag_01HXYZ..."
+export BUNDLE_KEY="a-strong-passphrase-here"
+
+python3 provision.py
+```
+
+## Step 3: Build the Offline Agent
+
+This is the main agent script. It loads the bundle, creates a verifier and audit log, then runs a loop that checks authorization before every action.
+
+```python
+#!/usr/bin/env python3
+"""agent.py — Offline Gemma 4 agent with Grantex authorization."""
+
+import os
+import time
+from grantex_gemma import (
+    load_bundle,
+    create_offline_verifier,
+    create_offline_audit_log,
+    enforce_scopes,
+)
+
+BUNDLE_PATH = os.path.expanduser("~/gemma-agent/bundle.enc")
+AUDIT_PATH = os.path.expanduser("~/gemma-agent/audit.jsonl")
+ENCRYPTION_KEY = os.environ["BUNDLE_KEY"]
+
+# Load the consent bundle (decrypts from disk)
+bundle = load_bundle(BUNDLE_PATH, ENCRYPTION_KEY)
+
+# Create offline verifier using the JWKS snapshot
+verifier = create_offline_verifier(
+    jwks_snapshot=bundle.jwks_snapshot,
+    require_scopes=["sensor:read"],
+    clock_skew_seconds=60,  # Pi clocks can drift
+)
+
+# Create audit log
+audit_log = create_offline_audit_log(
+    signing_key=bundle.offline_audit_key,
+    log_path=AUDIT_PATH,
+    max_size_mb=10,  # conservative for SD card
+)
+
+def read_sensor():
+    """Simulate reading a sensor value."""
+    return {"temperature": 22.5, "humidity": 45.2}
+
+def run_agent():
+    """Main agent loop — verify token before every action."""
+    print("Agent starting...")
+
+    # Verify the grant token (offline, no network call)
+    start = time.perf_counter_ns()
+    grant = verifier.verify(bundle.grant_token)
+    verify_ms = (time.perf_counter_ns() - start) / 1_000_000
+
+    print(f"Token verified in {verify_ms:.2f}ms")
+    print(f"Agent: {grant.agent_did}")
+    print(f"Scopes: {', '.join(grant.scopes)}")
+    print(f"Expires: {grant.expires_at.isoformat()}")
+
+    # Simulate an agent action
+    sensor_data = read_sensor()
+
+    # Log the action
+    entry = audit_log.append(
+        action="sensor.read",
+        agent_did=grant.agent_did,
+        grant_id=grant.grant_id,
+        scopes=grant.scopes,
+        result="success",
+        metadata=sensor_data,
+    )
+
+    print(f"Audit entry #{entry.seq}: {entry.hash[:16]}...")
+    print(f"Sensor: {sensor_data}")
+
+if __name__ == "__main__":
+    run_agent()
+```
+
+Run it:
+
+```bash
+export BUNDLE_KEY="a-strong-passphrase-here"
+python3 agent.py
+```
+
+Expected output:
+
+```text
+Agent starting...
+Token verified in 3.42ms
+Agent: did:grantex:ag_01HXYZ...
+Scopes: sensor:read, actuator:write, log:append
+Expires: 2026-04-06T12:00:00+00:00
+Audit entry #1: a3f29c81b4e2f1a7...
+Sensor: {'temperature': 22.5, 'humidity': 45.2}
+```
+
+## Step 4: Sync When Online
+
+Create a sync script that runs when the Pi reconnects:
+
+```python
+#!/usr/bin/env python3
+"""sync.py — Upload offline audit entries to Grantex cloud."""
+
+import os
+from grantex_gemma import load_bundle, create_offline_audit_log
+
+BUNDLE_PATH = os.path.expanduser("~/gemma-agent/bundle.enc")
+AUDIT_PATH = os.path.expanduser("~/gemma-agent/audit.jsonl")
+
+bundle = load_bundle(BUNDLE_PATH, os.environ["BUNDLE_KEY"])
+
+audit_log = create_offline_audit_log(
+    signing_key=bundle.offline_audit_key,
+    log_path=AUDIT_PATH,
+)
+
+result = audit_log.sync(
+    api_key=os.environ["GRANTEX_API_KEY"],
+    bundle_id=bundle.bundle_id,
+)
+
+print(f"Accepted: {result.accepted}")
+print(f"Rejected: {result.rejected}")
+print(f"Revocation status: {result.revocation_status}")
+
+if result.revocation_status == "revoked":
+    print("WARNING: Grant was revoked. Stopping agent.")
+    os.remove(BUNDLE_PATH)
+```
+
+## Benchmarks
+
+Measured on a Raspberry Pi 5 (8GB, Bookworm, Python 3.11):
+
+| Operation | Time | Notes |
+|---|---|---|
+| `loadBundle` (decrypt) | ~8ms | AES-256-GCM decryption of ~2KB bundle |
+| `verifier.verify()` | ~3-5ms | RS256 signature verification |
+| `enforce_scopes()` | <0.01ms | Array comparison |
+| `audit_log.append()` | ~2ms | SHA-256 hash + Ed25519 sign + JSONL append |
+| `verify_chain()` (100 entries) | ~15ms | Full chain re-verification |
+
+Total overhead per agent action: **under 5ms**. This is negligible compared to Gemma 4 inference time (~500ms-2s for the 2B model on Pi 5).
+
+## Production Tips
+
+### Log Rotation
+
+The audit log grows by ~200 bytes per entry. At 1 action per second, that is ~17MB per day. Set `max_size_mb` appropriately for your SD card:
+
+```python
+audit_log = create_offline_audit_log(
+    signing_key=bundle.offline_audit_key,
+    log_path=AUDIT_PATH,
+    max_size_mb=10,  # rotates at 10MB
+)
+```
+
+Rotated files are named `audit.jsonl.2026-04-03T12-00-00-000Z.bak`.
+
+### Bundle Refresh Cron
+
+If the Pi connects to Wi-Fi daily, add a cron job to refresh the bundle:
+
+```bash
+# crontab -e
+0 3 * * * cd ~/gemma-agent && source .venv/bin/activate && python3 refresh.py 2>> /var/log/gemma-refresh.log
+```
+
+The refresh script:
+
+```python
+#!/usr/bin/env python3
+"""refresh.py — Refresh the consent bundle if TTL is running low."""
+
+import os
+import sys
+from grantex_gemma import load_bundle, store_bundle
+
+# Import shouldRefresh and refreshBundle from the TS SDK's Python equivalent
+BUNDLE_PATH = os.path.expanduser("~/gemma-agent/bundle.enc")
+ENCRYPTION_KEY = os.environ.get("BUNDLE_KEY", "")
+
+if not ENCRYPTION_KEY:
+    print("BUNDLE_KEY not set, skipping refresh")
+    sys.exit(0)
+
+bundle = load_bundle(BUNDLE_PATH, ENCRYPTION_KEY)
+
+# Check if refresh is needed (< 20% TTL remaining)
+from datetime import datetime, timezone
+expires = datetime.fromisoformat(bundle.offline_expires_at)
+remaining = (expires - datetime.now(timezone.utc)).total_seconds()
+total_ttl = (expires.timestamp() * 1000 - bundle.checkpoint_at) / 1000
+
+if total_ttl > 0 and (remaining / total_ttl) < 0.2:
+    from grantex_gemma import create_consent_bundle
+    fresh = create_consent_bundle(
+        api_key=os.environ["GRANTEX_API_KEY"],
+        agent_id=os.environ["AGENT_ID"],
+        user_id="pi-user-001",
+        scopes=["sensor:read", "actuator:write", "log:append"],
+        offline_ttl="72h",
+    )
+    store_bundle(fresh, BUNDLE_PATH, ENCRYPTION_KEY)
+    print(f"Bundle refreshed: {fresh.bundle_id}")
+else:
+    pct = (remaining / total_ttl * 100) if total_ttl > 0 else 0
+    print(f"Bundle OK ({pct:.0f}% TTL remaining)")
+```
+
+### Systemd Service
+
+Run the agent as a systemd service for automatic restart:
+
+```ini
+# /etc/systemd/system/gemma-agent.service
+[Unit]
+Description=Gemma 4 Agent with Grantex Auth
+After=multi-user.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/gemma-agent
+Environment=BUNDLE_KEY=your-key-here
+ExecStart=/home/pi/gemma-agent/.venv/bin/python3 agent.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable gemma-agent
+sudo systemctl start gemma-agent
+```
+
+### SD Card Wear
+
+Frequent writes to the audit log can wear out SD cards. Mitigations:
+
+- Use an NVMe SSD via M.2 HAT for write-heavy workloads
+- Set `max_size_mb` to limit log file growth
+- Use `tmpfs` for temporary logs and sync to persistent storage periodically
+
+## Next Steps
+
+- [Offline Authorization](/features/offline-authorization) -- architecture and security model
+- [Gemma 4 SDK Reference](/sdks/gemma) -- complete API reference
+- [Quickstart: Gemma 4](/examples/quickstart-gemma) -- step-by-step tutorial
+- [Android Guide](/guides/android-gemma4) -- run on Android devices

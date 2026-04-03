@@ -1,0 +1,519 @@
+---
+title: "Gemma 4 SDK"
+sidebarTitle: "Gemma 4"
+description: "Complete API reference for @grantex/gemma — offline authorization for Gemma 4 on-device agents. TypeScript and Python."
+---
+
+## Overview
+
+`@grantex/gemma` (TypeScript) and `grantex-gemma` (Python) provide offline authorization for Gemma 4 on-device agents. The SDK handles consent bundle creation, JWT verification without network calls, scope enforcement, tamper-evident audit logging, and cloud sync.
+
+### Installation
+
+<CodeGroup>
+
+```bash TypeScript
+npm install @grantex/gemma
+```
+
+```bash Python
+pip install grantex-gemma
+```
+
+</CodeGroup>
+
+---
+
+## createConsentBundle
+
+Create a consent bundle from the Grantex API. This is the only call that requires network connectivity.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `apiKey` | `string` | Yes | Grantex developer API key |
+| `baseUrl` | `string` | No | API base URL (default `https://api.grantex.dev`) |
+| `agentId` | `string` | Yes | Agent ID requesting the bundle |
+| `userId` | `string` | Yes | End-user / principal ID granting consent |
+| `scopes` | `string[]` | Yes | Scopes the agent is requesting |
+| `offlineTTL` | `string` | No | Offline validity duration (default `'72h'`) |
+| `offlineAuditKeyAlgorithm` | `string` | No | Audit signing key algorithm (default `'Ed25519'`) |
+| `storage` | `string` | No | `'encrypted-file'`, `'keychain'`, or `'secure-enclave'` |
+| `storagePath` | `string` | No | File path when `storage` is `'encrypted-file'` |
+
+### Returns
+
+`Promise<ConsentBundle>` -- see [ConsentBundle type](#consentbundle-type) below.
+
+### Example
+
+<CodeGroup>
+
+```typescript TypeScript
+import { createConsentBundle } from '@grantex/gemma';
+
+const bundle = await createConsentBundle({
+  apiKey: 'gx_...',
+  agentId: 'ag_01HXYZ...',
+  userId: 'user_abc123',
+  scopes: ['calendar:read', 'email:send'],
+  offlineTTL: '72h',
+});
+```
+
+```python Python
+from grantex_gemma import create_consent_bundle
+
+bundle = create_consent_bundle(
+    api_key="gx_...",
+    agent_id="ag_01HXYZ...",
+    user_id="user_abc123",
+    scopes=["calendar:read", "email:send"],
+    offline_ttl="72h",
+)
+```
+
+</CodeGroup>
+
+### Errors
+
+| HTTP Status | Code | Cause |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | Invalid API key |
+| 404 | `AGENT_NOT_FOUND` | Agent ID does not exist |
+| 422 | `INVALID_SCOPES` | One or more scopes are not registered |
+
+---
+
+## createOfflineVerifier
+
+Create an offline JWT verifier using a pre-fetched JWKS snapshot. No network calls are made during verification.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `jwksSnapshot` | `JWKSSnapshot` | Yes | Pre-fetched JWKS keys from the consent bundle |
+| `clockSkewSeconds` | `number` | No | Allowed clock-skew tolerance (default `30`) |
+| `requireScopes` | `string[]` | No | Scopes that must be present in every token |
+| `maxDelegationDepth` | `number` | No | Maximum delegation depth allowed (inclusive) |
+| `onScopeViolation` | `'throw' \| 'log'` | No | Behaviour on scope failure (default `'throw'`) |
+
+### Returns
+
+`OfflineVerifier` -- an object with a single `verify(token: string)` method.
+
+### OfflineVerifier.verify(token)
+
+Verifies a Grantex grant token offline. Returns a `VerifiedGrant` on success.
+
+**VerifiedGrant fields:**
+
+| Field | Type | Description |
+|---|---|---|
+| `agentDID` | `string` | Agent DID from the `agt` claim |
+| `principalDID` | `string` | Principal ID from the `sub` claim |
+| `scopes` | `string[]` | Scopes from the `scp` claim |
+| `expiresAt` | `Date` | Token expiry |
+| `jti` | `string` | Token ID |
+| `grantId` | `string` | Grant ID (from `grnt` claim, falls back to `jti`) |
+| `depth` | `number` | Delegation depth (0 = root grant) |
+
+### Example
+
+<CodeGroup>
+
+```typescript TypeScript
+import { createOfflineVerifier } from '@grantex/gemma';
+
+const verifier = createOfflineVerifier({
+  jwksSnapshot: bundle.jwksSnapshot,
+  requireScopes: ['calendar:read'],
+  maxDelegationDepth: 2,
+});
+
+const grant = await verifier.verify(bundle.grantToken);
+console.log(grant.agentDID, grant.scopes);
+```
+
+```python Python
+from grantex_gemma import create_offline_verifier
+
+verifier = create_offline_verifier(
+    jwks_snapshot=bundle.jwks_snapshot,
+    require_scopes=["calendar:read"],
+    max_delegation_depth=2,
+)
+
+grant = verifier.verify(bundle.grant_token)
+print(grant.agent_did, grant.scopes)
+```
+
+</CodeGroup>
+
+### Errors
+
+| Error Class | Code | Cause |
+|---|---|---|
+| `OfflineVerificationError` | `MALFORMED_TOKEN` | JWT cannot be decoded |
+| `OfflineVerificationError` | `BLOCKED_ALGORITHM` | `none` or `HS256` algorithm used |
+| `OfflineVerificationError` | `MISSING_KID` | JWT header has no `kid` |
+| `OfflineVerificationError` | `KID_NOT_FOUND` | No matching key in JWKS snapshot |
+| `OfflineVerificationError` | `VERIFICATION_FAILED` | Signature invalid |
+| `OfflineVerificationError` | `FUTURE_IAT` | `iat` claim is in the future |
+| `OfflineVerificationError` | `DELEGATION_DEPTH_EXCEEDED` | Depth exceeds max |
+| `TokenExpiredError` | `TOKEN_EXPIRED` | Token has expired |
+| `ScopeViolationError` | `SCOPE_VIOLATION` | Required scopes missing |
+
+---
+
+## createOfflineAuditLog
+
+Create an append-only, Ed25519-signed, SHA-256 hash-chained audit log backed by a JSONL file.
+
+### Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `signingKey` | `{ publicKey, privateKey, algorithm }` | Yes | Ed25519 key pair from the consent bundle |
+| `logPath` | `string` | Yes | Path to the JSONL log file |
+| `maxSizeMB` | `number` | No | Maximum file size before rotation (default `50`) |
+| `rotateOnSize` | `boolean` | No | Whether to auto-rotate (default `true`) |
+
+### Returns
+
+`OfflineAuditLog` with methods:
+
+| Method | Signature | Description |
+|---|---|---|
+| `append` | `(entry: AuditEntry) => Promise<SignedAuditEntry>` | Append a signed entry |
+| `entries` | `() => Promise<SignedAuditEntry[]>` | Read all entries |
+| `unsyncedCount` | `() => Promise<number>` | Count of un-synced entries |
+| `markSynced` | `(upToSeq: number) => Promise<void>` | Mark entries as synced |
+
+### AuditEntry fields
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `action` | `string` | Yes | Action name (e.g. `'calendar.read'`) |
+| `agentDID` | `string` | Yes | Agent DID that performed the action |
+| `grantId` | `string` | Yes | Grant ID authorizing the action |
+| `scopes` | `string[]` | Yes | Scopes on the grant |
+| `result` | `string` | Yes | Outcome (`'success'`, `'auth_failure'`, etc.) |
+| `metadata` | `Record<string, unknown>` | No | Arbitrary metadata |
+
+### Example
+
+<CodeGroup>
+
+```typescript TypeScript
+import { createOfflineAuditLog } from '@grantex/gemma';
+
+const auditLog = createOfflineAuditLog({
+  signingKey: bundle.offlineAuditKey,
+  logPath: './audit.jsonl',
+});
+
+const entry = await auditLog.append({
+  action: 'email.send',
+  agentDID: grant.agentDID,
+  grantId: grant.grantId,
+  scopes: grant.scopes,
+  result: 'success',
+});
+
+console.log(entry.seq, entry.hash);
+```
+
+```python Python
+from grantex_gemma import create_offline_audit_log
+
+audit_log = create_offline_audit_log(
+    signing_key=bundle.offline_audit_key,
+    log_path="./audit.jsonl",
+)
+
+entry = audit_log.append(
+    action="email.send",
+    agent_did=grant.agent_did,
+    grant_id=grant.grant_id,
+    scopes=grant.scopes,
+    result="success",
+)
+
+print(entry.seq, entry.hash)
+```
+
+</CodeGroup>
+
+---
+
+## storeBundle / loadBundle
+
+Encrypt a `ConsentBundle` to disk with AES-256-GCM, or decrypt it back.
+
+### storeBundle
+
+| Parameter | Type | Description |
+|---|---|---|
+| `bundle` | `ConsentBundle` | The bundle to encrypt |
+| `path` | `string` | File path to write |
+| `encryptionKey` | `string` | Passphrase (hashed via SHA-256 to derive AES key) |
+
+Returns `Promise<void>`.
+
+### loadBundle
+
+| Parameter | Type | Description |
+|---|---|---|
+| `path` | `string` | File path to read |
+| `encryptionKey` | `string` | Passphrase used during `storeBundle` |
+
+Returns `Promise<ConsentBundle>`.
+
+Throws `BundleTamperedError` if decryption or integrity check fails.
+
+### File format
+
+```
+[12-byte IV][16-byte GCM auth tag][AES-256-GCM ciphertext]
+```
+
+### Example
+
+<CodeGroup>
+
+```typescript TypeScript
+import { storeBundle, loadBundle } from '@grantex/gemma';
+
+await storeBundle(bundle, './bundle.enc', 'my-secret-key');
+const loaded = await loadBundle('./bundle.enc', 'my-secret-key');
+```
+
+```python Python
+from grantex_gemma import store_bundle, load_bundle
+
+store_bundle(bundle, "./bundle.enc", "my-secret-key")
+loaded = load_bundle("./bundle.enc", "my-secret-key")
+```
+
+</CodeGroup>
+
+---
+
+## refreshBundle / shouldRefresh
+
+Manage consent bundle lifecycle. `shouldRefresh` returns `true` when the bundle has less than 20% of its TTL remaining. `refreshBundle` calls the Grantex API to get a fresh bundle.
+
+### shouldRefresh
+
+| Parameter | Type | Description |
+|---|---|---|
+| `bundle` | `ConsentBundle` | The bundle to check |
+
+Returns `boolean`.
+
+### refreshBundle
+
+| Parameter | Type | Description |
+|---|---|---|
+| `bundle` | `ConsentBundle` | The bundle to refresh |
+| `apiKey` | `string` | Developer API key |
+| `baseUrl` | `string` | API base URL (default `https://api.grantex.dev`) |
+
+Returns `Promise<ConsentBundle>` -- a fresh bundle with extended `offlineExpiresAt`, new JWKS snapshot, and rotated audit keys.
+
+### Example
+
+```typescript
+import { shouldRefresh, refreshBundle, storeBundle } from '@grantex/gemma';
+
+if (shouldRefresh(bundle)) {
+  const fresh = await refreshBundle(bundle, process.env.GRANTEX_API_KEY!);
+  await storeBundle(fresh, './bundle.enc', process.env.BUNDLE_KEY!);
+  bundle = fresh;
+}
+```
+
+---
+
+## enforceScopes / hasScope
+
+Utility functions for scope checking.
+
+### enforceScopes
+
+Throws `ScopeViolationError` if any of `requiredScopes` is missing from `grantScopes`.
+
+```typescript
+import { enforceScopes } from '@grantex/gemma';
+
+enforceScopes(grant.scopes, ['calendar:read', 'email:send']);
+// Throws ScopeViolationError if 'calendar:read' or 'email:send' is missing
+```
+
+### hasScope
+
+Returns `boolean` -- whether a specific scope is present.
+
+```typescript
+import { hasScope } from '@grantex/gemma';
+
+if (hasScope(grant.scopes, 'email:send')) {
+  // safe to send email
+}
+```
+
+---
+
+## computeEntryHash / verifyChain
+
+Audit log integrity utilities.
+
+### computeEntryHash
+
+Compute the SHA-256 hash of an audit entry. Hash input format:
+
+```
+seq|timestamp|action|agentDID|grantId|scopes|result|metadata|prevHash
+```
+
+### verifyChain
+
+Verify the integrity of an ordered sequence of `SignedAuditEntry` objects. Checks:
+
+1. Each entry's `hash` matches the recomputed value
+2. Each entry's `prevHash` matches the previous entry's `hash` (first entry must use `GENESIS_HASH`)
+3. Sequence numbers are consecutive
+
+Returns `{ valid: true }` or `{ valid: false, brokenAt: number }`.
+
+### Example
+
+```typescript
+import { verifyChain } from '@grantex/gemma';
+
+const entries = await auditLog.entries();
+const result = verifyChain(entries);
+
+if (!result.valid) {
+  console.error(`Chain broken at entry ${result.brokenAt}`);
+}
+```
+
+---
+
+## syncAuditLog
+
+Sync un-synced audit log entries to the Grantex cloud in batches with exponential back-off retry.
+
+### Parameters (SyncOptions)
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `endpoint` | `string` | Yes | Grantex API URL |
+| `apiKey` | `string` | Yes | Developer API key |
+| `bundleId` | `string` | Yes | Consent bundle ID linking entries to this session |
+| `batchSize` | `number` | No | Entries per batch (default `100`) |
+
+### Returns
+
+`SyncResult`:
+
+| Field | Type | Description |
+|---|---|---|
+| `syncedCount` | `number` | Total entries synced |
+| `hasErrors` | `boolean` | Whether any batch failed |
+| `errors` | `string[]` | Error messages for failed batches |
+
+---
+
+## withGrantexAuth (Google ADK)
+
+Wrap a Google ADK `FunctionTool` with offline Grantex authorization. Before the tool executes, the grant token is verified and scopes are enforced. After execution, an audit entry is logged.
+
+```typescript
+import { withGrantexAuthADK } from '@grantex/gemma';
+
+const protectedTool = withGrantexAuthADK(myAdkTool, {
+  verifier,
+  auditLog,
+  requiredScopes: ['calendar:read'],
+  grantToken: bundle.grantToken,
+});
+```
+
+### Parameters (GoogleADKAuthOptions)
+
+| Parameter | Type | Description |
+|---|---|---|
+| `verifier` | `OfflineVerifier` | Offline verifier instance |
+| `auditLog` | `OfflineAuditLog` | Audit log for recording actions |
+| `requiredScopes` | `string[]` | Scopes required to invoke the tool |
+| `grantToken` | `string` | Grant token JWT |
+
+---
+
+## withGrantexAuth (LangChain)
+
+Wrap a LangChain `StructuredTool` with offline Grantex authorization. Same behavior as the ADK adapter but wraps `_call` or `invoke` methods.
+
+```typescript
+import { withGrantexAuthLangChain } from '@grantex/gemma';
+
+const protectedTool = withGrantexAuthLangChain(myLangChainTool, {
+  verifier,
+  auditLog,
+  requiredScopes: ['email:read'],
+  grantToken: bundle.grantToken,
+});
+```
+
+### Parameters (LangChainAuthOptions)
+
+| Parameter | Type | Description |
+|---|---|---|
+| `verifier` | `OfflineVerifier` | Offline verifier instance |
+| `auditLog` | `OfflineAuditLog` | Audit log for recording actions |
+| `requiredScopes` | `string[]` | Scopes required to invoke the tool |
+| `grantToken` | `string` | Grant token JWT |
+
+---
+
+## ConsentBundle Type
+
+```typescript
+interface ConsentBundle {
+  bundleId: string;
+  grantToken: string;
+  jwksSnapshot: {
+    keys: JWK[];
+    fetchedAt: string;
+    validUntil: string;
+  };
+  offlineAuditKey: {
+    publicKey: string;
+    privateKey: string;
+    algorithm: string;
+  };
+  checkpointAt: number;       // Unix-ms of last cloud sync
+  syncEndpoint: string;       // URL for audit sync
+  offlineExpiresAt: string;   // ISO-8601 expiry
+}
+```
+
+---
+
+## Error Classes
+
+| Class | Code | Description |
+|---|---|---|
+| `GrantexAuthError` | varies | Base error for all auth failures |
+| `OfflineVerificationError` | `MALFORMED_TOKEN`, `BLOCKED_ALGORITHM`, `MISSING_KID`, `KID_NOT_FOUND`, `VERIFICATION_FAILED`, `FUTURE_IAT`, `DELEGATION_DEPTH_EXCEEDED` | JWT verification failures |
+| `TokenExpiredError` | `TOKEN_EXPIRED` | Token has expired beyond clock-skew window |
+| `ScopeViolationError` | `SCOPE_VIOLATION` | Required scopes missing from grant |
+| `BundleTamperedError` | `BUNDLE_TAMPERED` | Bundle file decryption or integrity check failed |
+| `HashChainError` | `HASH_CHAIN_BROKEN` | Audit log hash chain integrity failure |
+
+All error classes extend `GrantexAuthError`, which extends `Error` and includes a `code` property.

@@ -49,7 +49,7 @@ describe('createProgram()', () => {
     expect(jsonOpt).toBeDefined();
   });
 
-  it('registers all 23 expected commands', () => {
+  it('registers all 28 expected commands', () => {
     const program = createProgram();
     const names = program.commands.map((c) => c.name());
 
@@ -58,7 +58,8 @@ describe('createProgram()', () => {
       'audit', 'webhooks', 'policies', 'budgets', 'usage', 'domains',
       'events', 'principal-sessions', 'credentials', 'passports',
       'vault', 'webauthn', 'compliance', 'anomalies', 'billing',
-      'scim', 'sso',
+      'scim', 'sso', 'verify', 'decode', 'audit-log', 'registry',
+      'init',
     ];
 
     for (const name of expected) {

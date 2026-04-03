@@ -19,7 +19,10 @@ export type EventType =
   | 'sso.login'
   | 'sso.connection.created'
   | 'sso.connection.updated'
-  | 'sso.connection.deleted';
+  | 'sso.connection.deleted'
+  | 'consent_bundle.created'
+  | 'consent_bundle.synced'
+  | 'consent_bundle.revoked';
 
 export interface GrantexEvent {
   id: string;
