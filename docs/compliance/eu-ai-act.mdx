@@ -1,0 +1,223 @@
+---
+title: "EU AI Act Compliance"
+sidebarTitle: "EU AI Act"
+description: "How Grantex helps meet EU AI Act requirements for AI agent deployments. Binding August 2026."
+---
+
+## Overview
+
+The **EU AI Act** (Regulation (EU) 2024/1689) is the world's first comprehensive AI regulation. It entered into force in August 2024, with key provisions for high-risk AI systems and general-purpose AI becoming **binding in August 2026**.
+
+For AI agent deployments, five articles create direct obligations: risk management (Art. 9), transparency (Art. 13), human oversight (Art. 14), quality management (Art. 17), and deployer responsibilities (Art. 26). Grantex provides technical controls that map to each.
+
+<Warning>
+  This documentation explains how Grantex features map to EU AI Act requirements. It is not legal advice. The EU AI Act's risk classification system determines which requirements apply to your specific deployment. Consult qualified legal counsel to determine your obligations.
+</Warning>
+
+## Timeline
+
+| Date | Milestone |
+|------|-----------|
+| **August 2024** | EU AI Act enters into force |
+| **February 2025** | Prohibited practices provisions apply |
+| **August 2025** | GPAI model obligations apply |
+| **August 2026** | **High-risk AI system provisions become binding** |
+| **August 2027** | Certain product-specific requirements apply |
+
+The August 2026 deadline is the critical one for most AI agent deployments. If your agents operate in regulated domains (healthcare, finance, employment, law enforcement) or make decisions that significantly affect individuals, they likely fall under the high-risk classification.
+
+## Relevant Articles
+
+### Article 9 — Risk Management Systems
+
+**Requirement:** Providers of high-risk AI systems must establish, implement, document, and maintain a risk management system. This system must identify and analyze known and reasonably foreseeable risks, estimate and evaluate risks, and adopt appropriate risk management measures.
+
+**What this means for agents:** You need documented controls for what agents can do, how they escalate privileges, and how you stop them when something goes wrong. "We rotate the API key weekly" is not a risk management system.
+
+**Grantex coverage:**
+
+- **Scoped grants:** Every agent operates with explicitly defined permissions. The JWT `scp` claim lists exactly what the agent can do. Risks are bounded by the scope.
+- **Budget controls:** `budgets.allocate()` and `budgets.debit()` set per-agent, per-grant spending limits. Agents cannot exceed their allocated budget.
+- **Anomaly detection:** Background workers flag unusual agent behavior — scope expansion attempts, high-frequency API calls, out-of-pattern access.
+- **Policy-as-code:** OPA and Cedar integration for fine-grained rules beyond simple scopes. Policies can encode risk thresholds, time-of-day restrictions, and geo-fencing.
+- **Delegation invariants:** Sub-agents must have strictly fewer permissions than their parent. Depth limits prevent unbounded delegation chains.
+
+```typescript
+// Risk management via budget controls
+await grantex.budgets.allocate({
+  grantId: 'grt_123',
+  initialBudget: 100.00,
+  currency: 'EUR',
+  maxTransactionAmount: 10.00,
+});
+```
+
+### Article 13 — Transparency and Provision of Information
+
+**Requirement:** High-risk AI systems must be designed and developed so that their operation is sufficiently transparent to enable users to interpret the system's output and use it appropriately. Users must be provided with relevant, accessible, and understandable information.
+
+**What this means for agents:** Every autonomous action must be attributable — who authorized it, what scopes were active, and what the agent actually did. Users must understand what the agent can and cannot do before granting access.
+
+**Grantex coverage:**
+
+- **Human consent flow:** Before an agent gets access, the user sees a plain-language consent screen listing every scope and its description. The consent notice is stored immutably.
+- **Grant token claims:** The JWT carries `sub` (human principal), `agt` (agent DID), `dev` (developer), `scp` (scopes), and `grnt` (grant ID) — full attribution chain in every token.
+- **Verifiable Credentials:** W3C VCs provide portable, third-party-verifiable proof of authorization. Any party can verify who authorized what, without a Grantex account.
+- **SD-JWT selective disclosure:** Show auditors only the claims they need. Reveal scopes without revealing the principal's identity, or vice versa.
+- **Audit trail:** Hash-chained, append-only, tamper-evident logs of every action the agent took under its grant.
+
+### Article 14 — Human Oversight
+
+**Requirement:** High-risk AI systems must be designed to allow effective oversight by natural persons, including the ability to understand the system's capabilities and limitations, monitor operation, and intervene to correct, override, or stop the system.
+
+**What this means for agents:** You must be able to see what agents are doing in real time and stop them immediately. Post-hoc analysis is not oversight.
+
+**Grantex coverage:**
+
+- **Principal Sessions dashboard:** Embeddable UI showing all active grants, scopes, and recent activity per user. Principals see exactly what their agents are doing.
+- **Real-time event streaming:** SSE and WebSocket endpoints surface agent actions as they happen. Subscribe to specific event types or agents.
+- **One-click revocation:** Revoke a grant from the dashboard or via API. Takes effect in under 1 second.
+- **Cascade revocation:** Revoking a parent agent's grant automatically invalidates all delegated sub-agent grants. The entire delegation tree is stopped.
+- **Anomaly alerts:** Webhooks notify operators when anomalous behavior is detected, enabling immediate human intervention.
+
+```typescript
+// Real-time human oversight via event streaming
+for await (const event of grantex.events.stream({
+  types: ['grant.created', 'grant.revoked', 'token.verified'],
+})) {
+  console.log(`[${event.type}] Agent: ${event.agentId}, Grant: ${event.grantId}`);
+  if (event.type === 'anomaly.detected') {
+    await grantex.grants.revoke(event.grantId); // immediate intervention
+  }
+}
+```
+
+### Article 17 — Quality Management Systems
+
+**Requirement:** Providers must put a quality management system in place that ensures compliance, including techniques and procedures for design, development, and examination of AI systems, as well as record-keeping and documentation.
+
+**What this means for agents:** You need systematic record-keeping of how agents are configured, what access they have, and how compliance is maintained over time.
+
+**Grantex coverage:**
+
+- **Compliance evidence packs:** `POST /v1/compliance/evidence` generates a complete documentation bundle with grants, tokens, audit entries, policies, and anomaly reports.
+- **Configuration-as-code:** Terraform provider manages agents, grants, policies, and webhooks declaratively. Changes are versioned in git.
+- **Policy bundles:** `POST /v1/policies/sync` uploads OPA/Cedar policy bundles with versioning. You can trace which policy version was active for any historical decision.
+- **Conformance test suite:** `@grantex/conformance` validates your deployment against the Grantex protocol specification. Run it in CI to catch compliance regressions.
+
+### Article 26 — Obligations of Deployers
+
+**Requirement:** Deployers of high-risk AI systems must use such systems in accordance with the instructions of use, ensure human oversight is implemented by natural persons who have the necessary competence and authority, and monitor the operation of the AI system.
+
+**What this means for agents:** If you deploy agents (even if you did not build the underlying model), you have specific obligations around monitoring and oversight.
+
+**Grantex coverage:**
+
+- **Usage metering:** `usage.current()` and `usage.history()` track authorization volumes, token exchanges, and verification calls. Monitor deployment scale.
+- **Event streaming:** Continuous visibility into agent operations. Deployers can monitor without modifying the agent.
+- **Custom domains:** `domains.create()` and `domains.verify()` let deployers run Grantex on their own domain, maintaining control over the authorization infrastructure.
+- **Principal sessions:** Deployers can create sessions for their end-users, enabling oversight at the user level.
+
+## Step-by-Step: EU AI Act Compliance
+
+### 1. Classify your AI system
+
+Determine whether your agent deployment falls under the high-risk classification. Agents operating in Annex III domains (healthcare, finance, employment, law enforcement, critical infrastructure) are likely high-risk.
+
+### 2. Implement risk management (Art. 9)
+
+```typescript
+import { GrantexClient } from '@grantex/sdk';
+
+const grantex = new GrantexClient({ apiKey: process.env.GRANTEX_API_KEY });
+
+// Define scoped permissions for the agent
+const agent = await grantex.agents.create({
+  name: 'hr-screening-agent',
+  scopes: ['employee:read', 'application:review'], // bounded scope
+});
+
+// Set budget controls
+await grantex.budgets.allocate({
+  grantId: grant.grantId,
+  initialBudget: 500.00,
+  currency: 'EUR',
+});
+```
+
+### 3. Enable transparency (Art. 13)
+
+```typescript
+// Consent flow with clear descriptions
+const authRequest = await grantex.authorize({
+  agentId: agent.agentId,
+  scopes: ['employee:read', 'application:review'],
+  scopeDescriptions: {
+    'employee:read': 'View employee profiles and application history',
+    'application:review': 'Read and score job applications',
+  },
+});
+// User sees these descriptions in the consent UI
+```
+
+### 4. Configure human oversight (Art. 14)
+
+```typescript
+// Subscribe to agent events for real-time monitoring
+grantex.events.subscribe((event) => {
+  if (event.type === 'anomaly.detected') {
+    alertOpsTeam(event);
+    // Consider automatic revocation for critical anomalies
+  }
+});
+
+// Enable principal sessions for end-user oversight
+const session = await grantex.principalSessions.create({
+  principalId: 'user_123',
+  expiresIn: '24h',
+});
+// session.dashboardUrl → user can view and revoke grants
+```
+
+### 5. Generate conformance documentation (Art. 17)
+
+```typescript
+// Generate EU AI Act conformance report
+const report = await dpdp.exportAudit({
+  framework: 'eu-ai-act',
+  dateRange: { from: '2026-01-01', to: '2026-07-31' },
+  format: 'json',
+});
+```
+
+## Deadline Warnings
+
+<Warning>
+  **August 2026** is when high-risk AI system provisions become binding. If you are deploying AI agents in the EU or serving EU users, your compliance infrastructure must be in place before this date. Retroactive compliance is significantly more expensive and disruptive than building it in from the start.
+</Warning>
+
+Organizations that fail to comply face penalties of up to EUR 35 million or 7% of global annual turnover, whichever is higher, for the most serious infringements.
+
+## Cross-Framework Coverage
+
+Grantex features satisfy requirements across multiple frameworks simultaneously:
+
+| Grantex Feature | EU AI Act | DPDP Act | OWASP ASI |
+|----------------|-----------|----------|-----------|
+| Scoped grant tokens | Art. 9 (risk management) | S.4 (purpose limitation) | ASI-01 (goal hijacking) |
+| Per-agent DID | Art. 13 (transparency) | — | ASI-03 (identity abuse) |
+| Delegation invariants | Art. 9 (risk management) | — | ASI-05 (privilege escalation) |
+| Instant revocation | Art. 14 (human oversight) | S.6(6) (withdrawal) | ASI-10 (rogue agents) |
+| Consent flow | Art. 13 (transparency) | S.6 (consent) | — |
+| Audit trail | Art. 17 (quality management) | S.11 (data principal rights) | — |
+| Budget controls | Art. 9 (risk management) | — | — |
+| Event streaming | Art. 14 (human oversight) | — | — |
+| Principal sessions | Art. 26 (deployer obligations) | S.11 (data principal rights) | — |
+
+## Related Resources
+
+- [DPDP Act 2023 Compliance](/compliance/dpdp-act-2023) — India's data protection mapping
+- [DPDP Compliance Module](/features/dpdp-compliance) — feature overview and SDK reference
+- [OWASP Agentic Top 10 Blog](/blog/owasp-agentic-top-10-compliance) — threat taxonomy mapping
+- [Compliance Matrix](/guides/compliance-matrix) — full cross-framework compliance mapping
+- [Compliance Evidence Pack API](/api-reference/compliance/generate-compliance-evidence-pack) — export API reference

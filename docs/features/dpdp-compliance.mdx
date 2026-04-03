@@ -1,0 +1,385 @@
+---
+title: "DPDP & GDPR Compliance Module"
+sidebarTitle: "DPDP Compliance"
+description: "Structured consent records, purpose limitation, right to withdrawal, and audit-ready exports for AI agent deployments."
+---
+
+## Overview
+
+The `@grantex/dpdp` package provides a compliance layer on top of the Grantex authorization protocol. It adds structured consent records, purpose enforcement, data principal rights management, grievance tracking, and audit-ready exports — mapping directly to India's DPDP Act 2023, the EU's GDPR, and the EU AI Act.
+
+The key insight: **authorization is compliance**. Every Grantex grant already captures who authorized what agent to do what. The DPDP module adds the regulatory metadata — purpose descriptions, retention periods, consent notices, withdrawal mechanisms, and framework-specific export formats — that transforms authorization records into compliance evidence.
+
+<Info>
+  The DPDP compliance module works alongside your existing Grantex setup. It does not replace the core SDK — it extends it with compliance-specific features.
+</Info>
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @grantex/dpdp
+```
+
+```bash pip
+pip install grantex-dpdp
+```
+</CodeGroup>
+
+## DPDPConsentRecord Schema
+
+Every consent created through the DPDP module produces a `DPDPConsentRecord`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique consent record ID (`cns_...`) |
+| `principalId` | `string` | The data principal (user) who granted consent |
+| `agentId` | `string` | The agent receiving access |
+| `grantId` | `string` | Linked Grantex grant ID |
+| `status` | `string` | `active`, `withdrawn`, `expired` |
+| `purposes` | `Purpose[]` | Array of declared processing purposes |
+| `consentNotice` | `ConsentNotice` | The notice shown to the data principal |
+| `dataCategories` | `string[]` | Categories of personal data processed |
+| `crossBorder` | `boolean` | Whether data may be transferred outside India |
+| `withdrawUrl` | `string` | URL for the data principal to withdraw consent |
+| `createdAt` | `string` | ISO 8601 timestamp of consent |
+| `withdrawnAt` | `string \| null` | ISO 8601 timestamp of withdrawal, if any |
+| `expiresAt` | `string` | ISO 8601 expiry based on retention period |
+
+### Purpose Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | `string` | Scope code (e.g., `calendar:read`) |
+| `description` | `string` | Human-readable purpose description |
+| `dpdpSection` | `string` | DPDP Act section reference (e.g., `S.4`) |
+| `gdprArticle` | `string?` | GDPR article reference (e.g., `Art.6(1)(a)`) |
+| `retention` | `string` | Retention period (e.g., `30d`, `90d`, `1y`) |
+
+### ConsentNotice Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `language` | `string` | ISO 639-1 language code |
+| `text` | `string` | Plain-language notice shown to the user |
+| `version` | `string?` | Notice version for tracking changes |
+
+## Consent Lifecycle
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Created    │────▶│   Active     │────▶│  Withdrawn   │
+│              │     │              │     │              │
+│  Record is   │     │  Agent has   │     │  Grant is    │
+│  created     │     │  access via  │     │  revoked,    │
+│  with grant  │     │  grant token │     │  sub-agents  │
+│              │     │              │     │  cascade     │
+└──────────────┘     └──────┬───────┘     └──────────────┘
+                            │
+                            ▼
+                     ┌──────────────┐
+                     │   Expired    │
+                     │              │
+                     │  Retention   │
+                     │  period      │
+                     │  lapsed      │
+                     └──────────────┘
+```
+
+1. **Created:** `dpdp.createConsentRecord()` creates the consent record and the underlying Grantex grant. The consent notice is stored and the data principal receives the withdrawal URL.
+2. **Active:** The agent operates with the granted scopes. All actions are logged in the audit trail linked to this consent.
+3. **Withdrawn:** The data principal clicks "Withdraw consent" in the portal or calls `dpdp.withdrawConsent()`. The grant is revoked instantly, sub-agents are cascade-revoked, and the withdrawal is logged.
+4. **Expired:** The retention period lapses. Grantex auto-expires the consent and revokes the grant. Processing history is retained for audit purposes.
+
+## Creating Consent Records
+
+### TypeScript
+
+```typescript
+import { DPDPClient } from '@grantex/dpdp';
+
+const dpdp = new DPDPClient({
+  apiKey: process.env.GRANTEX_API_KEY,
+  dpoContact: {
+    name: 'Data Protection Officer',
+    email: 'dpo@yourcompany.com',
+  },
+  defaultRetention: '90d',
+  grievanceSla: '72h',
+});
+
+const consent = await dpdp.createConsentRecord({
+  principalId: 'user_rajesh_kumar',
+  agentId: 'ag_email_summarizer',
+  purposes: [
+    {
+      code: 'email:read',
+      description: 'Read email subjects and bodies to generate daily summaries',
+      dpdpSection: 'S.4',
+      gdprArticle: 'Art.6(1)(a)',
+      retention: '7d',
+    },
+  ],
+  consentNotice: {
+    language: 'en',
+    text: 'This agent reads your emails to create daily summaries. Email content is processed in memory and not stored beyond 7 days.',
+    version: '1.0',
+  },
+  dataCategories: ['communications', 'contacts'],
+  crossBorder: false,
+});
+
+console.log(consent.id);          // "cns_01HZ..."
+console.log(consent.grantId);     // "grt_01HZ..."
+console.log(consent.status);      // "active"
+console.log(consent.withdrawUrl); // "https://..."
+```
+
+### Python
+
+```python
+from grantex_dpdp import DPDPClient, CreateConsentParams, Purpose, ConsentNotice
+
+dpdp = DPDPClient(
+    api_key=os.environ["GRANTEX_API_KEY"],
+    dpo_contact={"name": "Data Protection Officer", "email": "dpo@yourcompany.com"},
+    default_retention="90d",
+    grievance_sla="72h",
+)
+
+consent = dpdp.create_consent_record(CreateConsentParams(
+    principal_id="user_rajesh_kumar",
+    agent_id="ag_email_summarizer",
+    purposes=[
+        Purpose(
+            code="email:read",
+            description="Read email subjects and bodies to generate daily summaries",
+            dpdp_section="S.4",
+            gdpr_article="Art.6(1)(a)",
+            retention="7d",
+        ),
+    ],
+    consent_notice=ConsentNotice(
+        language="en",
+        text="This agent reads your emails to create daily summaries.",
+        version="1.0",
+    ),
+    data_categories=["communications", "contacts"],
+    cross_border=False,
+))
+```
+
+## Purpose Enforcement
+
+The DPDP module enforces purpose limitation at two levels:
+
+### 1. Grant Token Scopes
+
+When a consent record is created, the underlying grant token's `scp` claim contains only the scopes from the declared purposes. The agent cannot request or use scopes that were not declared in the consent.
+
+### 2. Purpose Audit
+
+Every token verification logs the scope that was checked. The compliance dashboard shows whether agents are staying within their declared purposes. If an agent attempts to access a scope not in its consent record, the access is denied and the attempt is logged as a potential violation.
+
+```typescript
+// List consent records for an agent
+const records = await dpdp.listConsentRecords({
+  agentId: 'ag_email_summarizer',
+  status: 'active',
+});
+
+// Check purpose adherence
+const adherence = await dpdp.checkPurposeAdherence({
+  consentId: consent.id,
+  dateRange: { from: '2026-03-01', to: '2026-04-01' },
+});
+
+console.log(adherence.compliant);  // true
+console.log(adherence.violations); // []
+```
+
+## Data Principal Rights
+
+### Viewing Consents
+
+Data principals can view their active consents through the portal or API:
+
+```typescript
+// Get all consents for a data principal
+const consents = await dpdp.listConsentRecords({
+  principalId: 'user_rajesh_kumar',
+});
+```
+
+### Withdrawing Consent
+
+```typescript
+// Withdraw consent — triggers instant grant revocation
+await dpdp.withdrawConsent(consent.id);
+
+// After withdrawal:
+// - Grant token is revoked (< 1 second)
+// - All sub-agent delegations are cascade-revoked
+// - Audit entry records the withdrawal
+// - Developer receives webhook notification
+```
+
+### Exporting Data
+
+```typescript
+// Export all data for a data principal (DPDP S.11 / GDPR Art.20)
+const export = await dpdp.exportPrincipalData({
+  principalId: 'user_rajesh_kumar',
+  format: 'json',
+});
+// Returns: consent records, processing history, agent metadata
+```
+
+### Filing Grievances
+
+```typescript
+// Submit a grievance (DPDP S.13)
+const grievance = await dpdp.submitGrievance({
+  principalId: 'user_rajesh_kumar',
+  consentId: consent.id,
+  description: 'Agent accessed contacts that were not part of the declared purpose.',
+  category: 'purpose_violation',
+});
+
+console.log(grievance.id);          // "grv_01HZ..."
+console.log(grievance.status);      // "open"
+console.log(grievance.slaDeadline); // ISO 8601 timestamp (72h from submission)
+```
+
+## Grievance Mechanism
+
+The DPDP module includes a full grievance tracking system:
+
+| Feature | Description |
+|---------|-------------|
+| **Submission** | Data principals submit grievances through the portal or API |
+| **Routing** | Grievances are routed to the configured DPO contact via email and webhook |
+| **SLA tracking** | Each grievance has a deadline based on the configured `grievanceSla` |
+| **Status updates** | DPO can update status: `open`, `investigating`, `resolved`, `escalated` |
+| **Escalation** | Overdue grievances can be escalated to the Data Protection Board |
+| **Audit trail** | All grievance actions are logged for regulatory inspection |
+
+## Export Types
+
+The DPDP module supports three export frameworks:
+
+### DPDP Audit Export
+
+```typescript
+const pack = await dpdp.exportAudit({
+  framework: 'dpdp',
+  dateRange: { from: '2026-01-01', to: '2026-04-01' },
+  format: 'json',
+});
+```
+
+Includes: consent records, consent notices, withdrawal log, grievance log, retention compliance status, cross-border transfer declarations.
+
+### GDPR Article 15 Export
+
+```typescript
+const pack = await dpdp.exportAudit({
+  framework: 'gdpr',
+  principalId: 'user_rajesh_kumar',
+  format: 'json',
+});
+```
+
+Includes: processing purposes and legal basis, categories of data, recipients and third parties, retention periods, delegation chains, automated decision-making disclosure.
+
+### EU AI Act Conformance Report
+
+```typescript
+const pack = await dpdp.exportAudit({
+  framework: 'eu-ai-act',
+  dateRange: { from: '2026-01-01', to: '2026-07-31' },
+  format: 'json',
+});
+```
+
+Includes: risk management controls (Art. 9), transparency evidence (Art. 13), human oversight mechanisms (Art. 14), quality management documentation (Art. 17), deployer obligation checklist (Art. 26).
+
+## SDK Quick Start
+
+### 1. Install and configure
+
+```typescript
+import { DPDPClient } from '@grantex/dpdp';
+
+const dpdp = new DPDPClient({
+  apiKey: process.env.GRANTEX_API_KEY,
+});
+```
+
+### 2. Create a consent record
+
+```typescript
+const consent = await dpdp.createConsentRecord({
+  principalId: 'user_123',
+  agentId: 'ag_my_agent',
+  purposes: [{ code: 'calendar:read', description: 'Read calendar', dpdpSection: 'S.4', retention: '30d' }],
+  consentNotice: { language: 'en', text: 'This agent reads your calendar.' },
+  dataCategories: ['schedule'],
+  crossBorder: false,
+});
+```
+
+### 3. Verify purpose adherence
+
+```typescript
+const adherence = await dpdp.checkPurposeAdherence({ consentId: consent.id });
+```
+
+### 4. Handle withdrawal
+
+```typescript
+await dpdp.withdrawConsent(consent.id);
+```
+
+### 5. Export for audit
+
+```typescript
+const pack = await dpdp.exportAudit({ framework: 'dpdp', format: 'json' });
+```
+
+## API Reference Summary
+
+| Method | Description |
+|--------|-------------|
+| `createConsentRecord(params)` | Create a DPDP-compliant consent record with linked grant |
+| `getConsentRecord(id)` | Get a consent record by ID |
+| `listConsentRecords(params)` | List consent records with filters |
+| `withdrawConsent(id)` | Withdraw consent and revoke grant |
+| `checkPurposeAdherence(params)` | Check if agent stayed within declared purposes |
+| `exportPrincipalData(params)` | Export all data for a data principal |
+| `exportAudit(params)` | Generate framework-specific audit export |
+| `submitGrievance(params)` | Submit a data principal grievance |
+| `getGrievance(id)` | Get grievance by ID |
+| `updateGrievance(id, params)` | Update grievance status |
+| `listGrievances(params)` | List grievances with filters |
+| `getComplianceStats()` | Get compliance dashboard statistics |
+
+## Configuration Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `apiKey` | `string` | *required* | Grantex API key |
+| `baseUrl` | `string` | `https://grantex-auth-dd4mtrt2gq-uc.a.run.app` | Auth service URL |
+| `dpoContact` | `{ name, email }` | `undefined` | Data Protection Officer contact |
+| `defaultRetention` | `string` | `'90d'` | Default data retention period |
+| `grievanceSla` | `string` | `'72h'` | Grievance response deadline |
+| `autoExpire` | `boolean` | `true` | Auto-revoke grants when retention lapses |
+| `webhookUrl` | `string` | `undefined` | URL for consent lifecycle webhooks |
+
+## Related Resources
+
+- [DPDP Act 2023 Compliance](/compliance/dpdp-act-2023) — detailed DPDP section mapping
+- [EU AI Act Compliance](/compliance/eu-ai-act) — EU AI Act article mapping
+- [Compliance Matrix](/guides/compliance-matrix) — cross-framework compliance mapping
+- [Principal Sessions](/sdks/typescript/principal-sessions) — data principal portal SDK
+- [Blog: DPDP Act and AI Agents](/blog/dpdp-act-ai-agents) — what engineering teams need to know

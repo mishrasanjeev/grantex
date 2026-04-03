@@ -22,7 +22,10 @@ export type EventType =
   | 'sso.connection.deleted'
   | 'consent_bundle.created'
   | 'consent_bundle.synced'
-  | 'consent_bundle.revoked';
+  | 'consent_bundle.revoked'
+  | 'dpdp.consent.created'
+  | 'dpdp.consent.withdrawn'
+  | 'dpdp.grievance.filed';
 
 export interface GrantexEvent {
   id: string;

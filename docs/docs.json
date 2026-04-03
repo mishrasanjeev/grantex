@@ -68,6 +68,14 @@
             ]
           },
           {
+            "group": "Compliance",
+            "pages": [
+              "features/dpdp-compliance",
+              "compliance/dpdp-act-2023",
+              "compliance/eu-ai-act"
+            ]
+          },
+          {
             "group": "Guides",
             "pages": [
               "guides/rate-limits",
@@ -570,6 +578,7 @@
           {
             "group": "Posts",
             "pages": [
+              "blog/dpdp-act-ai-agents",
               "blog/agent-security-breaches-2025-2026",
               "blog/owasp-agentic-top-10-compliance",
               "blog/from-copilot-to-autonomous-agents",

@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- SEO -->
+  <title>Grantex DPDP — AI Agent Compliance for India's DPDP Act 2023</title>
+  <meta name="description" content="Meet India's DPDP Act and EU AI Act requirements for AI agents. Structured consent records, purpose limitation, right to withdrawal, and audit-ready exports — built on Grantex.">
+  <meta name="keywords" content="DPDP Act 2023, India data protection, AI agent compliance, EU AI Act, GDPR AI agents, consent management, purpose limitation, right to withdrawal, audit exports, Grantex DPDP, digital personal data protection, data principal rights, AI regulation India">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="https://grantex.dev/dpdp">
+  <link rel="llms-txt" href="/llms.txt">
+
+  <!-- OpenGraph -->
+  <meta property="og:title" content="Grantex DPDP — AI Agent Compliance for India's DPDP Act 2023">
+  <meta property="og:description" content="Meet India's DPDP Act and EU AI Act requirements for AI agents. Structured consent records, purpose limitation, right to withdrawal, and audit-ready exports.">
+  <meta property="og:url" content="https://grantex.dev/dpdp">
+  <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Grantex">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Grantex DPDP — AI Agent Compliance for India's DPDP Act 2023">
+  <meta name="twitter:description" content="Meet India's DPDP Act and EU AI Act requirements for AI agents. Structured consent records, purpose limitation, right to withdrawal, and audit-ready exports.">
+  <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Grantex DPDP Compliance Module",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Any",
+    "url": "https://grantex.dev/dpdp",
+    "description": "DPDP Act 2023, EU AI Act, and GDPR compliance module for AI agent deployments. Structured consent records, purpose limitation, data principal rights, and audit-ready exports.",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "codeRepository": "https://github.com/mishrasanjeev/grantex",
+    "applicationSubCategory": "Compliance",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "isPartOf": {
+      "@type": "SoftwareApplication",
+      "name": "Grantex",
+      "url": "https://grantex.dev"
+    }
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is India's DPDP Act 2023?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The Digital Personal Data Protection Act 2023 (DPDP Act) is India's comprehensive data protection law. It establishes rights for data principals (individuals), obligations for data fiduciaries (organizations processing data), and requirements for consent, purpose limitation, and data processing transparency. For AI agents, DPDP creates specific obligations around how agents collect, process, and use personal data on behalf of users."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does the DPDP Act apply to AI agents?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. AI agents that process digital personal data of Indian residents fall under the DPDP Act. The Act applies to any automated processing of personal data, which includes AI agents accessing emails, calendar entries, files, contacts, or any data that identifies an individual. The agent's developer is the data fiduciary and must ensure compliance."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does Grantex help with DPDP Act compliance?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Grantex provides a structured DPDPConsentRecord that maps directly to DPDP Act sections. It enforces purpose limitation through scoped grant tokens, implements right to withdrawal via instant revocation, maintains audit-ready logs for regulatory inspection, and provides data principal portals for individuals to manage their consent. The compliance module generates export packages formatted for DPDP audit requirements."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the EU AI Act and when does it take effect?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The EU AI Act is the world's first comprehensive AI regulation. Key provisions become binding in August 2026. Articles 9, 13, 14, 17, and 26 create specific obligations for AI agent deployments including risk management, transparency, human oversight, quality management, and deployer responsibilities. Organizations deploying AI agents that serve EU users must comply."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can Grantex handle both DPDP and GDPR compliance simultaneously?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Grantex's consent records support multiple regulatory frameworks simultaneously. A single DPDPConsentRecord can include DPDP Act section mappings, GDPR Article 6 legal bases, and EU AI Act article references. The export system generates framework-specific reports from the same underlying data."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    /* ── Design tokens ─────────────────────────────────────────────────────── */
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --accent:   #3fb950;
+      --accent2:  #58a6ff;
+      --orange:   #ffa657;
+      --red:      #f85149;
+      --purple:   #bc8cff;
+      --mono:     'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --sans:     'Inter', system-ui, -apple-system, sans-serif;
+      --radius:   8px;
+      --max-w:    1100px;
+    }
+
+    /* ── Reset ─────────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Layout ────────────────────────────────────────────────────────────── */
+    .container {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+    section { padding: 80px 0; }
+    section + section { border-top: 1px solid var(--border); }
+
+    /* ── Nav ───────────────────────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(13, 17, 23, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+    .nav-logo {
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.5px;
+    }
+    .nav-logo span { color: var(--text); }
+    .nav-links {
+      display: flex;
+      gap: 28px;
+      list-style: none;
+      font-size: 14px;
+    }
+    .nav-links a { color: var(--muted); transition: color 0.15s; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* ── Urgency bar ──────────────────────────────────────────────────────── */
+    .urgency-bar {
+      background: linear-gradient(90deg, rgba(255, 166, 87, 0.12) 0%, rgba(248, 81, 73, 0.12) 100%);
+      border: 1px solid rgba(255, 166, 87, 0.25);
+      border-radius: var(--radius);
+      padding: 10px 24px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 32px;
+      font-size: 14px;
+      font-family: var(--mono);
+      margin-bottom: 32px;
+    }
+    .urgency-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .urgency-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .urgency-dot.active {
+      background: var(--red);
+      box-shadow: 0 0 8px rgba(248, 81, 73, 0.5);
+      animation: pulse 2s infinite;
+    }
+    .urgency-dot.warning {
+      background: var(--orange);
+      box-shadow: 0 0 8px rgba(255, 166, 87, 0.5);
+      animation: pulse 2s infinite 0.5s;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .urgency-label { color: var(--muted); }
+    .urgency-value { color: var(--text); font-weight: 600; }
+
+    /* ── Hero ──────────────────────────────────────────────────────────────── */
+    .hero {
+      padding: 80px 0 72px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(36px, 5vw, 56px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      max-width: 660px;
+      margin: 0 auto 36px;
+      font-size: 18px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .hero-ctas {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 40px;
+    }
+
+    /* ── Buttons ───────────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.15s;
+      border: none;
+    }
+    .btn:hover { opacity: 0.88; transform: translateY(-1px); text-decoration: none; }
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--muted); }
+
+    /* ── Install command (hero) ────────────────────────────────────────────── */
+    .install-hero {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: border-color 0.2s;
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--text);
+    }
+    .install-hero:hover { border-color: var(--accent2); text-decoration: none; }
+    .install-hero .prefix { color: var(--accent); }
+    .install-hero .copy-hint {
+      font-size: 11px;
+      color: var(--muted);
+      transition: color 0.15s;
+    }
+    .install-hero:hover .copy-hint { color: var(--text); }
+
+    /* ── Trust bar ─────────────────────────────────────────────────────────── */
+    .trust-bar {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .trust-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      font-size: 12px;
+      font-family: var(--mono);
+      color: var(--muted);
+      background: var(--surface);
+    }
+    .trust-badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    /* ── Section chrome ────────────────────────────────────────────────────── */
+    .section-label {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-size: clamp(24px, 3vw, 36px);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+    .section-sub {
+      color: var(--muted);
+      font-size: 17px;
+      max-width: 600px;
+      margin-bottom: 48px;
+    }
+
+    /* ── Cards ─────────────────────────────────────────────────────────────── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: var(--accent2); }
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .card-icon.dpdp { background: rgba(255, 166, 87, 0.12); border: 1px solid rgba(255, 166, 87, 0.25); }
+    .card-icon.eu { background: rgba(88, 166, 255, 0.12); border: 1px solid rgba(88, 166, 255, 0.25); }
+    .card-icon.owasp { background: rgba(248, 81, 73, 0.12); border: 1px solid rgba(248, 81, 73, 0.25); }
+    .card h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .card p { color: var(--muted); font-size: 14px; line-height: 1.65; }
+    .card-sections {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .card-section-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .card-section-item .section-ref {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      flex-shrink: 0;
+    }
+
+    /* ── Code example ──────────────────────────────────────────────────────── */
+    .code-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: start;
+    }
+    @media (max-width: 768px) {
+      .code-section { grid-template-columns: 1fr; }
+    }
+    .code-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .code-filename {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .code-lang {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .code-block pre {
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.7;
+      padding: 20px;
+      overflow-x: auto;
+      color: var(--text);
+    }
+    .copy-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-family: var(--mono);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    /* Syntax highlight */
+    .kw  { color: #ff7b72; }
+    .str { color: #a5d6ff; }
+    .fn  { color: #d2a8ff; }
+    .cm  { color: #8b949e; }
+    .id  { color: #79c0ff; }
+    .op  { color: #e6edf3; }
+    .typ { color: #ffa657; }
+
+    .explain-list {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .explain-item h4 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .explain-item p {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .explain-item .tag {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-right: 8px;
+    }
+    .tag-dpdp { background: rgba(255, 166, 87, 0.12); color: var(--orange); border: 1px solid rgba(255, 166, 87, 0.25); }
+    .tag-gdpr { background: rgba(88, 166, 255, 0.12); color: var(--accent2); border: 1px solid rgba(88, 166, 255, 0.25); }
+    .tag-euai { background: rgba(188, 140, 255, 0.12); color: var(--purple); border: 1px solid rgba(188, 140, 255, 0.25); }
+
+    /* ── Dashboard mockup ──────────────────────────────────────────────────── */
+    .dashboard-mockup {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .dashboard-chrome {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .chrome-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--border);
+    }
+    .chrome-dot.r { background: #f85149; }
+    .chrome-dot.y { background: #d29922; }
+    .chrome-dot.g { background: #3fb950; }
+    .chrome-url {
+      flex: 1;
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .dashboard-body {
+      padding: 24px;
+    }
+    .dash-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .dash-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .dash-filters {
+      display: flex;
+      gap: 8px;
+    }
+    .dash-filter {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--muted);
+    }
+    .dash-filter.active { border-color: var(--accent); color: var(--accent); }
+    .dash-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .dash-stat {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+    }
+    .dash-stat-number {
+      font-family: var(--mono);
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .dash-stat-number.warn { color: var(--orange); }
+    .dash-stat-number.ok { color: var(--accent); }
+    .dash-stat-label {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: var(--mono);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .dash-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .dash-table th {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .dash-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .dash-table tr:last-child td { border-bottom: none; }
+    .dash-table .agent { color: var(--text); font-weight: 500; }
+    .dash-badge {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .dash-badge.active { background: rgba(63, 185, 80, 0.12); color: var(--accent); border: 1px solid rgba(63, 185, 80, 0.25); }
+    .dash-badge.withdrawn { background: rgba(248, 81, 73, 0.12); color: var(--red); border: 1px solid rgba(248, 81, 73, 0.25); }
+    .dash-badge.expired { background: rgba(139, 148, 158, 0.12); color: var(--muted); border: 1px solid var(--border); }
+
+    /* ── Portal section ────────────────────────────────────────────────────── */
+    .portal-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+    @media (max-width: 768px) {
+      .portal-grid { grid-template-columns: 1fr; }
+    }
+    .portal-features {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .portal-feature {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .portal-feature .check {
+      color: var(--accent);
+      font-size: 16px;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .portal-feature h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .portal-feature p { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .portal-mockup {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .portal-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .portal-card:last-child { margin-bottom: 0; }
+    .portal-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .portal-card-agent {
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .portal-card-scopes {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .scope-tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      background: rgba(88, 166, 255, 0.1);
+      border: 1px solid rgba(88, 166, 255, 0.2);
+      color: var(--accent2);
+    }
+    .portal-card-meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .portal-card-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .portal-btn {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .portal-btn.danger { border-color: rgba(248, 81, 73, 0.3); color: var(--red); }
+
+    /* ── Export section ─────────────────────────────────────────────────────── */
+    .export-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .export-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+    }
+    .export-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .export-card p {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .export-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .export-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+    .export-field .field-check { color: var(--accent); font-size: 14px; }
+    .export-field span { color: var(--muted); }
+
+    /* ── CTA bottom ────────────────────────────────────────────────────────── */
+    .cta-section {
+      text-align: center;
+    }
+    .cta-section h2 {
+      font-size: clamp(24px, 3vw, 36px);
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+    .cta-section p {
+      color: var(--muted);
+      font-size: 17px;
+      max-width: 560px;
+      margin: 0 auto 36px;
+    }
+    .install-commands {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 40px;
+    }
+    .install-cmd {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: border-color 0.2s;
+      min-width: 280px;
+    }
+    .install-cmd:hover { border-color: var(--accent2); }
+    .install-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--accent);
+      flex-shrink: 0;
+      width: 32px;
+    }
+    .install-cmd code {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--text);
+      flex: 1;
+    }
+    .install-copy {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    .install-cmd:hover .install-copy { color: var(--text); }
+
+    /* ── Mapping table ─────────────────────────────────────────────────────── */
+    .mapping-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-top: 32px;
+    }
+    .mapping-table th {
+      font-size: 11px;
+      font-family: var(--mono);
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      padding: 14px 16px;
+      border-bottom: 2px solid var(--border);
+      text-align: left;
+    }
+    .mapping-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .mapping-table tr:last-child td { border-bottom: none; }
+    .mapping-table .ref {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .mapping-table .feature {
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    /* ── Footer ────────────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .footer-logo {
+      font-family: var(--mono);
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .footer-links {
+      display: flex;
+      gap: 20px;
+      list-style: none;
+      font-size: 13px;
+    }
+    .footer-links a { color: var(--muted); }
+    .footer-links a:hover { color: var(--text); text-decoration: none; }
+    .footer-copy {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ── Responsive ────────────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      section { padding: 56px 0; }
+      .nav-links { gap: 16px; font-size: 13px; }
+      .hero { padding: 56px 0 48px; }
+      .urgency-bar { flex-direction: column; gap: 8px; padding: 12px 16px; }
+      .dash-stats { grid-template-columns: repeat(2, 1fr); }
+      .footer-inner { flex-direction: column; align-items: flex-start; }
+      .portal-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .nav-links { display: none; }
+      .cards { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Nav ───────────────────────────────────────────────────────────────── -->
+<nav>
+  <div class="container">
+    <div class="nav-inner">
+      <a href="/" class="nav-logo" style="text-decoration:none;">
+        grant<span>ex</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="https://docs.grantex.dev"
+               onclick="gtag('event','docs_click',{event_category:'nav'})">Docs</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex"
+               onclick="gtag('event','github_click',{event_category:'nav'})">GitHub</a></li>
+        <li><a href="/playground"
+               onclick="gtag('event','playground_click',{event_category:'nav'})">Playground</a></li>
+        <li><a href="https://www.npmjs.com/package/@grantex/sdk">npm</a></li>
+        <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
+        <li><a href="/dashboard" style="color:var(--accent);font-weight:600;">Dashboard</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Hero ──────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <div class="urgency-bar">
+      <div class="urgency-item">
+        <span class="urgency-dot warning"></span>
+        <span class="urgency-label">EU AI Act binding:</span>
+        <span class="urgency-value">August 2026</span>
+      </div>
+      <div class="urgency-item">
+        <span class="urgency-dot active"></span>
+        <span class="urgency-label">DPDP enforcement:</span>
+        <span class="urgency-value">Active</span>
+      </div>
+    </div>
+
+    <h1>AI Agent Compliance. Solved.</h1>
+    <p>
+      Meet India's DPDP Act 2023 and the EU AI Act for AI agent deployments.
+      Structured consent records, purpose limitation, right to withdrawal,
+      and audit-ready exports — built into the Grantex protocol.
+    </p>
+
+    <div class="hero-ctas">
+      <div class="install-hero" onclick="copyInstall('npm install @grantex/dpdp', this)"
+           title="Click to copy">
+        <span class="prefix">$</span>
+        npm install @grantex/dpdp
+        <span class="copy-hint">Copy</span>
+      </div>
+      <a href="https://docs.grantex.dev/features/dpdp-compliance" class="btn btn-secondary"
+         onclick="gtag('event','dpdp_docs_click',{event_category:'hero'})">
+        Read the Docs
+      </a>
+    </div>
+
+    <div class="trust-bar">
+      <span class="trust-badge"><span class="dot"></span> DPDP Act 2023</span>
+      <span class="trust-badge"><span class="dot"></span> EU AI Act</span>
+      <span class="trust-badge"><span class="dot"></span> OWASP Agentic Top 10</span>
+      <span class="trust-badge"><span class="dot"></span> Apache 2.0</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── Regulatory Coverage ──────────────────────────────────────────────── -->
+<section id="coverage">
+  <div class="container">
+    <div class="section-label">Regulatory Coverage</div>
+    <h2 class="section-title">Three frameworks. One integration.</h2>
+    <p class="section-sub">
+      Grantex maps your AI agent authorization infrastructure directly to regulatory requirements.
+      No separate compliance layer needed.
+    </p>
+
+    <div class="cards">
+      <!-- DPDP Act Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon dpdp">&#x1F1EE;&#x1F1F3;</div>
+          <h3>DPDP Act 2023</h3>
+        </div>
+        <p>
+          India's Digital Personal Data Protection Act creates specific obligations
+          for AI agents that process personal data of Indian residents.
+        </p>
+        <div class="card-sections">
+          <div class="card-section-item">
+            <span class="section-ref">S.6</span>
+            <span>Consent for personal data processing</span>
+          </div>
+          <div class="card-section-item">
+            <span class="section-ref">S.4</span>
+            <span>Purpose limitation and lawful processing</span>
+          </div>
+          <div class="card-section-item">
+            <span class="section-ref">S.6(6)</span>
+            <span>Right to withdraw consent</span>
+          </div>
+          <div class="card-section-item">
+            <span class="section-ref">S.11</span>
+            <span>Data principal rights</span>
+          </div>
+          <div class="card-section-item">
+            <span class="section-ref">S.8</span>
+            <span>Data fiduciary obligations</span>
+          </div>
+          <div class="card-section-item">
+            <span class="section-ref">S.13</span>
+            <span>Grievance redressal</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- EU AI Act Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon eu">&#x1F1EA;&#x1F1FA;</div>
+          <h3>EU AI Act</h3>
+        </div>
+        <p>
+          The world's first comprehensive AI regulation. Key provisions for
+          AI agent deployments become binding in August 2026.
+        </p>
+        <div class="card-sections">
+          <div class="card-section-item">
+            <span class="section-ref">Art. 9</span>
+            <span>Risk management systems</span>
+          </div>
+          <div class="card-section-item">
+            <span class="section-ref">Art. 13</span>
+            <span>Transparency and information</span>
+          </div>
+          <div class="card-section-item">
+            <span class="section-ref">Art. 14</span>
+            <span>Human oversight</span>
+          </div>
+          <div class="card-section-item">
+            <span class="section-ref">Art. 17</span>
+            <span>Quality management systems</span>
+          </div>
+          <div class="card-section-item">
+            <span class="section-ref">Art. 26</span>
+            <span>Deployer obligations</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- OWASP Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon owasp">&#x1F6E1;</div>
+          <h3>OWASP Agentic Top 10</h3>
+        </div>
+        <p>
+          The first industry threat taxonomy for AI agents. Published December 2025.
+          Four of ten risks directly addressed by authorization infrastructure.
+        </p>
+        <div class="card-sections">
+          <div class="card-section-item">
+            <span class="section-ref">ASI-01</span>
+            <span>Agent goal hijacking</span>
+          </div>
+          <div class="card-section-item">
+            <span class="section-ref">ASI-03</span>
+            <span>Identity and privilege abuse</span>
+          </div>
+          <div class="card-section-item">
+            <span class="section-ref">ASI-05</span>
+            <span>Privilege escalation</span>
+          </div>
+          <div class="card-section-item">
+            <span class="section-ref">ASI-10</span>
+            <span>Rogue agents (no revocation)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── What Grantex Does ────────────────────────────────────────────────── -->
+<section id="how">
+  <div class="container">
+    <div class="section-label">What Grantex Does</div>
+    <h2 class="section-title">Structured consent records for every grant</h2>
+    <p class="section-sub">
+      Every Grantex authorization creates a DPDPConsentRecord that maps directly to
+      DPDP Act requirements. No bolted-on compliance layer — it is the authorization layer.
+    </p>
+
+    <div class="code-section">
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-filename">create-consent.ts</span>
+          <span class="code-lang">TypeScript</span>
+        </div>
+        <pre><span class="kw">import</span> { <span class="id">DPDPClient</span> } <span class="kw">from</span> <span class="str">'@grantex/dpdp'</span>;
+
+<span class="kw">const</span> <span class="id">dpdp</span> = <span class="kw">new</span> <span class="fn">DPDPClient</span>({
+  <span class="id">apiKey</span>: process.env.<span class="id">GRANTEX_API_KEY</span>,
+});
+
+<span class="cm">// Create a DPDP-compliant consent record</span>
+<span class="kw">const</span> <span class="id">consent</span> = <span class="kw">await</span> <span class="id">dpdp</span>.<span class="fn">createConsentRecord</span>({
+  <span class="id">principalId</span>: <span class="str">'user_rajesh_kumar'</span>,
+  <span class="id">agentId</span>:     <span class="str">'ag_calendar_assistant'</span>,
+  <span class="id">purposes</span>: [
+    {
+      <span class="id">code</span>:        <span class="str">'calendar:read'</span>,
+      <span class="id">description</span>: <span class="str">'Read calendar events'</span>,
+      <span class="id">dpdpSection</span>: <span class="str">'S.4'</span>,
+      <span class="id">retention</span>:   <span class="str">'30d'</span>,
+    },
+    {
+      <span class="id">code</span>:        <span class="str">'calendar:write'</span>,
+      <span class="id">description</span>: <span class="str">'Create and modify events'</span>,
+      <span class="id">dpdpSection</span>: <span class="str">'S.4'</span>,
+      <span class="id">retention</span>:   <span class="str">'30d'</span>,
+    },
+  ],
+  <span class="id">consentNotice</span>: {
+    <span class="id">language</span>: <span class="str">'en'</span>,
+    <span class="id">text</span>: <span class="str">'This agent will access your calendar to schedule and manage meetings on your behalf.'</span>,
+  },
+  <span class="id">dataCategories</span>: [<span class="str">'schedule'</span>, <span class="str">'contacts'</span>],
+  <span class="id">crossBorder</span>:    <span class="kw">false</span>,
+});
+
+<span class="cm">// consent.id          → "cns_01HZ..."</span>
+<span class="cm">// consent.status      → "active"</span>
+<span class="cm">// consent.withdrawUrl → consent withdrawal endpoint</span>
+<span class="cm">// consent.grantId     → linked Grantex grant</span></pre>
+      </div>
+
+      <div class="explain-list">
+        <div class="explain-item">
+          <h4><span class="tag tag-dpdp">S.6</span> Structured Consent</h4>
+          <p>
+            Each consent record captures the specific data principal, the agent, the purposes,
+            and a plain-language consent notice. The record is immutable and timestamped.
+          </p>
+        </div>
+        <div class="explain-item">
+          <h4><span class="tag tag-dpdp">S.4</span> Purpose Limitation</h4>
+          <p>
+            Every purpose is tagged with its DPDP section reference and a retention period.
+            The agent can only access data for the declared purposes. Enforcement happens
+            at the grant token level — the JWT scopes match the declared purposes.
+          </p>
+        </div>
+        <div class="explain-item">
+          <h4><span class="tag tag-dpdp">S.6(6)</span> Right to Withdraw</h4>
+          <p>
+            Every consent record includes a withdrawal URL. Withdrawal triggers instant
+            revocation of the underlying Grantex grant, cascading to all delegated sub-agents.
+            The withdrawal is as easy as granting consent.
+          </p>
+        </div>
+        <div class="explain-item">
+          <h4><span class="tag tag-gdpr">Art. 15</span> Data Access</h4>
+          <p>
+            The consent record links to all audit entries for that grant. Data principals
+            can export their complete processing history via the portal or API.
+          </p>
+        </div>
+        <div class="explain-item">
+          <h4><span class="tag tag-euai">Art. 13</span> Transparency</h4>
+          <p>
+            The consent notice is stored alongside the technical authorization.
+            Auditors can verify that the user saw a clear explanation of what the agent does.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Compliance Dashboard ──────────────────────────────────────────────── -->
+<section id="dashboard">
+  <div class="container">
+    <div class="section-label">Compliance Dashboard</div>
+    <h2 class="section-title">Real-time compliance visibility</h2>
+    <p class="section-sub">
+      Monitor consent status, purpose adherence, and withdrawal rates across all agents and data principals.
+    </p>
+
+    <div class="dashboard-mockup">
+      <div class="dashboard-chrome">
+        <span class="chrome-dot r"></span>
+        <span class="chrome-dot y"></span>
+        <span class="chrome-dot g"></span>
+        <span class="chrome-url">grantex.dev/dashboard/compliance</span>
+      </div>
+      <div class="dashboard-body">
+        <div class="dash-header">
+          <div class="dash-title">DPDP Compliance Overview</div>
+          <div class="dash-filters">
+            <span class="dash-filter active">All Agents</span>
+            <span class="dash-filter">Active</span>
+            <span class="dash-filter">Withdrawn</span>
+            <span class="dash-filter">Expired</span>
+          </div>
+        </div>
+        <div class="dash-stats">
+          <div class="dash-stat">
+            <div class="dash-stat-number ok">847</div>
+            <div class="dash-stat-label">Active Consents</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-number">12</div>
+            <div class="dash-stat-label">Agents Deployed</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-number warn">23</div>
+            <div class="dash-stat-label">Withdrawals (30d)</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-number ok">100%</div>
+            <div class="dash-stat-label">Purpose Adherence</div>
+          </div>
+        </div>
+        <table class="dash-table">
+          <thead>
+            <tr>
+              <th>Agent</th>
+              <th>Principal</th>
+              <th>Purposes</th>
+              <th>Status</th>
+              <th>Granted</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="agent">calendar-assistant</td>
+              <td>rajesh.kumar@example.com</td>
+              <td style="font-family:var(--mono);font-size:11px;">calendar:read, calendar:write</td>
+              <td><span class="dash-badge active">Active</span></td>
+              <td style="font-family:var(--mono);font-size:11px;">2026-04-01</td>
+            </tr>
+            <tr>
+              <td class="agent">email-summarizer</td>
+              <td>priya.sharma@example.com</td>
+              <td style="font-family:var(--mono);font-size:11px;">email:read</td>
+              <td><span class="dash-badge active">Active</span></td>
+              <td style="font-family:var(--mono);font-size:11px;">2026-03-28</td>
+            </tr>
+            <tr>
+              <td class="agent">doc-analyzer</td>
+              <td>amit.patel@example.com</td>
+              <td style="font-family:var(--mono);font-size:11px;">files:read, files:analyze</td>
+              <td><span class="dash-badge withdrawn">Withdrawn</span></td>
+              <td style="font-family:var(--mono);font-size:11px;">2026-03-15</td>
+            </tr>
+            <tr>
+              <td class="agent">hr-assistant</td>
+              <td>deepa.nair@example.com</td>
+              <td style="font-family:var(--mono);font-size:11px;">employee:read, payroll:view</td>
+              <td><span class="dash-badge active">Active</span></td>
+              <td style="font-family:var(--mono);font-size:11px;">2026-03-10</td>
+            </tr>
+            <tr>
+              <td class="agent">travel-planner</td>
+              <td>vikram.singh@example.com</td>
+              <td style="font-family:var(--mono);font-size:11px;">calendar:read, travel:book</td>
+              <td><span class="dash-badge expired">Expired</span></td>
+              <td style="font-family:var(--mono);font-size:11px;">2026-02-20</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Data Principal Portal ─────────────────────────────────────────────── -->
+<section id="portal">
+  <div class="container">
+    <div class="section-label">Data Principal Portal</div>
+    <h2 class="section-title">Your users manage their own consent</h2>
+    <p class="section-sub">
+      DPDP Act Section 11 requires that data principals can access, correct, and withdraw
+      their consent at any time. Grantex provides this out of the box.
+    </p>
+
+    <div class="portal-grid">
+      <div class="portal-features">
+        <div class="portal-feature">
+          <span class="check">&#x2713;</span>
+          <div>
+            <h4>View all active consents</h4>
+            <p>
+              Data principals see every agent that has access to their data, what scopes
+              were granted, when consent was given, and retention periods.
+            </p>
+          </div>
+        </div>
+        <div class="portal-feature">
+          <span class="check">&#x2713;</span>
+          <div>
+            <h4>One-click withdrawal</h4>
+            <p>
+              Withdrawing consent is as easy as granting it. One click triggers instant revocation
+              of the underlying grant token, cascading to all delegated sub-agents.
+            </p>
+          </div>
+        </div>
+        <div class="portal-feature">
+          <span class="check">&#x2713;</span>
+          <div>
+            <h4>Processing history</h4>
+            <p>
+              View the complete audit trail of what each agent did with the granted access.
+              Hash-chained entries ensure the log cannot be tampered with.
+            </p>
+          </div>
+        </div>
+        <div class="portal-feature">
+          <span class="check">&#x2713;</span>
+          <div>
+            <h4>Data export</h4>
+            <p>
+              Export consent records, processing history, and agent metadata in
+              machine-readable JSON. Satisfies DPDP Section 11 and GDPR Article 20.
+            </p>
+          </div>
+        </div>
+        <div class="portal-feature">
+          <span class="check">&#x2713;</span>
+          <div>
+            <h4>Grievance submission</h4>
+            <p>
+              Integrated grievance form per DPDP Section 13. Data principals can flag
+              consent violations, and the system routes to the designated Data Protection Officer.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="portal-mockup">
+        <div style="font-size:14px;font-weight:600;margin-bottom:16px;">My AI Agent Consents</div>
+        <div class="portal-card">
+          <div class="portal-card-top">
+            <span class="portal-card-agent">Calendar Assistant</span>
+            <span class="dash-badge active">Active</span>
+          </div>
+          <div class="portal-card-scopes">
+            <span class="scope-tag">calendar:read</span>
+            <span class="scope-tag">calendar:write</span>
+          </div>
+          <div class="portal-card-meta">
+            Granted Apr 1, 2026 &middot; Retention: 30 days &middot; Purpose: Schedule management
+          </div>
+          <div class="portal-card-actions">
+            <span class="portal-btn">View activity</span>
+            <span class="portal-btn">Export data</span>
+            <span class="portal-btn danger">Withdraw consent</span>
+          </div>
+        </div>
+        <div class="portal-card">
+          <div class="portal-card-top">
+            <span class="portal-card-agent">Email Summarizer</span>
+            <span class="dash-badge active">Active</span>
+          </div>
+          <div class="portal-card-scopes">
+            <span class="scope-tag">email:read</span>
+          </div>
+          <div class="portal-card-meta">
+            Granted Mar 28, 2026 &middot; Retention: 7 days &middot; Purpose: Email digest
+          </div>
+          <div class="portal-card-actions">
+            <span class="portal-btn">View activity</span>
+            <span class="portal-btn">Export data</span>
+            <span class="portal-btn danger">Withdraw consent</span>
+          </div>
+        </div>
+        <div class="portal-card">
+          <div class="portal-card-top">
+            <span class="portal-card-agent">Document Analyzer</span>
+            <span class="dash-badge withdrawn">Withdrawn</span>
+          </div>
+          <div class="portal-card-scopes">
+            <span class="scope-tag">files:read</span>
+            <span class="scope-tag">files:analyze</span>
+          </div>
+          <div class="portal-card-meta">
+            Granted Mar 15, 2026 &middot; Withdrawn Mar 22, 2026
+          </div>
+          <div class="portal-card-actions">
+            <span class="portal-btn">View activity</span>
+            <span class="portal-btn">Export data</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── DPDP Section Mapping ──────────────────────────────────────────────── -->
+<section id="mapping">
+  <div class="container">
+    <div class="section-label">Section Mapping</div>
+    <h2 class="section-title">How Grantex maps to DPDP Act sections</h2>
+    <p class="section-sub">
+      Every DPDP obligation that applies to AI agent deployments has a corresponding
+      Grantex feature. No gaps, no manual processes.
+    </p>
+
+    <table class="mapping-table">
+      <thead>
+        <tr>
+          <th>DPDP Section</th>
+          <th>Obligation</th>
+          <th>Grantex Feature</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="ref">Section 4</td>
+          <td>Lawful purpose &mdash; personal data shall be processed only for a lawful purpose</td>
+          <td class="feature">Purpose-tagged consent records; JWT scp claim enforces scope at every API call</td>
+        </tr>
+        <tr>
+          <td class="ref">Section 5</td>
+          <td>Notice &mdash; data fiduciary must give notice before processing</td>
+          <td class="feature">Consent notice stored in DPDPConsentRecord; human-readable consent UI</td>
+        </tr>
+        <tr>
+          <td class="ref">Section 6</td>
+          <td>Consent &mdash; processing based on free, specific, informed consent</td>
+          <td class="feature">Structured consent flow; purpose-specific scope selection; immutable record</td>
+        </tr>
+        <tr>
+          <td class="ref">Section 6(6)</td>
+          <td>Withdrawal &mdash; consent withdrawal must be as easy as granting</td>
+          <td class="feature">One-click withdrawal in data principal portal; instant grant revocation</td>
+        </tr>
+        <tr>
+          <td class="ref">Section 8</td>
+          <td>Data fiduciary obligations &mdash; accuracy, storage limitation, security</td>
+          <td class="feature">Retention periods per purpose; auto-expiry; audit trail; encryption at rest</td>
+        </tr>
+        <tr>
+          <td class="ref">Section 8(7)</td>
+          <td>Grievance redressal &mdash; data fiduciary must have a grievance mechanism</td>
+          <td class="feature">Integrated grievance form in data principal portal; DPO routing</td>
+        </tr>
+        <tr>
+          <td class="ref">Section 9</td>
+          <td>Children's data &mdash; additional protections for minors</td>
+          <td class="feature">Age flag on consent records; separate approval flow for minor data principals</td>
+        </tr>
+        <tr>
+          <td class="ref">Section 11</td>
+          <td>Data principal rights &mdash; access, correction, erasure, portability</td>
+          <td class="feature">Self-service portal; JSON export; processing history; correction requests</td>
+        </tr>
+        <tr>
+          <td class="ref">Section 13</td>
+          <td>Grievance mechanism &mdash; respond within prescribed period</td>
+          <td class="feature">Grievance tracking with SLA timers; escalation to Data Protection Board</td>
+        </tr>
+        <tr>
+          <td class="ref">Section 16</td>
+          <td>Cross-border transfer &mdash; restrictions on data transfer outside India</td>
+          <td class="feature">crossBorder flag on consent records; data residency controls in grant tokens</td>
+        </tr>
+        <tr>
+          <td class="ref">Section 17</td>
+          <td>Data Protection Board &mdash; regulatory oversight and penalties</td>
+          <td class="feature">Audit export packages formatted for Board inspection requirements</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ── Export & Audit ────────────────────────────────────────────────────── -->
+<section id="exports">
+  <div class="container">
+    <div class="section-label">Export &amp; Audit</div>
+    <h2 class="section-title">Audit-ready exports for every framework</h2>
+    <p class="section-sub">
+      Generate compliance evidence packages formatted for DPDP, GDPR, and EU AI Act requirements.
+      One API call, framework-specific output.
+    </p>
+
+    <div class="export-cards">
+      <div class="export-card">
+        <h3>DPDP Audit Export</h3>
+        <p>
+          Complete consent and processing records formatted for India's Data Protection Board.
+          Includes all mandatory fields from Sections 6, 8, 11, and 13.
+        </p>
+        <div class="export-fields">
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Consent records with purpose mapping</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Data principal consent notices (original text)</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Withdrawal timestamps and cascaded revocations</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Grievance log with response SLAs</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Data retention compliance status</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Cross-border transfer declarations</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="export-card">
+        <h3>GDPR Article 15 Export</h3>
+        <p>
+          Subject access request response package. All data processing activities
+          related to a specific data principal, formatted per Article 15 requirements.
+        </p>
+        <div class="export-fields">
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Processing purposes and legal basis</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Categories of personal data processed</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Recipients and third-party access</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Retention periods per purpose</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Agent delegation chain (all sub-agents)</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Automated decision-making disclosure</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="export-card">
+        <h3>EU AI Act Conformance Report</h3>
+        <p>
+          Technical documentation per Articles 9, 13, and 17. Maps your
+          Grantex configuration to EU AI Act conformity requirements.
+        </p>
+        <div class="export-fields">
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Risk management controls (Art. 9)</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Transparency evidence (Art. 13)</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Human oversight mechanisms (Art. 14)</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Quality management documentation (Art. 17)</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Deployer obligation checklist (Art. 26)</span>
+          </div>
+          <div class="export-field">
+            <span class="field-check">&#x2713;</span>
+            <span>Anomaly detection and incident reports</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-block" style="margin-top:32px;max-width:600px;">
+      <div class="code-header">
+        <span class="code-filename">export-audit.ts</span>
+        <span class="code-lang">TypeScript</span>
+      </div>
+      <pre><span class="cm">// Generate a DPDP audit export</span>
+<span class="kw">const</span> <span class="id">pack</span> = <span class="kw">await</span> <span class="id">dpdp</span>.<span class="fn">exportAudit</span>({
+  <span class="id">framework</span>: <span class="str">'dpdp'</span>,
+  <span class="id">dateRange</span>: { <span class="id">from</span>: <span class="str">'2026-01-01'</span>, <span class="id">to</span>: <span class="str">'2026-04-01'</span> },
+  <span class="id">format</span>:    <span class="str">'json'</span>,  <span class="cm">// or 'csv', 'pdf'</span>
+});
+
+<span class="cm">// Also available: 'gdpr', 'eu-ai-act'</span>
+<span class="kw">const</span> <span class="id">gdprPack</span> = <span class="kw">await</span> <span class="id">dpdp</span>.<span class="fn">exportAudit</span>({
+  <span class="id">framework</span>:   <span class="str">'gdpr'</span>,
+  <span class="id">principalId</span>: <span class="str">'user_rajesh_kumar'</span>,
+  <span class="id">format</span>:      <span class="str">'json'</span>,
+});</pre>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA Bottom ────────────────────────────────────────────────────────── -->
+<section class="cta-section">
+  <div class="container">
+    <h2>Start building compliant AI agents today</h2>
+    <p>
+      The DPDP Act is active now. The EU AI Act is binding August 2026.
+      Grantex gives you the compliance infrastructure so you can focus on shipping.
+    </p>
+
+    <div class="install-commands">
+      <div class="install-cmd" onclick="copyInstall('npm install @grantex/dpdp', this)">
+        <span class="install-label">npm</span>
+        <code>npm install @grantex/dpdp</code>
+        <span class="install-copy">Copy</span>
+      </div>
+      <div class="install-cmd" onclick="copyInstall('pip install grantex-dpdp', this)">
+        <span class="install-label">pip</span>
+        <code>pip install grantex-dpdp</code>
+        <span class="install-copy">Copy</span>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+      <a href="https://docs.grantex.dev/features/dpdp-compliance" class="btn btn-primary"
+         onclick="gtag('event','dpdp_docs_bottom_click',{event_category:'cta'})">
+        Read the docs &rarr;
+      </a>
+      <a href="https://docs.grantex.dev/compliance/dpdp-act-2023" class="btn btn-secondary"
+         onclick="gtag('event','dpdp_compliance_click',{event_category:'cta'})">
+        DPDP Act mapping
+      </a>
+      <a href="https://docs.grantex.dev/compliance/eu-ai-act" class="btn btn-secondary"
+         onclick="gtag('event','eu_ai_act_click',{event_category:'cta'})">
+        EU AI Act mapping
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex" class="btn btn-secondary"
+         onclick="gtag('event','github_bottom_click',{event_category:'cta'})">
+        View on GitHub
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ─────────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <span class="footer-logo">grantex</span>
+      <ul class="footer-links">
+        <li><a href="https://docs.grantex.dev">Docs</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+        <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
+        <li><a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">IETF Draft</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
+      </ul>
+      <span class="footer-copy">&copy; 2026 Grantex</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ── Scripts ────────────────────────────────────────────────────────────── -->
+<script>
+  /* Install command copy */
+  function copyInstall(text, el) {
+    navigator.clipboard.writeText(text).then(() => {
+      var copyEl = el.querySelector('.install-copy') || el.querySelector('.copy-hint');
+      if (copyEl) {
+        var orig = copyEl.textContent;
+        copyEl.textContent = 'Copied!';
+        setTimeout(() => { copyEl.textContent = orig; }, 2000);
+      }
+    });
+    if (typeof gtag !== 'undefined') {
+      gtag('event', 'install_copy', { event_category: 'dpdp', event_label: text });
+    }
+  }
+</script>
+
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-DNXYVLS5NY');
+</script>
+
+</body>
+</html>
