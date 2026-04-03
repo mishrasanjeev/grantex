@@ -1,0 +1,37 @@
+---
+title: "DPDP & GDPR Compliance"
+sidebarTitle: "DPDP / GDPR"
+description: "India DPDP Act 2023 and EU GDPR compliance module for AI agent deployments — consent records, purpose limitation, grievances, and audit exports."
+---
+
+<Info>Full feature guide: [DPDP Compliance](/features/dpdp-compliance) | Regulatory reference: [DPDP Act 2023](/compliance/dpdp-act-2023)</Info>
+
+## Overview
+
+The Grantex DPDP module provides structured compliance tooling for AI agent deployments under the India Digital Personal Data Protection Act 2023 and the EU GDPR. It manages consent records, purpose limitation, right to withdrawal, grievance handling, and audit-ready exports.
+
+### Key Capabilities
+
+- **Consent records** — link consent to grants with purpose codes, processing expiry, and retention periods
+- **Consent notices** — versioned, content-hashed notices with grievance officer details
+- **Right to withdrawal** — withdraw consent with optional grant revocation and data deletion
+- **Grievance filing** — structured grievance workflow with reference numbers and SLA tracking
+- **Compliance exports** — DPDP audit, GDPR Article 15, and EU AI Act conformance reports
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/dpdp/consent-records` | Create consent record |
+| `POST` | `/v1/dpdp/consent-records/:id/withdraw` | Withdraw consent |
+| `GET` | `/v1/dpdp/data-principals/:id/records` | Data principal access |
+| `POST` | `/v1/dpdp/consent-notices` | Create consent notice |
+| `POST` | `/v1/dpdp/grievances` | File grievance |
+| `GET` | `/v1/dpdp/grievances/:id` | Get grievance status |
+| `POST` | `/v1/dpdp/exports` | Generate compliance export |
+
+## Links
+
+- [Full Feature Guide](/features/dpdp-compliance)
+- [DPDP Act 2023 Reference](/compliance/dpdp-act-2023)
+- [EU AI Act Reference](/compliance/eu-ai-act)
