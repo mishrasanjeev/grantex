@@ -1,5 +1,13 @@
 import type { Grantex } from '@grantex/sdk';
 
+export interface TokenIssuedEvent {
+  accessToken: string;
+  clientId: string;
+  scopes: string[];
+  grantId: string;
+  agentDid: string;
+}
+
 export interface McpAuthConfig {
   /** Grantex SDK client instance */
   grantex: Grantex;
@@ -17,6 +25,18 @@ export interface McpAuthConfig {
   clientStore?: ClientStore;
   /** Code expiration in seconds (default: 600) */
   codeExpirationSeconds?: number;
+  /** Consent UI customization */
+  consentUi?: {
+    appName?: string;
+    appLogo?: string;
+    privacyUrl?: string;
+    termsUrl?: string;
+  };
+  /** Lifecycle hooks */
+  hooks?: {
+    onTokenIssued?: (event: TokenIssuedEvent) => Promise<void>;
+    onRevocation?: (jti: string) => Promise<void>;
+  };
 }
 
 export interface ClientRegistration {

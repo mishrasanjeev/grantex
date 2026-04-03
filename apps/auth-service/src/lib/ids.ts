@@ -28,3 +28,5 @@ export const newSsoConnectionId = (): string => `sso_${ulid()}`;
 export const newSsoSessionId = (): string => `ssosess_${ulid()}`;
 export const newConsentBundleId = (): string => `bundle_${ulid()}`;
 export const newOfflineAuditEntryId = (): string => `oae_${ulid()}`;
+export const newMcpServerId = (): string => `mcp_srv_${ulid()}`;
+export const newCertificationId = (): string => `cert_${ulid()}`;
