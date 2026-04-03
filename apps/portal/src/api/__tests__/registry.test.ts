@@ -37,25 +37,25 @@ describe('registry', () => {
   it('searchRegistryOrgs with q param', async () => {
     ok({ data: [], meta: { total: 0 } });
     await searchRegistryOrgs({ q: 'test' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/registry/orgs?q=test');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/registry/orgs?q=test');
   });
 
   it('searchRegistryOrgs with verified param', async () => {
     ok({ data: [], meta: { total: 0 } });
     await searchRegistryOrgs({ verified: true });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/registry/orgs?verified=true');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/registry/orgs?verified=true');
   });
 
   it('searchRegistryOrgs with badge param', async () => {
     ok({ data: [], meta: { total: 0 } });
     await searchRegistryOrgs({ badge: 'gold' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/registry/orgs?badge=gold');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/registry/orgs?badge=gold');
   });
 
   it('searchRegistryOrgs with all params', async () => {
     ok({ data: [], meta: { total: 0 } });
     await searchRegistryOrgs({ q: 'acme', verified: true, badge: 'silver' });
-    const url = mockFetch.mock.calls[0][0];
+    const url = mockFetch.mock.calls[0]![0];
     expect(url).toContain('q=acme');
     expect(url).toContain('verified=true');
     expect(url).toContain('badge=silver');
@@ -103,7 +103,7 @@ describe('registry', () => {
     ok({ ...params, verificationLevel: 'none', badges: [], agents: [] });
     const result = await registerOrg(params);
     expect(result.did).toBe('did:web:neworg.com');
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/registry/orgs');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(params);
@@ -120,7 +120,7 @@ describe('registry', () => {
     ok({ verified: true });
     const result = await verifyOrgDns('org-1');
     expect(result).toEqual({ verified: true });
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/registry/orgs/org-1/verify-dns');
     expect(opts.method).toBe('POST');
   });
@@ -128,7 +128,7 @@ describe('registry', () => {
   it('verifyOrgDns encodes orgId', async () => {
     ok({ verified: false });
     await verifyOrgDns('org/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/registry/orgs/org%2F1/verify-dns');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/registry/orgs/org%2F1/verify-dns');
   });
 
   it('verifyOrgDns throws on error', async () => {

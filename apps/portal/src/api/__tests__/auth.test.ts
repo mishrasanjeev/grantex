@@ -47,7 +47,7 @@ describe('auth', () => {
     ok(resp);
     const result = await signup(req);
     expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/signup');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(req);
@@ -64,7 +64,7 @@ describe('auth', () => {
     ok({ message: 'Verification email sent', expiresAt: '2026-04-04T00:00:00Z' });
     const result = await sendVerificationEmail('test@test.com');
     expect(result.message).toBe('Verification email sent');
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/signup/verify');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual({ email: 'test@test.com' });
@@ -82,7 +82,7 @@ describe('auth', () => {
     ok(resp);
     const result = await rotateKey();
     expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/keys/rotate');
     expect(opts.method).toBe('POST');
   });

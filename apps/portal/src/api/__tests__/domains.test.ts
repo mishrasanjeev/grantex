@@ -48,7 +48,7 @@ describe('domains', () => {
     ok(domain);
     const result = await createDomain('new.dev');
     expect(result).toEqual(domain);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/domains');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual({ domain: 'new.dev' });
@@ -65,7 +65,7 @@ describe('domains', () => {
     ok({ verified: true });
     const result = await verifyDomain('d1');
     expect(result).toEqual({ verified: true });
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/domains/d1/verify');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual({});
@@ -74,7 +74,7 @@ describe('domains', () => {
   it('verifyDomain encodes id', async () => {
     ok({ verified: false });
     await verifyDomain('d/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/domains/d%2F1/verify');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/domains/d%2F1/verify');
   });
 
   it('verifyDomain throws on error', async () => {

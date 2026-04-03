@@ -1,44 +1,25 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CopyButton } from '../ui/CopyButton';
 
 describe('CopyButton', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('renders with Copy text initially', () => {
     render(<CopyButton text="some-value" />);
     expect(screen.getByText('Copy')).toBeInTheDocument();
   });
 
-  it('shows Copied! feedback when clicked (proves clipboard writeText was called)', async () => {
+  it('shows Copied! feedback when clicked', async () => {
     const user = userEvent.setup();
     render(<CopyButton text="gx_live_abc" />);
     await user.click(screen.getByText('Copy'));
-    // If clipboard.writeText was not called or failed, Copied! would not appear
     await waitFor(() => {
       expect(screen.getByText('Copied!')).toBeInTheDocument();
     });
-  });
-
-  it('reverts back to Copy after 2 seconds', async () => {
-    vi.useFakeTimers();
-    const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
-    render(<CopyButton text="token" />);
-    await user.click(screen.getByText('Copy'));
-    await vi.runAllTicksAsync();
-    expect(screen.getByText('Copied!')).toBeInTheDocument();
-
-    act(() => {
-      vi.advanceTimersByTime(2100);
-    });
-
-    expect(screen.getByText('Copy')).toBeInTheDocument();
-    vi.useRealTimers();
-  });
-
-  it('applies custom className', () => {
-    render(<CopyButton text="val" className="ml-2" />);
-    const btn = screen.getByText('Copy');
-    expect(btn).toHaveClass('ml-2');
   });
 
   it('changes styling to accent when copied', async () => {
@@ -50,6 +31,28 @@ describe('CopyButton', () => {
       expect(el).toHaveClass('border-gx-accent');
       expect(el).toHaveClass('text-gx-accent');
     });
+  });
+
+  it('reverts back to Copy after 2 seconds', async () => {
+    vi.useFakeTimers();
+    render(<CopyButton text="token" />);
+    // Use fireEvent to avoid userEvent + fake timers conflict
+    fireEvent.click(screen.getByText('Copy'));
+    // Flush microtasks from clipboard promise
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.getByText('Copied!')).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(2100);
+    });
+
+    expect(screen.getByText('Copy')).toBeInTheDocument();
+  });
+
+  it('applies custom className', () => {
+    render(<CopyButton text="val" className="ml-2" />);
+    const btn = screen.getByText('Copy');
+    expect(btn).toHaveClass('ml-2');
   });
 
   it('has muted styling before copying', () => {

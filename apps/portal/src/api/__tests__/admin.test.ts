@@ -74,7 +74,7 @@ describe('admin', () => {
     ok(stats);
     const result = await fetchStats();
     expect(result).toEqual(stats);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/admin/stats');
     expect(opts.method).toBe('GET');
     expect(opts.headers['Authorization']).toBe('Bearer admin-key');
@@ -119,7 +119,7 @@ describe('admin', () => {
     setAdminKey('my-admin-key');
     ok({ developers: [], total: 0, page: 1, pageSize: 50 });
     await fetchDevelopers();
-    const opts = mockFetch.mock.calls[0][1];
+    const opts = mockFetch.mock.calls[0]![1];
     expect(opts.headers['Authorization']).toBe('Bearer my-admin-key');
   });
 

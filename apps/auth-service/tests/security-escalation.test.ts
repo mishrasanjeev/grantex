@@ -11,7 +11,6 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import {
   buildTestApp,
   seedAuth,
-  seedSandboxAuth,
   authHeader,
   sqlMock,
   mockRedis,

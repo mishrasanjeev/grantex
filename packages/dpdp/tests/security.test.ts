@@ -4,7 +4,6 @@ import {
   computeNoticeHash,
   ConsentRegistry,
   withdrawConsent,
-  WithdrawalError,
 } from '../src/index.js';
 import type { DPDPConsentRecord } from '../src/index.js';
 

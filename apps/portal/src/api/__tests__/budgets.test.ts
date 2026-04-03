@@ -51,7 +51,7 @@ describe('budgets', () => {
   it('getBudget encodes grantId', async () => {
     ok({ id: 'b1' });
     await getBudget('g/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/budget/balance/g%2F1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/budget/balance/g%2F1');
   });
 
   it('getBudget throws on 404', async () => {
@@ -84,7 +84,7 @@ describe('budgets', () => {
   it('listTransactions encodes grantId', async () => {
     ok({ transactions: [], total: 0 });
     await listTransactions('g/1', 1, 20);
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/budget/transactions/g%2F1?page=1&pageSize=20');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/budget/transactions/g%2F1?page=1&pageSize=20');
   });
 
   it('listTransactions throws on error', async () => {

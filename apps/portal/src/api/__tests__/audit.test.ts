@@ -36,31 +36,31 @@ describe('audit', () => {
   it('listAuditEntries with agentId param', async () => {
     ok({ entries: [] });
     await listAuditEntries({ agentId: 'agent-1' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/audit/entries?agentId=agent-1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/audit/entries?agentId=agent-1');
   });
 
   it('listAuditEntries with grantId param', async () => {
     ok({ entries: [] });
     await listAuditEntries({ grantId: 'g1' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/audit/entries?grantId=g1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/audit/entries?grantId=g1');
   });
 
   it('listAuditEntries with principalId param', async () => {
     ok({ entries: [] });
     await listAuditEntries({ principalId: 'p1' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/audit/entries?principalId=p1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/audit/entries?principalId=p1');
   });
 
   it('listAuditEntries with action param', async () => {
     ok({ entries: [] });
     await listAuditEntries({ action: 'token.verify' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/audit/entries?action=token.verify');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/audit/entries?action=token.verify');
   });
 
   it('listAuditEntries with multiple params', async () => {
     ok({ entries: [] });
     await listAuditEntries({ agentId: 'a1', action: 'grant.revoke' });
-    const url = mockFetch.mock.calls[0][0];
+    const url = mockFetch.mock.calls[0]![0];
     expect(url).toContain('agentId=a1');
     expect(url).toContain('action=grant.revoke');
   });
@@ -82,7 +82,7 @@ describe('audit', () => {
   it('getAuditEntry encodes id', async () => {
     ok({ id: 'e/1' });
     await getAuditEntry('e/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/audit/e%2F1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/audit/e%2F1');
   });
 
   it('getAuditEntry throws on 404', async () => {

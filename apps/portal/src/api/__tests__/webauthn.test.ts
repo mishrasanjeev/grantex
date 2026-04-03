@@ -42,7 +42,7 @@ describe('webauthn', () => {
   it('listWebAuthnCredentials encodes principalId', async () => {
     ok({ credentials: [] });
     await listWebAuthnCredentials('p/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/webauthn/credentials?principalId=p%2F1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/webauthn/credentials?principalId=p%2F1');
   });
 
   it('listWebAuthnCredentials throws on error', async () => {
@@ -64,7 +64,7 @@ describe('webauthn', () => {
   it('deleteWebAuthnCredential encodes id', async () => {
     noContent();
     await deleteWebAuthnCredential('wc/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/webauthn/credentials/wc%2F1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/webauthn/credentials/wc%2F1');
   });
 
   it('deleteWebAuthnCredential throws on error', async () => {

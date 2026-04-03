@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthProvider, useAuth } from '../auth';
 
@@ -145,13 +145,6 @@ describe('Auth store', () => {
   it('handles login failure by propagating error', async () => {
     mockGetMe.mockRejectedValue(new Error('Invalid API key'));
     const user = userEvent.setup();
-
-    // We need a component that catches the error
-    function ErrorCatcher() {
-      const { login } = useAuth();
-      const [error, setError] = vi.importActual<typeof import('react')>('react').then ? null : null;
-      return null;
-    }
 
     // Just verify the mock rejects - the login function propagates errors
     renderAuthHarness();

@@ -71,7 +71,7 @@ describe('agents', () => {
     ok(created);
     const result = await createAgent(data as any);
     expect(result).toEqual(created);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/agents');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
@@ -88,7 +88,7 @@ describe('agents', () => {
     const data = { name: 'Updated' };
     ok({ agentId: 'a1', name: 'Updated' });
     await updateAgent('a1', data);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/agents/a1');
     expect(opts.method).toBe('PATCH');
     expect(JSON.parse(opts.body)).toEqual(data);

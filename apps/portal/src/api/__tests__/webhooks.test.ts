@@ -49,7 +49,7 @@ describe('webhooks', () => {
     ok(resp);
     const result = await createWebhook(data);
     expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/webhooks');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
@@ -71,7 +71,7 @@ describe('webhooks', () => {
   it('deleteWebhook encodes id', async () => {
     noContent();
     await deleteWebhook('wh/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/webhooks/wh%2F1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/webhooks/wh%2F1');
   });
 
   it('deleteWebhook throws on error', async () => {
@@ -95,7 +95,7 @@ describe('webhooks', () => {
   it('listDeliveries with page and pageSize', async () => {
     ok({ deliveries: [], total: 0, page: 2, pageSize: 10 });
     await listDeliveries('wh1', { page: 2, pageSize: 10 });
-    const url = mockFetch.mock.calls[0][0];
+    const url = mockFetch.mock.calls[0]![0];
     expect(url).toContain('page=2');
     expect(url).toContain('pageSize=10');
   });
@@ -103,13 +103,13 @@ describe('webhooks', () => {
   it('listDeliveries with status filter', async () => {
     ok({ deliveries: [], total: 0, page: 1, pageSize: 20 });
     await listDeliveries('wh1', { status: 'failed' });
-    expect(mockFetch.mock.calls[0][0]).toContain('status=failed');
+    expect(mockFetch.mock.calls[0]![0]).toContain('status=failed');
   });
 
   it('listDeliveries encodes webhookId', async () => {
     ok({ deliveries: [], total: 0, page: 1, pageSize: 20 });
     await listDeliveries('wh/1');
-    expect(mockFetch.mock.calls[0][0]).toContain('/v1/webhooks/wh%2F1/deliveries');
+    expect(mockFetch.mock.calls[0]![0]).toContain('/v1/webhooks/wh%2F1/deliveries');
   });
 
   it('listDeliveries throws on error', async () => {

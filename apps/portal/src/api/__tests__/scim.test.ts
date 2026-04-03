@@ -48,7 +48,7 @@ describe('scim', () => {
     ok(resp);
     const result = await createScimToken({ label: 'Deploy' });
     expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/scim/tokens');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual({ label: 'Deploy' });
@@ -70,7 +70,7 @@ describe('scim', () => {
   it('deleteScimToken encodes id', async () => {
     noContent();
     await deleteScimToken('t/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/scim/tokens/t%2F1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/scim/tokens/t%2F1');
   });
 
   it('deleteScimToken throws on 404', async () => {

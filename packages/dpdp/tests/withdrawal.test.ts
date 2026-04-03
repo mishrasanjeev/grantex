@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   withdrawConsent,
   ConsentRegistry,
-  WithdrawalError,
   checkPurposeCompliance,
 } from '../src/index.js';
 import type { DPDPConsentRecord } from '../src/index.js';

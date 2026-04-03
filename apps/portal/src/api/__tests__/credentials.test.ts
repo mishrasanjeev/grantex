@@ -36,19 +36,19 @@ describe('credentials', () => {
   it('listCredentials with grantId param', async () => {
     ok({ credentials: [] });
     await listCredentials({ grantId: 'g1' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/credentials?grantId=g1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/credentials?grantId=g1');
   });
 
   it('listCredentials with status param', async () => {
     ok({ credentials: [] });
     await listCredentials({ status: 'active' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/credentials?status=active');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/credentials?status=active');
   });
 
   it('listCredentials with both params', async () => {
     ok({ credentials: [] });
     await listCredentials({ grantId: 'g1', status: 'revoked' });
-    const url = mockFetch.mock.calls[0][0];
+    const url = mockFetch.mock.calls[0]![0];
     expect(url).toContain('grantId=g1');
     expect(url).toContain('status=revoked');
   });
@@ -71,7 +71,7 @@ describe('credentials', () => {
   it('getCredential encodes id', async () => {
     ok({ id: 'vc/1' });
     await getCredential('vc/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/credentials/vc%2F1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/credentials/vc%2F1');
   });
 
   it('getCredential throws on 404', async () => {

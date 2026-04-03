@@ -36,19 +36,19 @@ describe('bundles', () => {
   it('listBundles with status param', async () => {
     ok({ bundles: [] });
     await listBundles({ status: 'revoked' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/consent-bundles?status=revoked');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/consent-bundles?status=revoked');
   });
 
   it('listBundles with agentId param', async () => {
     ok({ bundles: [] });
     await listBundles({ agentId: 'agent-1' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/consent-bundles?agentId=agent-1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/consent-bundles?agentId=agent-1');
   });
 
   it('listBundles with both params', async () => {
     ok({ bundles: [] });
     await listBundles({ status: 'active', agentId: 'a1' });
-    const url = mockFetch.mock.calls[0][0];
+    const url = mockFetch.mock.calls[0]![0];
     expect(url).toContain('status=active');
     expect(url).toContain('agentId=a1');
   });
@@ -70,7 +70,7 @@ describe('bundles', () => {
   it('getBundle encodes id', async () => {
     ok({ id: 'cb/1' });
     await getBundle('cb/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/consent-bundles/cb%2F1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/consent-bundles/cb%2F1');
   });
 
   it('getBundle throws on 404', async () => {
@@ -86,7 +86,7 @@ describe('bundles', () => {
     ok(resp);
     const result = await createBundle(params);
     expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/consent-bundles');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(params);
@@ -102,7 +102,7 @@ describe('bundles', () => {
   it('revokeBundle sends POST /v1/consent-bundles/:id/revoke', async () => {
     ok(undefined);
     await revokeBundle('cb1');
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/consent-bundles/cb1/revoke');
     expect(opts.method).toBe('POST');
   });
@@ -127,7 +127,7 @@ describe('bundles', () => {
   it('getBundleAuditEntries encodes id', async () => {
     ok({ entries: [] });
     await getBundleAuditEntries('cb/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/consent-bundles/cb%2F1/audit');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/consent-bundles/cb%2F1/audit');
   });
 
   it('getBundleAuditEntries throws on error', async () => {

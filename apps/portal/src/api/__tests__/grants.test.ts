@@ -39,21 +39,21 @@ describe('grants', () => {
   it('listGrants with agentId adds query param', async () => {
     ok({ grants: [] });
     await listGrants({ agentId: 'agent-1' });
-    const url = mockFetch.mock.calls[0][0];
+    const url = mockFetch.mock.calls[0]![0];
     expect(url).toBe('http://localhost:3000/v1/grants?agentId=agent-1');
   });
 
   it('listGrants with status adds query param', async () => {
     ok({ grants: [] });
     await listGrants({ status: 'active' });
-    const url = mockFetch.mock.calls[0][0];
+    const url = mockFetch.mock.calls[0]![0];
     expect(url).toBe('http://localhost:3000/v1/grants?status=active');
   });
 
   it('listGrants with both params adds both', async () => {
     ok({ grants: [] });
     await listGrants({ agentId: 'a1', status: 'revoked' });
-    const url = mockFetch.mock.calls[0][0];
+    const url = mockFetch.mock.calls[0]![0];
     expect(url).toContain('agentId=a1');
     expect(url).toContain('status=revoked');
   });

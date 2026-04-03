@@ -66,7 +66,7 @@ describe('GrantDetail', () => {
     await waitFor(() => {
       const links = screen.getAllByText('a1');
       const link = links.find(l => l.closest('a'));
-      expect(link.closest('a')).toHaveAttribute('href', '/dashboard/agents/a1');
+      expect(link!.closest('a')).toHaveAttribute('href', '/dashboard/agents/a1');
     });
   });
 

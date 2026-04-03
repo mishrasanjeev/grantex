@@ -5,9 +5,8 @@ import {
   requestEuAiActExport,
   getExportStatus,
   EU_AI_ACT_ARTICLES,
-  ExportError,
 } from '../src/index.js';
-import type { ComplianceExportRequest, ComplianceExportResult } from '../src/index.js';
+import type { ComplianceExportRequest } from '../src/index.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

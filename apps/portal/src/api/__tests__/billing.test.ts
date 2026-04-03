@@ -51,7 +51,7 @@ describe('billing', () => {
     ok({ checkoutUrl: 'https://stripe.com/checkout/123' });
     const result = await createCheckout('pro');
     expect(result).toEqual({ checkoutUrl: 'https://stripe.com/checkout/123' });
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/billing/checkout');
     expect(opts.method).toBe('POST');
     const body = JSON.parse(opts.body);
@@ -71,7 +71,7 @@ describe('billing', () => {
     ok({ portalUrl: 'https://billing.stripe.com/portal/123' });
     const result = await getPortalUrl();
     expect(result).toEqual({ portalUrl: 'https://billing.stripe.com/portal/123' });
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/billing/portal');
     expect(opts.method).toBe('POST');
     const body = JSON.parse(opts.body);

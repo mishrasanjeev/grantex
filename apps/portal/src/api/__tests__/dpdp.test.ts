@@ -47,7 +47,7 @@ describe('dpdp', () => {
     ok(resp);
     const result = await createConsentRecord(data);
     expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/dpdp/consent-records');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
@@ -66,7 +66,7 @@ describe('dpdp', () => {
     ok(resp);
     const result = await withdrawConsent('cr1', data);
     expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/dpdp/consent-records/cr1/withdraw');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
@@ -75,7 +75,7 @@ describe('dpdp', () => {
   it('withdrawConsent encodes recordId', async () => {
     ok({ recordId: 'cr/1', status: 'withdrawn' });
     await withdrawConsent('cr/1', { reason: 'test' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/dpdp/consent-records/cr%2F1/withdraw');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/dpdp/consent-records/cr%2F1/withdraw');
   });
 
   it('withdrawConsent throws on 404', async () => {
@@ -99,7 +99,7 @@ describe('dpdp', () => {
   it('getDataPrincipalRecords encodes principalId', async () => {
     ok({ dataPrincipalId: 'dp/1', records: [], totalRecords: 0 });
     await getDataPrincipalRecords('dp/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/dpdp/data-principals/dp%2F1/records');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/dpdp/data-principals/dp%2F1/records');
   });
 
   it('getDataPrincipalRecords throws on error', async () => {
@@ -121,7 +121,7 @@ describe('dpdp', () => {
     ok(resp);
     const result = await createConsentNotice(data);
     expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/dpdp/consent-notices');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
@@ -140,7 +140,7 @@ describe('dpdp', () => {
     ok(resp);
     const result = await fileGrievance(data);
     expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/dpdp/grievances');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
@@ -167,7 +167,7 @@ describe('dpdp', () => {
   it('getGrievance encodes id', async () => {
     ok({ grievanceId: 'gr/1' });
     await getGrievance('gr/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/dpdp/grievances/gr%2F1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/dpdp/grievances/gr%2F1');
   });
 
   it('getGrievance throws on 404', async () => {
@@ -183,7 +183,7 @@ describe('dpdp', () => {
     ok(resp);
     const result = await createExport(data);
     expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/dpdp/exports');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
@@ -210,7 +210,7 @@ describe('dpdp', () => {
   it('getExport encodes id', async () => {
     ok({ exportId: 'ex/1' });
     await getExport('ex/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/dpdp/exports/ex%2F1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/dpdp/exports/ex%2F1');
   });
 
   it('getExport throws on 404', async () => {

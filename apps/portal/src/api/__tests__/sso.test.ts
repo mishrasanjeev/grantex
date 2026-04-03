@@ -61,7 +61,7 @@ describe('sso', () => {
     };
     ok({ issuerUrl: data.issuerUrl, clientId: data.clientId, redirectUri: data.redirectUri });
     await saveSsoConfig(data);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/sso/config');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
@@ -107,7 +107,7 @@ describe('sso', () => {
     ok({ id: 'conn-1', ...data, status: 'active' });
     const result = await createSsoConnection(data);
     expect(result.id).toBe('conn-1');
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/sso/connections');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
@@ -138,7 +138,7 @@ describe('sso', () => {
     ok(testResult);
     const result = await testSsoConnection('conn-1');
     expect(result).toEqual(testResult);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/sso/connections/conn-1/test');
     expect(opts.method).toBe('POST');
   });

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import { ToastProvider, useToast } from '../toast';
 
 // Helper component that exposes the toast API for testing
@@ -45,55 +44,47 @@ describe('Toast store', () => {
     expect(screen.getByTestId('toast-count')).toHaveTextContent('0');
   });
 
-  it('adds a toast when show is called', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it('adds a toast when show is called', () => {
     renderToastHarness();
-    await user.click(screen.getByText('Show Info'));
+    fireEvent.click(screen.getByText('Show Info'));
     expect(screen.getByTestId('toast-count')).toHaveTextContent('1');
   });
 
-  it('toast defaults to info type', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it('toast defaults to info type', () => {
     renderToastHarness();
-    await user.click(screen.getByText('Show Info'));
-    // Find the toast type element
+    fireEvent.click(screen.getByText('Show Info'));
     const toasts = screen.getAllByTestId(/^toast-type-/);
     expect(toasts[0]).toHaveTextContent('info');
   });
 
-  it('supports success type', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it('supports success type', () => {
     renderToastHarness();
-    await user.click(screen.getByText('Show Success'));
+    fireEvent.click(screen.getByText('Show Success'));
     const toasts = screen.getAllByTestId(/^toast-type-/);
     expect(toasts[0]).toHaveTextContent('success');
   });
 
-  it('supports error type', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it('supports error type', () => {
     renderToastHarness();
-    await user.click(screen.getByText('Show Error'));
+    fireEvent.click(screen.getByText('Show Error'));
     const toasts = screen.getAllByTestId(/^toast-type-/);
     expect(toasts[0]).toHaveTextContent('error');
   });
 
-  it('dismisses a toast when dismiss is called', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it('dismisses a toast when dismiss is called', () => {
     renderToastHarness();
-    await user.click(screen.getByText('Show Info'));
+    fireEvent.click(screen.getByText('Show Info'));
     expect(screen.getByTestId('toast-count')).toHaveTextContent('1');
 
-    // Find and click the dismiss button
     const dismissBtns = screen.getAllByText(/^Dismiss /);
-    await user.click(dismissBtns[0]!);
+    fireEvent.click(dismissBtns[0]!);
 
     expect(screen.getByTestId('toast-count')).toHaveTextContent('0');
   });
 
-  it('auto-dismisses toast after 4 seconds', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it('auto-dismisses toast after 4 seconds', () => {
     renderToastHarness();
-    await user.click(screen.getByText('Show Info'));
+    fireEvent.click(screen.getByText('Show Info'));
     expect(screen.getByTestId('toast-count')).toHaveTextContent('1');
 
     act(() => {
@@ -103,39 +94,34 @@ describe('Toast store', () => {
     expect(screen.getByTestId('toast-count')).toHaveTextContent('0');
   });
 
-  it('can show multiple toasts simultaneously', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it('can show multiple toasts simultaneously', () => {
     renderToastHarness();
-    await user.click(screen.getByText('Show Info'));
-    await user.click(screen.getByText('Show Success'));
-    await user.click(screen.getByText('Show Error'));
+    fireEvent.click(screen.getByText('Show Info'));
+    fireEvent.click(screen.getByText('Show Success'));
+    fireEvent.click(screen.getByText('Show Error'));
     expect(screen.getByTestId('toast-count')).toHaveTextContent('3');
   });
 
-  it('preserves other toasts when one is dismissed', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it('preserves other toasts when one is dismissed', () => {
     renderToastHarness();
-    await user.click(screen.getByText('Show Info'));
-    await user.click(screen.getByText('Show Success'));
+    fireEvent.click(screen.getByText('Show Info'));
+    fireEvent.click(screen.getByText('Show Success'));
     expect(screen.getByTestId('toast-count')).toHaveTextContent('2');
 
-    // Dismiss first toast
     const dismissBtns = screen.getAllByText(/^Dismiss /);
-    await user.click(dismissBtns[0]!);
+    fireEvent.click(dismissBtns[0]!);
 
     expect(screen.getByTestId('toast-count')).toHaveTextContent('1');
   });
 
-  it('stores correct message in toast', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it('stores correct message in toast', () => {
     renderToastHarness();
-    await user.click(screen.getByText('Show Info'));
+    fireEvent.click(screen.getByText('Show Info'));
     const msgs = screen.getAllByTestId(/^toast-msg-/);
     expect(msgs[0]).toHaveTextContent('Info toast');
   });
 
   it('throws error when useToast is used outside ToastProvider', () => {
-    // Suppress console.error for this test
     vi.spyOn(console, 'error').mockImplementation(() => {});
     expect(() => render(<ToastTestHarness />)).toThrow('useToast must be used within ToastProvider');
   });

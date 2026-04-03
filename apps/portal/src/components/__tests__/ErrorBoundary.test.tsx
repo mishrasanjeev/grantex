@@ -72,7 +72,7 @@ describe('ErrorBoundary', () => {
       return <div>Recovered</div>;
     }
 
-    const { rerender } = render(
+    const { rerender: _rerender } = render(
       <ErrorBoundary>
         <Wrapper />
       </ErrorBoundary>,
@@ -88,7 +88,7 @@ describe('ErrorBoundary', () => {
   });
 
   it('shows fallback message when error has no message', () => {
-    function ThrowEmpty() {
+    function ThrowEmpty(): JSX.Element {
       throw new Error();
     }
     render(

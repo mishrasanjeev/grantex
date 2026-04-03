@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
 import { createOfflineVerifier } from '../src/verifier/offline-verifier.js';
 import { createOfflineAuditLog, verifyEntrySignature } from '../src/audit/offline-audit-log.js';
-import { verifyChain, GENESIS_HASH, computeEntryHash } from '../src/audit/hash-chain.js';
+import { verifyChain, computeEntryHash } from '../src/audit/hash-chain.js';
 import { storeBundle, loadBundle } from '../src/consent/bundle-storage.js';
 import type { JWKSSnapshot } from '../src/verifier/jwks-cache.js';
 import type { ConsentBundle } from '../src/consent/consent-bundle.js';

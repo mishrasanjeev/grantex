@@ -55,7 +55,7 @@ describe('usage', () => {
   it('getUsageHistory with different days value', async () => {
     ok({ entries: [] });
     await getUsageHistory(7);
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/usage/history?days=7');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/usage/history?days=7');
   });
 
   it('getUsageHistory throws on error', async () => {

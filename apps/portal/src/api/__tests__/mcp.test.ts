@@ -36,25 +36,25 @@ describe('mcp', () => {
   it('listMcpServers with category param', async () => {
     ok({ servers: [] });
     await listMcpServers({ category: 'data' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/mcp/servers?category=data');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/mcp/servers?category=data');
   });
 
   it('listMcpServers with certified param (true)', async () => {
     ok({ servers: [] });
     await listMcpServers({ certified: true });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/mcp/servers?certified=true');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/mcp/servers?certified=true');
   });
 
   it('listMcpServers with certified param (false)', async () => {
     ok({ servers: [] });
     await listMcpServers({ certified: false });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/mcp/servers?certified=false');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/mcp/servers?certified=false');
   });
 
   it('listMcpServers with both params', async () => {
     ok({ servers: [] });
     await listMcpServers({ category: 'auth', certified: true });
-    const url = mockFetch.mock.calls[0][0];
+    const url = mockFetch.mock.calls[0]![0];
     expect(url).toContain('category=auth');
     expect(url).toContain('certified=true');
   });
@@ -76,7 +76,7 @@ describe('mcp', () => {
   it('getMcpServer encodes id', async () => {
     ok({ id: 's/1' });
     await getMcpServer('s/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/mcp/servers/s%2F1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/mcp/servers/s%2F1');
   });
 
   it('getMcpServer throws on 404', async () => {
@@ -91,7 +91,7 @@ describe('mcp', () => {
     ok({ id: 's2', ...params });
     const result = await createMcpServer(params);
     expect(result).toEqual({ id: 's2', ...params });
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/mcp/servers');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(params);
@@ -109,7 +109,7 @@ describe('mcp', () => {
     ok(cert);
     const result = await applyForCertification('s1', 'gold');
     expect(result).toEqual(cert);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/mcp/servers/s1/certify');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual({ level: 'gold' });
@@ -118,7 +118,7 @@ describe('mcp', () => {
   it('applyForCertification encodes serverId', async () => {
     ok({ id: 'cert-1' });
     await applyForCertification('s/1', 'silver');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/mcp/servers/s%2F1/certify');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/mcp/servers/s%2F1/certify');
   });
 
   it('applyForCertification throws on error', async () => {

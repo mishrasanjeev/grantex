@@ -85,7 +85,7 @@ describe('compliance', () => {
   it('exportEvidencePack encodes framework with special chars', async () => {
     ok({});
     await exportEvidencePack('iso 27001');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/compliance/evidence-pack?framework=iso%2027001');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/compliance/evidence-pack?framework=iso%2027001');
   });
 
   it('exportEvidencePack throws on error', async () => {

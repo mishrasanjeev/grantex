@@ -53,7 +53,7 @@ describe('policies', () => {
   it('getPolicy encodes id', async () => {
     ok({ id: 'p/1' });
     await getPolicy('p/1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/policies/p%2F1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/policies/p%2F1');
   });
 
   it('getPolicy throws on 404', async () => {
@@ -68,7 +68,7 @@ describe('policies', () => {
     ok({ id: 'p2', ...data });
     const result = await createPolicy(data as any);
     expect(result).toEqual({ id: 'p2', ...data });
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/policies');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
@@ -84,7 +84,7 @@ describe('policies', () => {
   it('updatePolicy sends PATCH /v1/policies/:id with body', async () => {
     ok({ id: 'p1', name: 'Updated' });
     await updatePolicy('p1', { name: 'Updated' } as any);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/policies/p1');
     expect(opts.method).toBe('PATCH');
     expect(JSON.parse(opts.body)).toEqual({ name: 'Updated' });

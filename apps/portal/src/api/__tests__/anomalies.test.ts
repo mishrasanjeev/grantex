@@ -64,7 +64,7 @@ describe('anomalies', () => {
     ok(resp);
     const result = await detectAnomalies();
     expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/anomalies/detect');
     expect(opts.method).toBe('POST');
   });
@@ -74,7 +74,7 @@ describe('anomalies', () => {
   it('acknowledgeAnomaly sends PATCH /v1/anomalies/:id/acknowledge', async () => {
     ok({ id: 'an1', acknowledged: true });
     await acknowledgeAnomaly('an1');
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/anomalies/an1/acknowledge');
     expect(opts.method).toBe('PATCH');
   });
@@ -91,19 +91,19 @@ describe('anomalies', () => {
   it('listAlerts with status param', async () => {
     ok({ alerts: [], total: 0 });
     await listAlerts({ status: 'open' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/anomalies/alerts?status=open');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/anomalies/alerts?status=open');
   });
 
   it('listAlerts with severity param', async () => {
     ok({ alerts: [], total: 0 });
     await listAlerts({ severity: 'critical' });
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/anomalies/alerts?severity=critical');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/anomalies/alerts?severity=critical');
   });
 
   it('listAlerts with both params', async () => {
     ok({ alerts: [], total: 0 });
     await listAlerts({ status: 'open', severity: 'high' });
-    const url = mockFetch.mock.calls[0][0];
+    const url = mockFetch.mock.calls[0]![0];
     expect(url).toContain('status=open');
     expect(url).toContain('severity=high');
   });
@@ -132,7 +132,7 @@ describe('anomalies', () => {
   it('acknowledgeAlert sends POST with empty body when no note', async () => {
     ok(undefined);
     await acknowledgeAlert('al1');
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/anomalies/alerts/al1/acknowledge');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual({});
@@ -141,7 +141,7 @@ describe('anomalies', () => {
   it('acknowledgeAlert sends POST with note', async () => {
     ok(undefined);
     await acknowledgeAlert('al1', 'Investigating');
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
     expect(body).toEqual({ note: 'Investigating' });
   });
 
@@ -150,7 +150,7 @@ describe('anomalies', () => {
   it('resolveAlert sends POST without note', async () => {
     ok(undefined);
     await resolveAlert('al1');
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/anomalies/alerts/al1/resolve');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual({});
@@ -159,7 +159,7 @@ describe('anomalies', () => {
   it('resolveAlert sends POST with note', async () => {
     ok(undefined);
     await resolveAlert('al1', 'Fixed');
-    expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({ note: 'Fixed' });
+    expect(JSON.parse(mockFetch.mock.calls[0]![1].body)).toEqual({ note: 'Fixed' });
   });
 
   // ── Metrics ───────────────────────────────────────────────────────────
@@ -175,13 +175,13 @@ describe('anomalies', () => {
   it('getMetrics with agentId param', async () => {
     ok({ totalAlerts: 0 });
     await getMetrics('agent-1');
-    expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:3000/v1/anomalies/metrics?agentId=agent-1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/anomalies/metrics?agentId=agent-1');
   });
 
   it('getMetrics with both agentId and window', async () => {
     ok({ totalAlerts: 0 });
     await getMetrics('agent-1', '24h');
-    const url = mockFetch.mock.calls[0][0];
+    const url = mockFetch.mock.calls[0]![0];
     expect(url).toContain('agentId=agent-1');
     expect(url).toContain('window=24h');
   });
@@ -211,7 +211,7 @@ describe('anomalies', () => {
     };
     ok({ ...data, builtin: false, enabled: true });
     await createRule(data);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/anomalies/rules');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
@@ -222,7 +222,7 @@ describe('anomalies', () => {
   it('toggleRule sends PATCH /v1/anomalies/rules/:id with enabled', async () => {
     ok({ ruleId: 'r1', enabled: false });
     await toggleRule('r1', false);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/anomalies/rules/r1');
     expect(opts.method).toBe('PATCH');
     expect(JSON.parse(opts.body)).toEqual({ enabled: false });
@@ -250,7 +250,7 @@ describe('anomalies', () => {
     const data = { type: 'slack', name: 'alerts', config: { url: 'https://hooks.slack.com/x' }, severities: ['critical'] };
     ok({ id: 'ch2', ...data, enabled: true });
     await createChannel(data);
-    const [url, opts] = mockFetch.mock.calls[0];
+    const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/anomalies/channels');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
