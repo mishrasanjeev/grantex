@@ -19,7 +19,7 @@ import { DomainsClient } from './resources/domains.js';
 import { WebAuthnClient } from './resources/webauthn.js';
 import { CredentialsClient } from './resources/credentials.js';
 import { PassportsClient } from './resources/passports.js';
-import { ToolManifest, Permission, permissionCovers, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
+import { ToolManifest, permissionCovers, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 import { verifyGrantToken } from './verify.js';
 import type {
   AuthorizationRequest,
