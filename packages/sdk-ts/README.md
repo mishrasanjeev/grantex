@@ -694,7 +694,7 @@ const result = await grantex.enforce({
 - `enforceMiddleware()` — Express/Fastify HTTP middleware
 - 54 pre-built manifests (Salesforce, HubSpot, Jira, Stripe, SAP, S3, and 48 more)
 - Permission hierarchy: `admin > delete > write > read`
-- Permissive mode for migration (`enforce_mode: 'permissive'`)
+- Permissive mode for migration (`enforceMode: 'permissive'`)
 
 [Full Guide](https://docs.grantex.dev/guides/scope-enforcement) | [API Reference](https://docs.grantex.dev/sdks/typescript/enforce)
 
