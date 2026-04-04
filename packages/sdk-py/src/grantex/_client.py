@@ -173,6 +173,13 @@ class Grantex:
         for m in manifests:
             self._manifests[m.connector] = m
 
+    def load_manifests_from_dir(self, dir_path: str) -> None:
+        """Load all JSON manifest files from a directory."""
+        import os
+        for fname in sorted(os.listdir(dir_path)):
+            if fname.endswith(".json"):
+                self.load_manifest(ToolManifest.from_file(os.path.join(dir_path, fname)))
+
     def enforce(
         self,
         grant_token: str,
@@ -351,11 +358,12 @@ class Grantex:
             return grant_token() if callable(grant_token) else grant_token
 
         def _check() -> None:
-            result = grantex.enforce(
-                grant_token=_get_token(),
-                connector=connector,
-                tool=tool_name,
-            )
+            token = _get_token()
+            result = grantex.enforce(grant_token=token, connector=connector, tool=tool_name)
+            # Retry once with refreshed token if expired and grant_token is callable
+            if not result.allowed and "expired" in result.reason.lower() and callable(grant_token):
+                token = _get_token()
+                result = grantex.enforce(grant_token=token, connector=connector, tool=tool_name)
             if not result.allowed:
                 raise PermissionError(f"Grantex scope denied: {result.reason}")
 

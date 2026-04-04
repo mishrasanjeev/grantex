@@ -1131,6 +1131,8 @@ result = grantex.enforce(grant_token=token, connector="salesforce", tool="delete
 54 pre-built manifests: Salesforce, HubSpot, Jira, Stripe, SAP, S3, Gmail, Slack, GitHub, and 45 more.
 Custom manifests: define inline or generate via CLI.
 
+**Framework helpers:** `wrapTool()` wraps LangChain tools with automatic scope enforcement. `enforceMiddleware()` adds one-line enforcement to Express/Fastify routes. FastAPI uses the `GrantexEnforcer` dependency.
+
 See the [Scope Enforcement Guide](https://docs.grantex.dev/guides/scope-enforcement) for full documentation.
 
 ---

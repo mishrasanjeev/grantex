@@ -141,7 +141,7 @@ export function ManifestViewer() {
           m.description.toLowerCase().includes(q),
       );
     }
-    return result;
+    return result.sort((a, b) => b.tools - a.tools);
   }, [search, category]);
 
   const totalTools = filtered.reduce((sum, m) => sum + m.tools, 0);

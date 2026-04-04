@@ -115,13 +115,24 @@ class ToolManifest:
 
     @classmethod
     def from_file(cls, path: str) -> "ToolManifest":
-        """Load a ToolManifest from a JSON file.
+        """Load a ToolManifest from a JSON or YAML file.
+
+        YAML requires the ``pyyaml`` package to be installed.
 
         Expected shape::
 
             { "connector": "salesforce", "tools": { "query": "read", ... } }
         """
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        p = Path(path)
+        raw = p.read_text(encoding="utf-8")
+        if p.suffix in (".yaml", ".yml"):
+            try:
+                import yaml  # type: ignore[import-not-found,unused-ignore,import-untyped]
+                data = yaml.safe_load(raw)
+            except ImportError:
+                raise ImportError("PyYAML is required to load YAML manifests: pip install pyyaml")
+        else:
+            data = json.loads(raw)
         return cls.from_dict(data)
 
     @classmethod
