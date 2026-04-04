@@ -19,7 +19,7 @@ import { DomainsClient } from './resources/domains.js';
 import { WebAuthnClient } from './resources/webauthn.js';
 import { CredentialsClient } from './resources/credentials.js';
 import { PassportsClient } from './resources/passports.js';
-import { ToolManifest, Permission, permissionCovers, type EnforceOptions, type EnforceResult } from './manifest.js';
+import { ToolManifest, Permission, permissionCovers, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 import { verifyGrantToken } from './verify.js';
 import type {
   AuthorizationRequest,
@@ -40,6 +40,7 @@ export class Grantex {
   readonly #http: HttpClient;
   readonly #manifests: Map<string, ToolManifest> = new Map();
   #jwksUri: string;
+  #enforceMode: 'strict' | 'permissive';
 
   readonly agents: AgentsClient;
   readonly grants: GrantsClient;
@@ -103,6 +104,7 @@ export class Grantex {
     this.credentials = new CredentialsClient(this.#http);
     this.passports = new PassportsClient(this.#http);
     this.#jwksUri = `${(options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '')}/.well-known/jwks.json`;
+    this.#enforceMode = (options as Record<string, unknown>)['enforceMode'] as 'strict' | 'permissive' ?? 'strict';
   }
 
   /**
@@ -213,11 +215,11 @@ export class Grantex {
     try {
       grant = await verifyGrantToken(grantToken, { jwksUri: this.#jwksUri });
     } catch (err) {
-      return {
+      return this.#applyEnforceMode({
         ...base,
         allowed: false,
         reason: `Token verification failed: ${err instanceof Error ? err.message : String(err)}`,
-      };
+      });
     }
 
     base.grantId = grant.grantId;
@@ -227,52 +229,52 @@ export class Grantex {
     // 2. Look up manifest for the connector
     const manifest = this.#manifests.get(connector);
     if (!manifest) {
-      return {
+      return this.#applyEnforceMode({
         ...base,
         allowed: false,
         reason: `No manifest loaded for connector '${connector}'. Load a manifest first.`,
-      };
+      });
     }
 
     // 3. Look up tool permission from manifest
     const requiredPermission = manifest.getPermission(tool);
     if (!requiredPermission) {
-      return {
+      return this.#applyEnforceMode({
         ...base,
         allowed: false,
         reason: `Unknown tool '${tool}' on connector '${connector}'. Tool not found in manifest.`,
-      };
+      });
     }
     base.permission = requiredPermission;
 
     // 4. Find the best matching scope for this connector
     const grantedPermission = this.#resolveGrantedPermission(grant.scopes, connector);
     if (!grantedPermission) {
-      return {
+      return this.#applyEnforceMode({
         ...base,
         allowed: false,
         reason: `No scope grants access to connector '${connector}'.`,
-      };
+      });
     }
 
     // 5. Check permission hierarchy
     if (!permissionCovers(grantedPermission, requiredPermission)) {
-      return {
+      return this.#applyEnforceMode({
         ...base,
         allowed: false,
         reason: `${grantedPermission} scope does not permit ${requiredPermission} operations on ${connector}.`,
-      };
+      });
     }
 
     // 6. Check capped amount if provided
     if (amount !== undefined) {
       const cap = this.#extractCap(grant.scopes, connector);
       if (cap !== undefined && amount > cap) {
-        return {
+        return this.#applyEnforceMode({
           ...base,
           allowed: false,
           reason: `Amount ${amount} exceeds budget cap of ${cap} on ${connector}.`,
-        };
+        });
       }
     }
 
@@ -327,5 +329,107 @@ export class Grantex {
       }
     }
     return undefined;
+  }
+
+  #applyEnforceMode(result: EnforceResult): EnforceResult {
+    if (!result.allowed && this.#enforceMode === 'permissive') {
+      console.warn(`[grantex] PERMISSIVE MODE — would deny: ${result.reason} (connector=${result.connector}, tool=${result.tool})`);
+      return { ...result, allowed: true };
+    }
+    return result;
+  }
+
+  /**
+   * Wrap a LangChain StructuredTool with automatic Grantex scope enforcement.
+   * Before each tool invocation, the grant token is verified and scopes are checked.
+   *
+   * @param tool - The LangChain StructuredTool to wrap
+   * @param options - Connector name, tool name, and grant token (string or getter function)
+   * @returns A new StructuredTool that enforces scopes before calling the original
+   *
+   * @example
+   * ```ts
+   * const protectedTool = grantex.wrapTool(myTool, {
+   *   connector: 'salesforce',
+   *   tool: 'create_lead',
+   *   grantToken: () => currentState.grant_token,
+   * });
+   * ```
+   */
+  wrapTool<T extends { name: string; description: string; invoke: (...args: unknown[]) => Promise<unknown> }>(
+    tool: T,
+    options: WrapToolOptions,
+  ): T {
+    const self = this;
+    const originalInvoke = tool.invoke.bind(tool);
+
+    const wrapped = Object.create(tool);
+    wrapped.invoke = async function (...args: unknown[]): Promise<unknown> {
+      const token = typeof options.grantToken === 'function'
+        ? options.grantToken()
+        : options.grantToken;
+
+      const result = await self.enforce({
+        grantToken: token,
+        connector: options.connector,
+        tool: options.tool,
+      });
+
+      if (!result.allowed) {
+        throw new Error(`Grantex scope denied: ${result.reason}`);
+      }
+
+      return originalInvoke(...args);
+    };
+
+    return wrapped as T;
+  }
+
+  /**
+   * Create Express/Fastify middleware that enforces Grantex scopes on every request.
+   *
+   * @example
+   * ```ts
+   * app.use('/api/tools/*', grantex.enforceMiddleware({
+   *   extractToken: (req) => req.headers.authorization?.replace('Bearer ', ''),
+   *   extractConnector: (req) => req.params.connector,
+   *   extractTool: (req) => req.params.tool,
+   * }));
+   * ```
+   */
+  enforceMiddleware(options: EnforceMiddlewareOptions): (req: unknown, res: unknown, next: unknown) => void {
+    const self = this;
+    return function grantexEnforce(req: unknown, res: unknown, next: unknown) {
+      const request = req as Record<string, unknown>;
+      const response = res as Record<string, unknown>;
+      const nextFn = next as (err?: unknown) => void;
+
+      const token = options.extractToken(request);
+      const connector = options.extractConnector(request);
+      const tool = options.extractTool(request);
+
+      if (!token) {
+        const statusFn = response['status'] as (code: number) => Record<string, unknown>;
+        const jsonFn = statusFn.call(response, 401)['json'] as (body: unknown) => void;
+        jsonFn.call(statusFn.call(response, 401), { error: { code: 'UNAUTHORIZED', message: 'Missing grant token' } });
+        return;
+      }
+
+      self.enforce({ grantToken: token, connector, tool })
+        .then((result) => {
+          if (!result.allowed) {
+            const statusFn = response['status'] as (code: number) => Record<string, unknown>;
+            const jsonFn = statusFn.call(response, 403)['json'] as (body: unknown) => void;
+            jsonFn.call(statusFn.call(response, 403), {
+              error: { code: 'SCOPE_DENIED', message: result.reason, connector, tool },
+            });
+            return;
+          }
+          // Attach enforce result to request for downstream use
+          (request as Record<string, unknown>)['grantexEnforce'] = result;
+          nextFn();
+        })
+        .catch((err) => nextFn(err));
+    };
   }
 }

@@ -554,4 +554,121 @@ describe('enforce()', () => {
       expect(result.allowed).toBe(false);
     });
   });
+
+  describe('wrapTool()', () => {
+    it('calls original invoke when scope is sufficient', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:write'] }));
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+      const original = { name: 'test', description: 'test', invoke: vi.fn().mockResolvedValue('result') };
+      const gx = new Grantex({ apiKey: 'k' });
+      gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
+      const wrapped = gx.wrapTool(original, { connector: 'salesforce', tool: 'create_lead', grantToken: 'token' });
+      const result = await wrapped.invoke('arg1');
+      expect(result).toBe('result');
+      expect(original.invoke).toHaveBeenCalledWith('arg1');
+    });
+
+    it('throws when scope is insufficient', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:read'] }));
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+      const original = { name: 'test', description: 'test', invoke: vi.fn() };
+      const gx = new Grantex({ apiKey: 'k' });
+      gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
+      const wrapped = gx.wrapTool(original, { connector: 'salesforce', tool: 'create_lead', grantToken: 'token' });
+      await expect(wrapped.invoke()).rejects.toThrow('Grantex scope denied');
+      expect(original.invoke).not.toHaveBeenCalled();
+    });
+
+    it('supports dynamic grant token getter', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:write'] }));
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+      const original = { name: 'test', description: 'test', invoke: vi.fn().mockResolvedValue('ok') };
+      const gx = new Grantex({ apiKey: 'k' });
+      gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
+      let token = 'token-1';
+      const wrapped = gx.wrapTool(original, { connector: 'salesforce', tool: 'create_lead', grantToken: () => token });
+      await wrapped.invoke();
+      expect(vi.mocked(verifyGrantToken)).toHaveBeenCalledWith('token-1', expect.anything());
+      token = 'token-2';
+      await wrapped.invoke();
+      expect(vi.mocked(verifyGrantToken)).toHaveBeenCalledWith('token-2', expect.anything());
+    });
+  });
+
+  describe('enforceMiddleware()', () => {
+    it('calls next when scope is sufficient', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:write'] }));
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+      const gx = new Grantex({ apiKey: 'k' });
+      gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
+      const mw = gx.enforceMiddleware({
+        extractToken: (req) => req['token'] as string,
+        extractConnector: () => 'salesforce',
+        extractTool: () => 'create_lead',
+      });
+      const req = { token: 'jwt' };
+      const next = vi.fn();
+      const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+      await new Promise<void>((resolve) => { mw(req, res, (err?: unknown) => { next(err); resolve(); }); });
+      expect(next).toHaveBeenCalledWith(undefined);
+      expect(req).toHaveProperty('grantexEnforce');
+    });
+
+    it('returns 403 when scope is insufficient', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:read'] }));
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+      const gx = new Grantex({ apiKey: 'k' });
+      gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
+      const mw = gx.enforceMiddleware({
+        extractToken: (req) => req['token'] as string,
+        extractConnector: () => 'salesforce',
+        extractTool: () => 'create_lead',
+      });
+      const req = { token: 'jwt' };
+      const json = vi.fn();
+      const res = { status: vi.fn().mockReturnValue({ json }) };
+      const next = vi.fn();
+      mw(req, res, next);
+      await vi.waitFor(() => expect(json).toHaveBeenCalled());
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('returns 401 when no token', () => {
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+      const gx = new Grantex({ apiKey: 'k' });
+      const mw = gx.enforceMiddleware({
+        extractToken: () => undefined,
+        extractConnector: () => 'salesforce',
+        extractTool: () => 'query',
+      });
+      const json = vi.fn();
+      const res = { status: vi.fn().mockReturnValue({ json }) };
+      mw({}, res, vi.fn());
+      expect(res.status).toHaveBeenCalledWith(401);
+    });
+  });
+
+  describe('permissive enforce_mode', () => {
+    it('allows denied results in permissive mode with warning', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:read'] }));
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const gx = new Grantex({ apiKey: 'k', enforceMode: 'permissive' } as any);
+      gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
+      const result = await gx.enforce({ grantToken: 'tok', connector: 'salesforce', tool: 'create_lead' });
+      expect(result.allowed).toBe(true); // permissive overrides
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('strict mode denies normally (default)', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:read'] }));
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+      const gx = new Grantex({ apiKey: 'k' });
+      gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
+      const result = await gx.enforce({ grantToken: 'tok', connector: 'salesforce', tool: 'create_lead' });
+      expect(result.allowed).toBe(false);
+    });
+  });
 });

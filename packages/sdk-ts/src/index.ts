@@ -33,7 +33,7 @@ export {
 } from './resources/passports.js';
 
 // Scope enforcement
-export { ToolManifest, Permission, permissionCovers, type EnforceOptions, type EnforceResult, type ToolManifestOptions } from './manifest.js';
+export { ToolManifest, Permission, permissionCovers, type EnforceOptions, type EnforceResult, type ToolManifestOptions, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 
 // Types
 export type {

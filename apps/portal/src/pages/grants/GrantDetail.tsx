@@ -168,6 +168,65 @@ export function GrantDetail() {
         </Card>
       </div>
 
+      {/* Scope enforcement breakdown */}
+      {grant.scopes.length > 0 && (
+        <Card className="mb-6">
+          <h2 className="text-sm font-semibold text-gx-text mb-4">Scope Enforcement Breakdown</h2>
+          <p className="text-xs text-gx-muted mb-3">
+            What this grant token allows and denies based on the permission hierarchy.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gx-border">
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">Scope</th>
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">Connector</th>
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">Granted Level</th>
+                  <th className="text-left py-2 text-xs font-medium text-gx-muted">Tool Access</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grant.scopes.map((scope) => {
+                  const parts = scope.split(':');
+                  const connector = parts[1] ?? '—';
+                  const perm = parts[2] ?? 'read';
+                  const permColors: Record<string, string> = { admin: 'bg-purple-500/15 text-purple-400', delete: 'bg-gx-danger/15 text-gx-danger', write: 'bg-gx-warning/15 text-gx-warning', read: 'bg-gx-accent/15 text-gx-accent' };
+                  const levels = ['read', 'write', 'delete', 'admin'];
+                  const grantedIdx = levels.indexOf(perm);
+                  return (
+                    <tr key={scope} className="border-b border-gx-border/50 last:border-0">
+                      <td className="py-2.5 pr-4 font-mono text-xs text-gx-accent2">{scope}</td>
+                      <td className="py-2.5 pr-4 text-xs text-gx-text">{connector}</td>
+                      <td className="py-2.5 pr-4">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase ${permColors[perm] ?? permColors['read']}`}>
+                          {perm}
+                        </span>
+                      </td>
+                      <td className="py-2.5">
+                        <div className="flex gap-1.5">
+                          {levels.map((level, i) => (
+                            <span
+                              key={level}
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase ${
+                                i <= grantedIdx
+                                  ? 'bg-gx-accent/10 text-gx-accent'
+                                  : 'bg-gx-border/30 text-gx-muted line-through'
+                              }`}
+                            >
+                              {level}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
       {/* Related audit entries */}
       <Card>
         <h2 className="text-sm font-semibold text-gx-text mb-4">

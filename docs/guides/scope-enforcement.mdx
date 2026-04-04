@@ -154,8 +154,6 @@ grantex.loadManifest(salesforceManifest);
 
 ## LangChain Integration
 
-<Note>Coming in v0.3.1. The `wrap_tool()` / `wrapTool()` method is not yet available on the SDK client.</Note>
-
 Wrap any LangChain tool with `wrap_tool()` to enforce scope checks automatically on every invocation:
 
 <CodeGroup>
@@ -188,8 +186,6 @@ const protectedTool = grantex.wrapTool(myLangChainTool, {
 ---
 
 ## Express / FastAPI Middleware
-
-<Note>Coming in v0.3.1. The `enforceMiddleware()` (Express) and `GrantexAuth` (FastAPI) enforce middleware are not yet available.</Note>
 
 Add one-line enforcement to your tool execution endpoints:
 

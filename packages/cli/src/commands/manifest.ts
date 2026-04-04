@@ -184,5 +184,83 @@ export function manifestCommand(): Command {
       }
     });
 
+  /* ── generate ─────────────────────────────────────────────────────── */
+  cmd
+    .command('generate <path>')
+    .description('Auto-generate a manifest from connector source code')
+    .option('--connector <name>', 'Override connector name (default: derived from filename)')
+    .option('--out <path>', 'Output file path (default: stdout)')
+    .action(async (sourcePath: string, opts: { connector?: string; out?: string }) => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+
+      if (!fs.existsSync(sourcePath)) {
+        console.error(chalk.red(`File not found: ${sourcePath}`));
+        process.exit(1);
+      }
+
+      const content = fs.readFileSync(sourcePath, 'utf-8');
+      const basename = path.basename(sourcePath, path.extname(sourcePath));
+      const connectorName = opts.connector ?? basename;
+
+      // Extract tool names from _register_tools() or _tool_registry patterns
+      const tools: Record<string, string> = {};
+
+      // Python pattern: self._tool_registry["tool_name"] = self.method
+      const pyPattern = /self\._tool_registry\["(\w+)"\]/g;
+      let match;
+      while ((match = pyPattern.exec(content)) !== null) {
+        tools[match[1]] = inferPermission(match[1]);
+      }
+
+      // TypeScript pattern: this.tools.set('tool_name', ...) or tools: { tool_name: ... }
+      const tsPattern = /["'](\w+)["']\s*:/g;
+      if (Object.keys(tools).length === 0) {
+        while ((match = tsPattern.exec(content)) !== null) {
+          const name = match[1];
+          if (name.length > 2 && !['name', 'type', 'description', 'version', 'auth', 'base', 'rate'].includes(name)) {
+            tools[name] = inferPermission(name);
+          }
+        }
+      }
+
+      if (Object.keys(tools).length === 0) {
+        console.error(chalk.yellow('No tools found in source file. Supported patterns:'));
+        console.error(chalk.dim('  Python: self._tool_registry["tool_name"] = ...'));
+        process.exit(1);
+      }
+
+      const manifest = {
+        connector: connectorName,
+        version: '1.0.0',
+        description: `Auto-generated manifest for ${connectorName}`,
+        tools,
+      };
+
+      if (isJsonMode() || !opts.out) {
+        console.log(JSON.stringify(manifest, null, 2));
+      }
+
+      if (opts.out) {
+        fs.writeFileSync(opts.out, JSON.stringify(manifest, null, 2) + '\n');
+        console.log(chalk.green(`Manifest written to ${opts.out}`));
+      }
+
+      if (!isJsonMode() && !opts.out) {
+        console.log('');
+        console.log(chalk.dim(`Generated manifest for ${chalk.cyan(connectorName)} (${Object.keys(tools).length} tools)`));
+        console.log(chalk.dim('Review permissions and save with --out <path>'));
+      }
+    });
+
   return cmd;
+}
+
+function inferPermission(toolName: string): string {
+  const name = toolName.toLowerCase();
+  if (/^(get_|list_|search_|query_|fetch_|check_|download_|read_|find_|run_report|export_|screen_|verify_|validate_)/.test(name)) return 'read';
+  if (/^(delete_|remove_|void_|terminate_|revoke_|cancel_|reject_|purge_|drop_)/.test(name)) return 'delete';
+  if (/^(run_payment|run_payroll|run_period|reset_|force_)/.test(name)) return 'admin';
+  if (/^(create_|update_|post_|send_|upload_|apply_|file_|record_|push_|add_|generate_|initiate_|set_|move_|schedule_|advance_|transition_|submit_|complete_|acknowledge_|resolve_|assign_|provision_|transfer_|mutate_|track_|reconcile_|create$)/.test(name)) return 'write';
+  return 'read'; // safe default
 }

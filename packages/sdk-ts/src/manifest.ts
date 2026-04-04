@@ -176,3 +176,23 @@ export interface EnforceOptions {
   /** Amount for capped scope enforcement (optional). */
   amount?: number;
 }
+
+/** Options for `grantex.wrapTool()`. */
+export interface WrapToolOptions {
+  /** Connector name. */
+  connector: string;
+  /** Tool name. */
+  tool: string;
+  /** Grant token — static string or getter function for dynamic tokens. */
+  grantToken: string | (() => string);
+}
+
+/** Options for `grantex.enforceMiddleware()`. */
+export interface EnforceMiddlewareOptions {
+  /** Extract the grant token from the request (e.g., from Authorization header). */
+  extractToken: (req: Record<string, unknown>) => string | undefined;
+  /** Extract the connector name from the request. */
+  extractConnector: (req: Record<string, unknown>) => string;
+  /** Extract the tool name from the request. */
+  extractTool: (req: Record<string, unknown>) => string;
+}

@@ -43,6 +43,8 @@ import { ConsentRecordList } from './pages/dpdp/ConsentRecordList';
 import { ConsentRecordDetail } from './pages/dpdp/ConsentRecordDetail';
 import { GrievanceList } from './pages/dpdp/GrievanceList';
 import { ExportPage } from './pages/dpdp/ExportPage';
+import { ManifestViewer } from './pages/manifests/ManifestViewer';
+import { EnforceLog } from './pages/enforce/EnforceLog';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './RequireAuth';
 
@@ -97,6 +99,8 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/dpdp/records/:recordId', element: <ConsentRecordDetail /> },
       { path: '/dashboard/dpdp/grievances', element: <GrievanceList /> },
       { path: '/dashboard/dpdp/exports', element: <ExportPage /> },
+      { path: '/dashboard/manifests', element: <ManifestViewer /> },
+      { path: '/dashboard/enforce-log', element: <EnforceLog /> },
       { path: '/dashboard/settings/sso', element: <SsoConfigPage /> },
       { path: '/dashboard/settings/scim', element: <ScimTokensPage /> },
       { path: '/dashboard/*', element: <NotFound /> },
