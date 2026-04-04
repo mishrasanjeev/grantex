@@ -184,19 +184,79 @@ export function manifestCommand(): Command {
       }
     });
 
+  /* ── load ─────────────────────────────────────────────────────────── */
+  cmd
+    .command('load <path>')
+    .description('Load a JSON manifest file and display its contents')
+    .action(async (manifestPath: string) => {
+      const fs = await import('node:fs');
+      if (!fs.existsSync(manifestPath)) {
+        console.error(chalk.red(`File not found: ${manifestPath}`));
+        process.exit(1);
+      }
+      const content = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      if (isJsonMode()) {
+        console.log(JSON.stringify(content, null, 2));
+        return;
+      }
+      const connector = content.connector ?? 'unknown';
+      const tools = content.tools ?? {};
+      const count = Object.keys(tools).length;
+      console.log(chalk.bold(`\nLoaded manifest: ${chalk.cyan(connector)} (${count} tools)\n`));
+      for (const [name, perm] of Object.entries(tools)) {
+        const color = perm === 'read' ? chalk.green : perm === 'write' ? chalk.yellow : perm === 'delete' ? chalk.red : chalk.magenta;
+        console.log(`  ${name.padEnd(35)} → ${color(String(perm))}`);
+      }
+      console.log();
+    });
+
   /* ── generate ─────────────────────────────────────────────────────── */
   cmd
     .command('generate <path>')
     .description('Auto-generate a manifest from connector source code')
     .option('--connector <name>', 'Override connector name (default: derived from filename)')
     .option('--out <path>', 'Output file path (default: stdout)')
-    .action(async (sourcePath: string, opts: { connector?: string; out?: string }) => {
+    .option('--recursive', 'Scan directory recursively')
+    .option('--format <format>', 'Output format: json (default) or python')
+    .action(async (sourcePath: string, opts: { connector?: string; out?: string; recursive?: boolean; format?: string }) => {
       const fs = await import('node:fs');
       const path = await import('node:path');
 
       if (!fs.existsSync(sourcePath)) {
         console.error(chalk.red(`File not found: ${sourcePath}`));
         process.exit(1);
+      }
+
+      const stats = fs.statSync(sourcePath);
+      if (stats.isDirectory()) {
+        // Scan all Python/TypeScript files in directory
+        const files = scanDir(sourcePath, opts.recursive ?? false);
+        let totalManifests = 0;
+        let totalTools = 0;
+        for (const file of files) {
+          const fileContent = fs.readFileSync(file, 'utf-8');
+          const fileBasename = path.basename(file, path.extname(file));
+          const fileTools: Record<string, string> = {};
+          const pyPat = /self\._tool_registry\["(\w+)"\]/g;
+          let m;
+          while ((m = pyPat.exec(fileContent)) !== null) {
+            fileTools[m[1]] = inferPermission(m[1]);
+          }
+          if (Object.keys(fileTools).length > 0) {
+            const manifest = { connector: fileBasename, version: '1.0.0', tools: fileTools };
+            if (opts.out) {
+              const outPath = path.join(opts.out, `${fileBasename}.json`);
+              fs.mkdirSync(path.dirname(outPath), { recursive: true });
+              fs.writeFileSync(outPath, JSON.stringify(manifest, null, 2) + '\n');
+            }
+            totalManifests++;
+            totalTools += Object.keys(fileTools).length;
+          }
+        }
+        if (!isJsonMode()) {
+          console.log(chalk.green(`Generated ${totalManifests} manifests (${totalTools} tools)`));
+        }
+        return;
       }
 
       const content = fs.readFileSync(sourcePath, 'utf-8');
@@ -237,6 +297,31 @@ export function manifestCommand(): Command {
         tools,
       };
 
+      if (opts.format === 'python') {
+        const pyLines = [
+          `from grantex.manifest import ToolManifest, Permission`,
+          ``,
+          `manifest = ToolManifest(`,
+          `    connector="${connectorName}",`,
+          `    description="Auto-generated manifest for ${connectorName}",`,
+          `    tools={`,
+        ];
+        for (const [name, perm] of Object.entries(tools)) {
+          const permConst = perm === 'read' ? 'Permission.READ' : perm === 'write' ? 'Permission.WRITE' : perm === 'delete' ? 'Permission.DELETE' : 'Permission.ADMIN';
+          pyLines.push(`        "${name}": ${permConst},`);
+        }
+        pyLines.push(`    },`);
+        pyLines.push(`)`);
+        const pyContent = pyLines.join('\n') + '\n';
+        if (opts.out) {
+          fs.writeFileSync(opts.out, pyContent);
+          console.log(chalk.green(`Python manifest written to ${opts.out}`));
+        } else {
+          console.log(pyContent);
+        }
+        return;
+      }
+
       if (isJsonMode() || !opts.out) {
         console.log(JSON.stringify(manifest, null, 2));
       }
@@ -254,6 +339,21 @@ export function manifestCommand(): Command {
     });
 
   return cmd;
+}
+
+function scanDir(dir: string, recursive: boolean): string[] {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const results: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory() && recursive) {
+      results.push(...scanDir(full, true));
+    } else if (entry.isFile() && (entry.name.endsWith('.py') || entry.name.endsWith('.ts'))) {
+      results.push(full);
+    }
+  }
+  return results;
 }
 
 function inferPermission(toolName: string): string {

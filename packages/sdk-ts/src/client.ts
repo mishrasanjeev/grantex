@@ -181,6 +181,21 @@ export class Grantex {
   }
 
   /**
+   * Load all JSON manifest files from a directory.
+   * Each `.json` file is parsed as a ToolManifest and loaded.
+   */
+  async loadManifestsFromDir(dirPath: string): Promise<void> {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const files = fs.readdirSync(dirPath).filter((f: string) => f.endsWith('.json'));
+    for (const file of files) {
+      const content = fs.readFileSync(path.join(dirPath, file), 'utf-8');
+      const data = JSON.parse(content) as Record<string, unknown>;
+      this.loadManifest(ToolManifest.fromJSON(data));
+    }
+  }
+
+  /**
    * Enforce scope for a tool call.
    *
    * 1. Verifies the grant token JWT offline (JWKS cached, <1ms after first call)
@@ -365,15 +380,22 @@ export class Grantex {
 
     const wrapped = Object.create(tool);
     wrapped.invoke = async function (...args: unknown[]): Promise<unknown> {
-      const token = typeof options.grantToken === 'function'
-        ? options.grantToken()
-        : options.grantToken;
+      const getToken = () => typeof options.grantToken === 'function' ? options.grantToken() : options.grantToken;
 
-      const result = await self.enforce({
-        grantToken: token,
+      let result = await self.enforce({
+        grantToken: getToken(),
         connector: options.connector,
         tool: options.tool,
       });
+
+      // Retry once with refreshed token if expired and grantToken is a getter
+      if (!result.allowed && result.reason.includes('expired') && typeof options.grantToken === 'function') {
+        result = await self.enforce({
+          grantToken: getToken(),
+          connector: options.connector,
+          tool: options.tool,
+        });
+      }
 
       if (!result.allowed) {
         throw new Error(`Grantex scope denied: ${result.reason}`);

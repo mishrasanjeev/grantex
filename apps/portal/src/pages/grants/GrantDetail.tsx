@@ -224,6 +224,44 @@ export function GrantDetail() {
               </tbody>
             </table>
           </div>
+
+          {/* Sample tool-level breakdown for known connectors */}
+          <h3 className="text-xs font-medium text-gx-muted mt-6 mb-3">Tool-Level Access (based on permission hierarchy)</h3>
+          <div className="space-y-3">
+            {grant.scopes.map((scope) => {
+              const parts = scope.split(':');
+              const connector = parts[1] ?? '';
+              const grantedPerm = parts[2] ?? 'read';
+              const levels = ['read', 'write', 'delete', 'admin'];
+              const grantedIdx = levels.indexOf(grantedPerm);
+              // Sample tools for this connector
+              const sampleTools: Record<string, {name: string; perm: string}[]> = {
+                salesforce: [{name:'query',perm:'read'},{name:'create_lead',perm:'write'},{name:'delete_contact',perm:'delete'}],
+                hubspot: [{name:'list_contacts',perm:'read'},{name:'create_deal',perm:'write'}],
+                jira: [{name:'search_issues',perm:'read'},{name:'create_issue',perm:'write'},{name:'transition_issue',perm:'write'}],
+                stripe: [{name:'list_charges',perm:'read'},{name:'create_payment_intent',perm:'write'},{name:'create_refund',perm:'write'}],
+                s3: [{name:'list_objects',perm:'read'},{name:'upload_document',perm:'write'},{name:'delete_object',perm:'delete'}],
+              };
+              const tools = sampleTools[connector];
+              if (!tools) return null;
+              return (
+                <div key={scope} className="bg-gx-bg rounded-lg p-3">
+                  <div className="text-xs font-mono text-gx-accent2 mb-2">{connector} (granted: {grantedPerm})</div>
+                  <div className="flex flex-wrap gap-2">
+                    {tools.map(t => {
+                      const toolIdx = levels.indexOf(t.perm);
+                      const allowed = toolIdx <= grantedIdx;
+                      return (
+                        <span key={t.name} className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-mono ${allowed ? 'bg-gx-accent/10 text-gx-accent' : 'bg-gx-danger/10 text-gx-danger line-through'}`}>
+                          {allowed ? '\u2713' : '\u2717'} {t.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </Card>
       )}
 

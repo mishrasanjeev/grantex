@@ -119,6 +119,25 @@ export class ToolManifest {
   }
 
   /**
+   * Load a ToolManifest from a JSON or YAML file.
+   * YAML requires the `yaml` package to be installed.
+   */
+  static async fromFile(filePath: string): Promise<ToolManifest> {
+    const fs = await import('node:fs');
+    const content = fs.readFileSync(filePath, 'utf-8');
+    if (filePath.endsWith('.yaml') || filePath.endsWith('.yml')) {
+      try {
+        // Dynamic import — yaml is an optional peer dependency
+        const yaml = (await import('yaml' as string)) as { parse: (s: string) => unknown };
+        return ToolManifest.fromJSON(yaml.parse(content) as Record<string, unknown>);
+      } catch {
+        throw new Error('yaml package required for YAML manifests: npm install yaml');
+      }
+    }
+    return ToolManifest.fromJSON(JSON.parse(content) as Record<string, unknown>);
+  }
+
+  /**
    * Create a ToolManifest from a JSON object (e.g., loaded from file).
    *
    * Expected shape:
