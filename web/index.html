@@ -1073,6 +1073,14 @@
         <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">One command to inspect any grant token. Scopes, expiry, delegation chain, revocation status. Works offline.</p>
       </a>
 
+      <a href="#scope-enforcement" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#f97583;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">v0.3.1</span>
+          <span style="color:var(--text);font-weight:600;">Scope Enforcement</span>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">enforce() + wrapTool() + Express/FastAPI middleware. 54 pre-built manifests for Salesforce, HubSpot, Jira, SAP, and 49 more. &lt;1ms per call.</p>
+      </a>
+
     </div>
   </div>
 </section>
@@ -1080,10 +1088,10 @@
 <!-- ── Scope Enforcement ──────────────────────────────────────────────────── -->
 <section id="scope-enforcement" style="padding:64px 0;border-bottom:1px solid var(--border);">
   <div class="container">
-    <div class="section-label">New in v0.3.0</div>
+    <div class="section-label">New in v0.3.1</div>
     <h2 class="section-title" style="font-size:clamp(24px,4vw,36px);">Scope Enforcement &mdash; Control What Agents Can Do</h2>
     <p class="section-sub" style="max-width:640px;margin:0 auto 40px;">
-      One line to verify a grant token and check tool-level permissions. 54 pre-built manifests for enterprise connectors. Offline JWKS verification, &lt;1ms per call.
+      Verify grant tokens and enforce tool-level permissions in one call. 54 pre-built manifests, LangChain wrappers, Express/FastAPI middleware. Offline JWKS, &lt;1ms per call.
     </p>
 
     <!-- Visual flow -->
@@ -1117,6 +1125,34 @@
 grantex.load_manifest(manifest)
 result = grantex.enforce(token, <span style="color:#c3e88d;">"salesforce"</span>, <span style="color:#c3e88d;">"delete_contact"</span>)
 <span style="color:var(--muted);"># result.allowed = False</span></code></pre>
+    </div>
+
+    <!-- Feature grid -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;max-width:960px;margin:0 auto 48px;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;">
+        <div style="font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px;">enforce()</div>
+        <div style="font-size:12px;color:var(--muted);">Verify JWT + check tool permission via manifest. One line, &lt;1ms.</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;">
+        <div style="font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px;">wrapTool()</div>
+        <div style="font-size:12px;color:var(--muted);">Wrap LangChain tools with auto scope enforcement. Denied tools throw.</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;">
+        <div style="font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px;">Express / FastAPI</div>
+        <div style="font-size:12px;color:var(--muted);">enforceMiddleware() for Express. GrantexEnforcer dependency for FastAPI.</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;">
+        <div style="font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px;">Permission Hierarchy</div>
+        <div style="font-size:12px;color:var(--muted);">admin &gt; delete &gt; write &gt; read. Write scope covers read tools.</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;">
+        <div style="font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px;">Permissive Mode</div>
+        <div style="font-size:12px;color:var(--muted);">Log-only mode for migration. See what would be denied without blocking.</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;">
+        <div style="font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px;">CLI: manifest generate</div>
+        <div style="font-size:12px;color:var(--muted);">Auto-generate manifests from connector source code. Review and commit.</div>
+      </div>
     </div>
 
     <!-- Connector grid -->
