@@ -52,7 +52,7 @@ class GrantexEnforcer:
 
         if not token:
             try:
-                from fastapi import HTTPException
+                from fastapi import HTTPException  # type: ignore[import-not-found,unused-ignore]
                 raise HTTPException(status_code=401, detail="Missing grant token")
             except ImportError:
                 raise PermissionError("Missing grant token")
@@ -65,7 +65,7 @@ class GrantexEnforcer:
 
         if not result.allowed:
             try:
-                from fastapi import HTTPException
+                from fastapi import HTTPException  # type: ignore[import-not-found,unused-ignore]
                 raise HTTPException(
                     status_code=403,
                     detail={"code": "SCOPE_DENIED", "message": result.reason, "connector": connector, "tool": tool},
