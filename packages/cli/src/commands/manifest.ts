@@ -222,12 +222,13 @@ export function manifestCommand(): Command {
       const fs = await import('node:fs');
       const path = await import('node:path');
 
-      if (!fs.existsSync(sourcePath)) {
+      let stats: import('node:fs').Stats;
+      try {
+        stats = fs.statSync(sourcePath);
+      } catch {
         console.error(chalk.red(`File not found: ${sourcePath}`));
         process.exit(1);
       }
-
-      const stats = fs.statSync(sourcePath);
       if (stats.isDirectory()) {
         // Scan all Python/TypeScript files in directory
         const files = scanDir(sourcePath, opts.recursive ?? false);
