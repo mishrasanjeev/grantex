@@ -286,6 +286,8 @@ Permission.is_valid("execute")  # False
 
 ## wrap_tool()
 
+<Note>Coming in v0.3.1. This method is not yet available on the SDK client.</Note>
+
 Wrap a LangChain `StructuredTool` so that enforcement runs automatically before every invocation.
 
 ```python
@@ -317,12 +319,14 @@ protected_tool = grantex.wrap_tool(
 
 ## FastAPI Integration
 
-Use `GrantexEnforcer` as a FastAPI dependency for automatic enforcement on tool execution routes:
+<Note>Coming in v0.3.1. The FastAPI enforce dependency is not yet available.</Note>
+
+Use `GrantexAuth` from `grantex_fastapi` as a FastAPI dependency for automatic enforcement on tool execution routes:
 
 ```python
-from grantex.fastapi import GrantexEnforcer
+from grantex_fastapi import GrantexAuth
 
-enforcer = GrantexEnforcer(grantex)
+enforcer = GrantexAuth(grantex)
 
 @app.post("/api/tools/{connector}/{tool}")
 async def execute_tool(

@@ -15,7 +15,7 @@ import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
 const grantex = new Grantex({ apiKey: 'gx_...' });
 grantex.loadManifest(salesforceManifest);
 
-const result = grantex.enforce({
+const result = await grantex.enforce({
   grantToken: token,
   connector: 'salesforce',
   tool: 'delete_contact',
@@ -33,7 +33,7 @@ if (!result.allowed) {
 Check whether a grant token permits a tool call.
 
 ```typescript
-enforce(options: EnforceOptions): EnforceResult
+enforce(options: EnforceOptions): Promise<EnforceResult>
 ```
 
 ### Parameters: `EnforceOptions`
@@ -91,7 +91,7 @@ enforce(options: EnforceOptions): EnforceResult
 ### Example
 
 ```typescript
-const result = grantex.enforce({
+const result = await grantex.enforce({
   grantToken: 'eyJhbGciOiJSUzI1NiIs...',
   connector: 'salesforce',
   tool: 'create_lead',
@@ -110,7 +110,7 @@ if (result.allowed) {
 When a token includes a capped scope, pass the `amount` to enforce against the cap:
 
 ```typescript
-const result = grantex.enforce({
+const result = await grantex.enforce({
   grantToken: token,
   connector: 'stripe',
   tool: 'create_payment_intent',
@@ -287,6 +287,8 @@ permissionCovers(Permission.READ, Permission.READ);     // true  — exact match
 
 ## wrapTool()
 
+<Note>Coming in v0.3.1. This method is not yet available on the SDK client.</Note>
+
 Wrap a LangChain `StructuredTool` so that enforcement runs automatically before every invocation.
 
 ```typescript
@@ -317,6 +319,8 @@ const protectedTool = grantex.wrapTool(myLangChainTool, {
 ---
 
 ## enforceMiddleware()
+
+<Note>Coming in v0.3.1. This method is not yet available on the SDK client.</Note>
 
 Express middleware that enforces scope on every request to a route.
 

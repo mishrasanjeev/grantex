@@ -33,7 +33,7 @@ import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
 const grantex = new Grantex({ apiKey: 'gx_...' });
 grantex.loadManifest(salesforceManifest);
 
-const result = grantex.enforce({ grantToken: token, connector: 'salesforce', tool: 'delete_contact' });
+const result = await grantex.enforce({ grantToken: token, connector: 'salesforce', tool: 'delete_contact' });
 if (!result.allowed) throw new Error(result.reason);
 ```
 
@@ -154,6 +154,8 @@ grantex.loadManifest(salesforceManifest);
 
 ## LangChain Integration
 
+<Note>Coming in v0.3.1. The `wrap_tool()` / `wrapTool()` method is not yet available on the SDK client.</Note>
+
 Wrap any LangChain tool with `wrap_tool()` to enforce scope checks automatically on every invocation:
 
 <CodeGroup>
@@ -187,6 +189,8 @@ const protectedTool = grantex.wrapTool(myLangChainTool, {
 
 ## Express / FastAPI Middleware
 
+<Note>Coming in v0.3.1. The `enforceMiddleware()` (Express) and `GrantexAuth` (FastAPI) enforce middleware are not yet available.</Note>
+
 Add one-line enforcement to your tool execution endpoints:
 
 <CodeGroup>
@@ -206,9 +210,9 @@ app.use('/api/tools/*', grantex.enforceMiddleware({
 ```
 
 ```python FastAPI
-from grantex.fastapi import GrantexEnforcer
+from grantex_fastapi import GrantexAuth
 
-enforcer = GrantexEnforcer(grantex)
+enforcer = GrantexAuth(grantex)
 
 @app.post("/api/tools/{connector}/{tool}")
 async def execute_tool(
@@ -243,9 +247,6 @@ grantex manifest validate --agent-tools create_lead,query,delete_contact --conne
 
 # Dry-run enforcement against a real token
 grantex enforce test --token "eyJ..." --connector salesforce --tool delete_contact
-
-# Generate a manifest from your connector source code
-grantex manifest generate ./connectors/inventory_service.py
 ```
 
 See [CLI manifest reference](/cli/manifest) and [CLI enforce reference](/cli/enforce) for full details.
@@ -359,7 +360,7 @@ const grantToken = tokenResponse.grantToken;
 
 // 3. Before every tool call, enforce scope
 async function callTool(connector: string, tool: string, params: any) {
-  const result = grantex.enforce({ grantToken, connector, tool });
+  const result = await grantex.enforce({ grantToken, connector, tool });
   if (!result.allowed) throw new Error(`Agent denied: ${result.reason}`);
 
   return executeConnectorTool(connector, tool, params);
