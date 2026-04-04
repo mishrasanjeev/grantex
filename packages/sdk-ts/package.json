@@ -11,6 +11,14 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./manifests/*": {
+      "import": "./dist/manifests/*.js",
+      "types": "./dist/manifests/*.d.ts"
+    },
+    "./manifests": {
+      "import": "./dist/manifests/index.js",
+      "types": "./dist/manifests/index.d.ts"
     }
   },
   "main": "./dist/index.js",

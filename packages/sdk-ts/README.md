@@ -668,6 +668,36 @@ try {
 - [Python SDK](https://pypi.org/project/grantex/)
 - [API Reference](https://api.grantex.dev/.well-known/jwks.json)
 
+## Scope Enforcement (v0.3.1)
+
+Enforce tool-level permissions using pre-built manifests for 54+ enterprise connectors.
+
+```typescript
+import { Grantex, ToolManifest, Permission } from '@grantex/sdk';
+import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+grantex.loadManifest(salesforceManifest);
+
+// One line — verify token + check tool permission
+const result = await grantex.enforce({
+  grantToken: token,
+  connector: 'salesforce',
+  tool: 'delete_contact',
+});
+// result.allowed = false — "write scope does not permit delete operations"
+```
+
+**Features:**
+- `enforce()` — verify JWT + check tool permission via manifest, <1ms
+- `wrapTool()` — auto-enforce on LangChain tools
+- `enforceMiddleware()` — Express/Fastify HTTP middleware
+- 54 pre-built manifests (Salesforce, HubSpot, Jira, Stripe, SAP, S3, and 48 more)
+- Permission hierarchy: `admin > delete > write > read`
+- Permissive mode for migration (`enforce_mode: 'permissive'`)
+
+[Full Guide](https://docs.grantex.dev/guides/scope-enforcement) | [API Reference](https://docs.grantex.dev/sdks/typescript/enforce)
+
 ## Grantex Ecosystem
 
 | Package | Description |
