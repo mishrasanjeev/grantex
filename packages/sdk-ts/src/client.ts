@@ -19,6 +19,8 @@ import { DomainsClient } from './resources/domains.js';
 import { WebAuthnClient } from './resources/webauthn.js';
 import { CredentialsClient } from './resources/credentials.js';
 import { PassportsClient } from './resources/passports.js';
+import { ToolManifest, Permission, permissionCovers, type EnforceOptions, type EnforceResult } from './manifest.js';
+import { verifyGrantToken } from './verify.js';
 import type {
   AuthorizationRequest,
   AuthorizeParams,
@@ -29,12 +31,15 @@ import type {
   SignupResponse,
   UpdateDeveloperSettingsParams,
   UpdateDeveloperSettingsResponse,
+  VerifiedGrant,
 } from './types.js';
 
 const DEFAULT_BASE_URL = 'https://api.grantex.dev';
 
 export class Grantex {
   readonly #http: HttpClient;
+  readonly #manifests: Map<string, ToolManifest> = new Map();
+  #jwksUri: string;
 
   readonly agents: AgentsClient;
   readonly grants: GrantsClient;
@@ -97,6 +102,7 @@ export class Grantex {
     this.webauthn = new WebAuthnClient(this.#http);
     this.credentials = new CredentialsClient(this.#http);
     this.passports = new PassportsClient(this.#http);
+    this.#jwksUri = `${(options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '')}/.well-known/jwks.json`;
   }
 
   /**
@@ -153,5 +159,173 @@ export class Grantex {
    */
   updateSettings(params: UpdateDeveloperSettingsParams): Promise<UpdateDeveloperSettingsResponse> {
     return this.#http.patch<UpdateDeveloperSettingsResponse>('/v1/me', params);
+  }
+
+  /**
+   * Load a tool manifest for scope enforcement.
+   * Manifests define what permission level each tool requires.
+   */
+  loadManifest(manifest: ToolManifest): void {
+    this.#manifests.set(manifest.connector, manifest);
+  }
+
+  /**
+   * Load multiple tool manifests at once.
+   */
+  loadManifests(manifests: ToolManifest[]): void {
+    for (const m of manifests) {
+      this.#manifests.set(m.connector, m);
+    }
+  }
+
+  /**
+   * Enforce scope for a tool call.
+   *
+   * 1. Verifies the grant token JWT offline (JWKS cached, <1ms after first call)
+   * 2. Looks up the tool's required permission from loaded manifests
+   * 3. Checks if the granted scope level covers the required permission
+   *
+   * Fails closed: unknown connectors/tools are denied by default.
+   *
+   * @example
+   * ```ts
+   * const result = await grantex.enforce({
+   *   grantToken: token,
+   *   connector: 'salesforce',
+   *   tool: 'delete_contact',
+   * });
+   * if (!result.allowed) throw new Error(result.reason);
+   * ```
+   */
+  async enforce(options: EnforceOptions): Promise<EnforceResult> {
+    const { grantToken, connector, tool, amount } = options;
+    const base: Omit<EnforceResult, 'allowed' | 'reason'> = {
+      grantId: '',
+      agentDid: '',
+      scopes: [],
+      permission: '',
+      connector,
+      tool,
+    };
+
+    // 1. Verify the token offline via JWKS
+    let grant: VerifiedGrant;
+    try {
+      grant = await verifyGrantToken(grantToken, { jwksUri: this.#jwksUri });
+    } catch (err) {
+      return {
+        ...base,
+        allowed: false,
+        reason: `Token verification failed: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+
+    base.grantId = grant.grantId;
+    base.agentDid = grant.agentDid;
+    base.scopes = grant.scopes;
+
+    // 2. Look up manifest for the connector
+    const manifest = this.#manifests.get(connector);
+    if (!manifest) {
+      return {
+        ...base,
+        allowed: false,
+        reason: `No manifest loaded for connector '${connector}'. Load a manifest first.`,
+      };
+    }
+
+    // 3. Look up tool permission from manifest
+    const requiredPermission = manifest.getPermission(tool);
+    if (!requiredPermission) {
+      return {
+        ...base,
+        allowed: false,
+        reason: `Unknown tool '${tool}' on connector '${connector}'. Tool not found in manifest.`,
+      };
+    }
+    base.permission = requiredPermission;
+
+    // 4. Find the best matching scope for this connector
+    const grantedPermission = this.#resolveGrantedPermission(grant.scopes, connector);
+    if (!grantedPermission) {
+      return {
+        ...base,
+        allowed: false,
+        reason: `No scope grants access to connector '${connector}'.`,
+      };
+    }
+
+    // 5. Check permission hierarchy
+    if (!permissionCovers(grantedPermission, requiredPermission)) {
+      return {
+        ...base,
+        allowed: false,
+        reason: `${grantedPermission} scope does not permit ${requiredPermission} operations on ${connector}.`,
+      };
+    }
+
+    // 6. Check capped amount if provided
+    if (amount !== undefined) {
+      const cap = this.#extractCap(grant.scopes, connector);
+      if (cap !== undefined && amount > cap) {
+        return {
+          ...base,
+          allowed: false,
+          reason: `Amount ${amount} exceeds budget cap of ${cap} on ${connector}.`,
+        };
+      }
+    }
+
+    return { ...base, allowed: true, reason: '' };
+  }
+
+  /**
+   * Resolve the highest granted permission level for a connector from scope strings.
+   * Scope format: `tool:{connector}:{permission}[:{resource}][:capped:{N}]`
+   */
+  #resolveGrantedPermission(scopes: string[], connector: string): string | undefined {
+    let best: string | undefined;
+    let bestLevel = -1;
+
+    const levels: Record<string, number> = { read: 0, write: 1, delete: 2, admin: 3 };
+
+    for (const scope of scopes) {
+      const parts = scope.split(':');
+      // Match: tool:{connector}:{permission}:...
+      if (parts[0] === 'tool' && parts[1] === connector && parts[2]) {
+        const level = levels[parts[2]] ?? -1;
+        if (level > bestLevel) {
+          bestLevel = level;
+          best = parts[2];
+        }
+      }
+      // Also match agenticorg:{connector}:{permission}
+      if (parts[0] === 'agenticorg' && parts[1] === connector && parts[2]) {
+        const level = levels[parts[2]] ?? -1;
+        if (level > bestLevel) {
+          bestLevel = level;
+          best = parts[2];
+        }
+      }
+    }
+
+    return best;
+  }
+
+  /**
+   * Extract the budget cap from capped scopes for a connector.
+   * Scope format: `tool:{connector}:{permission}:{resource}:capped:{N}`
+   */
+  #extractCap(scopes: string[], connector: string): number | undefined {
+    for (const scope of scopes) {
+      const parts = scope.split(':');
+      if (parts[0] === 'tool' && parts[1] === connector) {
+        const cappedIdx = parts.indexOf('capped');
+        if (cappedIdx !== -1 && parts[cappedIdx + 1]) {
+          return Number(parts[cappedIdx + 1]);
+        }
+      }
+    }
+    return undefined;
   }
 }

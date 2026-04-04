@@ -77,6 +77,21 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - SOC 2 Type I certified
 - Full compliance matrix: https://docs.grantex.dev/guides/compliance-matrix
 
+## Scope Enforcement (v0.3.0+)
+
+- `grantex.enforce(grant_token, connector, tool)` — verify JWT + check tool permission via manifest
+- `grantex.load_manifest(manifest)` / `load_manifests([...])` — load tool permission definitions
+- `grantex.wrap_tool(langchain_tool, connector, tool, grant_token)` — auto-enforce on LangChain tools
+- `ToolManifest(connector, tools)` — define custom connector permissions
+- `Permission.READ/WRITE/DELETE/ADMIN` — hierarchy: admin > delete > write > read
+- 54 pre-built manifests: from grantex.manifests.salesforce import manifest
+- CLI: grantex manifest generate ./connectors/ — auto-generate from code
+- CLI: grantex manifest list — browse bundled manifests
+- CLI: grantex enforce test --token X --connector Y --tool Z — dry-run
+- Unknown tools denied by default (fail closed)
+- Custom manifests: inline, JSON file, or extend pre-built
+- Case study: AgenticOrg — 35 agents, 54 connectors, 340+ tools, all enforced
+
 ## Comparisons
 
 - vs OAuth 2.0: Grantex adds cryptographic agent identity, delegation chains, action-level audit, and sub-second revocation

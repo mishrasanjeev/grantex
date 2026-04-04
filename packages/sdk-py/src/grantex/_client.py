@@ -34,6 +34,9 @@ from .resources._usage import UsageClient
 from .resources._domains import DomainsClient
 from .resources._webauthn import WebAuthnClient
 from .resources._credentials import CredentialsClient
+from .manifest import ToolManifest, Permission, EnforceResult
+from ._verify import verify_grant_token
+from ._types import VerifyGrantTokenOptions
 
 _DEFAULT_BASE_URL = "https://api.grantex.dev"
 
@@ -104,6 +107,8 @@ class Grantex:
         self.domains = DomainsClient(self._http)
         self.webauthn = WebAuthnClient(self._http)
         self.credentials = CredentialsClient(self._http)
+        self._manifests: dict[str, ToolManifest] = {}
+        self._jwks_uri = f"{base_url.rstrip('/')}/.well-known/jwks.json"
 
     @staticmethod
     def signup(
@@ -154,6 +159,149 @@ class Grantex:
         """
         data = self._http.post("/v1/authorize", params.to_dict())
         return AuthorizationRequest.from_dict(data)
+
+    def load_manifest(self, manifest: ToolManifest) -> None:
+        """Load a tool manifest for scope enforcement."""
+        self._manifests[manifest.connector] = manifest
+
+    def load_manifests(self, manifests: list[ToolManifest]) -> None:
+        """Load multiple tool manifests at once."""
+        for m in manifests:
+            self._manifests[m.connector] = m
+
+    def enforce(
+        self,
+        grant_token: str,
+        connector: str,
+        tool: str,
+        amount: float | None = None,
+    ) -> EnforceResult:
+        """Enforce scope for a tool call.
+
+        1. Verifies the grant token JWT offline (JWKS cached, <1ms after first call)
+        2. Looks up the tool's required permission from loaded manifests
+        3. Checks if the granted scope level covers the required permission
+
+        Fails closed: unknown connectors/tools are denied by default.
+
+        Example::
+
+            result = grantex.enforce(
+                grant_token=token,
+                connector="salesforce",
+                tool="delete_contact",
+            )
+            if not result.allowed:
+                raise PermissionError(result.reason)
+        """
+        base = {
+            "grant_id": "",
+            "agent_did": "",
+            "scopes": [],
+            "permission": "",
+            "connector": connector,
+            "tool": tool,
+        }
+
+        # 1. Verify the token offline via JWKS
+        try:
+            grant = verify_grant_token(
+                grant_token,
+                VerifyGrantTokenOptions(jwks_uri=self._jwks_uri),
+            )
+        except Exception as e:
+            return EnforceResult(
+                allowed=False,
+                reason=f"Token verification failed: {e}",
+                **base,
+            )
+
+        base["grant_id"] = getattr(grant, "grant_id", "")
+        base["agent_did"] = getattr(grant, "agent_did", "")
+        base["scopes"] = getattr(grant, "scopes", [])
+
+        # 2. Look up manifest for the connector
+        manifest = self._manifests.get(connector)
+        if not manifest:
+            return EnforceResult(
+                allowed=False,
+                reason=f"No manifest loaded for connector '{connector}'. Load a manifest first.",
+                **base,
+            )
+
+        # 3. Look up tool permission from manifest
+        required_permission = manifest.get_permission(tool)
+        if not required_permission:
+            return EnforceResult(
+                allowed=False,
+                reason=f"Unknown tool '{tool}' on connector '{connector}'. Tool not found in manifest.",
+                **base,
+            )
+        base["permission"] = required_permission
+
+        # 4. Find the best matching scope for this connector
+        granted_permission = self._resolve_granted_permission(
+            base["scopes"], connector
+        )
+        if not granted_permission:
+            return EnforceResult(
+                allowed=False,
+                reason=f"No scope grants access to connector '{connector}'.",
+                **base,
+            )
+
+        # 5. Check permission hierarchy
+        if not Permission.covers(granted_permission, required_permission):
+            return EnforceResult(
+                allowed=False,
+                reason=f"{granted_permission} scope does not permit {required_permission} operations on {connector}.",
+                **base,
+            )
+
+        # 6. Check capped amount if provided
+        if amount is not None:
+            cap = self._extract_cap(base["scopes"], connector)
+            if cap is not None and amount > cap:
+                return EnforceResult(
+                    allowed=False,
+                    reason=f"Amount {amount} exceeds budget cap of {cap} on {connector}.",
+                    **base,
+                )
+
+        return EnforceResult(allowed=True, reason="", **base)
+
+    @staticmethod
+    def _resolve_granted_permission(
+        scopes: list[str], connector: str
+    ) -> str | None:
+        """Resolve the highest granted permission level for a connector."""
+        levels = {"read": 0, "write": 1, "delete": 2, "admin": 3}
+        best: str | None = None
+        best_level = -1
+
+        for scope in scopes:
+            parts = scope.split(":")
+            if len(parts) >= 3 and parts[0] in ("tool", "agenticorg") and parts[1] == connector:
+                level = levels.get(parts[2], -1)
+                if level > best_level:
+                    best_level = level
+                    best = parts[2]
+
+        return best
+
+    @staticmethod
+    def _extract_cap(scopes: list[str], connector: str) -> float | None:
+        """Extract budget cap from capped scopes."""
+        for scope in scopes:
+            parts = scope.split(":")
+            if parts[0] == "tool" and len(parts) > 1 and parts[1] == connector:
+                try:
+                    idx = parts.index("capped")
+                    if idx + 1 < len(parts):
+                        return float(parts[idx + 1])
+                except ValueError:
+                    continue
+        return None
 
     def close(self) -> None:
         self._http.close()

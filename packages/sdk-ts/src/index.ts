@@ -32,6 +32,9 @@ export {
   type ListPassportsParams,
 } from './resources/passports.js';
 
+// Scope enforcement
+export { ToolManifest, Permission, permissionCovers, type EnforceOptions, type EnforceResult, type ToolManifestOptions } from './manifest.js';
+
 // Types
 export type {
   RateLimit,

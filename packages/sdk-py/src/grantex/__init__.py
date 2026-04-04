@@ -125,6 +125,7 @@ from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent,
 from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook_signature
+from .manifest import ToolManifest, Permission, EnforceResult
 
 __version__ = "0.1.6"
 
@@ -260,6 +261,10 @@ __all__ = [
     "EventsClient",
     "GrantexStreamEvent",
     "StreamOptions",
+    # Scope Enforcement / Manifests
+    "ToolManifest",
+    "Permission",
+    "EnforceResult",
     # Version
     "__version__",
 ]

@@ -29,6 +29,8 @@ import { decodeCommand } from './commands/decode.js';
 import { auditCmdCommand } from './commands/audit-cmd.js';
 import { registryCommand } from './commands/registry-cmd.js';
 import { initCommand } from './commands/init.js';
+import { manifestCommand } from './commands/manifest.js';
+import { enforceCommand } from './commands/enforce.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -36,7 +38,7 @@ export function createProgram(): Command {
   program
     .name('grantex')
     .description('CLI for the Grantex delegated authorization protocol')
-    .version('0.1.7')
+    .version('0.2.0')
     .option('--json', 'Output results as JSON (machine-readable)')
     .hook('preAction', () => {
       if (program.opts().json) {
@@ -72,6 +74,8 @@ export function createProgram(): Command {
   program.addCommand(auditCmdCommand());
   program.addCommand(registryCommand());
   program.addCommand(initCommand());
+  program.addCommand(manifestCommand());
+  program.addCommand(enforceCommand());
 
   return program;
 }
