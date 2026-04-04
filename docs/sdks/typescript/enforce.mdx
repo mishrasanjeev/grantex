@@ -287,8 +287,6 @@ permissionCovers(Permission.READ, Permission.READ);     // true  — exact match
 
 ## wrapTool()
 
-<Note>Coming in v0.3.1. This method is not yet available on the SDK client.</Note>
-
 Wrap a LangChain `StructuredTool` so that enforcement runs automatically before every invocation.
 
 ```typescript
@@ -319,8 +317,6 @@ const protectedTool = grantex.wrapTool(myLangChainTool, {
 ---
 
 ## enforceMiddleware()
-
-<Note>Coming in v0.3.1. This method is not yet available on the SDK client.</Note>
 
 Express middleware that enforces scope on every request to a route.
 

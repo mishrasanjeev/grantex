@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any, Callable
 
 import httpx
 
@@ -74,6 +75,7 @@ class Grantex:
         api_key: str | None = None,
         base_url: str = _DEFAULT_BASE_URL,
         timeout: float = 30.0,
+        enforce_mode: str = "strict",
     ) -> None:
         resolved_key = api_key or os.environ.get("GRANTEX_API_KEY", "")
         if not resolved_key:
@@ -81,6 +83,8 @@ class Grantex:
                 "Grantex API key is required. Pass `api_key` or set the "
                 "GRANTEX_API_KEY environment variable."
             )
+
+        self._enforce_mode = enforce_mode
 
         self._http = HttpClient(
             base_url=base_url,
@@ -206,11 +210,11 @@ class Grantex:
                 VerifyGrantTokenOptions(jwks_uri=self._jwks_uri),
             )
         except Exception as e:
-            return EnforceResult(
+            return self._apply_enforce_mode(EnforceResult(
                 allowed=False, reason=f"Token verification failed: {e}",
                 grant_id=grant_id, agent_did=agent_did, scopes=scopes,
                 permission=permission, connector=connector, tool=tool,
-            )
+            ))
 
         grant_id = getattr(grant, "grant_id", "")
         agent_did = getattr(grant, "agent_did", "")
@@ -226,28 +230,28 @@ class Grantex:
         # 2. Look up manifest for the connector
         manifest = self._manifests.get(connector)
         if not manifest:
-            return _denied(f"No manifest loaded for connector '{connector}'. Load a manifest first.")
+            return self._apply_enforce_mode(_denied(f"No manifest loaded for connector '{connector}'. Load a manifest first."))
 
         # 3. Look up tool permission from manifest
         required_permission = manifest.get_permission(tool)
         if not required_permission:
-            return _denied(f"Unknown tool '{tool}' on connector '{connector}'. Tool not found in manifest.")
+            return self._apply_enforce_mode(_denied(f"Unknown tool '{tool}' on connector '{connector}'. Tool not found in manifest."))
         permission = required_permission
 
         # 4. Find the best matching scope for this connector
         granted_permission = self._resolve_granted_permission(scopes, connector)
         if not granted_permission:
-            return _denied(f"No scope grants access to connector '{connector}'.")
+            return self._apply_enforce_mode(_denied(f"No scope grants access to connector '{connector}'."))
 
         # 5. Check permission hierarchy
         if not Permission.covers(granted_permission, required_permission):
-            return _denied(f"{granted_permission} scope does not permit {required_permission} operations on {connector}.")
+            return self._apply_enforce_mode(_denied(f"{granted_permission} scope does not permit {required_permission} operations on {connector}."))
 
         # 6. Check capped amount if provided
         if amount is not None:
             cap = self._extract_cap(scopes, connector)
             if cap is not None and amount > cap:
-                return _denied(f"Amount {amount} exceeds budget cap of {cap} on {connector}.")
+                return self._apply_enforce_mode(_denied(f"Amount {amount} exceeds budget cap of {cap} on {connector}."))
 
         return EnforceResult(
             allowed=True, reason="",
@@ -287,6 +291,89 @@ class Grantex:
                 except ValueError:
                     continue
         return None
+
+    def _apply_enforce_mode(self, result: EnforceResult) -> EnforceResult:
+        """In permissive mode, allow denied results with a warning."""
+        if not result.allowed and self._enforce_mode == "permissive":
+            import warnings
+            warnings.warn(
+                f"[grantex] PERMISSIVE MODE — would deny: {result.reason} "
+                f"(connector={result.connector}, tool={result.tool})",
+                stacklevel=2,
+            )
+            return EnforceResult(
+                allowed=True,
+                reason=result.reason,
+                grant_id=result.grant_id,
+                agent_did=result.agent_did,
+                scopes=result.scopes,
+                permission=result.permission,
+                connector=result.connector,
+                tool=result.tool,
+            )
+        return result
+
+    def wrap_tool(
+        self,
+        tool: Any,
+        *,
+        connector: str,
+        tool_name: str,
+        grant_token: str | Callable[[], str],
+    ) -> Any:
+        """Wrap a LangChain StructuredTool with automatic Grantex scope enforcement.
+
+        Before each invocation, the grant token is verified and scopes are checked.
+        If denied, raises PermissionError instead of calling the tool.
+
+        Args:
+            tool: A LangChain StructuredTool or compatible object with _run/_arun methods.
+            connector: Connector name for scope lookup.
+            tool_name: Tool name for manifest permission lookup.
+            grant_token: Static token string or callable that returns the current token.
+
+        Example::
+
+            protected = grantex.wrap_tool(
+                my_tool,
+                connector="salesforce",
+                tool_name="create_lead",
+                grant_token=lambda: state["grant_token"],
+            )
+        """
+        from typing import Callable as _Callable
+        grantex = self
+
+        original_run = getattr(tool, '_run', None)
+        original_arun = getattr(tool, '_arun', None)
+
+        def _get_token() -> str:
+            return grant_token() if callable(grant_token) else grant_token
+
+        def _check() -> None:
+            result = grantex.enforce(
+                grant_token=_get_token(),
+                connector=connector,
+                tool=tool_name,
+            )
+            if not result.allowed:
+                raise PermissionError(f"Grantex scope denied: {result.reason}")
+
+        if original_run:
+            original = original_run
+            def wrapped_run(*args: Any, **kwargs: Any) -> Any:
+                _check()
+                return original(*args, **kwargs)
+            tool._run = wrapped_run
+
+        if original_arun:
+            original_async = original_arun
+            async def wrapped_arun(*args: Any, **kwargs: Any) -> Any:
+                _check()
+                return await original_async(*args, **kwargs)
+            tool._arun = wrapped_arun
+
+        return tool
 
     def close(self) -> None:
         self._http.close()

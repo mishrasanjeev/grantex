@@ -29,6 +29,16 @@ const agent = {
   createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-02T00:00:00Z',
 };
 
+const agentWithScopes = {
+  ...agent,
+  scopes: ['grantex:hubspot:read', 'grantex:stripe:write', 'grantex:jira:delete', 'grantex:sap:admin'],
+};
+
+const agentNoScopes = {
+  ...agent,
+  scopes: [],
+};
+
 const grants = [
   { grantId: 'g1', agentId: 'a1', principalId: 'user@t.com', developerId: 'd1',
     scopes: ['read'], status: 'active' as const, issuedAt: '2026-01-01T00:00:00Z',
@@ -114,5 +124,46 @@ describe('AgentDetail', () => {
     await waitFor(() => expect(screen.getByText('Agent One')).toBeInTheDocument());
     expect(screen.getAllByText('read').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('write').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders "Scope Enforcement" card when agent has scopes', async () => {
+    mockGetAgent.mockResolvedValue(agentWithScopes);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('Scope Enforcement')).toBeInTheDocument());
+    expect(screen.getByText(/Permission levels derived from this agent's scopes/)).toBeInTheDocument();
+  });
+
+  it('shows permission level for each scope (READ/WRITE/DELETE/ADMIN)', async () => {
+    mockGetAgent.mockResolvedValue(agentWithScopes);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('Scope Enforcement')).toBeInTheDocument());
+    // Each scope appears in both ScopePills and enforcement table, so use getAllByText
+    expect(screen.getAllByText('grantex:hubspot:read').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('grantex:stripe:write').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('grantex:jira:delete').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('grantex:sap:admin').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows "Allows" column with correct levels', async () => {
+    mockGetAgent.mockResolvedValue(agentWithScopes);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('Scope Enforcement')).toBeInTheDocument());
+    // Check column header exists
+    expect(screen.getByText('Allows')).toBeInTheDocument();
+    // read scope -> "READ only"
+    expect(screen.getByText('READ only')).toBeInTheDocument();
+    // write scope -> "READ, WRITE"
+    expect(screen.getByText('READ, WRITE')).toBeInTheDocument();
+    // delete scope -> "READ, WRITE, DELETE"
+    expect(screen.getByText('READ, WRITE, DELETE')).toBeInTheDocument();
+    // admin scope -> "READ, WRITE, DELETE, ADMIN"
+    expect(screen.getByText('READ, WRITE, DELETE, ADMIN')).toBeInTheDocument();
+  });
+
+  it('does not render scope enforcement card when no scopes', async () => {
+    mockGetAgent.mockResolvedValue(agentNoScopes);
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('Agent One')).toBeInTheDocument());
+    expect(screen.queryByText('Scope Enforcement')).not.toBeInTheDocument();
   });
 });

@@ -28,6 +28,11 @@ const grant = {
   delegationDepth: 1, parentGrantId: 'g0',
 };
 
+const grantWithEnforcement = {
+  ...grant,
+  scopes: ['grantex:hubspot:read', 'grantex:stripe:write', 'grantex:jira:delete', 'grantex:sap:admin'],
+};
+
 const auditEntries = [{
   entryId: 'e1', agentId: 'a1', agentDid: 'did:web:a1', grantId: 'g1',
   principalId: 'user@t.com', developerId: 'd1', action: 'token.exchange',
@@ -110,5 +115,81 @@ describe('GrantDetail', () => {
     r();
     await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Grant not found', 'error'));
     expect(mockNavigate).toHaveBeenCalledWith('/dashboard/grants');
+  });
+
+  it('renders "Scope Enforcement Breakdown" card', async () => {
+    mockGetGrant.mockResolvedValue(grantWithEnforcement);
+    r();
+    await waitFor(() => expect(screen.getByText('Scope Enforcement Breakdown')).toBeInTheDocument());
+    expect(screen.getByText(/What this grant token allows and denies/)).toBeInTheDocument();
+  });
+
+  it('shows permission badges with correct colors', async () => {
+    mockGetGrant.mockResolvedValue(grantWithEnforcement);
+    r();
+    await waitFor(() => expect(screen.getByText('Scope Enforcement Breakdown')).toBeInTheDocument());
+
+    // The "Granted Level" column shows permission badges
+    // read -> green (bg-gx-accent/15 text-gx-accent)
+    const readBadge = screen.getByText((content, el) =>
+      content === 'read' &&
+      el?.tagName === 'SPAN' &&
+      (el?.className ?? '').includes('bg-gx-accent/15'),
+    );
+    expect(readBadge).toBeInTheDocument();
+
+    // write -> yellow (bg-gx-warning/15 text-gx-warning)
+    const writeBadge = screen.getByText((content, el) =>
+      content === 'write' &&
+      el?.tagName === 'SPAN' &&
+      (el?.className ?? '').includes('bg-gx-warning/15'),
+    );
+    expect(writeBadge).toBeInTheDocument();
+
+    // delete -> red (bg-gx-danger/15 text-gx-danger)
+    const deleteBadge = screen.getByText((content, el) =>
+      content === 'delete' &&
+      el?.tagName === 'SPAN' &&
+      (el?.className ?? '').includes('bg-gx-danger/15'),
+    );
+    expect(deleteBadge).toBeInTheDocument();
+
+    // admin -> purple (bg-purple-500/15 text-purple-400)
+    const adminBadge = screen.getByText((content, el) =>
+      content === 'admin' &&
+      el?.tagName === 'SPAN' &&
+      (el?.className ?? '').includes('bg-purple-500/15'),
+    );
+    expect(adminBadge).toBeInTheDocument();
+  });
+
+  it('shows level pills (read/write/delete/admin) with allowed/denied styling', async () => {
+    mockGetGrant.mockResolvedValue(grantWithEnforcement);
+    r();
+    await waitFor(() => expect(screen.getByText('Scope Enforcement Breakdown')).toBeInTheDocument());
+
+    // For the "read" scope row, only "read" should be allowed (bg-gx-accent/10), others should be struck through
+    // For the "admin" scope row, all levels should be allowed
+    // Check that "Tool Access" column header exists
+    expect(screen.getByText('Tool Access')).toBeInTheDocument();
+
+    // All four level pills should appear in every scope row (4 scopes x 4 levels = 16 pills in the Tool Access column)
+    // Allowed pills use: bg-gx-accent/10 text-gx-accent
+    // Denied pills use: bg-gx-border/30 text-gx-muted line-through
+    const allPills = screen.getAllByText((content, el) =>
+      ['read', 'write', 'delete', 'admin'].includes(content) &&
+      el?.tagName === 'SPAN' &&
+      (el?.className ?? '').includes('text-[10px]'),
+    );
+    // 4 scopes x 4 level pills = 16
+    expect(allPills.length).toBe(16);
+
+    // Count allowed pills (bg-gx-accent/10) — read:1, write:2, delete:3, admin:4 = 10
+    const allowedPills = allPills.filter((el) => el.className.includes('bg-gx-accent/10'));
+    expect(allowedPills.length).toBe(10);
+
+    // Count denied pills (line-through) — read:3, write:2, delete:1, admin:0 = 6
+    const deniedPills = allPills.filter((el) => el.className.includes('line-through'));
+    expect(deniedPills.length).toBe(6);
   });
 });

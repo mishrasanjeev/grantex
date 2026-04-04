@@ -165,6 +165,47 @@ export function AgentDetail() {
         </Card>
       </div>
 
+      {/* Scope enforcement — permission breakdown */}
+      {agent.scopes.length > 0 && (
+        <Card className="mb-6">
+          <h2 className="text-sm font-semibold text-gx-text mb-4">Scope Enforcement</h2>
+          <p className="text-xs text-gx-muted mb-3">
+            Permission levels derived from this agent's scopes. Tools at or below the granted level are allowed.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gx-border">
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">Scope</th>
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">Connector</th>
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">Permission</th>
+                  <th className="text-left py-2 pr-4 text-xs font-medium text-gx-muted">Allows</th>
+                </tr>
+              </thead>
+              <tbody>
+                {agent.scopes.map((scope) => {
+                  const parts = scope.split(':');
+                  const connector = parts[1] ?? '—';
+                  const perm = parts[2] ?? 'read';
+                  const permColor = perm === 'admin' ? 'text-purple-400' : perm === 'delete' ? 'text-gx-danger' : perm === 'write' ? 'text-gx-warning' : 'text-gx-accent';
+                  const allows = perm === 'admin' ? 'READ, WRITE, DELETE, ADMIN' : perm === 'delete' ? 'READ, WRITE, DELETE' : perm === 'write' ? 'READ, WRITE' : 'READ only';
+                  return (
+                    <tr key={scope} className="border-b border-gx-border/50 last:border-0">
+                      <td className="py-2.5 pr-4 font-mono text-xs text-gx-accent2">{scope}</td>
+                      <td className="py-2.5 pr-4 text-xs text-gx-text">{connector}</td>
+                      <td className="py-2.5 pr-4">
+                        <span className={`text-xs font-semibold uppercase ${permColor}`}>{perm}</span>
+                      </td>
+                      <td className="py-2.5 pr-4 text-xs text-gx-muted">{allows}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
       {/* Associated grants */}
       <Card>
         <h2 className="text-sm font-semibold text-gx-text mb-4">

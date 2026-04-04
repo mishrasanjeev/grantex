@@ -126,6 +126,7 @@ from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook_signature
 from .manifest import ToolManifest, Permission, EnforceResult
+from ._fastapi import GrantexEnforcer
 
 __version__ = "0.1.6"
 
@@ -265,6 +266,8 @@ __all__ = [
     "ToolManifest",
     "Permission",
     "EnforceResult",
+    # FastAPI Integration
+    "GrantexEnforcer",
     # Version
     "__version__",
 ]

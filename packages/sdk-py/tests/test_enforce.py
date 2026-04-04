@@ -559,3 +559,159 @@ class TestEnforceResultFields:
         assert result.connector == "salesforce"
         assert result.tool == "delete_contact"
         assert result.permission == "delete"
+
+
+# ── wrap_tool ──────────────────────────────────────────────────────────────
+
+
+class TestWrapTool:
+    @patch("grantex._client.verify_grant_token")
+    def test_calls_original_when_allowed(
+        self, mock_verify: object, client: Grantex
+    ) -> None:
+        mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
+            scopes=("tool:salesforce:write",)
+        )
+        client.load_manifest(
+            ToolManifest(
+                connector="salesforce",
+                tools={"create_lead": Permission.WRITE},
+            )
+        )
+
+        class FakeTool:
+            def _run(self, **kwargs: object) -> str:
+                return "result"
+
+        tool = FakeTool()
+        client.wrap_tool(
+            tool,
+            connector="salesforce",
+            tool_name="create_lead",
+            grant_token="tok",
+        )
+        assert tool._run() == "result"
+
+    @patch("grantex._client.verify_grant_token")
+    def test_raises_when_denied(
+        self, mock_verify: object, client: Grantex
+    ) -> None:
+        mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
+            scopes=("tool:salesforce:read",)
+        )
+        client.load_manifest(
+            ToolManifest(
+                connector="salesforce",
+                tools={"create_lead": Permission.WRITE},
+            )
+        )
+
+        class FakeTool:
+            def _run(self) -> str:
+                return "result"
+
+        tool = FakeTool()
+        client.wrap_tool(
+            tool,
+            connector="salesforce",
+            tool_name="create_lead",
+            grant_token="tok",
+        )
+        with pytest.raises(PermissionError, match="scope denied"):
+            tool._run()
+
+    @patch("grantex._client.verify_grant_token")
+    def test_dynamic_token_getter(
+        self, mock_verify: object, client: Grantex
+    ) -> None:
+        mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
+            scopes=("tool:salesforce:write",)
+        )
+        client.load_manifest(
+            ToolManifest(
+                connector="salesforce",
+                tools={"create_lead": Permission.WRITE},
+            )
+        )
+
+        class FakeTool:
+            def _run(self) -> str:
+                return "ok"
+
+        tokens = ["tok-1"]
+        tool = FakeTool()
+        client.wrap_tool(
+            tool,
+            connector="salesforce",
+            tool_name="create_lead",
+            grant_token=lambda: tokens[0],
+        )
+        tool._run()
+        tokens[0] = "tok-2"
+        tool._run()
+
+
+# ── Permissive mode ────────────────────────────────────────────────────────
+
+
+class TestPermissiveMode:
+    @patch("grantex._client.verify_grant_token")
+    def test_permissive_allows_denied(self, mock_verify: object) -> None:
+        mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
+            scopes=("tool:salesforce:read",)
+        )
+        client = Grantex(api_key="test", enforce_mode="permissive")
+        client.load_manifest(
+            ToolManifest(
+                connector="salesforce",
+                tools={"create_lead": Permission.WRITE},
+            )
+        )
+        result = client.enforce("tok", "salesforce", "create_lead")
+        assert result.allowed is True  # permissive overrides
+
+    @patch("grantex._client.verify_grant_token")
+    def test_strict_denies_normally(self, mock_verify: object) -> None:
+        mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
+            scopes=("tool:salesforce:read",)
+        )
+        client = Grantex(api_key="test")
+        client.load_manifest(
+            ToolManifest(
+                connector="salesforce",
+                tools={"create_lead": Permission.WRITE},
+            )
+        )
+        result = client.enforce("tok", "salesforce", "create_lead")
+        assert result.allowed is False
+
+
+# ── FastAPI GrantexEnforcer ────────────────────────────────────────────────
+
+
+class TestGrantexEnforcer:
+    @patch("grantex._client.verify_grant_token")
+    def test_returns_result_when_allowed(self, mock_verify: object) -> None:
+        mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
+            scopes=("tool:salesforce:write",)
+        )
+        client = Grantex(api_key="test")
+        client.load_manifest(
+            ToolManifest(
+                connector="salesforce",
+                tools={"create_lead": Permission.WRITE},
+            )
+        )
+        from grantex._fastapi import GrantexEnforcer
+
+        enforcer = GrantexEnforcer(client)
+        import asyncio
+
+        result = asyncio.get_event_loop().run_until_complete(
+            enforcer(
+                connector="salesforce",
+                tool="create_lead",
+                authorization="Bearer tok",
+            )
+        )
+        assert result.allowed is True
