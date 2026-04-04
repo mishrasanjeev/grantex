@@ -158,7 +158,7 @@ class EnforceResult:
     agent_did: str = ""
     """Agent DID from the JWT."""
 
-    scopes: list = field(default_factory=list)
+    scopes: list[str] = field(default_factory=list)
     """All scopes from the grant token."""
 
     permission: str = ""

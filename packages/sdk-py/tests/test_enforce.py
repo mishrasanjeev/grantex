@@ -536,7 +536,7 @@ class TestEnforceResultFields:
         assert result.reason == ""
         assert result.grant_id == "grnt_custom"
         assert result.agent_did == "did:grantex:ag_custom"
-        assert result.scopes == ("tool:salesforce:write",)
+        assert result.scopes == ["tool:salesforce:write"]
         assert result.permission == "write"
         assert result.connector == "salesforce"
         assert result.tool == "create_lead"
@@ -555,7 +555,7 @@ class TestEnforceResultFields:
         assert result.allowed is False
         assert result.grant_id == "grnt_denied"
         assert result.agent_did == "did:grantex:ag_denied"
-        assert result.scopes == ("tool:salesforce:read",)
+        assert result.scopes == ["tool:salesforce:read"]
         assert result.connector == "salesforce"
         assert result.tool == "delete_contact"
         assert result.permission == "delete"

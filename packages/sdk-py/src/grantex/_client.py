@@ -194,14 +194,10 @@ class Grantex:
             if not result.allowed:
                 raise PermissionError(result.reason)
         """
-        base = {
-            "grant_id": "",
-            "agent_did": "",
-            "scopes": [],
-            "permission": "",
-            "connector": connector,
-            "tool": tool,
-        }
+        grant_id = ""
+        agent_did = ""
+        scopes: list[str] = []
+        permission = ""
 
         # 1. Verify the token offline via JWKS
         try:
@@ -211,64 +207,53 @@ class Grantex:
             )
         except Exception as e:
             return EnforceResult(
-                allowed=False,
-                reason=f"Token verification failed: {e}",
-                **base,
+                allowed=False, reason=f"Token verification failed: {e}",
+                grant_id=grant_id, agent_did=agent_did, scopes=scopes,
+                permission=permission, connector=connector, tool=tool,
             )
 
-        base["grant_id"] = getattr(grant, "grant_id", "")
-        base["agent_did"] = getattr(grant, "agent_did", "")
-        base["scopes"] = getattr(grant, "scopes", [])
+        grant_id = getattr(grant, "grant_id", "")
+        agent_did = getattr(grant, "agent_did", "")
+        scopes = list(getattr(grant, "scopes", []))
+
+        def _denied(reason: str) -> EnforceResult:
+            return EnforceResult(
+                allowed=False, reason=reason,
+                grant_id=grant_id, agent_did=agent_did, scopes=scopes,
+                permission=permission, connector=connector, tool=tool,
+            )
 
         # 2. Look up manifest for the connector
         manifest = self._manifests.get(connector)
         if not manifest:
-            return EnforceResult(
-                allowed=False,
-                reason=f"No manifest loaded for connector '{connector}'. Load a manifest first.",
-                **base,
-            )
+            return _denied(f"No manifest loaded for connector '{connector}'. Load a manifest first.")
 
         # 3. Look up tool permission from manifest
         required_permission = manifest.get_permission(tool)
         if not required_permission:
-            return EnforceResult(
-                allowed=False,
-                reason=f"Unknown tool '{tool}' on connector '{connector}'. Tool not found in manifest.",
-                **base,
-            )
-        base["permission"] = required_permission
+            return _denied(f"Unknown tool '{tool}' on connector '{connector}'. Tool not found in manifest.")
+        permission = required_permission
 
         # 4. Find the best matching scope for this connector
-        granted_permission = self._resolve_granted_permission(
-            base["scopes"], connector
-        )
+        granted_permission = self._resolve_granted_permission(scopes, connector)
         if not granted_permission:
-            return EnforceResult(
-                allowed=False,
-                reason=f"No scope grants access to connector '{connector}'.",
-                **base,
-            )
+            return _denied(f"No scope grants access to connector '{connector}'.")
 
         # 5. Check permission hierarchy
         if not Permission.covers(granted_permission, required_permission):
-            return EnforceResult(
-                allowed=False,
-                reason=f"{granted_permission} scope does not permit {required_permission} operations on {connector}.",
-                **base,
-            )
+            return _denied(f"{granted_permission} scope does not permit {required_permission} operations on {connector}.")
 
         # 6. Check capped amount if provided
         if amount is not None:
-            cap = self._extract_cap(base["scopes"], connector)
+            cap = self._extract_cap(scopes, connector)
             if cap is not None and amount > cap:
-                return EnforceResult(
-                    allowed=False,
-                    reason=f"Amount {amount} exceeds budget cap of {cap} on {connector}.",
-                    **base,
-                )
+                return _denied(f"Amount {amount} exceeds budget cap of {cap} on {connector}.")
 
-        return EnforceResult(allowed=True, reason="", **base)
+        return EnforceResult(
+            allowed=True, reason="",
+            grant_id=grant_id, agent_did=agent_did, scopes=scopes,
+            permission=permission, connector=connector, tool=tool,
+        )
 
     @staticmethod
     def _resolve_granted_permission(
