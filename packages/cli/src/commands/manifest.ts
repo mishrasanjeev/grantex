@@ -75,7 +75,7 @@ export function manifestCommand(): Command {
     .action((opts: { category?: string }) => {
       let manifests = BUNDLED_MANIFESTS;
       if (opts.category) {
-        manifests = manifests.filter((m) => m.category === opts.category.toLowerCase());
+        manifests = manifests.filter((m) => m.category === opts.category!.toLowerCase());
       }
 
       if (isJsonMode()) {
