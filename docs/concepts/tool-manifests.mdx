@@ -1,0 +1,217 @@
+---
+title: "Tool Manifests"
+sidebarTitle: "Tool Manifests"
+description: "How tool manifests map every tool to a permission level, enabling precise scope enforcement for AI agent tool calls."
+---
+
+## What Is a Tool Manifest?
+
+A tool manifest is a declarative mapping from tool names to permission levels for a specific connector. It tells Grantex exactly which permission is required to call each tool, so enforcement does not have to guess from tool name keywords.
+
+```json
+{
+  "connector": "salesforce",
+  "version": "1.0.0",
+  "description": "Salesforce CRM connector",
+  "tools": {
+    "create_lead": "write",
+    "update_opportunity": "write",
+    "query": "read",
+    "create_task": "write",
+    "get_account": "read",
+    "list_opportunities": "read"
+  }
+}
+```
+
+When an agent calls `create_lead`, Grantex looks up the manifest, sees that `create_lead` requires `write` permission, and checks whether the agent's grant token includes a scope that covers `write` on the `salesforce` connector.
+
+---
+
+## The Permission Hierarchy
+
+Grantex defines four permission levels in a strict hierarchy. Higher levels subsume all lower levels:
+
+```
+admin (level 3)
+  └── delete (level 2)
+       └── write (level 1)
+            └── read (level 0)
+```
+
+| Level | Permission | Typical Operations |
+|-------|-----------|-------------------|
+| 0 | `read` | Query, list, get, search, fetch, check, download |
+| 1 | `write` | Create, update, send, post, upload, apply |
+| 2 | `delete` | Delete, remove, void, terminate, revoke, cancel |
+| 3 | `admin` | Run payroll, period close, force reset, purge |
+
+### Coverage Rules
+
+A scope grants access to all tools at or below its permission level:
+
+| Granted Scope | READ Tools | WRITE Tools | DELETE Tools | ADMIN Tools |
+|:---:|:---:|:---:|:---:|:---:|
+| `tool:X:read` | Allowed | Denied | Denied | Denied |
+| `tool:X:write` | Allowed | Allowed | Denied | Denied |
+| `tool:X:delete` | Allowed | Allowed | Allowed | Denied |
+| `tool:X:admin` | Allowed | Allowed | Allowed | Allowed |
+
+**Example:** An agent with `tool:salesforce:write:*` can call `query` (read) and `create_lead` (write) but cannot call `delete_contact` (delete) or `run_period_close` (admin).
+
+---
+
+## Scope Format
+
+Tool enforcement scopes follow the format:
+
+```
+tool:{connector}:{permission}:{resource}[:capped:{N}]
+```
+
+| Part | Required | Description |
+|------|----------|-------------|
+| `tool` | Yes | Fixed prefix identifying this as a tool scope |
+| `connector` | Yes | The connector name (e.g., `salesforce`, `s3`, `stripe`) |
+| `permission` | Yes | The maximum permission level granted (`read`, `write`, `delete`, `admin`) |
+| `resource` | Yes | The resource pattern (`*` for all tools on this connector) |
+| `capped:N` | No | Optional spending cap per operation (e.g., `capped:500`) |
+
+### Examples
+
+| Scope | Meaning |
+|-------|---------|
+| `tool:salesforce:write:*` | Write access to all Salesforce tools (covers read + write) |
+| `tool:s3:read:*` | Read-only access to all S3 tools |
+| `tool:stripe:write:*:capped:500` | Write access to Stripe tools, capped at 500 per operation |
+| `tool:jira:admin:*` | Full admin access to all Jira tools |
+| `tool:okta:delete:*` | Delete access to all Okta tools (covers read + write + delete) |
+
+---
+
+## How enforce() Uses Manifests
+
+When you call `enforce()`, Grantex performs these steps:
+
+1. **Decode the JWT** — extract `scp` (scopes), `grnt`/`jti` (grant ID), `agt` (agent DID)
+2. **Look up the manifest** — find the loaded manifest for the given connector
+3. **Resolve the permission** — look up the tool name in the manifest to get its required permission level
+4. **Check coverage** — determine if any scope in the token covers the required permission on this connector
+5. **Check caps** — if the scope is capped and an amount was provided, verify the amount is within the cap
+6. **Return the result** — `allowed: true` or `allowed: false` with a reason
+
+```python
+result = grantex.enforce(
+    grant_token=token,           # JWT with scp: ["tool:salesforce:write:*"]
+    connector="salesforce",      # Look up salesforce manifest
+    tool="delete_contact",       # Manifest says: delete permission required
+)
+# Token grants write, tool requires delete -> DENIED
+# result.allowed = False
+# result.reason = "write scope does not permit delete operations on salesforce"
+```
+
+---
+
+## Pre-Built vs Custom Manifests
+
+### Pre-Built Manifests
+
+Grantex ships 54 pre-built manifests covering 340+ tools across five categories:
+
+| Category | Connectors | Tools | Examples |
+|----------|-----------|-------|---------|
+| Finance | 14 | 88 | Stripe, SAP, QuickBooks, NetSuite |
+| HR | 8 | 56 | Darwinbox, Okta, DocuSign, Greenhouse |
+| Marketing | 16 | 107 | Salesforce, HubSpot, Mailchimp, Google Ads |
+| Ops | 7 | 48 | Jira, Confluence, ServiceNow, Zendesk |
+| Comms | 11 | 67 | Gmail, Slack, GitHub, S3, Twilio |
+
+Import and load them directly:
+
+```python
+from grantex.manifests.salesforce import manifest as sf
+from grantex.manifests.stripe import manifest as stripe
+
+grantex.load_manifests([sf, stripe])
+```
+
+### Custom Manifests
+
+For internal APIs, connectors Grantex does not ship, or extensions to pre-built connectors:
+
+- **Inline** — define in code with `ToolManifest(...)`
+- **JSON file** — load from disk with `ToolManifest.from_file("./manifests/my-service.json")`
+- **Extend pre-built** — add tools to an existing manifest with `manifest.add_tool("new_tool", Permission.WRITE)`
+- **CLI generate** — auto-generate from source code with `grantex manifest generate ./connectors/`
+
+---
+
+## Fail-Closed Default
+
+If `enforce()` is called with a connector or tool that has no manifest loaded, the call is **denied by default**:
+
+```python
+result = grantex.enforce(
+    grant_token=token,
+    connector="unknown-service",
+    tool="do_something",
+)
+# result.allowed = False
+# result.reason = "No manifest loaded for connector 'unknown-service'. Load a manifest first."
+```
+
+This fail-closed behavior ensures that agents cannot bypass enforcement by calling tools that were never declared. Every tool must have an explicit permission entry in a loaded manifest.
+
+For development and testing, you can switch to permissive mode:
+
+```python
+grantex = Grantex(
+    api_key=key,
+    enforce_mode="strict",       # default -- deny unknown tools
+    # enforce_mode="permissive", # dev only -- allow unknown tools with warning
+)
+```
+
+<Warning>
+Never use `enforce_mode="permissive"` in production. It defeats the purpose of scope enforcement.
+</Warning>
+
+---
+
+## JSON Manifest File Format
+
+When storing manifests as files (for git, CI, or team sharing), use this JSON format:
+
+```json
+{
+  "connector": "inventory-service",
+  "version": "1.0.0",
+  "description": "Internal warehouse inventory API",
+  "tools": {
+    "get_stock_level": "read",
+    "reserve_inventory": "write",
+    "release_reservation": "write",
+    "adjust_stock": "write",
+    "force_stock_reset": "admin"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `connector` | `string` | Yes | Unique connector identifier |
+| `version` | `string` | No | Semantic version of the manifest (default `"1.0.0"`) |
+| `description` | `string` | No | Human-readable description |
+| `tools` | `object` | Yes | Map of tool name to permission level (`"read"`, `"write"`, `"delete"`, `"admin"`) |
+
+---
+
+## Related
+
+- [Scope Enforcement guide](/guides/scope-enforcement) — end-to-end walkthrough
+- [Scopes concept](/concepts/scopes) — the `resource:action[:constraint]` scope format
+- [TypeScript SDK enforce()](/sdks/typescript/enforce) — API reference
+- [Python SDK enforce()](/sdks/python/enforce) — API reference
+- [CLI manifest commands](/cli/manifest) — browse and validate manifests
+- [AgenticOrg case study](/case-studies/agenticorg) — 54 connectors enforced in production

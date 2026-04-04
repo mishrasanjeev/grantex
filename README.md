@@ -1102,6 +1102,39 @@ bundles = client.policies.bundles()
 
 ---
 
+## Scope Enforcement
+
+Enforce tool-level permissions using pre-built manifests for 54+ enterprise connectors.
+
+### Quick Start
+
+```python
+from grantex import Grantex
+from grantex.manifests.salesforce import manifest
+
+grantex = Grantex(api_key="gx_...")
+grantex.load_manifest(manifest)
+
+result = grantex.enforce(grant_token=token, connector="salesforce", tool="delete_contact")
+# result.allowed = False — "write scope does not permit delete operations"
+```
+
+### Permission Hierarchy
+
+| Scope Level | READ tools | WRITE tools | DELETE tools |
+|:-----------:|:----------:|:-----------:|:------------:|
+| read        | Yes | No | No |
+| write       | Yes | Yes | No |
+| delete      | Yes | Yes | Yes |
+| admin       | Yes | Yes | Yes |
+
+54 pre-built manifests: Salesforce, HubSpot, Jira, Stripe, SAP, S3, Gmail, Slack, GitHub, and 45 more.
+Custom manifests: define inline or generate via CLI.
+
+See the [Scope Enforcement Guide](https://docs.grantex.dev/guides/scope-enforcement) for full documentation.
+
+---
+
 ## Local Development
 
 Start the full stack with one command:

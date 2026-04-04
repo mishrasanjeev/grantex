@@ -34,7 +34,8 @@
               "concepts/scopes",
               "concepts/scope-registry",
               "concepts/delegation",
-              "concepts/vs-oauth"
+              "concepts/vs-oauth",
+              "concepts/tool-manifests"
             ]
           },
           {
@@ -111,7 +112,14 @@
               "guides/anomaly-detection-setup",
               "guides/raspberry-pi",
               "guides/android-gemma4",
-              "guides/ios-gemma4"
+              "guides/ios-gemma4",
+              "guides/scope-enforcement"
+            ]
+          },
+          {
+            "group": "Case Studies",
+            "pages": [
+              "case-studies/agenticorg"
             ]
           },
           {
@@ -176,6 +184,12 @@
             ]
           },
           {
+            "group": "Enforcement",
+            "pages": [
+              "sdks/typescript/enforce"
+            ]
+          },
+          {
             "group": "Reference",
             "pages": [
               "sdks/typescript/errors"
@@ -221,6 +235,12 @@
               "sdks/python/events",
               "sdks/python/usage",
               "sdks/python/domains"
+            ]
+          },
+          {
+            "group": "Enforcement",
+            "pages": [
+              "sdks/python/enforce"
             ]
           },
           {
@@ -342,7 +362,9 @@
             "group": "CLI",
             "pages": [
               "integrations/cli",
-              "cli/verify"
+              "cli/verify",
+              "cli/manifest",
+              "cli/enforce"
             ]
           },
           {

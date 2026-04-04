@@ -1,0 +1,177 @@
+---
+title: "AgenticOrg Case Study"
+sidebarTitle: "AgenticOrg"
+description: "How AgenticOrg enforces scope on 35 AI agents, 54 connectors, and 340+ tools using Grantex tool manifests."
+---
+
+## Overview
+
+[AgenticOrg](https://github.com/mishrasanjeev/agentic-org) is an enterprise AI agent orchestration platform with **35 agents** across 6 domains, connected to **54 enterprise systems** via **340+ tools**. It is live at [agenticorg.ai](https://agenticorg.ai).
+
+AgenticOrg agents call real APIs — Salesforce, Jira, HubSpot, SAP, S3, Gmail, Stripe, and 47 more. Each agent has a shared service account credential for each system. The challenge: how do you prevent an AP Processor agent from deleting contacts when it should only read invoices?
+
+---
+
+## The Problem
+
+AgenticOrg's 35 agents share the same underlying service account credentials for each connected system. The credentials themselves do not restrict what an agent can do:
+
+- **Agent A** (AP Processor) should only read invoices, not delete contacts
+- **Agent B** (Sales Rep) should create leads, not approve payments
+- **Agent C** (Recruiter) should post jobs, not terminate employees
+
+Without per-agent enforcement, any agent with access to the Salesforce credential could call any Salesforce API — reads, writes, deletes, admin operations.
+
+---
+
+## How Grantex Solved It
+
+AgenticOrg integrated Grantex as the authorization layer between agents and their tool connectors:
+
+```
+                     Grantex Token                                   Shared Creds
+  +--------------+  ----------------->  +---------------------+  ----------------->  +------------+
+  |  AI Agent    |                      |   Tool Gateway      |                      | Salesforce  |
+  | (no creds)   |                      | verify token ->     |                      | S3, Jira    |
+  |              |  <-- scoped resp --  | check scope ->      |  <-- response -----  | SAP, FTP    |
+  +--------------+                      | connector           |                      +------------+
+                                        +---------------------+
+                                              |
+                                              v audit
+                                         Grantex Cloud
+```
+
+**The flow:**
+
+1. **Agent creation** — auto-registers on Grantex, gets a DID, tools mapped to scopes
+2. **Human approves** — Grantex issues an RS256-signed grant token with specific scopes
+3. **Every tool call** — Tool Gateway verifies the token, checks scopes against the manifest, then calls the connector
+4. **Agent never sees** the Salesforce/S3/Jira credentials — only the Grantex token
+5. **Revoke a grant** — agent immediately loses access across ALL connected systems
+
+---
+
+## The Remaining Gap: Keyword Guessing
+
+AgenticOrg's initial Tool Gateway guessed `read` vs `write` from tool name keywords:
+
+```python
+# Fragile -- "process_refund" passes as "read" because no keyword matches
+permission = "write" if any(w in tool_name for w in ("create", "delete", ...)) else "read"
+```
+
+This approach had real problems:
+
+- `process_refund` was classified as `read` because no keyword matched
+- `file_gstr3b` was classified as `read` (the word "file" as in "file a return" was not recognized)
+- `void_envelope` was classified as `read` (no "delete" keyword)
+- Any new tool defaulted to `read` even if it performed destructive operations
+
+**Grantex solved this with tool manifests**: explicit permission declarations for every tool on every connector, so no platform has to guess.
+
+---
+
+## The Solution: Tool Manifests + enforce()
+
+AgenticOrg replaced the keyword-guessing logic with Grantex's pre-built manifests:
+
+```python
+from grantex import Grantex
+from grantex.manifests.salesforce import manifest as sf
+from grantex.manifests.hubspot import manifest as hs
+from grantex.manifests.jira import manifest as jira
+# ... all 54 connectors
+
+grantex = Grantex(api_key=os.environ["GRANTEX_API_KEY"])
+grantex.load_manifests([sf, hs, jira, ...])
+
+# In the tool execution hot path -- before every tool call:
+result = grantex.enforce(
+    grant_token=agent_token,
+    connector=connector_name,
+    tool=tool_name,
+)
+if not result.allowed:
+    raise PermissionError(result.reason)
+
+# Proceed with tool execution...
+```
+
+Every one of AgenticOrg's 340+ tools now has an explicit permission level declared in a manifest. No guessing, no keywords, no ambiguity.
+
+---
+
+## Architecture
+
+```
+  Agent Pool (35 agents)
+  ├── Finance Domain
+  │   ├── AP Processor      → scopes: tool:netsuite:read:*, tool:banking_aa:read:*
+  │   ├── Revenue Analyst   → scopes: tool:stripe:read:*, tool:quickbooks:read:*
+  │   └── Tax Filing Agent  → scopes: tool:gstn:write:*, tool:income_tax:write:*
+  ├── Sales Domain
+  │   ├── Lead Generator    → scopes: tool:salesforce:write:*, tool:hubspot:write:*
+  │   └── Deal Closer       → scopes: tool:salesforce:write:*, tool:docusign:write:*
+  ├── HR Domain
+  │   ├── Recruiter         → scopes: tool:greenhouse:write:*, tool:linkedin_talent:write:*
+  │   └── Payroll Admin     → scopes: tool:darwinbox:admin:*, tool:keka:admin:*
+  └── ...
+
+  Tool Gateway
+  ├── grantex.enforce() on every call (< 1ms)
+  ├── 54 pre-built manifests loaded at startup
+  ├── 3 custom manifests for internal APIs
+  └── Fail-closed: unknown tools denied
+```
+
+---
+
+## Results
+
+<Note>
+"35 AI agents, 54 connectors, 340+ tools -- all scope-enforced through one grantex.enforce() call per tool execution. The keyword-guessing approach misclassified 12% of our tools. With manifests, it is zero."
+
+-- AgenticOrg engineering team
+</Note>
+
+**Key metrics after deploying Grantex scope enforcement:**
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Tool misclassification rate | 12% | 0% |
+| Enforcement latency (p99) | N/A (keyword regex) | < 1ms |
+| Permission coverage | ~60% of tools (others defaulted to read) | 100% of tools |
+| Time to add a new connector | Write keyword regex + manual review | Load pre-built manifest (1 line) |
+| Incident response (revoke access) | Per-connector credential rotation | Single grant revocation |
+
+**Enforcement in the hot path:** `grantex.enforce()` runs on every tool call in AgenticOrg's production pipeline. The call decodes the JWT, resolves the permission from the manifest, and checks scope coverage — all in under 1 millisecond, with no network round-trip required for the manifest lookup.
+
+---
+
+## Try It Yourself
+
+1. **Browse the manifests** — see all 54 connectors and their tools:
+   ```bash
+   grantex manifest list
+   ```
+
+2. **Add enforcement to your agent** — five lines of code:
+   ```python
+   from grantex import Grantex
+   from grantex.manifests.salesforce import manifest as sf
+   grantex = Grantex(api_key="gx_...")
+   grantex.load_manifest(sf)
+   result = grantex.enforce(grant_token=token, connector="salesforce", tool="delete_contact")
+   ```
+
+3. **Read the full guide** — [Scope Enforcement](/guides/scope-enforcement)
+
+---
+
+## Related
+
+- [AgenticOrg repository](https://github.com/mishrasanjeev/agentic-org)
+- [Scope Enforcement guide](/guides/scope-enforcement)
+- [Tool Manifests concept](/concepts/tool-manifests)
+- [Python SDK enforce()](/sdks/python/enforce)
+- [TypeScript SDK enforce()](/sdks/typescript/enforce)

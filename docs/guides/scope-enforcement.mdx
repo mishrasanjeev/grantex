@@ -1,0 +1,389 @@
+---
+title: "Scope Enforcement"
+sidebarTitle: "Scope Enforcement"
+description: "Enforce per-tool permissions on every AI agent tool call using manifests, the enforce() API, and framework integrations."
+---
+
+## Why Scope Enforcement Matters
+
+AI agents call real APIs — Salesforce, Jira, Stripe, S3 — using shared service account credentials. The credentials themselves do not restrict what an agent can do. Without enforcement, an agent authorized to *read contacts* can also *delete contacts* if the underlying credential allows it. Grantex scope enforcement closes this gap: every tool call is checked against an explicit permission manifest before execution, ensuring agents can only perform the actions their grant token authorizes.
+
+## Quick Start
+
+Add scope enforcement to your agent in five lines:
+
+<CodeGroup>
+
+```python Python
+from grantex import Grantex
+from grantex.manifests.salesforce import manifest as sf
+
+grantex = Grantex(api_key="gx_...")
+grantex.load_manifest(sf)
+
+result = grantex.enforce(grant_token=token, connector="salesforce", tool="delete_contact")
+if not result.allowed:
+    raise PermissionError(result.reason)
+```
+
+```typescript TypeScript
+import { Grantex } from '@grantex/sdk';
+import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+grantex.loadManifest(salesforceManifest);
+
+const result = grantex.enforce({ grantToken: token, connector: 'salesforce', tool: 'delete_contact' });
+if (!result.allowed) throw new Error(result.reason);
+```
+
+</CodeGroup>
+
+That is all you need. The `enforce()` call decodes the JWT, resolves the tool's required permission from the manifest, and checks whether the token's scopes cover it.
+
+---
+
+## Loading Manifests
+
+Grantex ships **54 pre-built manifests** covering finance, HR, marketing, ops, and comms connectors. Load them before calling `enforce()`.
+
+### Pre-Built Manifests
+
+<CodeGroup>
+
+```python Python
+from grantex import Grantex
+from grantex.manifests.salesforce import manifest as sf
+from grantex.manifests.hubspot import manifest as hs
+from grantex.manifests.jira import manifest as jira
+
+grantex = Grantex(api_key="gx_...")
+grantex.load_manifests([sf, hs, jira])
+```
+
+```typescript TypeScript
+import { Grantex } from '@grantex/sdk';
+import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
+import { hubspotManifest } from '@grantex/sdk/manifests/hubspot';
+import { jiraManifest } from '@grantex/sdk/manifests/jira';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+grantex.loadManifests([salesforceManifest, hubspotManifest, jiraManifest]);
+```
+
+</CodeGroup>
+
+### Custom Manifests
+
+For internal APIs or connectors Grantex does not ship, define your own manifest inline, from a JSON file, or by extending a pre-built manifest.
+
+**Inline definition:**
+
+<CodeGroup>
+
+```python Python
+from grantex import ToolManifest, Permission
+
+grantex.load_manifest(ToolManifest(
+    connector="inventory-service",
+    description="Internal warehouse inventory API",
+    tools={
+        "get_stock_level":   Permission.READ,
+        "reserve_inventory": Permission.WRITE,
+        "force_stock_reset": Permission.ADMIN,
+    },
+))
+```
+
+```typescript TypeScript
+import { ToolManifest, Permission } from '@grantex/sdk';
+
+grantex.loadManifest(new ToolManifest({
+  connector: 'inventory-service',
+  description: 'Internal warehouse inventory API',
+  tools: {
+    'get_stock_level':   Permission.READ,
+    'reserve_inventory': Permission.WRITE,
+    'force_stock_reset': Permission.ADMIN,
+  },
+}));
+```
+
+</CodeGroup>
+
+**From a JSON file:**
+
+<CodeGroup>
+
+```python Python
+grantex.load_manifest(ToolManifest.from_file("./manifests/inventory-service.json"))
+```
+
+```typescript TypeScript
+grantex.loadManifest(ToolManifest.fromJSON(require('./manifests/inventory-service.json')));
+```
+
+</CodeGroup>
+
+**Extend a pre-built manifest:**
+
+<CodeGroup>
+
+```python Python
+from grantex.manifests.salesforce import manifest as sf_manifest
+
+sf_manifest.add_tool("bulk_delete_all", Permission.ADMIN)
+sf_manifest.add_tool("export_all_contacts", Permission.READ)
+
+grantex.load_manifest(sf_manifest)
+```
+
+```typescript TypeScript
+import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
+import { Permission } from '@grantex/sdk';
+
+salesforceManifest.addTool('bulk_delete_all', Permission.ADMIN);
+salesforceManifest.addTool('export_all_contacts', Permission.READ);
+
+grantex.loadManifest(salesforceManifest);
+```
+
+</CodeGroup>
+
+---
+
+## LangChain Integration
+
+Wrap any LangChain tool with `wrap_tool()` to enforce scope checks automatically on every invocation:
+
+<CodeGroup>
+
+```python Python
+protected_tool = grantex.wrap_tool(
+    my_langchain_tool,
+    connector="salesforce",
+    tool="create_lead",
+    grant_token=lambda: current_state["grant_token"],
+)
+
+# Use protected_tool in your LangChain agent — enforcement happens
+# automatically before every call. If the token lacks write scope,
+# the tool raises PermissionError instead of executing.
+```
+
+```typescript TypeScript
+const protectedTool = grantex.wrapTool(myLangChainTool, {
+  connector: 'salesforce',
+  tool: 'create_lead',
+  grantToken: () => currentState.grant_token,
+});
+
+// Use protectedTool in your LangChain agent — enforcement is automatic.
+```
+
+</CodeGroup>
+
+---
+
+## Express / FastAPI Middleware
+
+Add one-line enforcement to your tool execution endpoints:
+
+<CodeGroup>
+
+```typescript Express
+import { Grantex } from '@grantex/sdk';
+import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+grantex.loadManifest(salesforceManifest);
+
+app.use('/api/tools/*', grantex.enforceMiddleware({
+  extractToken: (req) => req.headers.authorization?.replace('Bearer ', ''),
+  extractConnector: (req) => req.params.connector,
+  extractTool: (req) => req.params.tool,
+}));
+```
+
+```python FastAPI
+from grantex.fastapi import GrantexEnforcer
+
+enforcer = GrantexEnforcer(grantex)
+
+@app.post("/api/tools/{connector}/{tool}")
+async def execute_tool(
+    connector: str,
+    tool: str,
+    auth: EnforceResult = Depends(enforcer),
+):
+    # auth.allowed is guaranteed True here — 403 is raised automatically if denied
+    ...
+```
+
+</CodeGroup>
+
+---
+
+## CLI Workflow
+
+The CLI provides a complete manifest workflow: list available manifests, validate your agent's tools against them, and dry-run enforcement.
+
+```bash
+# Browse all 54 pre-built manifests
+grantex manifest list
+
+# Filter by category
+grantex manifest list --category finance
+
+# Show tools in a specific manifest
+grantex manifest show salesforce
+
+# Validate that your agent's tools all have manifest entries
+grantex manifest validate --agent-tools create_lead,query,delete_contact --connector salesforce
+
+# Dry-run enforcement against a real token
+grantex enforce test --token "eyJ..." --connector salesforce --tool delete_contact
+
+# Generate a manifest from your connector source code
+grantex manifest generate ./connectors/inventory_service.py
+```
+
+See [CLI manifest reference](/cli/manifest) and [CLI enforce reference](/cli/enforce) for full details.
+
+---
+
+## Permission Hierarchy
+
+Grantex uses a four-level permission hierarchy. Higher levels subsume all lower levels:
+
+| Level | Permission | Allows | Example Tools |
+|-------|-----------|--------|---------------|
+| 0 | `read` | Query, list, get, search, fetch, download | `get_contact`, `list_invoices`, `search_emails` |
+| 1 | `write` | Read + create, update, send, upload | `create_lead`, `send_email`, `update_issue` |
+| 2 | `delete` | Read + write + delete, remove, void, terminate | `delete_contact`, `void_envelope`, `reject_application` |
+| 3 | `admin` | Everything | `run_payroll`, `run_period_close`, `force_stock_reset` |
+
+**Coverage rules:**
+
+| Granted Scope | READ Tools | WRITE Tools | DELETE Tools | ADMIN Tools |
+|:---:|:---:|:---:|:---:|:---:|
+| `tool:X:read` | Allowed | Denied | Denied | Denied |
+| `tool:X:write` | Allowed | Allowed | Denied | Denied |
+| `tool:X:delete` | Allowed | Allowed | Allowed | Denied |
+| `tool:X:admin` | Allowed | Allowed | Allowed | Allowed |
+
+---
+
+## Scope Format
+
+Tool enforcement scopes use the format:
+
+```
+tool:{connector}:{permission}:{resource}[:capped:{N}]
+```
+
+Examples:
+
+| Scope | Meaning |
+|-------|---------|
+| `tool:salesforce:write:*` | Write access to all Salesforce tools |
+| `tool:s3:read:*` | Read-only access to S3 tools |
+| `tool:stripe:write:*:capped:500` | Write access to Stripe tools, capped at $500 per operation |
+| `tool:jira:admin:*` | Full admin access to all Jira tools |
+
+---
+
+## Complete Example
+
+A full agent with scope enforcement from token exchange to tool execution:
+
+<CodeGroup>
+
+```python Python
+import os
+from grantex import Grantex, ExchangeTokenParams
+from grantex.manifests.salesforce import manifest as sf
+from grantex.manifests.gmail import manifest as gmail
+
+# 1. Initialize client and load manifests
+grantex = Grantex(api_key=os.environ["GRANTEX_API_KEY"])
+grantex.load_manifests([sf, gmail])
+
+# 2. Exchange authorization code for a grant token
+token_response = grantex.tokens.exchange(ExchangeTokenParams(
+    code="auth_code_from_callback",
+    agent_id="agt_sales_rep",
+))
+grant_token = token_response.grant_token
+# Token scopes: ["tool:salesforce:write:*", "tool:gmail:read:*"]
+
+# 3. Before every tool call, enforce scope
+def call_tool(connector: str, tool: str, **kwargs):
+    result = grantex.enforce(
+        grant_token=grant_token,
+        connector=connector,
+        tool=tool,
+    )
+    if not result.allowed:
+        raise PermissionError(f"Agent denied: {result.reason}")
+
+    # Proceed with the actual tool execution
+    return execute_connector_tool(connector, tool, **kwargs)
+
+# 4. These calls succeed
+call_tool("salesforce", "create_lead", name="Acme Corp")     # write -> write: allowed
+call_tool("salesforce", "query", soql="SELECT Id FROM Lead") # write -> read: allowed
+call_tool("gmail", "search_emails", query="from:acme")       # read -> read: allowed
+
+# 5. These calls are denied
+call_tool("salesforce", "delete_contact", id="003xx")        # write -> delete: DENIED
+call_tool("gmail", "send_email", to="ceo@acme.com")          # read -> write: DENIED
+```
+
+```typescript TypeScript
+import { Grantex } from '@grantex/sdk';
+import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
+import { gmailManifest } from '@grantex/sdk/manifests/gmail';
+
+// 1. Initialize client and load manifests
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+grantex.loadManifests([salesforceManifest, gmailManifest]);
+
+// 2. Exchange authorization code for a grant token
+const tokenResponse = await grantex.tokens.exchange({
+  code: 'auth_code_from_callback',
+  agentId: 'agt_sales_rep',
+});
+const grantToken = tokenResponse.grantToken;
+// Token scopes: ["tool:salesforce:write:*", "tool:gmail:read:*"]
+
+// 3. Before every tool call, enforce scope
+async function callTool(connector: string, tool: string, params: any) {
+  const result = grantex.enforce({ grantToken, connector, tool });
+  if (!result.allowed) throw new Error(`Agent denied: ${result.reason}`);
+
+  return executeConnectorTool(connector, tool, params);
+}
+
+// 4. These calls succeed
+await callTool('salesforce', 'create_lead', { name: 'Acme Corp' });
+await callTool('salesforce', 'query', { soql: 'SELECT Id FROM Lead' });
+await callTool('gmail', 'search_emails', { query: 'from:acme' });
+
+// 5. These calls are denied
+await callTool('salesforce', 'delete_contact', { id: '003xx' });  // DENIED
+await callTool('gmail', 'send_email', { to: 'ceo@acme.com' });    // DENIED
+```
+
+</CodeGroup>
+
+---
+
+## Related Resources
+
+- [Tool Manifests concept](/concepts/tool-manifests) — permission hierarchy, scope format, fail-closed behavior
+- [TypeScript SDK enforce() reference](/sdks/typescript/enforce)
+- [Python SDK enforce() reference](/sdks/python/enforce)
+- [CLI manifest commands](/cli/manifest)
+- [CLI enforce test command](/cli/enforce)
+- [AgenticOrg case study](/case-studies/agenticorg) — 35 agents, 54 connectors, 340+ tools in production

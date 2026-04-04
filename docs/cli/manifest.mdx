@@ -1,0 +1,288 @@
+---
+title: "grantex manifest"
+sidebarTitle: "manifest"
+description: "Browse pre-built tool manifests, inspect connector tools, and validate agent tool coverage from the command line."
+---
+
+## Overview
+
+The `grantex manifest` commands let you browse the 54 pre-built tool manifests bundled with Grantex, inspect which tools each connector exposes, and validate that your agent's tools all have manifest entries.
+
+```bash
+npm install -g @grantex/cli
+```
+
+---
+
+## grantex manifest list
+
+List all available pre-built manifests, optionally filtered by category.
+
+```bash
+grantex manifest list
+```
+
+### Output
+
+```
+Available manifests (54 connectors, 340+ tools):
+
+  FINANCE (14 connectors, 88 tools)
+    banking_aa          5 tools
+    gstn                8 tools
+    netsuite            8 tools
+    oracle_fusion      10 tools
+    quickbooks          6 tools
+    sap                 7 tools
+    stripe              8 tools
+    tally               6 tools
+    zoho_books          7 tools
+    pinelabs_plural     6 tools
+    income_tax_india    7 tools
+    epfo                6 tools
+    mca_portal          4 tools
+    sanctions_api       5 tools
+
+  HR (8 connectors, 56 tools)
+    darwinbox          10 tools
+    docusign            6 tools
+    greenhouse          8 tools
+    keka                6 tools
+    linkedin_talent     6 tools
+    okta                8 tools
+    zoom                6 tools
+    ...
+
+  MARKETING (16 connectors, 107 tools)
+    salesforce          6 tools
+    hubspot            13 tools
+    mailchimp          10 tools
+    ...
+
+  OPS (7 connectors, 48 tools)
+    jira               11 tools
+    confluence          6 tools
+    ...
+
+  COMMS (11 connectors, 67 tools)
+    gmail               4 tools
+    slack               7 tools
+    github              9 tools
+    ...
+```
+
+### Filter by Category
+
+```bash
+grantex manifest list --category finance
+```
+
+```
+Finance manifests (14 connectors, 88 tools):
+
+  banking_aa          5 tools
+  gstn                8 tools
+  netsuite            8 tools
+  oracle_fusion      10 tools
+  quickbooks          6 tools
+  sap                 7 tools
+  stripe              8 tools
+  tally               6 tools
+  zoho_books          7 tools
+  pinelabs_plural     6 tools
+  income_tax_india    7 tools
+  epfo                6 tools
+  mca_portal          4 tools
+  sanctions_api       5 tools
+```
+
+### JSON Output
+
+```bash
+grantex manifest list --json
+```
+
+```json
+{
+  "manifests": [
+    {
+      "connector": "banking_aa",
+      "category": "finance",
+      "toolCount": 5,
+      "tools": ["fetch_bank_statement", "check_account_balance", "get_transaction_list", "request_consent", "fetch_fi_data"]
+    },
+    {
+      "connector": "salesforce",
+      "category": "marketing",
+      "toolCount": 6,
+      "tools": ["create_lead", "update_opportunity", "query", "create_task", "get_account", "list_opportunities"]
+    }
+  ],
+  "totalConnectors": 54,
+  "totalTools": 340
+}
+```
+
+---
+
+## grantex manifest show
+
+Show the tools and permission levels for a specific connector.
+
+```bash
+grantex manifest show <connector>
+```
+
+### Example
+
+```bash
+grantex manifest show salesforce
+```
+
+```
+salesforce (6 tools) — Marketing
+
+  Tool                    Permission
+  ──────────────────────  ──────────
+  create_lead             write
+  update_opportunity      write
+  query                   read
+  create_task             write
+  get_account             read
+  list_opportunities      read
+```
+
+```bash
+grantex manifest show okta
+```
+
+```
+okta (8 tools) — HR
+
+  Tool                    Permission
+  ──────────────────────  ──────────
+  provision_user          write
+  deactivate_user         delete
+  assign_group            write
+  remove_group            delete
+  get_access_log          read
+  reset_mfa               admin
+  list_active_sessions    read
+  suspend_user            delete
+```
+
+### JSON Output
+
+```bash
+grantex manifest show salesforce --json
+```
+
+```json
+{
+  "connector": "salesforce",
+  "category": "marketing",
+  "toolCount": 6,
+  "tools": {
+    "create_lead": "write",
+    "update_opportunity": "write",
+    "query": "read",
+    "create_task": "write",
+    "get_account": "read",
+    "list_opportunities": "read"
+  }
+}
+```
+
+---
+
+## grantex manifest validate
+
+Validate that a set of agent tools all have entries in a connector manifest. Useful for CI/CD checks before deployment.
+
+```bash
+grantex manifest validate --agent-tools <tools> --connector <connector>
+```
+
+### Example
+
+```bash
+grantex manifest validate --agent-tools create_lead,query,delete_contact --connector salesforce
+```
+
+```
+Validating 3 tools against salesforce manifest...
+
+  create_lead      write       (salesforce)
+  query            read        (salesforce)
+  delete_contact   NOT FOUND
+
+1 tool missing from salesforce manifest.
+Add "delete_contact" to a custom manifest or remove it from the agent's tool set.
+
+Exit code: 1
+```
+
+When all tools are found:
+
+```bash
+grantex manifest validate --agent-tools create_lead,query,get_account --connector salesforce
+```
+
+```
+Validating 3 tools against salesforce manifest...
+
+  create_lead      write       (salesforce)
+  query            read        (salesforce)
+  get_account      read        (salesforce)
+
+All 3 tools have manifest entries.
+```
+
+### JSON Output
+
+```bash
+grantex manifest validate --agent-tools create_lead,query --connector salesforce --json
+```
+
+```json
+{
+  "connector": "salesforce",
+  "totalTools": 2,
+  "matched": 2,
+  "missing": 0,
+  "tools": [
+    { "name": "create_lead", "permission": "write", "found": true },
+    { "name": "query", "permission": "read", "found": true }
+  ]
+}
+```
+
+---
+
+## Options
+
+| Flag | Description | Applies To |
+|------|-------------|------------|
+| `--category <name>` | Filter manifests by category (`finance`, `hr`, `marketing`, `ops`, `comms`) | `list` |
+| `--agent-tools <tools>` | Comma-separated list of tool names to validate | `validate` |
+| `--connector <name>` | The connector manifest to validate against | `validate` |
+| `--json` | Output machine-readable JSON instead of formatted text | All commands |
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success (list/show completed, or all tools validated) |
+| `1` | Validation failed (one or more tools missing from manifest) |
+| `2` | Usage error (missing arguments, unknown connector) |
+
+---
+
+## Related Commands
+
+| Command | Description |
+|---------|-------------|
+| [`grantex enforce test`](/cli/enforce) | Dry-run scope enforcement against a real token |
+| [`grantex verify`](/cli/verify) | Inspect a grant token's scopes, expiry, and delegation chain |
