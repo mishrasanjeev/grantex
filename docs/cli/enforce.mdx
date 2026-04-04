@@ -1,0 +1,211 @@
+---
+title: "grantex enforce"
+sidebarTitle: "enforce"
+description: "Dry-run scope enforcement from the command line. Test whether a grant token permits a specific tool call before deploying."
+---
+
+## Overview
+
+`grantex enforce test` lets you dry-run scope enforcement against a real grant token without writing any code. Pass a token, connector, and tool name to see whether the call would be allowed or denied, and why.
+
+```bash
+npm install -g @grantex/cli
+```
+
+---
+
+## grantex enforce test
+
+Test whether a grant token permits a specific tool call.
+
+```bash
+grantex enforce test --token <jwt> --connector <connector> --tool <tool>
+```
+
+### Allowed Example
+
+```bash
+grantex enforce test \
+  --token "eyJhbGciOiJSUzI1NiIs..." \
+  --connector salesforce \
+  --tool create_lead
+```
+
+```
+  Scope Enforcement Test
+  ───────────────────────────────────────────
+
+  Result         ALLOWED
+  Connector      salesforce
+  Tool           create_lead
+  Permission     write (from manifest)
+
+  Token Scopes
+  └ tool:salesforce:write:*
+
+  Grant ID       grnt_01HXYZ
+  Agent DID      did:grantex:ag_01HXYZ
+
+  ─────────────────────────────────────────────
+```
+
+### Denied Example
+
+```bash
+grantex enforce test \
+  --token "eyJhbGciOiJSUzI1NiIs..." \
+  --connector salesforce \
+  --tool delete_contact
+```
+
+```
+  Scope Enforcement Test
+  ───────────────────────────────────────────
+
+  Result         DENIED
+  Connector      salesforce
+  Tool           delete_contact
+  Permission     delete (from manifest)
+
+  Token Scopes
+  └ tool:salesforce:write:*
+
+  Reason         write scope does not permit delete operations
+
+  Grant ID       grnt_01HXYZ
+  Agent DID      did:grantex:ag_01HXYZ
+
+  ─────────────────────────────────────────────
+```
+
+---
+
+## Capped Scopes
+
+Use the `--amount` flag to test enforcement against capped scopes:
+
+```bash
+grantex enforce test \
+  --token "eyJ..." \
+  --connector stripe \
+  --tool create_payment_intent \
+  --amount 750
+```
+
+```
+  Scope Enforcement Test
+  ───────────────────────────────────────────
+
+  Result         DENIED
+  Connector      stripe
+  Tool           create_payment_intent
+  Permission     write (from manifest)
+
+  Token Scopes
+  └ tool:stripe:write:*:capped:500
+
+  Reason         amount 750 exceeds cap of 500
+
+  ─────────────────────────────────────────────
+```
+
+When within the cap:
+
+```bash
+grantex enforce test \
+  --token "eyJ..." \
+  --connector stripe \
+  --tool create_payment_intent \
+  --amount 200
+```
+
+```
+  Scope Enforcement Test
+  ───────────────────────────────────────────
+
+  Result         ALLOWED
+  Connector      stripe
+  Tool           create_payment_intent
+  Permission     write (from manifest)
+  Amount         200 (within cap of 500)
+
+  Token Scopes
+  └ tool:stripe:write:*:capped:500
+
+  ─────────────────────────────────────────────
+```
+
+---
+
+## JSON Output
+
+Use `--json` for machine-readable output, useful for scripting and CI pipelines:
+
+```bash
+grantex enforce test \
+  --token "eyJ..." \
+  --connector salesforce \
+  --tool delete_contact \
+  --json
+```
+
+```json
+{
+  "allowed": false,
+  "connector": "salesforce",
+  "tool": "delete_contact",
+  "permission": "delete",
+  "scopes": ["tool:salesforce:write:*"],
+  "reason": "write scope does not permit delete operations",
+  "grantId": "grnt_01HXYZ",
+  "agentDid": "did:grantex:ag_01HXYZ"
+}
+```
+
+Allowed result:
+
+```json
+{
+  "allowed": true,
+  "connector": "salesforce",
+  "tool": "create_lead",
+  "permission": "write",
+  "scopes": ["tool:salesforce:write:*"],
+  "reason": "",
+  "grantId": "grnt_01HXYZ",
+  "agentDid": "did:grantex:ag_01HXYZ"
+}
+```
+
+---
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `--token <jwt>` | The grant token to test against (required) |
+| `--connector <name>` | The connector name (required) |
+| `--tool <name>` | The tool name (required) |
+| `--amount <number>` | Amount to test against capped scopes |
+| `--json` | Output machine-readable JSON |
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Tool call is allowed |
+| `1` | Tool call is denied |
+| `2` | Usage error (missing arguments, invalid token) |
+
+---
+
+## Related Commands
+
+| Command | Description |
+|---------|-------------|
+| [`grantex manifest list`](/cli/manifest) | Browse all 54 pre-built tool manifests |
+| [`grantex manifest show <connector>`](/cli/manifest#grantex-manifest-show) | Inspect tools and permissions for a connector |
+| [`grantex manifest validate`](/cli/manifest#grantex-manifest-validate) | Validate agent tools against a manifest |
+| [`grantex verify`](/cli/verify) | Inspect a grant token's scopes, expiry, and delegation chain |

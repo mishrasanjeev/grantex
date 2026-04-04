@@ -1,0 +1,350 @@
+---
+title: "Enforce"
+sidebarTitle: "Enforce"
+description: "Check whether an agent's grant token permits a specific tool call. Load manifests, call enforce(), and wrap LangChain tools."
+---
+
+## Overview
+
+The enforce API verifies that an agent's grant token includes sufficient scope to call a specific tool on a specific connector. It combines JWT verification with manifest-based permission resolution in a single call.
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+grantex.loadManifest(salesforceManifest);
+
+const result = grantex.enforce({
+  grantToken: token,
+  connector: 'salesforce',
+  tool: 'delete_contact',
+});
+
+if (!result.allowed) {
+  console.log(result.reason); // "write scope does not cover delete operations on salesforce"
+}
+```
+
+---
+
+## enforce()
+
+Check whether a grant token permits a tool call.
+
+```typescript
+enforce(options: EnforceOptions): EnforceResult
+```
+
+### Parameters: `EnforceOptions`
+
+<ParamField body="grantToken" type="string" required>
+  The JWT grant token issued by Grantex. Decoded and verified inline.
+</ParamField>
+
+<ParamField body="connector" type="string" required>
+  The connector name to check against (e.g., `"salesforce"`, `"s3"`, `"jira"`). Must match a loaded manifest.
+</ParamField>
+
+<ParamField body="tool" type="string" required>
+  The tool name to check (e.g., `"delete_contact"`, `"create_lead"`). Must be declared in the connector's manifest.
+</ParamField>
+
+<ParamField body="amount" type="number">
+  Optional amount for capped scopes. When the token includes a capped scope like `tool:stripe:write:*:capped:500`, pass the transaction amount to check against the cap.
+</ParamField>
+
+### Response: `EnforceResult`
+
+<ResponseField name="allowed" type="boolean">
+  `true` if the tool call is permitted by the token's scopes.
+</ResponseField>
+
+<ResponseField name="reason" type="string">
+  Human-readable reason when `allowed` is `false`. Empty string when allowed.
+</ResponseField>
+
+<ResponseField name="grantId" type="string">
+  The grant ID extracted from the JWT `grnt` (or `jti`) claim.
+</ResponseField>
+
+<ResponseField name="agentDid" type="string">
+  The agent DID extracted from the JWT `agt` claim.
+</ResponseField>
+
+<ResponseField name="scopes" type="string[]">
+  All scopes from the JWT `scp` claim.
+</ResponseField>
+
+<ResponseField name="permission" type="string">
+  The resolved permission level for this tool from the manifest (`"read"`, `"write"`, `"delete"`, or `"admin"`).
+</ResponseField>
+
+<ResponseField name="connector" type="string">
+  The connector name that was checked.
+</ResponseField>
+
+<ResponseField name="tool" type="string">
+  The tool name that was checked.
+</ResponseField>
+
+### Example
+
+```typescript
+const result = grantex.enforce({
+  grantToken: 'eyJhbGciOiJSUzI1NiIs...',
+  connector: 'salesforce',
+  tool: 'create_lead',
+});
+
+if (result.allowed) {
+  console.log(`Allowed: ${result.tool} on ${result.connector}`);
+  console.log(`Grant: ${result.grantId}, Agent: ${result.agentDid}`);
+} else {
+  console.log(`Denied: ${result.reason}`);
+}
+```
+
+### Capped Scopes
+
+When a token includes a capped scope, pass the `amount` to enforce against the cap:
+
+```typescript
+const result = grantex.enforce({
+  grantToken: token,
+  connector: 'stripe',
+  tool: 'create_payment_intent',
+  amount: 750,
+});
+// If token scope is tool:stripe:write:*:capped:500
+// result.allowed = false
+// result.reason = "amount 750 exceeds cap of 500 on tool:stripe:write:*:capped:500"
+```
+
+---
+
+## loadManifest()
+
+Load a single tool manifest into the client. Must be called before `enforce()` for the corresponding connector.
+
+```typescript
+loadManifest(manifest: ToolManifest): void
+```
+
+### Example
+
+```typescript
+import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
+
+grantex.loadManifest(salesforceManifest);
+```
+
+---
+
+## loadManifests()
+
+Load multiple tool manifests at once.
+
+```typescript
+loadManifests(manifests: ToolManifest[]): void
+```
+
+### Example
+
+```typescript
+import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
+import { hubspotManifest } from '@grantex/sdk/manifests/hubspot';
+import { jiraManifest } from '@grantex/sdk/manifests/jira';
+
+grantex.loadManifests([salesforceManifest, hubspotManifest, jiraManifest]);
+```
+
+---
+
+## ToolManifest
+
+A manifest declares the permission level required for each tool on a connector.
+
+```typescript
+class ToolManifest {
+  constructor(options: {
+    connector: string;
+    description?: string;
+    version?: string;
+    tools: Record<string, Permission>;
+  });
+
+  readonly connector: string;
+  readonly description: string;
+  readonly version: string;
+  readonly toolCount: number;
+
+  getPermission(toolName: string): Permission | undefined;
+  addTool(toolName: string, permission: Permission): void;
+
+  static fromJSON(json: {
+    connector: string;
+    description?: string;
+    version?: string;
+    tools: Record<string, string>;
+  }): ToolManifest;
+}
+```
+
+### Constructor
+
+```typescript
+import { ToolManifest, Permission } from '@grantex/sdk';
+
+const manifest = new ToolManifest({
+  connector: 'inventory-service',
+  description: 'Internal warehouse inventory API',
+  version: '1.0.0',
+  tools: {
+    'get_stock_level':   Permission.READ,
+    'reserve_inventory': Permission.WRITE,
+    'force_stock_reset': Permission.ADMIN,
+  },
+});
+```
+
+### getPermission()
+
+Look up the required permission for a tool. Returns `undefined` if the tool is not in the manifest.
+
+```typescript
+const perm = manifest.getPermission('reserve_inventory');
+// Permission.WRITE
+
+const unknown = manifest.getPermission('nonexistent_tool');
+// undefined
+```
+
+### addTool()
+
+Add a tool to an existing manifest. Useful for extending pre-built manifests with custom tools.
+
+```typescript
+import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
+
+salesforceManifest.addTool('bulk_delete_all', Permission.ADMIN);
+salesforceManifest.addTool('export_all_contacts', Permission.READ);
+
+console.log(salesforceManifest.toolCount); // 8 (6 built-in + 2 custom)
+```
+
+### fromJSON()
+
+Create a manifest from a plain JSON object (e.g., loaded from a file):
+
+```typescript
+import { ToolManifest } from '@grantex/sdk';
+import manifest from './manifests/inventory-service.json';
+
+const inventoryManifest = ToolManifest.fromJSON(manifest);
+grantex.loadManifest(inventoryManifest);
+```
+
+---
+
+## Permission
+
+An enum representing the four permission levels in the hierarchy.
+
+```typescript
+enum Permission {
+  READ   = 'read',    // Level 0
+  WRITE  = 'write',   // Level 1
+  DELETE = 'delete',  // Level 2
+  ADMIN  = 'admin',   // Level 3
+}
+```
+
+Higher levels subsume all lower levels: `admin > delete > write > read`.
+
+---
+
+## permissionCovers()
+
+Check whether a granted permission level covers a required permission level.
+
+```typescript
+function permissionCovers(granted: Permission, required: Permission): boolean;
+```
+
+### Example
+
+```typescript
+import { permissionCovers, Permission } from '@grantex/sdk';
+
+permissionCovers(Permission.WRITE, Permission.READ);   // true  — write covers read
+permissionCovers(Permission.WRITE, Permission.DELETE);  // false — write does not cover delete
+permissionCovers(Permission.ADMIN, Permission.DELETE);  // true  — admin covers everything
+permissionCovers(Permission.READ, Permission.READ);     // true  — exact match
+```
+
+---
+
+## wrapTool()
+
+Wrap a LangChain `StructuredTool` so that enforcement runs automatically before every invocation.
+
+```typescript
+wrapTool(
+  tool: StructuredTool,
+  options: {
+    connector: string;
+    tool: string;
+    grantToken: string | (() => string);
+  },
+): StructuredTool
+```
+
+### Example
+
+```typescript
+const protectedTool = grantex.wrapTool(myLangChainTool, {
+  connector: 'salesforce',
+  tool: 'create_lead',
+  grantToken: () => currentState.grant_token,
+});
+
+// Use protectedTool in your LangChain agent chain.
+// If the token lacks sufficient scope, the tool throws an error
+// instead of executing the underlying function.
+```
+
+---
+
+## enforceMiddleware()
+
+Express middleware that enforces scope on every request to a route.
+
+```typescript
+grantex.enforceMiddleware(options: {
+  extractToken: (req: Request) => string | undefined;
+  extractConnector: (req: Request) => string;
+  extractTool: (req: Request) => string;
+}): RequestHandler
+```
+
+### Example
+
+```typescript
+app.use('/api/tools/:connector/:tool', grantex.enforceMiddleware({
+  extractToken: (req) => req.headers.authorization?.replace('Bearer ', ''),
+  extractConnector: (req) => req.params.connector,
+  extractTool: (req) => req.params.tool,
+}));
+
+// Requests with insufficient scope receive a 403 response automatically.
+```
+
+---
+
+## Related
+
+- [Scope Enforcement guide](/guides/scope-enforcement) — end-to-end walkthrough with framework integrations
+- [Python SDK enforce()](/sdks/python/enforce) — Python API reference
+- [Tool Manifests concept](/concepts/tool-manifests) — permission hierarchy and scope format
+- [CLI enforce test](/cli/enforce) — dry-run enforcement from the command line

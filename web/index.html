@@ -1077,6 +1077,75 @@
   </div>
 </section>
 
+<!-- ── Scope Enforcement ──────────────────────────────────────────────────── -->
+<section id="scope-enforcement" style="padding:64px 0;border-bottom:1px solid var(--border);">
+  <div class="container">
+    <div class="section-label">New in v0.3.0</div>
+    <h2 class="section-title" style="font-size:clamp(24px,4vw,36px);">Scope Enforcement &mdash; Control What Agents Can Do</h2>
+    <p class="section-sub" style="max-width:640px;margin:0 auto 40px;">
+      One line to verify a grant token and check tool-level permissions. 54 pre-built manifests for enterprise connectors. Offline JWKS verification, &lt;1ms per call.
+    </p>
+
+    <!-- Visual flow -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:24px;margin-bottom:48px;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;">
+        <div style="font-size:32px;margin-bottom:8px;">&#x1F464;</div>
+        <div style="font-weight:600;color:var(--text);margin-bottom:4px;">Human Approves</div>
+        <div style="font-size:13px;color:var(--muted);">"read contacts only"</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;">
+        <div style="font-size:32px;margin-bottom:8px;">&#x1F916;</div>
+        <div style="font-weight:600;color:var(--text);margin-bottom:4px;">Agent Gets Token</div>
+        <div style="font-size:13px;color:var(--muted);">JWT with scopes [read:*]</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;">
+        <div style="font-size:32px;margin-bottom:8px;">&#x1F527;</div>
+        <div style="font-weight:600;color:var(--text);margin-bottom:4px;">Tool Call</div>
+        <div style="font-size:13px;color:var(--muted);">delete_contact</div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;text-align:center;">
+        <div style="font-size:32px;margin-bottom:8px;">&#x1F6D1;</div>
+        <div style="font-weight:600;color:var(--text);margin-bottom:4px;">enforce() &rarr; DENIED</div>
+        <div style="font-size:13px;color:var(--muted);">read scope &ne; delete permission</div>
+      </div>
+    </div>
+
+    <!-- Code example -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:640px;margin:0 auto 40px;text-align:left;">
+      <pre style="margin:0;font-size:14px;line-height:1.6;color:var(--text);overflow-x:auto;"><code><span style="color:var(--muted);"># 3 lines to enforce tool-level permissions</span>
+<span style="color:#c792ea;">from</span> grantex.manifests.salesforce <span style="color:#c792ea;">import</span> manifest
+grantex.load_manifest(manifest)
+result = grantex.enforce(token, <span style="color:#c3e88d;">"salesforce"</span>, <span style="color:#c3e88d;">"delete_contact"</span>)
+<span style="color:var(--muted);"># result.allowed = False</span></code></pre>
+    </div>
+
+    <!-- Connector grid -->
+    <p style="color:var(--muted);font-size:14px;text-align:center;margin-bottom:16px;">54 pre-built manifests &mdash; 340+ tools mapped</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:32px;">
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">Salesforce</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">HubSpot</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">Jira</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">Stripe</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">SAP</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">S3</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">Gmail</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">Slack</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">GitHub</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">NetSuite</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">Oracle</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">Okta</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">Zendesk</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">+41 more</span>
+    </div>
+
+    <!-- CTA -->
+    <div style="text-align:center;">
+      <a href="https://docs.grantex.dev/guides/scope-enforcement" style="display:inline-block;background:var(--accent);color:var(--bg);padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;margin-right:12px;">Read the Guide</a>
+      <a href="https://docs.grantex.dev/case-studies/agenticorg" style="display:inline-block;border:1px solid var(--border);color:var(--text);padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;">AgenticOrg Case Study</a>
+    </div>
+  </div>
+</section>
+
 <!-- ── The Problem ────────────────────────────────────────────────────────── -->
 <section id="problem">
   <div class="container">
