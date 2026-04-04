@@ -38,7 +38,7 @@ export function createProgram(): Command {
   program
     .name('grantex')
     .description('CLI for the Grantex delegated authorization protocol')
-    .version('0.2.2')
+    .version('0.2.3')
     .option('--json', 'Output results as JSON (machine-readable)')
     .hook('preAction', () => {
       if (program.opts().json) {

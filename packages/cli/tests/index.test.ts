@@ -40,7 +40,7 @@ describe('createProgram()', () => {
 
   it('has the correct version', () => {
     const program = createProgram();
-    expect(program.version()).toBe('0.2.2');
+    expect(program.version()).toBe('0.2.3');
   });
 
   it('has a --json global option', () => {
