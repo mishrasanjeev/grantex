@@ -21,7 +21,7 @@ describe('Pre-built manifests', () => {
 
       it('every tool has a valid permission', () => {
         const validPerms = ['read', 'write', 'delete', 'admin'];
-        for (const [tool, perm] of Object.entries(manifest.tools)) {
+        for (const [, perm] of Object.entries(manifest.tools)) {
           expect(validPerms).toContain(perm);
         }
       });
