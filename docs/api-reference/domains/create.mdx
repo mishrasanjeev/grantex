@@ -1,0 +1,96 @@
+---
+title: "Register Custom Domain"
+sidebarTitle: "Register Domain"
+description: "Register a custom domain for your Grantex deployment. Requires Enterprise plan."
+---
+
+## Endpoint
+
+```
+POST /v1/domains
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+| `Content-Type` | `application/json` |
+
+## Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `domain` | `string` | Yes | The custom domain to register (e.g. `auth.example.com`) |
+
+## Example Request
+
+```bash
+curl -X POST https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/domains \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "domain": "auth.example.com"
+  }'
+```
+
+## Response -- 201 Created
+
+```json
+{
+  "id": "dom_01HXYZ...",
+  "domain": "auth.example.com",
+  "verified": false,
+  "verificationToken": "grantex-verify-a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "instructions": "Add a DNS TXT record: _grantex.auth.example.com = grantex-verify-a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique domain ID |
+| `domain` | `string` | The registered domain |
+| `verified` | `boolean` | Whether the domain has been verified (always `false` on creation) |
+| `verificationToken` | `string` | Token to add as a DNS TXT record for verification |
+| `instructions` | `string` | Human-readable DNS configuration instructions |
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `BAD_REQUEST` | Missing `domain` field |
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 402 | `PLAN_LIMIT_EXCEEDED` | Custom domains require Enterprise plan |
+| 409 | `CONFLICT` | Domain already registered |
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const domain = await grantex.domains.create({ domain: 'auth.example.com' });
+console.log(domain.verificationToken);
+console.log(domain.instructions);
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+domain = grantex.domains.create(domain="auth.example.com")
+print(domain.verification_token)
+print(domain.instructions)
+```
+
+</CodeGroup>

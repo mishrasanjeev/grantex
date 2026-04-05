@@ -163,6 +163,20 @@ func unmarshal[T any](data []byte, err error) (*T, error) {
 	return &result, nil
 }
 
+func unmarshalSlice[T any](data []byte, err error) ([]T, error) {
+	if err != nil {
+		return nil, err
+	}
+	if data == nil {
+		return nil, nil
+	}
+	var result []T
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, &NetworkError{Message: fmt.Sprintf("failed to decode response: %s", string(data)), Cause: err}
+	}
+	return result, nil
+}
+
 func buildQueryString(params map[string]string) string {
 	if len(params) == 0 {
 		return ""

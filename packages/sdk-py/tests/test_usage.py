@@ -141,12 +141,15 @@ def test_current_usage_unauthorized(client: Grantex) -> None:
 
 @respx.mock
 def test_usage_history_default_days(client: Grantex) -> None:
-    route = respx.get(f"{BASE_URL}/v1/usage/history?days=30").mock(
+    route = respx.get(f"{BASE_URL}/v1/usage/history").mock(
         return_value=httpx.Response(200, json=MOCK_HISTORY)
     )
     result = client.usage.history()
 
     assert route.called
+    # When called without args, no query params should be sent
+    request_url = str(route.calls[0].request.url)
+    assert "days=" not in request_url
     assert result.developer_id == "dev_01"
     assert result.days == 7  # from mock response
     assert len(result.entries) == 3
@@ -225,7 +228,7 @@ def test_usage_history_url_format(client: Grantex) -> None:
 
 @respx.mock
 def test_usage_history_server_error(client: Grantex) -> None:
-    respx.get(f"{BASE_URL}/v1/usage/history?days=30").mock(
+    respx.get(f"{BASE_URL}/v1/usage/history").mock(
         return_value=httpx.Response(
             500, json={"message": "Internal server error", "code": "INTERNAL_ERROR"}
         )

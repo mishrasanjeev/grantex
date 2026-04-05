@@ -89,7 +89,17 @@ class UsageClient:
         data = self._http.get("/v1/usage")
         return UsageResponse.from_dict(data)
 
-    def history(self, days: int = 30) -> UsageHistoryResponse:
-        """Get daily usage history."""
-        data = self._http.get(f"/v1/usage/history?days={days}")
+    def history(self, days: int | None = None) -> UsageHistoryResponse:
+        """Get daily usage history.
+
+        Args:
+            days: Number of days of history to retrieve. If omitted, the
+                  server decides the default.
+        """
+        params: list[str] = []
+        if days is not None:
+            params.append(f"days={days}")
+        qs = "&".join(params)
+        url = f"/v1/usage/history{('?' + qs) if qs else ''}"
+        data = self._http.get(url)
         return UsageHistoryResponse.from_dict(data)

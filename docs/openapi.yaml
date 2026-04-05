@@ -4088,3 +4088,936 @@ paths:
                           type: string
                         serviceEndpoint:
                           type: string
+
+  # ─── Events ────────────────────────────────────────────────────────────────────
+
+  /v1/events/stream:
+    get:
+      operationId: eventStream
+      tags: [Events]
+      summary: Server-Sent Events stream
+      description: |
+        Opens a persistent SSE connection that receives real-time events for the authenticated developer.
+        Events are forwarded from the Redis pub/sub channel `grantex:events:{developerId}`.
+
+        **Max 5 concurrent SSE connections per developer.**
+
+        Send a `types` query parameter (comma-separated) to filter by event type.
+        The stream sends `: keepalive` comments every 30 seconds to prevent timeouts.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: types
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Comma-separated event types to filter (e.g. `grant.created,token.issued`)
+      responses:
+        "200":
+          description: SSE stream opened
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Newline-delimited SSE events (`data: {JSON}\n\n`)
+        "429":
+          description: Too many concurrent connections
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  code:
+                    type: string
+                    example: TOO_MANY_CONNECTIONS
+
+  /v1/events/ws:
+    get:
+      operationId: eventWebSocket
+      tags: [Events]
+      summary: WebSocket event stream
+      description: |
+        Opens a WebSocket connection that receives real-time events for the authenticated developer.
+        Events are forwarded from the Redis pub/sub channel `grantex:events:{developerId}`.
+
+        **Max 5 concurrent WebSocket connections per developer.**
+
+        Send a JSON message `{ "types": ["grant.created", "token.issued"] }` to filter event types dynamically.
+        The server sends WebSocket pings every 30 seconds as keepalive.
+      security:
+        - bearerAuth: []
+      responses:
+        "101":
+          description: WebSocket upgrade successful
+        "1013":
+          description: Too many connections (WebSocket close code)
+
+  # ─── Email Verification ────────────────────────────────────────────────────────
+
+  /v1/signup/verify:
+    post:
+      operationId: sendVerificationEmail
+      tags: [Authentication]
+      summary: Send verification email
+      description: |
+        Sends a verification email to the specified address. The email contains a link
+        with a unique token that expires after 24 hours. The developer must be authenticated.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Email address to verify
+              required: [email]
+      responses:
+        "201":
+          description: Verification email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Verification email sent
+                  expiresAt:
+                    type: string
+                    format: date-time
+                    description: When the verification token expires
+        "400":
+          description: Missing email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/signup/verify/{token}:
+    get:
+      operationId: verifyEmailToken
+      tags: [Authentication]
+      summary: Verify email token
+      description: |
+        Verifies an email verification token received via email. This is a public endpoint
+        (no authentication required). On success, marks the developer's email as verified.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Verification token from the email link
+      responses:
+        "200":
+          description: Email verified successfully (or already verified)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Email verified successfully
+        "400":
+          description: Token expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ─── Policy Sync & Bundles ─────────────────────────────────────────────────────
+
+  /v1/policies/sync:
+    post:
+      operationId: syncPolicyBundle
+      tags: [Policies]
+      summary: Upload a policy bundle
+      description: |
+        Uploads a policy bundle (Rego or Cedar format) as base64-encoded content.
+        The bundle can optionally be activated immediately.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format:
+                  type: string
+                  enum: [rego, cedar]
+                  description: Policy language format
+                version:
+                  type: string
+                  description: Semantic version of the bundle
+                content:
+                  type: string
+                  description: Base64-encoded bundle content
+                fileCount:
+                  type: integer
+                  description: Number of files in the bundle (default 1)
+                activate:
+                  type: boolean
+                  description: Whether to activate the bundle immediately (default true)
+              required: [format, version, content]
+      responses:
+        "201":
+          description: Policy bundle uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  format:
+                    type: string
+                  version:
+                    type: string
+                  fileCount:
+                    type: integer
+                  active:
+                    type: boolean
+                  uploadedAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Invalid format, missing fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/policies/bundles:
+    get:
+      operationId: listPolicyBundles
+      tags: [Policies]
+      summary: List policy bundles
+      description: |
+        Returns all policy bundles uploaded by the authenticated developer.
+        Optionally filter by format (rego or cedar).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [rego, cedar]
+          description: Filter by policy language format
+      responses:
+        "200":
+          description: List of policy bundles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bundles:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        format:
+                          type: string
+                        version:
+                          type: string
+                        fileCount:
+                          type: integer
+                        active:
+                          type: boolean
+                        uploadedAt:
+                          type: string
+                          format: date-time
+
+  /v1/policies/bundles/active:
+    get:
+      operationId: getActivePolicyBundle
+      tags: [Policies]
+      summary: Get active policy bundle
+      description: |
+        Returns the currently active policy bundle for the specified format.
+        Returns 404 if no active bundle exists for the given format.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [rego, cedar]
+          description: Policy language format (required)
+      responses:
+        "200":
+          description: Active policy bundle
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  format:
+                    type: string
+                  version:
+                    type: string
+                  fileCount:
+                    type: integer
+                  active:
+                    type: boolean
+                  uploadedAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Missing or invalid format parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: No active bundle found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/policies/sync/webhook:
+    post:
+      operationId: policySyncWebhook
+      tags: [Policies]
+      summary: Git webhook trigger for policy sync
+      description: |
+        Receives a git webhook payload (e.g. from GitHub/GitLab push events) to trigger
+        policy bundle synchronization. Intended for CI/CD pipeline integration.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ref:
+                  type: string
+                  description: Git ref (e.g. `refs/heads/main`)
+                repository:
+                  type: object
+                  properties:
+                    full_name:
+                      type: string
+                      description: Repository full name (e.g. `org/repo`)
+      responses:
+        "200":
+          description: Webhook received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Webhook received
+                  ref:
+                    type: string
+                  repository:
+                    type: string
+
+  # ─── Anomaly Alerts ────────────────────────────────────────────────────────────
+
+  /v1/anomaly/alerts:
+    get:
+      operationId: listAnomalyAlerts
+      tags: [Anomalies]
+      summary: List anomaly alerts
+      description: |
+        Returns anomaly alerts with optional filters for status, severity, and agent.
+        Results are ordered by detection time (newest first).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [open, acknowledged, resolved]
+          description: Filter by alert status
+        - name: severity
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [critical, high, medium, low]
+          description: Filter by severity level
+        - name: agentId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by agent ID
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          description: Maximum number of alerts to return
+      responses:
+        "200":
+          description: List of anomaly alerts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        alertId:
+                          type: string
+                        ruleId:
+                          type: string
+                          nullable: true
+                        ruleName:
+                          type: string
+                        severity:
+                          type: string
+                          enum: [critical, high, medium, low]
+                        status:
+                          type: string
+                          enum: [open, acknowledged, resolved]
+                        agentId:
+                          type: string
+                          nullable: true
+                        detectedAt:
+                          type: string
+                          format: date-time
+                        description:
+                          type: string
+                        context:
+                          type: object
+                        acknowledgedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+                        resolvedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+
+  /v1/anomaly/alerts/{alertId}/acknowledge:
+    post:
+      operationId: acknowledgeAlert
+      tags: [Anomalies]
+      summary: Acknowledge an anomaly alert
+      description: |
+        Marks an anomaly alert as acknowledged. Optionally include a resolution note.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Alert ID to acknowledge
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  description: Optional resolution note
+      responses:
+        "200":
+          description: Alert acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alertId:
+                    type: string
+                  ruleId:
+                    type: string
+                    nullable: true
+                  ruleName:
+                    type: string
+                  severity:
+                    type: string
+                  status:
+                    type: string
+                    example: acknowledged
+                  agentId:
+                    type: string
+                    nullable: true
+                  detectedAt:
+                    type: string
+                    format: date-time
+                  description:
+                    type: string
+                  context:
+                    type: object
+                  acknowledgedAt:
+                    type: string
+                    format: date-time
+                  resolvedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+        "404":
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/anomaly/alerts/{alertId}/resolve:
+    post:
+      operationId: resolveAlert
+      tags: [Anomalies]
+      summary: Resolve an anomaly alert
+      description: |
+        Marks an anomaly alert as resolved. Optionally include a resolution note.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Alert ID to resolve
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  description: Optional resolution note
+      responses:
+        "200":
+          description: Alert resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alertId:
+                    type: string
+                  ruleId:
+                    type: string
+                    nullable: true
+                  ruleName:
+                    type: string
+                  severity:
+                    type: string
+                  status:
+                    type: string
+                    example: resolved
+                  agentId:
+                    type: string
+                    nullable: true
+                  detectedAt:
+                    type: string
+                    format: date-time
+                  description:
+                    type: string
+                  context:
+                    type: object
+                  acknowledgedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  resolvedAt:
+                    type: string
+                    format: date-time
+        "404":
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ─── Anomaly Metrics ───────────────────────────────────────────────────────────
+
+  /v1/anomaly/metrics:
+    get:
+      operationId: getAnomalyMetrics
+      tags: [Anomalies]
+      summary: Get anomaly metrics
+      description: |
+        Returns aggregated anomaly metrics broken down by status and severity
+        within a configurable time window.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: window
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["1h", "6h", "24h"]
+            default: "24h"
+          description: Time window for metrics aggregation
+        - name: agentId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter metrics by agent ID
+      responses:
+        "200":
+          description: Anomaly metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  window:
+                    type: string
+                  total:
+                    type: integer
+                  byStatus:
+                    type: object
+                    properties:
+                      open:
+                        type: integer
+                      acknowledged:
+                        type: integer
+                      resolved:
+                        type: integer
+                  bySeverity:
+                    type: object
+                    properties:
+                      critical:
+                        type: integer
+                      high:
+                        type: integer
+                      medium:
+                        type: integer
+                      low:
+                        type: integer
+
+  # ─── Anomaly Rules ─────────────────────────────────────────────────────────────
+
+  /v1/anomaly/rules:
+    get:
+      operationId: listAnomalyRules
+      tags: [Anomalies]
+      summary: List detection rules
+      description: |
+        Returns all built-in and custom anomaly detection rules for the authenticated developer.
+        Built-in rules (AD-001 through AD-010) are always included and cannot be deleted.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of detection rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          description: Internal ID (custom rules only)
+                        ruleId:
+                          type: string
+                          description: Rule identifier (e.g. AD-001)
+                        name:
+                          type: string
+                        description:
+                          type: string
+                          nullable: true
+                        condition:
+                          type: object
+                          description: Rule condition (custom rules only)
+                        severity:
+                          type: string
+                          enum: [critical, high, medium, low]
+                        alertChannels:
+                          type: array
+                          items:
+                            type: string
+                          description: Channel IDs to notify (custom rules only)
+                        enabled:
+                          type: boolean
+                        builtIn:
+                          type: boolean
+                        createdAt:
+                          type: string
+                          format: date-time
+                          description: Creation timestamp (custom rules only)
+
+    post:
+      operationId: createAnomalyRule
+      tags: [Anomalies]
+      summary: Create a custom detection rule
+      description: |
+        Creates a custom anomaly detection rule with a condition object and optional alert channels.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ruleId:
+                  type: string
+                  description: Unique rule identifier (e.g. CUSTOM-001)
+                name:
+                  type: string
+                  description: Human-readable rule name
+                description:
+                  type: string
+                  description: Optional description of what the rule detects
+                condition:
+                  type: object
+                  description: Rule condition definition
+                severity:
+                  type: string
+                  enum: [critical, high, medium, low]
+                  default: medium
+                  description: Alert severity when the rule triggers
+                alertChannels:
+                  type: array
+                  items:
+                    type: string
+                  description: Notification channel IDs to alert
+              required: [ruleId, name, condition]
+      responses:
+        "201":
+          description: Custom rule created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  ruleId:
+                    type: string
+                  name:
+                    type: string
+                  description:
+                    type: string
+                    nullable: true
+                  condition:
+                    type: object
+                  severity:
+                    type: string
+                  alertChannels:
+                    type: array
+                    items:
+                      type: string
+                  enabled:
+                    type: boolean
+        "400":
+          description: Missing required fields or invalid severity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/anomaly/rules/{ruleId}:
+    delete:
+      operationId: deleteAnomalyRule
+      tags: [Anomalies]
+      summary: Delete a custom detection rule
+      description: |
+        Deletes a custom anomaly detection rule. Built-in rules cannot be deleted.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: ruleId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Internal ID of the custom rule to delete
+      responses:
+        "204":
+          description: Rule deleted
+        "404":
+          description: Rule not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ─── Anomaly Channels ─────────────────────────────────────────────────────────
+
+  /v1/anomaly/channels:
+    get:
+      operationId: listAnomalyChannels
+      tags: [Anomalies]
+      summary: List notification channels
+      description: |
+        Returns all notification channels configured for the authenticated developer.
+        Channels receive alerts when detection rules fire.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of notification channels
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  channels:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        type:
+                          type: string
+                          enum: [slack, webhook, email]
+                        name:
+                          type: string
+                        config:
+                          type: object
+                          description: Channel-specific configuration (e.g. URL, email)
+                        severities:
+                          type: array
+                          items:
+                            type: string
+                          description: Severity levels this channel receives
+                        enabled:
+                          type: boolean
+                        createdAt:
+                          type: string
+                          format: date-time
+
+    post:
+      operationId: createAnomalyChannel
+      tags: [Anomalies]
+      summary: Create a notification channel
+      description: |
+        Creates a notification channel for anomaly alerts. Supported types: slack, webhook, email.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [slack, webhook, email]
+                  description: Channel type
+                name:
+                  type: string
+                  description: Human-readable channel name
+                config:
+                  type: object
+                  description: |
+                    Channel-specific configuration.
+                    - **slack**: `{ "webhookUrl": "https://hooks.slack.com/..." }`
+                    - **webhook**: `{ "url": "https://example.com/hook", "secret": "..." }`
+                    - **email**: `{ "to": "alerts@example.com" }`
+                severities:
+                  type: array
+                  items:
+                    type: string
+                    enum: [critical, high, medium, low]
+                  default: [critical, high]
+                  description: Severity levels to receive (defaults to critical and high)
+              required: [type, name, config]
+      responses:
+        "201":
+          description: Notification channel created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  type:
+                    type: string
+                  name:
+                    type: string
+                  config:
+                    type: object
+                  severities:
+                    type: array
+                    items:
+                      type: string
+                  enabled:
+                    type: boolean
+        "400":
+          description: Missing or invalid fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/anomaly/channels/{channelId}:
+    delete:
+      operationId: deleteAnomalyChannel
+      tags: [Anomalies]
+      summary: Delete a notification channel
+      description: |
+        Deletes a notification channel.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Channel ID to delete
+      responses:
+        "204":
+          description: Channel deleted
+        "404":
+          description: Channel not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"

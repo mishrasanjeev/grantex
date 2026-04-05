@@ -400,7 +400,9 @@
             "pages": [
               "api-reference/authentication/register-a-new-developer-account",
               "api-reference/authentication/get-current-developer-profile",
-              "api-reference/authentication/rotate-api-key"
+              "api-reference/authentication/rotate-api-key",
+              "api-reference/signup/send-verification",
+              "api-reference/signup/verify-token"
             ]
           },
           {
@@ -425,8 +427,16 @@
             "group": "Tokens",
             "pages": [
               "api-reference/tokens/exchange-authorization-code-for-grant-token",
+              "api-reference/tokens/refresh-a-grant-token",
               "api-reference/tokens/verify-a-grant-token-online",
               "api-reference/tokens/revoke-a-grant-token"
+            ]
+          },
+          {
+            "group": "Events",
+            "pages": [
+              "api-reference/events/stream",
+              "api-reference/events/websocket"
             ]
           },
           {
@@ -454,7 +464,11 @@
               "api-reference/policies/list-access-policies",
               "api-reference/policies/get-policy-by-id",
               "api-reference/policies/update-a-policy",
-              "api-reference/policies/delete-a-policy"
+              "api-reference/policies/delete-a-policy",
+              "api-reference/policies/sync-policy-bundle",
+              "api-reference/policies/list-bundles",
+              "api-reference/policies/active-bundle",
+              "api-reference/policies/sync-webhook"
             ]
           },
           {
@@ -479,7 +493,17 @@
             "pages": [
               "api-reference/anomalies/run-anomaly-detection",
               "api-reference/anomalies/list-detected-anomalies",
-              "api-reference/anomalies/acknowledge-an-anomaly"
+              "api-reference/anomalies/acknowledge-an-anomaly",
+              "api-reference/anomalies/list-alerts",
+              "api-reference/anomalies/acknowledge-alert",
+              "api-reference/anomalies/resolve-alert",
+              "api-reference/anomalies/get-metrics",
+              "api-reference/anomalies/list-rules",
+              "api-reference/anomalies/create-rule",
+              "api-reference/anomalies/delete-rule",
+              "api-reference/anomalies/list-channels",
+              "api-reference/anomalies/create-channel",
+              "api-reference/anomalies/delete-channel"
             ]
           },
           {
@@ -554,6 +578,42 @@
               "api-reference/webauthn/delete-credential",
               "api-reference/webauthn/generate-assertion-options",
               "api-reference/webauthn/verify-assertion"
+            ]
+          },
+          {
+            "group": "Budgets",
+            "pages": [
+              "api-reference/budgets/allocate",
+              "api-reference/budgets/debit",
+              "api-reference/budgets/balance",
+              "api-reference/budgets/transactions",
+              "api-reference/budgets/allocations"
+            ]
+          },
+          {
+            "group": "Domains",
+            "pages": [
+              "api-reference/domains/create",
+              "api-reference/domains/list",
+              "api-reference/domains/verify",
+              "api-reference/domains/delete"
+            ]
+          },
+          {
+            "group": "Usage",
+            "pages": [
+              "api-reference/usage/current",
+              "api-reference/usage/history"
+            ]
+          },
+          {
+            "group": "Vault",
+            "pages": [
+              "api-reference/vault/store",
+              "api-reference/vault/list",
+              "api-reference/vault/get",
+              "api-reference/vault/delete",
+              "api-reference/vault/exchange"
             ]
           },
           {

@@ -1,0 +1,106 @@
+---
+title: "Allocate Budget"
+sidebarTitle: "Allocate Budget"
+description: "Create a budget allocation for a grant, setting a spending cap for the agent."
+---
+
+## Endpoint
+
+```
+POST /v1/budget/allocate
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+| `Content-Type` | `application/json` |
+
+## Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `grantId` | `string` | Yes | The grant to attach a budget to |
+| `initialBudget` | `number` | Yes | The initial budget amount (must be positive) |
+| `currency` | `string` | No | Currency code (default `"USD"`) |
+
+## Example Request
+
+```bash
+curl -X POST https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/budget/allocate \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "grantId": "grnt_01HXYZ...",
+    "initialBudget": 100.00,
+    "currency": "USD"
+  }'
+```
+
+## Response -- 201 Created
+
+```json
+{
+  "id": "ba_01HXYZ...",
+  "grantId": "grnt_01HXYZ...",
+  "initialBudget": 100.00,
+  "remainingBudget": 100.00,
+  "currency": "USD",
+  "createdAt": "2026-04-05T12:00:00.000Z"
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique budget allocation ID |
+| `grantId` | `string` | The grant this budget is attached to |
+| `initialBudget` | `number` | The initial budget amount |
+| `remainingBudget` | `number` | Current remaining budget (equals `initialBudget` on creation) |
+| `currency` | `string` | Currency code |
+| `createdAt` | `string` | ISO-8601 creation timestamp |
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `BAD_REQUEST` | Missing `grantId` or `initialBudget` not positive |
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 404 | `NOT_FOUND` | Grant not found or does not belong to developer |
+| 409 | `CONFLICT` | Budget allocation already exists for this grant |
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const allocation = await grantex.budgets.allocate({
+  grantId: 'grnt_01HXYZ...',
+  initialBudget: 100.00,
+  currency: 'USD',
+});
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+allocation = grantex.budgets.allocate(
+    grant_id="grnt_01HXYZ...",
+    initial_budget=100.00,
+    currency="USD",
+)
+```
+
+</CodeGroup>

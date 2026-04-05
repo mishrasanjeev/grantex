@@ -1,0 +1,109 @@
+---
+title: "Get Usage History"
+sidebarTitle: "Usage History"
+description: "Retrieve daily usage breakdown over a specified number of days."
+---
+
+## Endpoint
+
+```
+GET /v1/usage/history
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+
+## Query Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `days` | `number` | No | Number of days to look back (default `30`, maximum `90`) |
+
+## Example Request
+
+```bash
+curl "https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/usage/history?days=7" \
+  -H "Authorization: Bearer gx_..."
+```
+
+## Response -- 200 OK
+
+```json
+{
+  "developerId": "dev_01HXYZ...",
+  "days": 7,
+  "entries": [
+    {
+      "date": "2026-04-05",
+      "tokenExchanges": 142,
+      "authorizations": 58,
+      "verifications": 1203,
+      "totalRequests": 1403
+    },
+    {
+      "date": "2026-04-04",
+      "tokenExchanges": 130,
+      "authorizations": 45,
+      "verifications": 1100,
+      "totalRequests": 1275
+    }
+  ]
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `developerId` | `string` | The authenticated developer's ID |
+| `days` | `number` | The number of days included in the response |
+| `entries` | `array` | Array of daily usage entries, sorted by date descending |
+| `entries[].date` | `string` | Date in `YYYY-MM-DD` format |
+| `entries[].tokenExchanges` | `number` | Number of token exchange requests that day |
+| `entries[].authorizations` | `number` | Number of authorization requests that day |
+| `entries[].verifications` | `number` | Number of token verification requests that day |
+| `entries[].totalRequests` | `number` | Sum of all request types for that day |
+
+<Note>
+Historical usage data is read from PostgreSQL. Days with no activity may be omitted from the response.
+</Note>
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const history = await grantex.usage.history({ days: 7 });
+for (const entry of history.entries) {
+  console.log(`${entry.date}: ${entry.totalRequests} requests`);
+}
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+history = grantex.usage.history(days=7)
+for entry in history.entries:
+    print(f"{entry.date}: {entry.total_requests} requests")
+```
+
+</CodeGroup>

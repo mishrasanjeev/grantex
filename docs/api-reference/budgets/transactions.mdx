@@ -1,0 +1,106 @@
+---
+title: "List Budget Transactions"
+sidebarTitle: "List Transactions"
+description: "Retrieve paginated transaction history for a grant's budget."
+---
+
+## Endpoint
+
+```
+GET /v1/budget/transactions/:grantId
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+
+## Path Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `grantId` | `string` | The grant ID to look up transactions for |
+
+## Query Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `page` | `number` | No | Page number (default `1`) |
+| `pageSize` | `number` | No | Results per page (default `50`) |
+
+## Example Request
+
+```bash
+curl "https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/budget/transactions/grnt_01HXYZ...?page=1&pageSize=20" \
+  -H "Authorization: Bearer gx_..."
+```
+
+## Response -- 200 OK
+
+```json
+{
+  "transactions": [
+    {
+      "id": "txn_01HXYZ...",
+      "grantId": "grnt_01HXYZ...",
+      "amount": 5.50,
+      "description": "GPT-4 API call",
+      "metadata": { "model": "gpt-4", "tokens": 1500 },
+      "balanceAfter": 94.50,
+      "createdAt": "2026-04-05T14:30:00.000Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `transactions` | `array` | Array of transaction objects |
+| `transactions[].id` | `string` | Unique transaction ID |
+| `transactions[].grantId` | `string` | The grant this transaction belongs to |
+| `transactions[].amount` | `number` | Amount debited |
+| `transactions[].description` | `string \| null` | Human-readable description |
+| `transactions[].metadata` | `object` | Arbitrary metadata |
+| `transactions[].balanceAfter` | `number` | Remaining balance after this transaction |
+| `transactions[].createdAt` | `string` | ISO-8601 timestamp |
+| `total` | `number` | Total number of transactions |
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const result = await grantex.budgets.transactions('grnt_01HXYZ...');
+console.log(result.transactions);
+console.log(result.total);
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+result = grantex.budgets.transactions("grnt_01HXYZ...")
+print(result.transactions)
+print(result.total)
+```
+
+</CodeGroup>
