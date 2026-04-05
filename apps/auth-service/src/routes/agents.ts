@@ -24,6 +24,13 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ message: 'name is required', code: 'BAD_REQUEST', requestId: request.id });
     }
 
+    if (scopes.some(s => typeof s !== 'string' || s.length > 256 || s.length === 0)) {
+      return reply.status(400).send({ message: 'Invalid scope format', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    if (scopes.length > 100) {
+      return reply.status(400).send({ message: 'Too many scopes (max 100)', code: 'BAD_REQUEST', requestId: request.id });
+    }
+
     const sql = getSql();
     const developerId = request.developer.id;
 
@@ -94,6 +101,15 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
 
     if (name === undefined && description === undefined && scopes === undefined && status === undefined) {
       return reply.status(400).send({ message: 'No fields to update', code: 'BAD_REQUEST', requestId: request.id });
+    }
+
+    if (scopes !== undefined) {
+      if (scopes.some(s => typeof s !== 'string' || s.length > 256 || s.length === 0)) {
+        return reply.status(400).send({ message: 'Invalid scope format', code: 'BAD_REQUEST', requestId: request.id });
+      }
+      if (scopes.length > 100) {
+        return reply.status(400).send({ message: 'Too many scopes (max 100)', code: 'BAD_REQUEST', requestId: request.id });
+      }
     }
 
     // Use COALESCE so unset fields keep their current values — single SQL call, no fragments

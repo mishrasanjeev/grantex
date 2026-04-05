@@ -77,6 +77,7 @@ class Grantex:
         api_key: str | None = None,
         base_url: str = _DEFAULT_BASE_URL,
         timeout: float = 30.0,
+        max_retries: int = 3,
         enforce_mode: str = "strict",
     ) -> None:
         resolved_key = api_key or os.environ.get("GRANTEX_API_KEY", "")
@@ -92,6 +93,7 @@ class Grantex:
             base_url=base_url,
             api_key=resolved_key,
             timeout=timeout,
+            max_retries=max_retries,
         )
 
         self.agents = AgentsClient(self._http)

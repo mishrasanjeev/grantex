@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## v0.3.4 (2026-04-05)
+
+### SDK Parity
+- Python SDK: Added PassportsClient (issue, get, revoke, list)
+- Python SDK: Added EventsClient.subscribe() with Subscription class
+- Python SDK: Fixed usage.history() and budgets.transactions() optional parameters
+- Go SDK: Added PassportsService and VaultService (20/20 service parity)
+- TypeScript SDK: Added AuthorizationRequest optional fields (sandbox, policyEnforced, effect)
+- Python SDK: Added SSO type aliases (SsoConnectionListResponse, SsoSessionListResponse)
+
+### Documentation
+- 35 new API reference pages (budgets, domains, usage, vault, events, tokens, signup, policies, anomalies)
+- Custom Manifests dedicated guide page
+- Manifest messaging reframed: "bring your own manifest" as primary story
+
+### Testing
+- 315+ new tests across all SDKs and packages
+- Auth service passport endpoint tests (25)
+- Anomalies endpoint tests expanded (15 new)
+- MCP server tests expanded (43 new, all 17 tools covered)
+- Gemma module tests (78), DPDP module tests (66), JWT tests (44)
+
+### Fixes
+- Fixed mcp-auth peer dep constraint (^0.1.8 → >=0.1.8)
+- Fixed manifest count: 53 connectors / 339 tools (was incorrectly 54/340)
+- Dropped orphaned signing_keys table (migration 030)
+- Tightened SDK version constraints across 13 integration packages
+- Corrected README badges: 3,900+ tests, 27 packages
+
 ## [2.5.0] — April 2026
 
 ### Added

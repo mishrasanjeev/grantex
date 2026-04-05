@@ -78,7 +78,7 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
       try {
         offlineSeconds = parseExpiresIn(offlineTTL);
       } catch {
-        return reply.status(422).send({
+        return reply.status(400).send({
           message: `Invalid offlineTTL format: ${offlineTTL}`,
           code: 'INVALID_TTL',
           requestId: request.id,

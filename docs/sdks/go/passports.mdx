@@ -1,0 +1,145 @@
+---
+title: "Passports"
+description: "Issue, retrieve, revoke, and list AgentPassportCredentials for MPP agent identity"
+---
+
+## Overview
+
+The `Passports` service manages AgentPassportCredentials -- W3C VC 2.0 credentials that bind agent identity, human delegation, and spending limits for machine payment flows.
+
+## Issue
+
+Issue a new AgentPassportCredential for an agent with an active grant.
+
+```go
+passport, err := client.Passports.Issue(ctx, grantex.IssuePassportParams{
+    AgentID:              "ag_01HXYZ...",
+    GrantID:              "grnt_01HXYZ...",
+    AllowedMPPCategories: []string{"inference", "compute"},
+    MaxTransactionAmount: grantex.TransactionAmount{Amount: 50, Currency: "USDC"},
+    PaymentRails:         []string{"tempo"},
+    ExpiresIn:            "24h",
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Passport ID: %s\n", passport.PassportID)
+fmt.Printf("Encoded: %s\n", passport.EncodedCredential)
+fmt.Printf("Expires: %s\n", passport.ExpiresAt)
+```
+
+### Parameters
+
+| Parameter              | Type                | Required | Description                                             |
+|------------------------|---------------------|----------|---------------------------------------------------------|
+| `AgentID`              | `string`            | Yes      | Grantex agent ID (`ag_...`).                            |
+| `GrantID`              | `string`            | Yes      | Active grant ID (`grnt_...`).                           |
+| `AllowedMPPCategories` | `[]string`          | Yes      | MPP categories: `inference`, `compute`, `data`, etc.    |
+| `MaxTransactionAmount` | `TransactionAmount` | Yes      | Max per-transaction amount with currency.               |
+| `PaymentRails`         | `[]string`          | No       | Payment networks (default: `["tempo"]`).                |
+| `ExpiresIn`            | `string`            | No       | Expiry duration (e.g., `"24h"`). Max: `"720h"`.        |
+| `ParentPassportID`     | `string`            | No       | Parent passport ID for delegated sub-agent passports.   |
+
+### Response (`IssuedPassportResponse`)
+
+| Field               | Type                     | Description                                |
+|---------------------|--------------------------|--------------------------------------------|
+| `PassportID`        | `string`                 | `urn:grantex:passport:<ulid>`              |
+| `Credential`        | `map[string]interface{}` | Full AgentPassportCredential JSON.         |
+| `EncodedCredential` | `string`                 | Base64url-encoded credential for headers.  |
+| `ExpiresAt`         | `string`                 | ISO 8601 expiry timestamp.                 |
+
+### Errors
+
+| Code                   | HTTP | Cause                                              |
+|------------------------|------|----------------------------------------------------|
+| `INVALID_AGENT`        | 400  | Agent not found or not owned by developer.         |
+| `INVALID_GRANT`        | 400  | Grant not found, revoked, or not owned by agent.   |
+| `SCOPE_INSUFFICIENT`   | 400  | Grant missing required `payments:mpp:*` scopes.    |
+| `AMOUNT_EXCEEDS_BUDGET`| 400  | Max amount exceeds remaining budget allocation.    |
+| `INVALID_EXPIRY`       | 422  | Expiry exceeds 720 hours.                          |
+
+---
+
+## Get
+
+Retrieve a passport by ID. Returns the current status.
+
+```go
+record, err := client.Passports.Get(ctx, "urn:grantex:passport:01HXYZ...")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Status: %s\n", record.Status) // "active" | "revoked" | "expired"
+```
+
+### Parameters
+
+| Parameter    | Type     | Required | Description                    |
+|--------------|----------|----------|--------------------------------|
+| `passportID` | `string` | Yes      | The passport URN identifier.   |
+
+### Response (`GetPassportResponse`)
+
+| Field    | Type     | Description                                          |
+|----------|----------|------------------------------------------------------|
+| `Status` | `string` | Current status: `active`, `revoked`, or `expired`.   |
+
+---
+
+## Revoke
+
+Revoke a passport immediately. Flips the StatusList2021 bit so offline verifiers see the revocation.
+
+```go
+result, err := client.Passports.Revoke(ctx, "urn:grantex:passport:01HXYZ...")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Revoked: %v\n", result.Revoked)     // true
+fmt.Printf("Revoked at: %s\n", result.RevokedAt) // "2026-03-20T03:14:15.261Z"
+```
+
+### Parameters
+
+| Parameter    | Type     | Required | Description                    |
+|--------------|----------|----------|--------------------------------|
+| `passportID` | `string` | Yes      | The passport URN identifier.   |
+
+### Response (`RevokePassportResponse`)
+
+| Field       | Type     | Description                              |
+|-------------|----------|------------------------------------------|
+| `Revoked`   | `bool`   | Always `true` on success.                |
+| `RevokedAt` | `string` | ISO 8601 revocation timestamp.           |
+
+---
+
+## List
+
+List passports with optional filters. The API returns a bare JSON array.
+
+```go
+passports, err := client.Passports.List(ctx, &grantex.ListPassportsParams{
+    AgentID: "ag_01HXYZ...",
+    Status:  "active",
+})
+if err != nil {
+    log.Fatal(err)
+}
+for _, p := range passports {
+    fmt.Printf("%s expires %s\n", p.PassportID, p.ExpiresAt)
+}
+```
+
+### Parameters
+
+| Parameter | Type     | Required | Description                                          |
+|-----------|----------|----------|------------------------------------------------------|
+| `AgentID` | `string` | No       | Filter by agent ID.                                  |
+| `GrantID` | `string` | No       | Filter by grant ID.                                  |
+| `Status`  | `string` | No       | Filter by status: `active`, `revoked`, or `expired`. |
+
+### Response
+
+Returns `[]IssuedPassportResponse`. See `Issue` above for the struct fields.

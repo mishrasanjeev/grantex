@@ -22,7 +22,7 @@ BASE_URL = "https://api.grantex.dev"
 
 @pytest.fixture
 def client() -> Grantex:
-    return Grantex(api_key="test-key")
+    return Grantex(api_key="test-key", max_retries=0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

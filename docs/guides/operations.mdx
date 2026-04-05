@@ -1,0 +1,269 @@
+---
+title: "Operations"
+sidebarTitle: "Operations"
+description: "Run Grantex in production — health checks, required configuration, graceful shutdown, connection management, and webhook delivery."
+---
+
+This guide covers the operational aspects of running the Grantex auth service in production. For initial setup and deployment options, see the [Self-Hosting guide](/guides/self-hosting).
+
+## Health Check Endpoint
+
+The auth service exposes a health check at `GET /health` that probes both PostgreSQL and Redis:
+
+```bash
+curl https://your-auth-service/health
+```
+
+### Healthy response (200)
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### Degraded response (503)
+
+When one or more dependencies are unreachable, the endpoint returns `503` with the failing components:
+
+```json
+{
+  "status": "degraded",
+  "failing": ["db", "redis"]
+}
+```
+
+The `failing` array can contain `"db"` (PostgreSQL unreachable), `"redis"` (Redis unreachable), or both.
+
+<Tip>
+Wire this endpoint into your load balancer's health check. Use a 5-second interval and 3-consecutive-failure threshold for removing unhealthy instances.
+</Tip>
+
+The health endpoint is unauthenticated (`skipAuth: true`) and does not count against rate limits.
+
+## Required Configuration
+
+The auth service validates required environment variables at startup and **exits immediately** if any are missing. This fail-fast behavior prevents partial startup with a broken configuration.
+
+| Variable | Required | Validated at | Failure mode |
+|----------|----------|-------------|--------------|
+| `DATABASE_URL` | Yes | Startup | Process exits with error |
+| `REDIS_URL` | Yes | Startup | Process exits with error |
+| `RSA_PRIVATE_KEY` | Yes* | Startup | Process exits unless `AUTO_GENERATE_KEYS=true` |
+| `JWT_ISSUER` | No | Startup | Defaults to `https://grantex.dev` |
+
+\* In development, set `AUTO_GENERATE_KEYS=true` to auto-generate an ephemeral RSA keypair. Never use this in production.
+
+### Full environment variable reference
+
+See the [Self-Hosting guide](/guides/self-hosting#5-environment-variable-reference) for the complete list of environment variables including optional Stripe, FIDO, email, and policy engine settings.
+
+### Startup sequence
+
+The auth service boots in this order:
+
+1. **OpenTelemetry tracing** -- initialized first to hook module loading (only if `OTEL_EXPORTER_OTLP_ENDPOINT` is set)
+2. **RSA key initialization** -- loads or generates the RSA keypair for JWT signing
+3. **Ed25519 key initialization** -- optional, for DID/VC support
+4. **Database connection** -- connects to PostgreSQL
+5. **Migrations** -- runs all `*.sql` migration files idempotently
+6. **Redis connection** -- connects to Redis with lazy connect
+7. **Seed data** -- creates dev accounts if `SEED_API_KEY` or `SEED_SANDBOX_KEY` are set
+8. **HTTP server** -- starts listening on `PORT` (default 3001)
+9. **Background workers** -- webhook delivery worker and anomaly detection worker start polling
+
+If any step fails, the process exits with code 1 and logs the error to stdout.
+
+## Graceful Shutdown
+
+The auth service handles `SIGTERM` signals for graceful shutdown. When running in Kubernetes or Docker, the container runtime sends `SIGTERM` before force-killing the process.
+
+When OpenTelemetry tracing is enabled, the `SIGTERM` handler flushes pending trace spans before the process exits:
+
+```
+process.on('SIGTERM', () => {
+  sdk.shutdown().catch(console.error);
+});
+```
+
+### Kubernetes configuration
+
+Set a `terminationGracePeriodSeconds` that gives the service enough time to finish in-flight requests:
+
+```yaml
+spec:
+  terminationGracePeriodSeconds: 30
+  containers:
+    - name: auth-service
+      livenessProbe:
+        httpGet:
+          path: /health
+          port: 3001
+        initialDelaySeconds: 10
+        periodSeconds: 5
+      readinessProbe:
+        httpGet:
+          path: /health
+          port: 3001
+        initialDelaySeconds: 5
+        periodSeconds: 5
+```
+
+## Database Connection
+
+The auth service uses [postgres.js](https://github.com/porsager/postgres) for PostgreSQL connections. The connection is lazily initialized on first use and reused for the lifetime of the process.
+
+### Connection string format
+
+```
+postgresql://user:password@host:5432/grantex?sslmode=require
+```
+
+Always use `sslmode=require` (or `verify-full` for stricter validation) in production.
+
+### Connection pool behavior
+
+postgres.js manages an internal connection pool. Default settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Max connections | 10 | Maximum concurrent connections |
+| Idle timeout | 0 (no timeout) | Connections stay open until the process exits |
+| Connect timeout | 30s | Time to wait for a new connection |
+
+For high-throughput deployments, tune the pool by passing options to the postgres constructor in `db/client.ts`.
+
+### Monitoring connections
+
+Check active connections via PostgreSQL:
+
+```sql
+SELECT count(*) FROM pg_stat_activity
+WHERE datname = 'grantex' AND state = 'active';
+```
+
+## Redis Connection
+
+The auth service uses [ioredis](https://github.com/redis/ioredis) with lazy connect. Redis stores:
+
+- **Rate limit counters** -- sliding-window request counts per IP
+- **Ephemeral token metadata** -- in-flight authorization request state
+
+### Reconnection behavior
+
+ioredis automatically reconnects when the Redis connection drops. Default behavior:
+
+- Retries with exponential backoff (starting at 50ms, capped at 2 seconds)
+- No maximum retry count -- reconnects indefinitely
+- Queues commands during disconnection and replays them on reconnect
+
+### Data durability
+
+Redis is not the source of truth. If Redis data is lost:
+
+- **Rate limits reset** -- clients get fresh windows (no security impact beyond a brief burst)
+- **In-flight auth requests fail** -- users must restart the consent flow
+- **No permanent data is lost** -- PostgreSQL is the durable store
+
+<Note>
+For high-availability deployments, use Redis Sentinel or Redis Cluster. ioredis supports both modes natively.
+</Note>
+
+## Webhook Delivery
+
+The auth service delivers webhooks with automatic retry and exponential backoff. A background worker polls the `webhook_deliveries` table every 30 seconds for pending deliveries.
+
+### Retry policy
+
+| Attempt | Delay | Cumulative wait |
+|---------|-------|-----------------|
+| 1st retry | 30 seconds | 30s |
+| 2nd retry | 60 seconds | 1.5 min |
+| 3rd retry | 120 seconds | 3.5 min |
+| 4th retry | 240 seconds | 7.5 min |
+| 5th retry | 480 seconds | 15.5 min |
+
+The backoff formula is `30 * 2^attempt` seconds. After 5 failed attempts (configurable via `max_attempts` in the deliveries table), the delivery is marked as `failed`.
+
+### Delivery mechanics
+
+- **Timeout**: Each delivery attempt has a 10-second timeout
+- **Success**: Any 2xx response marks the delivery as `delivered`
+- **Failure**: Non-2xx responses or network errors trigger a retry
+- **Signature**: Every payload includes an `X-Grantex-Signature` header for HMAC verification
+- **User-Agent**: Requests are sent with `Grantex-Webhooks/0.1`
+
+### Monitoring deliveries
+
+Query delivery status for a webhook endpoint:
+
+```bash
+curl https://api.grantex.dev/v1/webhooks/<webhook-id>/deliveries \
+  -H "Authorization: Bearer <api-key>"
+```
+
+This returns delivery history with status (`pending`, `delivered`, `failed`), attempt count, and error details.
+
+## Background Workers
+
+Two background workers run after the HTTP server starts:
+
+| Worker | Interval | Purpose |
+|--------|----------|---------|
+| **Webhook delivery** | 30 seconds | Processes pending webhook deliveries with exponential backoff |
+| **Anomaly detection** | Configurable | Scans for unusual patterns (rate spikes, off-hours activity, high failure rates) |
+
+Both workers are started in the main process. They run on `setInterval` timers and execute one initial run immediately on startup.
+
+### Worker health
+
+Workers log errors to stdout but do not crash the process. If a worker iteration fails, it retries on the next interval. Monitor worker health by checking for `[webhook-delivery]` and `[anomaly-detection]` prefixed log messages.
+
+## Logging
+
+All logs are emitted as structured JSON to stdout, compatible with:
+
+- **Datadog** -- auto-parsed by the Datadog agent
+- **Grafana Loki** -- ingestible via Promtail
+- **AWS CloudWatch Logs** -- auto-parsed in JSON format
+- **Google Cloud Logging** -- structured log entries
+
+Each log entry includes:
+
+```json
+{
+  "level": "info",
+  "time": 1712345678901,
+  "reqId": "a1b2c3d4-e5f6-...",
+  "msg": "request completed",
+  "responseTime": 12
+}
+```
+
+### Log levels
+
+| Level | When |
+|-------|------|
+| `info` | Normal request lifecycle (start, complete) |
+| `warn` | Deprecated API usage, approaching rate limits |
+| `error` | Failed requests, worker errors, database connection issues |
+| `fatal` | Startup failures (missing config, migration errors) |
+
+## Database Migrations
+
+Migrations run **automatically on every startup**. The auth service reads all `*.sql` files from the `migrations/` directory and executes each one using idempotent DDL (`CREATE TABLE IF NOT EXISTS`, etc.).
+
+To upgrade, restart the service. New migration files are applied automatically. There is no separate migration command or rollback mechanism -- migrations are designed to be forward-only and non-destructive.
+
+## Operational Checklist
+
+<Check>Health check is wired to your load balancer</Check>
+<Check>All required environment variables are set</Check>
+<Check>Database connection uses SSL (`sslmode=require`)</Check>
+<Check>Redis is on a private network with authentication</Check>
+<Check>Log forwarding is configured (Datadog, Loki, CloudWatch, etc.)</Check>
+<Check>Prometheus metrics are scraped from `/metrics`</Check>
+<Check>CPU and memory limits are set in your container orchestrator</Check>
+<Check>Automated database backups are configured</Check>
+<Check>Webhook endpoints are monitored for delivery failures</Check>
+<Check>Alerting rules are set for error rate spikes and health check failures</Check>

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { buildTestApp, seedAuth, authHeader, sqlMock } from './helpers.js';
+import { buildTestApp, seedAuth, authHeader, sqlMock, mockRedis } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
@@ -166,6 +166,7 @@ describe('metrics instrumentation', () => {
 
   it('health check still works alongside metrics', async () => {
     sqlMock.mockResolvedValueOnce([{ '?column?': 1 }]);
+    mockRedis.ping.mockResolvedValueOnce('PONG');
 
     const res = await app.inject({ method: 'GET', url: '/health' });
 

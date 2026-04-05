@@ -13,7 +13,7 @@ interface CreateWebhookBody {
 
 export async function webhooksRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/webhooks
-  app.post<{ Body: CreateWebhookBody }>('/v1/webhooks', async (request, reply) => {
+  app.post<{ Body: CreateWebhookBody }>('/v1/webhooks', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { url, events } = request.body;
 
     if (!url || !events || !Array.isArray(events) || events.length === 0) {
@@ -156,7 +156,7 @@ export async function webhooksRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // DELETE /v1/webhooks/:id
-  app.delete<{ Params: { id: string } }>('/v1/webhooks/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/v1/webhooks/:id', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const sql = getSql();
     const rows = await sql`
       DELETE FROM webhooks

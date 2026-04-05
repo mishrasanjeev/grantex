@@ -31,6 +31,7 @@ export async function principalRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/principal-sessions — developer creates a session for an end-user
   app.post<{ Body: { principalId?: string; expiresIn?: string } }>(
     '/v1/principal-sessions',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const { principalId, expiresIn } = request.body ?? {};
 

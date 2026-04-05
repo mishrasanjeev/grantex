@@ -11,48 +11,48 @@ beforeAll(async () => {
 describe('GET /health', () => {
   it('returns 200 with status ok when DB and Redis are healthy', async () => {
     sqlMock.mockResolvedValueOnce([{ '?column?': 1 }]);
-    mockRedis.get.mockResolvedValueOnce(null);
+    mockRedis.ping.mockResolvedValueOnce('PONG');
 
     const res = await app.inject({ method: 'GET', url: '/health' });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ status: 'ok' });
+    expect(res.json()).toEqual({ status: 'healthy', database: 'ok', redis: 'ok' });
   });
 
   it('returns 503 with status degraded when DB is unreachable', async () => {
     sqlMock.mockRejectedValueOnce(new Error('connection refused'));
-    mockRedis.get.mockResolvedValueOnce(null);
+    mockRedis.ping.mockResolvedValueOnce('PONG');
 
     const res = await app.inject({ method: 'GET', url: '/health' });
 
     expect(res.statusCode).toBe(503);
     const body = res.json();
     expect(body.status).toBe('degraded');
-    expect(body.failing).toContain('db');
+    expect(body.database).toBe('error');
   });
 
   it('returns 503 with status degraded when Redis is unreachable', async () => {
     sqlMock.mockResolvedValueOnce([{ '?column?': 1 }]);
-    mockRedis.get.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    mockRedis.ping.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
     const res = await app.inject({ method: 'GET', url: '/health' });
 
     expect(res.statusCode).toBe(503);
     const body = res.json();
     expect(body.status).toBe('degraded');
-    expect(body.failing).toContain('redis');
+    expect(body.redis).toBe('error');
   });
 
   it('returns 503 with both failing when DB and Redis are down', async () => {
     sqlMock.mockRejectedValueOnce(new Error('connection refused'));
-    mockRedis.get.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    mockRedis.ping.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
     const res = await app.inject({ method: 'GET', url: '/health' });
 
     expect(res.statusCode).toBe(503);
     const body = res.json();
     expect(body.status).toBe('degraded');
-    expect(body.failing).toContain('db');
-    expect(body.failing).toContain('redis');
+    expect(body.database).toBe('error');
+    expect(body.redis).toBe('error');
   });
 });

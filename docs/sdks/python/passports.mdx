@@ -1,0 +1,154 @@
+---
+title: "Passports"
+sidebarTitle: "Passports"
+description: "Issue, retrieve, revoke, and list AgentPassportCredentials for MPP agent identity."
+---
+
+## Overview
+
+The `passports` client manages AgentPassportCredentials -- W3C VC 2.0 credentials that bind agent identity, human delegation, and spending limits for machine payment flows.
+
+Access the passports client via `client.passports`.
+
+## Issue
+
+Issue a new AgentPassportCredential for an agent with an active grant.
+
+```python
+from grantex import Grantex, IssuePassportParams, MaxTransactionAmount
+
+with Grantex(api_key="gx_live_...") as client:
+    passport = client.passports.issue(IssuePassportParams(
+        agent_id="ag_01HXYZ...",
+        grant_id="grnt_01HXYZ...",
+        allowed_mpp_categories=["inference", "compute"],
+        max_transaction_amount=MaxTransactionAmount(amount=50, currency="USDC"),
+        payment_rails=["tempo"],
+        expires_in="24h",
+    ))
+
+    print(f"Passport ID: {passport.passport_id}")
+    print(f"Encoded: {passport.encoded_credential}")
+    print(f"Expires: {passport.expires_at}")
+```
+
+### IssuePassportParams
+
+| Parameter                  | Type                    | Required | Description                                             |
+|----------------------------|-------------------------|----------|---------------------------------------------------------|
+| `agent_id`                 | `str`                   | Yes      | Grantex agent ID (`ag_...`).                            |
+| `grant_id`                 | `str`                   | Yes      | Active grant ID (`grnt_...`).                           |
+| `allowed_mpp_categories`   | `list[str]`             | Yes      | MPP categories: `inference`, `compute`, `data`, etc.    |
+| `max_transaction_amount`   | `MaxTransactionAmount`  | Yes      | Max per-transaction amount with currency.               |
+| `payment_rails`            | `list[str] \| None`     | No       | Payment networks (default: `["tempo"]`).                |
+| `expires_in`               | `str \| None`           | No       | Expiry duration (e.g., `"24h"`). Max: `"720h"`.        |
+| `parent_passport_id`       | `str \| None`           | No       | Parent passport ID for delegated sub-agent passports.   |
+
+### IssuedPassportResponse
+
+| Field                | Type             | Description                                        |
+|----------------------|------------------|----------------------------------------------------|
+| `passport_id`        | `str`            | `urn:grantex:passport:<ulid>`                      |
+| `credential`         | `dict[str, Any]` | Full AgentPassportCredential JSON.                 |
+| `encoded_credential` | `str`            | Base64url-encoded credential for headers.          |
+| `expires_at`         | `str`            | ISO 8601 expiry timestamp.                         |
+
+### Errors
+
+| Code                   | HTTP | Cause                                              |
+|------------------------|------|----------------------------------------------------|
+| `INVALID_AGENT`        | 400  | Agent not found or not owned by developer.         |
+| `INVALID_GRANT`        | 400  | Grant not found, revoked, or not owned by agent.   |
+| `SCOPE_INSUFFICIENT`   | 400  | Grant missing required `payments:mpp:*` scopes.    |
+| `AMOUNT_EXCEEDS_BUDGET`| 400  | Max amount exceeds remaining budget allocation.    |
+| `INVALID_EXPIRY`       | 422  | Expiry exceeds 720 hours.                          |
+
+---
+
+## Get
+
+Retrieve a passport by ID. Returns the current status and raw data.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    record = client.passports.get("urn:grantex:passport:01HXYZ...")
+
+    print(f"Status: {record.status}")  # "active" | "revoked" | "expired"
+```
+
+### Parameters
+
+| Parameter     | Type  | Required | Description                    |
+|---------------|-------|----------|--------------------------------|
+| `passport_id` | `str` | Yes      | The passport URN identifier.   |
+
+### GetPassportResponse
+
+| Field    | Type             | Description                              |
+|----------|------------------|------------------------------------------|
+| `status` | `str`            | Current status: `active`, `revoked`, or `expired`. |
+| `raw`    | `dict[str, Any]` | Full raw response data.                  |
+
+---
+
+## Revoke
+
+Revoke a passport immediately. Flips the StatusList2021 bit so offline verifiers see the revocation.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.passports.revoke("urn:grantex:passport:01HXYZ...")
+
+    print(f"Revoked: {result.revoked}")      # True
+    print(f"Revoked at: {result.revoked_at}") # "2026-03-20T03:14:15.261Z"
+```
+
+### Parameters
+
+| Parameter     | Type  | Required | Description                    |
+|---------------|-------|----------|--------------------------------|
+| `passport_id` | `str` | Yes      | The passport URN identifier.   |
+
+### RevokePassportResponse
+
+| Field        | Type   | Description                              |
+|--------------|--------|------------------------------------------|
+| `revoked`    | `bool` | Always `True` on success.                |
+| `revoked_at` | `str`  | ISO 8601 revocation timestamp.           |
+
+---
+
+## List
+
+List passports with optional filters. Returns a bare array from the API.
+
+```python
+from grantex import Grantex, ListPassportsParams
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.passports.list(ListPassportsParams(
+        agent_id="ag_01HXYZ...",
+        status="active",
+    ))
+
+    for p in result.passports:
+        print(f"{p.passport_id} expires {p.expires_at}")
+```
+
+### ListPassportsParams
+
+| Parameter  | Type          | Required | Description                              |
+|------------|---------------|----------|------------------------------------------|
+| `agent_id` | `str \| None` | No       | Filter by agent ID.                      |
+| `grant_id` | `str \| None` | No       | Filter by grant ID.                      |
+| `status`   | `str \| None` | No       | Filter by status: `active`, `revoked`, `expired`. |
+
+### ListPassportsResponse
+
+| Field       | Type                                 | Description              |
+|-------------|--------------------------------------|--------------------------|
+| `passports` | `tuple[IssuedPassportResponse, ...]` | Matching passport records. |

@@ -124,7 +124,7 @@ describe('POST /v1/consent-bundles', () => {
       },
     });
 
-    expect(res.statusCode).toBe(422);
+    expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('INVALID_TTL');
   });
 

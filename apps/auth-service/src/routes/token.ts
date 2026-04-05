@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getSql } from '../db/client.js';
+import { getSql, type TxSql } from '../db/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
 import { emitEvent } from '../lib/events.js';
@@ -87,36 +87,36 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     const jti = newTokenId();
     const refreshId = newRefreshTokenId();
 
-    // Create grant
-    await sql`
-      INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
-      VALUES (
-        ${grantId},
-        ${authReq['agent_id'] as string},
-        ${authReq['principal_id'] as string},
-        ${authReq['developer_id'] as string},
-        ${authReq['scopes'] as string[]},
-        ${expiresAt}
-      )
-    `;
-
-    // Create grant token record
-    await sql`
-      INSERT INTO grant_tokens (jti, grant_id, expires_at)
-      VALUES (${jti}, ${grantId}, ${expiresAt})
-    `;
-
-    // Create refresh token
+    // Atomically create grant, token, refresh token, and consume auth request
     const refreshExpiresAt = new Date(now + 30 * 86400 * 1000); // 30 days
-    await sql`
-      INSERT INTO refresh_tokens (id, grant_id, expires_at)
-      VALUES (${refreshId}, ${grantId}, ${refreshExpiresAt})
-    `;
+    await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      await tx`
+        INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+        VALUES (
+          ${grantId},
+          ${authReq['agent_id'] as string},
+          ${authReq['principal_id'] as string},
+          ${authReq['developer_id'] as string},
+          ${authReq['scopes'] as string[]},
+          ${expiresAt}
+        )
+      `;
 
-    // Mark auth request as consumed
-    await sql`
-      UPDATE auth_requests SET status = 'consumed' WHERE id = ${authReq['id'] as string}
-    `;
+      await tx`
+        INSERT INTO grant_tokens (jti, grant_id, expires_at)
+        VALUES (${jti}, ${grantId}, ${expiresAt})
+      `;
+
+      await tx`
+        INSERT INTO refresh_tokens (id, grant_id, expires_at)
+        VALUES (${refreshId}, ${grantId}, ${refreshExpiresAt})
+      `;
+
+      await tx`
+        UPDATE auth_requests SET status = 'consumed' WHERE id = ${authReq['id'] as string}
+      `;
+    });
 
     // Check for budget allocation
     const budgetRows = await sql<{ remaining_budget: string }[]>`
@@ -274,9 +274,6 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ message: 'Grant has been revoked', code: 'BAD_REQUEST', requestId: request.id });
     }
 
-    // Mark old refresh token as used
-    await sql`UPDATE refresh_tokens SET is_used = true WHERE id = ${row['refresh_id'] as string}`;
-
     const grantId = row['grant_id'] as string;
     const scopes = row['scopes'] as string[];
     const now = Date.now();
@@ -288,18 +285,22 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     const jti = newTokenId();
     const newRefreshId = newRefreshTokenId();
 
-    // Create new grant token record
-    await sql`
-      INSERT INTO grant_tokens (jti, grant_id, expires_at)
-      VALUES (${jti}, ${grantId}, ${grantExpiresAt})
-    `;
-
-    // Create new refresh token (30-day TTL)
+    // Atomically rotate: mark old refresh token used, create new token + refresh token
     const refreshExpiresAt = new Date(now + 30 * 86400 * 1000);
-    await sql`
-      INSERT INTO refresh_tokens (id, grant_id, expires_at)
-      VALUES (${newRefreshId}, ${grantId}, ${refreshExpiresAt})
-    `;
+    await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      await tx`UPDATE refresh_tokens SET is_used = true WHERE id = ${row['refresh_id'] as string}`;
+
+      await tx`
+        INSERT INTO grant_tokens (jti, grant_id, expires_at)
+        VALUES (${jti}, ${grantId}, ${grantExpiresAt})
+      `;
+
+      await tx`
+        INSERT INTO refresh_tokens (id, grant_id, expires_at)
+        VALUES (${newRefreshId}, ${grantId}, ${refreshExpiresAt})
+      `;
+    });
 
     // Sign JWT with same grant claims
     const jwt = await signGrantToken({

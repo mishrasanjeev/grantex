@@ -62,9 +62,11 @@ func NewClient(apiKey string, opts ...Option) *Client {
 	}
 
 	h := &httpClient{
-		baseURL: cfg.baseURL,
-		apiKey:  apiKey,
-		client:  hc,
+		baseURL:    cfg.baseURL,
+		apiKey:     apiKey,
+		client:     hc,
+		maxRetries:    cfg.maxRetries,
+		maxRetriesSet: cfg.maxRetriesSet,
 	}
 
 	c := &Client{http: h}
@@ -108,9 +110,11 @@ func Signup(ctx context.Context, params SignupParams, opts ...Option) (*SignupRe
 	}
 
 	h := &httpClient{
-		baseURL: cfg.baseURL,
-		apiKey:  "",
-		client:  hc,
+		baseURL:    cfg.baseURL,
+		apiKey:     "",
+		client:     hc,
+		maxRetries:    cfg.maxRetries,
+		maxRetriesSet: cfg.maxRetriesSet,
 	}
 
 	return unmarshal[SignupResponse](h.post(ctx, "/v1/developers/signup", params))

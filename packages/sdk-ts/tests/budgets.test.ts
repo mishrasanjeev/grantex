@@ -133,8 +133,6 @@ describe('BudgetsClient', () => {
     const mockFetch = makeFetch(200, {
       transactions: [MOCK_TRANSACTION],
       total: 1,
-      page: 1,
-      pageSize: 20,
     });
     vi.stubGlobal('fetch', mockFetch);
 
@@ -144,8 +142,6 @@ describe('BudgetsClient', () => {
     expect(result.transactions).toHaveLength(1);
     expect(result.transactions[0]!.id).toBe('tx_01');
     expect(result.total).toBe(1);
-    expect(result.page).toBe(1);
-    expect(result.pageSize).toBe(20);
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/v1\/budget\/transactions\/grant_01$/);
     expect(init.method).toBe('GET');
@@ -155,16 +151,13 @@ describe('BudgetsClient', () => {
     const mockFetch = makeFetch(200, {
       transactions: [],
       total: 50,
-      page: 3,
-      pageSize: 10,
     });
     vi.stubGlobal('fetch', mockFetch);
 
     const grantex = new Grantex({ apiKey: 'test_key' });
     const result = await grantex.budgets.transactions('grant_01', { page: 3, pageSize: 10 });
 
-    expect(result.page).toBe(3);
-    expect(result.pageSize).toBe(10);
+    expect(result.total).toBe(50);
     const [url] = mockFetch.mock.calls[0] as [string];
     expect(url).toContain('page=3');
     expect(url).toContain('pageSize=10');
@@ -174,8 +167,6 @@ describe('BudgetsClient', () => {
     const mockFetch = makeFetch(200, {
       transactions: [MOCK_TRANSACTION],
       total: 1,
-      page: 1,
-      pageSize: 20,
     });
     vi.stubGlobal('fetch', mockFetch);
 

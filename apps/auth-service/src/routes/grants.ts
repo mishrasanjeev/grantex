@@ -102,6 +102,11 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({ active: false, reason: 'expired' });
     }
 
+    const exp = claims['exp'] as number | undefined;
+    if (exp && Math.floor(Date.now() / 1000) > exp) {
+      return reply.send({ active: false, reason: 'expired' });
+    }
+
     return reply.send({ active: true, claims });
   });
 }

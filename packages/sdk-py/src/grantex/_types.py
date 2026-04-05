@@ -97,17 +97,11 @@ class Agent:
 @dataclass(frozen=True)
 class ListAgentsResponse:
     agents: tuple[Agent, ...]
-    total: int
-    page: int
-    page_size: int
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ListAgentsResponse:
         return cls(
             agents=tuple(Agent.from_dict(a) for a in data.get("agents", [])),
-            total=data["total"],
-            page=data["page"],
-            page_size=data["pageSize"],
         )
 
 
@@ -234,17 +228,11 @@ class ListGrantsParams:
 @dataclass(frozen=True)
 class ListGrantsResponse:
     grants: tuple[Grant, ...]
-    total: int
-    page: int
-    page_size: int
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ListGrantsResponse:
         return cls(
             grants=tuple(Grant.from_dict(g) for g in data.get("grants", [])),
-            total=data.get("total", 0),
-            page=data.get("page", 1),
-            page_size=data.get("pageSize", 50),
         )
 
 
@@ -457,17 +445,11 @@ class ListAuditParams:
 @dataclass(frozen=True)
 class ListAuditResponse:
     entries: tuple[AuditEntry, ...]
-    total: int
-    page: int
-    page_size: int
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ListAuditResponse:
         return cls(
             entries=tuple(AuditEntry.from_dict(e) for e in data.get("entries", [])),
-            total=data.get("total", 0),
-            page=data.get("page", 1),
-            page_size=data.get("pageSize", 50),
         )
 
 
@@ -1736,8 +1718,6 @@ class BudgetTransaction:
 class BudgetTransactionsResponse:
     transactions: tuple[BudgetTransaction, ...]
     total: int
-    page: int
-    page_size: int
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "BudgetTransactionsResponse":
@@ -1747,8 +1727,6 @@ class BudgetTransactionsResponse:
                 for t in data.get("transactions", [])
             ),
             total=data["total"],
-            page=data["page"],
-            page_size=data["pageSize"],
         )
 
 

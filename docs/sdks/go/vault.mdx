@@ -1,0 +1,168 @@
+---
+title: "Vault"
+description: "Store, retrieve, and exchange encrypted service credentials through the Grantex credential vault"
+---
+
+## Overview
+
+The `Vault` service manages encrypted service credentials. Store upstream credentials (e.g., OAuth tokens for third-party APIs), retrieve metadata, delete credentials, and exchange Grantex grant tokens for stored service tokens at runtime.
+
+## Store
+
+Store an encrypted credential in the vault. Upserts on `PrincipalID` + `Service`.
+
+```go
+result, err := client.Vault.Store(ctx, grantex.StoreCredentialParams{
+    PrincipalID:    "user_abc123",
+    Service:        "github",
+    AccessToken:    "gho_xxxxxxxxxxxx",
+    CredentialType: "oauth2",
+    RefreshToken:   "ghr_xxxxxxxxxxxx",
+    TokenExpiresAt: "2026-04-10T00:00:00Z",
+    Metadata:       map[string]interface{}{"scope": "repo,user"},
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Credential ID: %s\n", result.ID)
+fmt.Printf("Service: %s\n", result.Service)
+```
+
+### Parameters
+
+| Parameter        | Type                     | Required | Description                                        |
+|------------------|--------------------------|----------|----------------------------------------------------|
+| `PrincipalID`    | `string`                 | Yes      | The end-user who owns this credential.             |
+| `Service`        | `string`                 | Yes      | Service name (e.g., `"github"`, `"slack"`).        |
+| `AccessToken`    | `string`                 | Yes      | The upstream access token (encrypted at rest).     |
+| `CredentialType` | `string`                 | No       | Credential type (e.g., `"oauth2"`, `"api_key"`).   |
+| `RefreshToken`   | `string`                 | No       | Optional refresh token.                            |
+| `TokenExpiresAt` | `string`                 | No       | ISO 8601 expiry for the upstream token.            |
+| `Metadata`       | `map[string]interface{}` | No       | Arbitrary metadata to store alongside the credential. |
+
+### Response (`StoreCredentialResponse`)
+
+| Field            | Type     | Description                              |
+|------------------|----------|------------------------------------------|
+| `ID`             | `string` | Unique credential identifier.            |
+| `PrincipalID`    | `string` | The principal who owns the credential.   |
+| `Service`        | `string` | Service name.                            |
+| `CredentialType` | `string` | Credential type.                         |
+| `CreatedAt`      | `string` | ISO 8601 timestamp when stored.          |
+
+---
+
+## List
+
+List credential metadata. Raw tokens are never returned by this endpoint.
+
+```go
+creds, err := client.Vault.List(ctx, &grantex.ListVaultCredentialsParams{
+    PrincipalID: "user_abc123",
+    Service:     "github",
+})
+if err != nil {
+    log.Fatal(err)
+}
+for _, cred := range creds {
+    fmt.Printf("%s (%s) - expires %v\n", cred.Service, cred.CredentialType, cred.TokenExpiresAt)
+}
+```
+
+### Parameters
+
+| Parameter     | Type     | Required | Description              |
+|---------------|----------|----------|--------------------------|
+| `PrincipalID` | `string` | No       | Filter by principal ID.  |
+| `Service`     | `string` | No       | Filter by service name.  |
+
+### Response
+
+Returns `[]VaultCredential`. See `Get` below for the `VaultCredential` struct fields.
+
+---
+
+## Get
+
+Get credential metadata by ID. Does not return the raw token.
+
+```go
+cred, err := client.Vault.Get(ctx, "cred_01HXYZ...")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Service: %s\n", cred.Service)
+fmt.Printf("Type: %s\n", cred.CredentialType)
+```
+
+### Parameters
+
+| Parameter      | Type     | Required | Description                    |
+|----------------|----------|----------|--------------------------------|
+| `credentialID` | `string` | Yes      | The credential ID to retrieve. |
+
+### `VaultCredential`
+
+| Field            | Type                     | Description                              |
+|------------------|--------------------------|------------------------------------------|
+| `ID`             | `string`                 | Unique credential identifier.            |
+| `PrincipalID`    | `string`                 | The principal who owns the credential.   |
+| `Service`        | `string`                 | Service name.                            |
+| `CredentialType` | `string`                 | Credential type.                         |
+| `TokenExpiresAt` | `*string`                | ISO 8601 expiry for the upstream token.  |
+| `Metadata`       | `map[string]interface{}` | Stored metadata.                         |
+| `CreatedAt`      | `string`                 | ISO 8601 creation timestamp.             |
+| `UpdatedAt`      | `string`                 | ISO 8601 last-updated timestamp.         |
+
+---
+
+## Delete
+
+Delete a credential from the vault.
+
+```go
+err := client.Vault.Delete(ctx, "cred_01HXYZ...")
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+### Parameters
+
+| Parameter      | Type     | Required | Description                    |
+|----------------|----------|----------|--------------------------------|
+| `credentialID` | `string` | Yes      | The credential ID to delete.   |
+
+---
+
+## Exchange
+
+Exchange a Grantex grant token for an upstream service credential. Unlike other methods, this uses the grant token (not the API key) as the Bearer token, allowing agents to retrieve stored credentials at runtime.
+
+```go
+result, err := client.Vault.Exchange(ctx, "eyJhbGciOiJSUzI1NiIs...", grantex.ExchangeCredentialParams{
+    Service: "github",
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Access token: %s\n", result.AccessToken)
+fmt.Printf("Service: %s\n", result.Service)
+```
+
+### Parameters
+
+| Parameter    | Type     | Required | Description                              |
+|--------------|----------|----------|------------------------------------------|
+| `grantToken` | `string` | Yes      | A valid Grantex grant token (JWT).       |
+| `Service`    | `string` | Yes      | The service to retrieve credentials for. |
+
+### Response (`ExchangeCredentialResponse`)
+
+| Field            | Type                     | Description                              |
+|------------------|--------------------------|------------------------------------------|
+| `AccessToken`    | `string`                 | The upstream access token.               |
+| `Service`        | `string`                 | Service name.                            |
+| `CredentialType` | `string`                 | Credential type.                         |
+| `TokenExpiresAt` | `*string`                | ISO 8601 expiry for the token.           |
+| `Metadata`       | `map[string]interface{}` | Stored metadata.                         |

@@ -1,5 +1,6 @@
 import { trace, type Span, type Tracer, SpanStatusCode } from '@opentelemetry/api';
 import { config } from '../config.js';
+import { logger } from './logger.js';
 
 let _initialized = false;
 
@@ -38,7 +39,7 @@ export async function initTracing(): Promise<void> {
   sdk.start();
 
   process.on('SIGTERM', () => {
-    sdk.shutdown().catch(console.error);
+    sdk.shutdown().catch((err) => logger.error(err, 'OpenTelemetry SDK shutdown error'));
   });
 }
 

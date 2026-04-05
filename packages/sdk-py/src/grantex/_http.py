@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+import time
 from typing import Any
 
 import httpx
@@ -9,6 +11,10 @@ from ._types import RateLimit
 
 _SDK_VERSION = "0.1.0"
 _DEFAULT_TIMEOUT = 30.0
+_DEFAULT_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 0.5  # seconds
+_RETRY_MAX_DELAY = 10.0  # seconds
+_RETRYABLE_STATUS_CODES = frozenset({429, 502, 503, 504})
 
 
 def _parse_rate_limit_headers(headers: httpx.Headers) -> RateLimit | None:
@@ -36,9 +42,11 @@ class HttpClient:
         base_url: str,
         api_key: str,
         timeout: float = _DEFAULT_TIMEOUT,
+        max_retries: int = _DEFAULT_MAX_RETRIES,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._last_rate_limit: RateLimit | None = None
+        self._max_retries = max_retries
         self._client = httpx.Client(
             headers={
                 "Authorization": f"Bearer {api_key}",
@@ -73,44 +81,82 @@ class HttpClient:
         if body is not None:
             kwargs["json"] = body
 
-        try:
-            response = self._client.request(method, url, **kwargs)
-        except httpx.TimeoutException as exc:
-            raise GrantexNetworkError(
-                f"Request timed out: {exc}", cause=exc
-            ) from exc
-        except httpx.RequestError as exc:
-            raise GrantexNetworkError(
-                f"Network error: {exc}", cause=exc
-            ) from exc
+        last_error: Exception | None = None
 
-        request_id: str | None = response.headers.get("x-request-id")
-        self._last_rate_limit = _parse_rate_limit_headers(response.headers)
+        for attempt in range(self._max_retries + 1):
+            if attempt > 0:
+                time.sleep(self._retry_delay(attempt - 1))
 
-        if not response.is_success:
-            body_data: Any = None
             try:
-                body_data = response.json()
-            except Exception:
-                body_data = response.text or None
+                response = self._client.request(method, url, **kwargs)
+            except httpx.TimeoutException as exc:
+                last_error = GrantexNetworkError(
+                    f"Request timed out: {exc}", cause=exc
+                )
+                if attempt < self._max_retries:
+                    continue
+                raise last_error from exc
+            except httpx.RequestError as exc:
+                last_error = GrantexNetworkError(
+                    f"Network error: {exc}", cause=exc
+                )
+                if attempt < self._max_retries:
+                    continue
+                raise last_error from exc
 
-            message = _extract_error_message(body_data, response.status_code)
-            error_code = _extract_error_code(body_data)
+            request_id: str | None = response.headers.get("x-request-id")
+            self._last_rate_limit = _parse_rate_limit_headers(response.headers)
 
-            if response.status_code in (401, 403):
-                raise GrantexAuthError(
+            if not response.is_success:
+                body_data: Any = None
+                try:
+                    body_data = response.json()
+                except Exception:
+                    body_data = response.text or None
+
+                # Retry on transient status codes
+                if response.status_code in _RETRYABLE_STATUS_CODES and attempt < self._max_retries:
+                    retry_after = _parse_retry_after(response.headers)
+                    if retry_after is not None:
+                        self._pending_retry_after = retry_after
+                    continue
+
+                message = _extract_error_message(body_data, response.status_code)
+                error_code = _extract_error_code(body_data)
+
+                if response.status_code in (401, 403):
+                    raise GrantexAuthError(
+                        message, response.status_code, body_data, request_id, error_code,
+                        self._last_rate_limit,
+                    )
+                raise GrantexApiError(
                     message, response.status_code, body_data, request_id, error_code,
                     self._last_rate_limit,
                 )
-            raise GrantexApiError(
-                message, response.status_code, body_data, request_id, error_code,
-                self._last_rate_limit,
-            )
 
-        if response.status_code == 204:
-            return None
+            if response.status_code == 204:
+                return None
 
-        return response.json()
+            return response.json()
+
+        # Should not reach here, but satisfy type checkers
+        if last_error is not None:
+            raise last_error
+        return None  # pragma: no cover
+
+    _pending_retry_after: float | None = None
+
+    def _retry_delay(self, attempt: int) -> float:
+        """Calculate retry delay with exponential backoff and jitter."""
+        # If a Retry-After header was parsed, use it
+        if self._pending_retry_after is not None:
+            delay = self._pending_retry_after
+            self._pending_retry_after = None
+            return min(delay, _RETRY_MAX_DELAY)
+        # Exponential backoff with jitter
+        exponential = _RETRY_BASE_DELAY * (2 ** attempt)
+        jitter = random.random() * _RETRY_BASE_DELAY
+        return float(min(exponential + jitter, _RETRY_MAX_DELAY))
 
     def close(self) -> None:
         self._client.close()
@@ -120,6 +166,25 @@ class HttpClient:
 
     def __exit__(self, *args: object) -> None:
         self.close()
+
+
+def _parse_retry_after(headers: httpx.Headers) -> float | None:
+    """Parse Retry-After header value into seconds."""
+    value = headers.get("retry-after")
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    # Try parsing as HTTP-date (RFC 7231)
+    from email.utils import parsedate_to_datetime
+    try:
+        dt = parsedate_to_datetime(value)
+        delta = dt.timestamp() - time.time()
+        return max(0.0, delta)
+    except (ValueError, TypeError):
+        return None
 
 
 def _extract_error_code(body: Any) -> str | None:

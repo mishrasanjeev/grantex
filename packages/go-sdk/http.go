@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const sdkVersion = "0.1.0"
@@ -44,10 +48,18 @@ func parseRateLimitHeaders(header http.Header) *RateLimit {
 	return rl
 }
 
+const (
+	defaultMaxRetries = 3
+	retryBaseDelay    = 500 * time.Millisecond
+	retryMaxDelay     = 10 * time.Second
+)
+
 type httpClient struct {
 	baseURL       string
 	apiKey        string
 	client        *http.Client
+	maxRetries    int
+	maxRetriesSet bool
 	lastRateLimit *RateLimit
 }
 
@@ -72,15 +84,102 @@ func (h *httpClient) del(ctx context.Context, path string) ([]byte, error) {
 }
 
 func (h *httpClient) do(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
-	url := strings.TrimRight(h.baseURL, "/") + path
+	maxRetries := h.maxRetries
+	if !h.maxRetriesSet {
+		maxRetries = defaultMaxRetries
+	}
 
-	var bodyReader io.Reader
+	// Pre-marshal the body so we can replay it on retries.
+	var bodyBytes []byte
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
 			return nil, &NetworkError{Message: "failed to marshal request body", Cause: err}
 		}
-		bodyReader = bytes.NewReader(data)
+		bodyBytes = data
+	}
+
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			delay := h.retryDelay(attempt-1, lastErr)
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, &NetworkError{Message: "request cancelled during retry backoff", Cause: ctx.Err()}
+			case <-timer.C:
+			}
+		}
+
+		respBody, err := h.doOnce(ctx, method, path, bodyBytes)
+		if err == nil {
+			return respBody, nil
+		}
+
+		if !isRetryable(err) {
+			return nil, err
+		}
+		lastErr = err
+	}
+
+	return nil, lastErr
+}
+
+// isRetryable returns true for transient failures that should be retried.
+func isRetryable(err error) bool {
+	// Network errors (connection refused, timeout, DNS failures) are retryable.
+	var netErr *NetworkError
+	if errors.As(err, &netErr) {
+		return true
+	}
+
+	// Retry specific HTTP status codes: 429, 502, 503, 504.
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.StatusCode {
+		case http.StatusTooManyRequests, // 429
+			http.StatusBadGateway,      // 502
+			http.StatusServiceUnavailable, // 503
+			http.StatusGatewayTimeout:  // 504
+			return true
+		}
+	}
+
+	// AuthError wraps APIError but should NOT be retried (401, 403).
+	return false
+}
+
+// retryDelay computes the backoff delay: min(baseDelay * 2^attempt + jitter, maxDelay).
+// If the last error carried a Retry-After header, that value is used instead.
+func (h *httpClient) retryDelay(attempt int, lastErr error) time.Duration {
+	// Respect Retry-After header from 429 responses.
+	var apiErr *APIError
+	if errors.As(lastErr, &apiErr) && apiErr.RateLimit != nil && apiErr.RateLimit.RetryAfter > 0 {
+		d := time.Duration(apiErr.RateLimit.RetryAfter) * time.Second
+		if d > retryMaxDelay {
+			d = retryMaxDelay
+		}
+		return d
+	}
+
+	exp := math.Pow(2, float64(attempt))
+	delay := time.Duration(float64(retryBaseDelay) * exp)
+	jitter := time.Duration(rand.Int63n(int64(retryBaseDelay)))
+	delay += jitter
+	if delay > retryMaxDelay {
+		delay = retryMaxDelay
+	}
+	return delay
+}
+
+// doOnce executes a single HTTP request (no retries).
+func (h *httpClient) doOnce(ctx context.Context, method, path string, bodyBytes []byte) ([]byte, error) {
+	url := strings.TrimRight(h.baseURL, "/") + path
+
+	var bodyReader io.Reader
+	if bodyBytes != nil {
+		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, url, bodyReader)
@@ -90,7 +189,7 @@ func (h *httpClient) do(ctx context.Context, method, path string, body interface
 
 	req.Header.Set("Authorization", "Bearer "+h.apiKey)
 	req.Header.Set("User-Agent", "grantex-go/"+sdkVersion)
-	if body != nil {
+	if bodyBytes != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 

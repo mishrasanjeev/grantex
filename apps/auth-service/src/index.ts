@@ -7,8 +7,10 @@ import { getRedis } from './redis/client.js';
 import { buildApp } from './server.js';
 import { hashApiKey } from './lib/hash.js';
 import { newDeveloperId } from './lib/ids.js';
-import { startWebhookDeliveryWorker } from './workers/webhookDelivery.js';
-import { startAnomalyDetectionWorker } from './workers/anomalyDetection.js';
+import { startWebhookDeliveryWorker, stopWebhookDeliveryWorker } from './workers/webhookDelivery.js';
+import { startAnomalyDetectionWorker, stopAnomalyDetectionWorker } from './workers/anomalyDetection.js';
+import { closeSql } from './db/client.js';
+import { closeRedis } from './redis/client.js';
 import { seedTrustRegistry } from './db/seeds/trust-registry.js';
 
 async function main() {
@@ -76,6 +78,19 @@ async function main() {
   // Start background workers after the server is listening
   startWebhookDeliveryWorker(sql);
   startAnomalyDetectionWorker(sql);
+
+  // Graceful shutdown: stop workers, close server, then close DB/Redis connections
+  const shutdown = async (signal: string) => {
+    app.log.info(`Received ${signal}, shutting down gracefully...`);
+    stopWebhookDeliveryWorker();
+    stopAnomalyDetectionWorker();
+    await app.close();
+    await closeRedis();
+    await closeSql();
+    process.exit(0);
+  };
+  process.on('SIGTERM', () => { shutdown('SIGTERM').catch(() => process.exit(1)); });
+  process.on('SIGINT', () => { shutdown('SIGINT').catch(() => process.exit(1)); });
 }
 
 main().catch((err) => {

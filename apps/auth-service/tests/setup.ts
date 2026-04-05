@@ -9,7 +9,10 @@ import { vi, beforeEach } from 'vitest';
 // The factories use arrow functions, so the variables are captured
 // by binding (not by value) and are always resolved at call time.
 // ------------------------------------------------------------------
-export const sqlMock = vi.fn().mockResolvedValue([]);
+export const sqlMock = Object.assign(vi.fn().mockResolvedValue([]), {
+  // Support sql.begin(async (tx) => { ... }) — passes sqlMock itself as the tx
+  begin: vi.fn().mockImplementation(async (cb: (tx: unknown) => unknown) => cb(sqlMock)),
+});
 
 export const mockRedis = {
   get: vi.fn().mockResolvedValue(null),
@@ -17,6 +20,7 @@ export const mockRedis = {
   del: vi.fn().mockResolvedValue(1),
   publish: vi.fn().mockResolvedValue(0),
   subscribe: vi.fn().mockResolvedValue(undefined),
+  ping: vi.fn().mockResolvedValue('PONG'),
   incr: vi.fn().mockResolvedValue(1),
   decr: vi.fn().mockResolvedValue(0),
   expire: vi.fn().mockResolvedValue(1),
@@ -217,11 +221,14 @@ vi.mock('@simplewebauthn/server/helpers', () => ({
 beforeEach(() => {
   sqlMock.mockReset();
   sqlMock.mockResolvedValue([]);
+  sqlMock.begin.mockReset();
+  sqlMock.begin.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(sqlMock));
   mockRedis.get.mockReset().mockResolvedValue(null);
   mockRedis.set.mockReset().mockResolvedValue('OK');
   mockRedis.del.mockReset().mockResolvedValue(1);
   mockRedis.publish.mockReset().mockResolvedValue(0);
   mockRedis.subscribe.mockReset().mockResolvedValue(undefined);
+  mockRedis.ping.mockReset().mockResolvedValue('PONG');
   mockRedis.incr.mockReset().mockResolvedValue(1);
   mockRedis.decr.mockReset().mockResolvedValue(0);
   mockRedis.expire.mockReset().mockResolvedValue(1);

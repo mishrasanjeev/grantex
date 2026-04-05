@@ -47,6 +47,7 @@ import {
   verifyIdToken,
   parseSamlResponse,
 } from '../src/lib/sso.js';
+import { signSsoState } from '../src/routes/sso.js';
 
 const mockedResolveConnection = vi.mocked(resolveConnection);
 const mockedVerifyIdToken = vi.mocked(verifyIdToken);
@@ -585,7 +586,9 @@ describe('GET /sso/login (enterprise)', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('POST /sso/callback/oidc', () => {
-  const state = Buffer.from(JSON.stringify({ org: 'dev_TEST', connectionId: 'sso_CONN01' })).toString('base64url');
+  // State is created lazily because signSsoState depends on initKeys() which runs in beforeAll
+  let state: string;
+  beforeAll(() => { state = signSsoState({ org: 'dev_TEST', connectionId: 'sso_CONN01' }); });
 
   it('exchanges code, verifies ID token, creates session', async () => {
     sqlMock.mockResolvedValueOnce([OIDC_CONNECTION_ROW]); // SELECT connection
@@ -692,7 +695,8 @@ describe('POST /sso/callback/oidc', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('POST /sso/callback/saml', () => {
-  const relayState = Buffer.from(JSON.stringify({ org: 'dev_TEST', connectionId: 'sso_CONN02' })).toString('base64url');
+  let relayState: string;
+  beforeAll(() => { relayState = signSsoState({ org: 'dev_TEST', connectionId: 'sso_CONN02' }); });
 
   it('parses SAML response, creates session', async () => {
     sqlMock.mockResolvedValueOnce([SAML_CONNECTION_ROW]); // SELECT connection
@@ -842,7 +846,7 @@ describe('DELETE /v1/sso/config (legacy)', () => {
 
 describe('GET /sso/callback (legacy)', () => {
   it('exchanges code and returns user info', async () => {
-    const state = Buffer.from(JSON.stringify({ org: 'dev_TEST' })).toString('base64url');
+    const state = signSsoState({ org: 'dev_TEST' });
     sqlMock.mockResolvedValueOnce([SSO_CONFIG_ROW]);
 
     const idTokenPayload = Buffer.from(
@@ -869,7 +873,7 @@ describe('GET /sso/callback (legacy)', () => {
   });
 
   it('returns 502 when IdP token exchange fails', async () => {
-    const state = Buffer.from(JSON.stringify({ org: 'dev_TEST' })).toString('base64url');
+    const state = signSsoState({ org: 'dev_TEST' });
     sqlMock.mockResolvedValueOnce([SSO_CONFIG_ROW]);
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400 }));

@@ -47,7 +47,7 @@ describe('Rate limit headers', () => {
       }),
     );
 
-    const client = new Grantex({ apiKey: 'test-key' });
+    const client = new Grantex({ apiKey: 'test-key', maxRetries: 0 });
 
     try {
       await client.agents.list();

@@ -1,0 +1,156 @@
+---
+title: "Security Hardening"
+sidebarTitle: "Security Hardening"
+description: "Enterprise-grade security controls built into the Grantex auth service — headers, rate limiting, CORS, input validation, and more."
+---
+
+The Grantex auth service ships with multiple layers of security hardening enabled by default. This guide explains each control so you can evaluate it against your compliance requirements and tune settings for your deployment.
+
+## HTTP Security Headers
+
+Every response from the auth service includes the following security headers:
+
+| Header | Value | Purpose |
+|--------|-------|---------|
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Forces HTTPS for one year, covering subdomains |
+| `X-Content-Type-Options` | `nosniff` | Prevents browsers from MIME-sniffing responses |
+| `X-Frame-Options` | `DENY` | Prevents the service from being embedded in iframes (clickjacking protection) |
+| `X-XSS-Protection` | `0` | Disables legacy XSS auditors (modern CSP is preferred) |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Limits referrer leakage across origins |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=()` | Denies access to sensitive browser APIs |
+
+<Note>
+If you are running behind a reverse proxy (Nginx, Cloudflare, AWS ALB), make sure HSTS is not duplicated. The proxy typically handles TLS termination and HSTS, while the auth service adds the defense-in-depth headers.
+</Note>
+
+## Rate Limiting
+
+All endpoints are protected by per-IP sliding-window rate limits powered by Redis.
+
+| Endpoint | Limit | Window |
+|----------|-------|--------|
+| **All endpoints** (global default) | 100 req | 1 minute |
+| `POST /v1/authorize` | 10 req | 1 minute |
+| `POST /v1/token` | 20 req | 1 minute |
+| `POST /v1/token/refresh` | 20 req | 1 minute |
+| `GET /.well-known/jwks.json` | **Exempt** | -- |
+
+When a client exceeds its limit, the API returns `429 Too Many Requests` with a `Retry-After` header indicating when the window resets. Every response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers.
+
+See the full [Rate Limits guide](/guides/rate-limits) for SDK integration examples and retry strategies.
+
+### Self-hosted tuning
+
+Rate limits are configured in `apps/auth-service/src/server.ts` (global) and in individual route files (per-endpoint). Adjust limits based on your traffic profile:
+
+```typescript
+await app.register(rateLimit, {
+  max: 100,              // requests per window
+  timeWindow: '1 minute',
+  allowList: (req) => {
+    return req.url.startsWith('/.well-known/');
+  },
+});
+```
+
+## CORS Policy
+
+The auth service registers `@fastify/cors` with default settings, allowing requests from any origin. This is appropriate for the hosted API because authentication is API-key-based (not cookie-based).
+
+For self-hosted deployments handling browser-based consent flows, you may want to restrict allowed origins:
+
+```typescript
+await app.register(cors, {
+  origin: ['https://your-app.com', 'https://portal.your-app.com'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  credentials: true,
+});
+```
+
+## Admin API Authentication
+
+The admin endpoints (`/v1/admin/*`) use a separate `ADMIN_API_KEY` environment variable. The key is validated against the `Authorization: Bearer <key>` header. If `ADMIN_API_KEY` is not set, all admin endpoints return `503 Service Unavailable`.
+
+<Warning>
+The admin API key grants full platform access (developer management, plan changes, stats). Use a strong random value (64+ characters) and rotate it regularly.
+</Warning>
+
+## SSO State Parameter
+
+During SSO login flows (OIDC, SAML, LDAP), the auth service encodes session context (organization ID and connection ID) into a `state` parameter. The state is serialized as a base64url-encoded JSON payload and validated on callback to prevent CSRF attacks.
+
+The SSO callback endpoints verify the state parameter structure before accepting any authentication response. Invalid or missing state values return `400 Bad Request`.
+
+## JWT Expiry Validation
+
+Every grant token is a RS256-signed JWT. Token verification (both online via `POST /v1/tokens/verify` and offline via `verifyGrantToken()`) always checks the `exp` claim. Expired tokens are rejected regardless of signature validity.
+
+Default token lifetimes:
+
+| Token type | Default TTL |
+|------------|-------------|
+| Grant token | Matches the `expiresIn` parameter on authorization (e.g., `24h`) |
+| Refresh token | 30 days, single-use |
+| Principal session token | Matches `expiresIn` from `POST /v1/principal-sessions` |
+
+<Tip>
+Use short-lived grant tokens (1-4 hours) combined with refresh tokens for long-running workflows. This limits the blast radius of a compromised token.
+</Tip>
+
+## Scope Format Validation
+
+Scopes follow the `resource:action` format and are validated at multiple points:
+
+1. **Agent registration** -- scopes declared during `agents.register()` are stored and used as the maximum allowable set
+2. **Authorization request** -- requested scopes must be a subset of the agent's declared scopes
+3. **Delegation** -- delegated scopes must be a subset of the parent grant's scopes
+
+The delegation endpoint explicitly checks for scope escalation:
+
+```
+Requested scopes exceed parent grant scopes: payments:write
+```
+
+Invalid scope format or scope escalation attempts are rejected with `400 Bad Request`.
+
+## Input Sanitization
+
+The auth service uses Fastify's built-in JSON parser with strict validation. All request bodies must be valid JSON with `Content-Type: application/json`. Key protections:
+
+- **Request IDs** -- every request is assigned a `randomUUID()` for tracing, attached as `x-request-id` in the response
+- **SQL injection** -- all database queries use parameterized queries via `postgres.js` tagged template literals (never string concatenation)
+- **Type coercion** -- Fastify validates request parameters before route handlers execute
+- **Error messages** -- internal errors return generic messages; stack traces are never leaked to clients
+
+## Body Size Limits
+
+Fastify enforces a default body size limit of **1 MB** for all routes. This prevents denial-of-service attacks via oversized payloads. If a request exceeds the limit, Fastify returns `413 Payload Too Large` before the route handler runs.
+
+For self-hosted deployments that need to accept larger policy bundles or compliance exports, increase the limit per-route:
+
+```typescript
+app.post('/v1/policies/sync', {
+  config: { skipAuth: false },
+  bodyLimit: 5 * 1024 * 1024, // 5 MB for policy bundles
+}, handler);
+```
+
+## API Key Hashing
+
+API keys are never stored in plaintext. The auth service hashes every API key with SHA-256 before storing it in the database. Authentication works by hashing the incoming key and comparing it against stored hashes. This means:
+
+- Database breaches do not expose raw API keys
+- API keys cannot be recovered -- only rotated via `POST /v1/keys/rotate`
+
+## Production Hardening Checklist
+
+<Check>Rate limiting is enabled (Redis required)</Check>
+<Check>CORS origins are restricted for browser-facing deployments</Check>
+<Check>ADMIN_API_KEY is set to a strong random value</Check>
+<Check>RSA_PRIVATE_KEY is a real 2048-bit key (not auto-generated)</Check>
+<Check>TLS is terminated at the reverse proxy or load balancer</Check>
+<Check>Database and Redis are on private networks, not publicly accessible</Check>
+<Check>JWT_ISSUER matches your exact public URL</Check>
+<Check>Grant tokens use short TTLs with refresh tokens for long workflows</Check>
+<Check>Scopes follow least-privilege design with `resource:action` format</Check>
+<Check>Audit logging is enabled for all sensitive agent actions</Check>

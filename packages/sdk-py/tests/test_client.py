@@ -129,7 +129,7 @@ def test_network_error_raises_grantex_network_error() -> None:
     respx.post("https://api.grantex.dev/v1/authorize").mock(
         side_effect=httpx.ConnectError("connection refused")
     )
-    client = Grantex(api_key="test-key")
+    client = Grantex(api_key="test-key", max_retries=0)
     with pytest.raises(GrantexNetworkError):
         client.authorize(
             AuthorizeParams(agent_id="ag_01", user_id="u_01", scopes=[])
@@ -141,7 +141,7 @@ def test_timeout_raises_network_error() -> None:
     respx.post("https://api.grantex.dev/v1/authorize").mock(
         side_effect=httpx.TimeoutException("timed out")
     )
-    client = Grantex(api_key="test-key")
+    client = Grantex(api_key="test-key", max_retries=0)
     with pytest.raises(GrantexNetworkError):
         client.authorize(
             AuthorizeParams(agent_id="ag_01", user_id="u_01", scopes=[])

@@ -262,7 +262,7 @@ describe('POST /v1/passport/issue', () => {
     expect(res.json().code).toBe('AMOUNT_EXCEEDS_BUDGET');
   });
 
-  it('returns 422 for invalid expiresIn format', async () => {
+  it('returns 400 for invalid expiresIn format', async () => {
     seedAuth();
 
     const res = await app.inject({
@@ -278,7 +278,7 @@ describe('POST /v1/passport/issue', () => {
       },
     });
 
-    expect(res.statusCode).toBe(422);
+    expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('INVALID_EXPIRY');
   });
 

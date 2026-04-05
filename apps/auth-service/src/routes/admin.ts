@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import crypto from 'node:crypto';
 import { getSql } from '../db/client.js';
 import { config } from '../config.js';
 
@@ -7,12 +8,14 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   function checkAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
     if (!adminKey) {
-      reply.status(503).send({ message: 'Admin API not configured' });
+      reply.status(503).send({ message: 'Admin API not configured', code: 'SERVICE_UNAVAILABLE', requestId: request.id });
       return false;
     }
     const auth = request.headers.authorization;
-    if (auth !== `Bearer ${adminKey}`) {
-      reply.status(401).send({ message: 'Unauthorized' });
+    const expected = Buffer.from(`Bearer ${adminKey}`);
+    const actual = Buffer.from(auth ?? '');
+    if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
+      reply.status(401).send({ message: 'Unauthorized', code: 'UNAUTHORIZED', requestId: request.id });
       return false;
     }
     return true;
@@ -21,7 +24,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/admin/stats — aggregate platform stats
   app.get(
     '/v1/admin/stats',
-    { config: { skipAuth: true } },
+    { config: { skipAuth: true, rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!checkAdmin(request, reply)) return;
 
@@ -57,7 +60,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/admin/developers — paginated developer list
   app.get(
     '/v1/admin/developers',
-    { config: { skipAuth: true } },
+    { config: { skipAuth: true, rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!checkAdmin(request, reply)) return;
 
@@ -95,7 +98,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   // PATCH /v1/admin/developers/:id/plan — Set developer plan (admin only)
   app.patch<{ Params: { id: string }; Body: { plan: string } }>(
     '/v1/admin/developers/:id/plan',
-    { config: { skipAuth: true } },
+    { config: { skipAuth: true, rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!checkAdmin(request, reply)) return;
 
@@ -103,7 +106,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       const { plan } = request.body;
 
       if (!plan || !['free', 'pro', 'enterprise'].includes(plan)) {
-        return reply.status(400).send({ message: "plan must be 'free', 'pro', or 'enterprise'" });
+        return reply.status(400).send({ message: "plan must be 'free', 'pro', or 'enterprise'", code: 'BAD_REQUEST', requestId: request.id });
       }
 
       const sql = getSql();

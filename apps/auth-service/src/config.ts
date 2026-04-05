@@ -48,10 +48,35 @@ export const config = {
   fidoRpId: optional('FIDO_RP_ID', 'grantex.dev'),
   fidoRpName: optional('FIDO_RP_NAME', 'Grantex'),
   fidoOrigin: optional('FIDO_ORIGIN', 'https://grantex.dev'),
+  // SSO state HMAC key (optional — derived from RSA_PRIVATE_KEY if not set)
+  ssoStateSecret: process.env['SSO_STATE_SECRET'] ?? null,
 } as const;
 
 if (!config.rsaPrivateKey && !config.autoGenerateKeys) {
   throw new Error(
     'Either RSA_PRIVATE_KEY or AUTO_GENERATE_KEYS=true must be set',
   );
+}
+
+/**
+ * Validate that all critical configuration values are present.
+ * Call before the server starts listening. Exits the process if
+ * any required value is missing.
+ */
+export function validateConfig(): void {
+  const missing: string[] = [];
+
+  if (!config.databaseUrl) missing.push('DATABASE_URL');
+  if (!config.redisUrl) missing.push('REDIS_URL');
+  if (!config.rsaPrivateKey && !config.autoGenerateKeys) {
+    missing.push('RSA_PRIVATE_KEY (or AUTO_GENERATE_KEYS=true)');
+  }
+  if (!config.jwtIssuer) missing.push('JWT_ISSUER');
+
+  if (missing.length > 0) {
+    console.error(
+      `[config] Fatal: missing required configuration: ${missing.join(', ')}`,
+    );
+    process.exit(1);
+  }
 }

@@ -13,7 +13,7 @@ export async function signupRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/signup — create a new developer account (public)
   app.post<{ Body: SignupBody }>(
     '/v1/signup',
-    { config: { skipAuth: true } },
+    { config: { skipAuth: true, rateLimit: { max: 5, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const { name, email, mode: requestedMode } = request.body;
       if (!name) {
@@ -53,7 +53,7 @@ export async function signupRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // POST /v1/keys/rotate — rotate API key (authenticated)
-  app.post('/v1/keys/rotate', async (request, reply) => {
+  app.post('/v1/keys/rotate', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (request, reply) => {
     const sql = getSql();
     const developerId = request.developer.id;
     const mode = request.developer.mode;

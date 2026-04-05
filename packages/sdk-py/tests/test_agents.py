@@ -63,17 +63,11 @@ def test_get_by_id(client: Grantex) -> None:
 def test_list_response_model(client: Grantex) -> None:
     payload = {
         "agents": [MOCK_AGENT],
-        "total": 1,
-        "page": 1,
-        "pageSize": 20,
     }
     respx.get("https://api.grantex.dev/v1/agents").mock(
         return_value=httpx.Response(200, json=payload)
     )
     response = client.agents.list()
-    assert response.total == 1
-    assert response.page == 1
-    assert response.page_size == 20
     assert len(response.agents) == 1
     assert response.agents[0].name == "travel-booker"
 
