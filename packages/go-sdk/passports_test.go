@@ -112,11 +112,9 @@ func TestPassportsList(t *testing.T) {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(listPassportsResponse{
-			Passports: []IssuedPassportResponse{
-				{PassportID: "passport-1", ExpiresAt: "2026-04-01T00:00:00Z"},
-				{PassportID: "passport-2", ExpiresAt: "2026-05-01T00:00:00Z"},
-			},
+		json.NewEncoder(w).Encode([]IssuedPassportResponse{
+			{PassportID: "passport-1", ExpiresAt: "2026-04-01T00:00:00Z"},
+			{PassportID: "passport-2", ExpiresAt: "2026-05-01T00:00:00Z"},
 		})
 	}))
 	defer server.Close()
@@ -140,10 +138,8 @@ func TestPassportsListWithParams(t *testing.T) {
 			t.Errorf("expected status=active, got %s", r.URL.Query().Get("status"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(listPassportsResponse{
-			Passports: []IssuedPassportResponse{
-				{PassportID: "passport-1"},
-			},
+		json.NewEncoder(w).Encode([]IssuedPassportResponse{
+			{PassportID: "passport-1"},
 		})
 	}))
 	defer server.Close()
