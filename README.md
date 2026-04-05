@@ -1541,7 +1541,7 @@ Protocol specification and SDKs: [Apache 2.0](https://github.com/mishrasanjeev/g
 
 <div align="center">
 
-**[Docs](https://grantex.dev/docs)** · **[Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)** · **[Dashboard](https://grantex.dev/dashboard)** · **[Self-Hosting](https://grantex.dev/docs/guides/self-hosting)** · **[Roadmap](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md)** · **[Contributing](https://grantex.dev/docs/community/contributing)** · **[GitHub](https://github.com/mishrasanjeev/grantex)**
+**[Docs](https://grantex.dev/docs)** · **[Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)** · **[Dashboard](https://grantex.dev/dashboard)** · **[Discord](https://discord.gg/QuSk7AeBdg)** · **[Self-Hosting](https://grantex.dev/docs/guides/self-hosting)** · **[Roadmap](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md)** · **[Contributing](https://grantex.dev/docs/community/contributing)** · **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 <br/>
 
