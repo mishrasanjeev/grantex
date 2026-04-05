@@ -6,7 +6,6 @@ import { hasScope, enforceScopes } from '../src/verifier/scope-enforcer.js';
 import {
   OfflineVerificationError,
   ScopeViolationError,
-  TokenExpiredError,
 } from '../src/errors.js';
 
 /* ------------------------------------------------------------------ */
