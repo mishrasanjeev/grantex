@@ -1104,18 +1104,22 @@ bundles = client.policies.bundles()
 
 ## Scope Enforcement
 
-Enforce tool-level permissions using pre-built manifests for 54+ enterprise connectors.
+Enforce tool-level permissions on **any connector** — define your own manifests or use the 54 pre-built ones.
 
 ### Quick Start
 
 ```python
-from grantex import Grantex
-from grantex.manifests.salesforce import manifest
+from grantex import Grantex, ToolManifest, Permission
 
 grantex = Grantex(api_key="gx_...")
-grantex.load_manifest(manifest)
 
-result = grantex.enforce(grant_token=token, connector="salesforce", tool="delete_contact")
+# Define a manifest for any connector — yours, not ours
+grantex.load_manifest(ToolManifest(
+    connector="my-crm",
+    tools={"search": Permission.READ, "create_deal": Permission.WRITE, "delete_account": Permission.DELETE},
+))
+
+result = grantex.enforce(grant_token=token, connector="my-crm", tool="delete_account")
 # result.allowed = False — "write scope does not permit delete operations"
 ```
 
@@ -1128,8 +1132,8 @@ result = grantex.enforce(grant_token=token, connector="salesforce", tool="delete
 | delete      | Yes | Yes | Yes |
 | admin       | Yes | Yes | Yes |
 
-54 pre-built manifests: Salesforce, HubSpot, Jira, Stripe, SAP, S3, Gmail, Slack, GitHub, and 45 more.
-Custom manifests: define inline or generate via CLI.
+**Bring your own manifests:** define inline, load from JSON files, load from a directory, or auto-generate from source code via CLI.
+**54 pre-built manifests included:** Salesforce, HubSpot, Jira, Stripe, SAP, S3, Gmail, Slack, GitHub, and 45 more — use as-is or as a starting point.
 
 **Framework helpers:** `wrapTool()` wraps LangChain tools with automatic scope enforcement. `enforceMiddleware()` adds one-line enforcement to Express/Fastify routes. FastAPI uses the `GrantexEnforcer` dependency.
 

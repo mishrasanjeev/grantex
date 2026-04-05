@@ -1,0 +1,334 @@
+---
+title: "Custom Manifests"
+sidebarTitle: "Custom Manifests"
+description: "Define tool manifests for any connector — internal APIs, new SaaS tools, proprietary services. No dependency on Grantex."
+---
+
+## You Own the Manifest
+
+Grantex is a **permission enforcement engine**, not a connector catalog. The 54 pre-built manifests are a convenience — the real power is that you define permissions for **any tool your agent calls**.
+
+<CardGroup cols={2}>
+  <Card title="Any Connector" icon="plug">
+    Internal APIs, new SaaS tools, proprietary services — if your agent calls it, you can enforce it.
+  </Card>
+  <Card title="Zero Dependency" icon="lock-open">
+    No waiting for a Grantex release. Define a manifest in your codebase, enforce immediately.
+  </Card>
+  <Card title="Identical at Runtime" icon="equals">
+    Custom and pre-built manifests use the same enforce() engine, permission hierarchy, and JWT scope resolution.
+  </Card>
+  <Card title="Multiple Sources" icon="layer-group">
+    Define inline, load from JSON files, load a directory, auto-generate from source code, or extend pre-built manifests.
+  </Card>
+</CardGroup>
+
+---
+
+## Define Inline
+
+The most common approach — define a manifest right in your code:
+
+<CodeGroup>
+
+```python Python
+from grantex import Grantex, ToolManifest, Permission
+
+grantex = Grantex(api_key="gx_...")
+
+grantex.load_manifest(ToolManifest(
+    connector="inventory-service",
+    description="Internal warehouse inventory API",
+    tools={
+        "get_stock_level":   Permission.READ,
+        "list_warehouses":   Permission.READ,
+        "reserve_inventory": Permission.WRITE,
+        "update_quantity":   Permission.WRITE,
+        "remove_item":       Permission.DELETE,
+        "force_stock_reset": Permission.ADMIN,
+    },
+))
+
+# Works exactly like a pre-built manifest
+result = grantex.enforce(
+    grant_token=token,
+    connector="inventory-service",
+    tool="force_stock_reset",
+)
+# Token with tool:inventory-service:write:* → DENIED (write < admin)
+```
+
+```typescript TypeScript
+import { Grantex, ToolManifest, Permission } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+grantex.loadManifest(new ToolManifest({
+  connector: 'inventory-service',
+  description: 'Internal warehouse inventory API',
+  tools: {
+    get_stock_level:   Permission.READ,
+    list_warehouses:   Permission.READ,
+    reserve_inventory: Permission.WRITE,
+    update_quantity:   Permission.WRITE,
+    remove_item:       Permission.DELETE,
+    force_stock_reset: Permission.ADMIN,
+  },
+}));
+
+// Works exactly like a pre-built manifest
+const result = await grantex.enforce({
+  grantToken: token,
+  connector: 'inventory-service',
+  tool: 'force_stock_reset',
+});
+// Token with tool:inventory-service:write:* → DENIED (write < admin)
+```
+
+</CodeGroup>
+
+---
+
+## Load from JSON Files
+
+Store manifests as JSON for version control, code review, and team sharing:
+
+```json inventory-service.json
+{
+  "connector": "inventory-service",
+  "version": "1.0.0",
+  "description": "Internal warehouse inventory API",
+  "tools": {
+    "get_stock_level": "read",
+    "list_warehouses": "read",
+    "reserve_inventory": "write",
+    "update_quantity": "write",
+    "remove_item": "delete",
+    "force_stock_reset": "admin"
+  }
+}
+```
+
+<CodeGroup>
+
+```python Python
+grantex.load_manifest(ToolManifest.from_file("./manifests/inventory-service.json"))
+```
+
+```typescript TypeScript
+const manifest = await ToolManifest.fromFile('./manifests/inventory-service.json');
+grantex.loadManifest(manifest);
+```
+
+</CodeGroup>
+
+<Tip>
+`ToolManifest.from_file()` supports both JSON and YAML (`.yml` / `.yaml`). However, `load_manifests_from_dir()` only loads `.json` files — rename or convert YAML files before using directory loading.
+</Tip>
+
+---
+
+## Load a Directory
+
+If you keep manifests as `.json` files in a folder, load them all at once:
+
+```
+manifests/
+  inventory-service.json
+  billing-api.json
+  notification-service.json
+  salesforce.json        ← you can mix custom and exported pre-built
+```
+
+<CodeGroup>
+
+```python Python
+grantex.load_manifests_from_dir("./manifests/")
+```
+
+```typescript TypeScript
+await grantex.loadManifestsFromDir('./manifests/');
+```
+
+</CodeGroup>
+
+---
+
+## Auto-Generate from Source Code
+
+The CLI can scan your tool definitions and generate a manifest automatically:
+
+```bash
+# Generate from Python tool registry
+grantex manifest generate agent_tools.py --out inventory-service.json
+
+# Generate from TypeScript tool definitions
+grantex manifest generate tools.ts --out inventory-service.json
+```
+
+The CLI infers permissions from tool name patterns (`get_*` → read, `create_*` → write, `delete_*` → delete). **Always review the output** — the inference is a starting point, not a guarantee.
+
+---
+
+## Extend Pre-Built Manifests
+
+Add tools to any existing manifest — pre-built or custom:
+
+<CodeGroup>
+
+```python Python
+from grantex.manifests.salesforce import manifest as sf
+
+# Add tools specific to your Salesforce org
+sf.add_tool("custom_bulk_export", Permission.READ)
+sf.add_tool("custom_data_purge", Permission.ADMIN)
+
+grantex.load_manifest(sf)
+```
+
+```typescript TypeScript
+import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
+import { Permission } from '@grantex/sdk';
+
+// Add tools specific to your Salesforce org
+salesforceManifest.addTool('custom_bulk_export', Permission.READ);
+salesforceManifest.addTool('custom_data_purge', Permission.ADMIN);
+
+grantex.loadManifest(salesforceManifest);
+```
+
+</CodeGroup>
+
+---
+
+## Mix Custom and Pre-Built
+
+Most production deployments use both. Load pre-built manifests for well-known connectors, custom manifests for everything else:
+
+<CodeGroup>
+
+```python Python
+from grantex import Grantex, ToolManifest, Permission
+from grantex.manifests.salesforce import manifest as sf
+from grantex.manifests.stripe import manifest as stripe
+from grantex.manifests.jira import manifest as jira
+
+grantex = Grantex(api_key="gx_...")
+
+# Pre-built for well-known connectors
+grantex.load_manifests([sf, stripe, jira])
+
+# Custom for your own services
+grantex.load_manifest(ToolManifest(
+    connector="billing-api",
+    tools={
+        "get_invoice":      Permission.READ,
+        "create_charge":    Permission.WRITE,
+        "issue_refund":     Permission.DELETE,
+        "override_billing": Permission.ADMIN,
+    },
+))
+
+grantex.load_manifests_from_dir("./manifests/")  # more custom manifests
+```
+
+```typescript TypeScript
+import { Grantex, ToolManifest, Permission } from '@grantex/sdk';
+import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
+import { stripeManifest } from '@grantex/sdk/manifests/stripe';
+import { jiraManifest } from '@grantex/sdk/manifests/jira';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+// Pre-built for well-known connectors
+grantex.loadManifests([salesforceManifest, stripeManifest, jiraManifest]);
+
+// Custom for your own services
+grantex.loadManifest(new ToolManifest({
+  connector: 'billing-api',
+  tools: {
+    get_invoice:      Permission.READ,
+    create_charge:    Permission.WRITE,
+    issue_refund:     Permission.DELETE,
+    override_billing: Permission.ADMIN,
+  },
+}));
+
+await grantex.loadManifestsFromDir('./manifests/');  // more custom manifests
+```
+
+</CodeGroup>
+
+---
+
+## Permission Hierarchy
+
+All manifests — custom or pre-built — use the same four permission levels:
+
+```
+admin (level 3)
+  └── delete (level 2)
+       └── write (level 1)
+            └── read (level 0)
+```
+
+| Granted Scope | READ Tools | WRITE Tools | DELETE Tools | ADMIN Tools |
+|:---:|:---:|:---:|:---:|:---:|
+| `tool:X:read` | Allowed | Denied | Denied | Denied |
+| `tool:X:write` | Allowed | Allowed | Denied | Denied |
+| `tool:X:delete` | Allowed | Allowed | Allowed | Denied |
+| `tool:X:admin` | Allowed | Allowed | Allowed | Allowed |
+
+The scope format is `tool:{connector}:{permission}:{resource}`. Your custom connector name goes in place of `{connector}`:
+
+```
+tool:inventory-service:write:*       ← custom connector
+tool:salesforce:read:*               ← pre-built connector
+tool:billing-api:admin:*             ← custom connector
+```
+
+---
+
+## Validation
+
+Validate your manifests before deploying:
+
+```bash
+# Load and inspect a custom manifest file
+grantex manifest load ./manifests/inventory-service.json
+```
+
+<Note>
+The CLI commands `grantex manifest validate` and `grantex enforce test` currently only work with the bundled manifests. For custom manifests, use `grantex manifest load` to inspect the file, and test enforcement programmatically using the SDK's `enforce()` method directly.
+</Note>
+
+---
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="Do I need Grantex to add support for a new connector?">
+    No. Define a `ToolManifest` in your codebase and load it at startup. The enforce engine makes no distinction between your manifests and the bundled ones.
+  </Accordion>
+  <Accordion title="What about connectors I don't control?">
+    Use the pre-built manifests for well-known connectors (Salesforce, Stripe, etc.). For third-party connectors not in the bundled set, define your own manifest based on the connector's API documentation.
+  </Accordion>
+  <Accordion title="Can I override a pre-built manifest?">
+    Yes. Load your own manifest with the same connector name — it fully replaces the previous one (all tools, not just overlapping ones). If you want to keep the original tools and add new ones, use `add_tool()` instead.
+  </Accordion>
+  <Accordion title="What happens if a tool isn't in any manifest?">
+    `enforce()` returns `allowed: false` with the reason "Unknown tool". This fail-closed default means agents cannot call tools that were never declared.
+  </Accordion>
+  <Accordion title="How do I scope tokens for custom connectors?">
+    Use the same format: `tool:{your-connector}:{permission}:*`. For example, `tool:inventory-service:write:*` grants write access to your inventory service.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Related
+
+- [Tool Manifests concept](/concepts/tool-manifests) — permission hierarchy, scope format, fail-closed behavior
+- [Scope Enforcement guide](/guides/scope-enforcement) — end-to-end walkthrough with framework integrations
+- [CLI manifest commands](/cli/manifest) — browse, validate, and generate manifests
+- [AgenticOrg case study](/case-studies/agenticorg) — 54 pre-built + custom manifests in production

@@ -73,17 +73,28 @@ This approach had real problems:
 
 ## The Solution: Tool Manifests + enforce()
 
-AgenticOrg replaced the keyword-guessing logic with Grantex's pre-built manifests:
+AgenticOrg replaced the keyword-guessing logic with Grantex tool manifests — a mix of pre-built manifests for well-known connectors and custom manifests for their internal APIs:
 
 ```python
-from grantex import Grantex
+from grantex import Grantex, ToolManifest, Permission
 from grantex.manifests.salesforce import manifest as sf
 from grantex.manifests.hubspot import manifest as hs
 from grantex.manifests.jira import manifest as jira
-# ... all 54 connectors
+# ... pre-built manifests for well-known connectors
 
 grantex = Grantex(api_key=os.environ["GRANTEX_API_KEY"])
 grantex.load_manifests([sf, hs, jira, ...])
+
+# Custom manifests for AgenticOrg's internal APIs — no Grantex release needed
+grantex.load_manifest(ToolManifest(
+    connector="agenticorg-tasks",
+    description="Internal task orchestration API",
+    tools={
+        "get_task_status":   Permission.READ,
+        "assign_agent":      Permission.WRITE,
+        "terminate_workflow": Permission.ADMIN,
+    },
+))
 
 # In the tool execution hot path -- before every tool call:
 result = grantex.enforce(
@@ -97,7 +108,7 @@ if not result.allowed:
 # Proceed with tool execution...
 ```
 
-Every one of AgenticOrg's 340+ tools now has an explicit permission level declared in a manifest. No guessing, no keywords, no ambiguity.
+Every one of AgenticOrg's 340+ tools now has an explicit permission level declared in a manifest — whether it's a Salesforce API or an internal service. No guessing, no keywords, no ambiguity.
 
 ---
 
@@ -119,8 +130,9 @@ Every one of AgenticOrg's 340+ tools now has an explicit permission level declar
 
   Tool Gateway
   ├── grantex.enforce() on every call (< 1ms)
-  ├── 54 pre-built manifests loaded at startup
-  ├── 3 custom manifests for internal APIs
+  ├── 54 pre-built manifests for well-known connectors
+  ├── 3 custom manifests for AgenticOrg's internal APIs
+  ├── Any new connector: define a manifest, enforce immediately
   └── Fail-closed: unknown tools denied
 ```
 
@@ -141,7 +153,7 @@ Every one of AgenticOrg's 340+ tools now has an explicit permission level declar
 | Tool misclassification rate | 12% | 0% |
 | Enforcement latency (p99) | N/A (keyword regex) | < 1ms |
 | Permission coverage | ~60% of tools (others defaulted to read) | 100% of tools |
-| Time to add a new connector | Write keyword regex + manual review | Load pre-built manifest (1 line) |
+| Time to add a new connector | Write keyword regex + manual review | Load pre-built manifest (1 line) or define custom (5 lines) |
 | Incident response (revoke access) | Per-connector credential rotation | Single grant revocation |
 
 **Enforcement in the hot path:** `grantex.enforce()` runs on every tool call in AgenticOrg's production pipeline. The call decodes the JWT, resolves the permission from the manifest, and checks scope coverage — all in under 1 millisecond, with no network round-trip required for the manifest lookup.
@@ -171,6 +183,7 @@ Every one of AgenticOrg's 340+ tools now has an explicit permission level declar
 ## Related
 
 - [AgenticOrg repository](https://github.com/mishrasanjeev/agentic-org)
+- [Custom Manifests guide](/guides/custom-manifests) — define your own manifests
 - [Scope Enforcement guide](/guides/scope-enforcement)
 - [Tool Manifests concept](/concepts/tool-manifests)
 - [Python SDK enforce()](/sdks/python/enforce)

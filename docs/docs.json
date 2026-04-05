@@ -113,7 +113,8 @@
               "guides/raspberry-pi",
               "guides/android-gemma4",
               "guides/ios-gemma4",
-              "guides/scope-enforcement"
+              "guides/scope-enforcement",
+              "guides/custom-manifests"
             ]
           },
           {
