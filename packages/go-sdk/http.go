@@ -59,6 +59,7 @@ type httpClient struct {
 	apiKey        string
 	client        *http.Client
 	maxRetries    int
+	maxRetriesSet bool
 	lastRateLimit *RateLimit
 }
 
@@ -84,7 +85,7 @@ func (h *httpClient) del(ctx context.Context, path string) ([]byte, error) {
 
 func (h *httpClient) do(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
 	maxRetries := h.maxRetries
-	if maxRetries <= 0 {
+	if !h.maxRetriesSet {
 		maxRetries = defaultMaxRetries
 	}
 

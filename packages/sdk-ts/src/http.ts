@@ -94,10 +94,12 @@ export class HttpClient {
     }
 
     let lastError: unknown;
+    let pendingRetryAfterMs: number | undefined;
 
     for (let attempt = 0; attempt <= this.#maxRetries; attempt++) {
       if (attempt > 0) {
-        await this.#sleep(this.#retryDelay(attempt - 1));
+        await this.#sleep(this.#retryDelay(attempt - 1, pendingRetryAfterMs));
+        pendingRetryAfterMs = undefined;
       }
 
       const controller = new AbortController();
@@ -143,10 +145,7 @@ export class HttpClient {
 
         // Retry on transient status codes
         if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < this.#maxRetries) {
-          const retryAfter = this.#parseRetryAfter(response.headers);
-          if (retryAfter !== undefined) {
-            this.#pendingRetryAfterMs = retryAfter;
-          }
+          pendingRetryAfterMs = this.#parseRetryAfter(response.headers);
           continue;
         }
 
@@ -178,14 +177,10 @@ export class HttpClient {
     throw lastError;
   }
 
-  #pendingRetryAfterMs: number | undefined;
-
-  #retryDelay(attempt: number): number {
+  #retryDelay(attempt: number, retryAfterMs?: number): number {
     // If a Retry-After header was parsed, use it
-    if (this.#pendingRetryAfterMs !== undefined) {
-      const delay = this.#pendingRetryAfterMs;
-      this.#pendingRetryAfterMs = undefined;
-      return Math.min(delay, RETRY_MAX_DELAY_MS);
+    if (retryAfterMs !== undefined) {
+      return Math.min(retryAfterMs, RETRY_MAX_DELAY_MS);
     }
     // Exponential backoff with jitter
     const exponential = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);

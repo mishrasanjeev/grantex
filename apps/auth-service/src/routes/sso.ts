@@ -46,7 +46,9 @@ function verifySsoState(state: string): Record<string, unknown> | null {
   const sig = state.slice(dotIdx + 1);
   if (!sig) return null;
   const expectedSig = crypto.createHmac('sha256', getSsoHmacKey()).update(payload).digest('base64url');
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) return null;
+  const sigBuf = Buffer.from(sig);
+  const expectedBuf = Buffer.from(expectedSig);
+  if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) return null;
   try {
     return JSON.parse(Buffer.from(payload, 'base64url').toString()) as Record<string, unknown>;
   } catch {
