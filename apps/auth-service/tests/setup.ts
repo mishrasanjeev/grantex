@@ -20,6 +20,7 @@ export const mockRedis = {
   del: vi.fn().mockResolvedValue(1),
   publish: vi.fn().mockResolvedValue(0),
   subscribe: vi.fn().mockResolvedValue(undefined),
+  ping: vi.fn().mockResolvedValue('PONG'),
   incr: vi.fn().mockResolvedValue(1),
   decr: vi.fn().mockResolvedValue(0),
   expire: vi.fn().mockResolvedValue(1),
@@ -227,6 +228,7 @@ beforeEach(() => {
   mockRedis.del.mockReset().mockResolvedValue(1);
   mockRedis.publish.mockReset().mockResolvedValue(0);
   mockRedis.subscribe.mockReset().mockResolvedValue(undefined);
+  mockRedis.ping.mockReset().mockResolvedValue('PONG');
   mockRedis.incr.mockReset().mockResolvedValue(1);
   mockRedis.decr.mockReset().mockResolvedValue(0);
   mockRedis.expire.mockReset().mockResolvedValue(1);

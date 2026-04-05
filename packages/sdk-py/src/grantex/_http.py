@@ -156,7 +156,7 @@ class HttpClient:
         # Exponential backoff with jitter
         exponential = _RETRY_BASE_DELAY * (2 ** attempt)
         jitter = random.random() * _RETRY_BASE_DELAY
-        return min(exponential + jitter, _RETRY_MAX_DELAY)
+        return float(min(exponential + jitter, _RETRY_MAX_DELAY))
 
     def close(self) -> None:
         self._client.close()

@@ -16,6 +16,8 @@ export interface GrantexClientOptions {
   baseUrl?: string;
   /** Request timeout in milliseconds. Defaults to 30000. */
   timeout?: number;
+  /** Maximum number of retries for transient failures (429, 502, 503, 504). Defaults to 3. Set to 0 to disable. */
+  maxRetries?: number;
 }
 
 // ─── Signup ─────────────────────────────────────────────────────────────────
