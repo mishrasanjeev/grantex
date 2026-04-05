@@ -16,6 +16,7 @@ function run(args: string, env?: Record<string, string>): { stdout: string; exit
       encoding: 'utf8',
       env: { ...process.env, ...env },
       timeout: 30000,
+      shell: true,
     });
     return { stdout, exitCode: 0 };
   } catch (err: unknown) {
