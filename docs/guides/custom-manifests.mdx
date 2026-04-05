@@ -297,17 +297,16 @@ Validate your manifests before deploying:
 # Load and inspect a custom manifest file
 grantex manifest load ./manifests/inventory-service.json
 
-# Validate that your agent's tools have entries
-grantex manifest validate \
-  --agent-tools get_stock_level,reserve_inventory,force_stock_reset \
-  --connector inventory-service
-
 # Dry-run enforcement against a real token
 grantex enforce test \
   --token "eyJ..." \
   --connector inventory-service \
   --tool force_stock_reset
 ```
+
+<Note>
+The `grantex manifest validate` CLI command currently only checks against the 54 bundled manifests. For custom manifests, use `grantex manifest load` to inspect them and `grantex enforce test` to dry-run enforcement.
+</Note>
 
 ---
 
