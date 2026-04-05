@@ -200,7 +200,7 @@ except GrantexNetworkError:
 
 ## Scope Enforcement (v0.3.1)
 
-Enforce tool-level permissions on **any connector** — define your own manifests or use the 54 pre-built ones.
+Enforce tool-level permissions on **any connector** — define your own manifests or use the 53 pre-built ones.
 
 ```python
 from grantex import Grantex, ToolManifest, Permission
@@ -222,7 +222,7 @@ result = grantex.enforce(grant_token=token, connector="my-crm", tool="delete_acc
 - `wrap_tool()` — auto-enforce on LangChain tools
 - `GrantexEnforcer` — FastAPI dependency for scope enforcement
 - Define custom manifests for any connector: inline, from JSON, or auto-generated via CLI
-- 54 pre-built manifests included (Salesforce, HubSpot, Jira, Stripe, SAP, S3, and 48 more)
+- 53 pre-built manifests included (Salesforce, HubSpot, Jira, Stripe, SAP, S3, and 47 more)
 - Permission hierarchy: `admin > delete > write > read`
 - Permissive mode for migration (`enforce_mode="permissive"`)
 

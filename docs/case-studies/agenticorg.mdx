@@ -1,12 +1,12 @@
 ---
 title: "AgenticOrg Case Study"
 sidebarTitle: "AgenticOrg"
-description: "How AgenticOrg enforces scope on 35 AI agents, 54 connectors, and 340+ tools using Grantex tool manifests."
+description: "How AgenticOrg enforces scope on 35 AI agents, 53+ connectors, and 339+ tools using Grantex tool manifests."
 ---
 
 ## Overview
 
-[AgenticOrg](https://github.com/mishrasanjeev/agentic-org) is an enterprise AI agent orchestration platform with **35 agents** across 6 domains, connected to **54 enterprise systems** via **340+ tools**. It is live at [agenticorg.ai](https://agenticorg.ai).
+[AgenticOrg](https://github.com/mishrasanjeev/agentic-org) is an enterprise AI agent orchestration platform with **35 agents** across 6 domains, connected to **56 enterprise systems** via **339+ tools**. It is live at [agenticorg.ai](https://agenticorg.ai).
 
 AgenticOrg agents call real APIs — Salesforce, Jira, HubSpot, SAP, S3, Gmail, Stripe, and 47 more. Each agent has a shared service account credential for each system. The challenge: how do you prevent an AP Processor agent from deleting contacts when it should only read invoices?
 
@@ -130,7 +130,7 @@ Every one of AgenticOrg's 340+ tools now has an explicit permission level declar
 
   Tool Gateway
   ├── grantex.enforce() on every call (< 1ms)
-  ├── 54 pre-built manifests for well-known connectors
+  ├── 53 pre-built manifests for well-known connectors
   ├── 3 custom manifests for AgenticOrg's internal APIs
   ├── Any new connector: define a manifest, enforce immediately
   └── Fail-closed: unknown tools denied
@@ -141,7 +141,7 @@ Every one of AgenticOrg's 340+ tools now has an explicit permission level declar
 ## Results
 
 <Note>
-"35 AI agents, 54 connectors, 340+ tools -- all scope-enforced through one grantex.enforce() call per tool execution. The keyword-guessing approach misclassified 12% of our tools. With manifests, it is zero."
+"35 AI agents, 53 pre-built + 3 custom connectors, 339+ tools -- all scope-enforced through one grantex.enforce() call per tool execution. The keyword-guessing approach misclassified 12% of our tools. With manifests, it is zero."
 
 -- AgenticOrg engineering team
 </Note>
@@ -162,7 +162,7 @@ Every one of AgenticOrg's 340+ tools now has an explicit permission level declar
 
 ## Try It Yourself
 
-1. **Browse the manifests** — see all 54 connectors and their tools:
+1. **Browse the manifests** — see all 53 bundled connectors and their tools:
    ```bash
    grantex manifest list
    ```

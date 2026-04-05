@@ -6,7 +6,7 @@ description: "Define tool manifests for any connector — internal APIs, new Saa
 
 ## You Own the Manifest
 
-Grantex is a **permission enforcement engine**, not a connector catalog. The 54 pre-built manifests are a convenience — the real power is that you define permissions for **any tool your agent calls**.
+Grantex is a **permission enforcement engine**, not a connector catalog. The 53 pre-built manifests are a convenience — the real power is that you define permissions for **any tool your agent calls**.
 
 <CardGroup cols={2}>
   <Card title="Any Connector" icon="plug">
@@ -299,7 +299,7 @@ grantex manifest load ./manifests/inventory-service.json
 ```
 
 <Note>
-The CLI commands `grantex manifest validate` and `grantex enforce test` currently only work with the bundled manifests. For custom manifests, use `grantex manifest load` to inspect the file, and test enforcement programmatically using the SDK's `enforce()` method directly.
+The CLI commands `grantex manifest validate` and `grantex enforce test` currently only work with the 53 bundled manifests. For custom manifests, use `grantex manifest load` to inspect the file, and test enforcement programmatically using the SDK's `enforce()` method directly.
 </Note>
 
 ---
@@ -331,4 +331,4 @@ The CLI commands `grantex manifest validate` and `grantex enforce test` currentl
 - [Tool Manifests concept](/concepts/tool-manifests) — permission hierarchy, scope format, fail-closed behavior
 - [Scope Enforcement guide](/guides/scope-enforcement) — end-to-end walkthrough with framework integrations
 - [CLI manifest commands](/cli/manifest) — browse, validate, and generate manifests
-- [AgenticOrg case study](/case-studies/agenticorg) — 54 pre-built + custom manifests in production
+- [AgenticOrg case study](/case-studies/agenticorg) — 53 pre-built + custom manifests in production

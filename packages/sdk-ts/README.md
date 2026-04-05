@@ -670,7 +670,7 @@ try {
 
 ## Scope Enforcement (v0.3.1)
 
-Enforce tool-level permissions on **any connector** — define your own manifests or use the 54 pre-built ones.
+Enforce tool-level permissions on **any connector** — define your own manifests or use the 53 pre-built ones.
 
 ```typescript
 import { Grantex, ToolManifest, Permission } from '@grantex/sdk';
@@ -692,7 +692,7 @@ const result = await grantex.enforce({ grantToken: token, connector: 'my-crm', t
 - `wrapTool()` — auto-enforce on LangChain tools
 - `enforceMiddleware()` — Express/Fastify HTTP middleware
 - Define custom manifests for any connector: inline, from JSON, or auto-generated via CLI
-- 54 pre-built manifests included (Salesforce, HubSpot, Jira, Stripe, SAP, S3, and 48 more)
+- 53 pre-built manifests included (Salesforce, HubSpot, Jira, Stripe, SAP, S3, and 47 more)
 - Permission hierarchy: `admin > delete > write > read`
 - Permissive mode for migration (`enforceMode: 'permissive'`)
 
