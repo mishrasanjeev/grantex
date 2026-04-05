@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "grantex>=0.1.0",
+    "grantex>=0.3.0",
     "fastapi>=0.100.0",
 ]
 
