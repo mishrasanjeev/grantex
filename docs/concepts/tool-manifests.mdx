@@ -113,11 +113,43 @@ result = grantex.enforce(
 
 ---
 
-## Pre-Built vs Custom Manifests
+## Defining Manifests
+
+Grantex enforces permissions on **any connector you define** — not just the ones we ship. You own the manifest, you own the permission mapping.
+
+### Custom Manifests
+
+Define a manifest for any tool, API, or internal service. No dependency on Grantex to add support:
+
+- **Inline** — define in code with `ToolManifest(...)`:
+
+```python
+from grantex import ToolManifest, Permission
+
+grantex.load_manifest(ToolManifest(
+    connector="my-internal-crm",
+    description="Internal CRM API",
+    tools={
+        "search_contacts": Permission.READ,
+        "create_deal":     Permission.WRITE,
+        "delete_account":  Permission.DELETE,
+        "manage_roles":    Permission.ADMIN,
+    },
+))
+```
+
+- **JSON file** — load from disk with `ToolManifest.from_file("./manifests/my-service.json")`
+- **Directory** — load all manifests from a folder with `grantex.load_manifests_from_dir("./manifests/")`
+- **Extend** — add tools to any manifest with `manifest.add_tool("new_tool", Permission.WRITE)`
+- **CLI generate** — auto-generate manifests from source code with `grantex manifest generate agent_tools.py`
+
+<Tip>
+The `enforce()` engine, permission hierarchy, and JWT scope resolution work identically for custom and pre-built manifests. There is no difference at runtime.
+</Tip>
 
 ### Pre-Built Manifests
 
-Grantex ships 54 pre-built manifests covering 340+ tools across five categories:
+As a convenience, Grantex ships 54 pre-built manifests covering 340+ tools across five categories:
 
 | Category | Connectors | Tools | Examples |
 |----------|-----------|-------|---------|
@@ -136,14 +168,7 @@ from grantex.manifests.stripe import manifest as stripe
 grantex.load_manifests([sf, stripe])
 ```
 
-### Custom Manifests
-
-For internal APIs, connectors Grantex does not ship, or extensions to pre-built connectors:
-
-- **Inline** — define in code with `ToolManifest(...)`
-- **JSON file** — load from disk with `ToolManifest.from_file("./manifests/my-service.json")`
-- **Extend pre-built** — add tools to an existing manifest with `manifest.add_tool("new_tool", Permission.WRITE)`
-- **CLI inspect** — browse and validate manifests with `grantex manifest list` and `grantex manifest validate`
+These are a starting point, not a boundary. Mix pre-built and custom manifests freely — most production deployments use both.
 
 ---
 
@@ -209,9 +234,10 @@ When storing manifests as files (for git, CI, or team sharing), use this JSON fo
 
 ## Related
 
+- [Custom Manifests guide](/guides/custom-manifests) — define manifests for any connector
 - [Scope Enforcement guide](/guides/scope-enforcement) — end-to-end walkthrough
 - [Scopes concept](/concepts/scopes) — the `resource:action[:constraint]` scope format
 - [TypeScript SDK enforce()](/sdks/typescript/enforce) — API reference
 - [Python SDK enforce()](/sdks/python/enforce) — API reference
 - [CLI manifest commands](/cli/manifest) — browse and validate manifests
-- [AgenticOrg case study](/case-studies/agenticorg) — 54 connectors enforced in production
+- [AgenticOrg case study](/case-studies/agenticorg) — 54 pre-built + custom manifests enforced in production

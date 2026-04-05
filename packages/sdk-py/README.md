@@ -200,16 +200,20 @@ except GrantexNetworkError:
 
 ## Scope Enforcement (v0.3.1)
 
-Enforce tool-level permissions using pre-built manifests for 54+ enterprise connectors.
+Enforce tool-level permissions on **any connector** — define your own manifests or use the 54 pre-built ones.
 
 ```python
-from grantex import Grantex
-from grantex.manifests.salesforce import manifest
+from grantex import Grantex, ToolManifest, Permission
 
 grantex = Grantex(api_key="gx_...")
-grantex.load_manifest(manifest)
 
-result = grantex.enforce(grant_token=token, connector="salesforce", tool="delete_contact")
+# Define a manifest for any connector — no dependency on Grantex to add support
+grantex.load_manifest(ToolManifest(
+    connector="my-crm",
+    tools={"search": Permission.READ, "create_deal": Permission.WRITE, "delete_account": Permission.DELETE},
+))
+
+result = grantex.enforce(grant_token=token, connector="my-crm", tool="delete_account")
 # result.allowed = False — "write scope does not permit delete operations"
 ```
 
@@ -217,7 +221,8 @@ result = grantex.enforce(grant_token=token, connector="salesforce", tool="delete
 - `enforce()` — verify JWT + check tool permission via manifest, <1ms
 - `wrap_tool()` — auto-enforce on LangChain tools
 - `GrantexEnforcer` — FastAPI dependency for scope enforcement
-- 54 pre-built manifests (Salesforce, HubSpot, Jira, Stripe, SAP, S3, and 48 more)
+- Define custom manifests for any connector: inline, from JSON, or auto-generated via CLI
+- 54 pre-built manifests included (Salesforce, HubSpot, Jira, Stripe, SAP, S3, and 48 more)
 - Permission hierarchy: `admin > delete > write > read`
 - Permissive mode for migration (`enforce_mode="permissive"`)
 

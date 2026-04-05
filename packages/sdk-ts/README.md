@@ -670,21 +670,20 @@ try {
 
 ## Scope Enforcement (v0.3.1)
 
-Enforce tool-level permissions using pre-built manifests for 54+ enterprise connectors.
+Enforce tool-level permissions on **any connector** — define your own manifests or use the 54 pre-built ones.
 
 ```typescript
 import { Grantex, ToolManifest, Permission } from '@grantex/sdk';
-import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
 
 const grantex = new Grantex({ apiKey: 'gx_...' });
-grantex.loadManifest(salesforceManifest);
 
-// One line — verify token + check tool permission
-const result = await grantex.enforce({
-  grantToken: token,
-  connector: 'salesforce',
-  tool: 'delete_contact',
-});
+// Define a manifest for any connector — no dependency on Grantex to add support
+grantex.loadManifest(new ToolManifest({
+  connector: 'my-crm',
+  tools: { search: Permission.READ, create_deal: Permission.WRITE, delete_account: Permission.DELETE },
+}));
+
+const result = await grantex.enforce({ grantToken: token, connector: 'my-crm', tool: 'delete_account' });
 // result.allowed = false — "write scope does not permit delete operations"
 ```
 
@@ -692,7 +691,8 @@ const result = await grantex.enforce({
 - `enforce()` — verify JWT + check tool permission via manifest, <1ms
 - `wrapTool()` — auto-enforce on LangChain tools
 - `enforceMiddleware()` — Express/Fastify HTTP middleware
-- 54 pre-built manifests (Salesforce, HubSpot, Jira, Stripe, SAP, S3, and 48 more)
+- Define custom manifests for any connector: inline, from JSON, or auto-generated via CLI
+- 54 pre-built manifests included (Salesforce, HubSpot, Jira, Stripe, SAP, S3, and 48 more)
 - Permission hierarchy: `admin > delete > write > read`
 - Permissive mode for migration (`enforceMode: 'permissive'`)
 

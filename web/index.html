@@ -1078,7 +1078,7 @@
           <span style="background:#f97583;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">v0.3.1</span>
           <span style="color:var(--text);font-weight:600;">Scope Enforcement</span>
         </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">enforce() + wrapTool() + Express/FastAPI middleware. 54 pre-built manifests for Salesforce, HubSpot, Jira, SAP, and 49 more. &lt;1ms per call.</p>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">enforce() + wrapTool() + Express/FastAPI middleware. Define manifests for any connector, or use 54 pre-built ones. &lt;1ms per call.</p>
       </a>
 
     </div>
@@ -1091,7 +1091,7 @@
     <div class="section-label">New in v0.3.1</div>
     <h2 class="section-title" style="font-size:clamp(24px,4vw,36px);">Scope Enforcement &mdash; Control What Agents Can Do</h2>
     <p class="section-sub" style="max-width:640px;margin:0 auto 40px;">
-      Verify grant tokens and enforce tool-level permissions in one call. 54 pre-built manifests, LangChain wrappers, Express/FastAPI middleware. Offline JWKS, &lt;1ms per call.
+      Enforce tool-level permissions on any connector you define. Bring your own manifests or use the 54 pre-built ones. Offline JWKS verification, &lt;1ms per call.
     </p>
 
     <!-- Visual flow -->
@@ -1118,17 +1118,42 @@
       </div>
     </div>
 
-    <!-- Code example -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:640px;margin:0 auto 40px;text-align:left;">
-      <pre style="margin:0;font-size:14px;line-height:1.6;color:var(--text);overflow-x:auto;"><code><span style="color:var(--muted);"># 3 lines to enforce tool-level permissions</span>
-<span style="color:#c792ea;">from</span> grantex.manifests.salesforce <span style="color:#c792ea;">import</span> manifest
-grantex.load_manifest(manifest)
-result = grantex.enforce(token, <span style="color:#c3e88d;">"salesforce"</span>, <span style="color:#c3e88d;">"delete_contact"</span>)
-<span style="color:var(--muted);"># result.allowed = False</span></code></pre>
+    <!-- Bring Your Own Manifest — hero callout -->
+    <div style="background:linear-gradient(135deg, rgba(88,166,255,0.08), rgba(249,117,131,0.08));border:2px solid var(--accent);border-radius:16px;padding:32px 40px;max-width:800px;margin:0 auto 48px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Bring Your Own Manifest</div>
+          <h3 style="font-size:22px;color:var(--text);margin:0 0 12px;line-height:1.3;">Your connectors.<br>Your permissions.<br>Your manifests.</h3>
+          <p style="font-size:14px;color:var(--muted);line-height:1.6;margin:0 0 16px;">
+            Define manifests for any tool your agent calls &mdash; internal APIs, new SaaS tools, proprietary services. No waiting for a Grantex release. The enforce engine treats custom and pre-built manifests identically.
+          </p>
+          <a href="https://docs.grantex.dev/guides/custom-manifests" style="display:inline-block;background:var(--accent);color:var(--bg);padding:8px 20px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;">Custom Manifests Guide &rarr;</a>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;">
+          <pre style="margin:0;font-size:13px;line-height:1.6;color:var(--text);overflow-x:auto;"><code><span style="color:var(--muted);"># Any connector. 5 lines.</span>
+<span style="color:#c792ea;">from</span> grantex <span style="color:#c792ea;">import</span> ToolManifest, Permission
+
+grantex.load_manifest(ToolManifest(
+    connector=<span style="color:#c3e88d;">"my-crm"</span>,
+    tools={
+        <span style="color:#c3e88d;">"search"</span>:  Permission.READ,
+        <span style="color:#c3e88d;">"create"</span>:  Permission.WRITE,
+        <span style="color:#c3e88d;">"delete"</span>:  Permission.DELETE,
+    },
+))
+
+<span style="color:var(--muted);"># enforce() works immediately</span>
+grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style="color:#c3e88d;">"delete"</span>)</code></pre>
+        </div>
+      </div>
     </div>
 
     <!-- Feature grid -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;max-width:960px;margin:0 auto 48px;">
+      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:16px;">
+        <div style="font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px;">Bring Your Own Manifest</div>
+        <div style="font-size:12px;color:var(--muted);">Define manifests for any connector &mdash; internal APIs, new SaaS tools, anything. No dependency on Grantex.</div>
+      </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;">
         <div style="font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px;">enforce()</div>
         <div style="font-size:12px;color:var(--muted);">Verify JWT + check tool permission via manifest. One line, &lt;1ms.</div>
@@ -1156,7 +1181,7 @@ result = grantex.enforce(token, <span style="color:#c3e88d;">"salesforce"</span>
     </div>
 
     <!-- Connector grid -->
-    <p style="color:var(--muted);font-size:14px;text-align:center;margin-bottom:16px;">54 pre-built manifests &mdash; 340+ tools mapped</p>
+    <p style="color:var(--muted);font-size:14px;text-align:center;margin-bottom:16px;">Works with any connector. 54 pre-built manifests included to get you started:</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:32px;">
       <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">Salesforce</span>
       <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">HubSpot</span>
@@ -1176,14 +1201,15 @@ result = grantex.enforce(token, <span style="color:#c3e88d;">"salesforce"</span>
 
     <!-- CTA -->
     <div style="text-align:center;">
-      <a href="https://docs.grantex.dev/guides/scope-enforcement" style="display:inline-block;background:var(--accent);color:var(--bg);padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;margin-right:12px;">Read the Guide</a>
+      <a href="https://docs.grantex.dev/guides/custom-manifests" style="display:inline-block;background:var(--accent);color:var(--bg);padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;margin-right:12px;">Custom Manifests Guide</a>
+      <a href="https://docs.grantex.dev/guides/scope-enforcement" style="display:inline-block;border:1px solid var(--border);color:var(--text);padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;margin-right:12px;">Scope Enforcement</a>
       <a href="https://docs.grantex.dev/case-studies/agenticorg" style="display:inline-block;border:1px solid var(--border);color:var(--text);padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;">AgenticOrg Case Study</a>
     </div>
 
     <!-- AgenticOrg testimonial -->
     <div style="margin-top:40px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:24px;max-width:640px;margin-left:auto;margin-right:auto;">
       <p style="color:var(--text);font-size:15px;font-style:italic;line-height:1.6;margin:0 0 12px;">
-        "35 AI agents, 54 connectors, 340+ tools — all scope-enforced through one grantex.enforce() call per tool execution."
+        "35 AI agents, 54 pre-built connectors + 3 custom manifests for our internal APIs, 340+ tools — all scope-enforced through one grantex.enforce() call per tool execution."
       </p>
       <p style="color:var(--muted);font-size:13px;margin:0;">
         — <a href="https://agenticorg.ai" style="color:var(--accent);text-decoration:none;">AgenticOrg</a> · AI Virtual Employee Platform · Live in production
