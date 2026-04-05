@@ -131,6 +131,14 @@ from ._types import (
 )
 from .resources._passports import PassportsClient
 from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent, StreamOptions, Subscription
+
+# ─── Aliases for cross-SDK naming consistency ────────────────────────────────
+# The TypeScript SDK uses SsoConnectionListResponse / SsoSessionListResponse
+# while the Python SDK uses ListSsoConnectionsResponse / ListSsoSessionsResponse.
+# Expose both names so consumers can use either convention.
+SsoConnectionListResponse = ListSsoConnectionsResponse
+SsoSessionListResponse = ListSsoSessionsResponse
+
 from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook_signature
@@ -236,6 +244,9 @@ __all__ = [
     "SsoSamlCallbackParams",
     "SsoLdapCallbackParams",
     "SsoCallbackResult",
+    # Enterprise SSO aliases (match TypeScript SDK naming)
+    "SsoConnectionListResponse",
+    "SsoSessionListResponse",
     # Budgets
     "AllocateBudgetParams",
     "BudgetAllocation",

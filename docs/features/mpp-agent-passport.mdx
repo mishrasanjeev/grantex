@@ -125,6 +125,16 @@ Trust levels: `basic` (self-declared), `verified` (DNS-TXT proof), `soc2` (SOC 2
 | `GET` | `/v1/trust-registry/:orgDID` | None | Look up org trust record (public) |
 | `GET` | `/v1/trust-registry` | API key | List all trust records (admin) |
 
+## SDK Support
+
+The PassportsClient / PassportsService is available across all three SDKs:
+
+| SDK | Access | Since |
+|-----|--------|-------|
+| **TypeScript** (`@grantex/sdk`) | `client.passports.issue(...)` | 0.3.3 |
+| **Python** (`grantex`) | `client.passports.issue(...)` | 0.3.3 |
+| **Go** (`grantex-go`) | `client.Passports.Issue(ctx, ...)` | 0.1.3 |
+
 ## Next Steps
 
 - **[MPP Integration Guide](/guides/mpp-integration)** — step-by-step setup for agents and merchants
