@@ -123,14 +123,14 @@ grantex.loadManifest(manifest);
 </CodeGroup>
 
 <Tip>
-JSON manifests also support YAML format (`.yml` / `.yaml`).
+`ToolManifest.from_file()` supports both JSON and YAML (`.yml` / `.yaml`). However, `load_manifests_from_dir()` only loads `.json` files — rename or convert YAML files before using directory loading.
 </Tip>
 
 ---
 
 ## Load a Directory
 
-If you keep manifests in a folder, load them all at once:
+If you keep manifests as `.json` files in a folder, load them all at once:
 
 ```
 manifests/
@@ -296,16 +296,10 @@ Validate your manifests before deploying:
 ```bash
 # Load and inspect a custom manifest file
 grantex manifest load ./manifests/inventory-service.json
-
-# Dry-run enforcement against a real token
-grantex enforce test \
-  --token "eyJ..." \
-  --connector inventory-service \
-  --tool force_stock_reset
 ```
 
 <Note>
-The `grantex manifest validate` CLI command currently only checks against the 54 bundled manifests. For custom manifests, use `grantex manifest load` to inspect them and `grantex enforce test` to dry-run enforcement.
+The CLI commands `grantex manifest validate` and `grantex enforce test` currently only work with the bundled manifests. For custom manifests, use `grantex manifest load` to inspect the file, and test enforcement programmatically using the SDK's `enforce()` method directly.
 </Note>
 
 ---
@@ -320,7 +314,7 @@ The `grantex manifest validate` CLI command currently only checks against the 54
     Use the pre-built manifests for well-known connectors (Salesforce, Stripe, etc.). For third-party connectors not in the bundled set, define your own manifest based on the connector's API documentation.
   </Accordion>
   <Accordion title="Can I override a pre-built manifest?">
-    Yes. Load your own manifest with the same connector name — the last one loaded wins. Or use `add_tool()` to extend a pre-built manifest with additional tools.
+    Yes. Load your own manifest with the same connector name — it fully replaces the previous one (all tools, not just overlapping ones). If you want to keep the original tools and add new ones, use `add_tool()` instead.
   </Accordion>
   <Accordion title="What happens if a tool isn't in any manifest?">
     `enforce()` returns `allowed: false` with the reason "Unknown tool". This fail-closed default means agents cannot call tools that were never declared.
