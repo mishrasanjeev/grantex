@@ -34,13 +34,23 @@ class BudgetsClient:
     def transactions(
         self,
         grant_id: str,
-        page: int = 1,
-        page_size: int = 20,
+        page: int | None = None,
+        page_size: int | None = None,
     ) -> BudgetTransactionsResponse:
-        """List budget transactions for a grant."""
+        """List budget transactions for a grant.
+
+        Args:
+            grant_id: The grant to list transactions for.
+            page: Page number. If omitted, the server decides the default.
+            page_size: Number of items per page. If omitted, the server
+                       decides the default.
+        """
         params: list[str] = []
-        params.append(f"page={page}")
-        params.append(f"pageSize={page_size}")
+        if page is not None:
+            params.append(f"page={page}")
+        if page_size is not None:
+            params.append(f"pageSize={page_size}")
         qs = "&".join(params)
-        data = self._http.get(f"/v1/budget/transactions/{grant_id}?{qs}")
+        url = f"/v1/budget/transactions/{grant_id}{('?' + qs) if qs else ''}"
+        data = self._http.get(url)
         return BudgetTransactionsResponse.from_dict(data)

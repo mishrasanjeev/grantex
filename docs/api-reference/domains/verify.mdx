@@ -1,0 +1,107 @@
+---
+title: "Verify Domain DNS"
+sidebarTitle: "Verify Domain"
+description: "Trigger DNS verification for a registered custom domain."
+---
+
+## Endpoint
+
+```
+POST /v1/domains/:id/verify
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+
+## Path Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `id` | `string` | The domain ID to verify (e.g. `dom_01HXYZ...`) |
+
+## Example Request
+
+```bash
+curl -X POST https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/domains/dom_01HXYZ.../verify \
+  -H "Authorization: Bearer gx_..."
+```
+
+## Response -- 200 OK
+
+When DNS verification succeeds:
+
+```json
+{
+  "verified": true,
+  "message": "Domain verified successfully"
+}
+```
+
+If the domain was already verified:
+
+```json
+{
+  "verified": true,
+  "message": "Domain already verified"
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `verified` | `boolean` | Whether the domain is now verified |
+| `message` | `string` | Human-readable status message |
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `VERIFICATION_FAILED` | DNS verification failed -- ensure the TXT record is set correctly |
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 404 | `NOT_FOUND` | Domain not found or does not belong to developer |
+
+## Rate Limits
+
+This endpoint is limited to **10 requests per minute** to prevent abuse of DNS lookups.
+
+## DNS Setup
+
+Before calling this endpoint, add a DNS TXT record:
+
+```
+_grantex.<your-domain> = <verificationToken>
+```
+
+The `verificationToken` is returned by the [Register Domain](/api-reference/domains/create) endpoint. DNS propagation may take up to 24 hours.
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const result = await grantex.domains.verify('dom_01HXYZ...');
+console.log(result.verified); // true
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+result = grantex.domains.verify("dom_01HXYZ...")
+print(result.verified)  # True
+```
+
+</CodeGroup>

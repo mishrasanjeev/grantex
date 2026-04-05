@@ -121,7 +121,7 @@ def test_balance() -> None:
 
 @respx.mock
 def test_transactions() -> None:
-    respx.get(f"{BASE_URL}/v1/budget/transactions/grant_01?page=1&pageSize=20").mock(
+    respx.get(f"{BASE_URL}/v1/budget/transactions/grant_01").mock(
         return_value=httpx.Response(200, json={
             "transactions": [MOCK_TRANSACTION],
             "total": 1,

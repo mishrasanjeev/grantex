@@ -1,0 +1,117 @@
+---
+title: "Exchange Grant Token for Service Credential"
+sidebarTitle: "Exchange Credential"
+description: "Exchange a valid Grantex grant token for a stored upstream service credential."
+---
+
+## Endpoint
+
+```
+POST /v1/vault/credentials/exchange
+```
+
+## Authentication
+
+Requires a **Grantex grant token** (not an API key) in the `Authorization` header. This is a public endpoint -- no developer API key is needed.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <grant_token>` |
+| `Content-Type` | `application/json` |
+
+## Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `service` | `string` | Yes | The service whose credential to retrieve (e.g. `"github"`, `"slack"`) |
+
+## Example Request
+
+```bash
+curl -X POST https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/vault/credentials/exchange \
+  -H "Authorization: Bearer eyJhbGciOiJSUzI1NiIs..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "service": "github"
+  }'
+```
+
+## Response -- 200 OK
+
+```json
+{
+  "accessToken": "ghp_xxxxxxxxxxxx",
+  "service": "github",
+  "credentialType": "oauth2",
+  "tokenExpiresAt": "2026-04-06T12:00:00.000Z",
+  "metadata": { "scopes": ["repo", "read:org"] }
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `accessToken` | `string` | The decrypted upstream access token |
+| `service` | `string` | Service identifier |
+| `credentialType` | `string` | Credential type (e.g. `"oauth2"`) |
+| `tokenExpiresAt` | `string \| null` | ISO-8601 token expiry, or `null` |
+| `metadata` | `object` | Arbitrary metadata stored with the credential |
+
+<Warning>
+This endpoint returns the raw access token. The grant token's `sub` (principal) and `dev` (developer) claims are used to look up the credential. Ensure your grant tokens have appropriate scopes and expiry to limit exposure.
+</Warning>
+
+## Rate Limits
+
+This endpoint is limited to **20 requests per minute** per grant token.
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `BAD_REQUEST` | Missing `service` field |
+| 401 | `UNAUTHORIZED` | Missing, invalid, or expired grant token |
+| 404 | `NOT_FOUND` | No credential found for this principal and service |
+
+## How It Works
+
+1. The agent presents its Grantex grant token.
+2. The server verifies the JWT signature and extracts the `sub` (principal ID) and `dev` (developer ID) claims.
+3. The server looks up the vault credential matching `(developerId, principalId, service)`.
+4. If found, the encrypted access token is decrypted and returned.
+
+This allows agents to access upstream services without ever seeing the raw credentials at configuration time -- credentials are stored once by the developer and retrieved at runtime by authorized agents.
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+// The agent calls this with its grant token
+const cred = await grantex.vault.exchange({
+  grantToken: 'eyJhbGciOiJSUzI1NiIs...',
+  service: 'github',
+});
+console.log(cred.accessToken); // "ghp_xxxxxxxxxxxx"
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+cred = grantex.vault.exchange(
+    grant_token="eyJhbGciOiJSUzI1NiIs...",
+    service="github",
+)
+print(cred.access_token)  # "ghp_xxxxxxxxxxxx"
+```
+
+</CodeGroup>

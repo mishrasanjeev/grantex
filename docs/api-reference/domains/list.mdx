@@ -1,0 +1,95 @@
+---
+title: "List Custom Domains"
+sidebarTitle: "List Domains"
+description: "List all custom domains registered by the authenticated developer."
+---
+
+## Endpoint
+
+```
+GET /v1/domains
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+
+## Example Request
+
+```bash
+curl https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/domains \
+  -H "Authorization: Bearer gx_..."
+```
+
+## Response -- 200 OK
+
+```json
+{
+  "domains": [
+    {
+      "id": "dom_01HXYZ...",
+      "domain": "auth.example.com",
+      "verified": true,
+      "verifiedAt": "2026-04-05T15:00:00.000Z",
+      "createdAt": "2026-04-05T12:00:00.000Z"
+    },
+    {
+      "id": "dom_02ABCD...",
+      "domain": "agents.example.com",
+      "verified": false,
+      "verifiedAt": null,
+      "createdAt": "2026-04-05T13:00:00.000Z"
+    }
+  ]
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `domains` | `array` | Array of domain objects |
+| `domains[].id` | `string` | Unique domain ID |
+| `domains[].domain` | `string` | The domain name |
+| `domains[].verified` | `boolean` | Whether DNS verification has passed |
+| `domains[].verifiedAt` | `string \| null` | ISO-8601 timestamp of verification, or `null` |
+| `domains[].createdAt` | `string` | ISO-8601 creation timestamp |
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const { domains } = await grantex.domains.list();
+for (const d of domains) {
+  console.log(`${d.domain} — verified: ${d.verified}`);
+}
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+result = grantex.domains.list()
+for d in result.domains:
+    print(f"{d.domain} — verified: {d.verified}")
+```
+
+</CodeGroup>

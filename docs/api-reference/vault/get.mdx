@@ -1,0 +1,95 @@
+---
+title: "Get Vault Credential"
+sidebarTitle: "Get Credential"
+description: "Retrieve metadata for a specific vault credential. Does not return raw tokens."
+---
+
+## Endpoint
+
+```
+GET /v1/vault/credentials/:id
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+
+## Path Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `id` | `string` | The vault credential ID (e.g. `vc_01HXYZ...`) |
+
+## Example Request
+
+```bash
+curl https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/vault/credentials/vc_01HXYZ... \
+  -H "Authorization: Bearer gx_..."
+```
+
+## Response -- 200 OK
+
+```json
+{
+  "id": "vc_01HXYZ...",
+  "principalId": "user_abc123",
+  "service": "github",
+  "credentialType": "oauth2",
+  "tokenExpiresAt": "2026-04-06T12:00:00.000Z",
+  "metadata": { "scopes": ["repo", "read:org"] },
+  "createdAt": "2026-04-05T12:00:00.000Z",
+  "updatedAt": "2026-04-05T12:00:00.000Z"
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique vault credential ID |
+| `principalId` | `string` | The principal who owns this credential |
+| `service` | `string` | Service identifier |
+| `credentialType` | `string` | Credential type (e.g. `"oauth2"`) |
+| `tokenExpiresAt` | `string \| null` | ISO-8601 token expiry, or `null` if not set |
+| `metadata` | `object` | Arbitrary metadata |
+| `createdAt` | `string` | ISO-8601 creation timestamp |
+| `updatedAt` | `string` | ISO-8601 last update timestamp |
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 404 | `NOT_FOUND` | Credential not found or does not belong to developer |
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const cred = await grantex.vault.get('vc_01HXYZ...');
+console.log(cred.service);       // "github"
+console.log(cred.tokenExpiresAt); // "2026-04-06T12:00:00.000Z"
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+cred = grantex.vault.get("vc_01HXYZ...")
+print(cred.service)           # "github"
+print(cred.token_expires_at)  # "2026-04-06T12:00:00.000Z"
+```
+
+</CodeGroup>
