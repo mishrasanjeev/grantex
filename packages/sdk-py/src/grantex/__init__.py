@@ -120,8 +120,17 @@ from ._types import (
     # Developer Settings
     UpdateDeveloperSettingsParams,
     UpdateDeveloperSettingsResponse,
+    # Passports (MPP Agent Identity)
+    MaxTransactionAmount,
+    IssuePassportParams,
+    IssuedPassportResponse,
+    GetPassportResponse,
+    RevokePassportResponse,
+    ListPassportsParams,
+    ListPassportsResponse,
 )
-from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent, StreamOptions
+from .resources._passports import PassportsClient
+from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent, StreamOptions, Subscription
 from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook_signature
@@ -258,10 +267,20 @@ __all__ = [
     # Developer Settings
     "UpdateDeveloperSettingsParams",
     "UpdateDeveloperSettingsResponse",
+    # Passports (MPP Agent Identity)
+    "PassportsClient",
+    "MaxTransactionAmount",
+    "IssuePassportParams",
+    "IssuedPassportResponse",
+    "GetPassportResponse",
+    "RevokePassportResponse",
+    "ListPassportsParams",
+    "ListPassportsResponse",
     # Events
     "EventsClient",
     "GrantexStreamEvent",
     "StreamOptions",
+    "Subscription",
     # Scope Enforcement / Manifests
     "ToolManifest",
     "Permission",

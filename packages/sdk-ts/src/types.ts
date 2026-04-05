@@ -98,6 +98,14 @@ export interface AuthorizationRequest {
   expiresAt: string;
   status: 'pending' | 'approved' | 'denied' | 'expired';
   createdAt: string;
+  /** Returned when sandbox mode or policy auto-approve */
+  code?: string;
+  /** Returned when sandbox mode is active */
+  sandbox?: boolean;
+  /** Returned when a policy was enforced */
+  policyEnforced?: boolean;
+  /** Returned when a policy was enforced */
+  effect?: 'allow' | 'deny';
 }
 
 // ─── Grants ───────────────────────────────────────────────────────────────────
