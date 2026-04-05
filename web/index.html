@@ -861,7 +861,7 @@
       border-radius: var(--radius);
       padding: 16px;
     }
-    .risk-q h4 {
+    .risk-q h3 {
       font-size: 14px;
       font-weight: 600;
       margin-bottom: 6px;
@@ -1205,7 +1205,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
       <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">Oracle</span>
       <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">Okta</span>
       <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">Zendesk</span>
-      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">+41 more</span>
+      <span style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;color:var(--muted);">+40 more</span>
     </div>
 
     <!-- CTA -->
@@ -1339,17 +1339,17 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
       </p>
       <div class="risk-questions">
         <div class="risk-q">
-          <h4>Who authorized it?</h4>
+          <h3>Who authorized it?</h3>
           <p>No consent record exists. The agent used your master key. You own the liability.</p>
           <span class="fix">Grantex fixes this &rarr;</span>
         </div>
         <div class="risk-q">
-          <h4>What did it access?</h4>
+          <h3>What did it access?</h3>
           <p>Full key = full access. No scope means no blast radius boundary.</p>
           <span class="fix">Grantex fixes this &rarr;</span>
         </div>
         <div class="risk-q">
-          <h4>Can you prove you tried?</h4>
+          <h3>Can you prove you tried?</h3>
           <p>No audit trail, no scoped token, no revocation log. The compliance gap is total.</p>
           <span class="fix">Grantex fixes this &rarr;</span>
         </div>
@@ -2043,6 +2043,18 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <span class="integration-icon">&#x1F4E1;</span>
         A2A Bridge (Py)
       </a>
+      <a href="https://www.npmjs.com/package/@grantex/cli" class="integration-pill" style="text-decoration:none;">
+        <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">&gt;_</span>
+        CLI
+      </a>
+      <a href="https://www.npmjs.com/package/@grantex/destinations" class="integration-pill" style="text-decoration:none;">
+        <span class="integration-icon">&#x1F4E8;</span>
+        Event Destinations
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/packages/terraform-provider-grantex" class="integration-pill" style="text-decoration:none;">
+        <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">TF</span>
+        Terraform Provider
+      </a>
     </div>
   </div>
 </section>
@@ -2147,6 +2159,143 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="example-packages">
           <span class="example-pkg">grantex</span>
           <span class="example-pkg">grantex-adk</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/quickstart-go"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">Go</div>
+        <h3>Quickstart</h3>
+        <p>
+          Core authorization lifecycle in Go &mdash; register agent, authorize,
+          exchange code, verify token offline, log audit entry, revoke.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">grantex-go</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/anthropic-tool-use"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">TypeScript</div>
+        <h3>Anthropic Tool Use</h3>
+        <p>
+          Anthropic SDK tool use with Grantex scope enforcement and audit logging.
+          Uses <code style="font-family:var(--mono);font-size:12px;">GrantexToolRegistry</code>
+          to manage tools and dispatch tool_use blocks.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">@grantex/sdk</span>
+          <span class="example-pkg">@grantex/anthropic</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/nextjs-starter"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">TypeScript</div>
+        <h3>Next.js Starter</h3>
+        <p>
+          Interactive Next.js app with the full Grantex consent flow &mdash;
+          agent registration, consent UI, token exchange, and audit logging.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">@grantex/sdk</span>
+          <span class="example-pkg">next</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/multi-agent-delegation"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">TypeScript</div>
+        <h3>Multi-Agent Delegation</h3>
+        <p>
+          Delegation chain pattern (SPEC &sect;9) &mdash; parent delegates scoped
+          subset to child agent with cascade revocation.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">@grantex/sdk</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/multi-agent-email-flow"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">TypeScript</div>
+        <h3>Multi-Agent Email Flow</h3>
+        <p>
+          Agent-to-agent email automation with delegation, scope enforcement,
+          failure handling, cascade revocation, and audit trail inspection.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">@grantex/sdk</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/gemma-raspberry-pi"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">Python</div>
+        <h3>Gemma on Raspberry Pi</h3>
+        <p>
+          Gemma 4 on-device agent with offline authorization via consent bundles.
+          Verifies every tool invocation locally &mdash; no internet required at runtime.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">grantex-gemma</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/x402-agent-demo"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">TypeScript</div>
+        <h3>x402 Payment Protocol</h3>
+        <p>
+          AI agent uses a Grantex Delegation Token with x402 to fetch paid API
+          data &mdash; automatic 402 &rarr; pay &rarr; retry flow.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">@grantex/x402</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/token-expiry-refresh"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">TypeScript</div>
+        <h3>Token Expiry &amp; Refresh</h3>
+        <p>
+          Time-bound grant tokens with automatic expiry detection, refresh token
+          rotation, and single-use refresh enforcement.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">@grantex/sdk</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/audit-dashboard"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">TypeScript</div>
+        <h3>Audit Dashboard</h3>
+        <p>
+          Query, filter, and analyze the audit trail with metrics computation
+          and hash chain integrity verification.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">@grantex/sdk</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/gateway-proxy"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">TypeScript</div>
+        <h3>Gateway Proxy</h3>
+        <p>
+          Grantex gateway as a reverse proxy with YAML config and scope enforcement.
+          Authorized requests pass through, unauthorized requests are rejected.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">@grantex/sdk</span>
+          <span class="example-pkg">@grantex/gateway</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/adapter-google-calendar"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">TypeScript</div>
+        <h3>Google Calendar Adapter</h3>
+        <p>
+          GoogleCalendarAdapter with automatic grant token verification, scope
+          checking, and audit logging. Shows read-only vs read-write enforcement.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">@grantex/sdk</span>
+          <span class="example-pkg">@grantex/adapters</span>
         </div>
       </a>
     </div>
