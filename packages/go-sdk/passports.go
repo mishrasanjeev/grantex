@@ -55,10 +55,6 @@ type ListPassportsParams struct {
 	Status  string
 }
 
-type listPassportsResponse struct {
-	Passports []IssuedPassportResponse `json:"passports"`
-}
-
 // Issue creates a new Agent Passport Credential.
 func (s *PassportsService) Issue(ctx context.Context, params IssuePassportParams) (*IssuedPassportResponse, error) {
 	return unmarshal[IssuedPassportResponse](s.http.post(ctx, "/v1/passport/issue", params))
@@ -92,9 +88,10 @@ func (s *PassportsService) List(ctx context.Context, params *ListPassportsParams
 			path += "?" + qs
 		}
 	}
-	resp, err := unmarshal[listPassportsResponse](s.http.get(ctx, path))
+	// API returns a bare JSON array, not a wrapped object
+	resp, err := unmarshalSlice[IssuedPassportResponse](s.http.get(ctx, path))
 	if err != nil {
 		return nil, err
 	}
-	return resp.Passports, nil
+	return resp, nil
 }
