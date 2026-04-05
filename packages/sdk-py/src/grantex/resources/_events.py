@@ -93,10 +93,9 @@ class EventsClient:
     ) -> Subscription:
         """Subscribe to events with a callback handler.
 
-        Starts a background thread that connects to the SSE stream and
-        invokes *handler* for each event.  Returns a :class:`Subscription`
-        whose ``unsubscribe()`` method cancels the HTTP connection and
-        stops the thread.
+        Starts a background thread that calls ``stream()`` and invokes
+        *handler* for each event.  Returns a :class:`Subscription` whose
+        ``unsubscribe()`` method stops the thread.
 
         Args:
             handler: Called with each :class:`GrantexEvent` received.
@@ -106,52 +105,17 @@ class EventsClient:
                 and the stream stops.
         """
         stop = threading.Event()
-        # Dedicated client so unsubscribe() can close() it to cancel blocked reads
-        cancel_client = httpx.Client()
 
         def _run() -> None:
-            params: dict[str, str] = {}
-            if options and options.types:
-                params["types"] = ",".join(options.types)
-            url = f"{self._base_url}/v1/events/stream"
             try:
-                with cancel_client.stream(
-                    "GET",
-                    url,
-                    params=params,
-                    headers={"Authorization": f"Bearer {self._api_key}"},
-                    timeout=None,
-                ) as response:
-                    response.raise_for_status()
-                    buffer = ""
-                    for chunk in response.iter_text():
-                        if stop.is_set():
-                            break
-                        buffer += chunk
-                        while "\n" in buffer:
-                            line, buffer = buffer.split("\n", 1)
-                            if line.startswith("data: "):
-                                try:
-                                    data = json.loads(line[6:])
-                                    handler(GrantexEvent.from_dict(data))
-                                except (json.JSONDecodeError, KeyError):
-                                    pass
+                for event in self.stream(options):
+                    if stop.is_set():
+                        break
+                    handler(event)
             except Exception as exc:  # noqa: BLE001
-                if not stop.is_set() and on_error is not None:
+                if on_error is not None:
                     on_error(exc)
-
-        old_unsubscribe = Subscription.unsubscribe
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
-        sub = Subscription(thread=thread, stop_event=stop)
-
-        # Override unsubscribe to also close the HTTP client, canceling blocked reads
-        def _cancel_unsubscribe(self_sub: Subscription) -> None:
-            self_sub._stop_event.set()
-            cancel_client.close()
-            self_sub._thread.join(timeout=5)
-
-        import types as _types
-        sub.unsubscribe = _types.MethodType(_cancel_unsubscribe, sub)  # type: ignore[method-assign]
-        return sub
+        return Subscription(thread=thread, stop_event=stop)
