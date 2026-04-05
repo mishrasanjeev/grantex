@@ -40,6 +40,8 @@ type Client struct {
 	Domains           *DomainsService
 	WebAuthn          *WebAuthnService
 	Credentials       *CredentialsService
+	Passports         *PassportsService
+	Vault             *VaultService
 
 	http *httpClient
 }
@@ -84,6 +86,8 @@ func NewClient(apiKey string, opts ...Option) *Client {
 	c.Domains = &DomainsService{http: h}
 	c.WebAuthn = &WebAuthnService{http: h}
 	c.Credentials = &CredentialsService{http: h}
+	c.Passports = &PassportsService{http: h}
+	c.Vault = &VaultService{http: h}
 
 	return c
 }

@@ -35,6 +35,7 @@ from .resources._usage import UsageClient
 from .resources._domains import DomainsClient
 from .resources._webauthn import WebAuthnClient
 from .resources._credentials import CredentialsClient
+from .resources._passports import PassportsClient
 from .manifest import ToolManifest, Permission, EnforceResult
 from ._verify import verify_grant_token
 from ._types import VerifyGrantTokenOptions
@@ -64,6 +65,7 @@ class Grantex:
     domains: DomainsClient
     webauthn: WebAuthnClient
     credentials: CredentialsClient
+    passports: PassportsClient
 
     @property
     def last_rate_limit(self) -> RateLimit | None:
@@ -111,6 +113,7 @@ class Grantex:
         self.domains = DomainsClient(self._http)
         self.webauthn = WebAuthnClient(self._http)
         self.credentials = CredentialsClient(self._http)
+        self.passports = PassportsClient(self._http)
         self._manifests: dict[str, ToolManifest] = {}
         self._jwks_uri = f"{base_url.rstrip('/')}/.well-known/jwks.json"
 

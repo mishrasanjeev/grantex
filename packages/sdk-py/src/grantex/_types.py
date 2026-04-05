@@ -153,6 +153,9 @@ class AuthorizationRequest:
     status: str
     created_at: str
     code: str | None = None
+    sandbox: bool | None = None
+    policy_enforced: bool | None = None
+    effect: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuthorizationRequest:
@@ -167,6 +170,9 @@ class AuthorizationRequest:
             status=data.get("status", ""),
             created_at=data.get("createdAt", ""),
             code=data.get("code"),
+            sandbox=data.get("sandbox"),
+            policy_enforced=data.get("policyEnforced"),
+            effect=data.get("effect"),
         )
 
 
@@ -1973,3 +1979,118 @@ class UpdateDeveloperSettingsResponse:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "UpdateDeveloperSettingsResponse":
         return cls(updated=data["updated"])
+
+
+# ─── Passports (MPP Agent Identity) ─────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class MaxTransactionAmount:
+    amount: float
+    currency: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"amount": self.amount, "currency": self.currency}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "MaxTransactionAmount":
+        return cls(amount=data["amount"], currency=data["currency"])
+
+
+@dataclass
+class IssuePassportParams:
+    agent_id: str
+    grant_id: str
+    allowed_mpp_categories: list[str]
+    max_transaction_amount: MaxTransactionAmount
+    payment_rails: list[str] | None = None
+    expires_in: str | None = None
+    parent_passport_id: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "agentId": self.agent_id,
+            "grantId": self.grant_id,
+            "allowedMPPCategories": self.allowed_mpp_categories,
+            "maxTransactionAmount": self.max_transaction_amount.to_dict(),
+        }
+        if self.payment_rails is not None:
+            body["paymentRails"] = self.payment_rails
+        if self.expires_in is not None:
+            body["expiresIn"] = self.expires_in
+        if self.parent_passport_id is not None:
+            body["parentPassportId"] = self.parent_passport_id
+        return body
+
+
+@dataclass(frozen=True)
+class IssuedPassportResponse:
+    passport_id: str
+    credential: dict[str, Any]
+    encoded_credential: str
+    expires_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "IssuedPassportResponse":
+        return cls(
+            passport_id=data["passportId"],
+            credential=data.get("credential", {}),
+            encoded_credential=data.get("encodedCredential", ""),
+            expires_at=data["expiresAt"],
+        )
+
+
+@dataclass(frozen=True)
+class GetPassportResponse:
+    status: str
+    raw: dict[str, Any]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "GetPassportResponse":
+        return cls(
+            status=data["status"],
+            raw=data,
+        )
+
+
+@dataclass(frozen=True)
+class RevokePassportResponse:
+    revoked: bool
+    revoked_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "RevokePassportResponse":
+        return cls(
+            revoked=data["revoked"],
+            revoked_at=data["revokedAt"],
+        )
+
+
+@dataclass
+class ListPassportsParams:
+    agent_id: str | None = None
+    grant_id: str | None = None
+    status: str | None = None
+
+    def to_query(self) -> dict[str, str]:
+        result: dict[str, str] = {}
+        if self.agent_id is not None:
+            result["agentId"] = self.agent_id
+        if self.grant_id is not None:
+            result["grantId"] = self.grant_id
+        if self.status is not None:
+            result["status"] = self.status
+        return result
+
+
+@dataclass(frozen=True)
+class ListPassportsResponse:
+    passports: tuple[IssuedPassportResponse, ...]
+
+    @classmethod
+    def from_list(cls, data: list[dict[str, Any]]) -> "ListPassportsResponse":
+        return cls(
+            passports=tuple(
+                IssuedPassportResponse.from_dict(p) for p in data
+            ),
+        )

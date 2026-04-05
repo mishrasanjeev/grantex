@@ -3,7 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Iterator, Optional, Sequence
 import json
+import threading
+
 import httpx
+
+
+EventHandler = Callable[["GrantexEvent"], None]
+ErrorHandler = Callable[[Exception], None]
 
 
 @dataclass(frozen=True)
@@ -26,6 +32,24 @@ class GrantexEvent:
 @dataclass(frozen=True)
 class StreamOptions:
     types: Optional[Sequence[str]] = None
+
+
+class Subscription:
+    """Handle returned by ``EventsClient.subscribe`` to control the background stream."""
+
+    def __init__(self, thread: threading.Thread, stop_event: threading.Event) -> None:
+        self._thread = thread
+        self._stop_event = stop_event
+
+    @property
+    def active(self) -> bool:
+        """Return ``True`` if the subscription is still running."""
+        return self._thread.is_alive()
+
+    def unsubscribe(self) -> None:
+        """Stop the background stream and wait for the thread to exit."""
+        self._stop_event.set()
+        self._thread.join(timeout=5)
 
 
 class EventsClient:
@@ -59,3 +83,39 @@ class EventsClient:
                             yield GrantexEvent.from_dict(data)
                         except (json.JSONDecodeError, KeyError):
                             pass
+
+    def subscribe(
+        self,
+        handler: EventHandler,
+        options: Optional[StreamOptions] = None,
+        *,
+        on_error: Optional[ErrorHandler] = None,
+    ) -> Subscription:
+        """Subscribe to events with a callback handler.
+
+        Starts a background thread that calls ``stream()`` and invokes
+        *handler* for each event.  Returns a :class:`Subscription` whose
+        ``unsubscribe()`` method stops the thread.
+
+        Args:
+            handler: Called with each :class:`GrantexEvent` received.
+            options: Optional :class:`StreamOptions` to filter event types.
+            on_error: Optional callback invoked when the stream raises an
+                exception.  If not provided, errors are silently swallowed
+                and the stream stops.
+        """
+        stop = threading.Event()
+
+        def _run() -> None:
+            try:
+                for event in self.stream(options):
+                    if stop.is_set():
+                        break
+                    handler(event)
+            except Exception as exc:  # noqa: BLE001
+                if on_error is not None:
+                    on_error(exc)
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        return Subscription(thread=thread, stop_event=stop)
