@@ -33,7 +33,7 @@ function toCredentialResponse(row: Record<string, unknown>) {
 
 export async function vaultRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/vault/credentials — store encrypted credential
-  app.post<{ Body: StoreCredentialBody }>('/v1/vault/credentials', async (request, reply) => {
+  app.post<{ Body: StoreCredentialBody }>('/v1/vault/credentials', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { principalId, service, credentialType, accessToken, refreshToken, tokenExpiresAt, metadata } = request.body;
 
     if (!principalId || !service || !accessToken) {
@@ -117,7 +117,7 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // DELETE /v1/vault/credentials/:id — delete credential
-  app.delete<{ Params: { id: string } }>('/v1/vault/credentials/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/v1/vault/credentials/:id', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const sql = getSql();
     const rows = await sql`
       DELETE FROM vault_credentials

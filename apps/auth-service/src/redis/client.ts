@@ -6,6 +6,8 @@ let _redis: Redis | null = null;
 export function getRedis(): Redis {
   if (!_redis) {
     _redis = new Redis(config.redisUrl, { lazyConnect: true });
+    _redis.on('error', (err: Error) => console.error('[redis] connection error:', err.message));
+    _redis.on('reconnecting', () => console.log('[redis] reconnecting...'));
   }
   return _redis;
 }

@@ -110,7 +110,7 @@ describe('Grantex client', () => {
         'fetch',
         vi.fn().mockRejectedValue(new TypeError('Failed to fetch')),
       );
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', maxRetries: 0 });
       await expect(grantex.agents.list()).rejects.toBeInstanceOf(GrantexNetworkError);
     });
 
@@ -173,7 +173,7 @@ describe('Grantex client', () => {
         'fetch',
         vi.fn().mockRejectedValue(abortError),
       );
-      const grantex = new Grantex({ apiKey: 'test_key', timeout: 5000 });
+      const grantex = new Grantex({ apiKey: 'test_key', timeout: 5000, maxRetries: 0 });
       try {
         await grantex.agents.list();
         expect.unreachable('should have thrown');
@@ -188,7 +188,7 @@ describe('Grantex client', () => {
         'fetch',
         vi.fn().mockRejectedValue('string error'),
       );
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', maxRetries: 0 });
       try {
         await grantex.agents.list();
         expect.unreachable('should have thrown');

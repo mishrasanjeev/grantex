@@ -1,0 +1,180 @@
+---
+title: "Vault"
+sidebarTitle: "Vault"
+description: "Store, retrieve, and exchange encrypted service credentials through the Grantex credential vault."
+---
+
+## Overview
+
+The `vault` client manages encrypted service credentials. Store upstream credentials (e.g., OAuth tokens for third-party APIs), retrieve metadata, delete credentials, and exchange Grantex grant tokens for stored service tokens at runtime.
+
+Access the vault client via `client.vault`.
+
+## Store
+
+Store an encrypted credential in the vault. Upserts on the `principal_id` + `service` combination.
+
+```python
+from grantex import Grantex, StoreCredentialParams
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.vault.store(StoreCredentialParams(
+        principal_id="user_abc123",
+        service="github",
+        access_token="gho_xxxxxxxxxxxx",
+        credential_type="oauth2",
+        refresh_token="ghr_xxxxxxxxxxxx",
+        token_expires_at="2026-04-10T00:00:00Z",
+        metadata={"scope": "repo,user"},
+    ))
+
+    print(f"Credential ID: {result.id}")
+    print(f"Service: {result.service}")
+    print(f"Created: {result.created_at}")
+```
+
+### StoreCredentialParams
+
+| Parameter          | Type                    | Required | Description                                        |
+|--------------------|-------------------------|----------|----------------------------------------------------|
+| `principal_id`     | `str`                   | Yes      | The end-user who owns this credential.             |
+| `service`          | `str`                   | Yes      | Service name (e.g., `"github"`, `"slack"`).        |
+| `access_token`     | `str`                   | Yes      | The upstream access token to store (encrypted at rest). |
+| `credential_type`  | `str \| None`           | No       | Credential type (e.g., `"oauth2"`, `"api_key"`).   |
+| `refresh_token`    | `str \| None`           | No       | Optional refresh token.                            |
+| `token_expires_at` | `str \| None`           | No       | ISO 8601 expiry for the upstream token.            |
+| `metadata`         | `dict[str, Any] \| None`| No      | Arbitrary metadata to store alongside the credential. |
+
+### StoreCredentialResponse
+
+| Field             | Type  | Description                              |
+|-------------------|-------|------------------------------------------|
+| `id`              | `str` | Unique credential identifier.            |
+| `principal_id`    | `str` | The principal who owns the credential.   |
+| `service`         | `str` | Service name.                            |
+| `credential_type` | `str` | Credential type.                         |
+| `created_at`      | `str` | ISO 8601 timestamp when stored.          |
+
+---
+
+## List
+
+List credential metadata. Raw tokens are never returned by this endpoint.
+
+```python
+from grantex import Grantex, ListVaultCredentialsParams
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.vault.list(ListVaultCredentialsParams(
+        principal_id="user_abc123",
+        service="github",
+    ))
+
+    for cred in result.credentials:
+        print(f"{cred.service} ({cred.credential_type}) - expires {cred.token_expires_at}")
+```
+
+### ListVaultCredentialsParams
+
+| Parameter      | Type          | Required | Description                      |
+|----------------|---------------|----------|----------------------------------|
+| `principal_id` | `str \| None` | No       | Filter by principal ID.          |
+| `service`      | `str \| None` | No       | Filter by service name.          |
+
+### ListVaultCredentialsResponse
+
+| Field         | Type                       | Description                     |
+|---------------|----------------------------|---------------------------------|
+| `credentials` | `tuple[VaultCredential, ...]` | Credential metadata records. |
+
+---
+
+## Get
+
+Get credential metadata by ID. Does not return the raw token.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    cred = client.vault.get("cred_01HXYZ...")
+
+    print(f"Service: {cred.service}")
+    print(f"Type: {cred.credential_type}")
+    print(f"Expires: {cred.token_expires_at}")
+```
+
+### Parameters
+
+| Parameter       | Type  | Required | Description                       |
+|-----------------|-------|----------|-----------------------------------|
+| `credential_id` | `str` | Yes      | The credential ID to retrieve.    |
+
+### VaultCredential
+
+| Field              | Type                    | Description                              |
+|--------------------|-------------------------|------------------------------------------|
+| `id`               | `str`                   | Unique credential identifier.            |
+| `principal_id`     | `str`                   | The principal who owns the credential.   |
+| `service`          | `str`                   | Service name.                            |
+| `credential_type`  | `str`                   | Credential type.                         |
+| `token_expires_at` | `str \| None`           | ISO 8601 expiry for the upstream token.  |
+| `metadata`         | `dict[str, Any]`        | Stored metadata.                         |
+| `created_at`       | `str`                   | ISO 8601 creation timestamp.             |
+| `updated_at`       | `str`                   | ISO 8601 last-updated timestamp.         |
+
+---
+
+## Delete
+
+Delete a credential from the vault.
+
+```python
+from grantex import Grantex
+
+with Grantex(api_key="gx_live_...") as client:
+    client.vault.delete("cred_01HXYZ...")
+```
+
+### Parameters
+
+| Parameter       | Type  | Required | Description                       |
+|-----------------|-------|----------|-----------------------------------|
+| `credential_id` | `str` | Yes      | The credential ID to delete.      |
+
+---
+
+## Exchange
+
+Exchange a Grantex grant token for an upstream service credential. This endpoint uses the grant token (not the API key) as the Bearer token, allowing agents to retrieve stored credentials at runtime without exposing the developer's API key.
+
+```python
+from grantex import Grantex, ExchangeCredentialParams
+
+with Grantex(api_key="gx_live_...") as client:
+    result = client.vault.exchange(
+        grant_token="eyJhbGciOiJSUzI1NiIs...",
+        params=ExchangeCredentialParams(service="github"),
+    )
+
+    print(f"Access token: {result.access_token}")
+    print(f"Service: {result.service}")
+    print(f"Expires: {result.token_expires_at}")
+```
+
+### Parameters
+
+| Parameter     | Type  | Required | Description                              |
+|---------------|-------|----------|------------------------------------------|
+| `grant_token` | `str` | Yes      | A valid Grantex grant token (JWT).       |
+| `service`     | `str` | Yes      | The service to retrieve credentials for. |
+
+### ExchangeCredentialResponse
+
+| Field              | Type             | Description                              |
+|--------------------|------------------|------------------------------------------|
+| `access_token`     | `str`            | The upstream access token.               |
+| `service`          | `str`            | Service name.                            |
+| `credential_type`  | `str`            | Credential type.                         |
+| `token_expires_at` | `str \| None`    | ISO 8601 expiry for the token.           |
+| `metadata`         | `dict[str, Any]` | Stored metadata.                         |

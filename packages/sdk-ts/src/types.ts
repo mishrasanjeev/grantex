@@ -68,9 +68,6 @@ export interface Agent {
 
 export interface ListAgentsResponse {
   agents: Agent[];
-  total: number;
-  page: number;
-  pageSize: number;
 }
 
 // ─── Authorization ────────────────────────────────────────────────────────────
@@ -133,9 +130,6 @@ export interface ListGrantsParams {
 
 export interface ListGrantsResponse {
   grants: Grant[];
-  total: number;
-  page: number;
-  pageSize: number;
 }
 
 export interface VerifiedGrant {
@@ -257,9 +251,6 @@ export interface ListAuditParams {
 
 export interface ListAuditResponse {
   entries: AuditEntry[];
-  total: number;
-  page: number;
-  pageSize: number;
 }
 
 // ─── Webhooks ─────────────────────────────────────────────────────────────────
@@ -831,8 +822,6 @@ export interface BudgetTransaction {
 export interface BudgetTransactionsResponse {
   transactions: BudgetTransaction[];
   total: number;
-  page: number;
-  pageSize: number;
 }
 
 // ─── Event streaming ─────────────────────────────────────────────────────────

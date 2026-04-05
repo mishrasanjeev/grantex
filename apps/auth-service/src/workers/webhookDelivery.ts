@@ -85,6 +85,8 @@ async function markRetryOrFail(
   }
 }
 
+let _intervalHandle: NodeJS.Timeout | null = null;
+
 /**
  * Start the webhook delivery worker. Polls every `intervalMs` for
  * pending deliveries and attempts to deliver them with exponential backoff.
@@ -99,10 +101,22 @@ export function startWebhookDeliveryWorker(
     });
   }, intervalMs);
 
+  _intervalHandle = timer;
+
   // Run once immediately
   processDeliveries(sql).catch((err) => {
     console.error('[webhook-delivery] Error on initial run:', err);
   });
 
   return timer;
+}
+
+/**
+ * Stop the webhook delivery worker and clean up the polling interval.
+ */
+export function stopWebhookDeliveryWorker(): void {
+  if (_intervalHandle) {
+    clearInterval(_intervalHandle);
+    _intervalHandle = null;
+  }
 }

@@ -76,7 +76,7 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
   // ═════════════════════════════════════════════════════════════════════════════
 
   // POST /v1/anomalies/detect — run detection, persist results, return them
-  app.post('/v1/anomalies/detect', async (request, reply) => {
+  app.post('/v1/anomalies/detect', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const sql = getSql();
     const developerId = request.developer.id;
 
@@ -431,7 +431,7 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
   // ═════════════════════════════════════════════════════════════════════════════
 
   // POST /v1/anomaly/rules — create custom rule
-  app.post('/v1/anomaly/rules', async (request, reply) => {
+  app.post('/v1/anomaly/rules', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const sql = getSql();
     const developerId = request.developer.id;
     const body = (request.body ?? {}) as Record<string, unknown>;
@@ -549,7 +549,7 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
   // ═════════════════════════════════════════════════════════════════════════════
 
   // POST /v1/anomaly/channels — create notification channel
-  app.post('/v1/anomaly/channels', async (request, reply) => {
+  app.post('/v1/anomaly/channels', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const sql = getSql();
     const developerId = request.developer.id;
     const body = (request.body ?? {}) as Record<string, unknown>;

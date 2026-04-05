@@ -49,14 +49,33 @@ export type AppOptions = {
   logger?: boolean | object;
 };
 
+const defaultLoggerOptions = {
+  level: process.env.LOG_LEVEL || 'info',
+  ...(process.env.NODE_ENV === 'development'
+    ? { transport: { target: 'pino-pretty' } }
+    : {}),
+};
+
 export async function buildApp(opts: AppOptions = {}) {
   const app = Fastify({
-    logger: opts.logger ?? true,
+    logger: opts.logger ?? defaultLoggerOptions,
+    bodyLimit: 1_048_576,
     genReqId: () => randomUUID(),
   });
 
-  await app.register(cors);
+  await app.register(cors, { origin: false });
   await app.register(websocket);
+
+  // HTTP security headers
+  app.addHook('onSend', async (_request, reply) => {
+    reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('X-XSS-Protection', '0');
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    reply.header('Cache-Control', 'no-store');
+  });
 
   // Global rate limit: 100 requests/minute per IP
   await app.register(rateLimit, {

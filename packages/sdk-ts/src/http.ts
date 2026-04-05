@@ -3,6 +3,10 @@ import type { RateLimit } from './types.js';
 
 const SDK_VERSION = '0.1.0';
 const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 500;
+const RETRY_MAX_DELAY_MS = 10_000;
+const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 
 function parseRateLimitHeaders(headers: Headers): RateLimit | undefined {
   const limit = headers.get('x-ratelimit-limit');
@@ -26,18 +30,21 @@ export interface HttpClientOptions {
   baseUrl: string;
   apiKey: string;
   timeout?: number;
+  maxRetries?: number;
 }
 
 export class HttpClient {
   readonly #baseUrl: string;
   readonly #apiKey: string;
   readonly #timeout: number;
+  readonly #maxRetries: number;
   #lastRateLimit: RateLimit | undefined;
 
   constructor(options: HttpClientOptions) {
     this.#baseUrl = options.baseUrl.replace(/\/$/, '');
     this.#apiKey = options.apiKey;
     this.#timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
+    this.#maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   }
 
   get lastRateLimit(): RateLimit | undefined {
@@ -75,8 +82,6 @@ export class HttpClient {
 
   async #request<T>(method: string, path: string, body: unknown): Promise<T> {
     const url = `${this.#baseUrl}${path}`;
-    const controller = new AbortController();
-    const timerId = setTimeout(() => controller.abort(), this.#timeout);
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.#apiKey}`,
@@ -88,60 +93,119 @@ export class HttpClient {
       headers['Content-Type'] = 'application/json';
     }
 
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method,
-        headers,
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-        signal: controller.signal,
-      });
-    } catch (err) {
-      const isTimeout =
-        err instanceof Error && err.name === 'AbortError';
-      throw new GrantexNetworkError(
-        isTimeout
-          ? `Request timed out after ${this.#timeout}ms`
-          : `Network error: ${err instanceof Error ? err.message : String(err)}`,
-        err,
-      );
-    } finally {
-      clearTimeout(timerId);
-    }
+    let lastError: unknown;
 
-    const requestId = response.headers.get('x-request-id') ?? undefined;
-    this.#lastRateLimit = parseRateLimitHeaders(response.headers);
+    for (let attempt = 0; attempt <= this.#maxRetries; attempt++) {
+      if (attempt > 0) {
+        await this.#sleep(this.#retryDelay(attempt - 1));
+      }
 
-    if (!response.ok) {
-      let responseBody: unknown;
+      const controller = new AbortController();
+      const timerId = setTimeout(() => controller.abort(), this.#timeout);
+
+      let response: Response;
       try {
-        responseBody = await response.json();
-      } catch {
-        responseBody = await response.text().catch(() => null);
-      }
-
-      const message = extractErrorMessage(responseBody, response.status);
-      const errorCode = extractErrorCode(responseBody);
-
-      if (response.status === 401 || response.status === 403) {
-        throw new GrantexAuthError(
-          message,
-          response.status as 401 | 403,
-          responseBody,
-          requestId,
-          errorCode,
-          this.#lastRateLimit,
+        response = await fetch(url, {
+          method,
+          headers,
+          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        clearTimeout(timerId);
+        const isTimeout =
+          err instanceof Error && err.name === 'AbortError';
+        lastError = new GrantexNetworkError(
+          isTimeout
+            ? `Request timed out after ${this.#timeout}ms`
+            : `Network error: ${err instanceof Error ? err.message : String(err)}`,
+          err,
         );
+        // Network errors are retryable
+        if (attempt < this.#maxRetries) {
+          continue;
+        }
+        throw lastError;
+      } finally {
+        clearTimeout(timerId);
       }
 
-      throw new GrantexApiError(message, response.status, responseBody, requestId, errorCode, this.#lastRateLimit);
+      const requestId = response.headers.get('x-request-id') ?? undefined;
+      this.#lastRateLimit = parseRateLimitHeaders(response.headers);
+
+      if (!response.ok) {
+        let responseBody: unknown;
+        try {
+          responseBody = await response.json();
+        } catch {
+          responseBody = await response.text().catch(() => null);
+        }
+
+        // Retry on transient status codes
+        if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < this.#maxRetries) {
+          const retryAfter = this.#parseRetryAfter(response.headers);
+          if (retryAfter !== undefined) {
+            this.#pendingRetryAfterMs = retryAfter;
+          }
+          continue;
+        }
+
+        const message = extractErrorMessage(responseBody, response.status);
+        const errorCode = extractErrorCode(responseBody);
+
+        if (response.status === 401 || response.status === 403) {
+          throw new GrantexAuthError(
+            message,
+            response.status as 401 | 403,
+            responseBody,
+            requestId,
+            errorCode,
+            this.#lastRateLimit,
+          );
+        }
+
+        throw new GrantexApiError(message, response.status, responseBody, requestId, errorCode, this.#lastRateLimit);
+      }
+
+      if (response.status === 204) {
+        return undefined as T;
+      }
+
+      return response.json() as Promise<T>;
     }
 
-    if (response.status === 204) {
-      return undefined as T;
-    }
+    // Should not reach here, but satisfy TypeScript
+    throw lastError;
+  }
 
-    return response.json() as Promise<T>;
+  #pendingRetryAfterMs: number | undefined;
+
+  #retryDelay(attempt: number): number {
+    // If a Retry-After header was parsed, use it
+    if (this.#pendingRetryAfterMs !== undefined) {
+      const delay = this.#pendingRetryAfterMs;
+      this.#pendingRetryAfterMs = undefined;
+      return Math.min(delay, RETRY_MAX_DELAY_MS);
+    }
+    // Exponential backoff with jitter
+    const exponential = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+    const jitter = Math.random() * RETRY_BASE_DELAY_MS;
+    return Math.min(exponential + jitter, RETRY_MAX_DELAY_MS);
+  }
+
+  #parseRetryAfter(headers: Headers): number | undefined {
+    const value = headers.get('retry-after');
+    if (value === null) return undefined;
+    const seconds = Number(value);
+    if (!Number.isNaN(seconds)) return seconds * 1000;
+    // Try parsing as HTTP-date
+    const date = Date.parse(value);
+    if (!Number.isNaN(date)) return Math.max(0, date - Date.now());
+    return undefined;
+  }
+
+  #sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 

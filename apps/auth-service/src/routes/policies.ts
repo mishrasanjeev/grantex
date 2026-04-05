@@ -43,7 +43,7 @@ function toResponse(row: Record<string, unknown>) {
 
 export async function policiesRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/policies — create a policy
-  app.post<{ Body: PolicyBody }>('/v1/policies', async (request, reply) => {
+  app.post<{ Body: PolicyBody }>('/v1/policies', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const {
       name,
       effect,
@@ -136,6 +136,7 @@ export async function policiesRoutes(app: FastifyInstance): Promise<void> {
   // PATCH /v1/policies/:id — update policy
   app.patch<{ Params: { id: string }; Body: UpdatePolicyBody }>(
     '/v1/policies/:id',
+    { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const sql = getSql();
       const {
@@ -180,7 +181,7 @@ export async function policiesRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // DELETE /v1/policies/:id — delete policy
-  app.delete<{ Params: { id: string } }>('/v1/policies/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/v1/policies/:id', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const sql = getSql();
     const rows = await sql`
       DELETE FROM policies

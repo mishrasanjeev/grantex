@@ -57,14 +57,13 @@ describe('AgentsClient', () => {
   });
 
   it('list() GETs /v1/agents', async () => {
-    const listResponse = { agents: [MOCK_AGENT], total: 1, page: 1, pageSize: 20 };
+    const listResponse = { agents: [MOCK_AGENT] };
     vi.stubGlobal('fetch', makeFetch(200, listResponse));
 
     const grantex = new Grantex({ apiKey: 'test_key' });
     const result = await grantex.agents.list();
 
     expect(result.agents).toHaveLength(1);
-    expect(result.total).toBe(1);
   });
 
   it('update() POSTs to /v1/agents/:id', async () => {

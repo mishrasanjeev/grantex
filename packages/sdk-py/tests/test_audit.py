@@ -67,9 +67,6 @@ def test_log_without_metadata(client: Grantex) -> None:
 def test_list_and_query_params(client: Grantex) -> None:
     payload = {
         "entries": [MOCK_AUDIT_ENTRY],
-        "total": 1,
-        "page": 1,
-        "pageSize": 20,
     }
     route = respx.get("https://api.grantex.dev/v1/audit/entries").mock(
         return_value=httpx.Response(200, json=payload)
@@ -77,7 +74,6 @@ def test_list_and_query_params(client: Grantex) -> None:
     params = ListAuditParams(agent_id="ag_01HXYZ123abc", action="payment.initiated")
     response = client.audit.list(params)
 
-    assert response.total == 1
     assert len(response.entries) == 1
 
     url = str(route.calls[0].request.url)

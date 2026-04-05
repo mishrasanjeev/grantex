@@ -80,7 +80,7 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
       try {
         expirySeconds = parseExpiresIn(expiresIn);
       } catch {
-        return reply.status(422).send({
+        return reply.status(400).send({
           message: `Invalid expiresIn format: ${expiresIn}`,
           code: 'INVALID_EXPIRY',
           requestId: request.id,

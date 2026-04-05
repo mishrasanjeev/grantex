@@ -31,7 +31,7 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // POST /v1/budget/allocate — create a budget allocation for a grant
-  app.post<{ Body: AllocateBody }>('/v1/budget/allocate', async (request, reply) => {
+  app.post<{ Body: AllocateBody }>('/v1/budget/allocate', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { grantId, initialBudget, currency } = request.body;
 
     if (!grantId || initialBudget == null || initialBudget <= 0) {
@@ -69,7 +69,7 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // POST /v1/budget/debit — debit an amount from a grant's budget
-  app.post<{ Body: DebitBody }>('/v1/budget/debit', async (request, reply) => {
+  app.post<{ Body: DebitBody }>('/v1/budget/debit', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { grantId, amount, description, metadata } = request.body;
 
     if (!grantId || amount == null || amount <= 0) {

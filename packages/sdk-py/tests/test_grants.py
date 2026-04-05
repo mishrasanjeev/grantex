@@ -44,21 +44,17 @@ def test_get(client: Grantex) -> None:
 def test_list(client: Grantex) -> None:
     payload = {
         "grants": [MOCK_GRANT],
-        "total": 1,
-        "page": 1,
-        "pageSize": 20,
     }
     respx.get("https://api.grantex.dev/v1/grants").mock(
         return_value=httpx.Response(200, json=payload)
     )
     response = client.grants.list()
-    assert response.total == 1
     assert len(response.grants) == 1
 
 
 @respx.mock
 def test_list_with_query_params(client: Grantex) -> None:
-    payload = {"grants": [], "total": 0, "page": 1, "pageSize": 20}
+    payload = {"grants": []}
     route = respx.get("https://api.grantex.dev/v1/grants").mock(
         return_value=httpx.Response(200, json=payload)
     )

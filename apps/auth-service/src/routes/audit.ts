@@ -16,7 +16,7 @@ interface AuditLogBody {
 
 export async function auditRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/audit/log
-  app.post<{ Body: AuditLogBody }>('/v1/audit/log', async (request, reply) => {
+  app.post<{ Body: AuditLogBody }>('/v1/audit/log', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { agentId, agentDid, grantId, principalId, action, metadata = {}, status = 'success' } = request.body;
 
     if (!agentId || !agentDid || !grantId || !principalId || !action) {

@@ -14,8 +14,45 @@ import {
   type SsoConnectionRow,
 } from '../lib/sso.js';
 import { authenticateLdap, testLdapConnection, type LdapConfig } from '../lib/ldap.js';
+import { config } from '../config.js';
+import { getKeyPair } from '../lib/crypto.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Derive a deterministic HMAC key for SSO state signing.
+ * Uses SSO_STATE_SECRET env var if set, otherwise derives from the RSA private key.
+ */
+function getSsoHmacKey(): string {
+  if (config.ssoStateSecret) return config.ssoStateSecret;
+  // Derive from RSA private key — stable across restarts as long as the key doesn't change.
+  const { kid } = getKeyPair();
+  const raw = config.rsaPrivateKey ?? kid;
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+/** Create an HMAC-signed SSO state parameter. */
+export function signSsoState(payload: Record<string, unknown>): string {
+  const statePayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const stateSignature = crypto.createHmac('sha256', getSsoHmacKey()).update(statePayload).digest('base64url');
+  return `${statePayload}.${stateSignature}`;
+}
+
+/** Verify and decode an HMAC-signed SSO state parameter. Returns null if invalid. */
+function verifySsoState(state: string): Record<string, unknown> | null {
+  const dotIdx = state.indexOf('.');
+  if (dotIdx === -1) return null;
+  const payload = state.slice(0, dotIdx);
+  const sig = state.slice(dotIdx + 1);
+  if (!sig) return null;
+  const expectedSig = crypto.createHmac('sha256', getSsoHmacKey()).update(payload).digest('base64url');
+  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) return null;
+  try {
+    return JSON.parse(Buffer.from(payload, 'base64url').toString()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
 
 function connectionToResponse(row: SsoConnectionRow) {
   const protocolFields =
@@ -435,7 +472,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ message: 'SSO not configured for this org', code: 'NOT_FOUND' });
       }
 
-      const state = Buffer.from(JSON.stringify({ org, connectionId: conn.id })).toString('base64url');
+      const state = signSsoState({ org, connectionId: conn.id });
 
       if (conn.protocol === 'oidc') {
         // Use OIDC Discovery to get the authorization endpoint
@@ -504,12 +541,11 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({ message: 'code and state are required', code: 'BAD_REQUEST' });
       }
 
-      let stateData: { org: string; connectionId: string };
-      try {
-        stateData = JSON.parse(Buffer.from(state, 'base64url').toString()) as { org: string; connectionId: string };
-      } catch {
-        return reply.status(400).send({ message: 'Invalid state parameter', code: 'BAD_REQUEST' });
+      const statePayload = verifySsoState(state);
+      if (!statePayload) {
+        return reply.status(400).send({ message: 'Invalid state parameter', code: 'BAD_REQUEST', requestId: request.id });
       }
+      const stateData = statePayload as unknown as { org: string; connectionId: string };
 
       const sql = getSql();
       const rows = await sql<SsoConnectionRow[]>`
@@ -632,12 +668,11 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({ message: 'SAMLResponse and RelayState are required', code: 'BAD_REQUEST' });
       }
 
-      let stateData: { org: string; connectionId: string };
-      try {
-        stateData = JSON.parse(Buffer.from(RelayState, 'base64url').toString()) as { org: string; connectionId: string };
-      } catch {
-        return reply.status(400).send({ message: 'Invalid RelayState', code: 'BAD_REQUEST' });
+      const statePayload = verifySsoState(RelayState);
+      if (!statePayload) {
+        return reply.status(400).send({ message: 'Invalid RelayState', code: 'BAD_REQUEST', requestId: request.id });
       }
+      const stateData = statePayload as unknown as { org: string; connectionId: string };
 
       const sql = getSql();
       const rows = await sql<SsoConnectionRow[]>`
@@ -895,12 +930,11 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       }
 
       let org: string;
-      try {
-        const decoded = JSON.parse(Buffer.from(state, 'base64url').toString()) as { org: string };
-        org = decoded.org;
-      } catch {
+      const statePayload = verifySsoState(state);
+      if (!statePayload) {
         return reply.status(400).send({ message: 'Invalid state parameter', code: 'BAD_REQUEST' });
       }
+      org = statePayload['org'] as string;
 
       const sql = getSql();
       const rows = await sql<Array<Record<string, unknown>>>`

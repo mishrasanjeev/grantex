@@ -5,7 +5,7 @@ import { verifyDomainDns } from '../lib/domains.js';
 
 export async function domainsRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/domains — register a custom domain
-  app.post<{ Body: { domain: string } }>('/v1/domains', async (request, reply) => {
+  app.post<{ Body: { domain: string } }>('/v1/domains', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { domain } = request.body;
     const developerId = request.developer.id;
 
@@ -122,7 +122,7 @@ export async function domainsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // DELETE /v1/domains/:id — remove a custom domain
-  app.delete<{ Params: { id: string } }>('/v1/domains/:id', async (request, reply) => {
+  app.delete<{ Params: { id: string } }>('/v1/domains/:id', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const sql = getSql();
 
     const rows = await sql`

@@ -9,6 +9,7 @@ type clientConfig struct {
 	baseURL    string
 	timeout    time.Duration
 	httpClient *http.Client
+	maxRetries int
 }
 
 // Option configures a Grantex client.
@@ -32,5 +33,13 @@ func WithTimeout(d time.Duration) Option {
 func WithHTTPClient(client *http.Client) Option {
 	return func(c *clientConfig) {
 		c.httpClient = client
+	}
+}
+
+// WithMaxRetries sets the maximum number of retry attempts for transient failures
+// (HTTP 429, 502, 503, 504, and network errors). Defaults to 3.
+func WithMaxRetries(n int) Option {
+	return func(c *clientConfig) {
+		c.maxRetries = n
 	}
 }

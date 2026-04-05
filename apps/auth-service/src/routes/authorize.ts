@@ -34,6 +34,13 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
+    if (scopes.some(s => typeof s !== 'string' || s.length > 256 || s.length === 0)) {
+      return reply.status(400).send({ message: 'Invalid scope format', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    if (scopes.length > 100) {
+      return reply.status(400).send({ message: 'Too many scopes (max 100)', code: 'BAD_REQUEST', requestId: request.id });
+    }
+
     // Validate PKCE params — only S256 is supported
     if (codeChallenge && codeChallengeMethod !== 'S256') {
       return reply.status(400).send({

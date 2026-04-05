@@ -125,8 +125,6 @@ def test_transactions() -> None:
         return_value=httpx.Response(200, json={
             "transactions": [MOCK_TRANSACTION],
             "total": 1,
-            "page": 1,
-            "pageSize": 20,
         })
     )
 
@@ -136,8 +134,6 @@ def test_transactions() -> None:
     assert len(result.transactions) == 1
     assert result.transactions[0].id == "tx_01"
     assert result.total == 1
-    assert result.page == 1
-    assert result.page_size == 20
 
 
 @respx.mock
@@ -146,16 +142,12 @@ def test_transactions_with_pagination() -> None:
         return_value=httpx.Response(200, json={
             "transactions": [],
             "total": 50,
-            "page": 3,
-            "pageSize": 10,
         })
     )
 
     client = Grantex(api_key="test_key", base_url=BASE_URL)
     result = client.budgets.transactions("grant_01", page=3, page_size=10)
 
-    assert result.page == 3
-    assert result.page_size == 10
     assert result.total == 50
 
 

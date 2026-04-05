@@ -169,6 +169,8 @@ async function runDetection(sql: ReturnType<typeof postgres>): Promise<void> {
   }
 }
 
+let _intervalHandle: NodeJS.Timeout | null = null;
+
 /**
  * Start the anomaly detection worker. Runs detection every `intervalMs`
  * (default 60 minutes) across all developers.
@@ -183,10 +185,22 @@ export function startAnomalyDetectionWorker(
     });
   }, intervalMs);
 
+  _intervalHandle = timer;
+
   // Run once immediately
   runDetection(sql).catch((err) => {
     console.error('[anomaly-detection] Error on initial run:', err);
   });
 
   return timer;
+}
+
+/**
+ * Stop the anomaly detection worker and clean up the polling interval.
+ */
+export function stopAnomalyDetectionWorker(): void {
+  if (_intervalHandle) {
+    clearInterval(_intervalHandle);
+    _intervalHandle = null;
+  }
 }

@@ -10,7 +10,7 @@ from grantex import Grantex, GrantexApiError, RateLimit
 
 @pytest.fixture
 def client() -> Grantex:
-    return Grantex(api_key="test-key")
+    return Grantex(api_key="test-key", max_retries=0)
 
 
 @respx.mock

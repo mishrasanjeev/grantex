@@ -62,7 +62,7 @@ describe('GrantsClient', () => {
   });
 
   it('list() GETs /v1/grants', async () => {
-    const listResponse = { grants: [MOCK_GRANT], total: 1, page: 1, pageSize: 20 };
+    const listResponse = { grants: [MOCK_GRANT] };
     vi.stubGlobal('fetch', makeFetch(200, listResponse));
 
     const grantex = new Grantex({ apiKey: 'test_key' });
@@ -72,7 +72,7 @@ describe('GrantsClient', () => {
   });
 
   it('list() appends query params', async () => {
-    const listResponse = { grants: [], total: 0, page: 1, pageSize: 20 };
+    const listResponse = { grants: [] };
     const mockFetch = makeFetch(200, listResponse);
     vi.stubGlobal('fetch', mockFetch);
 
@@ -122,7 +122,7 @@ describe('GrantsClient', () => {
   });
 
   it('list() filters out undefined/null query param values', async () => {
-    const listResponse = { grants: [], total: 0, page: 1, pageSize: 20 };
+    const listResponse = { grants: [] };
     const mockFetch = makeFetch(200, listResponse);
     vi.stubGlobal('fetch', mockFetch);
 
@@ -136,7 +136,7 @@ describe('GrantsClient', () => {
   });
 
   it('list() with all undefined params sends no query string', async () => {
-    const listResponse = { grants: [], total: 0, page: 1, pageSize: 20 };
+    const listResponse = { grants: [] };
     const mockFetch = makeFetch(200, listResponse);
     vi.stubGlobal('fetch', mockFetch);
 

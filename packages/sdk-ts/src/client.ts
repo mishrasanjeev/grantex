@@ -81,6 +81,7 @@ export class Grantex {
       baseUrl: options.baseUrl ?? DEFAULT_BASE_URL,
       apiKey,
       ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
+      ...(options.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
     });
 
     this.agents = new AgentsClient(this.#http);
