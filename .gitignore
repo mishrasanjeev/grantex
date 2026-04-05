@@ -52,9 +52,6 @@ coverage/
 *.tsbuildinfo
 
 # Marketing content - local only
-docs/blog/ai-agent-authorization-guide.mdx
-docs/blog/langchain-agent-permissions.mdx
-docs/blog/mcp-server-oauth-authentication.mdx
 twitter-thread-enterprise-hardening.md
 devto-article-enterprise-hardening.md
 discord-welcome.md
