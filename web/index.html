@@ -1073,6 +1073,14 @@
         <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">One command to inspect any grant token. Scopes, expiry, delegation chain, revocation status. Works offline.</p>
       </a>
 
+      <a href="https://docs.grantex.dev/guides/security-hardening" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="background:#f97583;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">v0.3.4</span>
+          <span style="color:var(--text);font-weight:600;">Enterprise Hardening</span>
+        </div>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Rate limiting on every endpoint, HTTP security headers, SDK retry with backoff, structured logging, deep health checks, DB transactions, graceful shutdown.</p>
+      </a>
+
       <a href="#scope-enforcement" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
           <span style="background:#f97583;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">v0.3.4</span>
@@ -2313,7 +2321,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
             <span class="check">&#x2713;</span>
             <div>
               <h4>Observability</h4>
-              <p>Prometheus metrics, OpenTelemetry tracing, and Grafana dashboard templates out of the box.</p>
+              <p>Structured JSON logging (pino), Prometheus metrics, OpenTelemetry tracing, and Grafana dashboard templates out of the box.</p>
             </div>
           </div>
           <div class="enterprise-feature">
@@ -2384,6 +2392,27 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
             <div>
               <h4><a href="https://docs.grantex.dev/features/did-infrastructure" style="color:inherit;text-decoration:none;">DID Infrastructure</a></h4>
               <p>W3C DID document at did:web:grantex.dev with RS256 and Ed25519 public keys for offline credential and token verification.</p>
+            </div>
+          </div>
+          <div class="enterprise-feature">
+            <span class="check">&#x2713;</span>
+            <div>
+              <h4><a href="https://docs.grantex.dev/guides/security-hardening" style="color:inherit;text-decoration:none;">Security Hardening</a></h4>
+              <p>Rate limiting on every endpoint, HTTP security headers (HSTS, CSP, X-Frame-Options), HMAC-signed SSO state, timing-safe auth, scope validation, and 1MB body limits.</p>
+            </div>
+          </div>
+          <div class="enterprise-feature">
+            <span class="check">&#x2713;</span>
+            <div>
+              <h4>SDK Retry &amp; Resilience</h4>
+              <p>All three SDKs (TypeScript, Python, Go) include exponential backoff with jitter, Retry-After header support, and configurable max retries for transient failures.</p>
+            </div>
+          </div>
+          <div class="enterprise-feature">
+            <span class="check">&#x2713;</span>
+            <div>
+              <h4><a href="https://docs.grantex.dev/guides/operations" style="color:inherit;text-decoration:none;">Production Operations</a></h4>
+              <p>Deep health checks (DB + Redis), config validation on startup, graceful shutdown, connection pooling, database transactions, and structured JSON logging.</p>
             </div>
           </div>
         </div>
