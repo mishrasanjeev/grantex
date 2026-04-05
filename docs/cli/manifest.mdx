@@ -1,12 +1,12 @@
 ---
 title: "grantex manifest"
 sidebarTitle: "manifest"
-description: "Browse, generate, and validate tool manifests — define your own or use 54 pre-built ones."
+description: "Browse, generate, and validate tool manifests — define your own or use 53 pre-built ones."
 ---
 
 ## Overview
 
-The `grantex manifest` commands let you browse, generate, and validate tool manifests. Grantex ships 54 pre-built manifests as a convenience, but you can define manifests for any connector — the enforcement engine treats custom and pre-built manifests identically.
+The `grantex manifest` commands let you browse, generate, and validate tool manifests. Grantex ships 53 pre-built manifests as a convenience, but you can define manifests for any connector — the enforcement engine treats custom and pre-built manifests identically.
 
 ```bash
 npm install -g @grantex/cli
@@ -25,9 +25,9 @@ grantex manifest list
 ### Output
 
 ```
-Available manifests (54 connectors, 340+ tools):
+Available manifests (53 connectors, 339 tools):
 
-  FINANCE (14 connectors, 88 tools)
+  FINANCE (11 connectors, 78 tools)
     banking_aa          5 tools
     gstn                8 tools
     netsuite            8 tools
@@ -39,32 +39,33 @@ Available manifests (54 connectors, 340+ tools):
     zoho_books          7 tools
     pinelabs_plural     6 tools
     income_tax_india    7 tools
-    epfo                6 tools
-    mca_portal          4 tools
-    sanctions_api       5 tools
 
   HR (8 connectors, 56 tools)
     darwinbox          10 tools
     docusign            6 tools
+    epfo                6 tools
     greenhouse          8 tools
     keka                6 tools
     linkedin_talent     6 tools
     okta                8 tools
     zoom                6 tools
-    ...
 
-  MARKETING (16 connectors, 107 tools)
+  MARKETING (16 connectors, 94 tools)
     salesforce          6 tools
     hubspot            13 tools
     mailchimp          10 tools
     ...
 
-  OPS (7 connectors, 48 tools)
+  OPS (7 connectors, 46 tools)
     jira               11 tools
     confluence          6 tools
-    ...
+    servicenow          6 tools
+    zendesk             8 tools
+    pagerduty           6 tools
+    sanctions_api       5 tools
+    mca_portal          4 tools
 
-  COMMS (11 connectors, 67 tools)
+  COMMS (11 connectors, 65 tools)
     gmail               4 tools
     slack               7 tools
     github              9 tools
@@ -78,7 +79,7 @@ grantex manifest list --category finance
 ```
 
 ```
-Finance manifests (14 connectors, 88 tools):
+Finance manifests (11 connectors, 78 tools):
 
   banking_aa          5 tools
   gstn                8 tools
@@ -91,9 +92,6 @@ Finance manifests (14 connectors, 88 tools):
   zoho_books          7 tools
   pinelabs_plural     6 tools
   income_tax_india    7 tools
-  epfo                6 tools
-  mca_portal          4 tools
-  sanctions_api       5 tools
 ```
 
 ### JSON Output
@@ -118,8 +116,8 @@ grantex manifest list --json
       "tools": ["create_lead", "update_opportunity", "query", "create_task", "get_account", "list_opportunities"]
     }
   ],
-  "totalConnectors": 54,
-  "totalTools": 340
+  "totalConnectors": 53,
+  "totalTools": 339
 }
 ```
 

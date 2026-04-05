@@ -150,7 +150,7 @@ Custom and pre-built manifests are identical at runtime. The `enforce()` engine,
 
 ### Pre-Built Manifests — 54 Included
 
-As a convenience, Grantex ships 54 pre-built manifests covering finance, HR, marketing, ops, and comms connectors. Use them as-is or as a starting point:
+As a convenience, Grantex ships 53 pre-built manifests covering finance, HR, marketing, ops, and comms connectors. Use them as-is or as a starting point:
 
 <CodeGroup>
 
@@ -257,7 +257,7 @@ async def execute_tool(
 The CLI provides a complete manifest workflow: list available manifests, validate your agent's tools against them, and dry-run enforcement.
 
 ```bash
-# Browse all 54 pre-built manifests (or use your own)
+# Browse all 53 pre-built manifests (or use your own)
 grantex manifest list
 
 # Filter by category
@@ -412,4 +412,4 @@ await callTool('gmail', 'send_email', { to: 'ceo@acme.com' });    // DENIED
 - [Python SDK enforce() reference](/sdks/python/enforce)
 - [CLI manifest commands](/cli/manifest)
 - [CLI enforce test command](/cli/enforce)
-- [AgenticOrg case study](/case-studies/agenticorg) — 35 agents, 54 pre-built + custom manifests in production
+- [AgenticOrg case study](/case-studies/agenticorg) — 35 agents, 53 pre-built + custom manifests in production
