@@ -677,9 +677,6 @@
           {
             "group": "Posts",
             "pages": [
-              "blog/ai-agent-authorization-guide",
-              "blog/langchain-agent-permissions",
-              "blog/mcp-server-oauth-authentication",
               "blog/dpdp-act-ai-agents",
               "blog/agent-security-breaches-2025-2026",
               "blog/owasp-agentic-top-10-compliance",
