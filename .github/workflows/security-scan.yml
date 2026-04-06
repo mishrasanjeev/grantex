@@ -48,6 +48,9 @@ jobs:
     name: OWASP ZAP Full Scan
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v4
 
