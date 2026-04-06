@@ -1,0 +1,34 @@
+# Grantex Python Requirements
+# Install: pip install -r requirements.txt
+#
+# This file covers ALL Python packages in the Grantex ecosystem.
+# Install only what you need — sections are labeled.
+
+# ─── Core SDK ────────────────────────────────────────────────────────────────
+grantex==0.3.5                    # Python SDK (httpx, PyJWT, cryptography)
+
+# ─── Framework Integrations (install as needed) ─────────────────────────────
+grantex-fastapi>=0.1.3            # FastAPI middleware (requires: fastapi>=0.100.0)
+grantex-crewai>=0.1.4             # CrewAI integration (requires: crewai>=0.1.0)
+grantex-openai-agents>=0.1.3      # OpenAI Agents SDK integration
+grantex-adk>=0.1.3                # Google ADK integration
+grantex-a2a>=0.1.2                # A2A Protocol Bridge (Python)
+grantex-gemma>=0.1.0              # Offline auth for Gemma on-device agents
+
+# ─── SDK Runtime Dependencies (installed automatically with grantex) ────────
+# httpx>=0.27.0                   # HTTP client (async + sync)
+# PyJWT>=2.8.0                    # JWT decoding
+# cryptography>=42.0.0            # RSA/Ed25519 key operations
+
+# ─── FastAPI Integration Dependencies ────────────────────────────────────────
+# fastapi>=0.100.0                # Required by grantex-fastapi
+# uvicorn>=0.20.0                 # ASGI server for FastAPI
+
+# ─── Development / Testing ──────────────────────────────────────────────────
+# pytest>=8.0.0                   # Test runner
+# pytest-mock>=3.14.0             # Mock support
+# pytest-asyncio>=0.23.0          # Async test support
+# respx>=0.22.0                   # httpx mock library
+# mypy>=1.8.0                     # Type checker (strict mode)
+# build>=1.0.0                    # Package builder
+# twine>=5.0.0                    # PyPI uploader
