@@ -1,6 +1,7 @@
 {
   "name": "@grantex/mcp",
   "version": "0.1.5",
+  "mcpName": "io.github.mishrasanjeev/grantex",
   "description": "MCP server for Grantex delegated agent authorization",
   "homepage": "https://grantex.dev/for/mcp",
   "bugs": {
