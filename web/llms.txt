@@ -1,6 +1,6 @@
 # Grantex
 
-> Last updated: 2026-04-05
+> Last updated: 2026-04-06
 
 > Delegated authorization protocol for AI agents. What OAuth 2.0 is to humans, Grantex is to agents.
 
@@ -89,13 +89,56 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - `enforce_mode="permissive"` — log-only mode without blocking (for migration)
 - `ToolManifest(connector, tools)` — define custom connector permissions
 - `Permission.READ/WRITE/DELETE/ADMIN` — hierarchy: admin > delete > write > read
-- 54 pre-built manifests: from grantex.manifests.salesforce import manifest
+- 53 pre-built manifests: from grantex.manifests.salesforce import manifest
 - CLI: grantex manifest generate ./path — auto-generate manifests from connector code
 - CLI: grantex manifest list — browse bundled manifests
 - CLI: grantex enforce test --token X --connector Y --tool Z — dry-run
 - Unknown tools denied by default (fail closed)
 - Custom manifests: inline, JSON file, or extend pre-built
-- Case study: AgenticOrg — 35 agents, 54 connectors, 340+ tools, all enforced
+- Case study: AgenticOrg — 35 agents, 53 pre-built + 3 custom connectors, 339+ tools, all enforced
+- Custom manifests are the primary story — define manifests for any connector, no dependency on Grantex
+
+## Enterprise Hardening (v0.3.6)
+
+- SDK retry with exponential backoff + jitter in all 3 languages (configurable maxRetries, default 3)
+- Retries 429, 502, 503, 504 + network errors; respects Retry-After header
+- Rate limiting on every endpoint (100/min global, 5-30/min per-endpoint)
+- 7 HTTP security headers (HSTS, X-Frame-Options, X-Content-Type-Options, etc.)
+- Timing-safe admin authentication (crypto.timingSafeEqual)
+- HMAC-signed SSO state parameters
+- JWT exp claim validated in introspection
+- Scope format validation (max 256 chars, max 100 scopes)
+- Input sanitization (trimming) on all string fields
+- 1MB request body limit, CORS disabled by default
+- Database connection pools (max 20, idle 30s, connect 10s, lifetime 30min)
+- Token exchange wrapped in database transactions
+- Redis error handling with reconnection logging
+- Graceful shutdown (SIGTERM → stop workers → drain connections)
+- Deep health check (DB + Redis with 2s timeout, 503 on degraded)
+- Config validation on startup (exits if required vars missing)
+- Structured JSON logging via pino (zero console.log remaining)
+- Webhook retry with 20% jitter (prevents thundering herd)
+- 3,332 tests across 27 packages — 100% pass rate
+- Zero known vulnerabilities (npm audit, pip-audit, govulncheck all clean)
+
+## SDK Parity
+
+All 3 SDKs (TypeScript 0.3.6, Python 0.3.6, Go v0.1.6) have:
+- 20 resource services each (agents, tokens, grants, audit, anomalies, compliance, billing, policies, scim, sso, principal sessions, vault, budgets, events, usage, domains, webauthn, credentials, passports, webhooks)
+- Offline JWT verification via JWKS
+- Retry with exponential backoff
+- PassportsClient for MPP agent identity
+- VaultService for encrypted credential storage
+- EventsClient with subscribe() for background streaming
+
+## Guides
+
+- Security Hardening: https://docs.grantex.dev/guides/security-hardening
+- Operations: https://docs.grantex.dev/guides/operations
+- Custom Manifests: https://docs.grantex.dev/guides/custom-manifests
+- Scope Enforcement: https://docs.grantex.dev/guides/scope-enforcement
+- Self-Hosting: https://docs.grantex.dev/guides/self-hosting
+- Deployment: https://github.com/mishrasanjeev/grantex/blob/main/DEPLOYMENT.md
 
 ## Comparisons
 

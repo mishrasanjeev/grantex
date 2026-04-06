@@ -2,6 +2,22 @@ User-agent: *
 Allow: /
 Disallow: /dashboard/
 
+# LLM crawlers — explicitly allowed
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Amazonbot
+Allow: /
+
+User-agent: GoogleOther
+Allow: /
+
 Sitemap: https://grantex.dev/sitemap.xml
 Sitemap: https://docs.grantex.dev/sitemap.xml
 
