@@ -20,6 +20,34 @@ Complete guide to deploying the Grantex authorization platform in your environme
 
 ---
 
+## Deployment Files
+
+| File | Purpose |
+|------|---------|
+| `DEPLOYMENT.md` | This guide |
+| `requirements.txt` | Python package dependencies |
+| `docker-compose.yml` | Dev stack (auth service + PostgreSQL + Redis) |
+| `docker-compose.prod.yml` | Production Docker stack |
+| `apps/auth-service/Dockerfile` | Auth service container image |
+| `apps/auth-service/.env.example` | All environment variables with defaults |
+| `apps/auth-service/package.json` | Node.js dependencies |
+| `apps/auth-service/package-lock.json` | Pinned Node.js dependencies |
+| `apps/auth-service/src/db/migrations/` | 30 SQL migration files |
+| `packages/gateway/Dockerfile` | Gateway reverse proxy container |
+| `deploy/gcp/setup.sh` | Google Cloud Run setup |
+| `deploy/gcp/setup-wif.sh` | Workload Identity Federation setup |
+| `deploy/gcp/dns.sh` | DNS configuration |
+| `deploy/helm/grantex/` | Kubernetes Helm chart (14 files) |
+| `deploy/helm/grantex/values.yaml` | Helm default values |
+| `deploy/nginx/nginx.conf` | Nginx reverse proxy config |
+| `deploy/grafana/` | 2 Grafana dashboard JSON files |
+| `firebase.json` | Firebase Hosting config (portal + landing page) |
+| `.zap/rules.tsv` | OWASP ZAP security scan rules |
+| `.github/workflows/deploy.yml` | CI/CD deploy to Cloud Run |
+| `.github/workflows/deploy-portal.yml` | CI/CD deploy portal to Firebase |
+
+---
+
 ## Quick Start (Docker Compose)
 
 The fastest way to run the full stack:
@@ -61,21 +89,20 @@ sudo systemctl enable redis-server
 
 ```bash
 cd apps/auth-service
+
+# Copy and edit environment variables
+cp .env.example .env
+# Edit .env — set DATABASE_URL, REDIS_URL, RSA_PRIVATE_KEY, JWT_ISSUER
+# See "Environment Variables" section below for all options
+
 npm ci
 npm run build
-
-# Set environment variables (see Environment Variables section below)
-export DATABASE_URL="postgresql://grantex:your-secure-password@localhost:5432/grantex"
-export REDIS_URL="redis://localhost:6379"
-export AUTO_GENERATE_KEYS=true
-export JWT_ISSUER="https://your-domain.com"
-export NODE_ENV=production
 
 # Run migrations
 npm run migrate
 
 # Start
-npm start
+NODE_ENV=production npm start
 ```
 
 The service starts on port 3001 by default.
