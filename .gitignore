@@ -59,3 +59,7 @@ nist-nccoe-comment-v2.md
 discord-platform-overview.md
 nist-nccoe-comment-v2.html
 twitter-thread-full-session.md
+
+# MCP publisher
+packages/mcp/.mcpregistry_*
+packages/mcp/mcp-publisher.exe

@@ -1,37 +1,29 @@
 {
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.mishrasanjeev/grantex",
-  "description": "Delegated authorization for AI agents — register agents, create authorization requests, exchange tokens, verify grants, manage audit trails, and create principal sessions. 17 tools for Claude Desktop, Cursor, and Windsurf.",
+  "description": "OAuth 2.0 for AI agents — scoped delegation tokens, audit trails, and revocation.",
   "repository": {
     "url": "https://github.com/mishrasanjeev/grantex",
-    "source": "packages/mcp"
+    "source": "github"
   },
-  "version": "0.1.5",
+  "version": "0.1.6",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@grantex/mcp",
-      "version": "0.1.5",
-      "transport": ["stdio"]
+      "version": "0.1.6",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "description": "Your Grantex API key",
+          "isRequired": true,
+          "format": "string",
+          "isSecret": true,
+          "name": "GRANTEX_API_KEY"
+        }
+      ]
     }
-  ],
-  "tools": [
-    "grantex_agent_register",
-    "grantex_agent_get",
-    "grantex_agent_list",
-    "grantex_agent_update",
-    "grantex_agent_delete",
-    "grantex_authorize",
-    "grantex_token_exchange",
-    "grantex_token_verify",
-    "grantex_token_refresh",
-    "grantex_token_revoke",
-    "grantex_grant_get",
-    "grantex_grant_list",
-    "grantex_grant_revoke",
-    "grantex_grant_delegate",
-    "grantex_audit_list",
-    "grantex_audit_get",
-    "grantex_principal_session_create"
-  ],
-  "categories": ["security", "authorization", "ai-agents"]
+  ]
 }
