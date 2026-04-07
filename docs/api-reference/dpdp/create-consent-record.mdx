@@ -1,0 +1,136 @@
+---
+title: "Create Consent Record"
+sidebarTitle: "Create Consent Record"
+description: "Create a DPDP-compliant consent record linking a grant to a data principal with explicit purpose limitation."
+---
+
+## Endpoint
+
+```
+POST /v1/dpdp/consent-records
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+| `Content-Type` | `application/json` |
+
+## Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `grantId` | `string` | Yes | The grant to attach the consent record to |
+| `dataPrincipalId` | `string` | Yes | The data principal (end-user) providing consent |
+| `purposes` | `object[]` | Yes | Array of purpose objects (`{ code, description }`) |
+| `consentNoticeId` | `string` | Yes | ID of the consent notice shown to the principal |
+| `processingExpiresAt` | `string` | Yes | ISO-8601 timestamp when data processing permission expires |
+
+### Purpose Object
+
+| Field | Type | Description |
+|---|---|---|
+| `code` | `string` | Machine-readable purpose code (e.g., `"analytics"`, `"personalization"`) |
+| `description` | `string` | Human-readable description of the purpose |
+
+## Example Request
+
+```bash
+curl -X POST https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/dpdp/consent-records \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "grantId": "grnt_01HXYZ...",
+    "dataPrincipalId": "user_abc123",
+    "purposes": [
+      { "code": "analytics", "description": "Usage analytics for service improvement" },
+      { "code": "personalization", "description": "Personalized recommendations" }
+    ],
+    "consentNoticeId": "notice_v2",
+    "processingExpiresAt": "2027-01-01T00:00:00.000Z"
+  }'
+```
+
+## Response -- 201 Created
+
+```json
+{
+  "recordId": "cr_01HXYZ...",
+  "grantId": "grnt_01HXYZ...",
+  "dataPrincipalId": "user_abc123",
+  "consentNoticeHash": "a1b2c3d4e5f6...",
+  "consentProof": {
+    "type": "Ed25519Signature2020",
+    "proofJwt": "eyJ...",
+    "signedAt": "2026-04-05T12:00:00.000Z"
+  },
+  "processingExpiresAt": "2027-01-01T00:00:00.000Z",
+  "retentionUntil": "2027-01-31T00:00:00.000Z",
+  "status": "active",
+  "createdAt": "2026-04-05T12:00:00.000Z"
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `recordId` | `string` | Unique consent record ID |
+| `grantId` | `string` | The grant this consent is attached to |
+| `dataPrincipalId` | `string` | The data principal who gave consent |
+| `consentNoticeHash` | `string` | SHA-256 hash of the consent notice content |
+| `consentProof` | `object` | Cryptographic proof of consent (Ed25519 signature or `none` if key unavailable) |
+| `processingExpiresAt` | `string` | ISO-8601 timestamp when processing permission expires |
+| `retentionUntil` | `string` | ISO-8601 timestamp for data retention limit (30 days after processing expiry) |
+| `status` | `string` | Record status: `active` |
+| `createdAt` | `string` | ISO-8601 creation timestamp |
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `BAD_REQUEST` | Missing required fields |
+| 400 | `INVALID_GRANT` | Grant not found or not owned by developer |
+| 400 | `INVALID_NOTICE` | Consent notice not found |
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const record = await grantex.dpdp.createConsentRecord({
+  grantId: 'grnt_01HXYZ...',
+  dataPrincipalId: 'user_abc123',
+  purposes: [
+    { code: 'analytics', description: 'Usage analytics' },
+  ],
+  consentNoticeId: 'notice_v2',
+  processingExpiresAt: '2027-01-01T00:00:00.000Z',
+});
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+record = grantex.dpdp.create_consent_record(
+    grant_id="grnt_01HXYZ...",
+    data_principal_id="user_abc123",
+    purposes=[{"code": "analytics", "description": "Usage analytics"}],
+    consent_notice_id="notice_v2",
+    processing_expires_at="2027-01-01T00:00:00.000Z",
+)
+```
+
+</CodeGroup>

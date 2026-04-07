@@ -220,3 +220,209 @@ describe('consent-record', () => {
     expect(Object.isFrozen(retrieved)).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// getConsentRecord
+// ---------------------------------------------------------------------------
+
+describe('getConsentRecord', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('fetches a single consent record by ID', async () => {
+    const { getConsentRecord } = await import('../src/index.js');
+
+    const serverResponse = {
+      ...MOCK_RECORD,
+      consentGivenAt: MOCK_RECORD.consentGivenAt.toISOString(),
+      processingExpiresAt: MOCK_RECORD.processingExpiresAt.toISOString(),
+      retentionUntil: MOCK_RECORD.retentionUntil.toISOString(),
+      consentProof: {
+        ...MOCK_RECORD.consentProof,
+        signedAt: MOCK_RECORD.consentProof.signedAt.toISOString(),
+      },
+    };
+
+    vi.stubGlobal('fetch', mockFetchSuccess(serverResponse));
+
+    const record = await getConsentRecord('rec_001', 'test-api-key', 'https://api.test.local');
+
+    expect(record.recordId).toBe('rec_001');
+    expect(record.grantId).toBe('grant_abc');
+    expect(record.dataPrincipalId).toBe('principal_1');
+    expect(record.status).toBe('active');
+    expect(record.consentGivenAt).toBeInstanceOf(Date);
+    expect(record.processingExpiresAt).toBeInstanceOf(Date);
+
+    // Verify correct URL
+    const fetchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(fetchCall[0]).toBe('https://api.test.local/v1/dpdp/consent-records/rec_001');
+
+    // Verify authorization header
+    expect(fetchCall[1].headers.Authorization).toBe('Bearer test-api-key');
+  });
+
+  it('throws DpdpError on non-ok response', async () => {
+    const { getConsentRecord } = await import('../src/index.js');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+    }));
+
+    await expect(
+      getConsentRecord('rec_NONEXIST', 'test-api-key', 'https://api.test.local'),
+    ).rejects.toThrow('Failed to get consent record rec_NONEXIST (404)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listConsentRecords
+// ---------------------------------------------------------------------------
+
+describe('listConsentRecords', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('lists consent records for a data principal', async () => {
+    const { listConsentRecords } = await import('../src/index.js');
+
+    const record1 = {
+      ...MOCK_RECORD,
+      consentGivenAt: MOCK_RECORD.consentGivenAt.toISOString(),
+      processingExpiresAt: MOCK_RECORD.processingExpiresAt.toISOString(),
+      retentionUntil: MOCK_RECORD.retentionUntil.toISOString(),
+      consentProof: {
+        ...MOCK_RECORD.consentProof,
+        signedAt: MOCK_RECORD.consentProof.signedAt.toISOString(),
+      },
+    };
+
+    const record2 = {
+      ...record1,
+      recordId: 'rec_002',
+      grantId: 'grant_xyz',
+      status: 'withdrawn',
+    };
+
+    vi.stubGlobal('fetch', mockFetchSuccess({
+      records: [record1, record2],
+      totalRecords: 2,
+    }));
+
+    const records = await listConsentRecords('principal_1', 'test-api-key', 'https://api.test.local');
+
+    expect(records).toHaveLength(2);
+    expect(records[0].recordId).toBe('rec_001');
+    expect(records[1].recordId).toBe('rec_002');
+    expect(records[1].status).toBe('withdrawn');
+
+    // Verify query param in URL
+    const fetchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(fetchCall[0]).toBe(
+      'https://api.test.local/v1/dpdp/consent-records?dataPrincipalId=principal_1',
+    );
+    expect(fetchCall[1].headers.Authorization).toBe('Bearer test-api-key');
+  });
+
+  it('returns empty array when no records exist', async () => {
+    const { listConsentRecords } = await import('../src/index.js');
+
+    vi.stubGlobal('fetch', mockFetchSuccess({ records: [], totalRecords: 0 }));
+
+    const records = await listConsentRecords('principal_unknown', 'test-api-key', 'https://api.test.local');
+
+    expect(records).toEqual([]);
+  });
+
+  it('throws DpdpError on non-ok response', async () => {
+    const { listConsentRecords } = await import('../src/index.js');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+    }));
+
+    await expect(
+      listConsentRecords('principal_1', 'test-api-key', 'https://api.test.local'),
+    ).rejects.toThrow('Failed to list consent records (500)');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// requestDataErasure
+// ---------------------------------------------------------------------------
+
+describe('requestDataErasure', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('submits a data erasure request', async () => {
+    const { requestDataErasure } = await import('../src/index.js');
+
+    const serverResponse = {
+      requestId: 'ER-2026-00001',
+      dataPrincipalId: 'principal_1',
+      status: 'completed',
+      submittedAt: '2026-04-05T10:00:00.000Z',
+      expectedCompletionBy: '2026-04-12T10:00:00.000Z',
+    };
+
+    vi.stubGlobal('fetch', mockFetchSuccess(serverResponse));
+
+    const result = await requestDataErasure('principal_1', 'test-api-key', 'https://api.test.local');
+
+    expect(result.requestId).toBe('ER-2026-00001');
+    expect(result.dataPrincipalId).toBe('principal_1');
+    expect(result.status).toBe('completed');
+    expect(result.submittedAt).toBeInstanceOf(Date);
+    expect(result.expectedCompletionBy).toBeInstanceOf(Date);
+
+    // Verify correct URL and method
+    const fetchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(fetchCall[0]).toBe(
+      'https://api.test.local/v1/dpdp/data-principals/principal_1/erasure',
+    );
+    expect(fetchCall[1].method).toBe('POST');
+    expect(fetchCall[1].headers.Authorization).toBe('Bearer test-api-key');
+
+    // Verify request body includes dataPrincipalId
+    const body = JSON.parse(fetchCall[1].body);
+    expect(body.dataPrincipalId).toBe('principal_1');
+  });
+
+  it('throws DpdpError on non-ok response', async () => {
+    const { requestDataErasure } = await import('../src/index.js');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+    }));
+
+    await expect(
+      requestDataErasure('principal_unknown', 'test-api-key', 'https://api.test.local'),
+    ).rejects.toThrow('Failed to submit erasure request for principal principal_unknown (404)');
+  });
+
+  it('URL-encodes the principal ID', async () => {
+    const { requestDataErasure } = await import('../src/index.js');
+
+    vi.stubGlobal('fetch', mockFetchSuccess({
+      requestId: 'ER-2026-00002',
+      dataPrincipalId: 'user/special&chars',
+      status: 'completed',
+      submittedAt: '2026-04-05T10:00:00.000Z',
+      expectedCompletionBy: '2026-04-12T10:00:00.000Z',
+    }));
+
+    await requestDataErasure('user/special&chars', 'test-api-key', 'https://api.test.local');
+
+    const fetchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(fetchCall[0]).toBe(
+      'https://api.test.local/v1/dpdp/data-principals/user%2Fspecial%26chars/erasure',
+    );
+  });
+});

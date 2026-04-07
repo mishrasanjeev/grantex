@@ -1,0 +1,114 @@
+---
+title: "File Grievance"
+sidebarTitle: "File Grievance"
+description: "File a grievance on behalf of a data principal. Implements the grievance mechanism required by DPDP Section 13(6)."
+---
+
+## Endpoint
+
+```
+POST /v1/dpdp/grievances
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+| `Content-Type` | `application/json` |
+
+## Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `dataPrincipalId` | `string` | Yes | The data principal filing the grievance |
+| `type` | `string` | Yes | Grievance type (e.g., `"consent-violation"`, `"data-breach"`, `"unauthorized-processing"`) |
+| `description` | `string` | Yes | Detailed description of the grievance |
+| `recordId` | `string` | No | Related consent record ID (if applicable) |
+| `evidence` | `object` | No | Supporting evidence as a JSON object |
+
+## Example Request
+
+```bash
+curl -X POST https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/dpdp/grievances \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataPrincipalId": "user_abc123",
+    "type": "unauthorized-processing",
+    "description": "Data was processed beyond the consented purposes",
+    "recordId": "cr_01HXYZ...",
+    "evidence": {
+      "observedAction": "marketing emails sent without consent",
+      "timestamp": "2026-04-04T10:00:00.000Z"
+    }
+  }'
+```
+
+## Response -- 202 Accepted
+
+```json
+{
+  "grievanceId": "grv_01HXYZ...",
+  "referenceNumber": "GRV-2026-00042",
+  "type": "unauthorized-processing",
+  "status": "submitted",
+  "expectedResolutionBy": "2026-04-12T14:00:00.000Z",
+  "createdAt": "2026-04-05T14:00:00.000Z"
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `grievanceId` | `string` | Unique grievance ID |
+| `referenceNumber` | `string` | Human-readable reference number (format: `GRV-YYYY-NNNNN`) |
+| `type` | `string` | Grievance type |
+| `status` | `string` | Initial status: `submitted` |
+| `expectedResolutionBy` | `string` | ISO-8601 deadline for resolution (7 days from filing) |
+| `createdAt` | `string` | ISO-8601 creation timestamp |
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `BAD_REQUEST` | Missing required fields (`dataPrincipalId`, `type`, `description`) |
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const grievance = await grantex.dpdp.fileGrievance({
+  dataPrincipalId: 'user_abc123',
+  type: 'unauthorized-processing',
+  description: 'Data was processed beyond consented purposes',
+  recordId: 'cr_01HXYZ...',
+});
+// grievance.referenceNumber → "GRV-2026-00042"
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+grievance = grantex.dpdp.file_grievance(
+    data_principal_id="user_abc123",
+    type="unauthorized-processing",
+    description="Data was processed beyond consented purposes",
+    record_id="cr_01HXYZ...",
+)
+```
+
+</CodeGroup>

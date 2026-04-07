@@ -12,7 +12,7 @@ export interface ConsentRecord {
   consentNoticeId: string;
   consentNoticeHash: string;
   consentProof: Record<string, unknown>;
-  status: 'active' | 'withdrawn' | 'expired';
+  status: 'active' | 'withdrawn' | 'expired' | 'erased';
   consentGivenAt: string;
   processingExpiresAt: string;
   retentionUntil: string;

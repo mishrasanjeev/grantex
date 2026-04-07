@@ -1,0 +1,109 @@
+---
+title: "Get Consent Record"
+sidebarTitle: "Get Consent Record"
+description: "Retrieve a single DPDP consent record by ID. Increments the access counter for audit purposes."
+---
+
+## Endpoint
+
+```
+GET /v1/dpdp/consent-records/:recordId
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `recordId` | `string` | Yes | The consent record ID |
+
+## Example Request
+
+```bash
+curl https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/dpdp/consent-records/cr_01HXYZ... \
+  -H "Authorization: Bearer gx_..."
+```
+
+## Response -- 200 OK
+
+```json
+{
+  "recordId": "cr_01HXYZ...",
+  "grantId": "grnt_01HXYZ...",
+  "dataPrincipalId": "user_abc123",
+  "dataFiduciaryName": "Acme Corp",
+  "purposes": [
+    { "code": "analytics", "description": "Usage analytics for service improvement" }
+  ],
+  "scopes": ["calendar:read", "email:send"],
+  "consentNoticeId": "notice_v2",
+  "status": "active",
+  "consentGivenAt": "2026-04-05T12:00:00.000Z",
+  "processingExpiresAt": "2027-01-01T00:00:00.000Z",
+  "retentionUntil": "2027-01-31T00:00:00.000Z",
+  "accessCount": 3,
+  "lastAccessedAt": "2026-04-05T14:00:00.000Z",
+  "withdrawnAt": null,
+  "withdrawnReason": null,
+  "createdAt": "2026-04-05T12:00:00.000Z"
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `recordId` | `string` | Unique consent record ID |
+| `grantId` | `string` | The associated grant ID |
+| `dataPrincipalId` | `string` | The data principal who gave consent |
+| `dataFiduciaryName` | `string` | Name of the data fiduciary (developer) |
+| `purposes` | `object[]` | Array of purpose objects (`{ code, description }`) |
+| `scopes` | `string[]` | Scopes from the associated grant |
+| `consentNoticeId` | `string` | ID of the consent notice |
+| `status` | `string` | Record status: `active`, `withdrawn`, `expired`, or `erased` |
+| `consentGivenAt` | `string` | ISO-8601 timestamp of original consent |
+| `processingExpiresAt` | `string` | ISO-8601 processing expiry timestamp |
+| `retentionUntil` | `string` | ISO-8601 data retention limit |
+| `accessCount` | `number` | Number of times this record has been accessed |
+| `lastAccessedAt` | `string \| null` | ISO-8601 timestamp of last access |
+| `withdrawnAt` | `string \| null` | ISO-8601 timestamp of withdrawal (if withdrawn) |
+| `withdrawnReason` | `string \| null` | Reason for withdrawal (if withdrawn) |
+| `createdAt` | `string` | ISO-8601 creation timestamp |
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 404 | `NOT_FOUND` | Consent record not found |
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const record = await grantex.dpdp.getConsentRecord('cr_01HXYZ...');
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+record = grantex.dpdp.get_consent_record("cr_01HXYZ...")
+```
+
+</CodeGroup>

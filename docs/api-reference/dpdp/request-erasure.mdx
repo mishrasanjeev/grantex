@@ -1,0 +1,99 @@
+---
+title: "Request Erasure"
+sidebarTitle: "Request Erasure"
+description: "Exercise the right to erasure for a data principal. Marks all consent records as erased, revokes associated grants, and anonymizes audit entries (DPDP Section 11)."
+---
+
+## Endpoint
+
+```
+POST /v1/dpdp/data-principals/:principalId/erasure
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `principalId` | `string` | Yes | The data principal requesting erasure |
+
+## Example Request
+
+```bash
+curl -X POST https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/dpdp/data-principals/user_abc123/erasure \
+  -H "Authorization: Bearer gx_..."
+```
+
+## Response -- 201 Created
+
+```json
+{
+  "requestId": "ER-2026-00042",
+  "dataPrincipalId": "user_abc123",
+  "status": "completed",
+  "recordsErased": 3,
+  "grantsRevoked": 2,
+  "submittedAt": "2026-04-05T14:00:00.000Z",
+  "expectedCompletionBy": "2026-04-12T14:00:00.000Z"
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `requestId` | `string` | Erasure request reference number (format: `ER-YYYY-NNNNN`) |
+| `dataPrincipalId` | `string` | The data principal whose data was erased |
+| `status` | `string` | Request status: `completed` |
+| `recordsErased` | `number` | Number of consent records marked as erased |
+| `grantsRevoked` | `number` | Number of grants revoked as part of erasure |
+| `submittedAt` | `string` | ISO-8601 timestamp of the erasure request |
+| `expectedCompletionBy` | `string` | ISO-8601 timestamp for full completion (7 days from submission) |
+
+## What Happens on Erasure
+
+1. All consent records for the data principal are set to `status: 'erased'`
+2. All associated grants are revoked
+3. Audit entries are annotated with an `erasedAt` timestamp (anonymized)
+4. A `dpdp.erasure.completed` event is emitted
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 404 | `NOT_FOUND` | No consent records found for this data principal |
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const result = await grantex.dpdp.requestErasure('user_abc123');
+// result.recordsErased → 3
+// result.grantsRevoked → 2
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+result = grantex.dpdp.request_erasure("user_abc123")
+print(f"Erased {result.records_erased} records, revoked {result.grants_revoked} grants")
+```
+
+</CodeGroup>

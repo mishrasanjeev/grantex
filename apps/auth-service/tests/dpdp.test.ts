@@ -280,6 +280,324 @@ describe('POST /v1/dpdp/consent-records/:recordId/withdraw', () => {
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('BAD_REQUEST');
   });
+
+  it('withdraws with deleteProcessedData and anonymizes audit entries', async () => {
+    seedAuth();
+    // Record lookup
+    sqlMock.mockResolvedValueOnce([{
+      id: 'crec_TEST',
+      grant_id: TEST_GRANT.id,
+      status: 'active',
+    }]);
+    // Update consent record
+    sqlMock.mockResolvedValueOnce([]);
+    // Anonymize audit entries (deleteProcessedData SQL)
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/dpdp/consent-records/crec_TEST/withdraw',
+      headers: authHeader(),
+      payload: { reason: 'GDPR Article 17 request', deleteProcessedData: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.recordId).toBe('crec_TEST');
+    expect(body.status).toBe('withdrawn');
+    expect(body.dataDeleted).toBe(true);
+    expect(body.grantRevoked).toBe(false);
+
+    // Verify 4 SQL calls: auth, record lookup, update record, anonymize audit
+    expect(sqlMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('withdraws with deleteProcessedData and revokeGrant together', async () => {
+    seedAuth();
+    // Record lookup
+    sqlMock.mockResolvedValueOnce([{
+      id: 'crec_TEST',
+      grant_id: TEST_GRANT.id,
+      status: 'active',
+    }]);
+    // Update consent record
+    sqlMock.mockResolvedValueOnce([]);
+    // Revoke grant
+    sqlMock.mockResolvedValueOnce([]);
+    // Anonymize audit entries
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/dpdp/consent-records/crec_TEST/withdraw',
+      headers: authHeader(),
+      payload: { reason: 'Full erasure', revokeGrant: true, deleteProcessedData: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.grantRevoked).toBe(true);
+    expect(body.dataDeleted).toBe(true);
+
+    // 5 SQL calls: auth, record lookup, update record, revoke grant, anonymize audit
+    expect(sqlMock).toHaveBeenCalledTimes(5);
+  });
+});
+
+// ── Get Consent Record by ID ────────────────────────────────────────────────
+
+describe('GET /v1/dpdp/consent-records/:recordId', () => {
+  it('returns a consent record by ID', async () => {
+    seedAuth();
+    // Record lookup
+    sqlMock.mockResolvedValueOnce([{
+      id: 'crec_1',
+      grant_id: TEST_GRANT.id,
+      data_principal_id: 'user_123',
+      data_fiduciary_name: 'Test Dev',
+      purposes: [{ code: 'analytics', description: 'Analytics' }],
+      scopes: ['read'],
+      consent_notice_id: 'notice-v1',
+      status: 'active',
+      consent_given_at: '2026-03-01T00:00:00Z',
+      processing_expires_at: '2027-03-01T00:00:00Z',
+      retention_until: '2027-04-01T00:00:00Z',
+      access_count: 5,
+      last_accessed_at: '2026-03-15T00:00:00Z',
+      withdrawn_at: null,
+      withdrawn_reason: null,
+      created_at: '2026-03-01T00:00:00Z',
+    }]);
+    // Update access count
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/dpdp/consent-records/crec_1',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.recordId).toBe('crec_1');
+    expect(body.grantId).toBe(TEST_GRANT.id);
+    expect(body.dataPrincipalId).toBe('user_123');
+    expect(body.dataFiduciaryName).toBe('Test Dev');
+    expect(body.status).toBe('active');
+    expect(body.accessCount).toBe(6); // incremented by 1
+    expect(body.lastAccessedAt).toBeDefined();
+    expect(body.withdrawnAt).toBeNull();
+    expect(body.withdrawnReason).toBeNull();
+  });
+
+  it('returns 404 for unknown record', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/dpdp/consent-records/crec_NONEXIST',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('NOT_FOUND');
+  });
+});
+
+// ── List Consent Records ────────────────────────────────────────────────────
+
+describe('GET /v1/dpdp/consent-records', () => {
+  it('lists records filtered by dataPrincipalId', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([
+      {
+        id: 'crec_1',
+        grant_id: TEST_GRANT.id,
+        data_principal_id: 'user_123',
+        data_fiduciary_name: 'Test Dev',
+        purposes: [{ code: 'analytics', description: 'Analytics' }],
+        scopes: ['read'],
+        consent_notice_id: 'notice-v1',
+        status: 'active',
+        consent_given_at: '2026-03-01T00:00:00Z',
+        processing_expires_at: '2027-03-01T00:00:00Z',
+        retention_until: '2027-04-01T00:00:00Z',
+        access_count: 2,
+        last_accessed_at: '2026-03-15T00:00:00Z',
+        withdrawn_at: null,
+        withdrawn_reason: null,
+        created_at: '2026-03-01T00:00:00Z',
+      },
+      {
+        id: 'crec_2',
+        grant_id: 'grnt_OTHER',
+        data_principal_id: 'user_123',
+        data_fiduciary_name: 'Test Dev',
+        purposes: [{ code: 'storage', description: 'Storage' }],
+        scopes: ['write'],
+        consent_notice_id: 'notice-v2',
+        status: 'withdrawn',
+        consent_given_at: '2026-02-01T00:00:00Z',
+        processing_expires_at: '2027-02-01T00:00:00Z',
+        retention_until: '2027-03-01T00:00:00Z',
+        access_count: 0,
+        last_accessed_at: null,
+        withdrawn_at: '2026-03-10T00:00:00Z',
+        withdrawn_reason: 'No longer needed',
+        created_at: '2026-02-01T00:00:00Z',
+      },
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/dpdp/consent-records?dataPrincipalId=user_123',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.records).toHaveLength(2);
+    expect(body.totalRecords).toBe(2);
+    expect(body.records[0].recordId).toBe('crec_1');
+    expect(body.records[1].recordId).toBe('crec_2');
+    expect(body.records[1].status).toBe('withdrawn');
+    expect(body.records[1].withdrawnAt).toBe('2026-03-10T00:00:00Z');
+  });
+
+  it('lists all records without filter', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([
+      {
+        id: 'crec_1',
+        grant_id: TEST_GRANT.id,
+        data_principal_id: 'user_123',
+        data_fiduciary_name: 'Test Dev',
+        purposes: [],
+        scopes: ['read'],
+        consent_notice_id: 'notice-v1',
+        status: 'active',
+        consent_given_at: '2026-03-01T00:00:00Z',
+        processing_expires_at: '2027-03-01T00:00:00Z',
+        retention_until: '2027-04-01T00:00:00Z',
+        access_count: 0,
+        last_accessed_at: null,
+        withdrawn_at: null,
+        withdrawn_reason: null,
+        created_at: '2026-03-01T00:00:00Z',
+      },
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/dpdp/consent-records',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.records).toHaveLength(1);
+    expect(body.totalRecords).toBe(1);
+    expect(body.records[0].recordId).toBe('crec_1');
+  });
+
+  it('returns empty list when no records exist', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/dpdp/consent-records?dataPrincipalId=user_unknown',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.records).toEqual([]);
+    expect(body.totalRecords).toBe(0);
+  });
+});
+
+// ── Data Erasure ────────────────────────────────────────────────────────────
+
+describe('POST /v1/dpdp/data-principals/:principalId/erasure', () => {
+  it('erases data, marks records, and revokes grants', async () => {
+    seedAuth();
+    // Consent records lookup
+    sqlMock.mockResolvedValueOnce([
+      { id: 'crec_1', grant_id: TEST_GRANT.id },
+      { id: 'crec_2', grant_id: 'grnt_OTHER' },
+    ]);
+    // Mark consent records as erased
+    sqlMock.mockResolvedValueOnce([]);
+    // Revoke grants
+    sqlMock.mockResolvedValueOnce([]);
+    // Anonymize audit entries
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/dpdp/data-principals/user_123/erasure',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.requestId).toMatch(/^ER-\d{4}-\d{5}$/);
+    expect(body.dataPrincipalId).toBe('user_123');
+    expect(body.status).toBe('completed');
+    expect(body.recordsErased).toBe(2);
+    expect(body.grantsRevoked).toBe(2);
+    expect(body.submittedAt).toBeDefined();
+    expect(body.expectedCompletionBy).toBeDefined();
+
+    // Verify expectedCompletionBy is 7 days from submittedAt
+    const submitted = new Date(body.submittedAt);
+    const expected = new Date(body.expectedCompletionBy);
+    const diffDays = Math.round((expected.getTime() - submitted.getTime()) / (86400_000));
+    expect(diffDays).toBe(7);
+  });
+
+  it('returns 404 when no consent records found for principal', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/dpdp/data-principals/user_unknown/erasure',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('NOT_FOUND');
+  });
+
+  it('handles records with no associated grants', async () => {
+    seedAuth();
+    // Consent records lookup — grant_id is null
+    sqlMock.mockResolvedValueOnce([
+      { id: 'crec_1', grant_id: null },
+    ]);
+    // Mark consent records as erased
+    sqlMock.mockResolvedValueOnce([]);
+    // Anonymize audit entries (still runs)
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/dpdp/data-principals/user_456/erasure',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.recordsErased).toBe(1);
+    expect(body.grantsRevoked).toBe(0);
+
+    // Only 4 SQL calls: auth, records lookup, mark erased, anonymize audit
+    // (no revoke grants call because there are no grant IDs)
+    expect(sqlMock).toHaveBeenCalledTimes(4);
+  });
 });
 
 // ── Data Principal Records ──────────────────────────────────────────────────

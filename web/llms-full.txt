@@ -356,6 +356,36 @@ White-label consent UI and API endpoints. DNS TXT verification.
 ### Anomaly Detection
 Runtime behavioral monitoring for agent activity. Detects deviations from established baselines.
 
+### DPDP Act Compliance (India Digital Personal Data Protection Act, 2023)
+Full lifecycle compliance for AI agent data processing under India's DPDP Act.
+
+#### Consent Management
+- `POST /v1/dpdp/consent-records` — Create a consent record linking a Grantex grant to a data principal with explicit purpose limitation. Each record is cryptographically signed (Ed25519) and includes a SHA-256 hash of the consent notice shown to the user.
+- `GET /v1/dpdp/consent-records/:recordId` — Retrieve a single consent record by ID. Increments an access counter for audit.
+- `GET /v1/dpdp/consent-records` — List all consent records, with optional `dataPrincipalId` filter.
+- `POST /v1/dpdp/consent-records/:recordId/withdraw` — Withdraw consent. Optionally revokes the underlying Grantex grant and anonymizes processed data (DPDP Section 6(6), GDPR Article 17).
+
+#### Purpose Limitation
+Every consent record requires an explicit `purposes` array (machine-readable `code` + human-readable `description`). Processing is time-bounded via `processingExpiresAt`, and data retention is automatically capped at 30 days beyond processing expiry. Consent notices are versioned and content-hashed — any change in notice content produces a different hash, ensuring records always reference the exact notice the principal agreed to.
+
+#### Right to Erasure (DPDP Section 11)
+- `POST /v1/dpdp/data-principals/:principalId/erasure` — Exercises the right to erasure. Marks all consent records as `erased`, revokes all associated grants, and annotates audit entries with an `erasedAt` timestamp. Returns an erasure request reference number and expected completion date (7 days).
+- `GET /v1/dpdp/data-principals/:principalId/records` — Right to access: retrieves all consent records for a data principal.
+
+#### Consent Notices
+- `POST /v1/dpdp/consent-notices` — Register a versioned consent notice with title, content, purposes, language, and optional grievance officer details. Content is SHA-256 hashed for tamper-evident linking to consent records. Duplicate versions are rejected (409 Conflict).
+
+#### Grievance Mechanism (DPDP Section 13(6))
+- `POST /v1/dpdp/grievances` — File a grievance with type, description, and optional evidence. Returns a human-readable reference number (GRV-YYYY-NNNNN) and 7-day resolution deadline.
+- `GET /v1/dpdp/grievances/:grievanceId` — Track grievance status: `submitted`, `in-progress`, `resolved`, or `rejected`.
+
+#### Compliance Exports
+- `POST /v1/dpdp/exports` — Generate a compliance report for a date range. Three export types:
+  - `dpdp-audit` — India DPDP Act audit (includes consent records, audit log, and grievances)
+  - `gdpr-article-15` — GDPR right of access report (consent records + audit log)
+  - `eu-ai-act-conformance` — EU AI Act conformance assessment (consent records + audit log)
+- `GET /v1/dpdp/exports/:exportId` — Retrieve a previously generated export. Exports expire after 7 days.
+
 ---
 
 ## API Endpoints
@@ -428,6 +458,19 @@ Runtime behavioral monitoring for agent activity. Detects deviations from establ
 - `POST /v1/passport/:id/revoke` → Revoke passport
 - `GET /v1/trust-registry/:orgDID` → Lookup org trust (public)
 - `GET /v1/trust-registry` → List trust records (admin)
+
+### DPDP Compliance
+- `POST /v1/dpdp/consent-records` → Create consent record
+- `GET /v1/dpdp/consent-records/:recordId` → Get consent record
+- `GET /v1/dpdp/consent-records` → List consent records
+- `POST /v1/dpdp/consent-records/:recordId/withdraw` → Withdraw consent
+- `GET /v1/dpdp/data-principals/:principalId/records` → List principal records (right to access)
+- `POST /v1/dpdp/data-principals/:principalId/erasure` → Request erasure (right to erasure)
+- `POST /v1/dpdp/consent-notices` → Register consent notice
+- `POST /v1/dpdp/grievances` → File grievance
+- `GET /v1/dpdp/grievances/:grievanceId` → Get grievance status
+- `POST /v1/dpdp/exports` → Generate compliance export (DPDP/GDPR/EU AI Act)
+- `GET /v1/dpdp/exports/:exportId` → Get export
 
 ### Infrastructure
 - `GET /.well-known/did.json` → W3C DID document

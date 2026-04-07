@@ -635,6 +635,22 @@
             ]
           },
           {
+            "group": "DPDP Compliance",
+            "pages": [
+              "api-reference/dpdp/create-consent-record",
+              "api-reference/dpdp/get-consent-record",
+              "api-reference/dpdp/list-consent-records",
+              "api-reference/dpdp/withdraw-consent",
+              "api-reference/dpdp/list-principal-records",
+              "api-reference/dpdp/request-erasure",
+              "api-reference/dpdp/create-consent-notice",
+              "api-reference/dpdp/file-grievance",
+              "api-reference/dpdp/get-grievance",
+              "api-reference/dpdp/create-export",
+              "api-reference/dpdp/get-export"
+            ]
+          },
+          {
             "group": "DID",
             "pages": [
               "api-reference/did/did-document"

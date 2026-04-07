@@ -1,0 +1,145 @@
+---
+title: "Create Export"
+sidebarTitle: "Create Export"
+description: "Generate a compliance export for DPDP, GDPR Article 15, or EU AI Act conformance. Bundles consent records, audit logs, and grievances into a single report."
+---
+
+## Endpoint
+
+```
+POST /v1/dpdp/exports
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Request Headers
+
+| Header | Value |
+|---|---|
+| `Authorization` | `Bearer <api_key>` |
+| `Content-Type` | `application/json` |
+
+## Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `type` | `string` | Yes | Export type: `dpdp-audit`, `gdpr-article-15`, or `eu-ai-act-conformance` |
+| `dateFrom` | `string` | Yes | ISO-8601 start date for the export window |
+| `dateTo` | `string` | Yes | ISO-8601 end date for the export window |
+| `format` | `string` | No | Output format (default: `"json"`) |
+| `includeActionLog` | `boolean` | No | Include audit log entries (default: `true`) |
+| `includeConsentRecords` | `boolean` | No | Include consent records (default: `true`) |
+| `dataPrincipalId` | `string` | No | Filter export to a specific data principal |
+
+## Example Request
+
+```bash
+curl -X POST https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/dpdp/exports \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "dpdp-audit",
+    "dateFrom": "2026-01-01T00:00:00.000Z",
+    "dateTo": "2026-04-01T00:00:00.000Z",
+    "includeActionLog": true,
+    "includeConsentRecords": true
+  }'
+```
+
+## Response -- 201 Created
+
+```json
+{
+  "exportId": "exp_01HXYZ...",
+  "type": "dpdp-audit",
+  "format": "json",
+  "recordCount": 42,
+  "data": {
+    "exportType": "dpdp-audit",
+    "dateRange": {
+      "from": "2026-01-01T00:00:00.000Z",
+      "to": "2026-04-01T00:00:00.000Z"
+    },
+    "generatedAt": "2026-04-05T14:00:00.000Z",
+    "developerId": "dev_01HXYZ...",
+    "consentRecords": [...],
+    "auditLog": [...],
+    "grievances": [...]
+  },
+  "expiresAt": "2026-04-12T14:00:00.000Z",
+  "createdAt": "2026-04-05T14:00:00.000Z"
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `exportId` | `string` | Unique export ID |
+| `type` | `string` | Export type |
+| `format` | `string` | Output format |
+| `recordCount` | `number` | Total number of records in the export |
+| `data` | `object` | The export data payload (see below) |
+| `expiresAt` | `string` | ISO-8601 expiry timestamp (7 days from creation) |
+| `createdAt` | `string` | ISO-8601 creation timestamp |
+
+### Export Data Object
+
+| Field | Type | Description |
+|---|---|---|
+| `exportType` | `string` | The export type |
+| `dateRange` | `object` | `{ from, to }` ISO-8601 timestamps |
+| `generatedAt` | `string` | ISO-8601 generation timestamp |
+| `developerId` | `string` | Developer who generated the export |
+| `consentRecords` | `object[]` | Consent records in the date range (if `includeConsentRecords`) |
+| `auditLog` | `object[]` | Audit log entries in the date range (if `includeActionLog`, max 1000) |
+| `grievances` | `object[]` | Grievances in the date range (only for `dpdp-audit` type) |
+
+## Export Types
+
+| Type | Description | Includes Grievances |
+|---|---|---|
+| `dpdp-audit` | India DPDP Act compliance audit | Yes |
+| `gdpr-article-15` | GDPR right of access (Article 15) report | No |
+| `eu-ai-act-conformance` | EU AI Act conformance assessment | No |
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `BAD_REQUEST` | Missing required fields or invalid `type` |
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+
+## SDK Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import Grantex from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: 'gx_...' });
+
+const report = await grantex.dpdp.createExport({
+  type: 'dpdp-audit',
+  dateFrom: '2026-01-01T00:00:00.000Z',
+  dateTo: '2026-04-01T00:00:00.000Z',
+});
+// report.recordCount → 42
+// report.data.consentRecords → [...]
+```
+
+```python Python
+from grantex import Grantex
+
+grantex = Grantex(api_key="gx_...")
+
+report = grantex.dpdp.create_export(
+    type="dpdp-audit",
+    date_from="2026-01-01T00:00:00.000Z",
+    date_to="2026-04-01T00:00:00.000Z",
+)
+```
+
+</CodeGroup>
