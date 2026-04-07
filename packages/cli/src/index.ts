@@ -11,6 +11,7 @@ import { complianceCommand } from './commands/compliance.js';
 import { configCommand } from './commands/config.js';
 import { credentialsCommand } from './commands/credentials.js';
 import { domainsCommand } from './commands/domains.js';
+import { dpdpCommand } from './commands/dpdp.js';
 import { eventsCommand } from './commands/events.js';
 import { grantsCommand } from './commands/grants.js';
 import { meCommand } from './commands/me.js';
@@ -61,6 +62,7 @@ export function createProgram(): Command {
   program.addCommand(eventsCommand());
   program.addCommand(principalSessionsCommand());
   program.addCommand(credentialsCommand());
+  program.addCommand(dpdpCommand());
   program.addCommand(passportsCommand());
   program.addCommand(vaultCommand());
   program.addCommand(webauthnCommand());
