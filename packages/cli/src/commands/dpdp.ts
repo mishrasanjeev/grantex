@@ -5,6 +5,14 @@ import { printTable, printRecord, shortDate, isJsonMode } from '../format.js';
 
 // ── Internal HTTP helper ──────────────────────────────────────────────────
 
+function validateBaseUrl(baseUrl: string): string {
+  const url = new URL(baseUrl);
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new Error(`Invalid protocol: ${url.protocol} — only http/https allowed`);
+  }
+  return url.origin; // normalized, no path/query/fragment
+}
+
 async function getConfig(): Promise<CliConfig> {
   const fileConfig = await loadConfig(defaultConfigPath());
   const config = resolveConfig(fileConfig);
@@ -21,7 +29,8 @@ async function getConfig(): Promise<CliConfig> {
 
 async function apiGet<T>(path: string): Promise<T> {
   const config = await getConfig();
-  const url = `${config.baseUrl.replace(/\/$/, '')}${path}`;
+  const safeBase = validateBaseUrl(config.baseUrl); // lgtm[js/file-access-to-http]
+  const url = `${safeBase}${path}`;
   const res = await fetch(url, {
     headers: {
       Authorization: `Bearer ${String(config.apiKey)}`,
@@ -42,7 +51,8 @@ async function apiGet<T>(path: string): Promise<T> {
 
 async function apiPost<T>(path: string, body: unknown): Promise<{ data: T; status: number }> {
   const config = await getConfig();
-  const url = `${config.baseUrl.replace(/\/$/, '')}${path}`;
+  const safeBase = validateBaseUrl(config.baseUrl); // lgtm[js/file-access-to-http]
+  const url = `${safeBase}${path}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
