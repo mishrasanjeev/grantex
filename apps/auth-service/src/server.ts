@@ -75,6 +75,7 @@ export async function buildApp(opts: AppOptions = {}) {
     reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     reply.header('Cache-Control', 'no-store');
+    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
   });
 
   // Global rate limit: 100 requests/minute per IP

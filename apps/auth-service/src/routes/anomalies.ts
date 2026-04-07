@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { newAnomalyId, newAnomalyRuleId, newAnomalyChannelId } from '../lib/ids.js';
+import { emitEvent } from '../lib/events.js';
 
 type AnomalyType = 'rate_spike' | 'high_failure_rate' | 'new_principal' | 'off_hours_activity';
 type AnomalySeverity = 'low' | 'medium' | 'high' | 'critical';
@@ -215,9 +216,36 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
       `;
     }
 
+    // Auto-revoke grants for critical/high severity anomalies if configured
+    const autoRevoked: string[] = [];
+    for (const a of anomalies) {
+      if ((a.severity === 'critical' || a.severity === 'high') && a.agent_id) {
+        const activeGrants = await sql`
+          SELECT id FROM grants
+          WHERE agent_id = ${a.agent_id} AND developer_id = ${developerId} AND status = 'active'
+        `;
+        for (const g of activeGrants as Array<Record<string, unknown>>) {
+          const grantId = g['id'] as string;
+          await sql`
+            UPDATE grants SET status = 'revoked', revoked_at = NOW()
+            WHERE id = ${grantId}
+          `;
+          autoRevoked.push(grantId);
+        }
+      }
+    }
+
+    if (autoRevoked.length > 0) {
+      emitEvent(developerId, 'anomaly.auto_revoked', {
+        revokedGrants: autoRevoked,
+        anomalyCount: anomalies.filter((a) => a.severity === 'critical' || a.severity === 'high').length,
+      }).catch(() => {});
+    }
+
     return reply.send({
       detectedAt: now,
       total: anomalies.length,
+      autoRevokedGrants: autoRevoked.length,
       anomalies: anomalies.map((a) => ({
         id: a.id,
         type: a.type,
