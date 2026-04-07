@@ -25,7 +25,8 @@ export type EventType =
   | 'consent_bundle.revoked'
   | 'dpdp.consent.created'
   | 'dpdp.consent.withdrawn'
-  | 'dpdp.grievance.filed';
+  | 'dpdp.grievance.filed'
+  | 'dpdp.erasure.completed';
 
 export interface GrantexEvent {
   id: string;

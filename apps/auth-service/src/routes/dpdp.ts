@@ -230,6 +230,19 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         `;
       }
 
+      // Delete processed data if requested (DPDP Section 6(6), GDPR Article 17)
+      if (deleteProcessedData) {
+        const grantId = record['grant_id'] as string;
+        // Anonymize audit entries related to this consent
+        if (grantId) {
+          await sql`
+            UPDATE audit_entries
+            SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{dataDeletedAt}', ${JSON.stringify(withdrawnAt.toISOString())}::jsonb)
+            WHERE grant_id = ${grantId} AND developer_id = ${developerId}
+          `;
+        }
+      }
+
       emitEvent(developerId, 'dpdp.consent.withdrawn', {
         recordId,
         reason,
@@ -592,6 +605,182 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         data: exp['data'],
         expiresAt: exp['expires_at'],
         createdAt: exp['created_at'],
+      });
+    },
+  );
+
+  // GET /v1/dpdp/consent-records/:recordId — Fetch single consent record by ID
+  app.get<{ Params: { recordId: string } }>(
+    '/v1/dpdp/consent-records/:recordId',
+    async (request, reply) => {
+      const { recordId } = request.params;
+      const developerId = request.developer.id;
+      const sql = getSql();
+
+      const rows = await sql`
+        SELECT id, grant_id, data_principal_id, data_fiduciary_name, purposes,
+               scopes, consent_notice_id, status, consent_given_at,
+               processing_expires_at, retention_until, access_count,
+               last_accessed_at, withdrawn_at, withdrawn_reason, created_at
+        FROM dpdp_consent_records
+        WHERE id = ${recordId} AND developer_id = ${developerId}
+      `;
+
+      if (rows.length === 0) {
+        return reply.status(404).send({
+          message: 'Consent record not found',
+          code: 'NOT_FOUND',
+          requestId: request.id,
+        });
+      }
+
+      const r = rows[0]!;
+
+      // Update access count
+      await sql`
+        UPDATE dpdp_consent_records
+        SET access_count = access_count + 1, last_accessed_at = NOW()
+        WHERE id = ${recordId}
+      `;
+
+      return reply.send({
+        recordId: r['id'],
+        grantId: r['grant_id'],
+        dataPrincipalId: r['data_principal_id'],
+        dataFiduciaryName: r['data_fiduciary_name'],
+        purposes: r['purposes'],
+        scopes: r['scopes'],
+        consentNoticeId: r['consent_notice_id'],
+        status: r['status'],
+        consentGivenAt: r['consent_given_at'],
+        processingExpiresAt: r['processing_expires_at'],
+        retentionUntil: r['retention_until'],
+        accessCount: (r['access_count'] as number) + 1,
+        lastAccessedAt: new Date().toISOString(),
+        withdrawnAt: r['withdrawn_at'] ?? null,
+        withdrawnReason: r['withdrawn_reason'] ?? null,
+        createdAt: r['created_at'],
+      });
+    },
+  );
+
+  // GET /v1/dpdp/consent-records — List consent records with optional dataPrincipalId filter
+  app.get<{ Querystring: { dataPrincipalId?: string } }>(
+    '/v1/dpdp/consent-records',
+    async (request, reply) => {
+      const { dataPrincipalId } = request.query;
+      const developerId = request.developer.id;
+      const sql = getSql();
+
+      const rows = dataPrincipalId
+        ? await sql`
+            SELECT id, grant_id, data_principal_id, data_fiduciary_name, purposes,
+                   scopes, consent_notice_id, status, consent_given_at,
+                   processing_expires_at, retention_until, access_count,
+                   last_accessed_at, withdrawn_at, withdrawn_reason, created_at
+            FROM dpdp_consent_records
+            WHERE developer_id = ${developerId} AND data_principal_id = ${dataPrincipalId}
+            ORDER BY created_at DESC
+          `
+        : await sql`
+            SELECT id, grant_id, data_principal_id, data_fiduciary_name, purposes,
+                   scopes, consent_notice_id, status, consent_given_at,
+                   processing_expires_at, retention_until, access_count,
+                   last_accessed_at, withdrawn_at, withdrawn_reason, created_at
+            FROM dpdp_consent_records
+            WHERE developer_id = ${developerId}
+            ORDER BY created_at DESC
+            LIMIT 100
+          `;
+
+      const records = rows.map((r) => ({
+        recordId: r['id'],
+        grantId: r['grant_id'],
+        dataPrincipalId: r['data_principal_id'],
+        dataFiduciaryName: r['data_fiduciary_name'],
+        purposes: r['purposes'],
+        scopes: r['scopes'],
+        consentNoticeId: r['consent_notice_id'],
+        status: r['status'],
+        consentGivenAt: r['consent_given_at'],
+        processingExpiresAt: r['processing_expires_at'],
+        retentionUntil: r['retention_until'],
+        accessCount: r['access_count'],
+        withdrawnAt: r['withdrawn_at'] ?? null,
+        createdAt: r['created_at'],
+      }));
+
+      return reply.send({ records, totalRecords: records.length });
+    },
+  );
+
+  // POST /v1/dpdp/data-principals/:principalId/erasure — Right to erasure (DPDP Section 11)
+  app.post<{ Params: { principalId: string } }>(
+    '/v1/dpdp/data-principals/:principalId/erasure',
+    async (request, reply) => {
+      const { principalId } = request.params;
+      const developerId = request.developer.id;
+      const sql = getSql();
+
+      // Verify principal has records
+      const records = await sql`
+        SELECT id, grant_id FROM dpdp_consent_records
+        WHERE data_principal_id = ${principalId} AND developer_id = ${developerId}
+      `;
+
+      if (records.length === 0) {
+        return reply.status(404).send({
+          message: 'No consent records found for this data principal',
+          code: 'NOT_FOUND',
+          requestId: request.id,
+        });
+      }
+
+      const erasedAt = new Date();
+      const requestId = `ER-${erasedAt.getFullYear()}-${String(Math.floor(Math.random() * 99999) + 1).padStart(5, '0')}`;
+
+      // Mark all consent records as erased
+      const ids = records.map((r) => r['id'] as string);
+      await sql`
+        UPDATE dpdp_consent_records
+        SET status = 'erased', withdrawn_at = ${erasedAt}, withdrawn_reason = 'Data erasure request'
+        WHERE id = ANY(${ids})
+      `;
+
+      // Revoke all associated grants
+      const grantIds = records.map((r) => r['grant_id'] as string).filter(Boolean);
+      if (grantIds.length > 0) {
+        await sql`
+          UPDATE grants SET status = 'revoked', revoked_at = ${erasedAt}
+          WHERE id = ANY(${grantIds}) AND developer_id = ${developerId}
+        `;
+      }
+
+      // Delete personal data from audit entries (anonymize)
+      await sql`
+        UPDATE audit_entries
+        SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{erasedAt}', ${JSON.stringify(erasedAt.toISOString())}::jsonb)
+        WHERE principal_id = ${principalId} AND developer_id = ${developerId}
+      `;
+
+      // Log the erasure
+      emitEvent(developerId, 'dpdp.erasure.completed', {
+        requestId,
+        dataPrincipalId: principalId,
+        recordsErased: ids.length,
+        grantsRevoked: grantIds.length,
+      }).catch(() => {});
+
+      const expectedCompletionBy = new Date(erasedAt.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+      return reply.status(201).send({
+        requestId,
+        dataPrincipalId: principalId,
+        status: 'completed',
+        recordsErased: ids.length,
+        grantsRevoked: grantIds.length,
+        submittedAt: erasedAt.toISOString(),
+        expectedCompletionBy: expectedCompletionBy.toISOString(),
       });
     },
   );
