@@ -19,6 +19,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/@grantex/sdk?label=npm%20downloads)](https://www.npmjs.com/package/@grantex/sdk)
 [![GitHub Stars](https://img.shields.io/github/stars/mishrasanjeev/grantex?style=social)](https://github.com/mishrasanjeev/grantex)
 [![Docs](https://img.shields.io/badge/docs-grantex.dev-3fb950)](https://grantex.dev/docs)
+[![MCP Server](https://img.shields.io/badge/MCP-Server-blue)](https://www.npmjs.com/package/@grantex/mcp)
 [![DPDP Compliant](https://img.shields.io/badge/DPDP-Compliant-green)](https://grantex.dev/dpdp)
 [![EU AI Act Ready](https://img.shields.io/badge/EU_AI_Act-Ready-blue)](https://grantex.dev/dpdp)
 
