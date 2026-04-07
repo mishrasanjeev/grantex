@@ -2072,3 +2072,302 @@ class ListPassportsResponse:
                 IssuedPassportResponse.from_dict(p) for p in data
             ),
         )
+
+
+# ─── DPDP (Digital Personal Data Protection Act 2023) ─────────────────────────
+
+
+@dataclass
+class CreateConsentRecordParams:
+    grant_id: str
+    data_principal_id: str
+    purposes: list[dict[str, str]]
+    consent_notice_id: str
+    processing_expires_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "grantId": self.grant_id,
+            "dataPrincipalId": self.data_principal_id,
+            "purposes": self.purposes,
+            "consentNoticeId": self.consent_notice_id,
+            "processingExpiresAt": self.processing_expires_at,
+        }
+
+
+@dataclass(frozen=True)
+class ConsentRecord:
+    record_id: str
+    grant_id: str
+    data_principal_id: str
+    status: str
+    consent_notice_hash: str | None = None
+    consent_proof: dict[str, Any] | None = None
+    processing_expires_at: str | None = None
+    retention_until: str | None = None
+    data_fiduciary_name: str | None = None
+    purposes: list[dict[str, str]] | None = None
+    scopes: list[str] | None = None
+    consent_notice_id: str | None = None
+    consent_given_at: str | None = None
+    access_count: int = 0
+    last_accessed_at: str | None = None
+    withdrawn_at: str | None = None
+    withdrawn_reason: str | None = None
+    created_at: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ConsentRecord":
+        return cls(
+            record_id=data["recordId"],
+            grant_id=data["grantId"],
+            data_principal_id=data["dataPrincipalId"],
+            status=data["status"],
+            consent_notice_hash=data.get("consentNoticeHash"),
+            consent_proof=data.get("consentProof"),
+            processing_expires_at=data.get("processingExpiresAt"),
+            retention_until=data.get("retentionUntil"),
+            data_fiduciary_name=data.get("dataFiduciaryName"),
+            purposes=data.get("purposes"),
+            scopes=data.get("scopes"),
+            consent_notice_id=data.get("consentNoticeId"),
+            consent_given_at=data.get("consentGivenAt"),
+            access_count=data.get("accessCount", 0),
+            last_accessed_at=data.get("lastAccessedAt"),
+            withdrawn_at=data.get("withdrawnAt"),
+            withdrawn_reason=data.get("withdrawnReason"),
+            created_at=data.get("createdAt"),
+        )
+
+
+@dataclass(frozen=True)
+class ListConsentRecordsResponse:
+    records: tuple[ConsentRecord, ...]
+    total_records: int
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ListConsentRecordsResponse":
+        return cls(
+            records=tuple(
+                ConsentRecord.from_dict(r) for r in data.get("records", [])
+            ),
+            total_records=data.get("totalRecords", 0),
+        )
+
+
+@dataclass(frozen=True)
+class WithdrawConsentResponse:
+    record_id: str
+    status: str
+    withdrawn_at: str
+    grant_revoked: bool
+    data_deleted: bool
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "WithdrawConsentResponse":
+        return cls(
+            record_id=data["recordId"],
+            status=data["status"],
+            withdrawn_at=data["withdrawnAt"],
+            grant_revoked=data.get("grantRevoked", False),
+            data_deleted=data.get("dataDeleted", False),
+        )
+
+
+@dataclass(frozen=True)
+class PrincipalRecordsResponse:
+    data_principal_id: str
+    records: tuple[ConsentRecord, ...]
+    total_records: int
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "PrincipalRecordsResponse":
+        return cls(
+            data_principal_id=data["dataPrincipalId"],
+            records=tuple(
+                ConsentRecord.from_dict(r) for r in data.get("records", [])
+            ),
+            total_records=data.get("totalRecords", 0),
+        )
+
+
+@dataclass(frozen=True)
+class ErasureResponse:
+    request_id: str
+    data_principal_id: str
+    status: str
+    records_erased: int
+    grants_revoked: int
+    submitted_at: str
+    expected_completion_by: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ErasureResponse":
+        return cls(
+            request_id=data["requestId"],
+            data_principal_id=data["dataPrincipalId"],
+            status=data["status"],
+            records_erased=data.get("recordsErased", 0),
+            grants_revoked=data.get("grantsRevoked", 0),
+            submitted_at=data["submittedAt"],
+            expected_completion_by=data["expectedCompletionBy"],
+        )
+
+
+@dataclass
+class CreateConsentNoticeParams:
+    notice_id: str
+    version: str
+    title: str
+    content: str
+    purposes: list[dict[str, str]]
+    language: str | None = None
+    data_fiduciary_contact: str | None = None
+    grievance_officer: dict[str, str] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "noticeId": self.notice_id,
+            "version": self.version,
+            "title": self.title,
+            "content": self.content,
+            "purposes": self.purposes,
+        }
+        if self.language is not None:
+            body["language"] = self.language
+        if self.data_fiduciary_contact is not None:
+            body["dataFiduciaryContact"] = self.data_fiduciary_contact
+        if self.grievance_officer is not None:
+            body["grievanceOfficer"] = self.grievance_officer
+        return body
+
+
+@dataclass(frozen=True)
+class ConsentNotice:
+    id: str
+    notice_id: str
+    version: str
+    language: str
+    content_hash: str
+    created_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ConsentNotice":
+        return cls(
+            id=data["id"],
+            notice_id=data["noticeId"],
+            version=data["version"],
+            language=data.get("language", "en"),
+            content_hash=data["contentHash"],
+            created_at=data["createdAt"],
+        )
+
+
+@dataclass
+class FileGrievanceParams:
+    data_principal_id: str
+    type: str
+    description: str
+    record_id: str | None = None
+    evidence: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "dataPrincipalId": self.data_principal_id,
+            "type": self.type,
+            "description": self.description,
+        }
+        if self.record_id is not None:
+            body["recordId"] = self.record_id
+        if self.evidence is not None:
+            body["evidence"] = self.evidence
+        return body
+
+
+@dataclass(frozen=True)
+class Grievance:
+    grievance_id: str
+    status: str
+    type: str | None = None
+    reference_number: str | None = None
+    data_principal_id: str | None = None
+    record_id: str | None = None
+    description: str | None = None
+    evidence: dict[str, Any] | None = None
+    expected_resolution_by: str | None = None
+    resolved_at: str | None = None
+    resolution: str | None = None
+    created_at: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Grievance":
+        return cls(
+            grievance_id=data["grievanceId"],
+            status=data["status"],
+            type=data.get("type"),
+            reference_number=data.get("referenceNumber"),
+            data_principal_id=data.get("dataPrincipalId"),
+            record_id=data.get("recordId"),
+            description=data.get("description"),
+            evidence=data.get("evidence"),
+            expected_resolution_by=data.get("expectedResolutionBy"),
+            resolved_at=data.get("resolvedAt"),
+            resolution=data.get("resolution"),
+            created_at=data.get("createdAt"),
+        )
+
+
+@dataclass
+class CreateExportParams:
+    type: str
+    date_from: str
+    date_to: str
+    format: str | None = None
+    include_action_log: bool | None = None
+    include_consent_records: bool | None = None
+    data_principal_id: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        body: dict[str, Any] = {
+            "type": self.type,
+            "dateFrom": self.date_from,
+            "dateTo": self.date_to,
+        }
+        if self.format is not None:
+            body["format"] = self.format
+        if self.include_action_log is not None:
+            body["includeActionLog"] = self.include_action_log
+        if self.include_consent_records is not None:
+            body["includeConsentRecords"] = self.include_consent_records
+        if self.data_principal_id is not None:
+            body["dataPrincipalId"] = self.data_principal_id
+        return body
+
+
+@dataclass(frozen=True)
+class ComplianceExport:
+    export_id: str
+    type: str
+    status: str | None = None
+    format: str | None = None
+    record_count: int = 0
+    data: dict[str, Any] | None = None
+    date_from: str | None = None
+    date_to: str | None = None
+    expires_at: str | None = None
+    created_at: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ComplianceExport":
+        return cls(
+            export_id=data["exportId"],
+            type=data["type"],
+            status=data.get("status"),
+            format=data.get("format"),
+            record_count=data.get("recordCount", 0),
+            data=data.get("data"),
+            date_from=data.get("dateFrom"),
+            date_to=data.get("dateTo"),
+            expires_at=data.get("expiresAt"),
+            created_at=data.get("createdAt"),
+        )

@@ -128,8 +128,22 @@ from ._types import (
     RevokePassportResponse,
     ListPassportsParams,
     ListPassportsResponse,
+    # DPDP (Digital Personal Data Protection)
+    CreateConsentRecordParams,
+    ConsentRecord,
+    ListConsentRecordsResponse,
+    WithdrawConsentResponse,
+    PrincipalRecordsResponse,
+    ErasureResponse,
+    CreateConsentNoticeParams,
+    ConsentNotice,
+    FileGrievanceParams,
+    Grievance,
+    CreateExportParams,
+    ComplianceExport,
 )
 from .resources._passports import PassportsClient
+from .resources._dpdp import DpdpClient
 from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent, StreamOptions, Subscription
 
 # ─── Aliases for cross-SDK naming consistency ────────────────────────────────
@@ -292,6 +306,20 @@ __all__ = [
     "GrantexStreamEvent",
     "StreamOptions",
     "Subscription",
+    # DPDP (Digital Personal Data Protection)
+    "DpdpClient",
+    "CreateConsentRecordParams",
+    "ConsentRecord",
+    "ListConsentRecordsResponse",
+    "WithdrawConsentResponse",
+    "PrincipalRecordsResponse",
+    "ErasureResponse",
+    "CreateConsentNoticeParams",
+    "ConsentNotice",
+    "FileGrievanceParams",
+    "Grievance",
+    "CreateExportParams",
+    "ComplianceExport",
     # Scope Enforcement / Manifests
     "ToolManifest",
     "Permission",

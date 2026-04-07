@@ -42,6 +42,7 @@ type Client struct {
 	Credentials       *CredentialsService
 	Passports         *PassportsService
 	Vault             *VaultService
+	DPDP              *DPDPService
 
 	http *httpClient
 }
@@ -90,6 +91,7 @@ func NewClient(apiKey string, opts ...Option) *Client {
 	c.Credentials = &CredentialsService{http: h}
 	c.Passports = &PassportsService{http: h}
 	c.Vault = &VaultService{http: h}
+	c.DPDP = &DPDPService{http: h}
 
 	return c
 }
