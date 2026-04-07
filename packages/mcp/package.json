@@ -1,8 +1,8 @@
 {
   "name": "@grantex/mcp",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "mcpName": "io.github.mishrasanjeev/grantex",
-  "description": "MCP server for Grantex delegated agent authorization",
+  "description": "MCP server for AI agent authorization — register agents, issue scoped tokens, verify grants, audit actions, revoke access",
   "homepage": "https://grantex.dev/for/mcp",
   "bugs": {
     "url": "https://github.com/mishrasanjeev/grantex/issues"
@@ -44,19 +44,28 @@
     "node": ">=18.0.0"
   },
   "keywords": [
-    "grantex",
     "mcp",
+    "mcp-server",
     "model-context-protocol",
     "ai-agents",
+    "ai-agent-authorization",
+    "ai-agent-security",
     "authorization",
     "oauth",
-    "claude",
-    "cursor",
-    "windsurf",
+    "oauth2",
+    "jwt",
+    "grant-token",
+    "scope-enforcement",
     "agent-permissions",
     "delegated-auth",
-    "grant-token",
-    "claude-desktop"
+    "token-verification",
+    "revocation",
+    "audit-trail",
+    "claude",
+    "claude-desktop",
+    "cursor",
+    "windsurf",
+    "grantex"
   ],
   "license": "Apache-2.0",
   "repository": {
