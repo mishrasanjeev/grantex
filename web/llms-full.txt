@@ -13,7 +13,7 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - IETF Draft: https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/
 - License: Apache 2.0
 - Protocol Version: 1.0 (Final, frozen)
-- Tests: 679+ passing
+- Tests: 3,332 passing (100% pass rate across 27 packages)
 - SOC 2 Type I certified
 - Production: Cloud Run at https://grantex-auth-dd4mtrt2gq-uc.a.run.app
 
