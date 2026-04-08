@@ -58,7 +58,7 @@ describe('generateRegOptions', () => {
     expect(result).toEqual(mockResult);
     expect(mockGenerateRegistrationOptions).toHaveBeenCalledOnce();
 
-    const args = mockGenerateRegistrationOptions.mock.calls[0][0];
+    const args = mockGenerateRegistrationOptions.mock.calls[0]![0];
     expect(args.rpName).toBe('TestApp');
     expect(args.rpID).toBe('grantex.dev');
     expect(args.userName).toBe('user_42');
@@ -75,7 +75,7 @@ describe('generateRegOptions', () => {
 
     await generateRegOptions('alice', 'App', []);
 
-    const args = mockGenerateRegistrationOptions.mock.calls[0][0];
+    const args = mockGenerateRegistrationOptions.mock.calls[0]![0];
     const expected = new TextEncoder().encode('alice');
     expect(new Uint8Array(args.userID)).toEqual(expected);
   });
@@ -90,7 +90,7 @@ describe('generateRegOptions', () => {
 
     await generateRegOptions('user_1', 'App', creds);
 
-    const args = mockGenerateRegistrationOptions.mock.calls[0][0];
+    const args = mockGenerateRegistrationOptions.mock.calls[0]![0];
     expect(args.excludeCredentials).toEqual([
       { id: 'cred-aaa', transports: ['usb', 'nfc'] },
       { id: 'cred-bbb', transports: ['internal'] },
@@ -106,7 +106,7 @@ describe('generateRegOptions', () => {
 
     await generateRegOptions('user_2', 'App', creds);
 
-    const args = mockGenerateRegistrationOptions.mock.calls[0][0];
+    const args = mockGenerateRegistrationOptions.mock.calls[0]![0];
     expect(args.excludeCredentials).toEqual([
       { id: 'cred-x', transports: [] },
     ]);
@@ -134,7 +134,7 @@ describe('verifyRegResponse', () => {
     expect(result).toEqual(mockVerification);
     expect(mockVerifyRegistrationResponse).toHaveBeenCalledOnce();
 
-    const args = mockVerifyRegistrationResponse.mock.calls[0][0];
+    const args = mockVerifyRegistrationResponse.mock.calls[0]![0];
     expect(args.response).toBe(fakeResponse);
     expect(args.expectedChallenge).toBe('challenge-xyz');
     expect(args.expectedOrigin).toBe('https://grantex.dev');
@@ -164,7 +164,7 @@ describe('generateAuthOptions', () => {
     expect(result).toEqual(mockResult);
     expect(mockGenerateAuthenticationOptions).toHaveBeenCalledOnce();
 
-    const args = mockGenerateAuthenticationOptions.mock.calls[0][0];
+    const args = mockGenerateAuthenticationOptions.mock.calls[0]![0];
     expect(args.rpID).toBe('grantex.dev');
     expect(args.userVerification).toBe('preferred');
     expect(args.allowCredentials).toEqual([]);
@@ -180,7 +180,7 @@ describe('generateAuthOptions', () => {
 
     await generateAuthOptions(creds);
 
-    const args = mockGenerateAuthenticationOptions.mock.calls[0][0];
+    const args = mockGenerateAuthenticationOptions.mock.calls[0]![0];
     expect(args.allowCredentials).toEqual([
       { id: 'cred-111', transports: ['ble'] },
       { id: 'cred-222', transports: ['usb', 'internal'] },
@@ -197,7 +197,7 @@ describe('generateAuthOptions', () => {
 
     await generateAuthOptions(creds);
 
-    const args = mockGenerateAuthenticationOptions.mock.calls[0][0];
+    const args = mockGenerateAuthenticationOptions.mock.calls[0]![0];
     expect(args.allowCredentials[0].id).toBe('z-last');
     expect(args.allowCredentials[1].id).toBe('a-first');
   });
@@ -231,7 +231,7 @@ describe('verifyAuthResponse', () => {
     expect(result).toEqual(mockResult);
     expect(mockVerifyAuthenticationResponse).toHaveBeenCalledOnce();
 
-    const args = mockVerifyAuthenticationResponse.mock.calls[0][0];
+    const args = mockVerifyAuthenticationResponse.mock.calls[0]![0];
     expect(args.response).toBe(fakeResponse);
     expect(args.expectedChallenge).toBe('challenge-abc');
     expect(args.expectedOrigin).toBe('https://grantex.dev');
@@ -254,7 +254,7 @@ describe('verifyAuthResponse', () => {
 
     await verifyAuthResponse({} as any, 'ch', credential);
 
-    const args = mockVerifyAuthenticationResponse.mock.calls[0][0];
+    const args = mockVerifyAuthenticationResponse.mock.calls[0]![0];
     const key = args.credential.publicKey;
 
     // Should be a Buffer (Uint8Array subclass) with the decoded bytes
@@ -279,7 +279,7 @@ describe('verifyAuthResponse', () => {
 
     await verifyAuthResponse({} as any, 'ch', credential);
 
-    const args = mockVerifyAuthenticationResponse.mock.calls[0][0];
+    const args = mockVerifyAuthenticationResponse.mock.calls[0]![0];
     expect(Array.from(args.credential.publicKey)).toEqual(Array.from(keyBytes));
   });
 

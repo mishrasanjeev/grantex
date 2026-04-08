@@ -72,7 +72,7 @@ class DpdpClient:
 
         POST /v1/dpdp/consent-records/:recordId/withdraw
         """
-        body: dict = {"reason": reason}
+        body: dict[str, object] = {"reason": reason}
         if revoke_grant:
             body["revokeGrant"] = True
         if delete_data:
