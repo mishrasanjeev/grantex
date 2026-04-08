@@ -523,7 +523,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       if (includeActionLog) {
         const auditRows = await sql`
           SELECT id, action, status, metadata, timestamp
-          FROM audit_log
+          FROM audit_entries
           WHERE developer_id = ${developerId}
             AND timestamp >= ${from} AND timestamp <= ${to}
             ${dataPrincipalId ? sql`AND principal_id = ${dataPrincipalId}` : sql``}
