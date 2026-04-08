@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BUNDLED_MANIFESTS, CATEGORIES, type ManifestEntry, type Category } from '../manifests';
+import { BUNDLED_MANIFESTS, CATEGORIES } from '../manifests';
 
 describe('manifests', () => {
   // ── BUNDLED_MANIFESTS ───────────────────────────────────────────────
@@ -87,6 +87,6 @@ describe('manifests', () => {
       m.connector.toLowerCase().includes('stripe'),
     );
     expect(results).toHaveLength(1);
-    expect(results[0].connector).toBe('stripe');
+    expect(results[0]!.connector).toBe('stripe');
   });
 });

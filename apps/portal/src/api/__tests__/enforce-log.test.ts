@@ -40,7 +40,7 @@ describe('enforce-log', () => {
     ok({ entries: [MOCK_ENTRY], total: 1, page: 1, pageSize: 20 });
     const result = await listEnforceLogs();
     expect(result.entries).toHaveLength(1);
-    expect(result.entries[0].connector).toBe('salesforce');
+    expect(result.entries[0]!.connector).toBe('salesforce');
     expect(mockFetch).toHaveBeenCalledWith(
       'http://localhost:3000/v1/enforce-log',
       expect.objectContaining({ method: 'GET' }),
@@ -86,8 +86,8 @@ describe('enforce-log', () => {
     const denied = { ...MOCK_ENTRY, result: 'denied', reason: 'read scope does not permit write operations' };
     ok({ entries: [denied], total: 1, page: 1, pageSize: 20 });
     const result = await listEnforceLogs({ result: 'denied' });
-    expect(result.entries[0].result).toBe('denied');
-    expect(result.entries[0].reason).toContain('read scope');
+    expect(result.entries[0]!.result).toBe('denied');
+    expect(result.entries[0]!.reason).toContain('read scope');
   });
 
   it('listEnforceLogs throws on error', async () => {
