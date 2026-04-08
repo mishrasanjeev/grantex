@@ -4,6 +4,60 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## v0.3.7 (2026-04-08)
+
+### Added
+- **TypeScript SDK: DpdpClient** — 11 methods for DPDP Act 2023 compliance (consent records, notices, grievances, erasure, exports), 14 tests
+- **Python SDK: DpdpClient** — full DPDP parity with TypeScript SDK, 13 tests
+- **Go SDK: DPDPService** — full DPDP parity, 12 tests
+- **CLI: `grantex dpdp`** — 11 subcommands for DPDP operations (consent CRUD, notices, grievances, erasure, exports, principal records), 42 tests
+- Auth service: 11 DPDP endpoints with Ed25519 consent proofs, access tracking, 7-day grievance SLA, retention policies
+- Auth service: auto-revoke on consent withdrawal, data deletion enforcement
+- Auth service: CSP header enforcement
+
+### Security
+- Upgraded `hono` to 4.12.12 — resolved 5 CVEs (cookie bypass, IPv6 matching, path traversal, serveStatic bypass, setCookie validation)
+- Upgraded `@hono/node-server` to 1.19.13 — resolved CVE-2026-39406 (middleware bypass)
+- Fixed SSRF vulnerability in CLI `dpdp` command (CodeQL js/file-access-to-http)
+- Resolved all 21 Dependabot vite alerts across packages
+
+### Documentation
+- README: DPDP CLI commands, SDK usage examples, API endpoint table
+- Landing page: version badges updated, DPDP feature card
+- Mintlify docs: CLI DPDP section, SDK overview pages (TS/Py/Go) updated
+- llms.txt: updated SDK versions and resource count
+
+### Fixes
+- Fixed E2E health check (`"healthy"` vs `"ok"` mismatch)
+- Regenerated root package-lock.json to sync with updated deps
+- Updated stale version references across DEPLOYMENT.md, requirements.txt, llms.txt
+
+## v0.3.6 (2026-04-06)
+
+### Security
+- Resolved all npm vulnerabilities across all packages
+- Upgraded brace-expansion to fix CVE (moderate severity)
+- Bumped Go SDK to go 1.26.1 (fixes 3 stdlib CVEs)
+- Tightened dependency version minimums (grantex-fastapi 0.1.4)
+
+### Documentation
+- Added comprehensive DEPLOYMENT.md with production deployment guide
+- Added requirements.txt for Python projects
+- Expanded .env.example to all 30 environment variables
+
+## v0.3.5 (2026-04-06)
+
+### Added
+- Enterprise hardening: rate limiting on every endpoint, HTTP security headers (HSTS, CSP, X-Frame-Options), SDK retry with exponential backoff, structured JSON logging via pino, database connection pools, graceful shutdown
+- Landing page: test coverage trust card, enterprise hardening features section
+- OWASP ZAP CI integration for security scanning
+
+### Fixes
+- Added vitest.config.ts to 6 packages with undiscoverable tests
+- Windows compatibility for CLI tests (shell:true)
+- SEO improvements: twitter:site meta tags, crawlability updates
+- Resolved 3 Codex review comments on enterprise hardening PR
+
 ## v0.3.4 (2026-04-05)
 
 ### SDK Parity

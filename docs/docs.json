@@ -237,7 +237,8 @@
               "sdks/python/budgets",
               "sdks/python/events",
               "sdks/python/usage",
-              "sdks/python/domains"
+              "sdks/python/domains",
+              "sdks/python/passports"
             ]
           },
           {

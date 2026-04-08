@@ -1,5 +1,5 @@
 import { initTracing } from './lib/tracing.js';
-import { config } from './config.js';
+import { config, validateConfig } from './config.js';
 import { initKeys, initEdKey } from './lib/crypto.js';
 import { getSql } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
@@ -14,6 +14,9 @@ import { closeRedis } from './redis/client.js';
 import { seedTrustRegistry } from './db/seeds/trust-registry.js';
 
 async function main() {
+  // Validate required environment variables before anything else
+  validateConfig();
+
   // Initialize OpenTelemetry tracing (must be first — hooks module loading)
   await initTracing();
 

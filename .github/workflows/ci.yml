@@ -3,14 +3,8 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'apps/auth-service/**'
-      - 'apps/portal/**'
-      - 'packages/sdk-ts/**'
-      - 'packages/sdk-py/**'
-      - 'packages/mpp/**'
-      - 'packages/anthropic/**'
-      - '.github/workflows/ci.yml'
+  push:
+    branches: [main]
 
 jobs:
   auth-service:
@@ -89,69 +83,279 @@ jobs:
       - name: Test
         run: pytest
 
+  # ─── Packages that depend on @grantex/sdk (need it built first) ───────────
+
+  cli:
+    name: CLI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+      - name: Install and test CLI
+        working-directory: packages/cli
+        run: npm ci && npm run typecheck && npm test
+
+  adapters:
+    name: Adapters
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+      - name: Install and test adapters
+        working-directory: packages/adapters
+        run: npm ci && npm test
+
+  gateway:
+    name: Gateway
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+      - name: Install and test gateway
+        working-directory: packages/gateway
+        run: npm ci && npm test
+
+  express:
+    name: Express Middleware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+      - name: Install and test express
+        working-directory: packages/express
+        run: npm ci && npm test
+
+  langchain:
+    name: LangChain Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+      - name: Install and test langchain
+        working-directory: packages/langchain
+        run: npm ci && npm test
+
+  anthropic:
+    name: Anthropic Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+      - name: Install and test anthropic
+        working-directory: packages/anthropic
+        run: npm ci && npm run typecheck && npm test
+
+  autogen:
+    name: AutoGen Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+      - name: Install and test autogen
+        working-directory: packages/autogen
+        run: npm ci && npm test
+
+  vercel-ai:
+    name: Vercel AI Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+      - name: Install and test vercel-ai
+        working-directory: packages/vercel-ai
+        run: npm ci && npm test
+
+  a2a:
+    name: A2A Bridge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+      - name: Install and test a2a
+        working-directory: packages/a2a
+        run: npm ci && npm test
+
+  mcp:
+    name: MCP Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+      - name: Install and test mcp
+        working-directory: packages/mcp
+        run: npm ci && npm test
+
+  mcp-auth:
+    name: MCP Auth Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+      - name: Install and test mcp-auth
+        working-directory: packages/mcp-auth
+        run: npm ci && npm test
+
+  dpdp:
+    name: DPDP Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build SDK
+        working-directory: packages/sdk-ts
+        run: npm ci && npm run build
+      - name: Install and test dpdp
+        working-directory: packages/dpdp
+        run: npm ci && npm test
+
   mpp:
     name: MPP Package
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Install SDK (peer dependency)
-        working-directory: packages/sdk-ts
-        run: npm ci
-
       - name: Build SDK
         working-directory: packages/sdk-ts
-        run: npm run build
-
-      - name: Install MPP dependencies
+        run: npm ci && npm run build
+      - name: Install and test mpp
         working-directory: packages/mpp
-        run: npm ci
+        run: npm ci && npm run typecheck && npm test
 
-      - name: Typecheck
-        working-directory: packages/mpp
-        run: npm run typecheck
+  # ─── Packages with no SDK dependency ──────────────────────────────────────
 
-      - name: Test
-        working-directory: packages/mpp
-        run: npm test
-
-  anthropic:
-    name: Anthropic SDK Integration
+  destinations:
+    name: Destinations
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install and test destinations
+        working-directory: packages/destinations
+        run: npm ci && npm test
 
-      - name: Install SDK (peer dependency)
-        working-directory: packages/sdk-ts
-        run: npm ci
+  conformance:
+    name: Conformance Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install and test conformance
+        working-directory: packages/conformance
+        run: npm ci && npm test
 
-      - name: Build SDK
-        working-directory: packages/sdk-ts
-        run: npm run build
+  gemma:
+    name: Gemma Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install and test gemma
+        working-directory: packages/gemma
+        run: npm ci && npm test
 
-      - name: Install Anthropic dependencies
-        working-directory: packages/anthropic
-        run: npm ci
+  # ─── Python integration packages ─────────────────────────────────────────
 
-      - name: Typecheck
-        working-directory: packages/anthropic
-        run: npm run typecheck
+  python-integrations:
+    name: Python Integrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-      - name: Test
-        working-directory: packages/anthropic
-        run: npm test
+      - name: Install Python SDK
+        working-directory: packages/sdk-py
+        run: pip install -e ".[dev]"
+
+      - name: Test FastAPI middleware
+        working-directory: packages/fastapi
+        run: pip install -e ".[dev]" && pytest
+
+      - name: Test CrewAI integration
+        working-directory: packages/crewai
+        run: pip install -e ".[dev]" && pytest
+
+      - name: Test OpenAI Agents integration
+        working-directory: packages/openai-agents
+        run: pip install -e ".[dev]" && pytest
+
+      - name: Test Google ADK integration
+        working-directory: packages/google-adk
+        run: pip install -e ".[dev]" && pytest
+
+      - name: Test A2A Python bridge
+        working-directory: packages/a2a-py
+        run: pip install -e ".[dev]" && pytest
+
+      - name: Test Gemma Python
+        working-directory: packages/gemma-py
+        run: pip install -e ".[dev]" && pytest
 
   portal:
     name: Developer Portal

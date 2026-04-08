@@ -7,22 +7,24 @@ Only the following versions of Grantex components receive security patches:
 | Component | Version | Supported |
 |-----------|---------|-----------|
 | Protocol spec | v1.0 | ✅ Yes |
-| `@grantex/sdk` | 0.1.x | ✅ Yes |
-| `grantex` (Python) | 0.1.x | ✅ Yes |
+| `@grantex/sdk` | 0.3.x | ✅ Yes |
+| `grantex` (Python) | 0.3.x | ✅ Yes |
+| `@grantex/cli` | 0.2.x | ✅ Yes |
+| `github.com/mishrasanjeev/grantex-go` | 0.1.x | ✅ Yes |
+| `@grantex/mcp` | 0.1.x | ✅ Yes |
+| `@grantex/mcp-auth` | 2.0.x | ✅ Yes |
 | `@grantex/langchain` | 0.1.x | ✅ Yes |
+| `@grantex/express` | 0.1.x | ✅ Yes |
+| `grantex-fastapi` | 0.1.x | ✅ Yes |
+| `@grantex/gateway` | 0.1.x | ✅ Yes |
+| `@grantex/adapters` | 0.1.x | ✅ Yes |
+| `@grantex/conformance` | 0.1.x | ✅ Yes |
 | `@grantex/autogen` | 0.1.x | ✅ Yes |
 | `@grantex/vercel-ai` | 0.1.x | ✅ Yes |
 | `grantex-crewai` | 0.1.x | ✅ Yes |
 | `grantex-openai-agents` | 0.1.x | ✅ Yes |
 | `grantex-adk` | 0.1.x | ✅ Yes |
-| `@grantex/mcp` | 0.1.x | ✅ Yes |
-| `@grantex/express` | 0.1.x | ✅ Yes |
-| `grantex-fastapi` | 0.1.x | ✅ Yes |
-| `@grantex/adapters` | 0.1.x | ✅ Yes |
-| `@grantex/gateway` | 0.1.x | ✅ Yes |
-| `@grantex/cli` | 0.1.x | ✅ Yes |
-| `@grantex/conformance` | 0.1.x | ✅ Yes |
-| `github.com/mishrasanjeev/grantex-go` | 0.1.x | ✅ Yes |
+| `@grantex/dpdp` | 0.1.x | ✅ Yes |
 
 If you are running a version not listed above, please upgrade before reporting.
 
@@ -88,6 +90,9 @@ We will not pursue legal action against researchers who act in good faith and fo
 | `vercel-ai`         | `@grantex/vercel-ai` — tool scope checks, audit logging  |
 | `crewai`            | `grantex-crewai` — tool scope enforcement                 |
 | `cli`               | `@grantex/cli` — CLI tool, credential handling            |
+| `gateway`           | `@grantex/gateway` — reverse-proxy, token enforcement     |
+| `mcp` / `mcp-auth`  | MCP server and OAuth 2.1 auth server                      |
+| `dpdp`              | `@grantex/dpdp` — DPDP compliance, consent handling       |
 | `portal`            | Developer portal — auth flow, API key handling            |
 | `SPEC.md`           | Protocol design flaws (e.g. cryptographic weaknesses)     |
 
