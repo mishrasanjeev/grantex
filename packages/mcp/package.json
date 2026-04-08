@@ -34,7 +34,8 @@
     "zod": "^3.22.0"
   },
   "overrides": {
-    "esbuild": ">=0.25.0"
+    "esbuild": ">=0.25.0",
+    "hono": ">=4.12.12"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
