@@ -47,7 +47,7 @@ jobs:
         run: |
           STATUS=$(curl -sf "$PROD_URL/health" | jq -r '.status')
           echo "Health: $STATUS"
-          [ "$STATUS" = "ok" ] || exit 1
+          [ "$STATUS" = "ok" ] || [ "$STATUS" = "healthy" ] || exit 1
 
       - name: Test trust registry — seeded orgs
         run: |
