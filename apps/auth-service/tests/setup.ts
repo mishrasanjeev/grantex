@@ -107,15 +107,15 @@ vi.mock('prom-client', () => {
   const mockSet = vi.fn();
   const mockStartTimer = vi.fn().mockReturnValue(vi.fn());
   const mockLabels = vi.fn().mockReturnValue({ observe: mockObserve, inc: mockInc });
-  const MockCounter = vi.fn().mockImplementation(() => ({ inc: mockInc, labels: mockLabels }));
-  const MockHistogram = vi.fn().mockImplementation(() => ({ observe: mockObserve, startTimer: mockStartTimer, labels: mockLabels }));
-  const MockGauge = vi.fn().mockImplementation(() => ({ set: mockSet, inc: mockInc, dec: vi.fn(), labels: mockLabels }));
-  const MockRegistry = vi.fn().mockImplementation(() => ({
-    setDefaultLabels: vi.fn(),
-    metrics: vi.fn().mockResolvedValue(''),
-    contentType: 'text/plain',
-    registerMetric: vi.fn(),
-  }));
+  const MockCounter = vi.fn(function (this: Record<string, unknown>) { this.inc = mockInc; this.labels = mockLabels; });
+  const MockHistogram = vi.fn(function (this: Record<string, unknown>) { this.observe = mockObserve; this.startTimer = mockStartTimer; this.labels = mockLabels; });
+  const MockGauge = vi.fn(function (this: Record<string, unknown>) { this.set = mockSet; this.inc = mockInc; this.dec = vi.fn(); this.labels = mockLabels; });
+  const MockRegistry = vi.fn(function (this: Record<string, unknown>) {
+    this.setDefaultLabels = vi.fn();
+    this.metrics = vi.fn().mockResolvedValue('');
+    this.contentType = 'text/plain';
+    this.registerMetric = vi.fn();
+  });
   return {
     Registry: MockRegistry,
     Counter: MockCounter,
