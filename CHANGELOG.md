@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## v0.3.8 / @grantex/mcp 0.1.9 (2026-04-08)
+
+### Security
+- `@grantex/mcp` 0.1.8 → 0.1.9: include `server.json` in npm tarball so MCP registry can index the manifest
+- `@grantex/mcp` 0.1.8: shipped hono >=4.12.12 override + @hono/node-server 1.19.13 (6 CVEs)
+
+### Fixes
+- Python SDK 0.3.8: fixed `dict` type annotation for mypy `--strict` compatibility
+- MCP registry re-published at 0.1.9 (0.1.7 and 0.1.8 tarballs lacked `server.json`)
+
+### CI
+- Expanded CI from 5 to 22 tested packages across 10 jobs (all green)
+- Fixed Vitest 4 constructor mock compatibility in auth-service, CLI, and policy tests
+- Auth-service: `validateConfig()` now called on startup (was defined but never invoked)
+- Added `vitest.config.ts` to adapters, excluded gemma E2E from unit test runs
+
+### Documentation
+- Updated test stats: 3,536 tests across 28 packages (was 3,332 / 27)
+- CHANGELOG: added v0.3.5, v0.3.6, v0.3.7 entries
+- SECURITY.md: updated supported versions (0.1.x → 0.3.x), added gateway/mcp/dpdp to scope
+- Python SDK passports page added to docs.json navigation
+
 ## v0.3.7 (2026-04-08)
 
 ### Added
