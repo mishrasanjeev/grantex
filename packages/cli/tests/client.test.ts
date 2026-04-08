@@ -6,9 +6,12 @@ vi.mock('../src/config.js', () => ({
   resolveConfig: vi.fn(),
 }));
 
-vi.mock('@grantex/sdk', () => ({
-  Grantex: vi.fn().mockImplementation((opts: unknown) => ({ _opts: opts })),
-}));
+vi.mock('@grantex/sdk', () => {
+  const MockGrantex = vi.fn(function (this: Record<string, unknown>, opts: unknown) {
+    this._opts = opts;
+  });
+  return { Grantex: MockGrantex };
+});
 
 import { loadConfig, resolveConfig } from '../src/config.js';
 import { Grantex } from '@grantex/sdk';
