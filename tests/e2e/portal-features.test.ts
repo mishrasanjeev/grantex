@@ -48,7 +48,7 @@ describe('Dashboard Overview', () => {
   });
 
   it('lists grants (empty initially)', async () => {
-    const { status, data } = await api('GET', '/v1/grants');
+    const { status } = await api('GET', '/v1/grants');
     expect(status).toBe(200);
   });
 
@@ -226,7 +226,7 @@ describe('Anomalies', () => {
 
 describe('Compliance', () => {
   it('gets compliance summary', async () => {
-    const { status, data } = await api('GET', '/v1/compliance/summary');
+    const { status } = await api('GET', '/v1/compliance/summary');
     expect(status).toBe(200);
   });
 });
