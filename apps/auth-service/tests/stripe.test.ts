@@ -8,9 +8,9 @@ const { mockConfig, MockStripe } = vi.hoisted(() => {
   const mockConfig = {
     stripeSecretKey: null as string | null,
   };
-  const MockStripe = vi.fn().mockImplementation(() => ({
-    checkout: { sessions: { create: vi.fn() } },
-  }));
+  const MockStripe = vi.fn(function (this: Record<string, unknown>) {
+    this.checkout = { sessions: { create: vi.fn() } };
+  });
   return { mockConfig, MockStripe };
 });
 

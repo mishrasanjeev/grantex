@@ -17,10 +17,10 @@ vi.mock('../src/config.js', () => ({ config: mockConfig }));
 
 // Mock all OpenTelemetry SDK modules
 vi.mock('@opentelemetry/sdk-node', () => ({
-  NodeSDK: vi.fn().mockImplementation(() => ({
-    start: mockSdkStart,
-    shutdown: mockSdkShutdown,
-  })),
+  NodeSDK: vi.fn(function (this: Record<string, unknown>) {
+    this.start = mockSdkStart;
+    this.shutdown = mockSdkShutdown;
+  }),
 }));
 
 vi.mock('@opentelemetry/auto-instrumentations-node', () => ({
@@ -28,11 +28,11 @@ vi.mock('@opentelemetry/auto-instrumentations-node', () => ({
 }));
 
 vi.mock('@opentelemetry/exporter-trace-otlp-http', () => ({
-  OTLPTraceExporter: vi.fn().mockImplementation(() => ({})),
+  OTLPTraceExporter: vi.fn(function () {}),
 }));
 
 vi.mock('@opentelemetry/resources', () => ({
-  Resource: vi.fn().mockImplementation(() => ({})),
+  Resource: vi.fn(function () {}),
 }));
 
 vi.mock('@opentelemetry/semantic-conventions', () => ({

@@ -12,9 +12,9 @@ const { mockConfig, MockBuiltinBackend, MockOpaBackend, MockCedarBackend } = vi.
     cedarUrl: null as string | null,
     cedarFallbackToBuiltin: true,
   };
-  const MockBuiltinBackend = vi.fn().mockImplementation(() => ({ evaluate: vi.fn() }));
-  const MockOpaBackend = vi.fn().mockImplementation(() => ({ evaluate: vi.fn() }));
-  const MockCedarBackend = vi.fn().mockImplementation(() => ({ evaluate: vi.fn() }));
+  const MockBuiltinBackend = vi.fn(function (this: Record<string, unknown>) { this.evaluate = vi.fn(); });
+  const MockOpaBackend = vi.fn(function (this: Record<string, unknown>) { this.evaluate = vi.fn(); });
+  const MockCedarBackend = vi.fn(function (this: Record<string, unknown>) { this.evaluate = vi.fn(); });
   return { mockConfig, MockBuiltinBackend, MockOpaBackend, MockCedarBackend };
 });
 

@@ -54,14 +54,14 @@ vi.mock('../src/redis/client.js', () => ({
 
 // Mock ioredis constructor — prevents real Redis connections in event streaming tests
 vi.mock('ioredis', () => {
-  const MockRedis = vi.fn().mockImplementation(() => ({
-    connect: vi.fn().mockResolvedValue(undefined),
-    subscribe: vi.fn().mockResolvedValue(undefined),
-    unsubscribe: vi.fn().mockResolvedValue(undefined),
-    disconnect: vi.fn(),
-    on: vi.fn(),
-    publish: vi.fn().mockResolvedValue(0),
-  }));
+  const MockRedis = vi.fn(function (this: Record<string, unknown>) {
+    this.connect = vi.fn().mockResolvedValue(undefined);
+    this.subscribe = vi.fn().mockResolvedValue(undefined);
+    this.unsubscribe = vi.fn().mockResolvedValue(undefined);
+    this.disconnect = vi.fn();
+    this.on = vi.fn();
+    this.publish = vi.fn().mockResolvedValue(0);
+  });
   return { default: MockRedis };
 });
 
