@@ -9,7 +9,7 @@ jobs:
   e2e:
     name: E2E Smoke Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +28,92 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
-      - name: Run E2E tests
+      - name: Core auth flow
         env:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
         run: npx vitest run tests/e2e/e2e.test.ts
+
+      - name: Portal features (full API surface)
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/portal-features.test.ts
+
+      - name: Scope enforcement
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/enforce-integration.test.ts
+
+      - name: Budgets
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/budget.test.ts
+
+      - name: DPDP compliance
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/dpdp.test.ts
+
+      - name: Policies
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/policies.test.ts
+
+      - name: Webhooks
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/webhooks.test.ts
+
+      - name: Usage
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/usage.test.ts
+
+      - name: Domains
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/domains.test.ts
+
+      - name: Vault
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/vault.test.ts
+
+      - name: Compliance
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/compliance.test.ts
+
+      - name: Credentials
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/credentials.test.ts
+
+      - name: Events
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/events.test.ts
+
+      - name: Principal sessions
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/principal-sessions.test.ts
+
+      - name: SCIM
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/scim.test.ts
+
+      - name: SSO
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/sso.test.ts
+
+      - name: MPP Passports
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/mpp-passport.test.ts
+
+      - name: Cross-feature
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run tests/e2e/cross-feature.test.ts
