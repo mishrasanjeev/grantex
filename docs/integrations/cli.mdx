@@ -298,6 +298,34 @@ grantex sso login-url my-org
 grantex sso callback --code AUTH_CODE --state STATE_PARAM
 ```
 
+### DPDP Compliance
+
+```bash
+# Consent notices
+grantex dpdp notices create --notice-id privacy-v1 --version 1.0 --title "Privacy Notice" \
+  --content "We process your data for..." --purposes '[{"code":"analytics","description":"Usage analytics"}]'
+
+# Consent records
+grantex dpdp consent create --grant-id grnt_01ABC... --principal-id user@example.com \
+  --purposes '[{"code":"analytics","description":"Usage analytics"}]' \
+  --consent-notice-id privacy-v1 --processing-expires-at 2027-01-01T00:00:00Z
+grantex dpdp consent get crec_01ABC...
+grantex dpdp consent list --principal-id user@example.com
+grantex dpdp consent withdraw crec_01ABC... --reason "No longer needed" --revoke-grant
+
+# Data principal rights (DPDP §11)
+grantex dpdp principal-records user@example.com
+grantex dpdp erasure user@example.com
+
+# Grievances (DPDP §13(6))
+grantex dpdp grievances file --principal-id user@example.com --type violation --description "Unauthorized access"
+grantex dpdp grievances get grv_01ABC...
+
+# Compliance exports
+grantex dpdp exports create --type dpdp-audit --date-from 2026-01-01 --date-to 2026-04-01
+grantex dpdp exports get exp_01ABC...
+```
+
 ## Full Workflow Example
 
 ```bash

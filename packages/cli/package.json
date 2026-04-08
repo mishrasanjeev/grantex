@@ -1,6 +1,6 @@
 {
   "name": "@grantex/cli",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "CLI tool for local Grantex development",
   "homepage": "https://grantex.dev",
   "bugs": {

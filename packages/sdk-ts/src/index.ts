@@ -35,6 +35,9 @@ export {
 // Scope enforcement
 export { ToolManifest, Permission, permissionCovers, type EnforceOptions, type EnforceResult, type ToolManifestOptions, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 
+// DPDP Compliance
+export { DpdpClient } from './resources/dpdp.js';
+
 // Types
 export type {
   RateLimit,
@@ -161,4 +164,20 @@ export type {
   // Developer Settings
   UpdateDeveloperSettingsParams,
   UpdateDeveloperSettingsResponse,
+  // DPDP Compliance
+  DpdpPurpose,
+  CreateConsentRecordParams,
+  ConsentRecord,
+  ListConsentRecordsResponse,
+  WithdrawConsentParams,
+  WithdrawConsentResponse,
+  PrincipalRecordsResponse,
+  ErasureResponse,
+  CreateConsentNoticeParams,
+  ConsentNotice,
+  FileGrievanceParams,
+  Grievance,
+  DpdpExportType,
+  CreateDpdpExportParams,
+  DpdpExport,
 } from './types.js';

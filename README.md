@@ -1101,6 +1101,91 @@ bundles = client.policies.bundles()
 
 </details>
 
+<details>
+<summary><strong>DPDP Compliance</strong> — India's Digital Personal Data Protection Act 2023</summary>
+
+## DPDP Act 2023 Compliance
+
+Full DPDP Act 2023 compliance built in — structured consent records, purpose limitation, data principal rights (access, erasure, grievance), and audit-ready exports. Available in all SDKs and the CLI.
+
+```typescript
+// Register a consent notice
+const notice = await grantex.dpdp.createConsentNotice({
+  noticeId: 'privacy-v1',
+  version: '1.0',
+  title: 'Data Processing Notice',
+  content: 'We process your data for...',
+  purposes: [{ code: 'analytics', description: 'Usage analytics' }],
+});
+
+// Create a consent record linked to a grant
+const record = await grantex.dpdp.createConsentRecord({
+  grantId: 'grnt_01HXYZ...',
+  dataPrincipalId: 'user@example.com',
+  purposes: [{ code: 'analytics', description: 'Usage analytics' }],
+  consentNoticeId: 'privacy-v1',
+  processingExpiresAt: '2027-01-01T00:00:00Z',
+});
+
+// Data principal exercises right to access (DPDP §11)
+const { records } = await grantex.dpdp.listPrincipalRecords('user@example.com');
+
+// Withdraw consent — optionally revoke grant and delete data
+const withdrawal = await grantex.dpdp.withdrawConsent(record.recordId, {
+  reason: 'No longer needed',
+  revokeGrant: true,
+  deleteProcessedData: true,
+});
+
+// File a grievance (DPDP §13(6))
+const grievance = await grantex.dpdp.fileGrievance({
+  dataPrincipalId: 'user@example.com',
+  type: 'data_breach',
+  description: 'Unauthorized data access',
+});
+
+// Request data erasure (DPDP §11)
+const erasure = await grantex.dpdp.requestErasure('user@example.com');
+
+// Generate compliance export
+const report = await grantex.dpdp.createExport({
+  type: 'dpdp-audit',
+  dateFrom: '2026-01-01T00:00:00Z',
+  dateTo: '2026-04-01T00:00:00Z',
+});
+```
+
+```python
+# Python SDK
+record = client.dpdp.create_consent_record(CreateConsentRecordParams(
+    grant_id="grnt_01HXYZ...",
+    data_principal_id="user@example.com",
+    purposes=[{"code": "analytics", "description": "Usage analytics"}],
+    consent_notice_id="privacy-v1",
+    processing_expires_at="2027-01-01T00:00:00Z",
+))
+records = client.dpdp.list_principal_records("user@example.com")
+erasure = client.dpdp.request_erasure("user@example.com")
+```
+
+### DPDP API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/dpdp/consent-notices` | Register a consent notice |
+| `POST` | `/v1/dpdp/consent-records` | Create a consent record |
+| `GET` | `/v1/dpdp/consent-records/:id` | Get a consent record |
+| `GET` | `/v1/dpdp/consent-records` | List consent records |
+| `POST` | `/v1/dpdp/consent-records/:id/withdraw` | Withdraw consent |
+| `GET` | `/v1/dpdp/data-principals/:id/records` | Right to access (§11) |
+| `POST` | `/v1/dpdp/data-principals/:id/erasure` | Right to erasure (§11) |
+| `POST` | `/v1/dpdp/grievances` | File a grievance (§13(6)) |
+| `GET` | `/v1/dpdp/grievances/:id` | Get grievance status |
+| `POST` | `/v1/dpdp/exports` | Generate compliance export |
+| `GET` | `/v1/dpdp/exports/:id` | Get export data |
+
+</details>
+
 ---
 
 ## Scope Enforcement
@@ -1371,7 +1456,7 @@ read_calendar = create_grantex_tool(
 # Returns a plain function — pass directly to google.adk.Agent(tools=[...])
 ```
 
-**CLI** (83 commands, all support `--json` for AI agent / scripting use):
+**CLI** (90+ commands, all support `--json` for AI agent / scripting use):
 
 ```bash
 grantex config set --url https://grantex-auth-dd4mtrt2gq-uc.a.run.app --key YOUR_API_KEY
@@ -1385,6 +1470,19 @@ grantex grants delegate --grant-token <jwt> --agent-id ag_child... --scopes emai
 grantex budgets allocate --grant-id grnt_... --amount 100
 grantex audit list --agent ag_...
 grantex grants revoke grnt_...
+
+# DPDP Act 2023 compliance (11 subcommands)
+grantex dpdp consent create --grant-id grnt_... --principal-id user@example.com
+grantex dpdp consent get <recordId>
+grantex dpdp consent list --principal-id user@example.com
+grantex dpdp consent withdraw <recordId> --reason "No longer needed"
+grantex dpdp notices create --notice-id privacy-v1 --version 1.0 --title "Privacy Notice"
+grantex dpdp grievances file --principal-id user@example.com --type violation
+grantex dpdp grievances get <grievanceId>
+grantex dpdp erasure user@example.com
+grantex dpdp exports create --type dpdp-audit --date-from 2026-01-01 --date-to 2026-04-01
+grantex dpdp exports get <exportId>
+grantex dpdp principal-records user@example.com
 
 # Machine-readable output for scripts and AI coding assistants
 grantex --json agents list | jq '.[0].agentId'

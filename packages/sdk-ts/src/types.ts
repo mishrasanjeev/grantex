@@ -962,6 +962,150 @@ export interface SDJWTPresentResult {
   error?: string;
 }
 
+// ─── DPDP Compliance ────────────────────────────────────────────────────────
+
+export interface DpdpPurpose {
+  code: string;
+  description: string;
+}
+
+export interface CreateConsentRecordParams {
+  grantId: string;
+  dataPrincipalId: string;
+  purposes: DpdpPurpose[];
+  consentNoticeId: string;
+  processingExpiresAt: string;
+}
+
+export interface ConsentRecord {
+  recordId: string;
+  grantId: string;
+  dataPrincipalId: string;
+  dataFiduciaryName?: string;
+  purposes?: DpdpPurpose[];
+  scopes?: string[];
+  consentNoticeId?: string;
+  consentNoticeHash?: string;
+  consentProof?: {
+    type: string;
+    proofJwt?: string;
+    signedAt?: string;
+    reason?: string;
+  };
+  status: string;
+  consentGivenAt?: string;
+  processingExpiresAt?: string;
+  retentionUntil?: string;
+  accessCount?: number;
+  lastAccessedAt?: string;
+  withdrawnAt?: string | null;
+  withdrawnReason?: string | null;
+  createdAt: string;
+}
+
+export interface ListConsentRecordsResponse {
+  records: ConsentRecord[];
+  totalRecords: number;
+}
+
+export interface WithdrawConsentParams {
+  reason: string;
+  revokeGrant?: boolean;
+  deleteProcessedData?: boolean;
+}
+
+export interface WithdrawConsentResponse {
+  recordId: string;
+  status: string;
+  withdrawnAt: string;
+  grantRevoked: boolean;
+  dataDeleted: boolean;
+}
+
+export interface PrincipalRecordsResponse {
+  dataPrincipalId: string;
+  records: ConsentRecord[];
+  totalRecords: number;
+}
+
+export interface ErasureResponse {
+  requestId: string;
+  dataPrincipalId: string;
+  status: string;
+  recordsErased: number;
+  grantsRevoked: number;
+  submittedAt: string;
+  expectedCompletionBy: string;
+}
+
+export interface CreateConsentNoticeParams {
+  noticeId: string;
+  version: string;
+  title: string;
+  content: string;
+  purposes: DpdpPurpose[];
+  language?: string;
+  dataFiduciaryContact?: string;
+  grievanceOfficer?: { name: string; email: string; phone?: string };
+}
+
+export interface ConsentNotice {
+  id: string;
+  noticeId: string;
+  version: string;
+  language: string;
+  contentHash: string;
+  createdAt: string;
+}
+
+export interface FileGrievanceParams {
+  dataPrincipalId: string;
+  type: string;
+  description: string;
+  recordId?: string;
+  evidence?: Record<string, unknown>;
+}
+
+export interface Grievance {
+  grievanceId: string;
+  dataPrincipalId?: string;
+  recordId?: string | null;
+  type: string;
+  description?: string;
+  evidence?: Record<string, unknown>;
+  status: string;
+  referenceNumber: string;
+  expectedResolutionBy: string;
+  resolvedAt?: string | null;
+  resolution?: string | null;
+  createdAt: string;
+}
+
+export type DpdpExportType = 'dpdp-audit' | 'gdpr-article-15' | 'eu-ai-act-conformance';
+
+export interface CreateDpdpExportParams {
+  type: DpdpExportType;
+  dateFrom: string;
+  dateTo: string;
+  format?: string;
+  includeActionLog?: boolean;
+  includeConsentRecords?: boolean;
+  dataPrincipalId?: string;
+}
+
+export interface DpdpExport {
+  exportId: string;
+  type: string;
+  format?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  recordCount?: number;
+  data?: Record<string, unknown>;
+  status?: string;
+  expiresAt?: string;
+  createdAt: string;
+}
+
 // ─── Developer Settings ──────────────────────────────────────────────────────
 
 export interface UpdateDeveloperSettingsParams {
