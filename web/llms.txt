@@ -123,7 +123,7 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 
 ## SDK Parity
 
-All 3 SDKs (TypeScript 0.3.7, Python 0.3.7, Go v0.1.6) have:
+All 3 SDKs (TypeScript 0.3.7, Python 0.3.8, Go v0.1.6) have:
 - 21 resource services each (agents, tokens, grants, audit, anomalies, compliance, billing, policies, scim, sso, principal sessions, vault, budgets, events, usage, domains, webauthn, credentials, passports, webhooks, dpdp)
 - Offline JWT verification via JWKS
 - Retry with exponential backoff

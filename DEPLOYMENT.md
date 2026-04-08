@@ -326,7 +326,7 @@ npm install @grantex/sdk@0.3.7
 ### Python
 
 ```bash
-pip install grantex==0.3.7
+pip install grantex==0.3.8
 # Or from requirements.txt:
 pip install -r requirements.txt
 ```
