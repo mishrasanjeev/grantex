@@ -118,7 +118,7 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - Config validation on startup (exits if required vars missing)
 - Structured JSON logging via pino (zero console.log remaining)
 - Webhook retry with 20% jitter (prevents thundering herd)
-- 3,332 tests across 27 packages — 100% pass rate
+- 3,536 tests across 28 packages — 100% pass rate
 - Zero known vulnerabilities (npm audit, pip-audit, govulncheck all clean)
 
 ## SDK Parity

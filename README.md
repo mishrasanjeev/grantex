@@ -13,7 +13,7 @@
 [![IETF Draft](https://img.shields.io/badge/IETF-draft--mishra--oauth--agent--grants-blue)](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
 [![SOC 2 Type I](https://img.shields.io/badge/SOC%202-Type%20I%20Certified-brightgreen)](https://docs.grantex.dev/security)
 [![CI](https://img.shields.io/github/actions/workflow/status/mishrasanjeev/grantex/ci.yml?branch=main&label=CI)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
-[![3,332 Tests — 100%](https://img.shields.io/badge/tests-3%2C332%20passing%20%7C%20100%25-brightgreen)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
+[![3,536 Tests — 100%](https://img.shields.io/badge/tests-3%2C536%20passing%20%7C%20100%25-brightgreen)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@grantex/sdk)](https://www.npmjs.com/package/@grantex/sdk)
 [![PyPI](https://img.shields.io/pypi/v/grantex)](https://pypi.org/project/grantex/)
 [![npm downloads](https://img.shields.io/npm/dm/@grantex/sdk?label=npm%20downloads)](https://www.npmjs.com/package/@grantex/sdk)
@@ -75,7 +75,7 @@ go get github.com/mishrasanjeev/grantex-go  # Go
 npm install -g @grantex/cli     # CLI
 ```
 
-> **27 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. 3,332 tests (100% pass rate). Fully self-hostable. Apache 2.0.
+> **28 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. 3,536 tests (100% pass rate). Fully self-hostable. Apache 2.0.
 
 ---
 
