@@ -320,13 +320,13 @@ nginx -t && systemctl reload nginx
 ### TypeScript
 
 ```bash
-npm install @grantex/sdk@0.3.5
+npm install @grantex/sdk@0.3.7
 ```
 
 ### Python
 
 ```bash
-pip install grantex==0.3.5
+pip install grantex==0.3.7
 # Or from requirements.txt:
 pip install -r requirements.txt
 ```

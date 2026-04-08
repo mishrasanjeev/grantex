@@ -79,7 +79,7 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - SOC 2 Type I certified
 - Full compliance matrix: https://docs.grantex.dev/guides/compliance-matrix
 
-## Scope Enforcement (v0.3.4)
+## Scope Enforcement (v0.3.7)
 
 - `grantex.enforce(grant_token, connector, tool)` — verify JWT + check tool permission via manifest
 - `grantex.load_manifest(manifest)` / `load_manifests([...])` — load tool permission definitions
@@ -98,7 +98,7 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - Case study: AgenticOrg — 35 agents, 53 pre-built + 3 custom connectors, 339+ tools, all enforced
 - Custom manifests are the primary story — define manifests for any connector, no dependency on Grantex
 
-## Enterprise Hardening (v0.3.6)
+## Enterprise Hardening (v0.3.7)
 
 - SDK retry with exponential backoff + jitter in all 3 languages (configurable maxRetries, default 3)
 - Retries 429, 502, 503, 504 + network errors; respects Retry-After header
@@ -123,8 +123,8 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 
 ## SDK Parity
 
-All 3 SDKs (TypeScript 0.3.6, Python 0.3.6, Go v0.1.6) have:
-- 20 resource services each (agents, tokens, grants, audit, anomalies, compliance, billing, policies, scim, sso, principal sessions, vault, budgets, events, usage, domains, webauthn, credentials, passports, webhooks)
+All 3 SDKs (TypeScript 0.3.7, Python 0.3.7, Go v0.1.6) have:
+- 21 resource services each (agents, tokens, grants, audit, anomalies, compliance, billing, policies, scim, sso, principal sessions, vault, budgets, events, usage, domains, webauthn, credentials, passports, webhooks, dpdp)
 - Offline JWT verification via JWKS
 - Retry with exponential backoff
 - PassportsClient for MPP agent identity

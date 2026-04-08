@@ -5,7 +5,7 @@
 # Install only what you need — sections are labeled.
 
 # ─── Core SDK ────────────────────────────────────────────────────────────────
-grantex==0.3.5                    # Python SDK (httpx, PyJWT, cryptography)
+grantex==0.3.7                    # Python SDK (httpx, PyJWT, cryptography)
 
 # ─── Framework Integrations (install as needed) ─────────────────────────────
 grantex-fastapi>=0.1.3            # FastAPI middleware (requires: fastapi>=0.100.0)
