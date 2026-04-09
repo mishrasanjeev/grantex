@@ -80,9 +80,15 @@ describe('E2E: Scope Enforcement Integration', () => {
     await grantex.grants.revoke(grantId);
   });
 
-  it('enforce denies after revocation', async () => {
+  it('online verify denies after revocation', async () => {
+    const result = await grantex.tokens.verify(grantToken);
+    expect(result.valid).toBe(false);
+  });
+
+  it('offline enforce still passes (no revocation check)', async () => {
+    // enforce() is offline-only (JWKS signature + manifest) — it does not
+    // query the server for revocation status, so the JWT remains valid locally.
     const result = await grantex.enforce({ grantToken, connector: 'salesforce', tool: 'query' });
-    expect(result.allowed).toBe(false);
-    expect(result.reason.toLowerCase()).toContain('verification failed');
+    expect(result.allowed).toBe(true);
   });
 });

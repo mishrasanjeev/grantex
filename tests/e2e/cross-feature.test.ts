@@ -278,7 +278,7 @@ describe('E2E: Budget + Delegation', () => {
       initialBudget: 500,
       currency: 'USD',
     });
-    expect(allocation.remainingBudget).toBe(500);
+    expect(Number(allocation.remainingBudget)).toBe(500);
 
     // Delegate to child
     const delegated = await grantex.grants.delegate({
@@ -290,7 +290,7 @@ describe('E2E: Budget + Delegation', () => {
 
     // Parent budget should be unaffected by delegation
     const balance = await grantex.budgets.balance(parentToken.grantId);
-    expect(balance.remainingBudget).toBe(500);
+    expect(Number(balance.remainingBudget)).toBe(500);
 
     // Debit from parent budget
     const debit = await grantex.budgets.debit({
@@ -298,7 +298,7 @@ describe('E2E: Budget + Delegation', () => {
       amount: 100,
       description: 'Post-delegation debit',
     });
-    expect(debit.remaining).toBe(400);
+    expect(Number(debit.remaining)).toBe(400);
   });
 });
 
@@ -317,7 +317,7 @@ describe('E2E: Compliance After Revocation', () => {
     await grantex.grants.revoke(token.grantId);
 
     // Compliance summary should show revoked grants
-    const summary = await grantex.compliance.summary();
+    const summary = await grantex.compliance.getSummary();
     expect(summary.grants.revoked).toBeGreaterThanOrEqual(1);
   });
 

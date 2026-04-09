@@ -51,7 +51,7 @@ beforeAll(async () => {
 
 describe('E2E: Compliance Summary', () => {
   it('gets compliance summary with all sections', async () => {
-    const summary = await grantex.compliance.summary();
+    const summary = await grantex.compliance.getSummary();
 
     expect(summary).toBeDefined();
     expect(summary).toHaveProperty('generatedAt');

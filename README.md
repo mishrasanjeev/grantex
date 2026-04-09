@@ -13,7 +13,7 @@
 [![IETF Draft](https://img.shields.io/badge/IETF-draft--mishra--oauth--agent--grants-blue)](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
 [![SOC 2 Type I](https://img.shields.io/badge/SOC%202-Type%20I%20Certified-brightgreen)](https://docs.grantex.dev/security)
 [![CI](https://img.shields.io/github/actions/workflow/status/mishrasanjeev/grantex/ci.yml?branch=main&label=CI)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
-[![3,604 Tests — 100%](https://img.shields.io/badge/tests-3%2C604%20passing%20%7C%20100%25-brightgreen)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
+[![4,147 Tests — 100%](https://img.shields.io/badge/tests-4%2C147%20passing%20%7C%20100%25-brightgreen)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@grantex/sdk)](https://www.npmjs.com/package/@grantex/sdk)
 [![PyPI](https://img.shields.io/pypi/v/grantex)](https://pypi.org/project/grantex/)
 [![npm downloads](https://img.shields.io/npm/dm/@grantex/sdk?label=npm%20downloads)](https://www.npmjs.com/package/@grantex/sdk)
@@ -75,7 +75,7 @@ go get github.com/mishrasanjeev/grantex-go  # Go
 npm install -g @grantex/cli     # CLI
 ```
 
-> **28 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. 3,604 tests (100% pass rate). Fully self-hostable. Apache 2.0.
+> **27 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. 4,147 tests (100% pass rate). Fully self-hostable. Apache 2.0.
 
 ---
 
@@ -1519,6 +1519,12 @@ Walk through all 7 steps of the protocol: register an agent, authorize, exchange
 | [`gemma-raspberry-pi`](examples/gemma-raspberry-pi) | Gemma 4 agent on Raspberry Pi with offline auth | `python agent.py` |
 | [`gemma-android-kotlin`](examples/gemma-android-kotlin) | Android Gemma 4 agent with offline verification | Android Studio |
 | [`gemma-ios-swift`](examples/gemma-ios-swift) | iOS Gemma 4 agent with CryptoKit verification | `swift run` |
+| [`quickstart-go`](examples/quickstart-go) | Core authorization lifecycle using the Go SDK | `go run .` |
+| [`multi-agent-email-flow`](examples/multi-agent-email-flow) | Multi-agent email automation with delegation, enforcement, and cascade revocation | `npm start` |
+| [`audit-dashboard`](examples/audit-dashboard) | Audit trail querying, filtering, and hash chain integrity verification | `npm start` |
+| [`token-expiry-refresh`](examples/token-expiry-refresh) | Time-bound grant tokens with automatic expiry detection and refresh rotation | `npm start` |
+| [`x402-agent-demo`](examples/x402-agent-demo) | AI agent using Grantex Delegation Token + x402 payments | `npm start` |
+| [`x402-weather-api`](examples/x402-weather-api) | Express server with x402 payment flow + GDT enforcement | `npm start` |
 
 ---
 

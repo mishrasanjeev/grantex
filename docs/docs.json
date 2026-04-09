@@ -238,7 +238,8 @@
               "sdks/python/events",
               "sdks/python/usage",
               "sdks/python/domains",
-              "sdks/python/passports"
+              "sdks/python/passports",
+              "sdks/python/vault"
             ]
           },
           {
@@ -292,7 +293,9 @@
               "sdks/go/budgets",
               "sdks/go/events",
               "sdks/go/usage",
-              "sdks/go/domains"
+              "sdks/go/domains",
+              "sdks/go/passports",
+              "sdks/go/vault"
             ]
           },
           {
