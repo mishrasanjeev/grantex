@@ -35,7 +35,9 @@ beforeAll(async () => {
 
   const agent = await grantex.agents.register({ name: `budget-agent-${Date.now()}`, scopes: ['files:read', 'calendar:read'] });
 
-  // Create two grants for multi-grant testing
+  // Create three grants on the same agent (each authorize uses a unique principalId
+  // so each call creates a distinct grant). Doing this in beforeAll keeps
+  // individual tests fast and avoids CI timeouts from Cloud Run cold starts.
   const token1 = await authorizeAndExchange(agent.agentId, ['files:read']);
   grantId = token1.grantId;
   grantToken = token1.grantToken;
@@ -43,11 +45,9 @@ beforeAll(async () => {
   const token2 = await authorizeAndExchange(agent.agentId, ['calendar:read']);
   secondGrantId = token2.grantId;
 
-  // Third grant for no-debit transaction test (created here to avoid CI timeouts)
-  const agent2 = await grantex.agents.register({ name: `budget-notx-${Date.now()}`, scopes: ['files:read'] });
-  const token3 = await authorizeAndExchange(agent2.agentId, ['files:read']);
+  const token3 = await authorizeAndExchange(agent.agentId, ['files:read']);
   noDebitGrantId = token3.grantId;
-});
+}, 60000);
 
 describe('E2E: Budget Allocation', () => {
   it('allocates a budget to a grant', async () => {
