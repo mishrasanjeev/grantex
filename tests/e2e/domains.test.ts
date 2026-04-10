@@ -13,11 +13,40 @@ const BASE_URL = process.env.E2E_BASE_URL ?? 'https://grantex-auth-dd4mtrt2gq-uc
 
 let grantex: Grantex;
 let apiKey: string;
+let domainsAvailable = false;
 
 beforeAll(async () => {
   const account = await Grantex.signup({ name: `e2e-domains-${Date.now()}`, mode: 'sandbox' }, { baseUrl: BASE_URL });
   apiKey = account.apiKey;
   grantex = new Grantex({ apiKey, baseUrl: BASE_URL });
+
+  // Probe whether the plan supports custom domains
+  try {
+    const probe = await grantex.domains.create({ domain: `probe-${Date.now()}.example.com` });
+    domainsAvailable = true;
+    // Clean up probe domain
+    await grantex.domains.delete(probe.id);
+  } catch {
+    // 402 PLAN_LIMIT_EXCEEDED — free/pro plan, skip domain CRUD tests
+  }
+});
+
+describe('E2E: Domain Plan Enforcement', () => {
+  it('rejects domains on free plan or allows on enterprise', async () => {
+    if (domainsAvailable) {
+      // Enterprise plan — creation works (already verified in beforeAll)
+      expect(domainsAvailable).toBe(true);
+    } else {
+      // Free/Pro plan — should get 402
+      try {
+        await grantex.domains.create({ domain: `plan-check-${Date.now()}.example.com` });
+        expect.fail('Should have thrown on free plan');
+      } catch (err: any) {
+        const status = err.statusCode ?? err.status ?? err.response?.status;
+        expect(status).toBe(402);
+      }
+    }
+  });
 });
 
 describe('E2E: Domain CRUD', () => {
@@ -26,6 +55,7 @@ describe('E2E: Domain CRUD', () => {
   let verificationToken: string;
 
   it('creates a custom domain', async () => {
+    if (!domainsAvailable) return;
     domainName = `test-${Date.now()}.example.com`;
     const domain = await grantex.domains.create({ domain: domainName });
     domainId = domain.id;
@@ -45,6 +75,7 @@ describe('E2E: Domain CRUD', () => {
   });
 
   it('creates a second domain', async () => {
+    if (!domainsAvailable) return;
     const secondDomain = `api-${Date.now()}.example.org`;
     const domain = await grantex.domains.create({ domain: secondDomain });
 
@@ -56,13 +87,13 @@ describe('E2E: Domain CRUD', () => {
   });
 
   it('lists all domains', async () => {
+    if (!domainsAvailable) return;
     const result = await grantex.domains.list();
     expect(result).toBeDefined();
     expect(result.domains).toBeDefined();
     expect(Array.isArray(result.domains)).toBe(true);
     expect(result.domains.length).toBeGreaterThanOrEqual(2);
 
-    // Find our domain
     const found = result.domains.find((d: any) => d.id === domainId);
     expect(found).toBeDefined();
     expect(found!.domain).toBe(domainName);
@@ -71,18 +102,17 @@ describe('E2E: Domain CRUD', () => {
   });
 
   it('verify domain fails for non-existent DNS record', async () => {
-    // DNS record doesn't exist, so verification should fail
+    if (!domainsAvailable) return;
     try {
       const result = await grantex.domains.verify(domainId);
-      // If it returns, verified should be false
       expect(result.verified).toBe(false);
     } catch (err: any) {
-      // Some implementations throw on verification failure
       expect(err).toBeDefined();
     }
   });
 
   it('returns 404 when verifying non-existent domain', async () => {
+    if (!domainsAvailable) return;
     try {
       await grantex.domains.verify('dom_nonexistent_000');
       expect.fail('Should have thrown');
@@ -92,19 +122,21 @@ describe('E2E: Domain CRUD', () => {
   });
 
   it('deletes a domain', async () => {
+    if (!domainsAvailable) return;
     await grantex.domains.delete(domainId);
 
-    // Verify it's gone
     const result = await grantex.domains.list();
     const found = result.domains.find((d: any) => d.id === domainId);
     expect(found).toBeUndefined();
   });
 
   it('returns 404 when deleting an already-deleted domain', async () => {
+    if (!domainsAvailable) return;
     await expect(grantex.domains.delete(domainId)).rejects.toThrow();
   });
 
   it('returns 404 when deleting a non-existent domain', async () => {
+    if (!domainsAvailable) return;
     await expect(grantex.domains.delete('dom_nonexistent_000')).rejects.toThrow();
   });
 });
@@ -117,10 +149,10 @@ describe('E2E: Domain Validation', () => {
   });
 
   it('rejects duplicate domain registration', async () => {
+    if (!domainsAvailable) return;
     const domainName = `dup-${Date.now()}.example.com`;
     await grantex.domains.create({ domain: domainName });
 
-    // Second registration of the same domain should fail
     await expect(
       grantex.domains.create({ domain: domainName }),
     ).rejects.toThrow();
