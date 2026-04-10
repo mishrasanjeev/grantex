@@ -76,18 +76,15 @@ describe('E2E: Budget Allocation', () => {
   });
 
   it('rejects allocation with zero budget', async () => {
-    const agent = await grantex.agents.register({ name: `budget-zero-${Date.now()}`, scopes: ['files:read'] });
-    const token = await authorizeAndExchange(agent.agentId, ['files:read']);
+    // Server validates initialBudget <= 0 before checking the grant, so reuse existing grantId
     await expect(
-      grantex.budgets.allocate({ grantId: token.grantId, initialBudget: 0 }),
+      grantex.budgets.allocate({ grantId, initialBudget: 0 }),
     ).rejects.toThrow();
   });
 
   it('rejects allocation with negative budget', async () => {
-    const agent = await grantex.agents.register({ name: `budget-neg-${Date.now()}`, scopes: ['files:read'] });
-    const token = await authorizeAndExchange(agent.agentId, ['files:read']);
     await expect(
-      grantex.budgets.allocate({ grantId: token.grantId, initialBudget: -100 }),
+      grantex.budgets.allocate({ grantId, initialBudget: -100 }),
     ).rejects.toThrow();
   });
 
