@@ -16,6 +16,7 @@ let apiKey: string;
 let grantId: string;
 let grantToken: string;
 let secondGrantId: string;
+let noDebitGrantId: string;
 
 async function authorizeAndExchange(agentId: string, scopes: string[]) {
   const auth = await grantex.authorize({ agentId, userId: `budget-user-${Date.now()}`, scopes });
@@ -41,6 +42,11 @@ beforeAll(async () => {
 
   const token2 = await authorizeAndExchange(agent.agentId, ['calendar:read']);
   secondGrantId = token2.grantId;
+
+  // Third grant for no-debit transaction test (created here to avoid CI timeouts)
+  const agent2 = await grantex.agents.register({ name: `budget-notx-${Date.now()}`, scopes: ['files:read'] });
+  const token3 = await authorizeAndExchange(agent2.agentId, ['files:read']);
+  noDebitGrantId = token3.grantId;
 });
 
 describe('E2E: Budget Allocation', () => {
@@ -202,11 +208,9 @@ describe('E2E: Budget Transactions', () => {
   });
 
   it('returns empty transactions for grant with no debits', async () => {
-    const agent = await grantex.agents.register({ name: `budget-notx-${Date.now()}`, scopes: ['files:read'] });
-    const token = await authorizeAndExchange(agent.agentId, ['files:read']);
-    await grantex.budgets.allocate({ grantId: token.grantId, initialBudget: 100 });
+    await grantex.budgets.allocate({ grantId: noDebitGrantId, initialBudget: 100 });
 
-    const txns = await grantex.budgets.transactions(token.grantId);
+    const txns = await grantex.budgets.transactions(noDebitGrantId);
     expect(txns.transactions.length).toBe(0);
     expect(txns.total).toBe(0);
   });
