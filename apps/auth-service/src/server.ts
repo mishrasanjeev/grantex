@@ -78,10 +78,20 @@ export async function buildApp(opts: AppOptions = {}) {
     reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
   });
 
-  // Global rate limit: 100 requests/minute per IP
+  // Global rate limit: 100 requests/minute, keyed by developer API key
+  // when authenticated, falling back to IP for unauthenticated requests.
+  // Per-developer keying prevents shared-IP scenarios (CI runners, NAT)
+  // from cross-contaminating rate limit buckets.
   await app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
+    keyGenerator: (req) => {
+      const auth = req.headers.authorization;
+      if (auth?.startsWith('Bearer ')) {
+        return `bearer:${auth.slice(7)}`;
+      }
+      return req.ip;
+    },
     allowList: (req) => {
       // Skip rate limiting for JWKS (public key distribution must never be throttled)
       return req.url.startsWith('/.well-known/');

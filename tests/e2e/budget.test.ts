@@ -19,9 +19,22 @@ let secondGrantId: string;
 let noDebitGrantId: string;
 
 async function authorizeAndExchange(agentId: string, scopes: string[]) {
-  const auth = await grantex.authorize({ agentId, userId: `budget-user-${Date.now()}`, scopes });
-  const code = ('code' in auth && typeof (auth as any).code === 'string')
-    ? (auth as any).code
+  // Retry on 429 — /v1/authorize is IP-rate-limited (10/min) and CI runs many
+  // test files sequentially from the same runner IP.
+  let auth: any;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      auth = await grantex.authorize({ agentId, userId: `budget-user-${Date.now()}`, scopes });
+      break;
+    } catch (err: any) {
+      const status = err.statusCode ?? err.status;
+      if (status !== 429 || attempt === 2) throw err;
+      const retryAfter = err.rateLimit?.retryAfter ?? 20;
+      await new Promise(r => setTimeout(r, (retryAfter + 1) * 1000));
+    }
+  }
+  const code = ('code' in auth && typeof auth.code === 'string')
+    ? auth.code
     : await fetch(`${BASE_URL}/v1/authorize/${auth.authRequestId}/approve`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` }, body: '{}',
       }).then(r => r.json()).then((d: any) => d.code);
@@ -47,7 +60,7 @@ beforeAll(async () => {
 
   const token3 = await authorizeAndExchange(agent.agentId, ['files:read']);
   noDebitGrantId = token3.grantId;
-}, 60000);
+}, 180000);
 
 describe('E2E: Budget Allocation', () => {
   it('allocates a budget to a grant', async () => {
