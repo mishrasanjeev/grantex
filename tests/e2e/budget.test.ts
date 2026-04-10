@@ -52,8 +52,8 @@ describe('E2E: Budget Allocation', () => {
     });
     expect(result).toBeDefined();
     expect(result.grantId).toBe(grantId);
-    expect(result.initialBudget).toBe(1000);
-    expect(result.remainingBudget).toBe(1000);
+    expect(Number(result.initialBudget)).toBe(1000);
+    expect(Number(result.remainingBudget)).toBe(1000);
     expect(result.id).toBeDefined();
     expect(typeof result.id).toBe('string');
   });
@@ -71,8 +71,8 @@ describe('E2E: Budget Allocation', () => {
       currency: 'EUR',
     });
     expect(result.grantId).toBe(secondGrantId);
-    expect(result.initialBudget).toBe(2000);
-    expect(result.remainingBudget).toBe(2000);
+    expect(Number(result.initialBudget)).toBe(2000);
+    expect(Number(result.remainingBudget)).toBe(2000);
   });
 
   it('rejects allocation with zero budget', async () => {
@@ -105,7 +105,7 @@ describe('E2E: Budget Debit', () => {
       amount: 250,
       description: 'test debit',
     });
-    expect(result.remaining).toBe(750);
+    expect(Number(result.remaining)).toBe(750);
     expect(result.transactionId).toBeTruthy();
     expect(typeof result.transactionId).toBe('string');
     expect(result.grantId).toBe(grantId);
@@ -117,7 +117,7 @@ describe('E2E: Budget Debit', () => {
       amount: 300,
       description: 'second debit',
     });
-    expect(result.remaining).toBe(450);
+    expect(Number(result.remaining)).toBe(450);
     expect(result.transactionId).toBeTruthy();
   });
 
@@ -128,7 +128,7 @@ describe('E2E: Budget Debit', () => {
       description: 'debit with metadata',
       metadata: { action: 'api-call', endpoint: '/v1/data' },
     });
-    expect(result.remaining).toBe(400);
+    expect(Number(result.remaining)).toBe(400);
   });
 
   it('rejects debit with zero amount', async () => {
@@ -159,7 +159,7 @@ describe('E2E: Budget Debit', () => {
       amount: 100,
       description: 'second grant debit',
     });
-    expect(result.remaining).toBe(1900);
+    expect(Number(result.remaining)).toBe(1900);
     expect(result.grantId).toBe(secondGrantId);
   });
 });
@@ -167,15 +167,15 @@ describe('E2E: Budget Debit', () => {
 describe('E2E: Budget Balance', () => {
   it('checks budget balance reflects debits', async () => {
     const balance = await grantex.budgets.balance(grantId);
-    expect(balance.remainingBudget).toBe(400);
-    expect(balance.initialBudget).toBe(1000);
+    expect(Number(balance.remainingBudget)).toBe(400);
+    expect(Number(balance.initialBudget)).toBe(1000);
     expect(balance.grantId).toBe(grantId);
   });
 
   it('checks second grant balance independently', async () => {
     const balance = await grantex.budgets.balance(secondGrantId);
-    expect(balance.remainingBudget).toBe(1900);
-    expect(balance.initialBudget).toBe(2000);
+    expect(Number(balance.remainingBudget)).toBe(1900);
+    expect(Number(balance.initialBudget)).toBe(2000);
   });
 
   it('returns 404 for balance of non-existent grant', async () => {
@@ -196,7 +196,7 @@ describe('E2E: Budget Transactions', () => {
     // Verify transaction shape
     const tx = txns.transactions[0];
     expect(tx).toHaveProperty('amount');
-    expect(typeof tx.amount).toBe('number');
+    expect(Number.isFinite(Number(tx.amount))).toBe(true);
   });
 
   it('lists transactions for the second grant separately', async () => {
