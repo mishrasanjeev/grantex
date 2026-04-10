@@ -187,6 +187,12 @@ describe('E2E: Policy CRUD', () => {
       } as any),
     ).rejects.toThrow();
   });
+
+  // Clean up remaining CRUD policies so they don't interfere with enforcement tests
+  it('deletes remaining CRUD policies', async () => {
+    await grantex.policies.delete(allowPolicyId);
+    await grantex.policies.delete(denyPolicyId);
+  });
 });
 
 describe('E2E: Policy Enforcement', () => {
