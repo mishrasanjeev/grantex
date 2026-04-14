@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import { config } from './config.js';
 import rateLimit from '@fastify/rate-limit';
 import { errorsPlugin } from './plugins/errors.js';
 import { authPlugin } from './plugins/auth.js';
@@ -63,7 +64,27 @@ export async function buildApp(opts: AppOptions = {}) {
     genReqId: () => randomUUID(),
   });
 
-  await app.register(cors, { origin: false });
+  // Browser clients (developer dashboard at grantex.dev/dashboard, local
+  // Vite during development) need to call the API cross-origin. Fastify-cors
+  // intercepts OPTIONS preflight before the auth preHandler runs, so allowed
+  // origins get proper Access-Control-Allow-Origin headers while unknown
+  // origins still fail the browser's CORS check.
+  const allowedOrigins = new Set(config.corsAllowedOrigins);
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      // Same-origin and non-browser callers have no Origin header — allow.
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.has(origin)) return cb(null, true);
+      // Unknown origin: reflect back "false" so the browser blocks the
+      // response but we don't throw a 5xx on the server.
+      return cb(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+    exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
+    maxAge: 600,
+  });
   await app.register(websocket);
 
   // HTTP security headers
