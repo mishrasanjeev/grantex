@@ -139,8 +139,8 @@ describe('GET /v1/mcp/servers', () => {
 describe('POST /v1/mcp/servers', () => {
   it('creates server (201)', async () => {
     seedAuth();
-    // Insert
-    sqlMock.mockResolvedValueOnce([]);
+    // Insert returns created_at
+    sqlMock.mockResolvedValueOnce([{ created_at: new Date('2026-04-14T00:00:00Z') }]);
 
     const res = await app.inject({
       method: 'POST',
@@ -162,6 +162,8 @@ describe('POST /v1/mcp/servers', () => {
     expect(body.category).toBe('productivity');
     expect(body.certified).toBe(false);
     expect(body.scopes).toEqual(['calendar:read']);
+    expect(body.status).toBe('active');
+    expect(body.createdAt).toBe('2026-04-14T00:00:00.000Z');
   });
 
   it('rejects missing name (400)', async () => {

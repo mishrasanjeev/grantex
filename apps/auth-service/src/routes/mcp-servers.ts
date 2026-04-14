@@ -93,9 +93,13 @@ export async function mcpServersRoutes(app: FastifyInstance): Promise<void> {
         certified: r['certified'] as boolean,
         ...(r['certified_at'] ? { certifiedAt: (r['certified_at'] as Date).toISOString() } : {}),
         ...(r['certification_level'] ? { certificationLevel: r['certification_level'] as string } : {}),
-        ...(r['npm_package'] ? { npmPackage: r['npm_package'] as string } : {}),
+        serverUrl: (r['server_url'] as string | null) ?? null,
+        authEndpoint: (r['auth_endpoint'] as string | null) ?? null,
+        npmPackage: (r['npm_package'] as string | null) ?? null,
         weeklyActiveAgents: r['weekly_active_agents'] as number,
         stars: r['stars'] as number,
+        status: 'active' as const,
+        createdAt: (r['created_at'] as Date).toISOString(),
       }));
 
       const nextCursor = rows.length === limit ? (rows[rows.length - 1]!['id'] as string) : undefined;
@@ -138,7 +142,7 @@ export async function mcpServersRoutes(app: FastifyInstance): Promise<void> {
       const sql = getSql();
       const scopeList = scopes ?? [];
 
-      await sql`
+      const inserted = await sql<{ created_at: Date }[]>`
         INSERT INTO mcp_servers (
           id, developer_id, name, description, server_url, auth_endpoint,
           npm_package, category, scopes
@@ -148,6 +152,7 @@ export async function mcpServersRoutes(app: FastifyInstance): Promise<void> {
           ${serverUrl ?? null}, ${authEndpoint ?? null},
           ${npmPackage ?? null}, ${category}, ${scopeList}
         )
+        RETURNING created_at
       `;
 
       return reply.status(201).send({
@@ -163,6 +168,7 @@ export async function mcpServersRoutes(app: FastifyInstance): Promise<void> {
         weeklyActiveAgents: 0,
         stars: 0,
         status: 'active',
+        createdAt: inserted[0]!.created_at.toISOString(),
       });
     },
   );
