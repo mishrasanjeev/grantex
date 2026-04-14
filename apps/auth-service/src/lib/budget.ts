@@ -50,18 +50,33 @@ export async function debitBudget(
   description?: string,
   metadata?: Record<string, unknown>,
 ): Promise<{ remaining: string; transactionId: string }> {
-  // Atomic debit — race-condition safe via WHERE clause
+  // Atomic debit — race-condition safe via WHERE clause.
+  // Joins grants so a revoked or expired grant cannot be debited even
+  // if a budget_allocations row still exists.
   const rows = await sql`
-    UPDATE budget_allocations
+    UPDATE budget_allocations ba
     SET remaining_budget = remaining_budget - ${amount},
         updated_at = NOW()
-    WHERE grant_id = ${grantId}
-      AND developer_id = ${developerId}
-      AND remaining_budget >= ${amount}
-    RETURNING id, initial_budget, remaining_budget
+    FROM grants g
+    WHERE ba.grant_id = ${grantId}
+      AND ba.developer_id = ${developerId}
+      AND ba.remaining_budget >= ${amount}
+      AND g.id = ba.grant_id
+      AND g.status = 'active'
+      AND g.expires_at > NOW()
+    RETURNING ba.id, ba.initial_budget, ba.remaining_budget
   `;
 
   if (rows.length === 0) {
+    // Disambiguate: is the grant still live, or just out of funds?
+    const grantCheck = await sql<{ status: string; expires_at: Date }[]>`
+      SELECT status, expires_at FROM grants
+      WHERE id = ${grantId} AND developer_id = ${developerId}
+    `;
+    const g = grantCheck[0];
+    if (!g || g.status !== 'active' || new Date(g.expires_at) <= new Date()) {
+      throw new GrantInactiveError(grantId);
+    }
     throw new InsufficientBudgetError(grantId);
   }
 
@@ -174,5 +189,12 @@ export class InsufficientBudgetError extends Error {
   constructor(grantId: string) {
     super(`Insufficient budget for grant ${grantId}`);
     this.name = 'InsufficientBudgetError';
+  }
+}
+
+export class GrantInactiveError extends Error {
+  constructor(grantId: string) {
+    super(`Grant ${grantId} is not active (revoked or expired)`);
+    this.name = 'GrantInactiveError';
   }
 }

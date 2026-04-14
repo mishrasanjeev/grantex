@@ -37,10 +37,10 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
       `,
       sql`
         SELECT
-          COUNT(*)                                       AS total,
-          COUNT(*) FILTER (WHERE status = 'active')     AS active,
-          COUNT(*) FILTER (WHERE status = 'revoked')    AS revoked,
-          COUNT(*) FILTER (WHERE status = 'expired')    AS expired
+          COUNT(*)                                                                       AS total,
+          COUNT(*) FILTER (WHERE status = 'active' AND expires_at > NOW())              AS active,
+          COUNT(*) FILTER (WHERE status = 'revoked')                                    AS revoked,
+          COUNT(*) FILTER (WHERE status = 'expired' OR (status = 'active' AND expires_at <= NOW())) AS expired
         FROM grants WHERE developer_id = ${developerId}
           AND (${since}::timestamptz IS NULL OR issued_at >= ${since}::timestamptz)
           AND (${until}::timestamptz IS NULL OR issued_at <= ${until}::timestamptz)
@@ -162,10 +162,10 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
       `,
       sql`
         SELECT
-          COUNT(*)                                       AS total,
-          COUNT(*) FILTER (WHERE status = 'active')     AS active,
-          COUNT(*) FILTER (WHERE status = 'revoked')    AS revoked,
-          COUNT(*) FILTER (WHERE status = 'expired')    AS expired
+          COUNT(*)                                                                       AS total,
+          COUNT(*) FILTER (WHERE status = 'active' AND expires_at > NOW())              AS active,
+          COUNT(*) FILTER (WHERE status = 'revoked')                                    AS revoked,
+          COUNT(*) FILTER (WHERE status = 'expired' OR (status = 'active' AND expires_at <= NOW())) AS expired
         FROM grants WHERE developer_id = ${developerId}
           AND (${since}::timestamptz IS NULL OR issued_at >= ${since}::timestamptz)
           AND (${until}::timestamptz IS NULL OR issued_at <= ${until}::timestamptz)
