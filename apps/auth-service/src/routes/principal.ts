@@ -67,6 +67,7 @@ export async function principalRoutes(app: FastifyInstance): Promise<void> {
         WHERE developer_id = ${request.developer.id}
           AND principal_id = ${principalId}
           AND status = 'active'
+          AND expires_at > NOW()
         LIMIT 1
       `;
 

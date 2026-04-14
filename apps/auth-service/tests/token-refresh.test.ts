@@ -130,6 +130,25 @@ describe('POST /v1/token/refresh', () => {
     expect(res.json().message).toBe('Grant has been revoked');
   });
 
+  it('returns 400 when the underlying grant has expired', async () => {
+    seedAuth();
+    // Refresh token itself is fresh, but grant_expires_at is in the past
+    sqlMock.mockResolvedValueOnce([{
+      ...validRefreshRow,
+      grant_expires_at: new Date(Date.now() - 1000).toISOString(),
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token/refresh',
+      headers: authHeader(),
+      payload: { refreshToken: 'ref_GRANTEXPIRED', agentId: TEST_AGENT.id },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toBe('Grant has expired');
+  });
+
   it('returns 400 when agent does not match', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ ...validRefreshRow, agent_id: 'ag_DIFFERENT' }]);

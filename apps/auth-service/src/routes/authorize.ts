@@ -63,7 +63,10 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     const grantLimit = PLAN_LIMITS[plan].grants;
 
     const countRows = await sql<{ count: string }[]>`
-      SELECT COUNT(*) AS count FROM grants WHERE developer_id = ${developerId} AND status = 'active'
+      SELECT COUNT(*) AS count FROM grants
+      WHERE developer_id = ${developerId}
+        AND status = 'active'
+        AND expires_at > NOW()
     `;
     const grantCount = parseInt(countRows[0]?.count ?? '0', 10);
 

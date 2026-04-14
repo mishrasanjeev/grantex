@@ -117,8 +117,8 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       VALUES (${jti}, ${grantId}, ${expiresAt})
     `;
 
-    // Insert refresh token
-    const refreshExpiresAt = new Date(now + 30 * 86400 * 1000);
+    // Insert refresh token — cannot outlive the underlying grant.
+    const refreshExpiresAt = new Date(Math.min(now + 30 * 86400 * 1000, expiresAt.getTime()));
     await sql`
       INSERT INTO refresh_tokens (id, grant_id, expires_at)
       VALUES (${refreshId}, ${grantId}, ${refreshExpiresAt})

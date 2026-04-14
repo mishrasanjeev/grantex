@@ -222,7 +222,10 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
       if ((a.severity === 'critical' || a.severity === 'high') && a.agent_id) {
         const activeGrants = await sql`
           SELECT id FROM grants
-          WHERE agent_id = ${a.agent_id} AND developer_id = ${developerId} AND status = 'active'
+          WHERE agent_id = ${a.agent_id}
+            AND developer_id = ${developerId}
+            AND status = 'active'
+            AND expires_at > NOW()
         `;
         for (const g of activeGrants as Array<Record<string, unknown>>) {
           const grantId = g['id'] as string;

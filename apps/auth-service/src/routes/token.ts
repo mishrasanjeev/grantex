@@ -102,7 +102,8 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         const now = Date.now();
         expiresAt = new Date(now + expiresSeconds * 1000);
         expTimestamp = Math.floor(expiresAt.getTime() / 1000);
-        const refreshExpiresAt = new Date(now + 30 * 86400 * 1000);
+        // Refresh tokens cannot outlive the underlying grant.
+        const refreshExpiresAt = new Date(Math.min(now + 30 * 86400 * 1000, expiresAt.getTime()));
 
         await tx`
           INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
@@ -301,12 +302,16 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         if (row['grant_status'] === 'revoked') {
           routeError(400, 'Grant has been revoked');
         }
+        if (new Date(row['grant_expires_at'] as string) <= new Date()) {
+          routeError(400, 'Grant has expired');
+        }
 
         grantId = row['grant_id'] as string;
         scopes = row['scopes'] as string[];
         grantExpiresAt = new Date(row['grant_expires_at'] as string);
         const now = Date.now();
-        const refreshExpiresAt = new Date(now + 30 * 86400 * 1000);
+        // Refresh tokens cannot outlive the underlying grant.
+        const refreshExpiresAt = new Date(Math.min(now + 30 * 86400 * 1000, grantExpiresAt.getTime()));
 
         const updated = await tx`
           UPDATE refresh_tokens

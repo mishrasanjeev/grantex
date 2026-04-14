@@ -11,8 +11,8 @@ beforeAll(async () => {
 describe('POST /v1/budget/allocate', () => {
   it('creates a budget allocation', async () => {
     seedAuth();
-    // Grant exists
-    sqlMock.mockResolvedValueOnce([{ id: 'grnt_1' }]);
+    // Grant exists, active, not expired
+    sqlMock.mockResolvedValueOnce([{ id: 'grnt_1', status: 'active', expires_at: new Date(Date.now() + 3600_000) }]);
     // Insert allocation
     sqlMock.mockResolvedValueOnce([{
       id: 'bdg_1',
@@ -64,6 +64,36 @@ describe('POST /v1/budget/allocate', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('returns 409 GRANT_INACTIVE when allocating against a revoked grant', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: 'grnt_revoked', status: 'revoked', expires_at: new Date(Date.now() + 3600_000) }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/allocate',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_revoked', initialBudget: 50 },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('GRANT_INACTIVE');
+  });
+
+  it('returns 409 GRANT_INACTIVE when allocating against an expired grant', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: 'grnt_exp', status: 'active', expires_at: new Date(Date.now() - 1000) }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/allocate',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_exp', initialBudget: 50 },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('GRANT_INACTIVE');
+  });
+
   it('requires authentication', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -76,8 +106,8 @@ describe('POST /v1/budget/allocate', () => {
 
   it('returns 409 for duplicate budget allocation', async () => {
     seedAuth();
-    // Grant exists
-    sqlMock.mockResolvedValueOnce([{ id: 'grnt_1' }]);
+    // Grant exists, active, not expired
+    sqlMock.mockResolvedValueOnce([{ id: 'grnt_1', status: 'active', expires_at: new Date(Date.now() + 3600_000) }]);
     // Insert fails with unique constraint
     sqlMock.mockRejectedValueOnce(Object.assign(new Error('unique constraint violated'), { code: '23505' }));
 
@@ -94,8 +124,8 @@ describe('POST /v1/budget/allocate', () => {
 
   it('re-throws unknown errors from allocation', async () => {
     seedAuth();
-    // Grant exists
-    sqlMock.mockResolvedValueOnce([{ id: 'grnt_1' }]);
+    // Grant exists, active, not expired
+    sqlMock.mockResolvedValueOnce([{ id: 'grnt_1', status: 'active', expires_at: new Date(Date.now() + 3600_000) }]);
     // Insert fails with non-unique error
     sqlMock.mockRejectedValueOnce(new Error('connection lost'));
 
@@ -132,7 +162,9 @@ describe('POST /v1/budget/debit', () => {
 
   it('returns 402 when insufficient budget', async () => {
     seedAuth();
-    sqlMock.mockResolvedValueOnce([]); // No matching row (insufficient)
+    sqlMock.mockResolvedValueOnce([]); // UPDATE: no matching row
+    // Disambiguation SELECT — grant is still live → INSUFFICIENT_BUDGET (not GRANT_INACTIVE)
+    sqlMock.mockResolvedValueOnce([{ status: 'active', expires_at: new Date(Date.now() + 3600_000) }]);
 
     const res = await app.inject({
       method: 'POST',
@@ -143,6 +175,40 @@ describe('POST /v1/budget/debit', () => {
 
     expect(res.statusCode).toBe(402);
     expect(res.json().code).toBe('INSUFFICIENT_BUDGET');
+  });
+
+  it('returns 409 GRANT_INACTIVE when debiting against a revoked grant', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]); // UPDATE: no matching row (grant blocked the join)
+    // Disambiguation SELECT — grant exists but is revoked
+    sqlMock.mockResolvedValueOnce([{ status: 'revoked', expires_at: new Date(Date.now() + 3600_000) }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/debit',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_revoked', amount: 10 },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('GRANT_INACTIVE');
+  });
+
+  it('returns 409 GRANT_INACTIVE when debiting against an expired grant', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]); // UPDATE: no matching row
+    // Disambiguation SELECT — grant exists, status active, but expires_at is past
+    sqlMock.mockResolvedValueOnce([{ status: 'active', expires_at: new Date(Date.now() - 1000) }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/debit',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_expired', amount: 10 },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('GRANT_INACTIVE');
   });
 
   it('returns 400 for missing fields', async () => {
