@@ -7,6 +7,12 @@ import { decodeJwt } from 'jose';
 let app: FastifyInstance;
 let parentToken: string;
 
+const ACTIVE_PARENT_ROW = {
+  is_revoked: false,
+  expires_at: new Date(Date.now() + 3600_000).toISOString(),
+  grant_status: 'active',
+};
+
 const SUB_AGENT = {
   id: 'ag_SUBAGENT01',
   did: 'did:grantex:ag_SUBAGENT01',
@@ -36,6 +42,8 @@ describe('POST /v1/grants/delegate', () => {
     seedAuth();
     // Redis: parent token not revoked
     mockRedis.get.mockResolvedValue(null);
+    // Parent token DB check
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
     // Sub-agent lookup
     sqlMock.mockResolvedValueOnce([SUB_AGENT]);
     // INSERT grants
@@ -79,6 +87,7 @@ describe('POST /v1/grants/delegate', () => {
   it('returns 400 when requested scopes exceed parent scopes', async () => {
     seedAuth();
     mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
 
     const res = await app.inject({
       method: 'POST',
@@ -120,6 +129,7 @@ describe('POST /v1/grants/delegate', () => {
   it('returns 404 when sub-agent is not found', async () => {
     seedAuth();
     mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
     // Sub-agent lookup returns empty
     sqlMock.mockResolvedValueOnce([]);
 
@@ -160,12 +170,21 @@ describe('POST /v1/grants/delegate', () => {
   it('returns 400 when parentGrantToken is missing required claims (jti)', async () => {
     seedAuth();
 
-    // Create a JWT without jti (and without grnt, scp, exp)
+    // Create a JWT that passes signature/issuer validation but omits jti.
     const { SignJWT: JoseSignJWT } = await import('jose');
     const { getKeyPair } = await import('../src/lib/crypto.js');
+    const { config } = await import('../src/config.js');
     const { privateKey } = getKeyPair();
-    const invalidToken = await new JoseSignJWT({ sub: 'user_123', agt: 'did:test:agent' })
+    const invalidToken = await new JoseSignJWT({
+      agt: TEST_AGENT.did,
+      dev: TEST_DEVELOPER.id,
+      scp: ['read'],
+    })
       .setProtectedHeader({ alg: 'RS256' })
+      .setIssuer(config.jwtIssuer)
+      .setSubject('user_123')
+      .setIssuedAt()
+      .setExpirationTime(Math.floor(Date.now() / 1000) + 3600)
       .sign(privateKey);
 
     const res = await app.inject({
@@ -201,6 +220,7 @@ describe('POST /v1/grants/delegate', () => {
   it('includes verifiableCredential when credentialFormat is vc-jwt', async () => {
     seedAuth();
     mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
     // Sub-agent lookup
     sqlMock.mockResolvedValueOnce([SUB_AGENT]);
     // INSERT grants
@@ -255,6 +275,7 @@ describe('POST /v1/grants/delegate', () => {
   it('includes verifiableCredential when credentialFormat is both', async () => {
     seedAuth();
     mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
     // Sub-agent lookup
     sqlMock.mockResolvedValueOnce([SUB_AGENT]);
     // INSERT grants
@@ -309,6 +330,7 @@ describe('POST /v1/grants/delegate', () => {
   it('succeeds without verifiableCredential when VC issuance fails (best-effort)', async () => {
     seedAuth();
     mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
     // Sub-agent lookup
     sqlMock.mockResolvedValueOnce([SUB_AGENT]);
     // INSERT grants

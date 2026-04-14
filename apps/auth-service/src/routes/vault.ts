@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getSql } from '../db/client.js';
 import { newVaultCredentialId } from '../lib/ids.js';
 import { encrypt, decrypt } from '../lib/vault-crypto.js';
-import { verifyGrantToken } from '../lib/crypto.js';
+import { checkActiveGrantToken } from '../lib/active-grant-token.js';
 
 interface StoreCredentialBody {
   principalId: string;
@@ -51,7 +51,7 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
     const encryptedAccess = encrypt(accessToken);
     const encryptedRefresh = refreshToken ? encrypt(refreshToken) : null;
 
-    await sql`
+    const rows = await sql`
       INSERT INTO vault_credentials (id, developer_id, principal_id, service, credential_type, access_token, refresh_token, token_expires_at, metadata)
       VALUES (
         ${id}, ${developerId}, ${principalId}, ${service},
@@ -65,14 +65,17 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
         token_expires_at = ${tokenExpiresAt ?? null},
         metadata = ${JSON.stringify(metadata ?? {})},
         updated_at = NOW()
+      RETURNING id, principal_id, service, credential_type, created_at
     `;
 
+    const row = rows[0]!;
+
     return reply.status(201).send({
-      id,
-      principalId,
-      service,
-      credentialType: credentialType ?? 'oauth2',
-      createdAt: new Date().toISOString(),
+      id: row['id'],
+      principalId: row['principal_id'],
+      service: row['service'],
+      credentialType: row['credential_type'],
+      createdAt: row['created_at'],
     });
   });
 
@@ -149,16 +152,15 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const grantToken = auth.slice(7);
-      let claims: { sub: string; dev: string; scp: string[] };
-      try {
-        claims = await verifyGrantToken(grantToken);
-      } catch {
+      const result = await checkActiveGrantToken(grantToken);
+      if (!result.ok) {
         return reply.status(401).send({
           message: 'Invalid or expired grant token',
           code: 'UNAUTHORIZED',
           requestId: request.id,
         });
       }
+      const { claims } = result;
 
       const { service } = request.body;
       if (!service) {

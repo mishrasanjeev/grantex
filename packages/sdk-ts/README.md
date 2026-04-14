@@ -233,6 +233,8 @@ console.log(verified.principalId);
 console.log(verified.scopes);
 ```
 
+Throws `GrantexTokenError` when the token is inactive, revoked, expired, or otherwise unusable.
+
 ---
 
 ### Tokens

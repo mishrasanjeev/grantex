@@ -115,5 +115,7 @@ describe('E2E: Principal Session Creation', () => {
     // Dashboard URL should be a valid URL
     const url = new URL(session.dashboardUrl);
     expect(url.protocol).toMatch(/^https?:$/);
+    expect(url.hash).toMatch(/^#session=/);
+    expect(url.search).toBe('');
   });
 });

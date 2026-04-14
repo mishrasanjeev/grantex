@@ -36,9 +36,9 @@ export const principalSessionsSuite: SuiteDefinition = {
           expectString(res.body.dashboardUrl, 'dashboardUrl');
           expectString(res.body.expiresAt, 'expiresAt');
 
-          if (!res.body.dashboardUrl.includes('/permissions?session=')) {
+          if (!res.body.dashboardUrl.includes('/permissions#session=')) {
             throw new Error(
-              `Expected dashboardUrl to contain /permissions?session=, got: ${res.body.dashboardUrl}`,
+              `Expected dashboardUrl to contain /permissions#session=, got: ${res.body.dashboardUrl}`,
             );
           }
         },

@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
-import { getRedis } from '../redis/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
-import { decodeTokenClaims, signGrantToken, parseExpiresIn } from '../lib/crypto.js';
+import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
 import { emitEvent } from '../lib/events.js';
 import { issueAgentGrantVC } from '../lib/vc.js';
+import { checkActiveGrantToken } from '../lib/active-grant-token.js';
 
 interface DelegateBody {
   parentGrantToken: string;
@@ -27,35 +27,39 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // Decode parent token
-    let parentClaims: Record<string, unknown>;
-    try {
-      parentClaims = decodeTokenClaims(parentGrantToken);
-    } catch {
-      return reply.status(400).send({ message: 'Invalid parentGrantToken', code: 'BAD_REQUEST', requestId: request.id });
+    const parentCheck = await checkActiveGrantToken(parentGrantToken, {
+      expectedDeveloperId: request.developer.id,
+    });
+
+    if (!parentCheck.ok) {
+      if (parentCheck.reason === 'invalid') {
+        return reply.status(400).send({ message: 'Invalid parentGrantToken', code: 'BAD_REQUEST', requestId: request.id });
+      }
+      if (parentCheck.reason === 'invalid_claims') {
+        return reply.status(400).send({ message: 'Invalid parentGrantToken claims', code: 'BAD_REQUEST', requestId: request.id });
+      }
+      if (parentCheck.reason === 'wrong_developer') {
+        return reply.status(403).send({ message: 'Parent grant belongs to a different developer', code: 'FORBIDDEN', requestId: request.id });
+      }
+      if (parentCheck.reason === 'not_found') {
+        return reply.status(400).send({ message: 'Invalid parentGrantToken claims', code: 'BAD_REQUEST', requestId: request.id });
+      }
+      if (parentCheck.reason === 'revoked') {
+        return reply.status(400).send({ message: 'Parent grant has been revoked', code: 'BAD_REQUEST', requestId: request.id });
+      }
+      return reply.status(400).send({ message: 'Parent grant has expired', code: 'BAD_REQUEST', requestId: request.id });
     }
 
-    const parentJti = parentClaims['jti'] as string | undefined;
-    const parentGrnt = (parentClaims['grnt'] ?? parentClaims['jti']) as string | undefined;
-    const parentAgt = parentClaims['agt'] as string | undefined;
-    const parentScp = parentClaims['scp'] as string[] | undefined;
-    const parentExp = parentClaims['exp'] as number | undefined;
-    const parentDepth = (parentClaims['delegationDepth'] as number | undefined) ?? 0;
-
-    if (!parentJti || !parentGrnt || !parentScp || !parentExp) {
+    const parentClaims = parentCheck.claims;
+    if (!parentClaims.jti || !parentClaims.grnt || !parentClaims.scp || !parentClaims.exp) {
       return reply.status(400).send({ message: 'Invalid parentGrantToken claims', code: 'BAD_REQUEST', requestId: request.id });
     }
 
-    // Check parent not revoked in Redis
-    const redis = getRedis();
-    const [parentTokenRevoked, parentGrantRevoked] = await Promise.all([
-      redis.get(`revoked:tok:${parentJti}`),
-      redis.get(`revoked:grant:${parentGrnt}`),
-    ]);
-
-    if (parentTokenRevoked || parentGrantRevoked) {
-      return reply.status(400).send({ message: 'Parent grant has been revoked', code: 'BAD_REQUEST', requestId: request.id });
-    }
+    const parentGrnt = parentClaims.grnt;
+    const parentAgt = parentClaims.agt;
+    const parentScp = parentClaims.scp;
+    const parentExp = parentClaims.exp;
+    const parentDepth = parentClaims.delegationDepth ?? 0;
 
     // Validate scopes ⊆ parent scopes
     const invalidScopes = scopes.filter((s) => !parentScp.includes(s));
@@ -98,7 +102,7 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       VALUES (
         ${grantId},
         ${subAgentId},
-        ${parentClaims['sub'] as string},
+        ${parentClaims.sub},
         ${developerId},
         ${scopes},
         ${expiresAt},
@@ -142,7 +146,7 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
         const vcResult = await issueAgentGrantVC({
           grantId,
           agentDid: subAgent['did'] as string,
-          principalId: parentClaims['sub'] as string,
+          principalId: parentClaims.sub,
           developerId,
           scopes,
           expiresAt,
@@ -159,7 +163,7 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
     emitEvent(developerId, 'grant.created', {
       grantId,
       agentId: subAgentId,
-      principalId: parentClaims['sub'] as string,
+      principalId: parentClaims.sub,
       scopes,
       expiresAt: expiresAt.toISOString(),
       delegationDepth,
@@ -169,7 +173,7 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       tokenId: jti,
       grantId,
       agentId: subAgentId,
-      principalId: parentClaims['sub'] as string,
+      principalId: parentClaims.sub,
       scopes,
       expiresAt: expiresAt.toISOString(),
     }).catch(() => {});

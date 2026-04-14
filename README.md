@@ -203,6 +203,7 @@ const session = await grantex.principalSessions.create({
   expiresIn: '2h',
 });
 // Send session.dashboardUrl to the user via email, in-app notification, etc.
+// The short-lived session token is carried in the URL fragment, not the query string.
 ```
 
 ---

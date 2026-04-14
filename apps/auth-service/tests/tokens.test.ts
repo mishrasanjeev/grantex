@@ -107,6 +107,30 @@ describe('POST /v1/tokens/verify', () => {
     expect(body.valid).toBe(false);
   });
 
+  it('returns valid:false when the token belongs to a different developer', async () => {
+    seedAuth();
+    const { signGrantToken } = await import('../src/lib/crypto.js');
+    const otherDevToken = await signGrantToken({
+      sub: 'user_123',
+      agt: TEST_GRANT.agent_id,
+      dev: 'dev_OTHER',
+      scp: TEST_GRANT.scopes,
+      jti: 'tok_OTHER_DEV',
+      grnt: TEST_GRANT.id,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/tokens/verify',
+      headers: authHeader(),
+      payload: { token: otherDevToken },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ valid: boolean }>().valid).toBe(false);
+  });
+
   it('returns 400 when token field is missing', async () => {
     seedAuth();
     const res = await app.inject({

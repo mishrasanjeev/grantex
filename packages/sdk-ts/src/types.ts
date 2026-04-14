@@ -285,6 +285,8 @@ export interface VerifyGrantTokenOptions {
   jwksUri: string;
   requiredScopes?: string[];
   audience?: string;
+  /** Expected issuer URL. Defaults to the issuer derived from issuerDid or jwksUri. */
+  issuer?: string;
   /** Resolve a did:web DID to derive the JWKS URL instead of using jwksUri directly */
   issuerDid?: string;
   /** @internal override clock for testing */

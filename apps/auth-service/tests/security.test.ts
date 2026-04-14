@@ -12,6 +12,12 @@ import { gzipSync } from 'node:zlib';
 
 let app: FastifyInstance;
 
+const ACTIVE_PARENT_ROW = {
+  is_revoked: false,
+  expires_at: new Date(Date.now() + 3600_000).toISOString(),
+  grant_status: 'active',
+};
+
 beforeAll(async () => {
   app = await buildTestApp();
 });
@@ -456,6 +462,7 @@ describe('Token Security', () => {
 
     seedAuth();
     mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
 
     const res = await app.inject({
       method: 'POST',

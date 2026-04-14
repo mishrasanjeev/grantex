@@ -254,8 +254,36 @@ describe('POST /v1/grants/verify', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ active: boolean }>();
+    const body = res.json<{ active: boolean; claims?: { iat?: number; jti?: string } }>();
     expect(body.active).toBe(true);
+    expect(typeof body.claims?.iat).toBe('number');
+    expect(body.claims?.jti).toBe('tok_valid');
+  });
+
+  it('returns active:false when the token belongs to a different developer', async () => {
+    seedAuth();
+    const { signGrantToken } = await import('../src/lib/crypto.js');
+    const token = await signGrantToken({
+      sub: 'user_123',
+      agt: TEST_GRANT.agent_id,
+      dev: 'dev_OTHER',
+      scp: TEST_GRANT.scopes,
+      jti: 'tok_other_dev',
+      grnt: TEST_GRANT.id,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/verify',
+      headers: authHeader(),
+      payload: { token },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ active: boolean; reason?: string }>();
+    expect(body.active).toBe(false);
+    expect(body.reason).toBe('wrong_developer');
   });
 
   it('returns active:false reason not_found when token not in DB', async () => {
