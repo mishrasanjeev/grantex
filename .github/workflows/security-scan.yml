@@ -11,6 +11,9 @@ jobs:
   zap-baseline:
     name: OWASP ZAP Baseline Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
 
     services:
       postgres:
