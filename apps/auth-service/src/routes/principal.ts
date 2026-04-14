@@ -87,7 +87,7 @@ export async function principalRoutes(app: FastifyInstance): Promise<void> {
 
       return reply.status(201).send({
         sessionToken,
-        dashboardUrl: `${request.protocol}://${request.hostname}/permissions?session=${sessionToken}`,
+        dashboardUrl: `${request.protocol}://${request.hostname}/permissions#session=${encodeURIComponent(sessionToken)}`,
         expiresAt,
       });
     },
@@ -303,7 +303,17 @@ function permissionsPageHtml(): string {
 </div>
 
 <script>
-  var sessionToken = new URLSearchParams(window.location.search).get('session');
+  function getSessionToken() {
+    var hash = window.location.hash || '';
+    if (hash.startsWith('#')) {
+      var hashParams = new URLSearchParams(hash.slice(1));
+      var hashToken = hashParams.get('session');
+      if (hashToken) return hashToken;
+    }
+    return new URLSearchParams(window.location.search).get('session');
+  }
+
+  var sessionToken = getSessionToken();
 
   if (!sessionToken) {
     document.getElementById('loading').style.display = 'none';

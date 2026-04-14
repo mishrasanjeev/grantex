@@ -19,7 +19,7 @@ describe('PrincipalSessionsClient', () => {
   it('create() POSTs to /v1/principal-sessions', async () => {
     const mockResponse = {
       sessionToken: 'eyJ...',
-      dashboardUrl: 'https://api.grantex.dev/permissions?session=eyJ...',
+      dashboardUrl: 'https://api.grantex.dev/permissions#session=eyJ...',
       expiresAt: '2026-03-01T00:00:00.000Z',
     };
     const mockFetch = makeFetch(201, mockResponse);
@@ -32,7 +32,7 @@ describe('PrincipalSessionsClient', () => {
     });
 
     expect(result.sessionToken).toBe('eyJ...');
-    expect(result.dashboardUrl).toContain('/permissions?session=');
+    expect(result.dashboardUrl).toContain('/permissions#session=');
     expect(result.expiresAt).toBeTruthy();
 
     const [url, init] = mockFetch.mock.calls[0]!;

@@ -1,11 +1,13 @@
 import type { HttpClient } from '../http.js';
-import { mapOnlineVerifyToVerifiedGrant } from '../verify.js';
+import { claimsToVerifiedGrant } from '../verify.js';
+import { GrantexTokenError } from '../errors.js';
 import type {
   Grant,
   ListGrantsParams,
   ListGrantsResponse,
   VerifiedGrant,
   DelegateParams,
+  GrantTokenPayload,
 } from '../types.js';
 
 export class GrantsClient {
@@ -38,17 +40,22 @@ export class GrantsClient {
 
   /**
    * Verify a grant token via the API (online verification).
-   * Returns a clean VerifiedGrant shape by decoding the raw token returned
-   * from the server to fill fields the summary response may omit.
    */
   async verify(token: string): Promise<VerifiedGrant> {
-    const response = await this.#http.post<{ token: string } & Partial<VerifiedGrant>>(
+    const response = await this.#http.post<{
+      active?: boolean;
+      reason?: string;
+      claims?: GrantTokenPayload;
+    }>(
       '/v1/grants/verify',
       { token },
     );
-    // The API may echo back the raw token; decode it to guarantee all fields.
-    const rawToken: string = response.token ?? token;
-    return mapOnlineVerifyToVerifiedGrant(rawToken);
+    if (!response.active || !response.claims) {
+      throw new GrantexTokenError(
+        `Grant token is not active${response.reason ? `: ${response.reason}` : ''}`,
+      );
+    }
+    return claimsToVerifiedGrant(response.claims);
   }
 }
 

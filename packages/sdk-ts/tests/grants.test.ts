@@ -1,14 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Grantex } from '../src/client.js';
-
-// Mock jose so verify.ts doesn't try to fetch JWKS
-vi.mock('jose', () => ({
-  jwtVerify: vi.fn(),
-  decodeJwt: vi.fn(),
-  createRemoteJWKSet: vi.fn(() => 'mock-jwks'),
-}));
-
-import * as jose from 'jose';
+import { GrantexTokenError } from '../src/errors.js';
 
 const MOCK_GRANT = {
   id: 'grant_01',
@@ -94,10 +86,12 @@ describe('GrantsClient', () => {
     expect(init.method).toBe('DELETE');
   });
 
-  it('verify() returns VerifiedGrant using decoded token', async () => {
-    const serverResponse = { token: 'fake.jwt.token' };
+  it('verify() returns VerifiedGrant from verified server claims', async () => {
+    const serverResponse = {
+      active: true,
+      claims: MOCK_PAYLOAD,
+    };
     vi.stubGlobal('fetch', makeFetch(200, serverResponse));
-    vi.mocked(jose.decodeJwt).mockReturnValue(MOCK_PAYLOAD as never);
 
     const grantex = new Grantex({ apiKey: 'test_key' });
     const result = await grantex.grants.verify('fake.jwt.token');
@@ -107,18 +101,17 @@ describe('GrantsClient', () => {
     expect(result.grantId).toBe('grant_01');
   });
 
-  it('verify() uses fallback token when API response has no token property', async () => {
+  it('verify() throws when server reports the token is inactive', async () => {
     // Response without a `token` field — the code falls back to the original token
-    const serverResponse = { valid: true, grantId: 'grant_01' };
+    const serverResponse = { active: false, reason: 'revoked' };
     vi.stubGlobal('fetch', makeFetch(200, serverResponse));
-    vi.mocked(jose.decodeJwt).mockReturnValue(MOCK_PAYLOAD as never);
-
     const grantex = new Grantex({ apiKey: 'test_key' });
-    const result = await grantex.grants.verify('original.jwt.token');
-
-    // mapOnlineVerifyToVerifiedGrant should be called with the fallback (original) token
-    expect(jose.decodeJwt).toHaveBeenCalledWith('original.jwt.token');
-    expect(result.principalId).toBe('user_abc');
+    await expect(grantex.grants.verify('original.jwt.token')).rejects.toBeInstanceOf(
+      GrantexTokenError,
+    );
+    await expect(grantex.grants.verify('original.jwt.token')).rejects.toThrow(
+      'Grant token is not active: revoked',
+    );
   });
 
   it('list() filters out undefined/null query param values', async () => {

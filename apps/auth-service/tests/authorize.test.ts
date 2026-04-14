@@ -52,6 +52,29 @@ describe('POST /v1/authorize', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('returns 400 for invalid expiresIn format', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                  // subscription lookup → free plan
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);    // grant count → 0
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]);
+    sqlMock.mockResolvedValueOnce([]);                  // policy lookup
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        principalId: 'user_123',
+        scopes: ['read'],
+        expiresIn: 'tomorrow-ish',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ code: string }>().code).toBe('BAD_REQUEST');
+  });
+
   it('returns 402 when plan grant limit is reached', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ plan: 'free' }]);  // subscription → free plan

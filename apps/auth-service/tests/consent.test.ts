@@ -39,6 +39,13 @@ describe('GET /consent', () => {
     const res = await app.inject({ method: 'GET', url: '/consent' });
     expect(res.statusCode).toBe(200);
   });
+
+  it('includes client-side escaping helpers for developer-controlled content', async () => {
+    const res = await app.inject({ method: 'GET', url: '/consent' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('function esc(value)');
+    expect(res.body).toContain("replace(/</g, '&lt;')");
+  });
 });
 
 describe('GET /v1/consent/:id', () => {

@@ -23,6 +23,24 @@ interface RefreshBody {
   agentId: string;
 }
 
+interface RouteError {
+  statusCode: number;
+  message: string;
+  code: string;
+}
+
+function routeError(statusCode: number, message: string, code = 'BAD_REQUEST'): never {
+  throw { statusCode, message, code } satisfies RouteError;
+}
+
+function isRouteError(err: unknown): err is RouteError {
+  return typeof err === 'object'
+    && err !== null
+    && 'statusCode' in err
+    && 'message' in err
+    && 'code' in err;
+}
+
 export async function tokenRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/token — stricter rate limit: 20/min
   app.post<{ Body: TokenBody }>('/v1/token', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
@@ -40,83 +58,90 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     const sql = getSql();
     const developerId = request.developer.id;
 
-    // Validate code + agentId
-    const authRows = await sql`
-      SELECT ar.id, ar.agent_id, ar.principal_id, ar.developer_id,
-             ar.scopes, ar.expires_in, ar.expires_at, ar.status,
-             ar.audience, ar.code_challenge, a.did AS agent_did
-      FROM auth_requests ar
-      JOIN agents a ON a.id = ar.agent_id
-      WHERE ar.code = ${code}
-        AND ar.agent_id = ${agentId}
-        AND ar.developer_id = ${developerId}
-    `;
-
-    const authReq = authRows[0];
-    if (!authReq) {
-      return reply.status(400).send({ message: 'Invalid code', code: 'BAD_REQUEST', requestId: request.id });
-    }
-
-    if (authReq['status'] !== 'approved') {
-      return reply.status(400).send({ message: 'Auth request not approved', code: 'BAD_REQUEST', requestId: request.id });
-    }
-
-    if (new Date(authReq['expires_at'] as string) < new Date()) {
-      return reply.status(400).send({ message: 'Auth request expired', code: 'BAD_REQUEST', requestId: request.id });
-    }
-
-    // PKCE verification
-    const storedChallenge = authReq['code_challenge'] as string | null;
-    if (storedChallenge) {
-      if (!codeVerifier) {
-        return reply.status(400).send({ message: 'codeVerifier is required for PKCE', code: 'BAD_REQUEST', requestId: request.id });
-      }
-      if (!verifyPkceChallenge(codeVerifier, storedChallenge)) {
-        return reply.status(400).send({ message: 'Invalid codeVerifier', code: 'BAD_REQUEST', requestId: request.id });
-      }
-    }
-
-    // Parse expiry
-    const expiresInStr = authReq['expires_in'] as string;
-    const expiresSeconds = parseExpiresIn(expiresInStr);
-    const now = Date.now();
-    const expiresAt = new Date(now + expiresSeconds * 1000);
-    const expTimestamp = Math.floor(expiresAt.getTime() / 1000);
-
+    let authReq!: Record<string, unknown>;
+    let expiresAt!: Date;
+    let expTimestamp!: number;
     const grantId = newGrantId();
     const jti = newTokenId();
     const refreshId = newRefreshTokenId();
 
-    // Atomically create grant, token, refresh token, and consume auth request
-    const refreshExpiresAt = new Date(now + 30 * 86400 * 1000); // 30 days
-    await sql.begin(async (_tx) => {
-      const tx = _tx as unknown as TxSql;
-      await tx`
-        INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
-        VALUES (
-          ${grantId},
-          ${authReq['agent_id'] as string},
-          ${authReq['principal_id'] as string},
-          ${authReq['developer_id'] as string},
-          ${authReq['scopes'] as string[]},
-          ${expiresAt}
-        )
-      `;
+    try {
+      await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const authRows = await tx`
+          SELECT ar.id, ar.agent_id, ar.principal_id, ar.developer_id,
+                 ar.scopes, ar.expires_in, ar.expires_at, ar.status,
+                 ar.audience, ar.code_challenge, a.did AS agent_did
+          FROM auth_requests ar
+          JOIN agents a ON a.id = ar.agent_id
+          WHERE ar.code = ${code}
+            AND ar.agent_id = ${agentId}
+            AND ar.developer_id = ${developerId}
+          FOR UPDATE
+        `;
 
-      await tx`
-        INSERT INTO grant_tokens (jti, grant_id, expires_at)
-        VALUES (${jti}, ${grantId}, ${expiresAt})
-      `;
+        authReq = authRows[0] ?? routeError(400, 'Invalid code');
+        if (authReq['status'] !== 'approved') {
+          routeError(400, 'Auth request not approved');
+        }
+        if (new Date(authReq['expires_at'] as string) < new Date()) {
+          routeError(400, 'Auth request expired');
+        }
 
-      await tx`
-        INSERT INTO refresh_tokens (id, grant_id, expires_at)
-        VALUES (${refreshId}, ${grantId}, ${refreshExpiresAt})
-      `;
+        const storedChallenge = authReq['code_challenge'] as string | null;
+        if (storedChallenge) {
+          if (!codeVerifier) {
+            routeError(400, 'codeVerifier is required for PKCE');
+          }
+          if (!verifyPkceChallenge(codeVerifier, storedChallenge)) {
+            routeError(400, 'Invalid codeVerifier');
+          }
+        }
 
-      await tx`
-        UPDATE auth_requests SET status = 'consumed' WHERE id = ${authReq['id'] as string}
-      `;
-    });
+        const expiresSeconds = parseExpiresIn(authReq['expires_in'] as string);
+        const now = Date.now();
+        expiresAt = new Date(now + expiresSeconds * 1000);
+        expTimestamp = Math.floor(expiresAt.getTime() / 1000);
+        const refreshExpiresAt = new Date(now + 30 * 86400 * 1000);
+
+        await tx`
+          INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+          VALUES (
+            ${grantId},
+            ${authReq['agent_id'] as string},
+            ${authReq['principal_id'] as string},
+            ${authReq['developer_id'] as string},
+            ${authReq['scopes'] as string[]},
+            ${expiresAt}
+          )
+        `;
+
+        await tx`
+          INSERT INTO grant_tokens (jti, grant_id, expires_at)
+          VALUES (${jti}, ${grantId}, ${expiresAt})
+        `;
+
+        await tx`
+          INSERT INTO refresh_tokens (id, grant_id, expires_at)
+          VALUES (${refreshId}, ${grantId}, ${refreshExpiresAt})
+        `;
+
+        await tx`
+          UPDATE auth_requests
+          SET status = 'consumed'
+          WHERE id = ${authReq['id'] as string}
+        `;
+      });
+    } catch (err) {
+      if (isRouteError(err)) {
+        return reply.status(err.statusCode).send({
+          message: err.message,
+          code: err.code,
+          requestId: request.id,
+        });
+      }
+      throw err;
+    }
 
     // Check for budget allocation
     const budgetRows = await sql<{ remaining_budget: string }[]>`
@@ -240,69 +265,83 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     const sql = getSql();
     const developerId = request.developer.id;
 
-    // Look up refresh token, joining grants and agents
-    const rows = await sql`
-      SELECT rt.id AS refresh_id, rt.grant_id, rt.is_used, rt.expires_at AS refresh_expires_at,
-             g.agent_id, g.principal_id, g.developer_id, g.scopes, g.status AS grant_status,
-             g.expires_at AS grant_expires_at,
-             a.did AS agent_did
-      FROM refresh_tokens rt
-      JOIN grants g ON g.id = rt.grant_id
-      JOIN agents a ON a.id = g.agent_id
-      WHERE rt.id = ${refreshToken}
-        AND g.developer_id = ${developerId}
-    `;
-
-    const row = rows[0];
-    if (!row) {
-      return reply.status(400).send({ message: 'Invalid refresh token', code: 'BAD_REQUEST', requestId: request.id });
-    }
-
-    if (row['agent_id'] !== agentId) {
-      return reply.status(400).send({ message: 'Agent mismatch', code: 'BAD_REQUEST', requestId: request.id });
-    }
-
-    if (row['is_used']) {
-      return reply.status(400).send({ message: 'Refresh token already used', code: 'BAD_REQUEST', requestId: request.id });
-    }
-
-    if (new Date(row['refresh_expires_at'] as string) < new Date()) {
-      return reply.status(400).send({ message: 'Refresh token expired', code: 'BAD_REQUEST', requestId: request.id });
-    }
-
-    if (row['grant_status'] === 'revoked') {
-      return reply.status(400).send({ message: 'Grant has been revoked', code: 'BAD_REQUEST', requestId: request.id });
-    }
-
-    const grantId = row['grant_id'] as string;
-    const scopes = row['scopes'] as string[];
-    const now = Date.now();
-
-    // Use remaining grant expiry window for the new token
-    const grantExpiresAt = new Date(row['grant_expires_at'] as string);
-    const expTimestamp = Math.floor(grantExpiresAt.getTime() / 1000);
-
+    let row!: Record<string, unknown>;
+    let grantId!: string;
+    let scopes!: string[];
+    let grantExpiresAt!: Date;
     const jti = newTokenId();
     const newRefreshId = newRefreshTokenId();
 
-    // Atomically rotate: mark old refresh token used, create new token + refresh token
-    const refreshExpiresAt = new Date(now + 30 * 86400 * 1000);
-    await sql.begin(async (_tx) => {
-      const tx = _tx as unknown as TxSql;
-      await tx`UPDATE refresh_tokens SET is_used = true WHERE id = ${row['refresh_id'] as string}`;
+    try {
+      await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const rows = await tx`
+          SELECT rt.id AS refresh_id, rt.grant_id, rt.is_used, rt.expires_at AS refresh_expires_at,
+                 g.agent_id, g.principal_id, g.developer_id, g.scopes, g.status AS grant_status,
+                 g.expires_at AS grant_expires_at,
+                 a.did AS agent_did
+          FROM refresh_tokens rt
+          JOIN grants g ON g.id = rt.grant_id
+          JOIN agents a ON a.id = g.agent_id
+          WHERE rt.id = ${refreshToken}
+            AND g.developer_id = ${developerId}
+          FOR UPDATE
+        `;
 
-      await tx`
-        INSERT INTO grant_tokens (jti, grant_id, expires_at)
-        VALUES (${jti}, ${grantId}, ${grantExpiresAt})
-      `;
+        row = rows[0] ?? routeError(400, 'Invalid refresh token');
+        if (row['agent_id'] !== agentId) {
+          routeError(400, 'Agent mismatch');
+        }
+        if (row['is_used']) {
+          routeError(400, 'Refresh token already used');
+        }
+        if (new Date(row['refresh_expires_at'] as string) < new Date()) {
+          routeError(400, 'Refresh token expired');
+        }
+        if (row['grant_status'] === 'revoked') {
+          routeError(400, 'Grant has been revoked');
+        }
 
-      await tx`
-        INSERT INTO refresh_tokens (id, grant_id, expires_at)
-        VALUES (${newRefreshId}, ${grantId}, ${refreshExpiresAt})
-      `;
-    });
+        grantId = row['grant_id'] as string;
+        scopes = row['scopes'] as string[];
+        grantExpiresAt = new Date(row['grant_expires_at'] as string);
+        const now = Date.now();
+        const refreshExpiresAt = new Date(now + 30 * 86400 * 1000);
+
+        const updated = await tx`
+          UPDATE refresh_tokens
+          SET is_used = true
+          WHERE id = ${row['refresh_id'] as string}
+            AND is_used = false
+          RETURNING id
+        `;
+        if (!updated[0]) {
+          routeError(400, 'Refresh token already used');
+        }
+
+        await tx`
+          INSERT INTO grant_tokens (jti, grant_id, expires_at)
+          VALUES (${jti}, ${grantId}, ${grantExpiresAt})
+        `;
+
+        await tx`
+          INSERT INTO refresh_tokens (id, grant_id, expires_at)
+          VALUES (${newRefreshId}, ${grantId}, ${refreshExpiresAt})
+        `;
+      });
+    } catch (err) {
+      if (isRouteError(err)) {
+        return reply.status(err.statusCode).send({
+          message: err.message,
+          code: err.code,
+          requestId: request.id,
+        });
+      }
+      throw err;
+    }
 
     // Sign JWT with same grant claims
+    const expTimestamp = Math.floor(grantExpiresAt.getTime() / 1000);
     const jwt = await signGrantToken({
       sub: row['principal_id'] as string,
       agt: row['agent_did'] as string,

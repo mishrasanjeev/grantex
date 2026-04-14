@@ -31,6 +31,23 @@ export interface GrantTokenPayload {
   bdg?: number;
 }
 
+export interface VerifiedGrantTokenClaims {
+  sub: string;
+  agt: string;
+  dev: string;
+  scp: string[];
+  jti: string;
+  grnt: string;
+  iat: number;
+  exp: number;
+  aud?: string | string[];
+  iss?: string;
+  parentAgt?: string;
+  parentGrnt?: string;
+  delegationDepth?: number;
+  bdg?: number;
+}
+
 let _keyPair: KeyPair | null = null;
 
 function buildKid(): string {
@@ -110,7 +127,7 @@ export async function signGrantToken(
 
 export async function verifyGrantToken(
   token: string,
-): Promise<{ sub: string; dev: string; scp: string[] }> {
+): Promise<VerifiedGrantTokenClaims> {
   const { publicKey } = getKeyPair();
   const { payload } = await jwtVerify(token, publicKey, {
     issuer: config.jwtIssuer,
@@ -118,13 +135,32 @@ export async function verifyGrantToken(
   });
 
   const sub = payload.sub;
+  const agt = payload['agt'] as string | undefined;
   const dev = payload['dev'] as string | undefined;
   const scp = payload['scp'] as string[] | undefined;
-  if (!sub || !dev || !scp) {
+  const jti = payload.jti;
+  const iat = payload.iat;
+  const exp = payload.exp;
+  if (!sub || !agt || !dev || !scp || !jti || typeof iat !== 'number' || typeof exp !== 'number') {
     throw new Error('Missing required grant token claims');
   }
 
-  return { sub, dev, scp };
+  return {
+    sub,
+    agt,
+    dev,
+    scp,
+    jti,
+    grnt: typeof payload['grnt'] === 'string' ? payload['grnt'] : jti,
+    iat,
+    exp,
+    ...(payload.aud !== undefined ? { aud: payload.aud as string | string[] } : {}),
+    ...(payload.iss !== undefined ? { iss: payload.iss } : {}),
+    ...(payload['parentAgt'] !== undefined ? { parentAgt: payload['parentAgt'] as string } : {}),
+    ...(payload['parentGrnt'] !== undefined ? { parentGrnt: payload['parentGrnt'] as string } : {}),
+    ...(payload['delegationDepth'] !== undefined ? { delegationDepth: payload['delegationDepth'] as number } : {}),
+    ...(payload['bdg'] !== undefined ? { bdg: payload['bdg'] as number } : {}),
+  };
 }
 
 // ─── Ed25519 key support (optional — for VC Data Integrity proofs) ────────────

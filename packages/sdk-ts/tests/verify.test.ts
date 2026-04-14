@@ -55,6 +55,23 @@ describe('verifyGrantToken', () => {
     expect(result.expiresAt).toBe(1700086400);
   });
 
+  it('passes a derived issuer to jwtVerify when using jwksUri', async () => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: VALID_PAYLOAD,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    await verifyGrantToken('fake.token.here', {
+      jwksUri: 'https://grantex.dev/.well-known/jwks.json',
+    });
+
+    expect(jose.jwtVerify).toHaveBeenCalledWith(
+      'fake.token.here',
+      'mock-jwks',
+      expect.objectContaining({ issuer: 'https://grantex.dev' }),
+    );
+  });
+
   it('throws GrantexTokenError when jose throws', async () => {
     vi.mocked(jose.jwtVerify).mockRejectedValue(
       new Error('JWTExpired: token has expired'),
@@ -172,6 +189,11 @@ describe('verifyGrantToken', () => {
     expect(jose.createRemoteJWKSet).toHaveBeenCalledWith(
       new URL('https://grantex.dev/.well-known/jwks.json'),
     );
+    expect(jose.jwtVerify).toHaveBeenCalledWith(
+      'fake.token.here',
+      'mock-jwks',
+      expect.objectContaining({ issuer: 'https://grantex.dev' }),
+    );
     expect(result.grantId).toBe('grant_01');
   });
 
@@ -189,6 +211,29 @@ describe('verifyGrantToken', () => {
     // Colons after the method-specific-id prefix become path separators
     expect(jose.createRemoteJWKSet).toHaveBeenCalledWith(
       new URL('https://example.com/api/v1/.well-known/jwks.json'),
+    );
+    expect(jose.jwtVerify).toHaveBeenCalledWith(
+      'fake.token.here',
+      'mock-jwks',
+      expect.objectContaining({ issuer: 'https://example.com/api/v1' }),
+    );
+  });
+
+  it('passes an explicit issuer override to jwtVerify', async () => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: VALID_PAYLOAD,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    await verifyGrantToken('fake.token.here', {
+      jwksUri: 'https://keys.example.com/grantex/jwks.json',
+      issuer: 'https://issuer.example.com',
+    });
+
+    expect(jose.jwtVerify).toHaveBeenCalledWith(
+      'fake.token.here',
+      'mock-jwks',
+      expect.objectContaining({ issuer: 'https://issuer.example.com' }),
     );
   });
 });

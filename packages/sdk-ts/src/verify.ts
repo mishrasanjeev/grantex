@@ -13,9 +13,17 @@ export async function verifyGrantToken(
   options: VerifyGrantTokenOptions,
 ): Promise<VerifiedGrant> {
   let jwksUri = options.jwksUri;
+  let expectedIssuer = options.issuer;
   if (options.issuerDid?.startsWith('did:web:')) {
     const domain = options.issuerDid.replace('did:web:', '').replaceAll(':', '/');
     jwksUri = `https://${domain}/.well-known/jwks.json`;
+    expectedIssuer ??= `https://${domain}`;
+  }
+  if (expectedIssuer === undefined) {
+    const jwksUrl = new URL(jwksUri);
+    expectedIssuer = jwksUrl.pathname.endsWith('/.well-known/jwks.json')
+      ? `${jwksUrl.origin}${jwksUrl.pathname.slice(0, -'/.well-known/jwks.json'.length)}`
+      : `${jwksUrl.origin}${jwksUrl.pathname.replace(/\/$/, '')}`;
   }
   const jwks = createRemoteJWKSet(new URL(jwksUri));
 
@@ -23,6 +31,7 @@ export async function verifyGrantToken(
   try {
     const jwtOptions = {
       algorithms: ['RS256'] as string[],
+      issuer: expectedIssuer,
       ...(options.clockTolerance !== undefined
         ? { clockTolerance: options.clockTolerance }
         : {}),
@@ -66,10 +75,10 @@ export function mapOnlineVerifyToVerifiedGrant(token: string): VerifiedGrant {
     const message = err instanceof Error ? err.message : String(err);
     throw new GrantexTokenError(`Failed to decode grant token: ${message}`);
   }
-  return payloadToVerifiedGrant(payload);
+  return claimsToVerifiedGrant(payload);
 }
 
-function payloadToVerifiedGrant(payload: GrantTokenPayload): VerifiedGrant {
+export function claimsToVerifiedGrant(payload: GrantTokenPayload): VerifiedGrant {
   if (
     typeof payload.jti !== 'string' ||
     typeof payload.sub !== 'string' ||
@@ -94,7 +103,11 @@ function payloadToVerifiedGrant(payload: GrantTokenPayload): VerifiedGrant {
     issuedAt: payload.iat,
     expiresAt: payload.exp,
     ...(payload.parentAgt !== undefined ? { parentAgentDid: payload.parentAgt } : {}),
-    ...(payload.parentGrnt !== undefined ? { parentGrantId: payload.parentGrnt } : {}),
-    ...(payload.delegationDepth !== undefined ? { delegationDepth: payload.delegationDepth } : {}),
+      ...(payload.parentGrnt !== undefined ? { parentGrantId: payload.parentGrnt } : {}),
+      ...(payload.delegationDepth !== undefined ? { delegationDepth: payload.delegationDepth } : {}),
   };
+}
+
+function payloadToVerifiedGrant(payload: GrantTokenPayload): VerifiedGrant {
+  return claimsToVerifiedGrant(payload);
 }

@@ -52,8 +52,17 @@ const CONSENT_HTML = `<!DOCTYPE html>
   const reqId = params.get('req');
   const el = document.getElementById('content');
 
+  function esc(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function showError(msg) {
-    el.innerHTML = '<div class="error-msg">' + msg + '</div>';
+    el.innerHTML = '<div class="error-msg">' + esc(msg) + '</div>';
   }
 
   function formatExpiry(isoStr) {
@@ -81,15 +90,15 @@ const CONSENT_HTML = `<!DOCTYPE html>
 
   const expiry = formatExpiry(data.expiresAt);
   const scopeItems = (data.scopeDescriptions || []).map(function(d) {
-    return '<li>' + d + '</li>';
+    return '<li>' + esc(d) + '</li>';
   }).join('');
 
   el.innerHTML =
     '<div class="header"><div class="icon">&#128274;</div><h1>Authorization Request</h1></div>' +
     '<div class="agent-box">' +
-      '<div class="agent-name">' + data.agentName + ' wants permission:</div>' +
-      (data.agentDescription ? '<div class="agent-desc">' + data.agentDescription + '</div>' : '') +
-      '<div class="agent-did">' + data.agentDid + '</div>' +
+      '<div class="agent-name">' + esc(data.agentName) + ' wants permission:</div>' +
+      (data.agentDescription ? '<div class="agent-desc">' + esc(data.agentDescription) + '</div>' : '') +
+      '<div class="agent-did">' + esc(data.agentDid) + '</div>' +
     '</div>' +
     '<div class="scopes-label">Requested permissions</div>' +
     '<ul class="scope-list">' + scopeItems + '</ul>' +

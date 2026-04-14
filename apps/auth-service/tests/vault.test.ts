@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { buildTestApp, authHeader, seedAuth, sqlMock } from './helpers.js';
+import { buildTestApp, authHeader, seedAuth, sqlMock, mockRedis } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 
 // Mock vault-crypto module
@@ -18,7 +18,13 @@ describe('POST /v1/vault/credentials', () => {
   it('stores a credential and returns metadata', async () => {
     seedAuth();
     // INSERT ... ON CONFLICT
-    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{
+      id: 'vault_1',
+      principal_id: 'user_123',
+      service: 'google',
+      credential_type: 'oauth2',
+      created_at: '2026-03-01T00:00:00Z',
+    }]);
 
     const res = await app.inject({
       method: 'POST',
@@ -54,6 +60,31 @@ describe('POST /v1/vault/credentials', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('BAD_REQUEST');
+  });
+
+  it('returns the persisted credential id on upsert', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      id: 'vault_existing',
+      principal_id: 'user_123',
+      service: 'google',
+      credential_type: 'oauth2',
+      created_at: '2026-03-01T00:00:00Z',
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/vault/credentials',
+      headers: authHeader(),
+      payload: {
+        principalId: 'user_123',
+        service: 'google',
+        accessToken: 'ya29.updated',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().id).toBe('vault_existing');
   });
 });
 
@@ -189,6 +220,13 @@ describe('POST /v1/vault/credentials/exchange', () => {
 
     sqlMock.mockResolvedValueOnce([
       {
+        is_revoked: false,
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        grant_status: 'active',
+      },
+    ]);
+    sqlMock.mockResolvedValueOnce([
+      {
         id: 'vault_1',
         access_token: 'encrypted:ya29.real_token',
         refresh_token: null,
@@ -233,6 +271,14 @@ describe('POST /v1/vault/credentials/exchange', () => {
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
 
+    sqlMock.mockResolvedValueOnce([
+      {
+        is_revoked: false,
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        grant_status: 'active',
+      },
+    ]);
+
     const res = await app.inject({
       method: 'POST',
       url: '/v1/vault/credentials/exchange',
@@ -255,6 +301,13 @@ describe('POST /v1/vault/credentials/exchange', () => {
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
 
+    sqlMock.mockResolvedValueOnce([
+      {
+        is_revoked: false,
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        grant_status: 'active',
+      },
+    ]);
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
@@ -272,6 +325,31 @@ describe('POST /v1/vault/credentials/exchange', () => {
       method: 'POST',
       url: '/v1/vault/credentials/exchange',
       headers: { authorization: 'Bearer invalid.jwt.token' },
+      payload: { service: 'google' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().code).toBe('UNAUTHORIZED');
+  });
+
+  it('returns 401 when grant token is revoked', async () => {
+    const { signGrantToken } = await import('../src/lib/crypto.js');
+    const token = await signGrantToken({
+      sub: 'user_123',
+      agt: 'did:grantex:ag_01',
+      dev: 'dev_TEST',
+      scp: ['google:read'],
+      jti: 'tok_VAULT04',
+      grnt: 'grnt_VAULT04',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+
+    mockRedis.get.mockResolvedValueOnce('1');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/vault/credentials/exchange',
+      headers: { authorization: `Bearer ${token}` },
       payload: { service: 'google' },
     });
 

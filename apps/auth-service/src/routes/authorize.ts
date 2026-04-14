@@ -7,6 +7,7 @@ import { getPolicyBackend } from '../lib/policy-backend.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 import { authorizeTotal, authorizeDuration } from '../lib/metrics.js';
 import { incrementUsage } from '../lib/usage.js';
+import { parseExpiresIn } from '../lib/crypto.js';
 
 interface AuthorizeBody {
   agentId: string;
@@ -99,8 +100,16 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // Parse expiresIn to compute expires_at
-    const expiresSeconds = parseExpiresIn(expiresIn);
+    let expiresSeconds: number;
+    try {
+      expiresSeconds = parseExpiresIn(expiresIn);
+    } catch {
+      return reply.status(400).send({
+        message: 'Invalid expiresIn format. Use e.g. "1h", "30m", "24h".',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
     const expiresAt = new Date(Date.now() + expiresSeconds * 1000);
 
     const id = newAuthRequestId();
@@ -192,18 +201,4 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({ requestId: row['id'], status: row['status'] });
   });
-}
-
-function parseExpiresIn(expiresIn: string): number {
-  const match = /^(\d+)([smhd])$/.exec(expiresIn);
-  if (!match) return 86400; // default 24h
-  const [, amount, unit] = match;
-  const n = parseInt(amount!, 10);
-  switch (unit) {
-    case 's': return n;
-    case 'm': return n * 60;
-    case 'h': return n * 3600;
-    case 'd': return n * 86400;
-    default: return 86400;
-  }
 }

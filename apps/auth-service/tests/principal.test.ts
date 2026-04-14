@@ -44,7 +44,8 @@ describe('POST /v1/principal-sessions', () => {
     expect(res.statusCode).toBe(201);
     const body = res.json<{ sessionToken: string; dashboardUrl: string; expiresAt: string }>();
     expect(body.sessionToken).toBeTruthy();
-    expect(body.dashboardUrl).toContain('/permissions?session=');
+    expect(body.dashboardUrl).toContain('/permissions#session=');
+    expect(body.dashboardUrl).not.toContain('/permissions?session=');
     expect(body.expiresAt).toBeTruthy();
   });
 

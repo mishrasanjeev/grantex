@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { getSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
-import { decodeTokenClaims } from '../lib/crypto.js';
+import { checkActiveGrantToken } from '../lib/active-grant-token.js';
+import { getSql } from '../db/client.js';
 
 export async function tokensRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/tokens/verify
@@ -11,61 +11,23 @@ export async function tokensRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ message: 'token is required', code: 'BAD_REQUEST', requestId: request.id });
     }
 
-    let claims: Record<string, unknown>;
-    try {
-      claims = decodeTokenClaims(token);
-    } catch {
+    const result = await checkActiveGrantToken(token, {
+      expectedDeveloperId: request.developer.id,
+    });
+
+    if (!result.ok) {
       return reply.send({ valid: false });
     }
 
-    const jti = claims['jti'] as string | undefined;
-    const gid = (claims['grnt'] ?? claims['jti']) as string | undefined;
-
-    if (!jti) return reply.send({ valid: false });
-
-    // Redis check first
-    const redis = getRedis();
-    const [tokenRevoked, grantRevoked] = await Promise.all([
-      redis.get(`revoked:tok:${jti}`),
-      gid ? redis.get(`revoked:grant:${gid}`) : Promise.resolve(null),
-    ]);
-
-    if (tokenRevoked || grantRevoked) {
-      return reply.send({ valid: false });
-    }
-
-    // DB check
-    const sql = getSql();
-    const rows = await sql`
-      SELECT gt.is_revoked, gt.expires_at, g.status AS grant_status
-      FROM grant_tokens gt
-      JOIN grants g ON g.id = gt.grant_id
-      WHERE gt.jti = ${jti}
-    `;
-
-    const row = rows[0];
-    if (!row) return reply.send({ valid: false });
-
-    if (row['is_revoked'] as boolean) {
-      // Write-back to Redis
-      const expiresAt = new Date(row['expires_at'] as string);
-      const ttl = Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
-      await redis.set(`revoked:tok:${jti}`, '1', 'EX', ttl);
-      return reply.send({ valid: false });
-    }
-
-    if (row['grant_status'] !== 'active') return reply.send({ valid: false });
-
-    const expiresAt = new Date(row['expires_at'] as string);
-    if (expiresAt < new Date()) return reply.send({ valid: false });
+    const { claims } = result;
 
     return reply.send({
       valid: true,
-      grantId: gid,
-      scopes: claims['scp'],
-      principal: claims['sub'],
-      agent: claims['agt'],
-      expiresAt: new Date((claims['exp'] as number) * 1000).toISOString(),
+      grantId: claims.grnt,
+      scopes: claims.scp,
+      principal: claims.sub,
+      agent: claims.agt,
+      expiresAt: new Date(claims.exp * 1000).toISOString(),
     });
   });
 

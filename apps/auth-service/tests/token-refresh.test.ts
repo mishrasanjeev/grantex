@@ -29,7 +29,7 @@ describe('POST /v1/token/refresh', () => {
     // Refresh token lookup (JOIN grants + agents)
     sqlMock.mockResolvedValueOnce([validRefreshRow]);
     // UPDATE refresh_tokens SET is_used = true
-    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ id: 'ref_EXISTING' }]);
     // INSERT grant_tokens
     sqlMock.mockResolvedValueOnce([]);
     // INSERT refresh_tokens (new)
@@ -64,6 +64,22 @@ describe('POST /v1/token/refresh', () => {
     expect(claims['dev']).toBe(TEST_DEVELOPER.id);
     expect(claims['scp']).toEqual(['read', 'write']);
     expect(claims['grnt']).toBe('grnt_EXISTING');
+  });
+
+  it('returns 400 when the refresh token was consumed concurrently', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([validRefreshRow]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token/refresh',
+      headers: authHeader(),
+      payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toBe('Refresh token already used');
   });
 
   it('returns 400 for already-used refresh token', async () => {
