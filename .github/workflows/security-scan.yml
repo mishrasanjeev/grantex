@@ -11,6 +11,35 @@ jobs:
   zap-baseline:
     name: OWASP ZAP Baseline Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: grantex
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
     steps:
       - uses: actions/checkout@v6
 
@@ -27,15 +56,32 @@ jobs:
       - name: Build auth service
         run: npm run build --prefix apps/auth-service
 
-      - name: Start test server
+      - name: Start auth service
         run: |
-          AUTO_GENERATE_KEYS=true \
-          DATABASE_URL=postgresql://localhost/test \
-          REDIS_URL=redis://localhost \
-          npm start --prefix apps/auth-service &
-          sleep 5
+          nohup node apps/auth-service/dist/index.js > auth.log 2>&1 &
+          echo $! > auth.pid
         env:
           NODE_ENV: production
+          AUTO_GENERATE_KEYS: 'true'
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grantex
+          REDIS_URL: redis://localhost:6379
+          PORT: '3001'
+          JWT_ISSUER: http://localhost:3001
+          LOG_LEVEL: info
+
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3001/health > /dev/null; then
+              echo "auth-service is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "auth-service did not become healthy"
+          echo "--- auth.log ---"
+          cat auth.log || true
+          exit 1
 
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.15.0
@@ -43,6 +89,21 @@ jobs:
           target: 'http://localhost:3001'
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
+
+      - name: Upload auth service log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: auth-service-log
+          path: auth.log
+          if-no-files-found: ignore
+
+      - name: Stop auth service
+        if: always()
+        run: |
+          if [ -f auth.pid ]; then
+            kill "$(cat auth.pid)" || true
+          fi
 
   zap-full:
     name: OWASP ZAP Full Scan
