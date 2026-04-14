@@ -20,14 +20,21 @@ export const mockRedis = {
   del: vi.fn().mockResolvedValue(1),
   publish: vi.fn().mockResolvedValue(0),
   subscribe: vi.fn().mockResolvedValue(undefined),
+  unsubscribe: vi.fn().mockResolvedValue(undefined),
   ping: vi.fn().mockResolvedValue('PONG'),
   incr: vi.fn().mockResolvedValue(1),
   decr: vi.fn().mockResolvedValue(0),
   expire: vi.fn().mockResolvedValue(1),
+  eval: vi.fn().mockResolvedValue(0),
   connect: vi.fn().mockResolvedValue(undefined),
+  disconnect: vi.fn(),
   quit: vi.fn().mockResolvedValue(undefined),
+  on: vi.fn(),
+  duplicate: vi.fn(),
   options: { host: 'localhost', port: 6379 },
 };
+// Returning self from duplicate() keeps the subscriber-side mocks in sync.
+mockRedis.duplicate.mockImplementation(() => mockRedis);
 
 export const mockStripe = {
   checkout: {

@@ -36,15 +36,21 @@ def verify_grant_token(
         )
 
     jwks_uri = options.jwks_uri
+    expected_issuer = options.issuer
     if options.issuer_did is not None and options.issuer_did.startswith("did:web:"):
         domain = options.issuer_did.removeprefix("did:web:").replace(":", "/")
         jwks_uri = f"https://{domain}/.well-known/jwks.json"
+        if expected_issuer is None:
+            expected_issuer = f"https://{domain}"
+    if expected_issuer is None:
+        expected_issuer = _derive_issuer_from_jwks_uri(jwks_uri)
 
     signing_key = _fetch_signing_key(jwks_uri, header.get("kid"))
 
     decode_kwargs: dict[str, Any] = {
         "algorithms": ["RS256"],
         "leeway": options.clock_tolerance,
+        "issuer": expected_issuer,
     }
     if options.audience is not None:
         decode_kwargs["audience"] = options.audience
@@ -73,6 +79,20 @@ def verify_grant_token(
             )
 
     return _payload_to_verified_grant(payload)
+
+
+def _derive_issuer_from_jwks_uri(jwks_uri: str) -> str:
+    """Mirror the TypeScript SDK: strip a trailing /.well-known/jwks.json,
+    otherwise use the origin + trimmed path."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(jwks_uri)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    path = parsed.path or ""
+    suffix = "/.well-known/jwks.json"
+    if path.endswith(suffix):
+        return f"{origin}{path[: -len(suffix)]}"
+    return f"{origin}{path.rstrip('/')}"
 
 
 def _fetch_signing_key(jwks_uri: str, kid: str | None) -> Any:
