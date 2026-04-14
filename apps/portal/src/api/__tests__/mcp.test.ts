@@ -27,32 +27,32 @@ describe('mcp', () => {
   // ── listMcpServers ────────────────────────────────────────────────────
 
   it('listMcpServers without params sends GET /v1/mcp/servers', async () => {
-    ok({ servers: [{ id: 's1', name: 'Server 1' }] });
+    ok({ data: [{ serverId: 's1', name: 'Server 1' }], meta: { total: 1 } });
     const result = await listMcpServers();
     expect(result).toEqual([{ id: 's1', name: 'Server 1' }]);
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/mcp/servers', expect.objectContaining({ method: 'GET' }));
   });
 
   it('listMcpServers with category param', async () => {
-    ok({ servers: [] });
+    ok({ data: [], meta: { total: 0 } });
     await listMcpServers({ category: 'data' });
     expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/mcp/servers?category=data');
   });
 
   it('listMcpServers with certified param (true)', async () => {
-    ok({ servers: [] });
+    ok({ data: [], meta: { total: 0 } });
     await listMcpServers({ certified: true });
     expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/mcp/servers?certified=true');
   });
 
   it('listMcpServers with certified param (false)', async () => {
-    ok({ servers: [] });
+    ok({ data: [], meta: { total: 0 } });
     await listMcpServers({ certified: false });
     expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/mcp/servers?certified=false');
   });
 
   it('listMcpServers with both params', async () => {
-    ok({ servers: [] });
+    ok({ data: [], meta: { total: 0 } });
     await listMcpServers({ category: 'auth', certified: true });
     const url = mockFetch.mock.calls[0]![0];
     expect(url).toContain('category=auth');
@@ -67,14 +67,14 @@ describe('mcp', () => {
   // ── getMcpServer ──────────────────────────────────────────────────────
 
   it('getMcpServer sends GET /v1/mcp/servers/:id', async () => {
-    ok({ id: 's1', name: 'Server 1' });
+    ok({ serverId: 's1', name: 'Server 1' });
     const result = await getMcpServer('s1');
     expect(result).toEqual({ id: 's1', name: 'Server 1' });
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/mcp/servers/s1', expect.objectContaining({ method: 'GET' }));
   });
 
   it('getMcpServer encodes id', async () => {
-    ok({ id: 's/1' });
+    ok({ serverId: 's/1' });
     await getMcpServer('s/1');
     expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/mcp/servers/s%2F1');
   });
@@ -88,7 +88,7 @@ describe('mcp', () => {
 
   it('createMcpServer sends POST /v1/mcp/servers with params', async () => {
     const params = { name: 'New Server', category: 'data', scopes: ['read'] };
-    ok({ id: 's2', ...params });
+    ok({ serverId: 's2', ...params });
     const result = await createMcpServer(params);
     expect(result).toEqual({ id: 's2', ...params });
     const [url, opts] = mockFetch.mock.calls[0]!;

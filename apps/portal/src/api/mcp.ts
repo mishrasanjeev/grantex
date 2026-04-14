@@ -43,21 +43,36 @@ export interface ListMcpServersParams {
   certified?: boolean;
 }
 
+// Server returns { data: [{ serverId, ... }], meta: { total, cursor? } } —
+// normalize to the portal's { id, ... } shape.
+interface McpServerWire extends Omit<McpServer, 'id'> {
+  serverId: string;
+}
+
+function normalizeServer(w: McpServerWire): McpServer {
+  const { serverId, ...rest } = w;
+  return { id: serverId, ...rest };
+}
+
 export async function listMcpServers(params?: ListMcpServersParams): Promise<McpServer[]> {
   const query = new URLSearchParams();
   if (params?.category) query.set('category', params.category);
   if (params?.certified !== undefined) query.set('certified', String(params.certified));
   const qs = query.toString();
-  const res = await api.get<{ servers: McpServer[] }>(`/v1/mcp/servers${qs ? `?${qs}` : ''}`);
-  return res.servers;
+  const res = await api.get<{ data: McpServerWire[]; meta: { total: number; cursor?: string } }>(
+    `/v1/mcp/servers${qs ? `?${qs}` : ''}`,
+  );
+  return (res.data ?? []).map(normalizeServer);
 }
 
-export function getMcpServer(id: string): Promise<McpServer> {
-  return api.get<McpServer>(`/v1/mcp/servers/${encodeURIComponent(id)}`);
+export async function getMcpServer(id: string): Promise<McpServer> {
+  const res = await api.get<McpServerWire>(`/v1/mcp/servers/${encodeURIComponent(id)}`);
+  return normalizeServer(res);
 }
 
-export function createMcpServer(params: CreateMcpServerParams): Promise<McpServer> {
-  return api.post<McpServer>('/v1/mcp/servers', params);
+export async function createMcpServer(params: CreateMcpServerParams): Promise<McpServer> {
+  const res = await api.post<McpServerWire>('/v1/mcp/servers', params);
+  return normalizeServer(res);
 }
 
 export function applyForCertification(serverId: string, level: string): Promise<McpCertification> {
