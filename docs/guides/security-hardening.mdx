@@ -55,9 +55,9 @@ await app.register(rateLimit, {
 
 ## CORS Policy
 
-The auth service registers `@fastify/cors` with default settings, allowing requests from any origin. This is appropriate for the hosted API because authentication is API-key-based (not cookie-based).
+The auth service registers `@fastify/cors` with `origin: false`, which **disables** cross-origin requests by default. The hosted API is consumed by server-side SDKs over Bearer auth, so browsers are never expected to call it directly, and no `Access-Control-Allow-Origin` header is emitted.
 
-For self-hosted deployments handling browser-based consent flows, you may want to restrict allowed origins:
+For self-hosted deployments that need browser-based consent flows or first-party dashboards to call the auth service, explicitly allow the origins you trust:
 
 ```typescript
 await app.register(cors, {

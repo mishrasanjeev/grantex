@@ -128,6 +128,63 @@ def test_hs256_header_raises_token_error() -> None:
         verify_grant_token(token, options)
 
 
+def test_issuer_is_bound_when_derived_from_jwks(mocker: pytest.FixtureRequest) -> None:
+    """verify_grant_token must pass an expected issuer to jwt.decode so
+    tokens signed by other Grantex developers (different issuer but same
+    JWKS) cannot be reused — parity with the TypeScript SDK."""
+    token = _fake_jwt(MOCK_JWT_PAYLOAD)
+    mocker.patch(  # type: ignore[attr-defined]
+        "grantex._verify._fetch_signing_key", return_value="mock-key"
+    )
+    decode_spy = mocker.patch(  # type: ignore[attr-defined]
+        "jwt.decode", return_value=MOCK_JWT_PAYLOAD
+    )
+    options = VerifyGrantTokenOptions(jwks_uri="https://grantex.dev/.well-known/jwks.json")
+
+    verify_grant_token(token, options)
+
+    _, kwargs = decode_spy.call_args
+    assert kwargs.get("issuer") == "https://grantex.dev"
+
+
+def test_issuer_explicit_option_takes_precedence(mocker: pytest.FixtureRequest) -> None:
+    token = _fake_jwt(MOCK_JWT_PAYLOAD)
+    mocker.patch(  # type: ignore[attr-defined]
+        "grantex._verify._fetch_signing_key", return_value="mock-key"
+    )
+    decode_spy = mocker.patch(  # type: ignore[attr-defined]
+        "jwt.decode", return_value=MOCK_JWT_PAYLOAD
+    )
+    options = VerifyGrantTokenOptions(
+        jwks_uri="https://grantex.dev/.well-known/jwks.json",
+        issuer="https://auth.mycompany.com",
+    )
+
+    verify_grant_token(token, options)
+
+    _, kwargs = decode_spy.call_args
+    assert kwargs.get("issuer") == "https://auth.mycompany.com"
+
+
+def test_issuer_derived_from_did_web(mocker: pytest.FixtureRequest) -> None:
+    token = _fake_jwt(MOCK_JWT_PAYLOAD)
+    mocker.patch(  # type: ignore[attr-defined]
+        "grantex._verify._fetch_signing_key", return_value="mock-key"
+    )
+    decode_spy = mocker.patch(  # type: ignore[attr-defined]
+        "jwt.decode", return_value=MOCK_JWT_PAYLOAD
+    )
+    options = VerifyGrantTokenOptions(
+        jwks_uri="https://grantex.dev/.well-known/jwks.json",
+        issuer_did="did:web:grantex.dev",
+    )
+
+    verify_grant_token(token, options)
+
+    _, kwargs = decode_spy.call_args
+    assert kwargs.get("issuer") == "https://grantex.dev"
+
+
 def test_jwks_fetch_failure_raises_token_error(mocker: pytest.FixtureRequest) -> None:
     token = _fake_jwt(MOCK_JWT_PAYLOAD)
     mocker.patch(  # type: ignore[attr-defined]

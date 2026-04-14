@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
+import type { Redis } from 'ioredis';
 import { getRedis } from '../redis/client.js';
-import { Redis } from 'ioredis';
 
 const MAX_CONNECTIONS_PER_DEV = 5;
 const KEEPALIVE_INTERVAL_MS = 30_000;
+const CONN_COUNTER_TTL_SECONDS = 300;
 
 /**
  * SSE + WebSocket event streaming routes.
@@ -17,14 +18,13 @@ export async function eventsRoutes(app: FastifyInstance): Promise<void> {
     const typesParam = (request.query as Record<string, string>)['types'];
     const filterTypes = typesParam ? typesParam.split(',') : null;
 
-    // Enforce connection limit
     const redis = getRedis();
     const connKey = `sse:connections:${developerId}`;
     const connCount = await redis.incr(connKey);
-    await redis.expire(connKey, 300); // 5 min TTL as safety net
+    await redis.expire(connKey, CONN_COUNTER_TTL_SECONDS);
 
     if (connCount > MAX_CONNECTIONS_PER_DEV) {
-      await redis.decr(connKey);
+      await safeDecr(redis, connKey);
       return reply.status(429).send({
         message: `Max ${MAX_CONNECTIONS_PER_DEV} concurrent SSE connections per developer`,
         code: 'TOO_MANY_CONNECTIONS',
@@ -32,10 +32,8 @@ export async function eventsRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // Hijack the response so Fastify doesn't manage it
     reply.hijack();
 
-    // Set SSE headers
     reply.raw.writeHead(200, {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache',
@@ -43,9 +41,7 @@ export async function eventsRoutes(app: FastifyInstance): Promise<void> {
       'x-accel-buffering': 'no',
     });
 
-    // Create a dedicated Redis subscriber
-    const redisConfig = (redis as unknown as { options: { host: string; port: number } }).options;
-    const subscriber = new Redis({ host: redisConfig?.host ?? 'localhost', port: redisConfig?.port ?? 6379, lazyConnect: true });
+    const subscriber = redis.duplicate();
     await subscriber.connect();
 
     const channel = `grantex:events:${developerId}`;
@@ -61,17 +57,16 @@ export async function eventsRoutes(app: FastifyInstance): Promise<void> {
       reply.raw.write(`data: ${message}\n\n`);
     });
 
-    // Keepalive
     const keepalive = setInterval(() => {
       reply.raw.write(': keepalive\n\n');
+      redis.expire(connKey, CONN_COUNTER_TTL_SECONDS).catch(() => { /* transient — next tick refreshes */ });
     }, KEEPALIVE_INTERVAL_MS);
 
-    // Cleanup on disconnect
     request.raw.on('close', async () => {
       clearInterval(keepalive);
       await subscriber.unsubscribe(channel);
       subscriber.disconnect();
-      await redis.decr(connKey);
+      await safeDecr(redis, connKey);
     });
   });
 
@@ -79,23 +74,20 @@ export async function eventsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/events/ws', { websocket: true }, async (socket, request) => {
     const developerId = request.developer.id;
 
-    // Enforce connection limit
     const redis = getRedis();
     const connKey = `ws:connections:${developerId}`;
     const connCount = await redis.incr(connKey);
-    await redis.expire(connKey, 300);
+    await redis.expire(connKey, CONN_COUNTER_TTL_SECONDS);
 
     if (connCount > MAX_CONNECTIONS_PER_DEV) {
-      await redis.decr(connKey);
+      await safeDecr(redis, connKey);
       socket.close(1013, 'Too many connections');
       return;
     }
 
     let filterTypes: string[] | null = null;
 
-    // Create a dedicated Redis subscriber
-    const redisConfig = (redis as unknown as { options: { host: string; port: number } }).options;
-    const subscriber = new Redis({ host: redisConfig?.host ?? 'localhost', port: redisConfig?.port ?? 6379, lazyConnect: true });
+    const subscriber = redis.duplicate();
     await subscriber.connect();
 
     const channel = `grantex:events:${developerId}`;
@@ -111,7 +103,6 @@ export async function eventsRoutes(app: FastifyInstance): Promise<void> {
       socket.send(message);
     });
 
-    // Accept filter configuration via client messages
     socket.on('message', (data: Buffer | string) => {
       try {
         const msg = JSON.parse(typeof data === 'string' ? data : data.toString()) as { types?: string[] };
@@ -121,10 +112,10 @@ export async function eventsRoutes(app: FastifyInstance): Promise<void> {
       } catch { /* ignore invalid messages */ }
     });
 
-    // Ping/pong keepalive
     const pingInterval = setInterval(() => {
       if (socket.readyState === 1) {
         socket.ping();
+        redis.expire(connKey, CONN_COUNTER_TTL_SECONDS).catch(() => { /* transient — next tick refreshes */ });
       }
     }, KEEPALIVE_INTERVAL_MS);
 
@@ -132,7 +123,30 @@ export async function eventsRoutes(app: FastifyInstance): Promise<void> {
       clearInterval(pingInterval);
       await subscriber.unsubscribe(channel);
       subscriber.disconnect();
-      await redis.decr(connKey);
+      await safeDecr(redis, connKey);
     });
   });
+}
+
+// DECR then clamp at 0 so transient counter drift (e.g. the key expired
+// while long-lived clients were still connected) cannot drive the gauge
+// negative and silently grant unlimited future connections.
+const SAFE_DECR_SCRIPT = `
+  local v = redis.call('DECR', KEYS[1])
+  if v < 0 then
+    redis.call('SET', KEYS[1], 0)
+    return 0
+  end
+  return v
+`;
+
+async function safeDecr(redis: Redis, key: string): Promise<void> {
+  try {
+    await redis.eval(SAFE_DECR_SCRIPT, 1, key);
+  } catch {
+    // If the Lua call fails (e.g. redis temporarily unavailable),
+    // fall back to a plain DECR. The subsequent keepalive tick will
+    // restore the TTL and next connection's INCR will self-correct.
+    await redis.decr(key).catch(() => { /* swallow */ });
+  }
 }

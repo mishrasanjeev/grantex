@@ -30,12 +30,13 @@ describe('GET /v1/events/stream (SSE)', () => {
 
     expect(res.statusCode).toBe(429);
     expect(res.json().code).toBe('TOO_MANY_CONNECTIONS');
-    expect(mockRedis.decr).toHaveBeenCalled();
+    expect(mockRedis.eval).toHaveBeenCalled();
   });
 
-  it('sets expire on connection counter', async () => {
+  it('uses guarded decrement when rejecting over-limit connections', async () => {
     seedAuth();
-    mockRedis.incr.mockResolvedValueOnce(6); // Over limit — tests the expire call
+    mockRedis.incr.mockResolvedValueOnce(6);
+    mockRedis.eval.mockClear();
 
     await app.inject({
       method: 'GET',
@@ -43,9 +44,12 @@ describe('GET /v1/events/stream (SSE)', () => {
       headers: authHeader(),
     });
 
-    expect(mockRedis.expire).toHaveBeenCalledWith(
+    // Plain DECR can drive the gauge negative after TTL-based drift.
+    // The route must use the eval-backed safe decrement that clamps at 0.
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.stringContaining("DECR"),
+      1,
       expect.stringContaining('sse:connections:'),
-      300,
     );
   });
 

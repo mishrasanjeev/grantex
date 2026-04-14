@@ -31,7 +31,7 @@ Response:
 ```json
 {
   "sessionToken": "eyJhbGciOiJSUzI1NiIs...",
-  "dashboardUrl": "https://api.grantex.dev/permissions?session=eyJhbGciOiJSUzI1NiIs...",
+  "dashboardUrl": "https://api.grantex.dev/permissions#session=eyJhbGciOiJSUzI1NiIs...",
   "expiresAt": "2026-03-01T14:00:00.000Z"
 }
 ```
@@ -50,7 +50,9 @@ const session = await grantex.principalSessions.create({
 });
 
 console.log(session.dashboardUrl);
-// → "https://api.grantex.dev/permissions?session=eyJ..."
+// → "https://api.grantex.dev/permissions#session=eyJ..."
+// The session token is in the URL fragment (#), not the query string,
+// so it is never transmitted to the server or leaked via Referer headers.
 
 // Send this URL to your user (email, in-app, etc.)
 ```
@@ -68,7 +70,9 @@ session = grantex.principal_sessions.create(
 )
 
 print(session.dashboard_url)
-# → "https://api.grantex.dev/permissions?session=eyJ..."
+# → "https://api.grantex.dev/permissions#session=eyJ..."
+# The session token is in the URL fragment (#), not the query string,
+# so it is never transmitted to the server or leaked via Referer headers.
 ```
 </CodeGroup>
 

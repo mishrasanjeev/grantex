@@ -463,6 +463,7 @@ class VerifyGrantTokenOptions:
     clock_tolerance: int = 0
     audience: str | None = None
     issuer_did: str | None = None
+    issuer: str | None = None
 
 
 # ─── Raw JWT payload shape ────────────────────────────────────────────────────
