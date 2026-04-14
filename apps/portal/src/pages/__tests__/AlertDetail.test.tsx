@@ -65,7 +65,12 @@ describe('AlertDetail', () => {
 
   it('acknowledges alert on button click', async () => {
     mockAcknowledgeAlert.mockResolvedValueOnce(undefined);
-    mockGetAlert.mockResolvedValue({ ...alert, status: 'acknowledged', acknowledgedAt: new Date().toISOString() });
+    // Initial fetch: open (so the Acknowledge button renders). Post-ack refresh:
+    // acknowledged. Previously this used mockResolvedValue with the final state,
+    // which hid the button at mount time.
+    mockGetAlert
+      .mockResolvedValueOnce(alert)
+      .mockResolvedValueOnce({ ...alert, status: 'acknowledged', acknowledgedAt: new Date().toISOString() });
     const user = userEvent.setup();
     r();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Acknowledge' })).toBeInTheDocument());

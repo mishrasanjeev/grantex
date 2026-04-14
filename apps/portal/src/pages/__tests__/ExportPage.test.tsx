@@ -24,7 +24,9 @@ describe('ExportPage', () => {
 
   it('shows Generate Export form', () => {
     r();
-    expect(screen.getByText('Generate Export')).toBeInTheDocument();
+    // Appears as a section heading AND as the submit button label.
+    expect(screen.getByRole('heading', { name: 'Generate Export' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate Export' })).toBeInTheDocument();
   });
 
   it('shows export type options', () => {

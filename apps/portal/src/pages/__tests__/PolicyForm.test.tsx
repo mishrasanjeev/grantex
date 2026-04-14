@@ -42,7 +42,8 @@ describe('PolicyForm', () => {
 
   it('renders Create Policy mode', () => {
     renderCreate();
-    expect(screen.getByText('Create Policy')).toBeInTheDocument();
+    // "Create Policy" appears as both the page heading and the submit button.
+    expect(screen.getByRole('heading', { name: 'Create Policy' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create Policy' })).toBeInTheDocument();
   });
 

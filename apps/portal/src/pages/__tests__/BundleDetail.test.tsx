@@ -111,11 +111,13 @@ describe('BundleDetail', () => {
     r();
     await waitFor(() => expect(screen.getByText('Revoke Bundle')).toBeInTheDocument());
     await user.click(screen.getByText('Revoke Bundle'));
+    // Dialog message is "Are you sure you want to revoke this bundle? The
+    // device will lose offline authorization on its next sync." — so the
+    // exact-match lookup on just the question fails. Use a regex.
     await waitFor(() => {
-      const dialog = screen.getByText('Are you sure you want to revoke this bundle?').closest('div[class*="fixed"]')!;
-      expect(dialog).toBeInTheDocument();
+      expect(screen.getByText(/Are you sure you want to revoke this bundle\?/)).toBeInTheDocument();
     });
-    const dialog = screen.getByText('Are you sure you want to revoke this bundle?').closest('div[class*="fixed"]')!;
+    const dialog = screen.getByText(/Are you sure you want to revoke this bundle\?/).closest('div[class*="fixed"]')!;
     const btns = within(dialog as HTMLElement).getAllByRole('button', { name: 'Revoke' });
     await user.click(btns[btns.length - 1]!);
     await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Bundle revoked', 'success'));

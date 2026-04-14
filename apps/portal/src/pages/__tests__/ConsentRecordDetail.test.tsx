@@ -41,6 +41,9 @@ describe('ConsentRecordDetail', () => {
 
   it('has back navigation link', async () => {
     r();
-    await waitFor(() => expect(screen.getByText('Consent Records')).toBeInTheDocument());
+    // Link text is "← Consent Records" in one node, so exact match fails.
+    // Regex matches the label; also check by href to prove it's a real link.
+    await waitFor(() => expect(screen.getAllByText(/Consent Records/).length).toBeGreaterThan(0));
+    expect(document.querySelector('a[href="/dashboard/dpdp/records"]')).toBeTruthy();
   });
 });
