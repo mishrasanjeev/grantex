@@ -3,3 +3,4 @@
 10049	IGNORE	(Storable and Cacheable Content)
 10021	IGNORE	(X-Content-Type-Options Header Missing)
 40025	IGNORE	(Proxy Disclosure - Cloud Run infrastructure)
+90005	IGNORE	(Sec-Fetch-Dest Header Missing - API service, not browser-fronted)
