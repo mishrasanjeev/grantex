@@ -73,8 +73,10 @@ describe('McpServerDetail', () => {
     r();
     await waitFor(() => expect(screen.getByText('Weekly Agents')).toBeInTheDocument());
     expect(screen.getByText('Stars')).toBeInTheDocument();
-    expect(screen.getByText('142')).toBeInTheDocument();
-    expect(screen.getByText('87')).toBeInTheDocument();
+    // 142 (weekly agents) is also listed in the Active Clients sample table,
+    // so the numeric text can appear multiple times by design.
+    expect(screen.getAllByText('142').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('87').length).toBeGreaterThan(0);
   });
 
   it('shows certification section', async () => {
@@ -118,7 +120,8 @@ describe('McpServerDetail', () => {
 
   it('shows Active Clients table', async () => {
     r();
-    await waitFor(() => expect(screen.getByText('Active Clients')).toBeInTheDocument());
+    // "Active Clients" appears as both a stat label and a section heading.
+    await waitFor(() => expect(screen.getAllByText('Active Clients').length).toBeGreaterThan(0));
     expect(screen.getByText('data-pipeline-agent')).toBeInTheDocument();
   });
 });

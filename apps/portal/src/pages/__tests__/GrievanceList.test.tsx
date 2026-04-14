@@ -31,20 +31,21 @@ describe('GrievanceList', () => {
 
   it('has File Grievance button', () => {
     r();
-    expect(screen.getByText('File Grievance')).toBeInTheDocument();
+    // Header toggle + empty-state CTA both render "File Grievance" — both expected.
+    expect(screen.getAllByRole('button', { name: 'File Grievance' }).length).toBeGreaterThan(0);
   });
 
   it('opens file form on button click', async () => {
     const user = userEvent.setup();
     r();
-    await user.click(screen.getByText('File Grievance'));
+    await user.click(screen.getAllByRole('button', { name: 'File Grievance' })[0]!);
     await waitFor(() => expect(screen.getByText('File New Grievance')).toBeInTheDocument());
   });
 
   it('shows grievance form fields', async () => {
     const user = userEvent.setup();
     r();
-    await user.click(screen.getByText('File Grievance'));
+    await user.click(screen.getAllByRole('button', { name: 'File Grievance' })[0]!);
     await waitFor(() => expect(screen.getByText('Data Principal ID *')).toBeInTheDocument());
     expect(screen.getByText('Type *')).toBeInTheDocument();
     expect(screen.getByText('Description *')).toBeInTheDocument();
@@ -58,11 +59,12 @@ describe('GrievanceList', () => {
     });
     const user = userEvent.setup();
     r();
-    await user.click(screen.getByText('File Grievance'));
+    await user.click(screen.getAllByRole('button', { name: 'File Grievance' })[0]!);
     await waitFor(() => expect(screen.getByText('File New Grievance')).toBeInTheDocument());
     await user.type(screen.getByPlaceholderText('e.g. user_123'), 'user-1');
     await user.type(screen.getByPlaceholderText('Describe the grievance...'), 'Request data erasure');
-    await user.click(screen.getAllByText('File Grievance').find(el => el.tagName === 'BUTTON' && el.getAttribute('type') === 'submit')!);
+    const submit = screen.getAllByRole('button', { name: 'File Grievance' }).find((b) => (b as HTMLButtonElement).type === 'submit')!;
+    await user.click(submit);
     await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Grievance filed: REF-001', 'success'));
   });
 
@@ -70,11 +72,12 @@ describe('GrievanceList', () => {
     mockFileGrievance.mockRejectedValueOnce(new Error('fail'));
     const user = userEvent.setup();
     r();
-    await user.click(screen.getByText('File Grievance'));
+    await user.click(screen.getAllByRole('button', { name: 'File Grievance' })[0]!);
     await waitFor(() => expect(screen.getByText('File New Grievance')).toBeInTheDocument());
     await user.type(screen.getByPlaceholderText('e.g. user_123'), 'user-1');
     await user.type(screen.getByPlaceholderText('Describe the grievance...'), 'Test');
-    await user.click(screen.getAllByText('File Grievance').find(el => el.tagName === 'BUTTON' && el.getAttribute('type') === 'submit')!);
+    const submit = screen.getAllByRole('button', { name: 'File Grievance' }).find((b) => (b as HTMLButtonElement).type === 'submit')!;
+    await user.click(submit);
     await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Failed to file grievance', 'error'));
   });
 
@@ -115,7 +118,7 @@ describe('GrievanceList', () => {
   it('shows grievance type dropdown', async () => {
     const user = userEvent.setup();
     r();
-    await user.click(screen.getByText('File Grievance'));
+    await user.click(screen.getAllByRole('button', { name: 'File Grievance' })[0]!);
     await waitFor(() => expect(screen.getByText('Type *')).toBeInTheDocument());
   });
 });

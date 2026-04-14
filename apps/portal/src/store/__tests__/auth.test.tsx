@@ -34,7 +34,9 @@ function AuthTestHarness() {
       <div data-testid="api-key">{apiKey ?? 'null'}</div>
       <div data-testid="developer-name">{developer?.name ?? 'null'}</div>
       <div data-testid="loading">{loading ? 'true' : 'false'}</div>
-      <button onClick={() => login('gx_live_test123')}>Login</button>
+      {/* Swallow the rejection in the harness — individual tests that care
+          about the failure path assert via mocks, not via a thrown promise. */}
+      <button onClick={() => { login('gx_live_test123').catch(() => {}); }}>Login</button>
       <button onClick={logout}>Logout</button>
     </div>
   );
