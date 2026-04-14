@@ -75,25 +75,6 @@ def verify_grant_token(
     return _payload_to_verified_grant(payload)
 
 
-def _map_online_verify_to_verified_grant(token: str) -> VerifiedGrant:
-    """Decode a grant token without re-verifying the signature.
-
-    Used by GrantsClient.verify() after the server has already validated.
-    """
-    try:
-        payload_data: dict[str, Any] = jwt.decode(
-            token,
-            options={"verify_signature": False, "verify_aud": False},
-            algorithms=["RS256"],
-        )
-    except jwt.PyJWTError as exc:
-        raise GrantexTokenError(
-            f"Failed to decode grant token: {exc}"
-        ) from exc
-
-    return _payload_to_verified_grant(_build_payload(payload_data))
-
-
 def _fetch_signing_key(jwks_uri: str, kid: str | None) -> Any:
     """Fetch the JWKS and return the matching RSA public key."""
     try:

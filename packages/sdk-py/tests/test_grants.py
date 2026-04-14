@@ -76,20 +76,37 @@ def test_revoke_delete(client: Grantex) -> None:
 
 
 @respx.mock
-def test_verify_returns_verified_grant(
-    client: Grantex, mocker: pytest.FixtureRequest
-) -> None:
-    fake_token = _make_fake_jwt(MOCK_JWT_PAYLOAD)
+def test_verify_returns_verified_grant(client: Grantex) -> None:
+    server_claims = {
+        "iss": "https://api.grantex.dev",
+        "sub": "user_abc123",
+        "agt": "did:grantex:ag_01HXYZ123abc",
+        "dev": "org_test",
+        "scp": ["calendar:read"],
+        "iat": 1709000000,
+        "exp": 9999999999,
+        "jti": "tok_01HXYZ987xyz",
+        "grnt": "grant_01HXYZ",
+    }
     respx.post("https://api.grantex.dev/v1/grants/verify").mock(
-        return_value=httpx.Response(200, json={"token": fake_token})
+        return_value=httpx.Response(200, json={"active": True, "claims": server_claims})
     )
-    mocker.patch(  # type: ignore[attr-defined]
-        "grantex._verify._map_online_verify_to_verified_grant",
-        return_value=_build_verified_grant(),
-    )
-    grant = client.grants.verify(fake_token)
+    grant = client.grants.verify("any.caller.supplied.token")
     assert grant.token_id == "tok_01HXYZ987xyz"
     assert grant.grant_id == "grant_01HXYZ"
+    assert grant.principal_id == "user_abc123"
+    assert grant.scopes == ("calendar:read",)
+
+
+@respx.mock
+def test_verify_raises_when_inactive(client: Grantex) -> None:
+    from grantex import GrantexTokenError
+
+    respx.post("https://api.grantex.dev/v1/grants/verify").mock(
+        return_value=httpx.Response(200, json={"active": False, "reason": "revoked"})
+    )
+    with pytest.raises(GrantexTokenError, match="revoked"):
+        client.grants.verify("any.caller.supplied.token")
 
 
 def _build_verified_grant():

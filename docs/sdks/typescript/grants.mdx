@@ -222,7 +222,7 @@ console.log(delegated.expiresAt);  // '2026-02-28T13:00:00Z'
 
 ## grants.verify()
 
-Verify a grant token online and return a `VerifiedGrant` with full claim details. The SDK decodes the token returned by the API to populate all fields.
+Verify a grant token online and return a `VerifiedGrant` with full claim details. The SDK uses the server-verified claims returned by `POST /v1/grants/verify` — it does not decode the caller-supplied token locally, so forged or tampered tokens are always rejected by the server before any claim is surfaced.
 
 ```typescript
 const verified = await grantex.grants.verify(grantToken);

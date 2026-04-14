@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import Any, List
 from urllib.parse import urlencode
 
+from .._errors import GrantexTokenError
 from .._http import HttpClient
 from .._types import Grant, ListGrantsParams, ListGrantsResponse, VerifiedGrant, DelegateParams
-from .._verify import _map_online_verify_to_verified_grant
+from .._verify import _build_payload, _payload_to_verified_grant
 
 
 class GrantsClient:
@@ -43,8 +44,12 @@ class GrantsClient:
 
     def verify(self, token: str) -> VerifiedGrant:
         response = self._http.post("/v1/grants/verify", {"token": token})
-        raw_token: str = response.get("token", token) if isinstance(response, dict) else token
-        return _map_online_verify_to_verified_grant(raw_token)
+        if not isinstance(response, dict) or not response.get("active") or not response.get("claims"):
+            reason = response.get("reason") if isinstance(response, dict) else None
+            suffix = f": {reason}" if reason else ""
+            raise GrantexTokenError(f"Grant token is not active{suffix}")
+        claims: dict[str, Any] = response["claims"]
+        return _payload_to_verified_grant(_build_payload(claims))
 
 
 def _build_query(params: dict[str, object]) -> str:

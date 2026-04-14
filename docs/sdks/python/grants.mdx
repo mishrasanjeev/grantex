@@ -110,7 +110,7 @@ All parameters are keyword-only.
 
 ## Verify
 
-Verify a grant token online and decode its claims. This calls the Grantex API for server-side validation, then decodes the token locally:
+Verify a grant token online against the Grantex API. The SDK uses the server-verified claims returned by `POST /v1/grants/verify` — it does not decode the caller-supplied token locally, so forged or tampered tokens are always rejected by the server before any claim is surfaced. Raises `GrantexTokenError` if the server reports the token as inactive (revoked, expired, or unknown):
 
 ```python
 from grantex import Grantex
