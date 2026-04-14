@@ -52,7 +52,7 @@ console.log(session.expiresAt);     // '2026-03-01T14:00:00.000Z'
 </ResponseField>
 
 <ResponseField name="dashboardUrl" type="string">
-  Full URL the user can open in their browser to view and revoke permissions.
+  Full URL the user can open in their browser to view and revoke permissions. The session token is carried in the URL **fragment** (`#session=...`), not the query string, so it is never transmitted to the server or captured in `Referer` headers or access logs.
 </ResponseField>
 
 <ResponseField name="expiresAt" type="string">

@@ -90,7 +90,7 @@ with Grantex(api_key="gx_invalid_key") as client:
 
 ## GrantexTokenError
 
-Raised when JWT verification or decoding fails. This occurs when using `verify_grant_token()` for offline verification or when `grants.verify()` cannot decode the returned token.
+Raised when JWT verification fails. This occurs when using `verify_grant_token()` for offline verification or when `grants.verify()` receives an `active: false` response (revoked, expired, or unknown token) from the Grantex API.
 
 ```python
 from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenError

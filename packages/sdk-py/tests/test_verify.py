@@ -1,4 +1,4 @@
-"""Tests for verify_grant_token and _map_online_verify_to_verified_grant."""
+"""Tests for verify_grant_token."""
 from __future__ import annotations
 
 import base64
@@ -8,7 +8,6 @@ import pytest
 
 from grantex import verify_grant_token, GrantexTokenError
 from grantex._types import VerifyGrantTokenOptions, VerifiedGrant
-from grantex._verify import _map_online_verify_to_verified_grant
 from tests.conftest import MOCK_JWT_PAYLOAD
 
 
@@ -151,25 +150,3 @@ def test_no_matching_kid_raises_token_error(mocker: pytest.FixtureRequest) -> No
         verify_grant_token(token, options)
 
 
-# ─── _map_online_verify_to_verified_grant ────────────────────────────────────
-
-
-def test_decode_without_verify_path(mocker: pytest.FixtureRequest) -> None:
-    token = _fake_jwt(MOCK_JWT_PAYLOAD)
-    mocker.patch(  # type: ignore[attr-defined]
-        "jwt.decode", return_value=MOCK_JWT_PAYLOAD
-    )
-    result = _map_online_verify_to_verified_grant(token)
-    assert result.token_id == MOCK_JWT_PAYLOAD["jti"]
-    assert result.grant_id == MOCK_JWT_PAYLOAD["grnt"]
-
-
-def test_decode_error_raises_token_error(mocker: pytest.FixtureRequest) -> None:
-    import jwt as pyjwt
-
-    token = _fake_jwt(MOCK_JWT_PAYLOAD)
-    mocker.patch(  # type: ignore[attr-defined]
-        "jwt.decode", side_effect=pyjwt.DecodeError("invalid token")
-    )
-    with pytest.raises(GrantexTokenError, match="decode"):
-        _map_online_verify_to_verified_grant(token)
