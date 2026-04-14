@@ -105,8 +105,8 @@ func TestAuthorize(t *testing.T) {
 
 func TestRotateKey(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/developers/rotate-key" {
-			t.Errorf("expected /v1/developers/rotate-key, got %s", r.URL.Path)
+		if r.URL.Path != "/v1/keys/rotate" {
+			t.Errorf("expected /v1/keys/rotate, got %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(RotateKeyResponse{
@@ -128,8 +128,8 @@ func TestRotateKey(t *testing.T) {
 
 func TestSignup(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/developers/signup" {
-			t.Errorf("expected /v1/developers/signup, got %s", r.URL.Path)
+		if r.URL.Path != "/v1/signup" {
+			t.Errorf("expected /v1/signup, got %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(SignupResponse{

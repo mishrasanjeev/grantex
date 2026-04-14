@@ -119,7 +119,7 @@ func Signup(ctx context.Context, params SignupParams, opts ...Option) (*SignupRe
 		maxRetriesSet: cfg.maxRetriesSet,
 	}
 
-	return unmarshal[SignupResponse](h.post(ctx, "/v1/developers/signup", params))
+	return unmarshal[SignupResponse](h.post(ctx, "/v1/signup", params))
 }
 
 // LastRateLimit returns the rate limit metadata from the most recent API response, or nil if unavailable.
@@ -134,5 +134,5 @@ func (c *Client) Authorize(ctx context.Context, params AuthorizeParams) (*Author
 
 // RotateKey rotates the developer API key.
 func (c *Client) RotateKey(ctx context.Context) (*RotateKeyResponse, error) {
-	return unmarshal[RotateKeyResponse](c.http.post(ctx, "/v1/developers/rotate-key", nil))
+	return unmarshal[RotateKeyResponse](c.http.post(ctx, "/v1/keys/rotate", nil))
 }
