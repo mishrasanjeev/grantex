@@ -50,6 +50,15 @@ export const config = {
   fidoOrigin: optional('FIDO_ORIGIN', 'https://grantex.dev'),
   // SSO state HMAC key (optional — derived from RSA_PRIVATE_KEY if not set)
   ssoStateSecret: process.env['SSO_STATE_SECRET'] ?? null,
+  // CORS: comma-separated list of browser origins allowed to call the API
+  // (developer dashboard, docs, etc.). Empty string disables CORS.
+  corsAllowedOrigins: optional(
+    'CORS_ALLOWED_ORIGINS',
+    'https://grantex.dev,https://portal.grantex.dev,http://localhost:5173',
+  )
+    .split(',')
+    .map((o) => o.trim())
+    .filter((o) => o.length > 0),
 } as const;
 
 if (!config.rsaPrivateKey && !config.autoGenerateKeys) {
