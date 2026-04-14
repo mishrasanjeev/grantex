@@ -78,20 +78,17 @@ export async function buildApp(opts: AppOptions = {}) {
     reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
   });
 
-  // Global rate limit: 100 requests/minute, keyed by developer API key
-  // when authenticated, falling back to IP for unauthenticated requests.
-  // Per-developer keying prevents shared-IP scenarios (CI runners, NAT)
-  // from cross-contaminating rate limit buckets.
+  // Global rate limit: 100 requests/minute, keyed strictly by source IP.
+  // Earlier versions keyed on the Bearer token, which let an attacker
+  // bypass the limiter by varying invalid tokens to mint fresh buckets
+  // (each fake token got its own 100/min budget). IP-keying closes that
+  // hole. Per-developer plan-based throughput is the responsibility of
+  // a post-auth limiter (see plugins/dynamicRateLimit.ts), not this
+  // global pre-auth net.
   await app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
-    keyGenerator: (req) => {
-      const auth = req.headers.authorization;
-      if (auth?.startsWith('Bearer ')) {
-        return `bearer:${auth.slice(7)}`;
-      }
-      return req.ip;
-    },
+    keyGenerator: (req) => req.ip,
     allowList: (req) => {
       // Skip rate limiting for JWKS (public key distribution must never be throttled)
       return req.url.startsWith('/.well-known/');

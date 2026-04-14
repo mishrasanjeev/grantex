@@ -11,9 +11,7 @@ beforeAll(async () => {
 describe('POST /v1/budget/allocate', () => {
   it('creates a budget allocation', async () => {
     seedAuth();
-    // Grant exists, active, not expired
-    sqlMock.mockResolvedValueOnce([{ id: 'grnt_1', status: 'active', expires_at: new Date(Date.now() + 3600_000) }]);
-    // Insert allocation
+    // INSERT...SELECT FROM grants — atomic insert returns the new row
     sqlMock.mockResolvedValueOnce([{
       id: 'bdg_1',
       grant_id: 'grnt_1',
@@ -52,7 +50,8 @@ describe('POST /v1/budget/allocate', () => {
 
   it('returns 404 when grant not found', async () => {
     seedAuth();
-    sqlMock.mockResolvedValueOnce([]); // No grant
+    sqlMock.mockResolvedValueOnce([]); // INSERT...SELECT: no row inserted (no matching grant)
+    sqlMock.mockResolvedValueOnce([]); // disambiguation SELECT: grant truly missing
 
     const res = await app.inject({
       method: 'POST',
@@ -62,11 +61,13 @@ describe('POST /v1/budget/allocate', () => {
     });
 
     expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('NOT_FOUND');
   });
 
   it('returns 409 GRANT_INACTIVE when allocating against a revoked grant', async () => {
     seedAuth();
-    sqlMock.mockResolvedValueOnce([{ id: 'grnt_revoked', status: 'revoked', expires_at: new Date(Date.now() + 3600_000) }]);
+    sqlMock.mockResolvedValueOnce([]); // INSERT...SELECT: zero rows (grant revoked)
+    sqlMock.mockResolvedValueOnce([{ status: 'revoked', expires_at: new Date(Date.now() + 3600_000) }]);
 
     const res = await app.inject({
       method: 'POST',
@@ -81,7 +82,8 @@ describe('POST /v1/budget/allocate', () => {
 
   it('returns 409 GRANT_INACTIVE when allocating against an expired grant', async () => {
     seedAuth();
-    sqlMock.mockResolvedValueOnce([{ id: 'grnt_exp', status: 'active', expires_at: new Date(Date.now() - 1000) }]);
+    sqlMock.mockResolvedValueOnce([]); // INSERT...SELECT: zero rows (expires_at past)
+    sqlMock.mockResolvedValueOnce([{ status: 'active', expires_at: new Date(Date.now() - 1000) }]);
 
     const res = await app.inject({
       method: 'POST',
@@ -106,9 +108,7 @@ describe('POST /v1/budget/allocate', () => {
 
   it('returns 409 for duplicate budget allocation', async () => {
     seedAuth();
-    // Grant exists, active, not expired
-    sqlMock.mockResolvedValueOnce([{ id: 'grnt_1', status: 'active', expires_at: new Date(Date.now() + 3600_000) }]);
-    // Insert fails with unique constraint
+    // INSERT...SELECT fails with unique constraint
     sqlMock.mockRejectedValueOnce(Object.assign(new Error('unique constraint violated'), { code: '23505' }));
 
     const res = await app.inject({
@@ -124,9 +124,7 @@ describe('POST /v1/budget/allocate', () => {
 
   it('re-throws unknown errors from allocation', async () => {
     seedAuth();
-    // Grant exists, active, not expired
-    sqlMock.mockResolvedValueOnce([{ id: 'grnt_1', status: 'active', expires_at: new Date(Date.now() + 3600_000) }]);
-    // Insert fails with non-unique error
+    // INSERT...SELECT fails with non-unique error
     sqlMock.mockRejectedValueOnce(new Error('connection lost'));
 
     const res = await app.inject({
@@ -175,6 +173,23 @@ describe('POST /v1/budget/debit', () => {
 
     expect(res.statusCode).toBe(402);
     expect(res.json().code).toBe('INSUFFICIENT_BUDGET');
+  });
+
+  it('returns 404 NOT_FOUND when debiting an unknown grant id', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]); // UPDATE: no matching row
+    // Disambiguation SELECT — grant truly missing
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/budget/debit',
+      headers: authHeader(),
+      payload: { grantId: 'grnt_typo', amount: 10 },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('NOT_FOUND');
   });
 
   it('returns 409 GRANT_INACTIVE when debiting against a revoked grant', async () => {

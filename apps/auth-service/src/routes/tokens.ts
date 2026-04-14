@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getRedis } from '../redis/client.js';
 import { checkActiveGrantToken } from '../lib/active-grant-token.js';
 import { getSql } from '../db/client.js';
+import { incrementUsage } from '../lib/usage.js';
 
 export async function tokensRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/tokens/verify
@@ -14,6 +15,8 @@ export async function tokensRoutes(app: FastifyInstance): Promise<void> {
     const result = await checkActiveGrantToken(token, {
       expectedDeveloperId: request.developer.id,
     });
+
+    incrementUsage(request.developer.id, 'verifications').catch(() => {});
 
     if (!result.ok) {
       return reply.send({ valid: false });

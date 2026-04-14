@@ -1005,11 +1005,11 @@ for entry in history.entries:
 </details>
 
 <details>
-<summary><strong>Custom Domains</strong> — white-label consent UI and API endpoints</summary>
+<summary><strong>Custom Domains</strong> — register & verify domains for white-labeling</summary>
 
 ## Custom Domains
 
-Grantex supports custom domains for white-labeling the consent UI and API endpoints. Register your domain, verify ownership via DNS TXT record, and all Grantex-hosted consent pages will be served under your brand.
+Grantex provides domain registration and DNS-based ownership verification so your account is provisioned and ready to host Grantex on your own domain. Today the API covers registration, verification, listing, and deletion; runtime traffic routing through verified domains (consent UI / API endpoints served from your domain) is on the roadmap and currently still served from `*.grantex.dev`. Track progress in [issues](https://github.com/mishrasanjeev/grantex/issues).
 
 ```typescript
 // Register a custom domain
