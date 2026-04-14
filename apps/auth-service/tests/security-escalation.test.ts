@@ -22,6 +22,12 @@ import { signGrantToken } from '../src/lib/crypto.js';
 
 let app: FastifyInstance;
 
+const ACTIVE_PARENT_ROW = {
+  is_revoked: false,
+  expires_at: new Date(Date.now() + 3600_000).toISOString(),
+  grant_status: 'active',
+};
+
 beforeAll(async () => {
   app = await buildTestApp();
 });
@@ -129,6 +135,7 @@ describe('Authorization escalation prevention', () => {
 
     seedAuth();
     mockRedis.get.mockResolvedValue(null); // not revoked
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
 
     const res = await app.inject({
       method: 'POST',

@@ -148,7 +148,7 @@ describe('metrics instrumentation', () => {
       grant_expires_at: new Date(Date.now() + 86400_000).toISOString(),
     }]);
     // mark old used
-    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ id: 'ref_1' }]);
     // insert new token
     sqlMock.mockResolvedValueOnce([]);
     // insert new refresh

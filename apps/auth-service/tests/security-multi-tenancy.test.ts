@@ -177,12 +177,6 @@ describe('Multi-tenancy isolation', () => {
       exp: Math.floor(Date.now() / 1000) + 3600,
     });
 
-    // Redis check: not revoked
-    mockRedis.get.mockResolvedValue(null);
-    // DB check: the join includes `g.developer_id = ${request.developer.id}`,
-    // so it returns empty because the token belongs to developer B
-    sqlMock.mockResolvedValueOnce([]);
-
     const res = await app.inject({
       method: 'POST',
       url: '/v1/grants/verify',
@@ -192,7 +186,7 @@ describe('Multi-tenancy isolation', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().active).toBe(false);
-    expect(res.json().reason).toBe('not_found');
+    expect(res.json().reason).toBe('wrong_developer');
   });
 
   // ── Vault credentials ──────────────────────────────────────────────────
