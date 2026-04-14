@@ -80,14 +80,40 @@ export async function verifyEmailRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // Mark verified
+    // Bind the verified address onto the developer record so developers.email
+    // is always the address that was actually proven. Without this, a developer
+    // could verify any mailbox while the canonical email field stayed unset or
+    // pointed to a different address.
+    const verifiedEmail = row['email'] as string;
+    const developerId = row['developer_id'] as string;
+
+    // Reject if another verified developer already owns this address — keeps
+    // the application-level uniqueness invariant from signup intact.
+    const conflicts = await sql`
+      SELECT id FROM developers
+      WHERE email = ${verifiedEmail}
+        AND id != ${developerId}
+        AND email_verified = TRUE
+      LIMIT 1
+    `;
+    if (conflicts.length > 0) {
+      return reply.status(409).send({
+        message: 'This email is already verified by another account',
+        code: 'EMAIL_TAKEN',
+        requestId: request.id,
+      });
+    }
+
     await sql`
       UPDATE email_verifications SET verified_at = NOW() WHERE id = ${row['id'] as string}
     `;
     await sql`
-      UPDATE developers SET email_verified = TRUE WHERE id = ${row['developer_id'] as string}
+      UPDATE developers
+      SET email_verified = TRUE,
+          email = ${verifiedEmail}
+      WHERE id = ${developerId}
     `;
 
-    return reply.send({ message: 'Email verified successfully' });
+    return reply.send({ message: 'Email verified successfully', email: verifiedEmail });
   });
 }

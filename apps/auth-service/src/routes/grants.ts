@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { revokeGrantCascade } from '../lib/revoke.js';
 import { checkActiveGrantToken } from '../lib/active-grant-token.js';
+import { incrementUsage } from '../lib/usage.js';
 
 export async function grantsRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/grants
@@ -63,6 +64,8 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
     const result = await checkActiveGrantToken(token, {
       expectedDeveloperId: request.developer.id,
     });
+
+    incrementUsage(request.developer.id, 'verifications').catch(() => {});
 
     if (!result.ok) {
       if (result.reason === 'invalid' || result.reason === 'invalid_claims') {

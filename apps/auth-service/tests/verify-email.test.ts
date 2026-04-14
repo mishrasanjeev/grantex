@@ -80,9 +80,11 @@ describe('GET /v1/signup/verify/:token', () => {
       expires_at: new Date(Date.now() + 86400_000).toISOString(),
       verified_at: null,
     }]);
+    // Conflict check — no other developer owns this email
+    sqlMock.mockResolvedValueOnce([]);
     // Update verification
     sqlMock.mockResolvedValueOnce([]);
-    // Update developer
+    // Update developer (sets email_verified=TRUE and email=verifiedEmail)
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
@@ -92,6 +94,27 @@ describe('GET /v1/signup/verify/:token', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().message).toContain('verified');
+    expect(res.json().email).toBe('test@example.com');
+  });
+
+  it('returns 409 EMAIL_TAKEN when another developer already verified the same address', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      id: 'emv_1',
+      developer_id: 'dev_TEST',
+      email: 'shared@example.com',
+      expires_at: new Date(Date.now() + 86400_000).toISOString(),
+      verified_at: null,
+    }]);
+    // Conflict check — another developer already owns this verified email
+    sqlMock.mockResolvedValueOnce([{ id: 'dev_OTHER' }]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/signup/verify/conflict-token',
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('EMAIL_TAKEN');
   });
 
   it('returns 404 for invalid token', async () => {
@@ -149,6 +172,8 @@ describe('GET /v1/signup/verify/:token', () => {
       expires_at: new Date(Date.now() + 86400_000).toISOString(),
       verified_at: null,
     }]);
+    // Conflict check, then two updates
+    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([]);
 

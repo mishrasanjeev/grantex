@@ -32,14 +32,32 @@ export async function createBudgetAllocation(
 ): Promise<BudgetAllocation> {
   const id = newBudgetAllocationId();
 
+  // Single statement: insert only if the grant is currently active and not
+  // expired. Closes the race where a concurrent revoke between a separate
+  // pre-check and the insert would still allow allocation against a dead grant.
   const rows = await sql`
     INSERT INTO budget_allocations (id, grant_id, developer_id, initial_budget, remaining_budget, currency)
-    VALUES (${id}, ${grantId}, ${developerId}, ${initialBudget}, ${initialBudget}, ${currency})
+    SELECT ${id}, g.id, g.developer_id, ${initialBudget}, ${initialBudget}, ${currency}
+    FROM grants g
+    WHERE g.id = ${grantId}
+      AND g.developer_id = ${developerId}
+      AND g.status = 'active'
+      AND g.expires_at > NOW()
     RETURNING id, grant_id, developer_id, initial_budget, remaining_budget, currency, created_at, updated_at
   `;
 
-  const row = rows[0]!;
-  return mapAllocationRow(row);
+  if (rows.length === 0) {
+    // Disambiguate: missing entirely vs. revoked/expired.
+    const grantCheck = await sql<{ status: string; expires_at: Date }[]>`
+      SELECT status, expires_at FROM grants
+      WHERE id = ${grantId} AND developer_id = ${developerId}
+    `;
+    const g = grantCheck[0];
+    if (!g) throw new GrantNotFoundError(grantId);
+    throw new GrantInactiveError(grantId);
+  }
+
+  return mapAllocationRow(rows[0]!);
 }
 
 export async function debitBudget(
@@ -68,13 +86,16 @@ export async function debitBudget(
   `;
 
   if (rows.length === 0) {
-    // Disambiguate: is the grant still live, or just out of funds?
+    // Disambiguate: missing entirely, dead, or just out of funds?
     const grantCheck = await sql<{ status: string; expires_at: Date }[]>`
       SELECT status, expires_at FROM grants
       WHERE id = ${grantId} AND developer_id = ${developerId}
     `;
     const g = grantCheck[0];
-    if (!g || g.status !== 'active' || new Date(g.expires_at) <= new Date()) {
+    if (!g) {
+      throw new GrantNotFoundError(grantId);
+    }
+    if (g.status !== 'active' || new Date(g.expires_at) <= new Date()) {
       throw new GrantInactiveError(grantId);
     }
     throw new InsufficientBudgetError(grantId);
@@ -196,5 +217,12 @@ export class GrantInactiveError extends Error {
   constructor(grantId: string) {
     super(`Grant ${grantId} is not active (revoked or expired)`);
     this.name = 'GrantInactiveError';
+  }
+}
+
+export class GrantNotFoundError extends Error {
+  constructor(grantId: string) {
+    super(`Grant ${grantId} not found`);
+    this.name = 'GrantNotFoundError';
   }
 }

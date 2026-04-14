@@ -8,6 +8,7 @@ import {
   listBudgetTransactions,
   InsufficientBudgetError,
   GrantInactiveError,
+  GrantNotFoundError,
 } from '../lib/budget.js';
 
 interface AllocateBody {
@@ -46,27 +47,20 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const sql = getSql();
     const developerId = request.developer.id;
 
-    // Verify grant belongs to developer and is still live
-    const grantRows = await sql<{ id: string; status: string; expires_at: Date }[]>`
-      SELECT id, status, expires_at FROM grants
-      WHERE id = ${grantId} AND developer_id = ${developerId}
-    `;
-    const grant = grantRows[0];
-    if (!grant) {
-      return reply.status(404).send({ message: 'Grant not found', code: 'NOT_FOUND', requestId: request.id });
-    }
-    if (grant.status !== 'active' || new Date(grant.expires_at) <= new Date()) {
-      return reply.status(409).send({
-        message: 'Grant is not active (revoked or expired)',
-        code: 'GRANT_INACTIVE',
-        requestId: request.id,
-      });
-    }
-
     try {
       const allocation = await createBudgetAllocation(sql, grantId, developerId, initialBudget, currency);
       return reply.status(201).send(allocation);
     } catch (err) {
+      if (err instanceof GrantNotFoundError) {
+        return reply.status(404).send({ message: 'Grant not found', code: 'NOT_FOUND', requestId: request.id });
+      }
+      if (err instanceof GrantInactiveError) {
+        return reply.status(409).send({
+          message: 'Grant is not active (revoked or expired)',
+          code: 'GRANT_INACTIVE',
+          requestId: request.id,
+        });
+      }
       if (err instanceof Error && err.message.includes('unique')) {
         return reply.status(409).send({
           message: 'Budget allocation already exists for this grant',
@@ -105,6 +99,13 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(402).send({
           message: err.message,
           code: 'INSUFFICIENT_BUDGET',
+          requestId: request.id,
+        });
+      }
+      if (err instanceof GrantNotFoundError) {
+        return reply.status(404).send({
+          message: err.message,
+          code: 'NOT_FOUND',
           requestId: request.id,
         });
       }
