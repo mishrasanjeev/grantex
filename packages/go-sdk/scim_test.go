@@ -75,7 +75,7 @@ func TestSCIMRevokeToken(t *testing.T) {
 
 func TestSCIMListUsers(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/scim/v2/Users" || r.Method != http.MethodGet {
+		if r.URL.Path != "/scim/v2/Users" || r.Method != http.MethodGet {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -100,7 +100,7 @@ func TestSCIMListUsers(t *testing.T) {
 
 func TestSCIMGetUser(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/scim/v2/Users/user-1" {
+		if r.URL.Path != "/scim/v2/Users/user-1" {
 			t.Errorf("unexpected path %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -120,7 +120,7 @@ func TestSCIMGetUser(t *testing.T) {
 
 func TestSCIMCreateUser(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/scim/v2/Users" || r.Method != http.MethodPost {
+		if r.URL.Path != "/scim/v2/Users" || r.Method != http.MethodPost {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -142,7 +142,7 @@ func TestSCIMCreateUser(t *testing.T) {
 
 func TestSCIMReplaceUser(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/scim/v2/Users/user-1" || r.Method != http.MethodPut {
+		if r.URL.Path != "/scim/v2/Users/user-1" || r.Method != http.MethodPut {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -164,7 +164,7 @@ func TestSCIMReplaceUser(t *testing.T) {
 
 func TestSCIMUpdateUser(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/scim/v2/Users/user-1" || r.Method != http.MethodPatch {
+		if r.URL.Path != "/scim/v2/Users/user-1" || r.Method != http.MethodPatch {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -186,7 +186,7 @@ func TestSCIMUpdateUser(t *testing.T) {
 
 func TestSCIMDeleteUser(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/scim/v2/Users/user-1" || r.Method != http.MethodDelete {
+		if r.URL.Path != "/scim/v2/Users/user-1" || r.Method != http.MethodDelete {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		w.WriteHeader(http.StatusNoContent)
