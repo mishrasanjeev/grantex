@@ -1,11 +1,15 @@
 ---
 title: "Domains"
-description: "Register custom domains with DNS TXT verification for your Grantex API endpoints"
+description: "Register and verify custom domains for your Grantex account via DNS TXT records."
 ---
 
 ## Overview
 
-The `Domains` service manages custom domains for your Grantex API endpoints. Register a domain, verify ownership via DNS TXT records, list all registered domains, and remove them.
+The `Domains` service manages the registration and ownership-verification lifecycle for custom domains on your Grantex account. Register a domain, verify ownership via a DNS TXT record, list registered domains, and remove them.
+
+<Note>
+Today the API covers registration, DNS verification, listing, and deletion. Runtime traffic routing — having Grantex consent UI and API endpoints actually served from your verified domain — is on the roadmap; both still resolve under `*.grantex.dev`.
+</Note>
 
 ## Create
 
