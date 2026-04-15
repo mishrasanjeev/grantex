@@ -27,7 +27,7 @@
     "@simplewebauthn/server": "^11.0.0",
     "@simplewebauthn/types": "^11.0.0",
     "dotenv": "^16.4.5",
-    "fastify": "^5.8.3",
+    "fastify": "^5.8.5",
     "ioredis": "^5.3.2",
     "jose": "^5.2.4",
     "pino": "^9.6.0",
