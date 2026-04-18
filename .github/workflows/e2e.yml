@@ -10,6 +10,8 @@ jobs:
     name: E2E Smoke Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      E2E_ISSUER: https://grantex.dev
 
     steps:
       - uses: actions/checkout@v6

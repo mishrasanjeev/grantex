@@ -83,6 +83,32 @@ describe('enforce()', () => {
     expect(result.permission).toBe(Permission.WRITE);
   });
 
+  it('passes explicit issuer and jwksUri overrides to offline verification', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(
+      makeGrant({ scopes: ['tool:salesforce:write'] }),
+    );
+    vi.stubGlobal('fetch', makeFetch(200, {}));
+
+    const grantex = new Grantex({
+      apiKey: 'test_key',
+      baseUrl: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app',
+      jwksUri: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json',
+      issuer: 'https://grantex.dev',
+    });
+    grantex.loadManifest(salesforceManifest);
+
+    await grantex.enforce({
+      grantToken: 'fake.token',
+      connector: 'salesforce',
+      tool: 'create_lead',
+    });
+
+    expect(verifyGrantToken).toHaveBeenCalledWith('fake.token', {
+      jwksUri: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json',
+      issuer: 'https://grantex.dev',
+    });
+  });
+
   it('returns denied when scope is insufficient (read scope, write tool)', async () => {
     vi.mocked(verifyGrantToken).mockResolvedValue(
       makeGrant({ scopes: ['tool:salesforce:read'] }),

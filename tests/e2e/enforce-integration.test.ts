@@ -6,6 +6,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { Grantex, ToolManifest, Permission } from '@grantex/sdk';
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
+const ISSUER = process.env.E2E_ISSUER ?? 'https://grantex.dev';
 
 let grantex: Grantex;
 let apiKey: string;
@@ -13,7 +14,7 @@ let apiKey: string;
 beforeAll(async () => {
   const account = await Grantex.signup({ name: `e2e-enforce-${Date.now()}`, mode: 'sandbox' }, { baseUrl: BASE_URL });
   apiKey = account.apiKey;
-  grantex = new Grantex({ apiKey, baseUrl: BASE_URL });
+  grantex = new Grantex({ apiKey, baseUrl: BASE_URL, issuer: ISSUER });
 
   // Load manifest
   grantex.loadManifest(new ToolManifest({

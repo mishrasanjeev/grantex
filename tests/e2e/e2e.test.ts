@@ -12,6 +12,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { Grantex, verifyGrantToken } from '@grantex/sdk';
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
+const ISSUER = process.env.E2E_ISSUER ?? 'https://grantex.dev';
 const JWKS_URI = `${BASE_URL}/.well-known/jwks.json`;
 
 let grantex: Grantex;
@@ -117,7 +118,7 @@ describe('E2E: Full Auth Flow', () => {
   });
 
   it('should verify the grant token offline (JWKS)', async () => {
-    const grant = await verifyGrantToken(grantToken, { jwksUri: JWKS_URI });
+    const grant = await verifyGrantToken(grantToken, { jwksUri: JWKS_URI, issuer: ISSUER });
 
     expect(grant.grantId).toBe(grantId);
     expect(grant.scopes).toEqual(expect.arrayContaining(['calendar:read', 'email:send']));
@@ -147,7 +148,7 @@ describe('E2E: Full Auth Flow', () => {
 
   it('should revoke the grant token', async () => {
     // Get the current token's ID (after refresh, tokenId points to old token)
-    const currentGrant = await verifyGrantToken(grantToken, { jwksUri: JWKS_URI });
+    const currentGrant = await verifyGrantToken(grantToken, { jwksUri: JWKS_URI, issuer: ISSUER });
     await grantex.tokens.revoke(currentGrant.tokenId);
 
     const result = await grantex.tokens.verify(grantToken);
@@ -235,7 +236,7 @@ describe('E2E: Grant Delegation', () => {
       scopes: ['calendar:read'],
     });
 
-    const grant = await verifyGrantToken(delegation.grantToken, { jwksUri: JWKS_URI });
+    const grant = await verifyGrantToken(delegation.grantToken, { jwksUri: JWKS_URI, issuer: ISSUER });
 
     expect(grant.parentGrantId).toBeDefined();
     expect(grant.delegationDepth).toBeGreaterThanOrEqual(1);
