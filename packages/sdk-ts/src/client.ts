@@ -41,6 +41,7 @@ export class Grantex {
   readonly #http: HttpClient;
   readonly #manifests: Map<string, ToolManifest> = new Map();
   #jwksUri: string;
+  #issuer: string | undefined;
   #enforceMode: 'strict' | 'permissive';
 
   readonly agents: AgentsClient;
@@ -72,6 +73,8 @@ export class Grantex {
   constructor(options: GrantexClientOptions = {}) {
     const apiKey =
       options.apiKey ?? process.env['GRANTEX_API_KEY'] ?? '';
+    const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
+    const normalizedBaseUrl = baseUrl.replace(/\/$/, '');
 
     if (!apiKey) {
       throw new Error(
@@ -80,7 +83,7 @@ export class Grantex {
     }
 
     this.#http = new HttpClient({
-      baseUrl: options.baseUrl ?? DEFAULT_BASE_URL,
+      baseUrl,
       apiKey,
       ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
       ...(options.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
@@ -98,7 +101,7 @@ export class Grantex {
     this.scim = new ScimClient(this.#http);
     this.sso = new SsoClient(this.#http);
     this.principalSessions = new PrincipalSessionsClient(this.#http);
-    this.vault = new VaultClient(this.#http, options.baseUrl ?? DEFAULT_BASE_URL);
+    this.vault = new VaultClient(this.#http, baseUrl);
     this.budgets = new BudgetsClient(this.#http);
     this.events = new EventsClient(this.#http);
     this.usage = new UsageClient(this.#http);
@@ -107,7 +110,8 @@ export class Grantex {
     this.credentials = new CredentialsClient(this.#http);
     this.passports = new PassportsClient(this.#http);
     this.dpdp = new DpdpClient(this.#http);
-    this.#jwksUri = `${(options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '')}/.well-known/jwks.json`;
+    this.#jwksUri = options.jwksUri ?? `${normalizedBaseUrl}/.well-known/jwks.json`;
+    this.#issuer = options.issuer;
     this.#enforceMode = (options as Record<string, unknown>)['enforceMode'] as 'strict' | 'permissive' ?? 'strict';
   }
 
@@ -232,7 +236,10 @@ export class Grantex {
     // 1. Verify the token offline via JWKS
     let grant: VerifiedGrant;
     try {
-      grant = await verifyGrantToken(grantToken, { jwksUri: this.#jwksUri });
+      grant = await verifyGrantToken(grantToken, {
+        jwksUri: this.#jwksUri,
+        ...(this.#issuer !== undefined ? { issuer: this.#issuer } : {}),
+      });
     } catch (err) {
       return this.#applyEnforceMode({
         ...base,

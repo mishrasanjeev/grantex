@@ -14,6 +14,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { Grantex, verifyGrantToken } from '@grantex/sdk';
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
+const ISSUER = process.env.E2E_ISSUER ?? 'https://grantex.dev';
 const JWKS_URI = `${BASE_URL}/.well-known/jwks.json`;
 
 let grantex: Grantex;
@@ -142,7 +143,7 @@ describe('E2E: Revocation Cascade', () => {
     expect(childVerifyBefore.valid).toBe(true);
 
     // Verify delegation claims in the child token
-    const childGrant = await verifyGrantToken(delegated.grantToken, { jwksUri: JWKS_URI });
+    const childGrant = await verifyGrantToken(delegated.grantToken, { jwksUri: JWKS_URI, issuer: ISSUER });
     expect(childGrant.parentGrantId).toBeDefined();
     expect(childGrant.delegationDepth).toBeGreaterThanOrEqual(1);
 

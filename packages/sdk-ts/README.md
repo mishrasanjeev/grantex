@@ -58,6 +58,8 @@ await grantex.tokens.revoke(grant.tokenId);
 const grantex = new Grantex({
   apiKey: 'gx_....',              // or set GRANTEX_API_KEY env var
   baseUrl: 'https://api.grantex.dev', // default
+  issuer: 'https://grantex.dev',  // optional when token issuer differs from API host
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json', // optional JWKS override
   timeout: 30000,                 // request timeout in ms (default: 30s)
 });
 ```
@@ -66,6 +68,8 @@ const grantex = new Grantex({
 |--------|------|---------|-------------|
 | `apiKey` | `string` | `process.env.GRANTEX_API_KEY` | API key for authentication |
 | `baseUrl` | `string` | `https://api.grantex.dev` | Base URL of the Grantex API |
+| `issuer` | `string` | derived from `jwksUri` | Expected JWT issuer for offline verification |
+| `jwksUri` | `string` | `${baseUrl}/.well-known/jwks.json` | JWKS URL used for offline verification |
 | `timeout` | `number` | `30000` | Request timeout in milliseconds |
 
 ## PKCE Support
@@ -304,10 +308,13 @@ import { verifyGrantToken } from '@grantex/sdk';
 
 const grant = await verifyGrantToken('eyJhbG...', {
   jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+  issuer: 'https://grantex.dev',   // optional when issuer differs from JWKS host
   requiredScopes: ['files:read'],   // optional — rejects if missing
   audience: 'https://myapp.com',    // optional — validates aud claim
 });
 ```
+
+If you call a deployment through a raw Cloud Run URL or another internal host, but the service signs tokens for a canonical public domain, pass `issuer` explicitly. Otherwise offline verification will reject a valid token because the JWT `iss` claim will not match the transport host.
 
 **Returns**: `VerifiedGrant`
 

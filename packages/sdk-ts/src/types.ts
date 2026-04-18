@@ -14,6 +14,10 @@ export interface GrantexClientOptions {
   apiKey?: string;
   /** Base URL for the Grantex API. Defaults to https://api.grantex.dev */
   baseUrl?: string;
+  /** Override the JWKS URL used for offline token verification. Defaults to `${baseUrl}/.well-known/jwks.json`. */
+  jwksUri?: string;
+  /** Expected JWT issuer for offline token verification. Set this when tokens are issued for a canonical domain different from `baseUrl`. */
+  issuer?: string;
   /** Request timeout in milliseconds. Defaults to 30000. */
   timeout?: number;
   /** Maximum number of retries for transient failures (429, 502, 503, 504). Defaults to 3. Set to 0 to disable. */
