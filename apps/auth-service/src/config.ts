@@ -18,6 +18,13 @@ export const config = {
   rsaPrivateKey: process.env['RSA_PRIVATE_KEY'] ?? null,
   autoGenerateKeys: process.env['AUTO_GENERATE_KEYS'] === 'true',
   jwtIssuer: optional('JWT_ISSUER', 'https://grantex.dev'),
+  // Base URL for client-facing pages and endpoints embedded in responses
+  // (consent page, VC status lists, offline-sync endpoint, email links).
+  // Defaults to JWT_ISSUER for back-compat, but is conceptually distinct:
+  // jwtIssuer is the JWT `iss` claim string, publicBaseUrl is the
+  // browser-reachable base URL. They differ when the issuer URL is fronted
+  // by a static host (Firebase) that proxies only some paths to the API.
+  publicBaseUrl: optional('PUBLIC_BASE_URL', process.env['JWT_ISSUER'] ?? 'https://grantex.dev'),
   seedApiKey: process.env['SEED_API_KEY'] ?? null,
   seedSandboxKey: process.env['SEED_SANDBOX_KEY'] ?? null,
   // Stripe billing (optional — billing endpoints return 503 when not configured)

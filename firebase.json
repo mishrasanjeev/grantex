@@ -11,6 +11,11 @@
     "rewrites": [
       { "source": "/consent", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
       { "source": "/v1/consent/**", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
+      { "source": "/.well-known/jwks.json", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
+      { "source": "/.well-known/did.json", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
+      { "source": "/v1/audit/offline-sync", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
+      { "source": "/v1/credentials/status/**", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
+      { "source": "/v1/signup/verify/**", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
       { "source": "/dashboard/**", "destination": "/dashboard/index.html" },
       { "source": "/playground", "destination": "/playground.html" },
       { "source": "/for/:framework", "destination": "/for/index.html" },

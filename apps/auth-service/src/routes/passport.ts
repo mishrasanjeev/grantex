@@ -187,11 +187,11 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
       `;
 
       const credentialStatus = {
-        id: `${config.jwtIssuer}/v1/credentials/status/${statusList.id}#${statusListIdx}`,
+        id: `${config.publicBaseUrl}/v1/credentials/status/${statusList.id}#${statusListIdx}`,
         type: 'StatusList2021Entry',
         statusPurpose: 'revocation',
         statusListIndex: String(statusListIdx),
-        statusListCredential: `${config.jwtIssuer}/v1/credentials/status/${statusList.id}`,
+        statusListCredential: `${config.publicBaseUrl}/v1/credentials/status/${statusList.id}`,
       };
 
       const credentialSubject: Record<string, unknown> = {

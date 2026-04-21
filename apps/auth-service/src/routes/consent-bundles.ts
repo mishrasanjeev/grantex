@@ -170,7 +170,7 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
           jwksSnapshot,
           offlineAuditKey,
           checkpointAt,
-          syncEndpoint: `${config.jwtIssuer}/v1/audit/offline-sync`,
+          syncEndpoint: `${config.publicBaseUrl}/v1/audit/offline-sync`,
           offlineExpiresAt: offlineExpiresAt.toISOString(),
         },
       });
@@ -431,7 +431,7 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
         jwksSnapshot,
         offlineExpiresAt: offlineExpiresAt.toISOString(),
         checkpointAt: Math.floor(Date.now() / 1000),
-        syncEndpoint: `${config.jwtIssuer}/v1/audit/offline-sync`,
+        syncEndpoint: `${config.publicBaseUrl}/v1/audit/offline-sync`,
       });
     },
   );
