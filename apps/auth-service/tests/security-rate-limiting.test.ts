@@ -107,7 +107,9 @@ describe('Rate limiting', () => {
 
     expect(res.statusCode).toBe(200);
     const limit = parseInt(res.headers['x-ratelimit-limit'] as string, 10);
-    // Global rate limit is 100/min
-    expect(limit).toBe(100);
+    // Global rate limit is 500/min — generous because authenticated endpoints
+    // layer per-developer post-auth limits on top; this one only needs to stop
+    // raw unauth'd IP floods against public endpoints and the auth plugin.
+    expect(limit).toBe(500);
   });
 });

@@ -99,15 +99,20 @@ export async function buildApp(opts: AppOptions = {}) {
     reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
   });
 
-  // Global rate limit: 100 requests/minute, keyed strictly by source IP.
+  // Global rate limit: 500 requests/minute, keyed strictly by source IP.
   // Earlier versions keyed on the Bearer token, which let an attacker
   // bypass the limiter by varying invalid tokens to mint fresh buckets
-  // (each fake token got its own 100/min budget). IP-keying closes that
-  // hole. Per-developer plan-based throughput is the responsibility of
-  // a post-auth limiter (see plugins/dynamicRateLimit.ts), not this
-  // global pre-auth net.
+  // (each fake token got its own budget). IP-keying closes that hole.
+  //
+  // The number is deliberately generous — authenticated endpoints have
+  // per-developer caps on top (e.g., /v1/authorize uses checkRateLimit
+  // on developer.id for a 10/min bucket). This global net only needs
+  // to stop unauth'd abuse against public endpoints (signup, consent
+  // page, status lists) and shield the auth plugin from raw IP floods.
+  // Per-developer plan-based throughput belongs in post-auth limiters,
+  // not here.
   await app.register(rateLimit, {
-    max: 100,
+    max: 500,
     timeWindow: '1 minute',
     keyGenerator: (req) => req.ip,
     allowList: (req) => {
