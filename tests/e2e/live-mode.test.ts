@@ -157,9 +157,11 @@ describe('live-mode: deny flow', () => {
     });
     expect(denyRes.status).toBe(200);
 
-    // Subsequent GET /v1/consent/:id should now report non-pending status.
+    // Subsequent GET /v1/consent/:id must return 410 Gone, which is how
+    // the service signals "already processed" after deny. Accepting 200
+    // here would let the test pass even if deny were a no-op that left
+    // the request pending — exactly the regression we want to catch.
     const getRes = await fetch(`${PUBLIC_BASE_URL}/v1/consent/${auth.authRequestId}`);
-    // 410 Gone is how the service signals "already processed" after deny.
-    expect([410, 200]).toContain(getRes.status);
+    expect(getRes.status).toBe(410);
   });
 });
