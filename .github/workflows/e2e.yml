@@ -35,6 +35,12 @@ jobs:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
         run: npx vitest run tests/e2e/e2e.test.ts
 
+      - name: Live-mode consent flow (via grantex.dev Firebase rewrites)
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+          E2E_PUBLIC_BASE_URL: https://grantex.dev
+        run: npx vitest run tests/e2e/live-mode.test.ts
+
       - name: Portal features (full API surface)
         env:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
