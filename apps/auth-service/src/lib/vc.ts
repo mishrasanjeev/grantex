@@ -163,11 +163,11 @@ export async function issueAgentGrantVC(params: IssueVCParams): Promise<{
   };
 
   const credentialStatus = {
-    id: `${config.jwtIssuer}/v1/credentials/status/${statusList.id}#${statusListIdx}`,
+    id: `${config.publicBaseUrl}/v1/credentials/status/${statusList.id}#${statusListIdx}`,
     type: 'StatusList2021Entry',
     statusPurpose: 'revocation',
     statusListIndex: String(statusListIdx),
-    statusListCredential: `${config.jwtIssuer}/v1/credentials/status/${statusList.id}`,
+    statusListCredential: `${config.publicBaseUrl}/v1/credentials/status/${statusList.id}`,
   };
 
   const evidence: Record<string, unknown>[] = [];
@@ -364,12 +364,12 @@ export async function buildStatusListCredential(
       'https://www.w3.org/ns/credentials/v2',
       'https://w3id.org/vc/status-list/2021/v1',
     ],
-    id: `${config.jwtIssuer}/v1/credentials/status/${list['id'] as string}`,
+    id: `${config.publicBaseUrl}/v1/credentials/status/${list['id'] as string}`,
     type: ['VerifiableCredential', 'StatusList2021Credential'],
     issuer: issuerDid,
     issued: (list['updated_at'] as Date).toISOString(),
     credentialSubject: {
-      id: `${config.jwtIssuer}/v1/credentials/status/${list['id'] as string}#list`,
+      id: `${config.publicBaseUrl}/v1/credentials/status/${list['id'] as string}#list`,
       type: 'StatusList2021',
       statusPurpose: list['purpose'] as string,
       encodedList: list['encoded_list'] as string,

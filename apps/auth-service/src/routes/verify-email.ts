@@ -34,7 +34,7 @@ export async function verifyEmailRoutes(app: FastifyInstance): Promise<void> {
       await sendEmail({
         to: email,
         subject: 'Verify your Grantex email',
-        html: verificationEmailHtml(token, config.jwtIssuer),
+        html: verificationEmailHtml(token, config.publicBaseUrl),
       });
     } catch {
       // Email send failure is non-fatal

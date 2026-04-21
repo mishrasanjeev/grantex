@@ -135,7 +135,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       )
     `;
 
-    const consentUrl = `${config.jwtIssuer}/consent?req=${id}`;
+    const consentUrl = `${config.publicBaseUrl}/consent?req=${id}`;
 
     const responseBody: Record<string, unknown> = {
       authRequestId: id,

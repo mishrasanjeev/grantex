@@ -53,3 +53,33 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: grantex-prod
           channelId: live
+
+      - name: Smoke test Firebase -> Cloud Run rewrites
+        run: |
+          set -e
+          BASE=https://grantex.dev
+
+          # Give Firebase CDN a moment to pick up the new config.
+          sleep 15
+
+          check() {
+            local path="$1"
+            local expect_substr="$2"
+            local url="$BASE$path"
+            echo "--- GET $url"
+            local body
+            body=$(curl -sS -L --fail --max-time 20 "$url")
+            if ! grep -q "$expect_substr" <<<"$body"; then
+              echo "FAIL: $url did not contain '$expect_substr'"
+              echo "---- response head ----"
+              head -c 500 <<<"$body"
+              exit 1
+            fi
+            echo "OK"
+          }
+
+          # /consent always returns HTML regardless of req param — the page JS
+          # handles not-found cases after loading.
+          check "/consent?req=smoke-test" "Authorization Request"
+          check "/.well-known/jwks.json" "\"keys\""
+          check "/.well-known/did.json" "\"id\""
