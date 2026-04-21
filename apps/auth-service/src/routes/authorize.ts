@@ -8,6 +8,10 @@ import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 import { authorizeTotal, authorizeDuration } from '../lib/metrics.js';
 import { incrementUsage } from '../lib/usage.js';
 import { parseExpiresIn } from '../lib/crypto.js';
+import { checkRateLimit } from '../lib/rate-limit.js';
+
+const AUTHORIZE_MAX_PER_MINUTE = 10;
+const AUTHORIZE_WINDOW_SECONDS = 60;
 
 interface AuthorizeBody {
   agentId: string;
@@ -22,10 +26,31 @@ interface AuthorizeBody {
 }
 
 export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
-  // POST /v1/authorize — stricter rate limit: 10/min
-  app.post<{ Body: AuthorizeBody }>('/v1/authorize', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
+  // POST /v1/authorize — per-developer rate limit of 10/min.
+  // Keyed on developer.id (post-auth) instead of IP so that multiple developers
+  // sharing a NAT'd egress IP — and our own CI running many suites from one
+  // runner IP — don't share a bucket. The global IP-keyed limit in server.ts
+  // still caps unauthenticated abuse.
+  app.post<{ Body: AuthorizeBody }>('/v1/authorize', async (request, reply) => {
     const endTimer = authorizeDuration.startTimer();
     const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h', audience, codeChallenge, codeChallengeMethod } = request.body;
+
+    const rl = await checkRateLimit(
+      `authorize:${request.developer.id}`,
+      AUTHORIZE_MAX_PER_MINUTE,
+      AUTHORIZE_WINDOW_SECONDS,
+    );
+    if (!rl.allowed) {
+      reply.header('retry-after', String(rl.resetSeconds));
+      reply.header('x-ratelimit-limit', String(AUTHORIZE_MAX_PER_MINUTE));
+      reply.header('x-ratelimit-remaining', '0');
+      reply.header('x-ratelimit-reset', String(rl.resetSeconds));
+      return reply.status(429).send({
+        message: `Rate limit exceeded, retry in ${rl.resetSeconds} seconds`,
+        code: 'RATE_LIMITED',
+        requestId: request.id,
+      });
+    }
 
     if (!agentId || !principalId || !scopes?.length) {
       return reply.status(400).send({
