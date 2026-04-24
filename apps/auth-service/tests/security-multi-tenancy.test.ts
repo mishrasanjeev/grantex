@@ -10,7 +10,6 @@ import {
   seedAuth,
   authHeader,
   sqlMock,
-  mockRedis,
   TEST_DEVELOPER,
   TEST_AGENT,
 } from './helpers.js';
