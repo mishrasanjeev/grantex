@@ -49,6 +49,7 @@ export type AgentResolutionFailure =
   | { kind: 'assertion_too_long_lived'; lifetimeSeconds: number }
   | { kind: 'assertion_wrong_audience'; aud: unknown }
   | { kind: 'assertion_missing_claims'; fields: string[] }
+  | { kind: 'assertion_temporal_claim_invalid'; reason: string }
   | { kind: 'assertion_replay' }
   | { kind: 'replay_check_unavailable'; error: string };
 
@@ -230,7 +231,23 @@ export async function verifyAgentAssertion(
   if (String(payload['tenant_id']) !== agent.tenant_id) {
     return { ok: false, failure: { kind: 'assertion_signature_invalid', reason: 'tenant_id mismatch with registered agent' } };
   }
-  const lifetime = (payload.exp as number) - (payload.iat as number);
+  // Validate temporal claim TYPES before doing arithmetic. Required-claim
+  // check above only confirms presence, but jose's decoded payload exposes
+  // these as `unknown`. Non-numeric values (e.g. iat/exp passed as JSON
+  // strings) would coerce to NaN below, and `NaN > MAX` is false — silently
+  // bypassing the lifetime cap.
+  const iatRaw = payload.iat;
+  const expRaw = payload.exp;
+  if (typeof iatRaw !== 'number' || !Number.isFinite(iatRaw)) {
+    return { ok: false, failure: { kind: 'assertion_temporal_claim_invalid', reason: 'iat must be a finite number' } };
+  }
+  if (typeof expRaw !== 'number' || !Number.isFinite(expRaw)) {
+    return { ok: false, failure: { kind: 'assertion_temporal_claim_invalid', reason: 'exp must be a finite number' } };
+  }
+  if (expRaw <= iatRaw) {
+    return { ok: false, failure: { kind: 'assertion_temporal_claim_invalid', reason: 'exp must be greater than iat' } };
+  }
+  const lifetime = expRaw - iatRaw;
   if (lifetime > ASSERTION_MAX_LIFETIME_SECONDS) {
     return { ok: false, failure: { kind: 'assertion_too_long_lived', lifetimeSeconds: lifetime } };
   }
@@ -239,9 +256,14 @@ export async function verifyAgentAssertion(
 
   // Replay protection. Use Redis SET key with NX + EX so first writer
   // wins. If Redis unavailable, fail closed (caller surfaces 503).
+  //
+  // Key is scoped by the VERIFIED agent's tenant_id + id (from the DB
+  // row, not from JWT claims) so two different agents that happen to
+  // pick the same jti value cannot collide, and a malicious agent
+  // cannot pre-empt jti values that another agent might use.
   if (redis) {
     try {
-      const setKey = `${REDIS_REPLAY_KEY_PREFIX}${jti}`;
+      const setKey = `${REDIS_REPLAY_KEY_PREFIX}${agent.tenant_id}:${agent.id}:${jti}`;
       const ttl = Math.max(1, ASSERTION_MAX_LIFETIME_SECONDS);
       // ioredis SET with options: ['EX', ttl, 'NX']
       const result = await redis.set(setKey, '1', 'EX', ttl, 'NX');
