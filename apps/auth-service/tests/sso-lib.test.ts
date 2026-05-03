@@ -53,6 +53,24 @@ describe('isBlockedPrivateHost', () => {
     expect(isBlockedPrivateHost('example.com.')).toBe(false);
     expect(isBlockedPrivateHost('grantex.dev.')).toBe(false);
   });
+
+  it('blocks the full IPv6 link-local range (fe80::/10), not just fe80:', () => {
+    // fe80::/10 spans first-group values 0xfe80–0xfebf, so the second hex
+    // digit of byte 2 is 8/9/a/b. Earlier check only matched "fe80:" prefix.
+    expect(isBlockedPrivateHost('fe80::1')).toBe(true);
+    expect(isBlockedPrivateHost('fe90::1')).toBe(true);
+    expect(isBlockedPrivateHost('fea0::1')).toBe(true);
+    expect(isBlockedPrivateHost('febf::1')).toBe(true);
+    expect(isBlockedPrivateHost('FE90::1')).toBe(true); // case-insensitive
+  });
+
+  it('does not over-block adjacent IPv6 ranges outside link-local', () => {
+    // fec0::/10 (site-local, deprecated per RFC 3879) and fc00::/7 boundaries
+    // — make sure we did not accidentally widen the link-local match.
+    expect(isBlockedPrivateHost('fec0::1')).toBe(false);
+    expect(isBlockedPrivateHost('ff00::1')).toBe(false); // multicast — not private
+    expect(isBlockedPrivateHost('2001:db8::1')).toBe(false); // doc range
+  });
 });
 
 describe('escapeLdapFilter', () => {

@@ -57,10 +57,13 @@ function isPrivateIpv6(hostname: string): boolean {
       return isPrivateIpv4(ipv4);
     }
   }
+  // Link-local is fe80::/10 — first 10 bits 1111111010, i.e. first 16-bit
+  // group ranges 0xfe80–0xfebf. Matching only "fe80:" missed fe81:..febf:
+  // (e.g. fe90::1), leaving an SSRF path to link-local targets.
   return normalized === '::1'
-    || normalized.startsWith('fc')
-    || normalized.startsWith('fd')
-    || normalized.startsWith('fe80:')
+    || normalized.startsWith('fc')        // fc00::/7 unique-local (low half)
+    || normalized.startsWith('fd')        // fc00::/7 unique-local (high half)
+    || /^fe[89ab][0-9a-f]:/.test(normalized)  // fe80::/10 link-local
     || normalized === '::';
 }
 
