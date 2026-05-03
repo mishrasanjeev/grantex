@@ -27,6 +27,9 @@ export default defineConfig({
       STRIPE_PRICE_ENTERPRISE: 'price_enterprise_fake',
       VAULT_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       ADMIN_API_KEY: 'test-admin-key-secret',
+      // Grantex Commerce M1 — flag is checked at request time so tests can
+      // toggle it via vi.stubEnv. The feature-flag test stubs it back off.
+      COMMERCE_V1_ENABLED: 'true',
     },
   },
 });
