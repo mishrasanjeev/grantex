@@ -14,19 +14,23 @@ import { sqlMock, TEST_DEVELOPER } from './helpers.js';
 export const TEST_COMMERCE_TENANT_ID = 'cten_TESTTENANT';
 
 /**
- * Mapped, active tenant — the common case. Primes:
- *   1. authPlugin developer SELECT
- *   2. resolveTenantForDeveloper join → returns { id, status: 'active' }
+ * Mapped, active tenant — operator caller (developer API key). Primes:
+ *   1. caller.ts loadDeveloperByApiKey → developer row
+ *   2. caller.ts loadOperatorContext JOIN → { tenant_id, status, role }
+ *
+ * Token shape detection in caller.ts: anything that is not merchant key
+ * prefix / agent key prefix / 3-segment JWT falls through to the
+ * operator path. The TEST_API_KEY ('test-api-key-1234') matches that.
  */
 export function seedCommerceContext(tenantId: string = TEST_COMMERCE_TENANT_ID): void {
   sqlMock.mockResolvedValueOnce([TEST_DEVELOPER]);
-  sqlMock.mockResolvedValueOnce([{ id: tenantId, status: 'active' }]);
+  sqlMock.mockResolvedValueOnce([{ tenant_id: tenantId, status: 'active', role: 'owner' }]);
 }
 
 /**
- * No developer→tenant mapping exists. Resolver returns
- * `{ kind: 'not_provisioned' }`; the route preHandler then either
- * 422s (default) or auto-provisions (if COMMERCE_ALLOW_AUTO_TENANT=true).
+ * No developer→tenant mapping exists. JOIN returns []; the route
+ * preHandler either 422s (default) or auto-provisions (if
+ * COMMERCE_ALLOW_AUTO_TENANT=true).
  */
 export function seedCommerceContextNoMapping(): void {
   sqlMock.mockResolvedValueOnce([TEST_DEVELOPER]);
@@ -34,13 +38,13 @@ export function seedCommerceContextNoMapping(): void {
 }
 
 /**
- * Mapping exists but the tenant is disabled. Resolver returns
- * `{ kind: 'disabled' }`; the route preHandler must 403 and must NOT
+ * Mapping exists but the tenant is disabled. JOIN returns
+ * status='disabled'; the route preHandler must 403 and must NOT
  * auto-provision a replacement.
  */
 export function seedCommerceContextDisabledTenant(
   tenantId: string = TEST_COMMERCE_TENANT_ID,
 ): void {
   sqlMock.mockResolvedValueOnce([TEST_DEVELOPER]);
-  sqlMock.mockResolvedValueOnce([{ id: tenantId, status: 'disabled' }]);
+  sqlMock.mockResolvedValueOnce([{ tenant_id: tenantId, status: 'disabled', role: 'owner' }]);
 }

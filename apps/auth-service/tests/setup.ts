@@ -31,6 +31,11 @@ export const mockRedis = {
   quit: vi.fn().mockResolvedValue(undefined),
   on: vi.fn(),
   duplicate: vi.fn(),
+  // M2 commerce — set ops for revocation cache + replay tracking.
+  sadd: vi.fn().mockResolvedValue(1),
+  sismember: vi.fn().mockResolvedValue(0),
+  srem: vi.fn().mockResolvedValue(1),
+  smembers: vi.fn().mockResolvedValue([]),
   options: { host: 'localhost', port: 6379 },
 };
 // Returning self from duplicate() keeps the subscriber-side mocks in sync.
@@ -244,6 +249,9 @@ beforeEach(() => {
   mockRedis.incr.mockReset().mockResolvedValue(1);
   mockRedis.decr.mockReset().mockResolvedValue(0);
   mockRedis.expire.mockReset().mockResolvedValue(1);
+  mockRedis.sadd.mockReset().mockResolvedValue(1);
+  mockRedis.sismember.mockReset().mockResolvedValue(0);
+  mockRedis.srem.mockReset().mockResolvedValue(1);
   mockGetStripe.mockReset().mockReturnValue(mockStripe);
   mockStripe.checkout.sessions.create.mockReset().mockResolvedValue({ url: 'https://checkout.stripe.com/test' });
   mockStripe.billingPortal.sessions.create.mockReset().mockResolvedValue({ url: 'https://billing.stripe.com/test' });

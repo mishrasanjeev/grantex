@@ -31,19 +31,22 @@ function gather(dir: string, ext: string[]): string[] {
 }
 
 function stripSqlComments(src: string): string {
-  // Remove `-- ...` line comments and `/* ... */` block comments.
+  // Remove `-- ...` line comments and `/* ... */` block comments. The
+  // SQL comment regex uses `[^\r\n]*` (not `.*$`) because `.` doesn't
+  // cross `\r` and CRLF-checkout files would otherwise leave the
+  // comment text intact.
   return src
     .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .map((line) => line.replace(/--.*$/, ''))
+    .split(/\r?\n/)
+    .map((line) => line.replace(/--[^\r\n]*/, ''))
     .join('\n');
 }
 
 function stripTsComments(src: string): string {
   return src
     .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .map((line) => line.replace(/\/\/.*$/, ''))
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\/\/[^\r\n]*/, ''))
     .join('\n');
 }
 
