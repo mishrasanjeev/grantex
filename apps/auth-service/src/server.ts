@@ -43,6 +43,7 @@ import { trustRegistryRoutes } from './routes/trust-registry.js';
 import { consentBundlesRoutes } from './routes/consent-bundles.js';
 import { mcpServersRoutes } from './routes/mcp-servers.js';
 import { dpdpRoutes } from './routes/dpdp.js';
+import { commerceRoutes } from './routes/commerce.js';
 import { metricsHookPlugin } from './plugins/metricsHook.js';
 import websocket from '@fastify/websocket';
 
@@ -172,6 +173,12 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(consentBundlesRoutes);
   await app.register(mcpServersRoutes);
   await app.register(dpdpRoutes);
+
+  // Grantex Commerce V1 — registered with prefix so all commerce paths
+  // share the spec §16 envelope via the sub-instance error handler.
+  // The plugin's preHandler enforces the COMMERCE_V1_ENABLED flag and
+  // resolves request.commerceTenantId.
+  await app.register(commerceRoutes, { prefix: '/v1/commerce' });
 
   return app;
 }

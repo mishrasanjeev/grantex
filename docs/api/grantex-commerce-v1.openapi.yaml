@@ -1,0 +1,624 @@
+openapi: "3.1.0"
+info:
+  title: Grantex Commerce V1
+  version: "0.1.0"
+  description: >-
+    Authorization-as-a-service for agent-initiated commerce actions.
+    Source of truth: GRANTEX_COMMERCE_V1_BUILD_SPEC.md.
+    Milestone 1 (Foundations) implements feature flags, tenant boundary,
+    merchant/agent/product/variant models, the electronics_appliances
+    category preset, and the append-only audit ledger. Passport, policy,
+    payment, MCP, and provider-credential routes are listed but
+    unimplemented in M1 (each carries `x-implemented: false`).
+servers:
+  - url: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+    description: Production (Cloud Run)
+  - url: http://localhost:3001
+    description: Local
+
+tags:
+  - name: Tenants
+  - name: Merchants
+  - name: Provider Credentials
+  - name: Catalog
+  - name: Commerce Agents
+  - name: Policy
+  - name: Cart
+  - name: Passports
+  - name: Payments
+  - name: Audit
+  - name: Webhooks
+  - name: Well-Known
+
+components:
+  securitySchemes:
+    developerApiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: >-
+        Existing platform API key (`grtx_*`). M1 commerce routes auto-resolve
+        the tenant from this caller. M2 will add merchant API keys
+        (`grtx_sk_<env>_*`) and agent JWT/API-key callers.
+    merchantApiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: M2 — `grtx_sk_<env>_<secret>`. Not implemented in M1.
+    agentJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: jwt
+      description: M2 — agent JWT assertion verified vs CommerceAgent.public_key_jwk.
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Resource not found in this tenant
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ValidationFailed:
+      description: Request body failed validation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    CommerceDisabled:
+      description: COMMERCE_V1_ENABLED is not set in this environment
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              examples: [validation_failed, merchant_not_found, commerce_disabled]
+            message: { type: string }
+            decision_id: { type: string, nullable: true }
+            audit_event_id: { type: string, nullable: true }
+            remediation: { type: string, nullable: true }
+            retryable: { type: boolean, nullable: true }
+            details:
+              type: object
+              additionalProperties: true
+
+    Merchant:
+      type: object
+      properties:
+        id: { type: string, examples: [mch_01HXYZ] }
+        tenant_id: { type: string, examples: [cten_01HXYZ] }
+        legal_name: { type: string }
+        display_name: { type: string }
+        category_preset: { type: string, enum: [electronics_appliances] }
+        verification_status: { type: string, enum: [unverified, pending, verified, rejected] }
+        environment: { type: string, enum: [sandbox, live] }
+        agentic_commerce_enabled: { type: boolean }
+        default_currency: { type: string }
+        country_code: { type: string }
+        support_email: { type: string, nullable: true }
+        disabled_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CreateMerchantRequest:
+      type: object
+      required: [legal_name, display_name, category_preset]
+      properties:
+        legal_name: { type: string }
+        display_name: { type: string }
+        category_preset: { type: string, enum: [electronics_appliances] }
+        default_currency: { type: string, default: INR }
+        country_code: { type: string, default: IN }
+        support_email: { type: string, nullable: true }
+
+    Agent:
+      type: object
+      properties:
+        id: { type: string, examples: [cag_01HXYZ] }
+        tenant_id: { type: string }
+        display_name: { type: string }
+        agent_type: { type: string }
+        public_key_jwk: { type: object, additionalProperties: true, nullable: true }
+        trust_status: { type: string, enum: [pending, trusted, suspended, disabled] }
+        disabled_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CreateAgentRequest:
+      type: object
+      required: [display_name]
+      properties:
+        display_name: { type: string }
+        agent_type: { type: string, default: sales }
+        public_key_jwk: { type: object, additionalProperties: true }
+        api_key_hash: { type: string, description: "Salted hash of grtx_agent_<secret>; never raw" }
+        trust_status:
+          type: string
+          enum: [pending, trusted, suspended, disabled]
+          default: pending
+
+    Variant:
+      type: object
+      properties:
+        id: { type: string }
+        sku: { type: string }
+        parent_sku: { type: string, nullable: true }
+        model: { type: string, nullable: true }
+        variant_title: { type: string, nullable: true }
+        attributes: { type: object, additionalProperties: true }
+        price_amount: { type: integer }
+        currency: { type: string }
+        tax_inclusive: { type: boolean }
+        gst_slab: { type: string, nullable: true }
+        tax_rate: { type: number, nullable: true }
+        hsn_code: { type: string, nullable: true }
+        availability_status:
+          type: string
+          enum: [in_stock, out_of_stock, pre_order, back_order, unknown]
+        warranty_summary: { type: string, nullable: true }
+        return_policy_summary: { type: string, nullable: true }
+        archived_at: { type: string, format: date-time, nullable: true }
+
+    Product:
+      type: object
+      properties:
+        id: { type: string }
+        tenant_id: { type: string }
+        merchant_id: { type: string }
+        product_id: { type: string }
+        title: { type: string }
+        brand: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        image_url: { type: string, nullable: true }
+        category_preset: { type: string }
+        source_system: { type: string }
+        manually_maintained: { type: boolean }
+        archived_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        variants:
+          type: array
+          items: { $ref: "#/components/schemas/Variant" }
+
+    CreateProductRequest:
+      type: object
+      required: [merchant_id, product_id, title, category_preset, variants]
+      properties:
+        merchant_id: { type: string }
+        product_id: { type: string }
+        title: { type: string }
+        brand: { type: string }
+        description: { type: string }
+        image_url: { type: string }
+        category_preset: { type: string, enum: [electronics_appliances] }
+        source_system: { type: string, default: manual }
+        manually_maintained: { type: boolean, default: false }
+        variants:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [sku, price_amount]
+            properties:
+              sku: { type: string }
+              price_amount: { type: integer, minimum: 0 }
+              currency: { type: string, default: INR }
+              tax_inclusive: { type: boolean, default: true }
+              gst_slab: { type: string }
+              hsn_code: { type: string }
+              availability_status:
+                type: string
+                enum: [in_stock, out_of_stock, pre_order, back_order, unknown]
+                default: unknown
+              warranty_summary: { type: string }
+              return_policy_summary: { type: string }
+
+    AuditEvent:
+      type: object
+      properties:
+        id: { type: string }
+        tenant_id: { type: string }
+        merchant_id: { type: string, nullable: true }
+        agent_id: { type: string, nullable: true }
+        user_principal_id: { type: string, nullable: true }
+        event_type: { type: string }
+        resource_type: { type: string, nullable: true }
+        resource_id: { type: string, nullable: true }
+        passport_jti: { type: string, nullable: true }
+        policy_version: { type: string, nullable: true }
+        decision_id: { type: string, nullable: true }
+        idempotency_key_hash: { type: string, nullable: true }
+        request_id: { type: string, nullable: true }
+        occurred_at: { type: string, format: date-time }
+        metadata: { type: object, additionalProperties: true }
+
+security:
+  - developerApiKey: []
+
+paths:
+  # =====================================================================
+  # M1 — implemented
+  # =====================================================================
+  /v1/commerce/merchants:
+    post:
+      tags: [Merchants]
+      summary: Create a merchant
+      operationId: createMerchant
+      x-implemented: true
+      x-milestone: M1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateMerchantRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Merchant" }
+                  audit_event_id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    get:
+      tags: [Merchants]
+      summary: Get a merchant
+      operationId: getMerchant
+      x-implemented: true
+      x-milestone: M1
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Merchant" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+    patch:
+      tags: [Merchants]
+      summary: Update merchant (mutable fields only)
+      x-implemented: false
+      x-milestone: M2
+      responses:
+        "501": { description: Not implemented in M1 }
+
+  /v1/commerce/merchants/{merchant_id}/disable-agentic-commerce:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    post:
+      tags: [Merchants]
+      summary: Emergency disable
+      x-implemented: false
+      x-milestone: M3
+      responses:
+        "501": { description: Not implemented in M1 }
+
+  /v1/commerce/agents:
+    post:
+      tags: [Commerce Agents]
+      summary: Register a CommerceAgent
+      operationId: createAgent
+      x-implemented: true
+      x-milestone: M1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAgentRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Agent" }
+                  audit_event_id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+    get:
+      tags: [Commerce Agents]
+      summary: List CommerceAgents
+      x-implemented: false
+      x-milestone: M2
+      responses:
+        "501": { description: Not implemented in M1 }
+
+  /v1/commerce/agents/{agent_id}:
+    parameters:
+      - { in: path, name: agent_id, required: true, schema: { type: string } }
+    get:
+      tags: [Commerce Agents]
+      summary: Get a CommerceAgent
+      operationId: getAgent
+      x-implemented: true
+      x-milestone: M1
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Agent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+    patch:
+      tags: [Commerce Agents]
+      summary: Update agent
+      x-implemented: false
+      x-milestone: M2
+      responses:
+        "501": { description: Not implemented in M1 }
+
+  /v1/commerce/catalog/products:
+    post:
+      tags: [Catalog]
+      summary: Create a product with variants
+      operationId: createProduct
+      x-implemented: true
+      x-milestone: M1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateProductRequest" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Product" }
+                  audit_event_id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+    get:
+      tags: [Catalog]
+      summary: List products
+      x-implemented: false
+      x-milestone: M2
+      responses:
+        "501": { description: Not implemented in M1 }
+
+  /v1/commerce/catalog/products/bulk:
+    post:
+      tags: [Catalog]
+      summary: Bulk create products
+      x-implemented: false
+      x-milestone: M2
+      responses:
+        "501": { description: Not implemented in M1 }
+
+  /v1/commerce/catalog/products/{product_id}:
+    parameters:
+      - { in: path, name: product_id, required: true, schema: { type: string } }
+    get:
+      tags: [Catalog]
+      summary: Get a product (with variants)
+      operationId: getProduct
+      x-implemented: true
+      x-milestone: M1
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Product" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+    patch:
+      tags: [Catalog]
+      summary: Update product
+      x-implemented: false
+      x-milestone: M2
+      responses:
+        "501": { description: Not implemented in M1 }
+    delete:
+      tags: [Catalog]
+      summary: Soft-delete (archive) a product
+      operationId: archiveProduct
+      x-implemented: true
+      x-milestone: M1
+      responses:
+        "200": { description: Archived }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/catalog/search:
+    post:
+      tags: [Catalog]
+      summary: Catalog search (also exposed via MCP catalog.search)
+      x-implemented: false
+      x-milestone: M5
+      responses:
+        "501": { description: Not implemented in M1 }
+
+  /v1/commerce/audit/events:
+    get:
+      tags: [Audit]
+      summary: List audit events
+      operationId: listAuditEvents
+      x-implemented: true
+      x-milestone: M1
+      parameters:
+        - { in: query, name: merchant_id, schema: { type: string } }
+        - { in: query, name: agent_id, schema: { type: string } }
+        - { in: query, name: passport_jti, schema: { type: string } }
+        - { in: query, name: event_type, schema: { type: string } }
+        - { in: query, name: from, schema: { type: string, format: date-time } }
+        - { in: query, name: to, schema: { type: string, format: date-time } }
+        - { in: query, name: limit, schema: { type: integer, default: 25, minimum: 1, maximum: 100 } }
+        - { in: query, name: cursor, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AuditEvent" }
+                  next_cursor: { type: string, nullable: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  # =====================================================================
+  # Stubs for V1 surface implemented in later milestones
+  # =====================================================================
+  # ---------------------------------------------------------------------
+  # M2 — explicit tenant provisioning. M1 ships the tenant boundary in
+  # schema only; staging/production return 422 tenant_not_provisioned
+  # until these endpoints land. For local/sandbox use only,
+  # COMMERCE_ALLOW_AUTO_TENANT=true bypasses the requirement.
+  # ---------------------------------------------------------------------
+  /v1/commerce/tenants:
+    post:
+      tags: [Tenants]
+      summary: "M2 — create a commerce tenant (operator-only)"
+      x-implemented: false
+      x-milestone: M2
+      responses:
+        "501": { description: Not implemented in M1 }
+  /v1/commerce/developer-tenants:
+    post:
+      tags: [Tenants]
+      summary: "M2 — bind a developer to a commerce tenant (operator-only)"
+      x-implemented: false
+      x-milestone: M2
+      responses:
+        "501": { description: Not implemented in M1 }
+
+  /v1/commerce/provider-credentials:
+    post: { tags: [Provider Credentials], summary: M4, x-implemented: false, x-milestone: M4, responses: { "501": { description: Not implemented in M1 } } }
+    get:  { tags: [Provider Credentials], summary: M4, x-implemented: false, x-milestone: M4, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/provider-credentials/{credential_id}:
+    parameters:
+      - { in: path, name: credential_id, required: true, schema: { type: string } }
+    patch: { tags: [Provider Credentials], summary: M4, x-implemented: false, x-milestone: M4, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/provider-credentials/{credential_id}/validate:
+    parameters:
+      - { in: path, name: credential_id, required: true, schema: { type: string } }
+    post: { tags: [Provider Credentials], summary: M4, x-implemented: false, x-milestone: M4, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/policies:
+    post: { tags: [Policy], summary: M3, x-implemented: false, x-milestone: M3, responses: { "501": { description: Not implemented in M1 } } }
+    get:  { tags: [Policy], summary: M3, x-implemented: false, x-milestone: M3, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/policies/{policy_id}:
+    parameters:
+      - { in: path, name: policy_id, required: true, schema: { type: string } }
+    get: { tags: [Policy], summary: M3, x-implemented: false, x-milestone: M3, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/policies/{policy_id}/activate:
+    parameters:
+      - { in: path, name: policy_id, required: true, schema: { type: string } }
+    post: { tags: [Policy], summary: M3, x-implemented: false, x-milestone: M3, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/policies/evaluate:
+    post: { tags: [Policy], summary: M3, x-implemented: false, x-milestone: M3, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/carts:
+    post: { tags: [Cart], summary: M3, x-implemented: false, x-milestone: M3, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/carts/{cart_id}:
+    parameters:
+      - { in: path, name: cart_id, required: true, schema: { type: string } }
+    get: { tags: [Cart], summary: M3, x-implemented: false, x-milestone: M3, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/passports/consent-requests:
+    post: { tags: [Passports], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+  /v1/commerce/passports/exchange:
+    post: { tags: [Passports], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+  /v1/commerce/passports:
+    get:  { tags: [Passports], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+  /v1/commerce/passports/verify:
+    post: { tags: [Passports], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+  /v1/commerce/passports/revoke:
+    post: { tags: [Passports], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/payments/intents:
+    post: { tags: [Payments], summary: M4, x-implemented: false, x-milestone: M4, responses: { "501": { description: Not implemented in M1 } } }
+    get:  { tags: [Payments], summary: M4, x-implemented: false, x-milestone: M4, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/payments/intents/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    get: { tags: [Payments], summary: M4, x-implemented: false, x-milestone: M4, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/payments/intents/{id}/checkout-link:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    post: { tags: [Payments], summary: M4, x-implemented: false, x-milestone: M4, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/webhooks/providers/{provider_key}:
+    parameters:
+      - { in: path, name: provider_key, required: true, schema: { type: string } }
+    post: { tags: [Webhooks], summary: "M4 — Plural webhook signature scheme is an external blocker", x-implemented: false, x-milestone: M4, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/webhooks/merchant/{merchant_id}/{source_key}:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+      - { in: path, name: source_key, required: true, schema: { type: string } }
+    post: { tags: [Webhooks], summary: "M2/M5 — catalog.product.updated only", x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/webhook-sources:
+    post: { tags: [Webhooks], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+    get:  { tags: [Webhooks], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/webhook-sources/{source_key}:
+    parameters:
+      - { in: path, name: source_key, required: true, schema: { type: string } }
+    patch: { tags: [Webhooks], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+
+  /v1/commerce/webhook-sources/{source_key}/rotate-secret:
+    parameters:
+      - { in: path, name: source_key, required: true, schema: { type: string } }
+    post: { tags: [Webhooks], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+
+  /.well-known/grantex-commerce:
+    get: { tags: [Well-Known], summary: "M5 — merchant publishing profile", x-implemented: false, x-milestone: M5, responses: { "501": { description: Not implemented in M1 } } }
+
+  /mcp:
+    get: { tags: [Well-Known], summary: "M5 — MCP streamable-HTTP", x-implemented: false, x-milestone: M5, responses: { "501": { description: Not implemented in M1 } } }
