@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { generateKeyPair, exportJWK, SignJWT, type KeyLike, type JWK } from 'jose';
+import { generateKeyPair, exportJWK, SignJWT, type KeyLike, type JWK, type JWTPayload } from 'jose';
 import { authHeader, sqlMock, mockRedis, TEST_DEVELOPER, buildTestApp } from './helpers.js';
 import { TEST_COMMERCE_TENANT_ID } from './commerce-helpers.js';
 
@@ -262,5 +262,194 @@ describe('Commerce caller resolver — agent JWT assertion', () => {
     });
     expect(res.statusCode).toBe(403);
     expect(res.json<{ error: { code: string } }>().error.code).toBe('agent_not_trusted');
+  });
+});
+
+// ----------------------------------------------------------------------
+// Codex P1 — Validate numeric JWT temporal claims before lifetime check.
+// Codex P2 — Scope replay cache key by tenant + agent identity so two
+// different agents cannot collide on a shared jti.
+// ----------------------------------------------------------------------
+describe('Commerce caller resolver — agent JWT temporal claims and replay scoping', () => {
+  let agentKp: { privateKey: KeyLike; publicKey: KeyLike };
+  let agentJwk: JWK;
+  beforeAll(async () => {
+    agentKp = await generateKeyPair('ES256');
+    agentJwk = await exportJWK(agentKp.publicKey) as JWK;
+  });
+
+  // Build a signed JWT from a raw payload object — bypasses SignJWT's
+  // typed setters so we can produce assertions with non-numeric or
+  // missing temporal claims that a syntactically-valid JWS could carry.
+  async function makeRawJwt(payload: Record<string, unknown>): Promise<string> {
+    return new SignJWT(payload as JWTPayload)
+      .setProtectedHeader({ alg: 'ES256' })
+      .sign(agentKp.privateKey);
+  }
+
+  function trustedAgentRow(agentId = 'cag_AGENT', tenantId = 'cten_TEST') {
+    return {
+      id: agentId, tenant_id: tenantId, trust_status: 'trusted',
+      public_key_jwk: agentJwk, api_key_hash: null,
+    };
+  }
+
+  it('iat as string (non-numeric) → 401 invalid_agent_credential', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const jwt = await makeRawJwt({
+      iss: 'cag_AGENT', sub: 'cag_AGENT', aud: 'grantex-commerce',
+      tenant_id: 'cten_TEST', jti: `jti_iat_str_${now}`,
+      iat: 'not-a-number', exp: now + 60,
+    });
+    sqlMock.mockResolvedValueOnce([trustedAgentRow()]);
+    const res = await app.inject({
+      method: 'GET', url: '/v1/commerce/merchants/mch_X',
+      headers: { authorization: `Bearer ${jwt}` },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('invalid_agent_credential');
+    // Replay cache must NOT have been touched — we rejected before that point.
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it('exp as string (non-numeric) → 401 invalid_agent_credential', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const jwt = await makeRawJwt({
+      iss: 'cag_AGENT', sub: 'cag_AGENT', aud: 'grantex-commerce',
+      tenant_id: 'cten_TEST', jti: `jti_exp_str_${now}`,
+      iat: now, exp: 'not-a-number',
+    });
+    sqlMock.mockResolvedValueOnce([trustedAgentRow()]);
+    const res = await app.inject({
+      method: 'GET', url: '/v1/commerce/merchants/mch_X',
+      headers: { authorization: `Bearer ${jwt}` },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('invalid_agent_credential');
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it('missing iat → 401 invalid_agent_credential', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const jwt = await makeRawJwt({
+      iss: 'cag_AGENT', sub: 'cag_AGENT', aud: 'grantex-commerce',
+      tenant_id: 'cten_TEST', jti: `jti_no_iat_${now}`,
+      exp: now + 60,
+    });
+    sqlMock.mockResolvedValueOnce([trustedAgentRow()]);
+    const res = await app.inject({
+      method: 'GET', url: '/v1/commerce/merchants/mch_X',
+      headers: { authorization: `Bearer ${jwt}` },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('invalid_agent_credential');
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it('missing exp → 401 invalid_agent_credential', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const jwt = await makeRawJwt({
+      iss: 'cag_AGENT', sub: 'cag_AGENT', aud: 'grantex-commerce',
+      tenant_id: 'cten_TEST', jti: `jti_no_exp_${now}`,
+      iat: now,
+    });
+    sqlMock.mockResolvedValueOnce([trustedAgentRow()]);
+    const res = await app.inject({
+      method: 'GET', url: '/v1/commerce/merchants/mch_X',
+      headers: { authorization: `Bearer ${jwt}` },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('invalid_agent_credential');
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it('exp <= iat (zero or negative lifetime) → 401 invalid_agent_credential', async () => {
+    // exp == iat — both in the future to satisfy jose's expiry check
+    // (so the temporal-validity guard, not jose, is what rejects).
+    const future = Math.floor(Date.now() / 1000) + 120;
+    const jwt = await makeRawJwt({
+      iss: 'cag_AGENT', sub: 'cag_AGENT', aud: 'grantex-commerce',
+      tenant_id: 'cten_TEST', jti: `jti_eq_${future}`,
+      iat: future, exp: future,
+    });
+    sqlMock.mockResolvedValueOnce([trustedAgentRow()]);
+    const res = await app.inject({
+      method: 'GET', url: '/v1/commerce/merchants/mch_X',
+      headers: { authorization: `Bearer ${jwt}` },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('invalid_agent_credential');
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it('two different agents reusing the same jti both succeed; replay keys differ and include agent identity', async () => {
+    const sharedJti = `jti_shared_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const now = Math.floor(Date.now() / 1000);
+
+    // Agent A in tenant T1
+    const jwtA = await makeRawJwt({
+      iss: 'cag_A', sub: 'cag_A', aud: 'grantex-commerce',
+      tenant_id: 'cten_T1', jti: sharedJti,
+      iat: now, exp: now + 60,
+    });
+    sqlMock.mockResolvedValueOnce([trustedAgentRow('cag_A', 'cten_T1')]);
+    sqlMock.mockResolvedValueOnce([]);  // GET own agent → 404 (no row)
+    mockRedis.set.mockResolvedValueOnce('OK');
+    const resA = await app.inject({
+      method: 'GET', url: '/v1/commerce/agents/cag_A',
+      headers: { authorization: `Bearer ${jwtA}` },
+    });
+    expect(resA.statusCode).toBe(404);
+    expect(resA.json<{ error: { code: string } }>().error.code).toBe('agent_not_found');
+
+    // Agent B in tenant T2 — same JTI
+    const jwtB = await makeRawJwt({
+      iss: 'cag_B', sub: 'cag_B', aud: 'grantex-commerce',
+      tenant_id: 'cten_T2', jti: sharedJti,
+      iat: now, exp: now + 60,
+    });
+    sqlMock.mockResolvedValueOnce([trustedAgentRow('cag_B', 'cten_T2')]);
+    sqlMock.mockResolvedValueOnce([]);  // GET own agent → 404
+    mockRedis.set.mockResolvedValueOnce('OK');
+    const resB = await app.inject({
+      method: 'GET', url: '/v1/commerce/agents/cag_B',
+      headers: { authorization: `Bearer ${jwtB}` },
+    });
+    expect(resB.statusCode).toBe(404);
+    expect(resB.json<{ error: { code: string } }>().error.code).toBe('agent_not_found');
+
+    // Verify Redis SET keys included both tenant + agent identity and
+    // differ between the two callers despite the shared jti.
+    expect(mockRedis.set).toHaveBeenCalledTimes(2);
+    const keyA = mockRedis.set.mock.calls[0]?.[0] as string;
+    const keyB = mockRedis.set.mock.calls[1]?.[0] as string;
+    expect(keyA).toContain('cten_T1');
+    expect(keyA).toContain('cag_A');
+    expect(keyA).toContain(sharedJti);
+    expect(keyB).toContain('cten_T2');
+    expect(keyB).toContain('cag_B');
+    expect(keyB).toContain(sharedJti);
+    expect(keyA).not.toBe(keyB);
+  });
+
+  it('same agent reusing jti → 401 agent_assertion_replay (existing behavior preserved); key carries agent identity', async () => {
+    const jti = `jti_replay_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const now = Math.floor(Date.now() / 1000);
+    const jwt = await makeRawJwt({
+      iss: 'cag_AGENT', sub: 'cag_AGENT', aud: 'grantex-commerce',
+      tenant_id: 'cten_TEST', jti, iat: now, exp: now + 60,
+    });
+    sqlMock.mockResolvedValueOnce([trustedAgentRow()]);
+    mockRedis.set.mockResolvedValueOnce(null);  // jti already seen by THIS agent
+    const res = await app.inject({
+      method: 'GET', url: '/v1/commerce/merchants/mch_X',
+      headers: { authorization: `Bearer ${jwt}` },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('agent_assertion_replay');
+    const setKey = mockRedis.set.mock.calls[0]?.[0] as string;
+    expect(setKey).toContain('cten_TEST');
+    expect(setKey).toContain('cag_AGENT');
+    expect(setKey).toContain(jti);
   });
 });
