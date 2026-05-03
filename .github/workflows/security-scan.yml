@@ -68,6 +68,9 @@ jobs:
           PORT: '3001'
           JWT_ISSUER: http://localhost:3001
           LOG_LEVEL: info
+          ADMIN_API_KEY: ci-zap-admin
+          METRICS_API_KEY: ci-zap-metrics
+          VAULT_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
 
       - name: Wait for /health
         run: |
