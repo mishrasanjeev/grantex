@@ -157,29 +157,21 @@ async function ensurePrincipalCanActOnTenant(
   };
 }
 
-function parseFormBody(body: unknown): Record<string, string> {
-  // Use a null-prototype object and skip well-known prototype-pollution
-  // keys so user-supplied form keys cannot mutate Object.prototype or
-  // override built-in methods. Callers only ever read fixed known fields
-  // (csrf, code, etc.) from the result.
-  const out: Record<string, string> = Object.create(null) as Record<string, string>;
-  const isUnsafeKey = (k: string): boolean =>
-    k === '__proto__' || k === 'constructor' || k === 'prototype';
+function parseFormBody(body: unknown): URLSearchParams {
+  // Return URLSearchParams rather than a plain object so user-supplied
+  // form keys cannot pollute Object.prototype via bracket-assignment.
+  // Callers read fixed known fields with `.get('csrf')` etc.
   if (typeof body === 'string') {
-    const params = new URLSearchParams(body);
-    for (const [k, v] of params) {
-      if (isUnsafeKey(k)) continue;
-      out[k] = v;
-    }
-    return out;
+    return new URLSearchParams(body);
   }
   if (body && typeof body === 'object') {
+    const init: Array<[string, string]> = [];
     for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
-      if (isUnsafeKey(k)) continue;
-      if (typeof v === 'string') out[k] = v;
+      if (typeof v === 'string') init.push([k, v]);
     }
+    return new URLSearchParams(init);
   }
-  return out;
+  return new URLSearchParams();
 }
 
 type RenderState =
@@ -491,7 +483,7 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
           'Requesting a verification code requires an authenticated principal session');
       }
       const form = parseFormBody(request.body);
-      const formCsrf = form['csrf'] ?? '';
+      const formCsrf = form.get('csrf') ?? '';
       const expected = deriveConsentCsrfToken(principal.rawToken, request.params.reqId);
       const a = Buffer.from(formCsrf);
       const b = Buffer.from(expected);
@@ -587,14 +579,14 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
           'Verifying a challenge requires an authenticated principal session');
       }
       const form = parseFormBody(request.body);
-      const formCsrf = form['csrf'] ?? '';
+      const formCsrf = form.get('csrf') ?? '';
       const expected = deriveConsentCsrfToken(principal.rawToken, request.params.reqId);
       const a = Buffer.from(formCsrf);
       const b = Buffer.from(expected);
       if (a.length !== b.length || !timingSafeEqual(a, b)) {
         throw new CommerceHttpError(403, 'csrf_invalid', 'CSRF token mismatch');
       }
-      const code = (form['code'] ?? '').trim();
+      const code = (form.get('code') ?? '').trim();
       if (!/^\d{4,10}$/.test(code)) {
         throw new CommerceHttpError(422, 'validation_failed', 'Code must be a 4-10 digit numeric string',
           { details: { fields: { code: 'numeric, 4-10 digits' } }, retryable: false });
@@ -682,7 +674,7 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
       }
       // 2. CSRF token bound to (session_token, consent_request_id).
       const form = parseFormBody(request.body);
-      const formCsrf = form['csrf'] ?? '';
+      const formCsrf = form.get('csrf') ?? '';
       const expected = deriveConsentCsrfToken(principal.rawToken, request.params.reqId);
       const a = Buffer.from(formCsrf);
       const b = Buffer.from(expected);
@@ -776,7 +768,7 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
           'Denying consent requires an authenticated principal session');
       }
       const form = parseFormBody(request.body);
-      const formCsrf = form['csrf'] ?? '';
+      const formCsrf = form.get('csrf') ?? '';
       const expected = deriveConsentCsrfToken(principal.rawToken, request.params.reqId);
       const a = Buffer.from(formCsrf);
       const b = Buffer.from(expected);
