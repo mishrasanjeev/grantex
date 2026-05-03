@@ -143,6 +143,74 @@ describe('Commerce schema — composite tenant-safe foreign keys (M1 hardening)'
   });
 });
 
+describe('Commerce schema — M2 migrations (037-041)', () => {
+  it('037 commerce_tenant_operators has role CHECK and backfill from M1 default mappings', () => {
+    const s = read('037_commerce_tenant_operators.sql');
+    expect(s).toMatch(/CREATE TABLE IF NOT EXISTS commerce_tenant_operators/);
+    expect(s).toMatch(/CHECK \(role IN \('owner','operator'\)\)/);
+    expect(s).toMatch(/INSERT INTO commerce_tenant_operators[\s\S]*FROM commerce_developer_tenants/);
+    expect(s).toMatch(/ON CONFLICT \(developer_id, tenant_id\) DO NOTHING/);
+  });
+
+  it('038 commerce_merchant_api_keys uses sha256 hash + composite tenant FK + partial unique on active', () => {
+    const s = read('038_commerce_merchant_api_keys.sql');
+    expect(s).toMatch(/CREATE TABLE IF NOT EXISTS commerce_merchant_api_keys/);
+    expect(s).toMatch(/key_hash\s+TEXT NOT NULL/);
+    expect(s).toMatch(/CONSTRAINT fk_merchant_api_key_merchant\s*\n?\s*FOREIGN KEY \(tenant_id, merchant_id\)\s*\n?\s*REFERENCES commerce_merchants\(tenant_id, id\)/);
+    expect(s).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_commerce_merchant_api_keys_hash[\s\S]*WHERE revoked_at IS NULL/);
+    expect(s).toMatch(/CHECK \(environment IN \('sandbox','live'\)\)/);
+  });
+
+  it('039 commerce_passport_keys enforces ES256 algorithm and kid namespace at the DB layer', () => {
+    const s = read('039_commerce_passport_keys.sql');
+    expect(s).toMatch(/CREATE TABLE IF NOT EXISTS commerce_passport_keys/);
+    expect(s).toMatch(/CHECK \(algorithm = 'ES256'\)/);
+    expect(s).toMatch(/CHECK \(\s*kid ~ '\^commerce-passport-\[0-9\]\{8\}-\[a-z0-9\]\{8\}\$'\s*\)/);
+    expect(s).toMatch(/CHECK \(status IN \('active','retired','compromised'\)\)/);
+    // Exactly one active key at any time.
+    expect(s).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_commerce_passport_keys_active[\s\S]*WHERE status = 'active'/);
+    // Private key is encrypted.
+    expect(s).toMatch(/encrypted_private_key_jwk\s+TEXT NOT NULL/);
+  });
+
+  it('040 commerce_consent_records has composite tenant FKs + status CHECK + presented_payload_hash + user_principal_hint', () => {
+    const s = read('040_commerce_consent_records.sql');
+    expect(s).toMatch(/CREATE TABLE IF NOT EXISTS commerce_consent_records/);
+    expect(s).toMatch(/CHECK \(status IN \('requested','granted','denied','expired'\)\)/);
+    expect(s).toMatch(/CHECK \(passport_type IN \('browse','checkout'\)\)/);
+    expect(s).toMatch(/presented_payload_hash\s+TEXT/);
+    // Finding 1 redesign: csrf_secret_hash dropped (CSRF derived per-form
+    // from principal session token); user_principal_hint added (agent
+    // hint that's enforced at approval against verified principal).
+    expect(s).not.toMatch(/csrf_secret_hash/);
+    expect(s).toMatch(/user_principal_hint\s+TEXT/);
+    expect(s).toMatch(/consent_request_id\s+TEXT NOT NULL UNIQUE/);
+    expect(s).toMatch(/CONSTRAINT fk_consent_merchant\s*\n?\s*FOREIGN KEY \(tenant_id, merchant_id\)\s*\n?\s*REFERENCES commerce_merchants\(tenant_id, id\)/);
+    expect(s).toMatch(/CONSTRAINT fk_consent_agent\s*\n?\s*FOREIGN KEY \(tenant_id, agent_id\)\s*\n?\s*REFERENCES commerce_agents\(tenant_id, id\)/);
+  });
+
+  it('041 commerce_passports has UNIQUE consent_record_id (Finding 3 — single-use exchange)', () => {
+    const s = read('041_commerce_passports.sql');
+    expect(s).toMatch(/consent_record_id\s+TEXT NOT NULL UNIQUE/);
+    // Belt-and-braces idempotent ALTER TABLE for upgrade scenarios.
+    expect(s).toMatch(/ADD CONSTRAINT commerce_passports_consent_record_id_key/);
+  });
+
+  it('041 commerce_passports is append-only with BEFORE UPDATE/DELETE triggers + revocations sibling table', () => {
+    const s = read('041_commerce_passports.sql');
+    expect(s).toMatch(/CREATE TABLE IF NOT EXISTS commerce_passports/);
+    expect(s).toMatch(/jti\s+TEXT PRIMARY KEY/);
+    expect(s).toMatch(/kid\s+TEXT NOT NULL REFERENCES commerce_passport_keys\(kid\)/);
+    expect(s).toMatch(/CREATE OR REPLACE FUNCTION commerce_passports_block_mutation/);
+    expect(s).toMatch(/BEFORE UPDATE ON commerce_passports/);
+    expect(s).toMatch(/BEFORE DELETE ON commerce_passports/);
+    // Revocations sibling table exists and is itself append-only at the role layer.
+    expect(s).toMatch(/CREATE TABLE IF NOT EXISTS commerce_passport_revocations/);
+    expect(s).toMatch(/REVOKE UPDATE, DELETE, TRUNCATE ON commerce_passports FROM grantex_app/);
+    expect(s).toMatch(/GRANT INSERT, SELECT ON commerce_passports TO grantex_app/);
+  });
+});
+
 describe('Commerce schema — electronics_appliances preset is seeded', () => {
   it('migration 032 inserts electronics_appliances with required_fields and default_policy_rules', () => {
     const s = read('032_commerce_category_presets.sql');

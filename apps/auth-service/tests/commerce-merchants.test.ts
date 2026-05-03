@@ -87,16 +87,19 @@ describe('POST /v1/commerce/merchants', () => {
       .toHaveProperty('category_preset');
   });
 
-  it('returns 401 with no Authorization header (platform envelope, NOT commerce envelope)', async () => {
+  it('returns 401 with the commerce envelope on missing Authorization (M2 caller refactor)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/commerce/merchants',
       payload: validBody,
     });
-    // Auth runs at the global preHandler before commerce sub-instance kicks in,
-    // so the response uses the platform error envelope { message, code, requestId }.
+    // M2 Decision F: commerce routes opt out of the global authPlugin and
+    // run their own commerce caller resolver. 401s now use the commerce
+    // envelope { error: { code, message, ... } } scoped to /v1/commerce/*.
     expect(res.statusCode).toBe(401);
-    expect(res.json<{ code: string }>().code).toBe('UNAUTHORIZED');
+    const body = res.json<{ error: { code: string; message: string } }>();
+    expect(body.error.code).toBe('missing_authorization');
+    expect(typeof body.error.message).toBe('string');
   });
 });
 

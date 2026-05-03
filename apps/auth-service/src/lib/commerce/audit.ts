@@ -22,10 +22,17 @@ export type CommerceAuditEventType =
   | 'consent.requested'
   | 'consent.granted'
   | 'consent.denied'
+  | 'consent.expired'
+  | 'consent.challenge.requested'
+  | 'consent.challenge.verified'
+  | 'consent.challenge.failed'
+  | 'consent.challenge.expired'
+  | 'consent.challenge.used'
   | 'passport.issued'
   | 'passport.verified'
   | 'passport.revoked'
   | 'passport.expired'
+  | 'passport.verification_failed'
   | 'policy.evaluated'
   | 'cart.created'
   | 'payment_intent.created'
@@ -40,7 +47,14 @@ export type CommerceAuditEventType =
   | 'idempotency.conflict'
   | 'rate_limit.exceeded'
   | 'meter.passport_issued'
-  | 'meter.payment_intent_created';
+  | 'meter.payment_intent_created'
+  // M2 — tenant operator + provisioning lifecycle
+  | 'tenant.created'
+  | 'tenant.updated'
+  | 'tenant.disabled'
+  | 'developer_tenant.bound'
+  | 'developer_tenant.unbound'
+  | 'commerce_passport_key.rotated';
 
 export interface AppendCommerceAuditInput {
   tenantId: string;
