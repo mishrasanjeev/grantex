@@ -37,9 +37,13 @@ describe('Commerce schema — tenant_id presence on every tenant-owned table', (
 });
 
 describe('Commerce schema — required indexes/constraints from spec §15', () => {
-  it('commerce_merchants has unique (tenant_id, id)', () => {
+  it('commerce_merchants has unique (tenant_id, id) — as CONSTRAINT, not bare index', () => {
+    // The hardening migration converted the original CREATE UNIQUE INDEX
+    // to a table CONSTRAINT so it can be referenced by composite FKs from
+    // commerce_products and commerce_product_variants. PG rejects bare
+    // unique indexes as FK targets.
     expect(read('033_commerce_merchants.sql')).toMatch(
-      /CREATE UNIQUE INDEX IF NOT EXISTS uq_commerce_merchants_tenant_id\s*\n\s*ON commerce_merchants\(tenant_id, id\)/,
+      /CONSTRAINT uq_commerce_merchants_tenant_id UNIQUE \(tenant_id, id\)/,
     );
   });
 
@@ -62,10 +66,11 @@ describe('Commerce schema — required indexes/constraints from spec §15', () =
     );
   });
 
-  it('commerce_product_variants has FK to products and merchants and tenants', () => {
+  it('commerce_product_variants has tenant_id FK to commerce_tenants', () => {
+    // merchant_id and product_id FKs are no longer single-column — they
+    // moved to composite tenant-safe FKs asserted in the dedicated
+    // describe block below.
     const s = read('035_commerce_products.sql');
-    expect(s).toMatch(/product_id\s+TEXT NOT NULL REFERENCES commerce_products\(id\)/);
-    expect(s).toMatch(/merchant_id\s+TEXT NOT NULL REFERENCES commerce_merchants\(id\)/);
     expect(s).toMatch(/tenant_id\s+TEXT NOT NULL REFERENCES commerce_tenants\(id\)/);
   });
 
@@ -91,6 +96,50 @@ describe('Commerce schema — required indexes/constraints from spec §15', () =
     expect(read('031_commerce_tenants.sql')).toMatch(
       /CONSTRAINT chk_commerce_tenants_status CHECK \(status IN \('active','disabled'\)\)/,
     );
+  });
+});
+
+describe('Commerce schema — composite tenant-safe foreign keys (M1 hardening)', () => {
+  it('commerce_merchants exposes UNIQUE CONSTRAINT (tenant_id, id) usable as an FK target', () => {
+    // PG requires the referenced columns to be a UNIQUE/PK constraint, not
+    // a bare unique index, before another table can FK to them. The
+    // hardening migration converted the original CREATE UNIQUE INDEX to a
+    // table CONSTRAINT inside CREATE TABLE.
+    const s = read('033_commerce_merchants.sql');
+    expect(s).toMatch(
+      /CONSTRAINT uq_commerce_merchants_tenant_id UNIQUE \(tenant_id, id\)/,
+    );
+  });
+
+  it('commerce_products has composite FK (tenant_id, merchant_id) → commerce_merchants(tenant_id, id)', () => {
+    const s = read('035_commerce_products.sql');
+    expect(s).toMatch(
+      /CONSTRAINT fk_commerce_products_merchant_tenant\s*\n?\s*FOREIGN KEY \(tenant_id, merchant_id\)\s*\n?\s*REFERENCES commerce_merchants\(tenant_id, id\)/,
+    );
+    // The legacy single-column FK to commerce_merchants(id) on products.merchant_id is gone.
+    expect(s).not.toMatch(/merchant_id\s+TEXT NOT NULL REFERENCES commerce_merchants\(id\)/);
+  });
+
+  it('commerce_products has UNIQUE CONSTRAINT (tenant_id, id) so variants can FK back', () => {
+    expect(read('035_commerce_products.sql')).toMatch(
+      /CONSTRAINT uq_commerce_products_tenant_id UNIQUE \(tenant_id, id\)/,
+    );
+  });
+
+  it('commerce_product_variants has composite FK (tenant_id, merchant_id) → commerce_merchants(tenant_id, id)', () => {
+    const s = read('035_commerce_products.sql');
+    expect(s).toMatch(
+      /CONSTRAINT fk_commerce_variants_merchant_tenant\s*\n?\s*FOREIGN KEY \(tenant_id, merchant_id\)\s*\n?\s*REFERENCES commerce_merchants\(tenant_id, id\)/,
+    );
+    expect(s).not.toMatch(/merchant_id\s+TEXT NOT NULL REFERENCES commerce_merchants\(id\)/);
+  });
+
+  it('commerce_product_variants has composite FK (tenant_id, product_id) → commerce_products(tenant_id, id)', () => {
+    const s = read('035_commerce_products.sql');
+    expect(s).toMatch(
+      /CONSTRAINT fk_commerce_variants_product_tenant\s*\n?\s*FOREIGN KEY \(tenant_id, product_id\)\s*\n?\s*REFERENCES commerce_products\(tenant_id, id\)/,
+    );
+    expect(s).not.toMatch(/product_id\s+TEXT NOT NULL REFERENCES commerce_products\(id\)/);
   });
 });
 

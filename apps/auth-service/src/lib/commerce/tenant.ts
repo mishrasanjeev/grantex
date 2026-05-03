@@ -44,12 +44,18 @@ export async function resolveTenantForDeveloper(
 }
 
 /**
- * True only when COMMERCE_ALLOW_AUTO_TENANT === 'true'. Read at call time
- * so tests can flip it via vi.stubEnv. Must remain false in staging and
- * production; M2 introduces explicit provisioning endpoints
- * (POST /v1/commerce/tenants and POST /v1/commerce/developer-tenants).
+ * True only when COMMERCE_ALLOW_AUTO_TENANT === 'true' AND the process is
+ * not running in production. The NODE_ENV gate is unconditional: even an
+ * accidental COMMERCE_ALLOW_AUTO_TENANT=true in a production deploy must
+ * not silently provision tenants. Read at call time so tests can flip
+ * either env var via vi.stubEnv.
+ *
+ * M2 introduces explicit provisioning endpoints
+ * (POST /v1/commerce/tenants and POST /v1/commerce/developer-tenants);
+ * the auto path is for local/sandbox iteration only.
  */
 export function isAutoTenantAllowed(): boolean {
+  if (process.env['NODE_ENV'] === 'production') return false;
   return process.env['COMMERCE_ALLOW_AUTO_TENANT'] === 'true';
 }
 

@@ -23,14 +23,35 @@ CREATE TABLE IF NOT EXISTS commerce_merchants (
   CONSTRAINT chk_merchants_verification CHECK (
     verification_status IN ('unverified','pending','verified','rejected')
   ),
-  CONSTRAINT chk_merchants_environment CHECK (environment IN ('sandbox','live'))
+  CONSTRAINT chk_merchants_environment CHECK (environment IN ('sandbox','live')),
+  -- Must be a CONSTRAINT (not a bare UNIQUE INDEX) so other tables can
+  -- declare composite FOREIGN KEY (tenant_id, merchant_id) → here.
+  -- PG requires a UNIQUE/PK constraint on the referenced columns; a
+  -- standalone unique index is not accepted as an FK target.
+  CONSTRAINT uq_commerce_merchants_tenant_id UNIQUE (tenant_id, id)
 );
 
--- Spec §15 mandates (tenant_id, id) unique even though id is already PK.
--- Carrying the redundant constraint matches the spec text and makes
--- composite FKs from cross-tenant tables straightforward later.
-CREATE UNIQUE INDEX IF NOT EXISTS uq_commerce_merchants_tenant_id
-  ON commerce_merchants(tenant_id, id);
+-- Idempotency for upgrades from a prior shape that used CREATE UNIQUE
+-- INDEX. Drop the legacy index if present (the CONSTRAINT above creates
+-- its own backing index automatically). No-op on fresh installs.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND indexname = 'uq_commerce_merchants_tenant_id'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'uq_commerce_merchants_tenant_id'
+          AND conrelid = 'commerce_merchants'::regclass
+      )
+  ) THEN
+    DROP INDEX uq_commerce_merchants_tenant_id;
+    ALTER TABLE commerce_merchants
+      ADD CONSTRAINT uq_commerce_merchants_tenant_id UNIQUE (tenant_id, id);
+  END IF;
+END
+$$;
 
 CREATE INDEX IF NOT EXISTS idx_commerce_merchants_tenant
   ON commerce_merchants(tenant_id);

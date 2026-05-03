@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS commerce_products (
   id                    TEXT PRIMARY KEY,                                       -- cprd_<ulid>
   tenant_id             TEXT NOT NULL REFERENCES commerce_tenants(id),
-  merchant_id           TEXT NOT NULL REFERENCES commerce_merchants(id),
+  merchant_id           TEXT NOT NULL,
   product_id            TEXT NOT NULL,                                          -- merchant-supplied stable product key
   title                 TEXT NOT NULL,
   brand                 TEXT,
@@ -16,7 +16,18 @@ CREATE TABLE IF NOT EXISTS commerce_products (
   manually_maintained   BOOLEAN NOT NULL DEFAULT FALSE,
   archived_at           TIMESTAMPTZ,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- Composite tenant-safe FK: a product's merchant must belong to the
+  -- same tenant. Replaces the prior single-column merchant_id REFERENCES
+  -- commerce_merchants(id), which would have allowed cross-tenant
+  -- references at the DB layer (the route guard caught it; this closes
+  -- the gap one level deeper).
+  CONSTRAINT fk_commerce_products_merchant_tenant
+    FOREIGN KEY (tenant_id, merchant_id)
+    REFERENCES commerce_merchants(tenant_id, id),
+  -- Required so commerce_product_variants can declare a composite
+  -- (tenant_id, product_id) FK back to here.
+  CONSTRAINT uq_commerce_products_tenant_id UNIQUE (tenant_id, id)
 );
 
 -- Spec §15: (tenant_id, merchant_id, product_id) unique for active rows.
@@ -34,8 +45,8 @@ CREATE INDEX IF NOT EXISTS idx_commerce_products_archived
 CREATE TABLE IF NOT EXISTS commerce_product_variants (
   id                        TEXT PRIMARY KEY,                                   -- cvar_<ulid>
   tenant_id                 TEXT NOT NULL REFERENCES commerce_tenants(id),
-  merchant_id               TEXT NOT NULL REFERENCES commerce_merchants(id),
-  product_id                TEXT NOT NULL REFERENCES commerce_products(id),
+  merchant_id               TEXT NOT NULL,
+  product_id                TEXT NOT NULL,
   sku                       TEXT NOT NULL,
   parent_sku                TEXT,
   model                     TEXT,
@@ -58,7 +69,16 @@ CREATE TABLE IF NOT EXISTS commerce_product_variants (
   CONSTRAINT chk_variant_availability CHECK (
     availability_status IN ('in_stock','out_of_stock','pre_order','back_order','unknown')
   ),
-  CONSTRAINT chk_variant_price_nonneg CHECK (price_amount >= 0)
+  CONSTRAINT chk_variant_price_nonneg CHECK (price_amount >= 0),
+  -- Composite tenant-safe FKs: a variant's merchant and product must both
+  -- belong to the same tenant as the variant itself. Replaces the prior
+  -- single-column merchant_id and product_id REFERENCES.
+  CONSTRAINT fk_commerce_variants_merchant_tenant
+    FOREIGN KEY (tenant_id, merchant_id)
+    REFERENCES commerce_merchants(tenant_id, id),
+  CONSTRAINT fk_commerce_variants_product_tenant
+    FOREIGN KEY (tenant_id, product_id)
+    REFERENCES commerce_products(tenant_id, id)
 );
 
 -- Spec §15: SKU unique per (tenant, merchant) for active variants. Partial

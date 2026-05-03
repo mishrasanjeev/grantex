@@ -147,6 +147,48 @@ describe('Tenant resolution — auto-provision (test/sandbox only)', () => {
   });
 });
 
+describe('Tenant resolution — production guard (NODE_ENV=production)', () => {
+  it('route returns 422 tenant_not_provisioned even with COMMERCE_ALLOW_AUTO_TENANT=true in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('COMMERCE_ALLOW_AUTO_TENANT', 'true');
+    seedCommerceContextNoMapping();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_X',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('tenant_not_provisioned');
+
+    // No INSERT to commerce_tenants happened.
+    const insertedAnyTenant = sqlMock.mock.calls.some((c) => {
+      const tpl = c[0] as unknown;
+      if (!Array.isArray(tpl)) return false;
+      return tpl.some((s) => typeof s === 'string'
+        && /INSERT INTO commerce_tenants/i.test(s));
+    });
+    expect(insertedAnyTenant).toBe(false);
+  });
+
+  it('isAutoTenantAllowed() returns false in production regardless of the flag', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('COMMERCE_ALLOW_AUTO_TENANT', 'true');
+    const { isAutoTenantAllowed } = await import('../src/lib/commerce/tenant.js');
+    expect(isAutoTenantAllowed()).toBe(false);
+  });
+
+  it('lib resolveOrCreateTenantForDeveloper throws in production even with flag set', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('COMMERCE_ALLOW_AUTO_TENANT', 'true');
+    const { resolveOrCreateTenantForDeveloper } = await import('../src/lib/commerce/tenant.js');
+    await expect(
+      resolveOrCreateTenantForDeveloper(sqlMock as unknown as never, 'dev_X', 'X'),
+    ).rejects.toThrow(/auto-provisioning is disabled/i);
+  });
+});
+
 describe('Tenant resolution — disabled tenant', () => {
   it('returns 403 tenant_disabled (does NOT 422 and does NOT auto-create a replacement)', async () => {
     seedCommerceContextDisabledTenant();

@@ -76,7 +76,6 @@ interface ProductCreateBody {
   variants?: unknown;
 }
 
-const TRUST_STATUS = new Set(['pending', 'trusted', 'suspended', 'disabled']);
 const AVAILABILITY = new Set(['in_stock', 'out_of_stock', 'pre_order', 'back_order', 'unknown']);
 
 function isString(v: unknown): v is string {
@@ -230,15 +229,25 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
 
   // ----------------------------------------------------------------------
   // POST /agents
+  //
+  // Trust-status policy (M1 hardening): trust_status is server-controlled.
+  // Every new CommerceAgent is created in 'pending' state regardless of
+  // what the caller sends. Trust changes belong on a future admin/operator
+  // endpoint with its own auth surface (planned for M2). Accepting
+  // trust_status from a normal create caller would let any operator mint
+  // a 'trusted' agent and bypass the trust review workflow entirely.
+  // We allow callers to send trust_status=pending (a no-op) for
+  // forward compatibility, but reject any other value with 422.
   // ----------------------------------------------------------------------
   app.post<{ Body: AgentCreateBody }>('/agents', async (request, reply) => {
     const body = request.body ?? {};
     const fieldErrors: Record<string, string> = {};
     if (!isString(body.display_name)) fieldErrors['display_name'] = 'required string';
     const agentType = isString(body.agent_type) ? body.agent_type : 'sales';
-    const trustStatus = isString(body.trust_status) ? body.trust_status : 'pending';
-    if (!TRUST_STATUS.has(trustStatus)) {
-      fieldErrors['trust_status'] = 'must be one of: pending, trusted, suspended, disabled';
+    if (body.trust_status !== undefined && body.trust_status !== 'pending') {
+      fieldErrors['trust_status'] =
+        'trust_status is server-controlled; new agents are always created as "pending". '
+        + 'Omit this field or send "pending". Trust changes will land on a future admin endpoint.';
     }
     const hasJwk = isPlainObject(body.public_key_jwk);
     const hasKeyHash = isString(body.api_key_hash);
@@ -254,6 +263,8 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     const sql = getSql();
     const id = newCommerceAgentId();
     const tenantId = request.commerceTenantId;
+    // Hardcoded — see policy comment above. Not derived from request body.
+    const trustStatus = 'pending';
 
     const result = await sql.begin(async (_tx) => {
       const tx = _tx as unknown as TxSql;

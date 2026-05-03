@@ -73,15 +73,54 @@ describe('POST /v1/commerce/agents', () => {
       .toHaveProperty('public_key_jwk');
   });
 
+  it('hardcodes trust_status=pending when caller omits the field', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([{ id: 'cag_X', trust_status: 'pending' }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_A', occurred_at: new Date().toISOString() }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/agents',
+      headers: authHeader(),
+      payload: { display_name: 'X', public_key_jwk: VALID_JWK },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ data: { trust_status: string } }>().data.trust_status).toBe('pending');
+
+    // Verify the route INSERT bound the literal 'pending' regardless of input.
+    const insertCall = sqlMock.mock.calls.find((c) => {
+      const tpl = c[0] as unknown;
+      if (!Array.isArray(tpl)) return false;
+      return tpl.some((s) => typeof s === 'string' && /INSERT INTO commerce_agents/i.test(s));
+    });
+    expect(insertCall).toBeDefined();
+    // Slice off the template strings array; the rest are the bound values.
+    expect(insertCall!.slice(1)).toContain('pending');
+  });
+
+  it('accepts trust_status="pending" explicitly as a no-op (forward-compat)', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([{ id: 'cag_X', trust_status: 'pending' }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_A', occurred_at: new Date().toISOString() }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/agents',
+      headers: authHeader(),
+      payload: { display_name: 'X', public_key_jwk: VALID_JWK, trust_status: 'pending' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ data: { trust_status: string } }>().data.trust_status).toBe('pending');
+  });
+
   it.each([
-    ['pending'],
     ['trusted'],
     ['suspended'],
     ['disabled'],
-  ])('accepts trust_status=%s', async (trust_status) => {
+    ['untrusted'],   // also covers the previous "invalid value" case
+    ['admin'],
+  ])('rejects caller-supplied trust_status=%s with 422 (server-controlled)', async (trust_status) => {
     seedCommerceContext();
-    sqlMock.mockResolvedValueOnce([{ id: 'cag_X', trust_status }]);
-    sqlMock.mockResolvedValueOnce([{ id: 'caud_A', occurred_at: new Date().toISOString() }]);
 
     const res = await app.inject({
       method: 'POST',
@@ -89,21 +128,11 @@ describe('POST /v1/commerce/agents', () => {
       headers: authHeader(),
       payload: { display_name: 'X', public_key_jwk: VALID_JWK, trust_status },
     });
-    expect(res.statusCode).toBe(201);
-  });
-
-  it('rejects invalid trust_status with 422', async () => {
-    seedCommerceContext();
-
-    const res = await app.inject({
-      method: 'POST',
-      url: '/v1/commerce/agents',
-      headers: authHeader(),
-      payload: { display_name: 'X', public_key_jwk: VALID_JWK, trust_status: 'untrusted' },
-    });
     expect(res.statusCode).toBe(422);
-    expect(res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields)
-      .toHaveProperty('trust_status');
+    const body = res.json<{ error: { code: string; details: { fields: Record<string, string> } } }>();
+    expect(body.error.code).toBe('validation_failed');
+    expect(body.error.details.fields).toHaveProperty('trust_status');
+    expect(body.error.details.fields['trust_status']).toMatch(/server-controlled/i);
   });
 });
 

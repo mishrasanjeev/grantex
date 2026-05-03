@@ -144,10 +144,11 @@ components:
         agent_type: { type: string, default: sales }
         public_key_jwk: { type: object, additionalProperties: true }
         api_key_hash: { type: string, description: "Salted hash of grtx_agent_<secret>; never raw" }
-        trust_status:
-          type: string
-          enum: [pending, trusted, suspended, disabled]
-          default: pending
+      description: >-
+        Note: trust_status is server-controlled. New agents are always
+        created in 'pending'. The field accepts 'pending' (no-op) for
+        forward compatibility but rejects any other value with 422. Trust
+        changes will land on a future admin/operator endpoint (M2+).
 
     Variant:
       type: object
