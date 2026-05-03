@@ -83,6 +83,22 @@ export const config = {
     .split(',')
     .map((o) => o.trim())
     .filter((o) => o.length > 0),
+  // ---------------------------------------------------------------------
+  // Grantex Commerce V1 feature flags. M1 reads them at request time
+  // (process.env directly) so test toggling via vi.stubEnv works.
+  // Flag-flip events that affect payment or agentic commerce must be
+  // audited as merchant.feature_flag.updated (M2+).
+  // commerceAllowAutoTenant: gates the test/local-sandbox auto-provision
+  // path in lib/commerce/tenant.ts. MUST stay false in staging/production;
+  // unmapped developers there receive 422 tenant_not_provisioned and must
+  // be provisioned via the explicit endpoints planned for M2.
+  // ---------------------------------------------------------------------
+  commerceV1Enabled: process.env['COMMERCE_V1_ENABLED'] === 'true',
+  commerceSandboxEnabled: process.env['COMMERCE_SANDBOX_ENABLED'] !== 'false',
+  commerceAllowAutoTenant: process.env['COMMERCE_ALLOW_AUTO_TENANT'] === 'true',
+  pluralSandboxEnabled: process.env['PLURAL_SANDBOX_ENABLED'] === 'true',
+  pluralLiveEnabled: process.env['PLURAL_LIVE_ENABLED'] === 'true',
+  commerceLiveModeEnabled: process.env['COMMERCE_LIVE_MODE_ENABLED'] === 'true',
 } as const;
 
 if (!config.rsaPrivateKey && !config.autoGenerateKeys) {
