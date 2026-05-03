@@ -88,13 +88,18 @@ export async function buildApp(opts: AppOptions = {}) {
   });
   await app.register(websocket);
 
-  // HTTP security headers
+  // HTTP security headers. Most are unconditional defaults; CSP and
+  // Referrer-Policy are conditional so individual routes can apply
+  // stricter policies (e.g., commerce consent uses Referrer-Policy:
+  // no-referrer because the URL may carry one-shot session tokens).
   app.addHook('onSend', async (_request, reply) => {
     reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('X-Frame-Options', 'DENY');
     reply.header('X-XSS-Protection', '0');
-    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (!reply.getHeader('Referrer-Policy')) {
+      reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    }
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     reply.header('Cache-Control', 'no-store');
     if (!reply.getHeader('Content-Security-Policy')) {

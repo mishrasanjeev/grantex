@@ -1,8 +1,8 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type postgres from 'postgres';
 import { getSql, type TxSql } from '../db/client.js';
+import { getRedis } from '../redis/client.js';
 import {
-  resolveTenantForDeveloper,
   resolveOrCreateTenantForDeveloper,
   isAutoTenantAllowed,
 } from '../lib/commerce/tenant.js';
@@ -15,10 +15,19 @@ import {
   newCommerceVariantId,
 } from '../lib/commerce/ids.js';
 import { isCommerceCategoryPreset } from '../lib/commerce/presets.js';
+import { resolveCommerceCaller, type CommerceCaller } from '../lib/commerce/caller.js';
+import { commerceTenantsRoutes } from './commerce-tenants.js';
+import { commercePassportRoutes } from './commerce-passport.js';
+import { commerceConsentRoutes } from './commerce-consent.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
     commerceTenantId: string;
+    commerceCaller: CommerceCaller;
+  }
+  interface FastifyContextConfig {
+    /** Set on consent SSR routes to opt out of commerce caller resolution. */
+    publicConsent?: boolean;
   }
 }
 
@@ -90,11 +99,36 @@ function asInt(v: unknown): number | null {
   return null;
 }
 
+/**
+ * Commerce route registration. Decision F: every route inside this
+ * plugin is opted out of the global authPlugin via an onRoute hook that
+ * sets config.skipAuth=true. Auth is then re-imposed by our own
+ * commerceCaller preHandler. A test
+ * (commerce-caller-bypass.test.ts) confirms merchant/agent tokens reach
+ * the resolver instead of being rejected by the platform authPlugin.
+ */
 export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   app.setErrorHandler(commerceErrorHandler);
 
-  // Single preHandler: feature-flag gate + tenant resolution.
-  // Auth (request.developer) is already populated by the global authPlugin.
+  // Decision F: every commerce route bypasses the global authPlugin.
+  // The hook fires for each app.get/.post/etc registered in this scope,
+  // including the routes registered inside the sub-route plugins below.
+  app.addHook('onRoute', (routeOptions) => {
+    if (!routeOptions.config) {
+      (routeOptions as unknown as { config: Record<string, unknown> }).config = {};
+    }
+    (routeOptions.config as unknown as Record<string, unknown>)['skipAuth'] = true;
+  });
+
+  // Single preHandler: feature-flag gate + commerce caller resolution +
+  // tenant materialization. Tenant rules:
+  //   - Operator with explicit mapping → use it.
+  //   - Operator with no mapping AND isAutoTenantAllowed() → auto-provision
+  //     (sandbox/test only; production blocked at the lib layer).
+  //   - Operator with no mapping AND not auto-allowed → 422 tenant_not_provisioned.
+  //   - Merchant/agent caller → caller carries its own tenantId.
+  //   - Platform admin caller (no developer record) → tenantId left empty;
+  //     operator endpoints accepting admin must consume tenant_id from path/body.
   app.addHook('preHandler', async (request) => {
     if (!isCommerceV1Enabled()) {
       throw new CommerceHttpError(
@@ -104,53 +138,127 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         { retryable: false },
       );
     }
-    const sql = getSql();
-    const resolution = await resolveTenantForDeveloper(sql, request.developer.id);
+    // Public consent endpoints (the SSR page + approve/deny) do not have
+    // a Bearer caller — the user reaches them via a magic link from
+    // their agent. Those routes opt in to publicConsent in their own
+    // route config and handle Host isolation + CSRF themselves.
+    if (request.routeOptions.config?.publicConsent === true) return;
 
-    if (resolution.kind === 'resolved') {
-      request.commerceTenantId = resolution.tenantId;
-      return;
+    const sql = getSql();
+    let redis: import('ioredis').Redis | null = null;
+    try {
+      redis = getRedis();
+    } catch {
+      redis = null;
     }
-    if (resolution.kind === 'disabled') {
+    const r = await resolveCommerceCaller(request, sql, redis);
+    if (!r.ok) {
+      throw new CommerceHttpError(r.failure.status, r.failure.code, r.failure.message,
+        { retryable: r.failure.status === 503,
+          ...(('details' in r.failure && r.failure.details !== undefined) ? { details: r.failure.details } : {}) });
+    }
+    request.commerceCaller = r.caller;
+
+    if (r.caller.kind === 'operator') {
+      // Platform admin without a developer-bound tenant: leave empty;
+      // tenant-aware routes must accept tenant_id explicitly.
+      if (r.caller.isPlatformAdmin && !r.caller.developerId.startsWith('dev_')) {
+        request.commerceTenantId = '';
+        return;
+      }
+      // The caller resolver's JOIN already produced tenantId + tenantStatus
+      // for the operator. Trust it instead of running another SELECT.
+      if (r.caller.tenantStatus === 'active') {
+        request.commerceTenantId = r.caller.tenantId;
+        return;
+      }
+      if (r.caller.tenantStatus === 'disabled') {
+        throw new CommerceHttpError(
+          403,
+          'tenant_disabled',
+          'The commerce tenant mapped to this developer is disabled',
+          {
+            remediation:
+              'Contact Grantex support to re-enable the tenant or to provision a replacement mapping.',
+            retryable: false,
+          },
+        );
+      }
+      // tenantStatus === null → no mapping. Optional auto-provision (test/sandbox only).
+      if (isAutoTenantAllowed()) {
+        request.commerceTenantId = await resolveOrCreateTenantForDeveloper(
+          sql,
+          r.caller.developerId,
+          r.caller.developerName,
+        );
+        return;
+      }
       throw new CommerceHttpError(
-        403,
-        'tenant_disabled',
-        'The commerce tenant mapped to this developer is disabled',
+        422,
+        'tenant_not_provisioned',
+        'No commerce tenant is mapped to this developer in this environment',
         {
           remediation:
-            'Contact Grantex support to re-enable the tenant or to provision a replacement mapping.',
+            'In staging/production, an operator must provision a commerce tenant and bind '
+            + 'this developer to it via POST /v1/commerce/tenants and '
+            + 'POST /v1/commerce/developer-tenants. For local/sandbox testing only, '
+            + 'set COMMERCE_ALLOW_AUTO_TENANT=true to enable auto-provisioning.',
           retryable: false,
         },
       );
     }
-    // resolution.kind === 'not_provisioned'
-    if (isAutoTenantAllowed()) {
-      request.commerceTenantId = await resolveOrCreateTenantForDeveloper(
-        sql,
-        request.developer.id,
-        request.developer.name,
-      );
-      return;
-    }
-    throw new CommerceHttpError(
-      422,
-      'tenant_not_provisioned',
-      'No commerce tenant is mapped to this developer in this environment',
-      {
-        remediation:
-          'In staging/production, an operator must provision a commerce tenant and bind ' +
-          'this developer to it via the M2 admin endpoints (POST /v1/commerce/tenants then ' +
-          'POST /v1/commerce/developer-tenants). For local/sandbox testing only, ' +
-          'set COMMERCE_ALLOW_AUTO_TENANT=true to enable auto-provisioning.',
-        retryable: false,
-      },
-    );
+
+    // merchant / agent / service: tenantId is intrinsic to the caller.
+    request.commerceTenantId = r.caller.tenantId;
   });
 
   // ----------------------------------------------------------------------
-  // POST /merchants
+  // Per-route caller-kind enforcement helpers (Finding 2 — promised
+  // M2 caller matrix). The shape is `requireX(request)` throws 403 when
+  // the resolved caller kind isn't in the route's allowlist.
+  // ----------------------------------------------------------------------
+  function requireOperator(request: FastifyRequest): Extract<CommerceCaller, { kind: 'operator' }> {
+    if (request.commerceCaller.kind !== 'operator') {
+      throw new CommerceHttpError(403, 'operator_required',
+        'This endpoint is only callable by operator (developer API key) callers');
+    }
+    return request.commerceCaller;
+  }
+  /**
+   * Operator OR merchant for the merchant_id the caller is reading.
+   * Agents are explicitly denied — admin merchant data is not part of
+   * any agent's surface in M2.
+   */
+  function requireOperatorOrSelfMerchant(
+    request: FastifyRequest,
+    merchantId: string,
+  ): void {
+    const c = request.commerceCaller;
+    if (c.kind === 'operator') return;
+    if (c.kind === 'merchant' && c.merchantId === merchantId) return;
+    throw new CommerceHttpError(403, 'caller_not_authorized',
+      'This endpoint requires operator or the merchant whose data is being read');
+  }
+  /**
+   * Operator OR the agent reading their own record. Merchants are
+   * explicitly denied — they don't enumerate arbitrary agents.
+   */
+  function requireOperatorOrSelfAgent(
+    request: FastifyRequest,
+    agentId: string,
+  ): void {
+    const c = request.commerceCaller;
+    if (c.kind === 'operator') return;
+    if (c.kind === 'agent' && c.agentId === agentId) return;
+    throw new CommerceHttpError(403, 'caller_not_authorized',
+      'This endpoint requires operator or the agent reading their own record');
+  }
+
+  // ----------------------------------------------------------------------
+  // POST /merchants  — operator only
   // ----------------------------------------------------------------------
   app.post<{ Body: MerchantCreateBody }>('/merchants', async (request, reply) => {
+    requireOperator(request);
     const body = request.body ?? {};
     const fieldErrors: Record<string, string> = {};
     if (!isString(body.legal_name)) fieldErrors['legal_name'] = 'required string';
@@ -200,16 +308,15 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       return { merchant: rows[0], auditEventId: audit.id };
     });
 
-    return reply.status(201).send({
-      data: result.merchant,
-      audit_event_id: result.auditEventId,
-    });
+    return reply.status(201).send({ data: result.merchant, audit_event_id: result.auditEventId });
   });
 
   // ----------------------------------------------------------------------
-  // GET /merchants/:merchantId
+  // GET /merchants/:merchantId — operator OR merchant for own merchant.
+  // Agent denied (admin merchant data is not in any agent's M2 surface).
   // ----------------------------------------------------------------------
   app.get<{ Params: { merchantId: string } }>('/merchants/:merchantId', async (request, reply) => {
+    requireOperatorOrSelfMerchant(request, request.params.merchantId);
     const sql = getSql();
     const rows = await sql<Record<string, unknown>[]>`
       SELECT id, tenant_id, legal_name, display_name, category_preset,
@@ -228,18 +335,10 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ----------------------------------------------------------------------
-  // POST /agents
-  //
-  // Trust-status policy (M1 hardening): trust_status is server-controlled.
-  // Every new CommerceAgent is created in 'pending' state regardless of
-  // what the caller sends. Trust changes belong on a future admin/operator
-  // endpoint with its own auth surface (planned for M2). Accepting
-  // trust_status from a normal create caller would let any operator mint
-  // a 'trusted' agent and bypass the trust review workflow entirely.
-  // We allow callers to send trust_status=pending (a no-op) for
-  // forward compatibility, but reject any other value with 422.
+  // POST /agents — operator only; trust_status server-controlled (M1 hardening)
   // ----------------------------------------------------------------------
   app.post<{ Body: AgentCreateBody }>('/agents', async (request, reply) => {
+    requireOperator(request);
     const body = request.body ?? {};
     const fieldErrors: Record<string, string> = {};
     if (!isString(body.display_name)) fieldErrors['display_name'] = 'required string';
@@ -263,7 +362,6 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     const sql = getSql();
     const id = newCommerceAgentId();
     const tenantId = request.commerceTenantId;
-    // Hardcoded — see policy comment above. Not derived from request body.
     const trustStatus = 'pending';
 
     const result = await sql.begin(async (_tx) => {
@@ -296,16 +394,15 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       return { agent: rows[0], auditEventId: audit.id };
     });
 
-    return reply.status(201).send({
-      data: result.agent,
-      audit_event_id: result.auditEventId,
-    });
+    return reply.status(201).send({ data: result.agent, audit_event_id: result.auditEventId });
   });
 
   // ----------------------------------------------------------------------
-  // GET /agents/:agentId
+  // GET /agents/:agentId — operator OR the agent reading own record.
+  // Merchant denied.
   // ----------------------------------------------------------------------
   app.get<{ Params: { agentId: string } }>('/agents/:agentId', async (request, reply) => {
+    requireOperatorOrSelfAgent(request, request.params.agentId);
     const sql = getSql();
     const rows = await sql<Record<string, unknown>[]>`
       SELECT id, tenant_id, display_name, agent_type,
@@ -323,9 +420,10 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ----------------------------------------------------------------------
-  // POST /catalog/products  — creates product + variants atomically
+  // POST /catalog/products — operator only
   // ----------------------------------------------------------------------
   app.post<{ Body: ProductCreateBody }>('/catalog/products', async (request, reply) => {
+    requireOperator(request);
     const body = request.body ?? {};
     const fieldErrors: Record<string, string> = {};
     if (!isString(body.merchant_id)) fieldErrors['merchant_id'] = 'required string';
@@ -360,7 +458,6 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     const tenantId = request.commerceTenantId;
     const merchantId = body.merchant_id as string;
 
-    // Tenant boundary: refuse cross-tenant merchant access up front.
     const merchantRows = await sql<{ id: string }[]>`
       SELECT id FROM commerce_merchants
       WHERE id = ${merchantId} AND tenant_id = ${tenantId}
@@ -446,20 +543,47 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // ----------------------------------------------------------------------
-  // GET /catalog/products/:productId
-  // ----------------------------------------------------------------------
   app.get<{ Params: { productId: string } }>('/catalog/products/:productId', async (request, reply) => {
+    // GET /catalog/products/:productId — operator OR merchant for own
+    // merchant. Agent denied (this is the admin product detail endpoint;
+    // agent-facing catalog reads land in M5 via MCP catalog tools with
+    // their own caller-kind matrix and read-scoping rules).
+    //
+    // Finding 4 (P2): authorize BEFORE the product lookup so a denied
+    // caller never receives information about whether the product
+    // exists. Specifically:
+    //   - agent/service callers → 403 immediately, no SQL.
+    //   - merchant callers → product query bound to (tenant_id,
+    //     merchant_id), so cross-merchant product IDs return 404 (same
+    //     shape as not-in-tenant), not 403.
+    //   - operator → existing tenant-scoped query.
+    const caller = request.commerceCaller;
+    if (caller.kind === 'agent' || caller.kind === 'service') {
+      throw new CommerceHttpError(403, 'caller_not_authorized',
+        'This endpoint requires operator or the merchant whose data is being read');
+    }
+
     const sql = getSql();
-    const productRows = await sql<Record<string, unknown>[]>`
-      SELECT id, tenant_id, merchant_id, product_id, title, brand, description,
-             image_url, category_preset, source_system, manually_maintained,
-             archived_at, created_at, updated_at
-      FROM commerce_products
-      WHERE id = ${request.params.productId}
-        AND tenant_id = ${request.commerceTenantId}
-      LIMIT 1
-    `;
+    const productRows = caller.kind === 'merchant'
+      ? await sql<Record<string, unknown>[]>`
+          SELECT id, tenant_id, merchant_id, product_id, title, brand, description,
+                 image_url, category_preset, source_system, manually_maintained,
+                 archived_at, created_at, updated_at
+            FROM commerce_products
+           WHERE id = ${request.params.productId}
+             AND tenant_id = ${caller.tenantId}
+             AND merchant_id = ${caller.merchantId}
+           LIMIT 1
+        `
+      : await sql<Record<string, unknown>[]>`
+          SELECT id, tenant_id, merchant_id, product_id, title, brand, description,
+                 image_url, category_preset, source_system, manually_maintained,
+                 archived_at, created_at, updated_at
+            FROM commerce_products
+           WHERE id = ${request.params.productId}
+             AND tenant_id = ${request.commerceTenantId}
+           LIMIT 1
+        `;
     if (!productRows[0]) {
       throw new CommerceHttpError(404, 'product_not_found', 'Product not found in this tenant');
     }
@@ -479,10 +603,8 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // ----------------------------------------------------------------------
-  // DELETE /catalog/products/:productId  — soft-delete (archive)
-  // ----------------------------------------------------------------------
   app.delete<{ Params: { productId: string } }>('/catalog/products/:productId', async (request, reply) => {
+    requireOperator(request);
     const sql = getSql();
     const tenantId = request.commerceTenantId;
     const result = await sql.begin(async (_tx) => {
@@ -496,7 +618,6 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
          RETURNING id, merchant_id, archived_at
       `;
       if (!updated[0]) return null;
-      // Archive all active variants of this product.
       await tx`
         UPDATE commerce_product_variants
            SET archived_at = NOW(), updated_at = NOW()
@@ -524,9 +645,6 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // ----------------------------------------------------------------------
-  // GET /audit/events
-  // ----------------------------------------------------------------------
   app.get<{
     Querystring: {
       merchant_id?: string;
@@ -539,10 +657,13 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       cursor?: string;
     };
   }>('/audit/events', async (request, reply) => {
+    // GET /audit/events — operator only in M2. Merchant + agent audit
+    // surfaces (scoped reads) land in M5/M6 once the SDK and dashboard
+    // need them.
+    requireOperator(request);
     const sql = getSql();
     const tenantId = request.commerceTenantId;
     const limit = Math.min(Math.max(asInt(request.query.limit) ?? 25, 1), 100);
-    // Cursor: opaque base64 of "<occurred_at_iso>|<id>". Tail-only paging.
     let cursorOccurred: string | null = null;
     let cursorId: string | null = null;
     if (request.query.cursor) {
@@ -559,8 +680,6 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     const fromTs = isString(request.query.from) ? request.query.from : null;
     const toTs = isString(request.query.to) ? request.query.to : null;
 
-    // Single tagged template: NULL-checks on each optional filter keep the
-    // shape stable (no SQL fragment composition required by the test mock).
     const rows = await sql<Record<string, unknown>[]>`
       SELECT id, tenant_id, merchant_id, agent_id, user_principal_id,
              event_type, resource_type, resource_id, passport_jti,
@@ -586,9 +705,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       const last = rows[limit - 1];
       if (last) {
         const occVal = last['occurred_at'];
-        const occIso = occVal instanceof Date
-          ? occVal.toISOString()
-          : String(occVal);
+        const occIso = occVal instanceof Date ? occVal.toISOString() : String(occVal);
         const enc = `${occIso}|${last['id'] as string}`;
         nextCursor = Buffer.from(enc, 'utf8').toString('base64url');
       }
@@ -596,4 +713,12 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     }
     return reply.status(200).send({ items: rows, next_cursor: nextCursor });
   });
+
+  // M2 sub-route plugins. They inherit the onRoute hook and the commerce
+  // preHandler from this scope (Fastify scope inheritance), so all their
+  // routes also bypass authPlugin and go through the commerce caller
+  // resolver.
+  await app.register(commerceTenantsRoutes);
+  await app.register(commercePassportRoutes);
+  await app.register(commerceConsentRoutes);
 }
