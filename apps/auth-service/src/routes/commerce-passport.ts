@@ -15,7 +15,6 @@ import {
 import {
   createConsentRequest,
   findConsentByRequestId,
-  findConsentById,
   canonicalPresentedPayload,
   sha256hex,
   type CreateConsentInput,

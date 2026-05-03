@@ -158,16 +158,28 @@ async function ensurePrincipalCanActOnTenant(
 }
 
 function parseFormBody(body: unknown): Record<string, string> {
+  // Use a null-prototype object and skip well-known prototype-pollution
+  // keys so user-supplied form keys cannot mutate Object.prototype or
+  // override built-in methods. Callers only ever read fixed known fields
+  // (csrf, code, etc.) from the result.
+  const out: Record<string, string> = Object.create(null) as Record<string, string>;
+  const isUnsafeKey = (k: string): boolean =>
+    k === '__proto__' || k === 'constructor' || k === 'prototype';
   if (typeof body === 'string') {
-    const out: Record<string, string> = {};
-    for (const pair of body.split('&')) {
-      const [k, v] = pair.split('=');
-      if (k) out[decodeURIComponent(k)] = decodeURIComponent((v ?? '').replace(/\+/g, ' '));
+    const params = new URLSearchParams(body);
+    for (const [k, v] of params) {
+      if (isUnsafeKey(k)) continue;
+      out[k] = v;
     }
     return out;
   }
-  if (body && typeof body === 'object') return body as Record<string, string>;
-  return {};
+  if (body && typeof body === 'object') {
+    for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
+      if (isUnsafeKey(k)) continue;
+      if (typeof v === 'string') out[k] = v;
+    }
+  }
+  return out;
 }
 
 type RenderState =
@@ -303,39 +315,45 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
       // The token must NOT linger in browser history, server logs,
       // screenshots, or referrers. Render is deferred to the follow-up
       // request that the browser will make against the clean URL.
+      //
+      // The sensitive action (cookie set + redirect) is gated solely on
+      // verifiedSession, which is bound only after server-side
+      // cryptographic verification of the JWT succeeds. The user-controlled
+      // presence/length test is only used to decide whether to attempt
+      // verification, never as the security gate itself.
       const querySession = request.query.session;
+      let verifiedSession: string | null = null;
       if (typeof querySession === 'string' && querySession.length > 0) {
-        let sessionValid = false;
         try {
           await verifyPrincipalSessionToken(querySession);
-          sessionValid = true;
+          verifiedSession = querySession;
         } catch {
           // Invalid session in the URL — do NOT set a cookie, do NOT
           // redirect. Fall through and render sign_in_required so the
           // user sees a useful error rather than a redirect loop.
         }
-        if (sessionValid) {
-          setSessionCookie(reply, querySession);
-          // Build a clean URL that preserves the req param and any other
-          // future query params except session. encodeURIComponent here
-          // because reqId is reflected from user input.
-          const reqIdParam = typeof request.query.req === 'string' && request.query.req
-            ? `?req=${encodeURIComponent(request.query.req)}`
-            : '';
-          // 303 See Other forces the browser to GET the new location
-          // without resending any body, and explicitly without keeping
-          // the query string. Cache-Control: no-store + Pragma:
-          // no-cache prevent intermediaries from caching the redirect
-          // (the cookie set in this response is the side-effect we
-          // need preserved). The browser drops the old URL from the
-          // address bar and history navigation.
-          return reply
-            .status(303)
-            .header('Location', `/v1/commerce/consent/page${reqIdParam}`)
-            .header('Cache-Control', 'no-store')
-            .header('Pragma', 'no-cache')
-            .send('');
-        }
+      }
+      if (verifiedSession !== null) {
+        setSessionCookie(reply, verifiedSession);
+        // Build a clean URL that preserves the req param and any other
+        // future query params except session. encodeURIComponent here
+        // because reqId is reflected from user input.
+        const reqIdParam = typeof request.query.req === 'string' && request.query.req
+          ? `?req=${encodeURIComponent(request.query.req)}`
+          : '';
+        // 303 See Other forces the browser to GET the new location
+        // without resending any body, and explicitly without keeping
+        // the query string. Cache-Control: no-store + Pragma:
+        // no-cache prevent intermediaries from caching the redirect
+        // (the cookie set in this response is the side-effect we
+        // need preserved). The browser drops the old URL from the
+        // address bar and history navigation.
+        return reply
+          .status(303)
+          .header('Location', `/v1/commerce/consent/page${reqIdParam}`)
+          .header('Cache-Control', 'no-store')
+          .header('Pragma', 'no-cache')
+          .send('');
       }
 
       const reqId = request.query.req;
