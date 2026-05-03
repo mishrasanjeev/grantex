@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { authHeader, sqlMock, buildTestApp } from './helpers.js';
-import { seedCommerceContext, TEST_COMMERCE_TENANT_ID } from './commerce-helpers.js';
+import { seedCommerceContext } from './commerce-helpers.js';
 
 let app: FastifyInstance;
 
