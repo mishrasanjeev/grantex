@@ -872,6 +872,28 @@ describe('GET /sso/callback (legacy)', () => {
     expect(res.json().developerId).toBe('dev_TEST');
   });
 
+  it('rejects legacy callback when ID token verification fails', async () => {
+    const state = signSsoState({ org: 'dev_TEST' });
+    sqlMock.mockResolvedValueOnce([SSO_CONFIG_ROW]);
+    mockedVerifyIdToken.mockRejectedValueOnce(new Error('bad signature'));
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id_token: 'bad.token.sig', access_token: 'at_xxx' }),
+      }),
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sso/callback?code=auth_code_xyz&state=${state}`,
+    });
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json().message).toBe('ID token verification failed');
+  });
+
   it('returns 502 when IdP token exchange fails', async () => {
     const state = signSsoState({ org: 'dev_TEST' });
     sqlMock.mockResolvedValueOnce([SSO_CONFIG_ROW]);

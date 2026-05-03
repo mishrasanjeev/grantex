@@ -5,11 +5,20 @@ import {
   clearDiscoveryCache,
   clearJwksCache,
 } from '../src/lib/sso.js';
+import { validateOutboundUrl } from '../src/lib/url-security.js';
 
 beforeEach(() => {
   clearDiscoveryCache();
   clearJwksCache();
   sqlMock.mockReset().mockResolvedValue([]);
+});
+
+describe('validateOutboundUrl', () => {
+  it('rejects IPv4-mapped IPv6 loopback literals', () => {
+    expect(() => validateOutboundUrl('https://[::ffff:127.0.0.1]/metadata', {
+      allowedProtocols: ['https:'],
+    })).toThrow(/Private/);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -96,6 +105,17 @@ describe('discoverOidcProvider', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
 
     await expect(discoverOidcProvider('https://bad.example.com')).rejects.toThrow('OIDC discovery failed');
+
+    vi.unstubAllGlobals();
+  });
+
+  it('rejects loopback discovery URLs before fetch', async () => {
+    const { discoverOidcProvider } = await import('../src/lib/sso.js');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(discoverOidcProvider('http://127.0.0.1:8080')).rejects.toThrow(/HTTP URLs|Private/);
+    expect(fetchMock).not.toHaveBeenCalled();
 
     vi.unstubAllGlobals();
   });

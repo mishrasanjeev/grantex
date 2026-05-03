@@ -37,6 +37,14 @@ async function authenticateRequest(
   }
 
   const apiKey = authHeader.slice(7);
+  if (apiKey.length < 16 || apiKey.length > 512) {
+    await reply.status(401).send({
+      message: 'Invalid API key',
+      code: 'UNAUTHORIZED',
+      requestId: request.id,
+    });
+    return;
+  }
   const keyHash = hashApiKey(apiKey);
 
   const sql = getSql();

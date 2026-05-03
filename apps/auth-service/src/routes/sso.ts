@@ -16,6 +16,7 @@ import {
 import { authenticateLdap, testLdapConnection, type LdapConfig } from '../lib/ldap.js';
 import { config } from '../config.js';
 import { getKeyPair } from '../lib/crypto.js';
+import { assertValidRedirectUri, validateOutboundUrl } from '../lib/url-security.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -89,6 +90,44 @@ function connectionToResponse(row: SsoConnectionRow) {
   };
 }
 
+function validateSsoHttpUrl(value: string, field: string): string | null {
+  try {
+    validateOutboundUrl(value, {
+      allowedProtocols: ['https:', 'http:'],
+      allowInsecureHttp: config.allowInsecureSsoUrls,
+      allowPrivateHosts: config.allowPrivateSsoHosts,
+    });
+    return null;
+  } catch (err) {
+    return `${field}: ${err instanceof Error ? err.message : 'invalid URL'}`;
+  }
+}
+
+function validateLdapUrl(value: string, tlsEnabled: boolean): string | null {
+  try {
+    const url = validateOutboundUrl(value, {
+      allowedProtocols: ['ldap:', 'ldaps:'],
+      allowPrivateHosts: config.allowPrivateSsoHosts,
+      allowInsecureHttp: true,
+    });
+    if (url.protocol === 'ldap:' && !tlsEnabled && !config.allowInsecureSsoUrls) {
+      return 'ldapUrl: Insecure LDAP URLs are disabled; use LDAPS or enable SSO_ALLOW_INSECURE_URLS';
+    }
+    return null;
+  } catch (err) {
+    return `ldapUrl: ${err instanceof Error ? err.message : 'invalid URL'}`;
+  }
+}
+
+function validateOptionalRedirectUri(value: string, field: string): string | null {
+  try {
+    assertValidRedirectUri(value);
+    return null;
+  } catch (err) {
+    return `${field}: ${err instanceof Error ? err.message : 'invalid URL'}`;
+  }
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────
 
 export async function ssoRoutes(app: FastifyInstance): Promise<void> {
@@ -140,6 +179,16 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     }
     if (b.protocol === 'ldap' && (!b.ldapUrl || !b.ldapBindDn || !b.ldapBindPassword || !b.ldapSearchBase)) {
       return reply.status(400).send({ message: 'LDAP connections require ldapUrl, ldapBindDn, ldapBindPassword, and ldapSearchBase', code: 'BAD_REQUEST', requestId: request.id });
+    }
+
+    const urlErrors = [
+      b.protocol === 'oidc' && typeof b.issuerUrl === 'string' ? validateSsoHttpUrl(b.issuerUrl, 'issuerUrl') : null,
+      b.protocol === 'saml' && typeof b.idpSsoUrl === 'string' ? validateSsoHttpUrl(b.idpSsoUrl, 'idpSsoUrl') : null,
+      b.protocol === 'saml' && typeof b.spAcsUrl === 'string' ? validateOptionalRedirectUri(b.spAcsUrl, 'spAcsUrl') : null,
+      b.protocol === 'ldap' && typeof b.ldapUrl === 'string' ? validateLdapUrl(b.ldapUrl, b.ldapTlsEnabled === true) : null,
+    ].filter((err): err is string => err !== null);
+    if (urlErrors.length > 0) {
+      return reply.status(400).send({ message: urlErrors.join('; '), code: 'BAD_REQUEST', requestId: request.id });
     }
 
     const sql = getSql();
@@ -254,6 +303,20 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ message: 'SSO connection not found', code: 'NOT_FOUND', requestId: request.id });
     }
     const cur = existing[0];
+
+    if (b.status !== undefined && !['active', 'inactive', 'testing'].includes(String(b.status))) {
+      return reply.status(400).send({ message: 'status must be active, inactive, or testing', code: 'BAD_REQUEST', requestId: request.id });
+    }
+
+    const urlErrors = [
+      cur.protocol === 'oidc' && typeof b.issuerUrl === 'string' ? validateSsoHttpUrl(b.issuerUrl, 'issuerUrl') : null,
+      cur.protocol === 'saml' && typeof b.idpSsoUrl === 'string' ? validateSsoHttpUrl(b.idpSsoUrl, 'idpSsoUrl') : null,
+      cur.protocol === 'saml' && typeof b.spAcsUrl === 'string' ? validateOptionalRedirectUri(b.spAcsUrl, 'spAcsUrl') : null,
+      cur.protocol === 'ldap' && typeof b.ldapUrl === 'string' ? validateLdapUrl(b.ldapUrl, b.ldapTlsEnabled ?? Boolean(cur.ldap_tls_enabled)) : null,
+    ].filter((err): err is string => err !== null);
+    if (urlErrors.length > 0) {
+      return reply.status(400).send({ message: urlErrors.join('; '), code: 'BAD_REQUEST', requestId: request.id });
+    }
 
     const rows = await sql<SsoConnectionRow[]>`
       UPDATE sso_connections SET
@@ -474,7 +537,19 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ message: 'SSO not configured for this org', code: 'NOT_FOUND' });
       }
 
-      const state = signSsoState({ org, connectionId: conn.id });
+      const requestedRedirectUri = query['redirect_uri'];
+      if (requestedRedirectUri) {
+        const redirectError = validateOptionalRedirectUri(requestedRedirectUri, 'redirect_uri');
+        if (redirectError) {
+          return reply.status(400).send({ message: redirectError, code: 'BAD_REQUEST', requestId: request.id });
+        }
+      }
+
+      const state = signSsoState({
+        org,
+        connectionId: conn.id,
+        ...(requestedRedirectUri ? { redirectUri: requestedRedirectUri } : {}),
+      });
 
       if (conn.protocol === 'oidc') {
         // Use OIDC Discovery to get the authorization endpoint
@@ -486,10 +561,14 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
           // Fallback to /authorize
           authorizeEndpoint = `${conn.issuer_url!}/authorize`;
         }
+        const endpointError = validateSsoHttpUrl(authorizeEndpoint, 'authorization_endpoint');
+        if (endpointError) {
+          return reply.status(400).send({ message: endpointError, code: 'BAD_REQUEST', requestId: request.id });
+        }
 
         const authorizeUrl = new URL(authorizeEndpoint);
         authorizeUrl.searchParams.set('client_id', conn.client_id!);
-        authorizeUrl.searchParams.set('redirect_uri', `${query['redirect_uri'] ?? ''}`);
+        authorizeUrl.searchParams.set('redirect_uri', requestedRedirectUri ?? '');
         authorizeUrl.searchParams.set('response_type', 'code');
         authorizeUrl.searchParams.set('scope', 'openid email profile');
         authorizeUrl.searchParams.set('state', state);
@@ -547,7 +626,16 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       if (!statePayload) {
         return reply.status(400).send({ message: 'Invalid state parameter', code: 'BAD_REQUEST', requestId: request.id });
       }
-      const stateData = statePayload as unknown as { org: string; connectionId: string };
+      const stateData = statePayload as unknown as { org: string; connectionId: string; redirectUri?: string };
+      if (stateData.redirectUri && redirectUri !== stateData.redirectUri) {
+        return reply.status(400).send({ message: 'redirect_uri does not match signed state', code: 'BAD_REQUEST', requestId: request.id });
+      }
+      if (redirectUri) {
+        const redirectError = validateOptionalRedirectUri(redirectUri, 'redirect_uri');
+        if (redirectError) {
+          return reply.status(400).send({ message: redirectError, code: 'BAD_REQUEST', requestId: request.id });
+        }
+      }
 
       const sql = getSql();
       const rows = await sql<SsoConnectionRow[]>`
@@ -568,6 +656,10 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         tokenEndpoint = discovery.token_endpoint;
       } catch {
         tokenEndpoint = `${conn.issuer_url!}/token`;
+      }
+      const tokenEndpointError = validateSsoHttpUrl(tokenEndpoint, 'token_endpoint');
+      if (tokenEndpointError) {
+        return reply.status(400).send({ message: tokenEndpointError, code: 'BAD_REQUEST', requestId: request.id });
       }
 
       // Exchange authorization code for tokens
@@ -661,7 +753,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post(
     '/sso/callback/saml',
-    { config: { skipAuth: true } },
+    { config: { skipAuth: true, rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const body = (request.body ?? {}) as Record<string, string>;
       const { SAMLResponse, RelayState } = body;
@@ -854,6 +946,11 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     if (!issuerUrl || !clientId || !clientSecret || !redirectUri) {
       return reply.status(400).send({ message: 'issuerUrl, clientId, clientSecret, and redirectUri are required', code: 'BAD_REQUEST', requestId: request.id });
     }
+    const issuerError = validateSsoHttpUrl(issuerUrl, 'issuerUrl');
+    const redirectError = validateOptionalRedirectUri(redirectUri, 'redirectUri');
+    if (issuerError || redirectError) {
+      return reply.status(400).send({ message: [issuerError, redirectError].filter(Boolean).join('; '), code: 'BAD_REQUEST', requestId: request.id });
+    }
 
     const sql = getSql();
     const rows = await sql<Array<Record<string, unknown>>>`
@@ -948,8 +1045,14 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ message: 'SSO not configured for this org', code: 'NOT_FOUND' });
       }
       const cfg = rows[0];
+      const issuerUrl = String(cfg['issuer_url']);
+      const tokenEndpoint = `${issuerUrl.replace(/\/$/, '')}/token`;
+      const tokenEndpointError = validateSsoHttpUrl(tokenEndpoint, 'token_endpoint');
+      if (tokenEndpointError) {
+        return reply.status(400).send({ message: tokenEndpointError, code: 'BAD_REQUEST', requestId: request.id });
+      }
 
-      const tokenRes = await fetch(`${String(cfg['issuer_url'])}/token`, {
+      const tokenRes = await fetch(tokenEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -968,12 +1071,11 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       const tokenData = (await tokenRes.json()) as Record<string, unknown>;
       const idToken = String(tokenData['id_token'] ?? '');
 
-      let claims: Record<string, unknown> = {};
+      let claims: Record<string, unknown>;
       try {
-        const payload = idToken.split('.')[1] ?? '';
-        claims = JSON.parse(Buffer.from(payload, 'base64url').toString()) as Record<string, unknown>;
+        claims = await verifyIdToken(idToken, issuerUrl, String(cfg['client_id'])) as unknown as Record<string, unknown>;
       } catch {
-        return reply.status(502).send({ message: 'Invalid ID token from IdP', code: 'SSO_ERROR' });
+        return reply.status(502).send({ message: 'ID token verification failed', code: 'SSO_ERROR' });
       }
 
       return reply.send({

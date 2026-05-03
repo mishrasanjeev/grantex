@@ -3,6 +3,15 @@ import { getSql } from '../db/client.js';
 import { ulid } from 'ulid';
 import { describeScope } from '../lib/scopes.js';
 
+const CONSENT_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "connect-src 'self'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
 const CONSENT_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -170,7 +179,10 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
     '/consent',
     { config: { skipAuth: true } },
     async (_request, reply) => {
-      return reply.type('text/html').send(CONSENT_HTML);
+      return reply
+        .header('Content-Security-Policy', CONSENT_CSP)
+        .type('text/html')
+        .send(CONSENT_HTML);
     },
   );
 

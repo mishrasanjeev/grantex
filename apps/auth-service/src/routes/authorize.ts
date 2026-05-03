@@ -9,6 +9,7 @@ import { authorizeTotal, authorizeDuration } from '../lib/metrics.js';
 import { incrementUsage } from '../lib/usage.js';
 import { parseExpiresIn } from '../lib/crypto.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
+import { assertValidRedirectUri } from '../lib/url-security.js';
 
 const AUTHORIZE_MAX_PER_MINUTE = 10;
 const AUTHORIZE_WINDOW_SECONDS = 60;
@@ -65,6 +66,20 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     }
     if (scopes.length > 100) {
       return reply.status(400).send({ message: 'Too many scopes (max 100)', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    if (redirectUri) {
+      try {
+        assertValidRedirectUri(redirectUri);
+      } catch (err) {
+        return reply.status(400).send({
+          message: `Invalid redirectUri: ${err instanceof Error ? err.message : 'invalid URL'}`,
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+    }
+    if (state !== undefined && state.length > 1024) {
+      return reply.status(400).send({ message: 'state must be 1024 characters or fewer', code: 'BAD_REQUEST', requestId: request.id });
     }
 
     // Validate PKCE params — only S256 is supported

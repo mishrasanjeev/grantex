@@ -11,6 +11,9 @@
  *   4. Group search (resolve group memberships)
  */
 
+import { config as appConfig } from '../config.js';
+import { validateOutboundUrl } from './url-security.js';
+
 export interface LdapConfig {
   ldapUrl: string;
   bindDn: string;
@@ -28,6 +31,12 @@ export interface LdapUserInfo {
   email?: string;
   displayName?: string;
   groups: string[];
+}
+
+function validateLdapUsername(username: string): void {
+  if (!/^[A-Za-z0-9._@-]{1,256}$/.test(username)) {
+    throw new Error('Invalid LDAP username');
+  }
 }
 
 /**
@@ -48,6 +57,7 @@ export async function authenticateLdap(
   if (!username || !password) {
     throw new Error('Username and password are required');
   }
+  validateLdapUsername(username);
 
   // Use the injected LDAP client (allows mocking in tests, real impl in prod)
   const client = getLdapClient();
@@ -94,7 +104,14 @@ function createDefaultLdapClient(): LdapClient {
       const net = await import('node:net');
       const tls = await import('node:tls');
 
-      const url = new URL(config.ldapUrl);
+      const url = validateOutboundUrl(config.ldapUrl, {
+        allowedProtocols: ['ldap:', 'ldaps:'],
+        allowPrivateHosts: appConfig.allowPrivateSsoHosts,
+        allowInsecureHttp: true,
+      });
+      if (url.protocol === 'ldap:' && !config.tlsEnabled && !appConfig.allowInsecureSsoUrls) {
+        throw new Error('Insecure LDAP URLs are disabled; use LDAPS or enable SSO_ALLOW_INSECURE_URLS');
+      }
       const host = url.hostname;
       const port = parseInt(url.port || (config.tlsEnabled ? '636' : '389'), 10);
 
@@ -102,7 +119,7 @@ function createDefaultLdapClient(): LdapClient {
       const connect = (): Promise<import('node:net').Socket> =>
         new Promise((resolve, reject) => {
           const socket = config.tlsEnabled
-            ? tls.connect({ host, port, rejectUnauthorized: false }, () => resolve(socket as unknown as import('node:net').Socket))
+            ? tls.connect({ host, port, servername: host, rejectUnauthorized: appConfig.ldapTlsRejectUnauthorized }, () => resolve(socket as unknown as import('node:net').Socket))
             : net.createConnection({ host, port }, () => resolve(socket));
           socket.on('error', reject);
           socket.setTimeout(10_000);
@@ -179,13 +196,20 @@ function createDefaultLdapClient(): LdapClient {
       const tls = await import('node:tls');
 
       try {
-        const url = new URL(config.ldapUrl);
+        const url = validateOutboundUrl(config.ldapUrl, {
+          allowedProtocols: ['ldap:', 'ldaps:'],
+          allowPrivateHosts: appConfig.allowPrivateSsoHosts,
+          allowInsecureHttp: true,
+        });
+        if (url.protocol === 'ldap:' && !config.tlsEnabled && !appConfig.allowInsecureSsoUrls) {
+          throw new Error('Insecure LDAP URLs are disabled; use LDAPS or enable SSO_ALLOW_INSECURE_URLS');
+        }
         const host = url.hostname;
         const port = parseInt(url.port || (config.tlsEnabled ? '636' : '389'), 10);
 
         await new Promise<void>((resolve, reject) => {
           const socket = config.tlsEnabled
-            ? tls.connect({ host, port, rejectUnauthorized: false }, () => { socket.destroy(); resolve(); })
+            ? tls.connect({ host, port, servername: host, rejectUnauthorized: appConfig.ldapTlsRejectUnauthorized }, () => { socket.destroy(); resolve(); })
             : net.createConnection({ host, port }, () => { socket.destroy(); resolve(); });
           socket.on('error', reject);
           socket.setTimeout(5_000);

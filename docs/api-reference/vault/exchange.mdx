@@ -14,6 +14,16 @@ POST /v1/vault/credentials/exchange
 
 Requires a **Grantex grant token** (not an API key) in the `Authorization` header. This is a public endpoint -- no developer API key is needed.
 
+The grant token must also carry a credential scope for the requested service. Accepted scopes are:
+
+- `*`
+- `<service>:*`
+- `<service>:read`
+- `<service>:credentials:read`
+- `vault:<service>:*`
+- `vault:<service>:read`
+- `vault:credentials:exchange`
+
 ## Request Headers
 
 | Header | Value |
@@ -61,7 +71,7 @@ curl -X POST https://grantex-auth-dd4mtrt2gq-uc.a.run.app/v1/vault/credentials/e
 | `metadata` | `object` | Arbitrary metadata stored with the credential |
 
 <Warning>
-This endpoint returns the raw access token. The grant token's `sub` (principal) and `dev` (developer) claims are used to look up the credential. Ensure your grant tokens have appropriate scopes and expiry to limit exposure.
+This endpoint returns the raw access token. The grant token's `sub` (principal), `dev` (developer), and `scp` (scopes) claims are enforced before decrypting a credential. Keep grant scopes and expiry narrow.
 </Warning>
 
 ## Rate Limits
@@ -74,14 +84,16 @@ This endpoint is limited to **20 requests per minute** per grant token.
 |---|---|---|
 | 400 | `BAD_REQUEST` | Missing `service` field |
 | 401 | `UNAUTHORIZED` | Missing, invalid, or expired grant token |
+| 403 | `FORBIDDEN` | Grant token does not include a service-matching credential scope |
 | 404 | `NOT_FOUND` | No credential found for this principal and service |
 
 ## How It Works
 
 1. The agent presents its Grantex grant token.
-2. The server verifies the JWT signature and extracts the `sub` (principal ID) and `dev` (developer ID) claims.
-3. The server looks up the vault credential matching `(developerId, principalId, service)`.
-4. If found, the encrypted access token is decrypted and returned.
+2. The server verifies the JWT signature and extracts the `sub` (principal ID), `dev` (developer ID), and `scp` (scopes) claims.
+3. The requested `service` must match one of the token credential scopes listed above.
+4. The server looks up the vault credential matching `(developerId, principalId, service)`.
+5. If found, the encrypted access token is decrypted and returned.
 
 This allows agents to access upstream services without ever seeing the raw credentials at configuration time -- credentials are stored once by the developer and retrieved at runtime by authorized agents.
 

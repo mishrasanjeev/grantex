@@ -3,6 +3,7 @@ import { getSql } from '../db/client.js';
 import { newVaultCredentialId } from '../lib/ids.js';
 import { encrypt, decrypt } from '../lib/vault-crypto.js';
 import { checkActiveGrantToken } from '../lib/active-grant-token.js';
+import { emitEvent } from '../lib/events.js';
 
 interface StoreCredentialBody {
   principalId: string;
@@ -31,6 +32,24 @@ function toCredentialResponse(row: Record<string, unknown>) {
   };
 }
 
+function isValidServiceName(service: string): boolean {
+  return /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(service);
+}
+
+function canExchangeCredential(scopes: string[], service: string): boolean {
+  const normalized = service.toLowerCase();
+  const accepted = new Set([
+    '*',
+    `${normalized}:*`,
+    `${normalized}:read`,
+    `${normalized}:credentials:read`,
+    `vault:${normalized}:*`,
+    `vault:${normalized}:read`,
+    'vault:credentials:exchange',
+  ]);
+  return scopes.some((scope) => accepted.has(scope.toLowerCase()));
+}
+
 export async function vaultRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/vault/credentials — store encrypted credential
   app.post<{ Body: StoreCredentialBody }>('/v1/vault/credentials', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
@@ -39,6 +58,13 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
     if (!principalId || !service || !accessToken) {
       return reply.status(400).send({
         message: 'principalId, service, and accessToken are required',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    if (!isValidServiceName(service)) {
+      return reply.status(400).send({
+        message: 'service must be 1-64 characters and contain only letters, numbers, dot, underscore, or dash',
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
@@ -69,6 +95,12 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
     `;
 
     const row = rows[0]!;
+
+    emitEvent(developerId, 'vault.credential.stored', {
+      credentialId: row['id'],
+      principalId,
+      service,
+    }).catch(() => {});
 
     return reply.status(201).send({
       id: row['id'],
@@ -125,7 +157,7 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
     const rows = await sql`
       DELETE FROM vault_credentials
       WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
-      RETURNING id
+      RETURNING id, principal_id, service
     `;
     if (!rows[0]) {
       return reply.status(404).send({
@@ -134,6 +166,11 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
         requestId: request.id,
       });
     }
+    emitEvent(request.developer.id, 'vault.credential.deleted', {
+      credentialId: rows[0]['id'],
+      principalId: rows[0]['principal_id'],
+      service: rows[0]['service'],
+    }).catch(() => {});
     return reply.status(204).send();
   });
 
@@ -170,6 +207,20 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
           requestId: request.id,
         });
       }
+      if (!isValidServiceName(service)) {
+        return reply.status(400).send({
+          message: 'service must be 1-64 characters and contain only letters, numbers, dot, underscore, or dash',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+      if (!canExchangeCredential(claims.scp, service)) {
+        return reply.status(403).send({
+          message: `Grant token is not scoped for ${service} credential exchange`,
+          code: 'FORBIDDEN',
+          requestId: request.id,
+        });
+      }
 
       const sql = getSql();
       const rows = await sql`
@@ -190,6 +241,13 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const accessToken = decrypt(cred['access_token'] as string);
+
+      emitEvent(claims.dev, 'vault.credential.exchanged', {
+        credentialId: cred['id'],
+        grantId: claims.grnt,
+        principalId: claims.sub,
+        service,
+      }).catch(() => {});
 
       return reply.send({
         accessToken,
