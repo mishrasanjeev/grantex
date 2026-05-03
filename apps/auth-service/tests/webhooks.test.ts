@@ -91,6 +91,20 @@ describe('POST /v1/webhooks', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('returns 400 for non-HTTP webhook URLs', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webhooks',
+      headers: authHeader(),
+      payload: { url: 'file:///etc/passwd', events: ['grant.created'] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ message: string }>().message).toContain('Invalid webhook URL');
+  });
+
   it('returns 400 for invalid event type', async () => {
     seedAuth();
 

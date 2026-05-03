@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -159,16 +160,16 @@ async def test_fetch_jwks_from_production() -> None:
         assert "kty" in key
         assert "kid" in key
 
-    # Expect at least one RSA key with the primary kid
+    # Expect at least one RSA key with a Grantex primary kid (grantex-YYYY-MM).
+    # Match by pattern rather than a specific kid so the test survives key rotation.
     rsa_keys = [k for k in body["keys"] if k["kty"] == "RSA"]
     assert len(rsa_keys) >= 1
 
     primary = next(
-        (k for k in body["keys"] if k.get("kid") == "grantex-2026-04"),
+        (k for k in rsa_keys if re.match(r"^grantex-\d{4}-\d{2}$", k.get("kid", ""))),
         None,
     )
-    assert primary is not None
-    assert primary["kty"] == "RSA"
+    assert primary is not None, f"no RSA key matching grantex-YYYY-MM in {[k.get('kid') for k in body['keys']]}"
 
 
 @pytest.mark.live

@@ -8,6 +8,8 @@ import { createVerify } from 'node:crypto';
 import crypto from 'node:crypto';
 import { getSql } from '../db/client.js';
 import { newSsoSessionId, newScimUserId } from './ids.js';
+import { config } from '../config.js';
+import { validateOutboundUrl } from './url-security.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -95,7 +97,12 @@ export async function discoverOidcProvider(issuerUrl: string): Promise<OidcDisco
     return cached.doc;
   }
 
-  const url = `${issuerUrl.replace(/\/$/, '')}/.well-known/openid-configuration`;
+  const issuer = validateOutboundUrl(issuerUrl, {
+    allowedProtocols: ['https:', 'http:'],
+    allowInsecureHttp: config.allowInsecureSsoUrls,
+    allowPrivateHosts: config.allowPrivateSsoHosts,
+  });
+  const url = `${issuer.toString().replace(/\/$/, '')}/.well-known/openid-configuration`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`OIDC discovery failed for ${issuerUrl}: ${res.status}`);
@@ -132,6 +139,11 @@ export async function verifyIdToken(
   // Fetch or use cached JWKS
   let jwks = jwksCache.get(jwksUri);
   if (!jwks || Date.now() - jwks.fetchedAt > JWKS_TTL_MS) {
+    validateOutboundUrl(jwksUri, {
+      allowedProtocols: ['https:', 'http:'],
+      allowInsecureHttp: config.allowInsecureSsoUrls,
+      allowPrivateHosts: config.allowPrivateSsoHosts,
+    });
     const res = await fetch(jwksUri);
     if (!res.ok) {
       throw new Error(`Failed to fetch JWKS from ${jwksUri}: ${res.status}`);
@@ -211,21 +223,27 @@ export function parseSamlResponse(
   const dsSignedInfoStart = xml.indexOf('<ds:SignedInfo');
   const siStart = signedInfoStart >= 0 ? signedInfoStart : dsSignedInfoStart;
 
-  if (siStart >= 0) {
-    const siEndTag = xml.indexOf('</SignedInfo>', siStart);
-    const dsSiEndTag = xml.indexOf('</ds:SignedInfo>', siStart);
-    const siEnd = siEndTag >= 0 ? siEndTag + '</SignedInfo>'.length : (dsSiEndTag >= 0 ? dsSiEndTag + '</ds:SignedInfo>'.length : -1);
+  if (siStart < 0) {
+    throw new Error('SAML Response missing SignedInfo');
+  }
 
-    if (siEnd > siStart) {
-      const signedInfoXml = xml.slice(siStart, siEnd);
-      const signatureValue = Buffer.from(sigValueMatch[1]!.replace(/\s/g, ''), 'base64');
-      const verifier = createVerify('RSA-SHA256');
-      verifier.update(signedInfoXml);
-      const valid = verifier.verify(certPem, signatureValue);
-      if (!valid) {
-        throw new Error('SAML Response signature verification failed');
-      }
-    }
+  const siEndTag = xml.indexOf('</SignedInfo>', siStart);
+  const dsSiEndTag = xml.indexOf('</ds:SignedInfo>', siStart);
+  const siEnd = siEndTag >= 0
+    ? siEndTag + '</SignedInfo>'.length
+    : (dsSiEndTag >= 0 ? dsSiEndTag + '</ds:SignedInfo>'.length : -1);
+
+  if (siEnd <= siStart) {
+    throw new Error('SAML Response missing SignedInfo');
+  }
+
+  const signedInfoXml = xml.slice(siStart, siEnd);
+  const signatureValue = Buffer.from(sigValueMatch[1]!.replace(/\s/g, ''), 'base64');
+  const verifier = createVerify('RSA-SHA256');
+  verifier.update(signedInfoXml);
+  const valid = verifier.verify(certPem, signatureValue);
+  if (!valid) {
+    throw new Error('SAML Response signature verification failed');
   }
 
   // Extract attributes

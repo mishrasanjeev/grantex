@@ -75,6 +75,44 @@ describe('POST /v1/authorize', () => {
     expect(res.json<{ code: string }>().code).toBe('BAD_REQUEST');
   });
 
+  it('returns 400 for unsafe redirectUri values', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        principalId: 'user_123',
+        scopes: ['read'],
+        redirectUri: 'javascript:alert(1)',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ code: string }>().code).toBe('BAD_REQUEST');
+  });
+
+  it('returns 400 when state is too large', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        principalId: 'user_123',
+        scopes: ['read'],
+        state: 'x'.repeat(1025),
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ code: string }>().code).toBe('BAD_REQUEST');
+  });
+
   it('returns 402 when plan grant limit is reached', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ plan: 'free' }]);  // subscription → free plan

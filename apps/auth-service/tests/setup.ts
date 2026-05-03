@@ -149,19 +149,24 @@ vi.mock('../src/lib/domains.js', () => ({
   verifyDomainDns: vi.fn().mockResolvedValue(false),
 }));
 
-// Mock LDAP — prevents real LDAP connections in tests
-vi.mock('../src/lib/ldap.js', () => ({
-  authenticateLdap: vi.fn().mockResolvedValue({
-    dn: 'uid=alice,ou=people,dc=corp,dc=com',
-    uid: 'alice',
-    email: 'alice@corp.com',
-    displayName: 'Alice Smith',
-    groups: ['Engineering', 'VPN-Users'],
-  }),
-  testLdapConnection: vi.fn().mockResolvedValue({ success: true }),
-  setLdapClient: vi.fn(),
-  getLdapClient: vi.fn(),
-}));
+// Mock LDAP — prevents real LDAP connections in tests, but keeps pure
+// helpers (e.g. escapeLdapFilter) callable via partial-mock importOriginal.
+vi.mock('../src/lib/ldap.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/ldap.js')>();
+  return {
+    ...actual,
+    authenticateLdap: vi.fn().mockResolvedValue({
+      dn: 'uid=alice,ou=people,dc=corp,dc=com',
+      uid: 'alice',
+      email: 'alice@corp.com',
+      displayName: 'Alice Smith',
+      groups: ['Engineering', 'VPN-Users'],
+    }),
+    testLdapConnection: vi.fn().mockResolvedValue({ success: true }),
+    setLdapClient: vi.fn(),
+    getLdapClient: vi.fn(),
+  };
+});
 
 // Mock WebAuthn — prevents real crypto operations in tests
 vi.mock('../src/lib/webauthn.js', () => ({

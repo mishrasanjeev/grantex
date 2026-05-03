@@ -10,6 +10,12 @@ function optional(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
 
+function isValidVaultEncryptionKey(value: string): boolean {
+  if (/^[0-9a-fA-F]{64}$/.test(value)) return true;
+  if (!/^[A-Za-z0-9+/]{43}={0,2}$/.test(value)) return false;
+  return Buffer.from(value, 'base64').length === 32;
+}
+
 export const config = {
   port: parseInt(optional('PORT', '3001'), 10),
   host: optional('HOST', '0.0.0.0'),
@@ -35,7 +41,18 @@ export const config = {
   vaultEncryptionKey: process.env['VAULT_ENCRYPTION_KEY'] ?? null,
   adminApiKey: optional('ADMIN_API_KEY', ''),
   metricsEnabled: process.env['METRICS_ENABLED'] !== 'false',
+  metricsApiKey: process.env['METRICS_API_KEY'] ?? null,
+  metricsRequireAuth: process.env['METRICS_REQUIRE_AUTH'] === 'true'
+    || process.env['NODE_ENV'] === 'production',
   otelEndpoint: process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? null,
+  allowInsecureSsoUrls: process.env['SSO_ALLOW_INSECURE_URLS'] === 'true'
+    || process.env['NODE_ENV'] !== 'production',
+  allowPrivateSsoHosts: process.env['SSO_ALLOW_PRIVATE_HOSTS'] === 'true',
+  allowInsecureWebhookUrls: process.env['WEBHOOK_ALLOW_INSECURE_URLS'] === 'true'
+    || process.env['NODE_ENV'] !== 'production',
+  allowPrivateWebhookHosts: process.env['WEBHOOK_ALLOW_PRIVATE_HOSTS'] === 'true'
+    || process.env['NODE_ENV'] !== 'production',
+  ldapTlsRejectUnauthorized: process.env['LDAP_TLS_REJECT_UNAUTHORIZED'] !== 'false',
   // Policy backend ('builtin' | 'opa' | 'cedar')
   policyBackend: optional('POLICY_BACKEND', 'builtin') as 'builtin' | 'opa' | 'cedar',
   opaUrl: process.env['OPA_URL'] ?? null,
@@ -88,6 +105,18 @@ export function validateConfig(): void {
     missing.push('RSA_PRIVATE_KEY (or AUTO_GENERATE_KEYS=true)');
   }
   if (!config.jwtIssuer) missing.push('JWT_ISSUER');
+  if (config.metricsEnabled && config.metricsRequireAuth && !config.metricsApiKey) {
+    missing.push('METRICS_API_KEY');
+  }
+  if (process.env['NODE_ENV'] === 'production' && !config.adminApiKey) {
+    missing.push('ADMIN_API_KEY');
+  }
+  if (process.env['NODE_ENV'] === 'production' && !config.vaultEncryptionKey) {
+    missing.push('VAULT_ENCRYPTION_KEY');
+  }
+  if (config.vaultEncryptionKey && !isValidVaultEncryptionKey(config.vaultEncryptionKey)) {
+    missing.push('VAULT_ENCRYPTION_KEY (must be 32-byte hex or base64)');
+  }
 
   if (missing.length > 0) {
     console.error(

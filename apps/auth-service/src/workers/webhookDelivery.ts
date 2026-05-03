@@ -1,5 +1,7 @@
 import type postgres from 'postgres';
 import { webhookDeliveriesTotal } from '../lib/metrics.js';
+import { config } from '../config.js';
+import { validateOutboundUrl } from '../lib/url-security.js';
 
 interface PendingDelivery {
   id: string;
@@ -32,6 +34,12 @@ async function processDeliveries(sql: ReturnType<typeof postgres>): Promise<void
     const nextAttempt = row.attempts + 1;
 
     try {
+      validateOutboundUrl(row.url, {
+        allowedProtocols: ['https:', 'http:'],
+        allowInsecureHttp: config.allowInsecureWebhookUrls,
+        allowPrivateHosts: config.allowPrivateWebhookHosts,
+      });
+
       const res = await fetch(row.url, {
         method: 'POST',
         headers: {

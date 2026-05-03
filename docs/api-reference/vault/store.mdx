@@ -26,7 +26,7 @@ Requires a developer API key in the `Authorization` header.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `principalId` | `string` | Yes | The principal (end-user) who owns this credential |
-| `service` | `string` | Yes | Service identifier (e.g. `"github"`, `"slack"`, `"google"`) |
+| `service` | `string` | Yes | Service identifier (e.g. `"github"`, `"slack"`, `"google"`). Use 1-64 characters: letters, numbers, `.`, `_`, or `-`. |
 | `accessToken` | `string` | Yes | The access token to store (encrypted at rest) |
 | `credentialType` | `string` | No | Credential type (default `"oauth2"`) |
 | `refreshToken` | `string` | No | Optional refresh token (encrypted at rest) |
@@ -80,6 +80,7 @@ If a credential already exists for the same `(developerId, principalId, service)
 | Status | Code | Description |
 |---|---|---|
 | 400 | `BAD_REQUEST` | Missing `principalId`, `service`, or `accessToken` |
+| 400 | `BAD_REQUEST` | Invalid `service` identifier |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
 
 ## SDK Examples

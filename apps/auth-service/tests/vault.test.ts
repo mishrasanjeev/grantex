@@ -62,6 +62,24 @@ describe('POST /v1/vault/credentials', () => {
     expect(res.json().code).toBe('BAD_REQUEST');
   });
 
+  it('returns 400 for invalid service identifiers', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/vault/credentials',
+      headers: authHeader(),
+      payload: {
+        principalId: 'user_123',
+        service: 'vault:github',
+        accessToken: 'token',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('BAD_REQUEST');
+  });
+
   it('returns the persisted credential id on upsert', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{
@@ -289,6 +307,38 @@ describe('POST /v1/vault/credentials/exchange', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('returns 403 when grant token lacks a service-matching credential scope', async () => {
+    const { signGrantToken } = await import('../src/lib/crypto.js');
+    const token = await signGrantToken({
+      sub: 'user_123',
+      agt: 'did:grantex:ag_01',
+      dev: 'dev_TEST',
+      scp: ['slack:read'],
+      jti: 'tok_VAULT_SCOPE',
+      grnt: 'grnt_VAULT_SCOPE',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+
+    sqlMock.mockResolvedValueOnce([
+      {
+        is_revoked: false,
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        grant_status: 'active',
+      },
+    ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/vault/credentials/exchange',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { service: 'google' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('FORBIDDEN');
+    expect(sqlMock).toHaveBeenCalledTimes(1);
+  });
+
   it('returns 404 when no credential found', async () => {
     const { signGrantToken } = await import('../src/lib/crypto.js');
     const token = await signGrantToken({
@@ -314,7 +364,7 @@ describe('POST /v1/vault/credentials/exchange', () => {
       method: 'POST',
       url: '/v1/vault/credentials/exchange',
       headers: { authorization: `Bearer ${token}` },
-      payload: { service: 'nonexistent' },
+      payload: { service: 'google' },
     });
 
     expect(res.statusCode).toBe(404);

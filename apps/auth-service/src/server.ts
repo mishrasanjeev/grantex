@@ -96,7 +96,9 @@ export async function buildApp(opts: AppOptions = {}) {
     reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     reply.header('Cache-Control', 'no-store');
-    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'");
+    if (!reply.getHeader('Content-Security-Policy')) {
+      reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+    }
   });
 
   // Global rate limit: 500 requests/minute, keyed strictly by source IP.

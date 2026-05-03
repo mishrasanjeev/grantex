@@ -5,11 +5,114 @@ import {
   clearDiscoveryCache,
   clearJwksCache,
 } from '../src/lib/sso.js';
+import { validateOutboundUrl, isBlockedPrivateHost } from '../src/lib/url-security.js';
+import { escapeLdapFilter } from '../src/lib/ldap.js';
 
 beforeEach(() => {
   clearDiscoveryCache();
   clearJwksCache();
   sqlMock.mockReset().mockResolvedValue([]);
+});
+
+describe('validateOutboundUrl', () => {
+  it('rejects IPv4-mapped IPv6 loopback literals', () => {
+    expect(() => validateOutboundUrl('https://[::ffff:127.0.0.1]/metadata', {
+      allowedProtocols: ['https:'],
+    })).toThrow(/Private/);
+  });
+
+  it('rejects loopback hostnames with a trailing dot (FQDN form)', () => {
+    expect(() => validateOutboundUrl('http://localhost./api', {
+      allowedProtocols: ['http:'],
+      allowInsecureHttp: true,
+    })).toThrow(/Private/);
+  });
+
+  it('rejects loopback IPs with a trailing dot', () => {
+    expect(() => validateOutboundUrl('http://127.0.0.1./api', {
+      allowedProtocols: ['http:'],
+      allowInsecureHttp: true,
+    })).toThrow(/Private/);
+  });
+
+  it('rejects URLs with empty hostnames', () => {
+    // "ldap:///dc=example" parses cleanly via the URL constructor but has
+    // no host. Downstream callers would otherwise get ambiguous
+    // default-target socket behavior. (Note: schemes like https require a
+    // host at parse time, so they fail earlier with "must be absolute and
+    // valid" — only schemes that allow empty authority hit this check.)
+    expect(() => validateOutboundUrl('ldap:///dc=example,dc=com', {
+      allowedProtocols: ['ldap:', 'ldaps:'],
+      allowInsecureHttp: true,
+    })).toThrow(/hostname/);
+  });
+});
+
+describe('isBlockedPrivateHost', () => {
+  it('treats trailing-dot loopback as private', () => {
+    expect(isBlockedPrivateHost('localhost.')).toBe(true);
+    expect(isBlockedPrivateHost('LOCALHOST.')).toBe(true);
+    expect(isBlockedPrivateHost('localhost..')).toBe(true);
+  });
+
+  it('treats trailing-dot private IPs as private', () => {
+    expect(isBlockedPrivateHost('127.0.0.1.')).toBe(true);
+    expect(isBlockedPrivateHost('10.0.0.1.')).toBe(true);
+    expect(isBlockedPrivateHost('192.168.1.1.')).toBe(true);
+  });
+
+  it('still allows public hostnames with a trailing dot', () => {
+    expect(isBlockedPrivateHost('example.com.')).toBe(false);
+    expect(isBlockedPrivateHost('grantex.dev.')).toBe(false);
+  });
+
+  it('blocks the full IPv6 link-local range (fe80::/10), not just fe80:', () => {
+    // fe80::/10 spans first-group values 0xfe80–0xfebf, so the second hex
+    // digit of byte 2 is 8/9/a/b. Earlier check only matched "fe80:" prefix.
+    expect(isBlockedPrivateHost('fe80::1')).toBe(true);
+    expect(isBlockedPrivateHost('fe90::1')).toBe(true);
+    expect(isBlockedPrivateHost('fea0::1')).toBe(true);
+    expect(isBlockedPrivateHost('febf::1')).toBe(true);
+    expect(isBlockedPrivateHost('FE90::1')).toBe(true); // case-insensitive
+  });
+
+  it('does not over-block adjacent IPv6 ranges outside link-local', () => {
+    // fec0::/10 (site-local, deprecated per RFC 3879) and fc00::/7 boundaries
+    // — make sure we did not accidentally widen the link-local match.
+    expect(isBlockedPrivateHost('fec0::1')).toBe(false);
+    expect(isBlockedPrivateHost('ff00::1')).toBe(false); // multicast — not private
+    expect(isBlockedPrivateHost('2001:db8::1')).toBe(false); // doc range
+  });
+});
+
+describe('escapeLdapFilter', () => {
+  it('escapes RFC 4515 special characters', () => {
+    expect(escapeLdapFilter('alice')).toBe('alice');
+    expect(escapeLdapFilter('a*b')).toBe('a\\2ab');
+    expect(escapeLdapFilter('a(b)c')).toBe('a\\28b\\29c');
+    expect(escapeLdapFilter('a\\b')).toBe('a\\5cb');
+    expect(escapeLdapFilter('a\0b')).toBe('a\\00b');
+  });
+
+  it('neutralizes filter-injection payloads', () => {
+    // Classic injection: "*)(uid=*" — would otherwise widen filter scope.
+    expect(escapeLdapFilter('*)(uid=*')).toBe('\\2a\\29\\28uid=\\2a');
+  });
+
+  it('preserves valid enterprise identifiers', () => {
+    // None of these contain LDAP filter metachars, so they pass through
+    // untouched — which proves the previous regex gate was over-restrictive.
+    expect(escapeLdapFilter('cn=Jane Doe,ou=Users,dc=example,dc=com'))
+      .toBe('cn=Jane Doe,ou=Users,dc=example,dc=com');
+    expect(escapeLdapFilter('user@corp.example.com')).toBe('user@corp.example.com');
+  });
+
+  it('escapes backslash before other escapes (no double-escape)', () => {
+    // If \ were escaped after the others, an input like "a\*b" would become
+    // "a\5c\2ab" → reparsed as escaped "*", changing meaning. Backslash-first
+    // means "a\*b" → "a\5c\2ab" is the right canonical form.
+    expect(escapeLdapFilter('a\\*b')).toBe('a\\5c\\2ab');
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -96,6 +199,17 @@ describe('discoverOidcProvider', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
 
     await expect(discoverOidcProvider('https://bad.example.com')).rejects.toThrow('OIDC discovery failed');
+
+    vi.unstubAllGlobals();
+  });
+
+  it('rejects loopback discovery URLs before fetch', async () => {
+    const { discoverOidcProvider } = await import('../src/lib/sso.js');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(discoverOidcProvider('http://127.0.0.1:8080')).rejects.toThrow(/HTTP URLs|Private/);
+    expect(fetchMock).not.toHaveBeenCalled();
 
     vi.unstubAllGlobals();
   });

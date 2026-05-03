@@ -3,6 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { newWebhookId } from '../lib/ids.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
+import { config } from '../config.js';
+import { validateOutboundUrl } from '../lib/url-security.js';
 
 const VALID_EVENTS = new Set(['grant.created', 'grant.revoked', 'token.issued']);
 
@@ -19,6 +21,19 @@ export async function webhooksRoutes(app: FastifyInstance): Promise<void> {
     if (!url || !events || !Array.isArray(events) || events.length === 0) {
       return reply.status(400).send({
         message: 'url and events are required',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    try {
+      validateOutboundUrl(url, {
+        allowedProtocols: ['https:', 'http:'],
+        allowInsecureHttp: config.allowInsecureWebhookUrls,
+        allowPrivateHosts: config.allowPrivateWebhookHosts,
+      });
+    } catch (err) {
+      return reply.status(400).send({
+        message: `Invalid webhook URL: ${err instanceof Error ? err.message : 'invalid URL'}`,
         code: 'BAD_REQUEST',
         requestId: request.id,
       });

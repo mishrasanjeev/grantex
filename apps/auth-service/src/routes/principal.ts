@@ -7,6 +7,15 @@ import {
 } from '../lib/crypto.js';
 import { revokeGrantCascade } from '../lib/revoke.js';
 
+const PERMISSIONS_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "connect-src 'self'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
 const MAX_SESSION_SECONDS = 86400; // 24h
 
 async function verifyPrincipalAuth(
@@ -203,7 +212,10 @@ export async function principalRoutes(app: FastifyInstance): Promise<void> {
     '/permissions',
     { config: { skipAuth: true } },
     async (_request, reply) => {
-      await reply.type('text/html').send(permissionsPageHtml());
+      await reply
+        .header('Content-Security-Policy', PERMISSIONS_CSP)
+        .type('text/html')
+        .send(permissionsPageHtml());
     },
   );
 }
@@ -383,7 +395,7 @@ function permissionsPageHtml(): string {
         + '<div class="grant-actions">'
         + '<span class="badge b-active">active</span>'
         + depthBadge
-        + '<button class="btn-revoke" onclick="revokeGrant(\\''+g.grantId+'\\')">Revoke access</button>'
+        + '<button class="btn-revoke" onclick="revokeGrant(' + jsString(g.grantId) + ')">Revoke access</button>'
         + '</div>'
         + '</div>';
     }).join('');
@@ -396,13 +408,13 @@ function permissionsPageHtml(): string {
       return;
     }
     tbody.innerHTML = entries.map(function(e) {
-      var s = e.status || 'success';
+      var s = e.status === 'failure' || e.status === 'blocked' ? e.status : 'success';
       var meta = e.metadata && Object.keys(e.metadata).length
         ? JSON.stringify(e.metadata).slice(0, 80)
         : '\\u2014';
       return '<tr>'
         + '<td class="mono">' + esc(e.action || '\\u2014') + '</td>'
-        + '<td><span class="badge b-' + s + '">' + s + '</span></td>'
+        + '<td><span class="badge b-' + s + '">' + esc(s) + '</span></td>'
         + '<td style="font-size:12px;color:#6b7280">' + esc((e.agentId || '').slice(0, 22)) + '</td>'
         + '<td><span class="mono" style="font-size:11px;color:#6b7280">' + esc(meta) + '</span></td>'
         + '<td style="font-size:12px;color:#9ca3af;white-space:nowrap">' + fmtTime(e.timestamp) + '</td>'
@@ -412,7 +424,7 @@ function permissionsPageHtml(): string {
 
   function revokeGrant(grantId) {
     if (!confirm('Revoke this access?\\n\\nThe agent will no longer be able to act on your behalf. This cannot be undone.')) return;
-    fetch('/v1/principal/grants/' + grantId, {
+    fetch('/v1/principal/grants/' + encodeURIComponent(grantId), {
       method: 'DELETE',
       headers: { Authorization: 'Bearer ' + sessionToken },
     }).then(function(res) {
@@ -430,6 +442,10 @@ function permissionsPageHtml(): string {
 
   function esc(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function jsString(str) {
+    return JSON.stringify(String(str || '')).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
   }
 </script>
 </body>

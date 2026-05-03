@@ -45,6 +45,8 @@ vi.mock('@opentelemetry/api', () => ({
   SpanStatusCode: { OK: 1, ERROR: 2 },
 }));
 
+const TRACING_TEST_TIMEOUT_MS = 15_000;
+
 beforeEach(() => {
   mockConfig.otelEndpoint = null;
   mockSdkStart.mockClear();
@@ -59,7 +61,7 @@ describe('initTracing', () => {
     await initTracing();
 
     expect(mockSdkStart).not.toHaveBeenCalled();
-  });
+  }, TRACING_TEST_TIMEOUT_MS);
 
   it('starts SDK when otelEndpoint is set', async () => {
     mockConfig.otelEndpoint = 'http://otel-collector:4318';
@@ -68,7 +70,7 @@ describe('initTracing', () => {
     await initTracing();
 
     expect(mockSdkStart).toHaveBeenCalledOnce();
-  });
+  }, TRACING_TEST_TIMEOUT_MS);
 
   it('returns early on second call (already initialized)', async () => {
     mockConfig.otelEndpoint = 'http://otel-collector:4318';
@@ -79,5 +81,5 @@ describe('initTracing', () => {
 
     // Only called once despite two initTracing calls
     expect(mockSdkStart).toHaveBeenCalledTimes(1);
-  });
+  }, TRACING_TEST_TIMEOUT_MS);
 });

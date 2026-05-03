@@ -1,13 +1,31 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+
+const HTML_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+function sendHtml(reply: FastifyReply, html: string) {
+  return reply
+    .header('Content-Security-Policy', HTML_CSP)
+    .type('text/html')
+    .send(html);
+}
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get('/dashboard', { config: { skipAuth: true } }, async (_request, reply) => {
-    await reply.type('text/html').send(dashboardHtml());
+    await sendHtml(reply, dashboardHtml());
   });
 
   app.get('/dashboard/principal', { config: { skipAuth: true } }, async (request, reply) => {
     const principalId = (request.query as Record<string, string>)['id'] ?? '';
-    await reply.type('text/html').send(principalDashboardHtml(principalId));
+    await sendHtml(reply, principalDashboardHtml(principalId));
   });
 }
 
@@ -249,9 +267,9 @@ function dashboardHtml(): string {
         + '<td><strong>' + esc(a.name) + '</strong>'
         + (a.description ? '<div style="font-size:11px;color:#9ca3af;margin-top:2px">' + esc(a.description) + '</div>' : '')
         + '</td>'
-        + '<td>' + shortId(a.did) + '</td>'
-        + '<td>' + scopesHtml(a.scopes) + '</td>'
-        + '<td>' + statusBadge(a.status) + '</td>'
+        + '<td>' + safeShortId(a.did) + '</td>'
+        + '<td>' + safeScopesHtml(a.scopes) + '</td>'
+        + '<td>' + safeStatusBadge(a.status) + '</td>'
         + '<td style="font-size:12px;color:#9ca3af;white-space:nowrap">' + fmtTime(a.createdAt) + '</td>'
         + '</tr>';
     }).join('');
@@ -269,15 +287,15 @@ function dashboardHtml(): string {
         ? '<span class="badge" style="background:#e0e7ff;color:#3730a3">depth ' + depth + '</span>'
         : '<span style="color:#9ca3af;font-size:12px">root</span>';
       var revokeBtn = g.status === 'active'
-        ? '<button class="btn-revoke" onclick="revokeGrant(\'' + g.grantId + '\')">Revoke</button>'
+        ? '<button class="btn-revoke" onclick="revokeGrant(' + jsString(g.grantId) + ')">Revoke</button>'
         : '';
       return '<tr>'
-        + '<td>' + shortId(g.grantId) + '</td>'
+        + '<td>' + safeShortId(g.grantId) + '</td>'
         + '<td class="mono">' + esc(g.principalId || '—') + '</td>'
-        + '<td>' + shortId(g.agentId) + '</td>'
-        + '<td>' + scopesHtml(g.scopes) + '</td>'
+        + '<td>' + safeShortId(g.agentId) + '</td>'
+        + '<td>' + safeScopesHtml(g.scopes) + '</td>'
         + '<td>' + depthCell + '</td>'
-        + '<td>' + statusBadge(g.status) + '</td>'
+        + '<td>' + safeStatusBadge(g.status) + '</td>'
         + '<td style="font-size:12px;color:#9ca3af;white-space:nowrap">' + fmtTime(g.expiresAt) + '</td>'
         + '<td>' + revokeBtn + '</td>'
         + '</tr>';
@@ -296,9 +314,9 @@ function dashboardHtml(): string {
         : '—';
       return '<tr>'
         + '<td class="mono">' + esc(e.action || '—') + '</td>'
-        + '<td>' + auditBadge(e.status) + '</td>'
-        + '<td>' + shortId(e.principalId) + '</td>'
-        + '<td>' + shortId(e.agentId) + '</td>'
+        + '<td>' + safeAuditBadge(e.status) + '</td>'
+        + '<td>' + safeShortId(e.principalId) + '</td>'
+        + '<td>' + safeShortId(e.agentId) + '</td>'
         + '<td><span class="mono" style="font-size:11px;color:#6b7280">' + esc(meta) + '</span></td>'
         + '<td style="font-size:12px;color:#9ca3af;white-space:nowrap">' + fmtTime(e.timestamp) + '</td>'
         + '</tr>';
@@ -307,7 +325,7 @@ function dashboardHtml(): string {
 
   function revokeGrant(grantId) {
     if (!confirm('Revoke grant ' + grantId + '?\\n\\nThis will also cascade-revoke all delegated sub-grants.')) return;
-    fetch('/v1/grants/' + grantId, {
+    fetch('/v1/grants/' + encodeURIComponent(grantId), {
       method: 'DELETE',
       headers: { Authorization: 'Bearer ' + apiKey },
     }).then(function(res) {
@@ -321,13 +339,54 @@ function dashboardHtml(): string {
   function esc(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
+  function jsString(str) {
+    return JSON.stringify(String(str || '')).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
+  }
+
+  function safeStatusBadge(status) {
+    var s = status === 'active' || status === 'revoked' || status === 'expired' ? status : 'expired';
+    var cls = s === 'active' ? 'b-active' : s === 'revoked' ? 'b-revoked' : 'b-expired';
+    return '<span class="badge ' + cls + '">' + esc(status || '-') + '</span>';
+  }
+
+  function safeAuditBadge(status) {
+    var s = status === 'failure' || status === 'blocked' ? status : 'success';
+    return '<span class="badge b-' + s + '">' + esc(s) + '</span>';
+  }
+
+  function safeScopesHtml(arr) {
+    if (!arr || !arr.length) return '-';
+    return '<div class="scope-list">' + arr.map(function(s) {
+      return '<span class="scope">' + esc(s) + '</span>';
+    }).join('') + '</div>';
+  }
+
+  function safeShortId(id) {
+    if (!id) return '-';
+    var text = String(id);
+    return '<span class="mono" title="' + esc(text) + '">' + esc(text.slice(0, 20)) + (text.length > 20 ? '\\u2026' : '') + '</span>';
+  }
 </script>
 </body>
 </html>`;
 }
 
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function jsStringLiteral(value: string): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
+}
+
 function principalDashboardHtml(prefillId: string): string {
-  const safeId = prefillId.replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  const safeIdAttr = escapeHtmlAttr(prefillId);
+  const safeIdJs = jsStringLiteral(prefillId);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -404,7 +463,7 @@ function principalDashboardHtml(prefillId: string): string {
   <label>API Key</label>
   <input class="key" id="api-key" type="password" placeholder="developer api key" autocomplete="off">
   <label>Your ID</label>
-  <input class="pid" id="principal-id" type="text" placeholder="user_abc123" value="${safeId}">
+  <input class="pid" id="principal-id" type="text" placeholder="user_abc123" value="${safeIdAttr}">
   <button onclick="connectKey()">Load</button>
   <span id="conn-status"></span>
 </div>
@@ -435,7 +494,7 @@ function principalDashboardHtml(prefillId: string): string {
 
 <script>
   var apiKey = sessionStorage.getItem('grantex_key') || '';
-  var principalId = '${safeId}';
+  var principalId = ${safeIdJs};
 
   if (apiKey) document.getElementById('api-key').value = apiKey;
   if (apiKey && principalId) loadData();
@@ -491,12 +550,12 @@ function principalDashboardHtml(prefillId: string): string {
         ? '<span class="badge b-active">active</span>'
         : g.status === 'revoked'
           ? '<span class="badge b-revoked">revoked</span>'
-          : '<span class="badge b-expired">' + g.status + '</span>';
+          : '<span class="badge b-expired">' + esc(g.status || 'expired') + '</span>';
       var depthBadge = g.delegationDepth > 0
         ? '<span class="depth-badge">sub-agent depth ' + g.delegationDepth + '</span>'
         : '';
       var revokeBtn = isActive
-        ? '<button class="btn-revoke" onclick="revokeGrant(\'' + g.grantId + '\')">Revoke access</button>'
+        ? '<button class="btn-revoke" onclick="revokeGrant(' + jsString(g.grantId) + ')">Revoke access</button>'
         : '';
       var scopes = (g.scopes || []).map(function(s) {
         return '<span class="scope">' + esc(s) + '</span>';
@@ -512,7 +571,7 @@ function principalDashboardHtml(prefillId: string): string {
         + '<div class="grant-meta">'
         + '<span>Granted ' + issued + '</span>'
         + '<span>Expires ' + expires + '</span>'
-        + (g.grantId ? '<span class="mono" style="font-size:11px">' + g.grantId.slice(0,20) + '</span>' : '')
+        + (g.grantId ? '<span class="mono" style="font-size:11px">' + esc(String(g.grantId).slice(0,20)) + '</span>' : '')
         + '</div>'
         + '</div>'
         + '<div class="grant-actions">' + statusBadge + depthBadge + revokeBtn + '</div>'
@@ -527,13 +586,13 @@ function principalDashboardHtml(prefillId: string): string {
       return;
     }
     tbody.innerHTML = entries.map(function(e) {
-      var s = e.status || 'success';
+      var s = e.status === 'failure' || e.status === 'blocked' ? e.status : 'success';
       var meta = e.metadata && Object.keys(e.metadata).length
         ? JSON.stringify(e.metadata).slice(0, 80)
         : '—';
       return '<tr>'
         + '<td class="mono">' + esc(e.action || '—') + '</td>'
-        + '<td><span class="badge b-' + s + '">' + s + '</span></td>'
+        + '<td><span class="badge b-' + s + '">' + esc(s) + '</span></td>'
         + '<td style="font-size:12px;color:#6b7280">' + esc((e.agentId || '').slice(0, 22)) + '</td>'
         + '<td><span class="mono" style="font-size:11px;color:#6b7280">' + esc(meta) + '</span></td>'
         + '<td style="font-size:12px;color:#9ca3af;white-space:nowrap">' + fmtTime(e.timestamp) + '</td>'
@@ -543,7 +602,7 @@ function principalDashboardHtml(prefillId: string): string {
 
   function revokeGrant(grantId) {
     if (!confirm('Revoke this access?\\n\\nThe agent will no longer be able to act on your behalf. This cannot be undone.')) return;
-    fetch('/v1/grants/' + grantId, {
+    fetch('/v1/grants/' + encodeURIComponent(grantId), {
       method: 'DELETE',
       headers: { Authorization: 'Bearer ' + apiKey },
     }).then(function(res) {
@@ -560,6 +619,10 @@ function principalDashboardHtml(prefillId: string): string {
 
   function esc(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function jsString(str) {
+    return JSON.stringify(String(str || '')).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
   }
 </script>
 </body>
