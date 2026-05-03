@@ -33,10 +33,17 @@ export interface LdapUserInfo {
   groups: string[];
 }
 
-function validateLdapUsername(username: string): void {
-  if (!/^[A-Za-z0-9._@-]{1,256}$/.test(username)) {
-    throw new Error('Invalid LDAP username');
-  }
+// RFC 4515 § 3 — escape characters that have special meaning in LDAP search
+// filters (\, *, (, ), NUL). Applied at the interpolation site so legitimate
+// enterprise usernames (full DNs, DOMAIN\user, etc.) are accepted while
+// filter-injection payloads like "*)(uid=*" are neutralized.
+export function escapeLdapFilter(value: string): string {
+  return value
+    .replace(/\\/g, '\\5c')
+    .replace(/\*/g, '\\2a')
+    .replace(/\(/g, '\\28')
+    .replace(/\)/g, '\\29')
+    .replace(/\0/g, '\\00');
 }
 
 /**
@@ -57,7 +64,9 @@ export async function authenticateLdap(
   if (!username || !password) {
     throw new Error('Username and password are required');
   }
-  validateLdapUsername(username);
+  if (username.length > 256) {
+    throw new Error('Username too long');
+  }
 
   // Use the injected LDAP client (allows mocking in tests, real impl in prod)
   const client = getLdapClient();
@@ -171,7 +180,7 @@ function createDefaultLdapClient(): LdapClient {
         if (!svcBound) throw new Error('LDAP service-account bind failed');
 
         // For the default client, we construct the user DN from the search filter
-        const userFilter = config.searchFilter.replace('{{username}}', username);
+        const userFilter = config.searchFilter.replace('{{username}}', escapeLdapFilter(username));
         const userDn = `${userFilter.replace(/[()]/g, '')},${config.searchBase}`;
 
         // Step 2: User bind (verify password)

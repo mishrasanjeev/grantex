@@ -5,7 +5,8 @@ import {
   clearDiscoveryCache,
   clearJwksCache,
 } from '../src/lib/sso.js';
-import { validateOutboundUrl } from '../src/lib/url-security.js';
+import { validateOutboundUrl, isBlockedPrivateHost } from '../src/lib/url-security.js';
+import { escapeLdapFilter } from '../src/lib/ldap.js';
 
 beforeEach(() => {
   clearDiscoveryCache();
@@ -18,6 +19,69 @@ describe('validateOutboundUrl', () => {
     expect(() => validateOutboundUrl('https://[::ffff:127.0.0.1]/metadata', {
       allowedProtocols: ['https:'],
     })).toThrow(/Private/);
+  });
+
+  it('rejects loopback hostnames with a trailing dot (FQDN form)', () => {
+    expect(() => validateOutboundUrl('http://localhost./api', {
+      allowedProtocols: ['http:'],
+      allowInsecureHttp: true,
+    })).toThrow(/Private/);
+  });
+
+  it('rejects loopback IPs with a trailing dot', () => {
+    expect(() => validateOutboundUrl('http://127.0.0.1./api', {
+      allowedProtocols: ['http:'],
+      allowInsecureHttp: true,
+    })).toThrow(/Private/);
+  });
+});
+
+describe('isBlockedPrivateHost', () => {
+  it('treats trailing-dot loopback as private', () => {
+    expect(isBlockedPrivateHost('localhost.')).toBe(true);
+    expect(isBlockedPrivateHost('LOCALHOST.')).toBe(true);
+    expect(isBlockedPrivateHost('localhost..')).toBe(true);
+  });
+
+  it('treats trailing-dot private IPs as private', () => {
+    expect(isBlockedPrivateHost('127.0.0.1.')).toBe(true);
+    expect(isBlockedPrivateHost('10.0.0.1.')).toBe(true);
+    expect(isBlockedPrivateHost('192.168.1.1.')).toBe(true);
+  });
+
+  it('still allows public hostnames with a trailing dot', () => {
+    expect(isBlockedPrivateHost('example.com.')).toBe(false);
+    expect(isBlockedPrivateHost('grantex.dev.')).toBe(false);
+  });
+});
+
+describe('escapeLdapFilter', () => {
+  it('escapes RFC 4515 special characters', () => {
+    expect(escapeLdapFilter('alice')).toBe('alice');
+    expect(escapeLdapFilter('a*b')).toBe('a\\2ab');
+    expect(escapeLdapFilter('a(b)c')).toBe('a\\28b\\29c');
+    expect(escapeLdapFilter('a\\b')).toBe('a\\5cb');
+    expect(escapeLdapFilter('a\0b')).toBe('a\\00b');
+  });
+
+  it('neutralizes filter-injection payloads', () => {
+    // Classic injection: "*)(uid=*" — would otherwise widen filter scope.
+    expect(escapeLdapFilter('*)(uid=*')).toBe('\\2a\\29\\28uid=\\2a');
+  });
+
+  it('preserves valid enterprise identifiers', () => {
+    // None of these contain LDAP filter metachars, so they pass through
+    // untouched — which proves the previous regex gate was over-restrictive.
+    expect(escapeLdapFilter('cn=Jane Doe,ou=Users,dc=example,dc=com'))
+      .toBe('cn=Jane Doe,ou=Users,dc=example,dc=com');
+    expect(escapeLdapFilter('user@corp.example.com')).toBe('user@corp.example.com');
+  });
+
+  it('escapes backslash before other escapes (no double-escape)', () => {
+    // If \ were escaped after the others, an input like "a\*b" would become
+    // "a\5c\2ab" → reparsed as escaped "*", changing meaning. Backslash-first
+    // means "a\*b" → "a\5c\2ab" is the right canonical form.
+    expect(escapeLdapFilter('a\\*b')).toBe('a\\5c\\2ab');
   });
 });
 

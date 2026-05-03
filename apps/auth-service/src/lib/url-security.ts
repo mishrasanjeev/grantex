@@ -65,7 +65,11 @@ function isPrivateIpv6(hostname: string): boolean {
 }
 
 export function isBlockedPrivateHost(hostname: string): boolean {
-  const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  // Strip surrounding [] (IPv6 literals) and any trailing dots before
+  // comparing — a trailing dot makes a hostname an absolute FQDN that DNS
+  // resolves identically (e.g. "localhost." === "localhost"), so without
+  // stripping it the loopback/private guards can be bypassed.
+  const normalized = hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase();
   if (LOCAL_HOSTNAMES.has(normalized) || normalized.endsWith('.localhost')) return true;
   const ipVersion = net.isIP(normalized);
   if (ipVersion === 4) return isPrivateIpv4(normalized);
