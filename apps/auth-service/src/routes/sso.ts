@@ -627,11 +627,17 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({ message: 'Invalid state parameter', code: 'BAD_REQUEST', requestId: request.id });
       }
       const stateData = statePayload as unknown as { org: string; connectionId: string; redirectUri?: string };
-      if (stateData.redirectUri && redirectUri !== stateData.redirectUri) {
+      // OIDC callback handlers commonly forward only `code` and `state` from
+      // the IdP, so the body's redirect_uri may be absent. The signed state
+      // already integrity-protects the value supplied at /sso/login, so fall
+      // back to it when the body omits it; only fail when the body provides
+      // a different value (tampering attempt).
+      const effectiveRedirectUri = redirectUri ?? stateData.redirectUri;
+      if (stateData.redirectUri && redirectUri && redirectUri !== stateData.redirectUri) {
         return reply.status(400).send({ message: 'redirect_uri does not match signed state', code: 'BAD_REQUEST', requestId: request.id });
       }
-      if (redirectUri) {
-        const redirectError = validateOptionalRedirectUri(redirectUri, 'redirect_uri');
+      if (effectiveRedirectUri) {
+        const redirectError = validateOptionalRedirectUri(effectiveRedirectUri, 'redirect_uri');
         if (redirectError) {
           return reply.status(400).send({ message: redirectError, code: 'BAD_REQUEST', requestId: request.id });
         }
@@ -669,7 +675,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         body: new URLSearchParams({
           grant_type: 'authorization_code',
           code,
-          redirect_uri: redirectUri ?? '',
+          redirect_uri: effectiveRedirectUri ?? '',
           client_id: conn.client_id!,
           client_secret: conn.client_secret!,
         }).toString(),

@@ -618,6 +618,60 @@ describe('POST /sso/callback/oidc', () => {
     expect(body.developerId).toBe('dev_TEST');
   });
 
+  it('falls back to signed-state redirect_uri when body omits it', async () => {
+    // Common IdP callback flow: only `code` and `state` are POSTed back.
+    // The signed state carries the original redirect_uri; we should accept
+    // the callback and forward that value to the IdP token endpoint.
+    const stateWithRedirect = signSsoState({
+      org: 'dev_TEST',
+      connectionId: 'sso_CONN01',
+      redirectUri: 'https://app.test/callback',
+    });
+    sqlMock.mockResolvedValueOnce([OIDC_CONNECTION_ROW]);
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ id_token: 'mock.id.token', access_token: 'at_xxx' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sso/callback/oidc',
+      headers: { 'content-type': 'application/json' },
+      payload: { code: 'auth_code_xyz', state: stateWithRedirect },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Confirm the token-exchange call forwarded the signed redirect_uri
+    const tokenCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(tokenCall).toBeDefined();
+    const body = String(tokenCall![1].body);
+    expect(body).toContain('redirect_uri=https%3A%2F%2Fapp.test%2Fcallback');
+  });
+
+  it('rejects callback when body redirect_uri mismatches signed state', async () => {
+    const stateWithRedirect = signSsoState({
+      org: 'dev_TEST',
+      connectionId: 'sso_CONN01',
+      redirectUri: 'https://app.test/callback',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sso/callback/oidc',
+      headers: { 'content-type': 'application/json' },
+      payload: {
+        code: 'auth_code_xyz',
+        state: stateWithRedirect,
+        redirect_uri: 'https://attacker.example/steal',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toMatch(/redirect_uri does not match signed state/);
+  });
+
   it('returns 400 when code or state missing', async () => {
     const res = await app.inject({
       method: 'POST',
