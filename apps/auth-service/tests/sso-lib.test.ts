@@ -34,6 +34,18 @@ describe('validateOutboundUrl', () => {
       allowInsecureHttp: true,
     })).toThrow(/Private/);
   });
+
+  it('rejects URLs with empty hostnames', () => {
+    // "ldap:///dc=example" parses cleanly via the URL constructor but has
+    // no host. Downstream callers would otherwise get ambiguous
+    // default-target socket behavior. (Note: schemes like https require a
+    // host at parse time, so they fail earlier with "must be absolute and
+    // valid" — only schemes that allow empty authority hit this check.)
+    expect(() => validateOutboundUrl('ldap:///dc=example,dc=com', {
+      allowedProtocols: ['ldap:', 'ldaps:'],
+      allowInsecureHttp: true,
+    })).toThrow(/hostname/);
+  });
 });
 
 describe('isBlockedPrivateHost', () => {

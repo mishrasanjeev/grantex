@@ -80,6 +80,20 @@ export function isBlockedPrivateHost(hostname: string): boolean {
   return false;
 }
 
+/**
+ * Validate an outbound URL string against the supplied policy.
+ *
+ * Known limitation: this validator inspects the URL string only. It does
+ * not resolve DNS, so an attacker-controlled hostname like
+ * `attacker.example` whose A record points to 127.0.0.1 / RFC1918 space
+ * will pass even when `allowPrivateHosts` is false. Full SSRF defense
+ * requires resolving the hostname once and pinning the connection to the
+ * resolved IP, which is tracked in #313 (DNS-pinned outbound fetch).
+ *
+ * Until that lands, this function is still a meaningful defense-in-depth
+ * layer: it blocks literal private IPs, localhost variants, IPv6
+ * link-local (fe80::/10), embedded credentials, and disallowed protocols.
+ */
 export function validateOutboundUrl(value: string, policy: OutboundUrlPolicy): URL {
   if (typeof value !== 'string' || value.length === 0 || value.length > 2048) {
     throw new Error('URL is required and must be 2048 characters or fewer');
@@ -94,6 +108,13 @@ export function validateOutboundUrl(value: string, policy: OutboundUrlPolicy): U
 
   if (parsed.username || parsed.password) {
     throw new Error('URL must not contain embedded credentials');
+  }
+
+  if (!parsed.hostname) {
+    // URLs like "ldap:///dc=example" parse cleanly with an empty hostname,
+    // and downstream callers (LDAP socket open, fetch) end up with ambiguous
+    // or default-target behavior instead of a deterministic rejection.
+    throw new Error('URL must include a hostname');
   }
 
   if (!policy.allowedProtocols.includes(parsed.protocol)) {
