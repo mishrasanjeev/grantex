@@ -242,6 +242,25 @@ export async function buildJwks(): Promise<{ keys: Record<string, unknown>[] }> 
     });
   }
 
+  // Commerce Passport ES256 keys (M2). Include both active and retired so
+  // passports signed with a recently-rotated key keep verifying through
+  // the rotation grace window. Lazy-imported to avoid pulling the
+  // commerce module surface into pure-platform call sites that may run
+  // before commerce config is wired.
+  try {
+    const { getSql } = await import('../db/client.js');
+    const { listCommercePassportKeysForJwks } = await import('./commerce/passport-keys.js');
+    const commerceKeys = await listCommercePassportKeysForJwks(getSql());
+    for (const k of commerceKeys) {
+      // public_key_jwk in DB already carries kid + alg + use=sig; emit as-is.
+      keys.push(k.publicKeyJwk);
+    }
+  } catch {
+    // Commerce keys are optional in the JWKS — if the DB is unavailable
+    // here we still serve the platform RS256/EdDSA keys. Log via the
+    // route layer (this lib should not depend on pino directly).
+  }
+
   return { keys };
 }
 
