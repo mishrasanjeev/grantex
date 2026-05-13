@@ -16,10 +16,10 @@ export async function initTracing(): Promise<void> {
   const { NodeSDK } = await import('@opentelemetry/sdk-node');
   const { getNodeAutoInstrumentations } = await import('@opentelemetry/auto-instrumentations-node');
   const { OTLPTraceExporter } = await import('@opentelemetry/exporter-trace-otlp-http');
-  const { Resource } = await import('@opentelemetry/resources');
+  const { resourceFromAttributes } = await import('@opentelemetry/resources');
   const { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = await import('@opentelemetry/semantic-conventions');
 
-  const resource = new Resource({
+  const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: 'grantex-auth-service',
     [ATTR_SERVICE_VERSION]: '2.1.0',
   });
