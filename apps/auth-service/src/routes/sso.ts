@@ -16,7 +16,7 @@ import {
 import { authenticateLdap, testLdapConnection, type LdapConfig } from '../lib/ldap.js';
 import { config } from '../config.js';
 import { getKeyPair } from '../lib/crypto.js';
-import { assertValidRedirectUri, validateOutboundUrl } from '../lib/url-security.js';
+import { assertValidRedirectUri, safeFetch, validateOutboundUrl } from '../lib/url-security.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -669,7 +669,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       }
 
       // Exchange authorization code for tokens
-      const tokenRes = await fetch(tokenEndpoint, {
+      const tokenRes = await safeFetch(tokenEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -679,6 +679,10 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
           client_id: conn.client_id!,
           client_secret: conn.client_secret!,
         }).toString(),
+      }, {
+        allowedProtocols: ['https:', 'http:'],
+        allowInsecureHttp: config.allowInsecureSsoUrls,
+        allowPrivateHosts: config.allowPrivateSsoHosts,
       });
 
       if (!tokenRes.ok) {
@@ -1058,7 +1062,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({ message: tokenEndpointError, code: 'BAD_REQUEST', requestId: request.id });
       }
 
-      const tokenRes = await fetch(tokenEndpoint, {
+      const tokenRes = await safeFetch(tokenEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -1068,6 +1072,10 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
           client_id: String(cfg['client_id']),
           client_secret: String(cfg['client_secret']),
         }).toString(),
+      }, {
+        allowedProtocols: ['https:', 'http:'],
+        allowInsecureHttp: config.allowInsecureSsoUrls,
+        allowPrivateHosts: config.allowPrivateSsoHosts,
       });
 
       if (!tokenRes.ok) {

@@ -1,18 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { startWebhookDeliveryWorker } from '../src/workers/webhookDelivery.js';
 import { sqlMock } from './setup.js';
+import { setSafeFetchForTests } from '../src/lib/url-security.js';
 
-// Mock global fetch
-const mockFetch = vi.fn();
-vi.stubGlobal('fetch', mockFetch);
+const mockSafeFetch = vi.fn();
 
 beforeEach(() => {
   vi.useFakeTimers();
-  mockFetch.mockReset();
+  mockSafeFetch.mockReset();
+  setSafeFetchForTests(mockSafeFetch);
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  setSafeFetchForTests(null);
 });
 
 const pendingDelivery = {
@@ -27,7 +28,7 @@ const pendingDelivery = {
 describe('startWebhookDeliveryWorker', () => {
   it('processes pending deliveries on startup', async () => {
     sqlMock.mockResolvedValueOnce([pendingDelivery]); // SELECT pending
-    mockFetch.mockResolvedValueOnce({ ok: true });
+    mockSafeFetch.mockResolvedValueOnce(new Response('', { status: 200 }));
     sqlMock.mockResolvedValueOnce([]);                 // UPDATE delivered
 
     const timer = startWebhookDeliveryWorker(sqlMock as never, 60_000);
@@ -35,12 +36,16 @@ describe('startWebhookDeliveryWorker', () => {
     // Let the immediate run complete
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockSafeFetch).toHaveBeenCalledWith(
       'https://example.com/webhook',
       expect.objectContaining({
         method: 'POST',
         body: '{"type":"grant.created"}',
       }),
+      expect.objectContaining({
+        allowedProtocols: ['https:', 'http:'],
+      }),
+      undefined,
     );
 
     clearInterval(timer);
@@ -48,7 +53,7 @@ describe('startWebhookDeliveryWorker', () => {
 
   it('marks delivery as delivered on successful HTTP response', async () => {
     sqlMock.mockResolvedValueOnce([pendingDelivery]);
-    mockFetch.mockResolvedValueOnce({ ok: true });
+    mockSafeFetch.mockResolvedValueOnce(new Response('', { status: 200 }));
     sqlMock.mockResolvedValueOnce([]); // UPDATE status = 'delivered'
 
     const timer = startWebhookDeliveryWorker(sqlMock as never, 60_000);
@@ -63,7 +68,7 @@ describe('startWebhookDeliveryWorker', () => {
 
   it('schedules retry on HTTP failure', async () => {
     sqlMock.mockResolvedValueOnce([pendingDelivery]);
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+    mockSafeFetch.mockResolvedValueOnce(new Response('', { status: 500 }));
     sqlMock.mockResolvedValueOnce([]); // UPDATE with retry
 
     const timer = startWebhookDeliveryWorker(sqlMock as never, 60_000);
@@ -75,7 +80,7 @@ describe('startWebhookDeliveryWorker', () => {
   it('marks delivery as failed when max attempts reached', async () => {
     const exhaustedDelivery = { ...pendingDelivery, attempts: 4, max_attempts: 5 };
     sqlMock.mockResolvedValueOnce([exhaustedDelivery]);
-    mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
+    mockSafeFetch.mockResolvedValueOnce(new Response('', { status: 503 }));
     sqlMock.mockResolvedValueOnce([]); // UPDATE status = 'failed'
 
     const timer = startWebhookDeliveryWorker(sqlMock as never, 60_000);
@@ -86,7 +91,7 @@ describe('startWebhookDeliveryWorker', () => {
 
   it('handles fetch errors gracefully', async () => {
     sqlMock.mockResolvedValueOnce([pendingDelivery]);
-    mockFetch.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    mockSafeFetch.mockRejectedValueOnce(new Error('ECONNREFUSED'));
     sqlMock.mockResolvedValueOnce([]); // UPDATE with retry
 
     const timer = startWebhookDeliveryWorker(sqlMock as never, 60_000);
@@ -101,7 +106,7 @@ describe('startWebhookDeliveryWorker', () => {
     const timer = startWebhookDeliveryWorker(sqlMock as never, 60_000);
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockSafeFetch).not.toHaveBeenCalled();
 
     clearInterval(timer);
   });

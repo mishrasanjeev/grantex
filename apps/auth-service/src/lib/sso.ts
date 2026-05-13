@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { getSql } from '../db/client.js';
 import { newSsoSessionId, newScimUserId } from './ids.js';
 import { config } from '../config.js';
-import { validateOutboundUrl } from './url-security.js';
+import { safeFetch, validateOutboundUrl } from './url-security.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -103,7 +103,11 @@ export async function discoverOidcProvider(issuerUrl: string): Promise<OidcDisco
     allowPrivateHosts: config.allowPrivateSsoHosts,
   });
   const url = `${issuer.toString().replace(/\/$/, '')}/.well-known/openid-configuration`;
-  const res = await fetch(url);
+  const res = await safeFetch(url, {}, {
+    allowedProtocols: ['https:', 'http:'],
+    allowInsecureHttp: config.allowInsecureSsoUrls,
+    allowPrivateHosts: config.allowPrivateSsoHosts,
+  });
   if (!res.ok) {
     throw new Error(`OIDC discovery failed for ${issuerUrl}: ${res.status}`);
   }
@@ -139,12 +143,11 @@ export async function verifyIdToken(
   // Fetch or use cached JWKS
   let jwks = jwksCache.get(jwksUri);
   if (!jwks || Date.now() - jwks.fetchedAt > JWKS_TTL_MS) {
-    validateOutboundUrl(jwksUri, {
+    const res = await safeFetch(jwksUri, {}, {
       allowedProtocols: ['https:', 'http:'],
       allowInsecureHttp: config.allowInsecureSsoUrls,
       allowPrivateHosts: config.allowPrivateSsoHosts,
     });
-    const res = await fetch(jwksUri);
     if (!res.ok) {
       throw new Error(`Failed to fetch JWKS from ${jwksUri}: ${res.status}`);
     }

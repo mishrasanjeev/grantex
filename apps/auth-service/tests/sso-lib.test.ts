@@ -5,12 +5,18 @@ import {
   clearDiscoveryCache,
   clearJwksCache,
 } from '../src/lib/sso.js';
-import { validateOutboundUrl, isBlockedPrivateHost } from '../src/lib/url-security.js';
+import {
+  validateOutboundUrl,
+  isBlockedPrivateHost,
+  resolvePinnedOutboundTarget,
+  setSafeFetchForTests,
+} from '../src/lib/url-security.js';
 import { escapeLdapFilter } from '../src/lib/ldap.js';
 
 beforeEach(() => {
   clearDiscoveryCache();
   clearJwksCache();
+  setSafeFetchForTests(null);
   sqlMock.mockReset().mockResolvedValue([]);
 });
 
@@ -82,6 +88,36 @@ describe('isBlockedPrivateHost', () => {
     expect(isBlockedPrivateHost('fec0::1')).toBe(false);
     expect(isBlockedPrivateHost('ff00::1')).toBe(false); // multicast — not private
     expect(isBlockedPrivateHost('2001:db8::1')).toBe(false); // doc range
+  });
+});
+
+describe('resolvePinnedOutboundTarget', () => {
+  it('rejects hostnames that resolve to loopback addresses', async () => {
+    await expect(resolvePinnedOutboundTarget('https://attacker.example/metadata', {
+      allowedProtocols: ['https:'],
+    }, async () => [{ address: '127.0.0.1', family: 4 }])).rejects.toThrow(/Resolved private/);
+  });
+
+  it('rejects mixed public and private DNS answers', async () => {
+    await expect(resolvePinnedOutboundTarget('https://attacker.example/metadata', {
+      allowedProtocols: ['https:'],
+    }, async () => [
+      { address: '203.0.113.10', family: 4 },
+      { address: '10.0.0.8', family: 4 },
+    ])).rejects.toThrow(/Resolved private/);
+  });
+
+  it('pins to the first public resolved address', async () => {
+    const target = await resolvePinnedOutboundTarget('https://idp.example.com/.well-known/openid-configuration', {
+      allowedProtocols: ['https:'],
+    }, async () => [
+      { address: '203.0.113.10', family: 4 },
+      { address: '2001:db8::10', family: 6 },
+    ]);
+
+    expect(target.url.hostname).toBe('idp.example.com');
+    expect(target.address).toBe('203.0.113.10');
+    expect(target.family).toBe(4);
   });
 });
 
@@ -174,11 +210,8 @@ describe('discoverOidcProvider', () => {
       jwks_uri: 'https://idp.example.com/.well-known/jwks.json',
     };
 
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockDoc),
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(mockDoc), { status: 200 }));
+    setSafeFetchForTests(async (url, init, policy) => fetchMock(url, init, policy));
 
     const doc1 = await discoverOidcProvider('https://idp.example.com');
     expect(doc1.issuer).toBe('https://idp.example.com');
@@ -189,29 +222,29 @@ describe('discoverOidcProvider', () => {
     expect(doc2.issuer).toBe('https://idp.example.com');
     expect(fetchMock).toHaveBeenCalledTimes(1); // Still 1
 
-    vi.unstubAllGlobals();
+    setSafeFetchForTests(null);
   });
 
   it('throws when discovery fails', async () => {
     const { discoverOidcProvider } = await import('../src/lib/sso.js');
     clearDiscoveryCache();
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+    setSafeFetchForTests(async () => new Response('', { status: 404 }));
 
     await expect(discoverOidcProvider('https://bad.example.com')).rejects.toThrow('OIDC discovery failed');
 
-    vi.unstubAllGlobals();
+    setSafeFetchForTests(null);
   });
 
   it('rejects loopback discovery URLs before fetch', async () => {
     const { discoverOidcProvider } = await import('../src/lib/sso.js');
     const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
+    setSafeFetchForTests(async (url, init, policy) => fetchMock(url, init, policy));
 
     await expect(discoverOidcProvider('http://127.0.0.1:8080')).rejects.toThrow(/HTTP URLs|Private/);
     expect(fetchMock).not.toHaveBeenCalled();
 
-    vi.unstubAllGlobals();
+    setSafeFetchForTests(null);
   });
 });
 
