@@ -335,8 +335,10 @@ describe('Commerce M6C security and rate-limit hardening', () => {
     const webhooks = readRoute('commerce-provider-webhooks.ts');
     const reconciliation = readFileSync(join(ROUTES_DIR, '..', 'lib', 'commerce', 'payment-reconciliation.ts'), 'utf8');
 
-    expect(playgroundValidate).toContain('matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script\\s*>/gi)');
-    expect(playgroundValidate).toContain("/\\btype=[\"']application\\/json[\"']/i");
+    expect(playgroundValidate).toContain('function extractStaticBlock');
+    expect(playgroundValidate).toContain('<script type="application/json" id="commerce-playground-manifest">');
+    expect(playgroundValidate).toContain("extractStaticBlock(html, '<script>', '</script>', 'playground browser script'");
+    expect(playgroundValidate).not.toContain('matchAll(/<script');
 
     expect(seedScript).not.toContain('existsSync');
     expect(seedScript).not.toContain("const OPERATOR_API_KEY =");

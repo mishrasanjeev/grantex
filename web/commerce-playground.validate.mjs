@@ -8,12 +8,27 @@ const html = readFileSync(join(currentDir, 'commerce-playground.html'), 'utf8');
 const repoRoot = join(currentDir, '..');
 const catalogSource = readFileSync(join(repoRoot, 'apps', 'auth-service', 'src', 'lib', 'commerce', 'catalog.ts'), 'utf8');
 
-const manifestMatch = html.match(
-  /<script\b[^>]*\btype=["']application\/json["'][^>]*\bid=["']commerce-playground-manifest["'][^>]*>([\s\S]*?)<\/script\s*>/i,
-);
-assert.ok(manifestMatch, 'commerce playground manifest is present');
+function extractStaticBlock(source, openMarker, closeMarker, label, fromIndex = 0) {
+  const openIndex = source.indexOf(openMarker, fromIndex);
+  assert.notEqual(openIndex, -1, `${label} open marker is present`);
+  const contentStart = openIndex + openMarker.length;
+  const closeIndex = source.indexOf(closeMarker, contentStart);
+  assert.notEqual(closeIndex, -1, `${label} close marker is present`);
+  return {
+    content: source.slice(contentStart, closeIndex),
+    endIndex: closeIndex + closeMarker.length,
+  };
+}
 
-const manifest = JSON.parse(manifestMatch[1]);
+const manifestBlock = extractStaticBlock(
+  html,
+  '<script type="application/json" id="commerce-playground-manifest">',
+  '</script>',
+  'commerce playground manifest',
+);
+assert.ok(manifestBlock.content.trim().length > 0, 'commerce playground manifest is present');
+
+const manifest = JSON.parse(manifestBlock.content);
 const expectedTools = [
   'merchant.get_profile',
   'catalog.search',
@@ -60,13 +75,10 @@ assert.deepEqual(
   'localStorage is limited to non-secret connection settings',
 );
 
-const runnableScripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)]
-  .filter((match) => !/\btype=["']application\/json["']/i.test(match[1]))
-  .map((match) => match[2]);
-assert.ok(runnableScripts.length > 0, 'playground browser script is present');
-for (const script of runnableScripts) {
-  new Function(script);
-}
+const browserScript = extractStaticBlock(html, '<script>', '</script>', 'playground browser script', manifestBlock.endIndex);
+assert.ok(browserScript.content.trim().length > 0, 'playground browser script is present');
+assert.equal(html.indexOf('<script>', browserScript.endIndex), -1, 'playground has one runnable browser script');
+new Function(browserScript.content);
 
 assert.equal(/[^\u0000-\u007F]/.test(html), false, 'playground HTML stays ASCII-only');
 assert.equal(
