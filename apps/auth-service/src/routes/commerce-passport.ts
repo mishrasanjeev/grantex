@@ -74,7 +74,10 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
   // --------------------------------------------------------------------
   // POST /passports/consent-requests — agent only
   // --------------------------------------------------------------------
-  app.post('/passports/consent-requests', async (request, reply) => {
+  app.post(
+    '/passports/consent-requests',
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
+    async (request, reply) => {
     const caller = agentCallerOrThrow(request);
     const body = (request.body ?? {}) as {
       merchant_id?: unknown;
@@ -190,12 +193,16 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
       },
       audit_event_id: created.auditEventId,
     });
-  });
+    },
+  );
 
   // --------------------------------------------------------------------
   // POST /passports/exchange — agent only; mints the passport
   // --------------------------------------------------------------------
-  app.post('/passports/exchange', async (request, reply) => {
+  app.post(
+    '/passports/exchange',
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
+    async (request, reply) => {
     const caller = agentCallerOrThrow(request);
     const body = (request.body ?? {}) as { consent_request_id?: unknown };
     if (!isString(body.consent_request_id)) {
@@ -399,12 +406,16 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
       },
       audit_event_id: result.auditEventId,
     });
-  });
+    },
+  );
 
   // --------------------------------------------------------------------
   // GET /passports — list (operator + merchant + agent for own)
   // --------------------------------------------------------------------
-  app.get('/passports', async (request, reply) => {
+  app.get(
+    '/passports',
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
+    async (request, reply) => {
     const sql = getSql();
     const caller = request.commerceCaller;
     let rows: Record<string, unknown>[];
@@ -449,13 +460,17 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
       `;
     }
     return reply.status(200).send({ items: rows, next_cursor: null });
-  });
+    },
+  );
 
   // --------------------------------------------------------------------
   // POST /passports/verify — agent / merchant / operator
   // Body: { passport_jwt, mode? }
   // --------------------------------------------------------------------
-  app.post('/passports/verify', async (request, reply) => {
+  app.post(
+    '/passports/verify',
+    { config: { rateLimit: { max: 1000, timeWindow: '1 minute' } } },
+    async (request, reply) => {
     const body = (request.body ?? {}) as { passport_jwt?: unknown; mode?: unknown; expected_merchant_id?: unknown };
     if (!isString(body.passport_jwt)) {
       throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
@@ -523,13 +538,17 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
     }
 
     return reply.status(200).send({ data: { valid: true, passport: result.passport, mode } });
-  });
+    },
+  );
 
   // --------------------------------------------------------------------
   // POST /passports/revoke — operator + merchant (own) + agent (own)
   // Body: { jti, reason? }
   // --------------------------------------------------------------------
-  app.post('/passports/revoke', async (request, reply) => {
+  app.post(
+    '/passports/revoke',
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
+    async (request, reply) => {
     const body = (request.body ?? {}) as { jti?: unknown; reason?: unknown };
     if (!isString(body.jti)) {
       throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
@@ -587,7 +606,8 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
       metadata: { reason, revoked_by: revokedBy },
     });
     return reply.status(200).send({ data: { jti: body.jti, revoked: true, reason }, audit_event_id: audit.id });
-  });
+    },
+  );
 }
 
 // Side-effect-free re-export to keep the module surface lint-friendly.

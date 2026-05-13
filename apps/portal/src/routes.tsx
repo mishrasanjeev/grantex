@@ -35,6 +35,12 @@ import { BundleDetail } from './pages/bundles/BundleDetail';
 import { McpServerList } from './pages/mcp/McpServerList';
 import { McpServerForm } from './pages/mcp/McpServerForm';
 import { McpServerDetail } from './pages/mcp/McpServerDetail';
+import { CommercePayments } from './pages/commerce/CommercePayments';
+import { CommerceAudit } from './pages/commerce/CommerceAudit';
+import { CommercePassports } from './pages/commerce/CommercePassports';
+import { CommerceSettings } from './pages/commerce/CommerceSettings';
+import { CommercePlayground } from './pages/commerce/CommercePlayground';
+import { CommerceOps } from './pages/commerce/CommerceOps';
 import { RegistrySearch } from './pages/registry/RegistrySearch';
 import { RegistryOrgDetail } from './pages/registry/RegistryOrgDetail';
 import { RegisterOrgForm } from './pages/registry/RegisterOrgForm';
@@ -90,6 +96,12 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/mcp', element: <McpServerList /> },
       { path: '/dashboard/mcp/new', element: <McpServerForm /> },
       { path: '/dashboard/mcp/:serverId', element: <McpServerDetail /> },
+      { path: '/dashboard/commerce/payments', element: <CommercePayments /> },
+      { path: '/dashboard/commerce/audit', element: <CommerceAudit /> },
+      { path: '/dashboard/commerce/passports', element: <CommercePassports /> },
+      { path: '/dashboard/commerce/settings', element: <CommerceSettings /> },
+      { path: '/dashboard/commerce/playground', element: <CommercePlayground /> },
+      { path: '/dashboard/commerce/ops', element: <CommerceOps /> },
       { path: '/dashboard/registry', element: <RegistrySearch /> },
       { path: '/dashboard/registry/register', element: <RegisterOrgForm /> },
       { path: '/dashboard/registry/:did', element: <RegistryOrgDetail /> },

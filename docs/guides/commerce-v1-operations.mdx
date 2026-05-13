@@ -1,0 +1,461 @@
+---
+title: Commerce V1 Operations
+description: Sandbox operations, import columns, and runbooks for Grantex Commerce V1.
+---
+
+# Commerce V1 Operations
+
+This guide is the Milestone 6A through 7C operating baseline for Grantex Commerce V1 on
+`grantex.dev`. It covers sandbox use, safe observability, pilot readiness evidence, and runbooks
+only. It does not enable deployment, production configuration, live payment mode, or real Plural
+payments.
+
+## Sandbox Playground Usage
+
+Use `web/commerce-playground.html` against a local or sandbox API base URL.
+
+1. Start the auth-service in a local sandbox with `COMMERCE_V1_ENABLED=true`.
+2. Open the static playground file in a browser.
+3. Set the API base URL, for example `http://localhost:3001`.
+4. Paste bearer tokens and Commerce Passports only into the in-memory inputs.
+5. Load `/.well-known/grantex-commerce`.
+6. List `/mcp` tools.
+7. Run read tools first: `merchant.get_profile`, `catalog.search`, `catalog.get_item`, and `inventory.check`.
+8. Run write demo tools only in sandbox with explicit idempotency keys and, for payment-affecting tools, a checkout Commerce Passport.
+
+The playground may store only non-secret connection settings such as API base URL and merchant ID.
+It must not store bearer tokens, Commerce Passports, provider credentials, payment credentials, or
+idempotency keys in `localStorage` or `sessionStorage`.
+
+Live payment mode remains unavailable. Plural remains blocked until exact API and webhook signature
+details are confirmed and legal, compliance, and operations reviews are complete.
+
+## Security And Rate-Limit Evidence
+
+Consent approval and denial use the dedicated consent host, an HttpOnly same-site principal session
+cookie, CSRF bound to the session and consent request ID, and a verified single-use challenge before
+a decision can be recorded. Consent HTML responses send `Content-Security-Policy` with
+`frame-ancestors 'none'`, `X-Frame-Options: DENY`, `Cache-Control: no-store`, and
+`Referrer-Policy: no-referrer`. Consent pages must not render bearer tokens, raw Commerce Passports,
+provider credentials, or secrets.
+
+Rate-limit evidence for M6C:
+
+- JWKS is the only route allowlisted from the global rate limiter.
+- `/.well-known/grantex-commerce` is limited to 60 requests per minute.
+- `/mcp` is limited to 600 requests per minute.
+- Provider webhooks are limited to 1000 requests per minute.
+- Consent approval, denial, and challenge endpoints are limited to 60 requests per minute.
+- Passport consent request, exchange, list, and revoke endpoints are limited to 120 requests per minute.
+- Passport verify and policy evaluate endpoints are limited to 1000 requests per minute.
+- Policy create, policy activate, payment intent create, checkout link create, manual reconcile, and
+  ops health are limited to 60 requests per minute.
+- Cart create is limited to 120 requests per minute.
+- Catalog search is limited to 600 requests per minute.
+
+These route-local limits are enforced with the existing Fastify rate-limit stack and do not weaken
+the global 500 requests per minute safety net. Spec-level caller-keyed budgets per merchant, agent,
+or provider remain an operations refinement if stricter production quota isolation is required.
+
+## Pilot SLA And Readiness Dashboard
+
+The portal route `/dashboard/commerce/ops` is the M7A API-backed operations dashboard. It reads:
+
+- `/v1/commerce/ops/health` for API, database, provider adapter, reconciliation worker, and webhook backlog status.
+- `/v1/commerce/payments/intents?status=payment_pending` for stuck pending payment visibility.
+- `/v1/commerce/ops/provider-webhook-events?processing_status=failed` for safe failed provider webhook metadata.
+
+Pilot SLA targets from the V1 spec:
+
+- Payment intent create: `POST /v1/commerce/payments/intents`, 10 RPS, p95 under 500 ms excluding provider latency.
+- Catalog search: `POST /v1/commerce/catalog/search`, 50 RPS, p95 under 300 ms for pilot catalog size.
+- Provider webhooks: `POST /v1/webhooks/providers/{provider_key}`, 5 events/sec, p95 under 500 ms excluding provider verification latency.
+
+M7B dashboard status:
+
+- Health checks are measured from the API.
+- SLA target cards are visible as target indicators; measured local load evidence is recorded in
+  `docs/reports/commerce-v1-local-pilot-load.md`.
+- Live Plural readiness is marked `blocked`.
+- Failed webhook replay is marked `blocked`; metadata-only listing is available for operator review.
+
+## Local Pilot Load Harness
+
+Use `scripts/commerce-pilot-load-harness.mjs` for local-only load evidence. The harness preserves
+dry-run mode and refuses non-local API base URLs before it sends any request.
+
+Local dev stack discovery:
+
+- The repo's documented local stack is `docker compose up --build` from the repo root.
+- That stack provides PostgreSQL on `localhost:5432`, Redis on `localhost:6379`, and auth-service on
+  `http://localhost:3001`.
+- Auth-service runs SQL migrations on startup through `apps/auth-service/src/db/migrate.ts`.
+- M7C does not add Docker or external infrastructure. If Docker, local Postgres, or local Redis are
+  unavailable, measured load remains blocked.
+
+Local sandbox seed command:
+
+```bash
+node scripts/commerce-pilot-seed-local.mjs --run \
+  --migrate \
+  --database-url=postgres://grantex:grantex@localhost:5432/grantex \
+  --env-output=.tmp/commerce-pilot-load.env
+```
+
+The seed script refuses `NODE_ENV=production`, live commerce flags, live Plural flags, and non-local
+or production-like database URLs. It creates synthetic local data only:
+
+- sandbox tenant `cten_internal_sandbox`;
+- mock-provider merchant `mch_internal_sandbox_pilot`;
+- trusted agent `cag_internal_sandbox_pilot`;
+- active policy `m7c-local-pilot-v1`;
+- one pilot catalog product and variant;
+- checkout Commerce Passport;
+- 100 draft cart IDs;
+- 51 pending mock provider payment references.
+
+The generated `.tmp/commerce-pilot-load.env` file contains synthetic local bearer/passport values
+for the harness. Do not commit it and do not replace those values with production secrets.
+
+Dry-run validation:
+
+```bash
+node scripts/commerce-pilot-load-harness.mjs --dry-run
+```
+
+Measured run command:
+
+```bash
+node scripts/commerce-pilot-load-harness.mjs --run \
+  --env-file=.tmp/commerce-pilot-load.env \
+  --report=docs/reports/commerce-v1-local-pilot-load.md
+```
+
+Optional target subset for staged local checks:
+
+```bash
+node scripts/commerce-pilot-load-harness.mjs --run \
+  --api-base=http://localhost:3001 \
+  --targets=catalog_search
+```
+
+Run mode requires local seeded sandbox data and these environment variables, either in the process
+environment or in `--env-file`:
+
+- `COMMERCE_LOAD_API_BASE`
+- `COMMERCE_LOAD_AUTH_TOKEN`
+- `COMMERCE_LOAD_MERCHANT_ID`
+- `COMMERCE_LOAD_AGENT_ID`
+- `COMMERCE_LOAD_CART_IDS`
+- `COMMERCE_LOAD_CHECKOUT_PASSPORT`
+- `COMMERCE_LOAD_PROVIDER_PAYMENT_IDS`
+- `COMMERCE_LOAD_MOCK_WEBHOOK_SECRET`
+
+For the full M7B target run, seed at least:
+
+- 100 unique draft carts for `payment_intent_create`.
+- 51 pending mock provider payment references for `mock_provider_webhook`; the first reference is
+  used for the duplicate event probe and the remaining 50 references are used for the 5 events/sec
+  measured target.
+
+The measured report includes request count, success count, error count, p50, p95, max latency,
+per-target pass/fail, and duplicate webhook transition evidence. The report location is
+`docs/reports/commerce-v1-local-pilot-load.md`.
+
+Do not use production credentials, real provider credentials, live payment mode, or real Plural calls
+with this harness.
+
+## Pilot Merchant Configuration Path
+
+The internal sandbox pilot template is `docs/examples/commerce-pilot-merchant.sandbox.json`.
+
+Setup path:
+
+1. Create or select an internal sandbox tenant.
+2. Create a sandbox merchant using the `electronics_appliances` category preset.
+3. Keep provider key set to `mock`.
+4. Create and activate a policy with explicit amount and scope caps.
+5. Register only trusted CommerceAgents needed for the pilot.
+6. Keep live Plural disabled and Plural sandbox marked blocked until API and webhook contracts are confirmed.
+7. Confirm emergency disable ownership before any external pilot traffic.
+
+## Support Ownership Placeholder
+
+Support ownership must be assigned before external pilot:
+
+- Product owner: TBD.
+- Engineering owner: TBD.
+- Security reviewer: TBD.
+- Operations/on-call owner: TBD.
+- Legal/compliance reviewer: TBD.
+
+Until owners are assigned, the system is ready for internal sandbox only.
+
+## On-Call Escalation Template
+
+Escalation fields:
+
+- Incident ID.
+- Request ID.
+- Tenant ID.
+- Merchant ID.
+- Agent ID when available.
+- Payment intent ID.
+- Provider payment ID.
+- Provider webhook event ID.
+- Normalized error code.
+- Whether emergency disable is active.
+- Whether live mode or Plural was involved. Expected M7A answer: no.
+
+Initial response:
+
+1. Check `/dashboard/commerce/ops`.
+2. Verify `/v1/commerce/ops/health`.
+3. If payments are stuck, use manual reconcile from the dashboard.
+4. If provider webhooks failed, inspect metadata-only failed events.
+5. Do not replay provider webhooks through ad hoc scripts.
+6. Use emergency disable if protected actions must stop immediately.
+
+## Backup Restore And RPO Notes
+
+Live readiness requires reviewed backup and restore evidence for:
+
+- Commerce tenants, merchants, agents, products, variants, policies, passports, provider credentials, carts, payment intents, provider webhook events, and audit events.
+- Point-in-time restore for Postgres.
+- Secret manager or KMS recovery for credential encryption keys.
+- RPO target and RTO target approved by operations.
+- Restore drill evidence in a non-production environment.
+
+M7A does not certify live RPO or RTO. It records the requirement and keeps external pilot blocked
+until operations signoff is complete.
+
+## Final V1 Sign-Off Checklist
+
+- OpenAPI matches implemented V1 routes.
+- Auth-service typecheck and full tests pass.
+- Portal typecheck, tests, and build pass when dashboard files are touched.
+- Docs and playground validators pass.
+- Local pilot load harness dry-run passes.
+- Local pilot load run is executed against seeded sandbox data and records p50, p95, max latency,
+  success counts, error counts, and duplicate webhook transition evidence.
+- First pilot merchant is named or internal sandbox pilot is approved.
+- Support, security, legal, compliance, and operations owners are assigned.
+- Plural API and webhook signature blockers are resolved or explicitly accepted as mock-only sandbox scope.
+- Live payment mode remains disabled unless all legal, compliance, security, and operations gates approve it.
+
+M7C internal-sandbox signoff status:
+
+| Gate | Status | Evidence |
+| --- | --- | --- |
+| Dry-run harness validation | Passing | `node scripts/commerce-pilot-load-harness.mjs --dry-run` |
+| Non-local URL refusal | Passing | Harness refuses production-like base URLs before network calls |
+| Local sandbox seed path | Available | `node scripts/commerce-pilot-seed-local.mjs --run --migrate --env-output=.tmp/commerce-pilot-load.env` |
+| Measured local load report | Passing | `docs/reports/commerce-v1-local-pilot-load.md` records localhost/mock run results: payment intent create 100/100 p95 16.53 ms, catalog search 500/500 p95 5.41 ms, mock provider webhook 52/52 p95 20.45 ms, duplicate transitions 0 |
+| Internal sandbox recommendation | Ready for internal sandbox only | External/live pilot remains blocked |
+
+## Not-Ready-If Checklist
+
+V1 is not ready for external pilot if any item is true:
+
+- Live Plural or real payment processing is required.
+- Plural API or webhook signature scheme remains unconfirmed for the target pilot.
+- No named support or on-call owner exists.
+- No approved sandbox pilot merchant exists.
+- Local load evidence is missing or fails the p95 targets.
+- Failed webhook replay is required but safe raw payload storage and redaction are not implemented.
+- Emergency re-enable is required but the reviewed recovery API contract does not exist.
+- Backup/restore/RPO review is required for the pilot but not approved.
+
+## CSV Product And Variant Import Columns
+
+Commerce V1 currently exposes API-backed product and variant creation. CSV import remains an
+operator workflow specification until a dedicated importer is implemented.
+
+Required product columns:
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `merchant_id` | string | Existing merchant in the caller tenant. |
+| `product_id` | string | Merchant catalog reference. |
+| `title` | string | Customer-facing product title. |
+| `category_preset` | string | Must be `electronics_appliances` for V1. |
+
+Optional product columns:
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `brand` | string | Brand display name. |
+| `description` | string | Safe product description. |
+| `image_url` | HTTPS URL | Product image URL. |
+| `source_system` | string | Defaults to `manual`. |
+| `manually_maintained` | boolean | Defaults to `false`. |
+
+Required variant columns:
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `sku` | string | Unique variant SKU within the product import row. |
+| `price_amount` | integer | Minor currency units. |
+
+Optional variant columns:
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `parent_sku` | string | Parent SKU where applicable. |
+| `model` | string | Variant model reference. |
+| `variant_title` | string | Variant display title. |
+| `attributes` | JSON object | Color, size, capacity, or other structured attributes. |
+| `currency` | string | ISO 4217 uppercase code. Defaults to `INR`. |
+| `tax_inclusive` | boolean | Defaults to `true`. |
+| `gst_slab` | string | GST slab label. |
+| `tax_rate` | number | Tax rate when known. |
+| `hsn_code` | string | HSN code when known. |
+| `availability_status` | string | `in_stock`, `out_of_stock`, `pre_order`, `back_order`, or `unknown`. |
+| `warranty_summary` | string | Short warranty text. |
+| `return_policy_summary` | string | Short return policy text. |
+| `source_system` | string | Source system for the variant row. |
+
+Importer safety requirements before implementation:
+
+- Validate tenant and merchant ownership before inserting rows.
+- Reject archived or duplicate variant references in the same import.
+- Do not infer inventory guarantees when availability is `unknown`.
+- Emit append-only audit events for created or updated products.
+- Keep raw import files out of application logs.
+
+## Provider Outage Runbook
+
+Signals:
+
+- `/v1/commerce/ops/health` reports provider adapter status down or degraded.
+- Payment intent creation or checkout link creation returns a provider error.
+- Reconciliation stores a safe provider error on payment intents.
+
+Immediate actions:
+
+1. Confirm the outage is isolated to the provider adapter and not database or tenant auth.
+2. Keep live payment mode disabled.
+3. Verify emergency disable status for affected merchants.
+4. For sandbox, switch only test traffic to the mock provider when appropriate.
+5. Use `GET /v1/commerce/payments/intents` to inspect safe payment status fields.
+6. Avoid manual database edits. Use reconciliation once the provider is healthy.
+
+Escalation:
+
+- Legal and payment operations must approve any real provider retry strategy.
+- Plural remains blocked until exact API behavior and error mapping are confirmed.
+
+## Webhook Backlog And Failure Runbook
+
+Signals:
+
+- `/v1/commerce/ops/health` reports webhook backlog or recent failures.
+- `commerce_provider_webhook_events.processing_status` is `received` or `failed`.
+- Audit contains `provider.webhook.signature_failed` or denied webhook processing events.
+
+Immediate actions:
+
+1. Check whether failures are signature failures, stale replay timestamps, unsupported events, or invalid transitions.
+2. Confirm no raw payload, raw signature, or webhook secret is present in logs or audit metadata.
+3. Confirm duplicate provider event IDs are accepted idempotently without a second payment transition.
+4. Do not replay failed events through ad hoc scripts.
+
+Deferred blocker:
+
+- A safe failed webhook listing and replay API needs an explicit V1 contract before implementation.
+  Ops health reports this as `webhook_failed_event_list_and_replay_api_contract_deferred`.
+  Required fields are tenant, merchant, payment intent, provider key, provider event ID, safe status,
+  safe error code, timestamps, and operator audit references. Raw provider payload replay requires a
+  storage and redaction design that is not part of M6A or M6C. Do not fake replay from partial data.
+
+## Reconciliation Failure Runbook
+
+Signals:
+
+- Manual reconcile returns a provider error.
+- Batch reconciliation reports failed results.
+- Payment intents have `last_reconciliation_error` set.
+
+Immediate actions:
+
+1. Confirm the payment intent is still tenant-owned and not terminal.
+2. Check `provider_payment_id`, `provider_raw_status`, `last_reconciliation_attempt_at`,
+   `last_reconciliation_error`, and `last_reconciliation_retryable`.
+3. Retry only retryable provider errors after provider health is restored.
+4. Do not retry validation, auth, policy, tenant, or missing provider payment errors.
+5. If pending longer than the timeout and provider remains pending, allow the normal expired transition.
+
+Scheduler status:
+
+- The reconciliation helper and disabled-by-default worker exist.
+- Runtime scheduler enablement remains an operations gate controlled by configuration review.
+
+## Audit Write Failure Runbook
+
+Signals:
+
+- `grantex_commerce_audit_write_failures_total` increases.
+- State-changing requests fail where transactional audit write is required.
+
+Immediate actions:
+
+1. Treat the system as not release-ready for commerce state changes.
+2. Check database availability, migration state, append-only trigger errors, and application role grants.
+3. Do not bypass audit writes.
+4. Retry only after database health and audit insert permissions are verified.
+5. Preserve request IDs from structured logs for incident correlation.
+
+Safe audit data:
+
+- Audit events may include IDs, policy version, decision ID, idempotency key hash, provider reference ID,
+  and normalized error codes.
+- Audit events must not include bearer tokens, raw passports, raw credentials, webhook secrets, raw
+  signatures, raw payment data, or plaintext idempotency keys.
+
+## Emergency Disable Runbook
+
+Signals:
+
+- Merchant `agentic_commerce_enabled=false`.
+- Merchant disabled timestamp is set.
+- Active policy sets emergency disable.
+- Protected payment-affecting action returns `emergency_disabled`.
+
+Immediate actions:
+
+1. Confirm the tenant and merchant in the request.
+2. Keep protected commerce actions blocked.
+3. Verify audit events for denied policy decisions.
+4. Do not create payment intents or checkout links for the merchant until a new policy version and
+   activation explicitly restore access.
+5. Communicate sandbox or pilot status to the operator team.
+
+Re-enable decision:
+
+- The emergency disable API remains one-way in M6C. There is no re-enable route in the V1 API.
+- Re-enabling agentic commerce requires a reviewed recovery contract with operator authorization,
+  incident review, policy version and activation evidence, and audit semantics. Until that contract
+  exists, dashboard re-enable controls must remain unavailable.
+
+## Legal And Live Mode Blockers
+
+Before enabling real Plural or live payments, require human signoff for:
+
+- Confirmed Plural API contract, credential fields, idempotency behavior, and webhook signature scheme.
+- Legal review of user consent, payment authorization, refund handling, dispute handling, and customer support obligations.
+- Compliance review for India payment requirements, strong customer authentication, data residency, and audit retention.
+- Security review for provider credential vaulting, webhook secret rotation, and incident response.
+- Operations review for provider outage handling, webhook replay tooling, reconciliation scheduler, dashboard coverage, and on-call ownership.
+- Merchant pilot approval with explicit sandbox-to-live promotion criteria.
+
+Do not advertise external commerce protocol certification unless a separate conformance and legal review
+has approved the exact claim.
+
+## Human Review Gates
+
+Required before Milestone 6 release signoff:
+
+- Engineering review of OpenAPI drift, tenant filters, idempotency conflict handling, policy/passport enforcement, and webhook transition idempotency.
+- Security review of logs, audit metadata, playground storage, credential handling, and provider webhook verification.
+- Operations review of health, metrics, runbooks, reconciliation worker configuration, and alert thresholds.
+- Legal and compliance review before any live payment mode or real Plural processing.

@@ -350,6 +350,13 @@ describe('POST /v1/commerce/consent/:reqId/approve — Finding 1 enforcement', (
     });
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatch(/Approved/);
+    expect(res.headers['content-security-policy']).toMatch(/frame-ancestors 'none'/);
+    expect(res.headers['content-security-policy']).not.toMatch(/'unsafe-inline'/);
+    expect(res.headers['x-frame-options']).toBe('DENY');
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.body).not.toMatch(/\sstyle=/);
+    expect(res.body).not.toContain(sessionToken);
+    expect(res.body).not.toContain(csrf);
 
     // Confirm both audit events fired: consent.granted AND consent.challenge.used.
     const auditEventTypes = sqlMock.mock.calls

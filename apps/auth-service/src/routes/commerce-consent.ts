@@ -284,6 +284,28 @@ function renderConsentPage(
 </body></html>`;
 }
 
+function renderDecisionPage(
+  title: 'Approved' | 'Denied',
+  message: string,
+  nonce: string,
+): string {
+  return `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<style nonce="${nonce}">
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;padding:24px}
+  main{max-width:560px}
+  h1{font-size:20px;margin:0 0 12px}
+  p{color:#555;line-height:1.6}
+</style>
+</head><body><main>
+<h1>${escapeHtml(title)}</h1>
+<p>${escapeHtml(message)}</p>
+</main></body></html>`;
+}
+
 export async function commerceConsentRoutes(app: FastifyInstance): Promise<void> {
   app.addContentTypeParser(
     'application/x-www-form-urlencoded',
@@ -294,7 +316,7 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
   // GET /v1/commerce/consent/page?req=<id>[&session=<token>]
   app.get<{ Querystring: { req?: string; session?: string } }>(
     '/consent/page',
-    { config: { publicConsent: true } },
+    { config: { publicConsent: true, rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!isAcceptableConsentHost(request.headers['host'])) {
         return reply.status(404).type('text/html').send('<!doctype html><title>Not Found</title>');
@@ -435,7 +457,7 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
   // GET /v1/commerce/consent/:reqId — JSON metadata (publicConsent)
   app.get<{ Params: { reqId: string } }>(
     '/consent/:reqId',
-    { config: { publicConsent: true } },
+    { config: { publicConsent: true, rateLimit: { max: 120, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!isAcceptableConsentHost(request.headers['host'])) {
         throw new CommerceHttpError(404, 'not_found', 'Resource not found');
@@ -472,7 +494,7 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
   // -----------------------------------------------------------------
   app.post<{ Params: { reqId: string }; Body: string | Record<string, string> }>(
     '/consent/:reqId/challenge',
-    { config: { publicConsent: true } },
+    { config: { publicConsent: true, rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!isAcceptableConsentHost(request.headers['host'])) {
         throw new CommerceHttpError(404, 'not_found', 'Resource not found');
@@ -568,7 +590,7 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
   // -----------------------------------------------------------------
   app.post<{ Params: { reqId: string }; Body: string | Record<string, string> }>(
     '/consent/:reqId/challenge/verify',
-    { config: { publicConsent: true } },
+    { config: { publicConsent: true, rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!isAcceptableConsentHost(request.headers['host'])) {
         throw new CommerceHttpError(404, 'not_found', 'Resource not found');
@@ -661,7 +683,7 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
   // POST /v1/commerce/consent/:reqId/approve
   app.post<{ Params: { reqId: string }; Body: string | Record<string, string> }>(
     '/consent/:reqId/approve',
-    { config: { publicConsent: true } },
+    { config: { publicConsent: true, rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!isAcceptableConsentHost(request.headers['host'])) {
         throw new CommerceHttpError(404, 'not_found', 'Resource not found');
@@ -747,9 +769,7 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
       const nonce = randomBytes(8).toString('base64url');
       applySecurityHeaders(reply, nonce);
       return reply.status(200).type('text/html; charset=utf-8').send(
-        `<!doctype html><html><head><meta charset="utf-8"><title>Approved</title></head>`
-        + `<body style="font-family:sans-serif;padding:24px"><h1>Approved</h1>`
-        + `<p>You may now return to your agent. You can close this tab.</p></body></html>`,
+        renderDecisionPage('Approved', 'You may now return to your agent. You can close this tab.', nonce),
       );
     },
   );
@@ -757,7 +777,7 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
   // POST /v1/commerce/consent/:reqId/deny
   app.post<{ Params: { reqId: string }; Body: string | Record<string, string> }>(
     '/consent/:reqId/deny',
-    { config: { publicConsent: true } },
+    { config: { publicConsent: true, rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request, reply) => {
       if (!isAcceptableConsentHost(request.headers['host'])) {
         throw new CommerceHttpError(404, 'not_found', 'Resource not found');
@@ -831,9 +851,7 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
       const nonce = randomBytes(8).toString('base64url');
       applySecurityHeaders(reply, nonce);
       return reply.status(200).type('text/html; charset=utf-8').send(
-        `<!doctype html><html><head><meta charset="utf-8"><title>Denied</title></head>`
-        + `<body style="font-family:sans-serif;padding:24px"><h1>Denied</h1>`
-        + `<p>The agent has been notified. You may close this tab.</p></body></html>`,
+        renderDecisionPage('Denied', 'The agent has been notified. You may close this tab.', nonce),
       );
     },
   );
