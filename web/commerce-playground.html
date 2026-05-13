@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grantex Commerce MCP Playground</title>
+  <meta name="description" content="Operator playground for Grantex Commerce MCP JSON-RPC tools.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1f2630;
+      --border: #30363d;
+      --border-strong: #4b5563;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #3fb950;
+      --accent-2: #58a6ff;
+      --warn: #d29922;
+      --danger: #f85149;
+      --purple: #bc8cff;
+      --mono: "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-width: 320px; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: 0.58; }
+    a { color: var(--accent-2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .app {
+      width: min(1560px, 100%);
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 0 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      min-width: 0;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 4px 9px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      background: var(--surface);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .pill.ok { border-color: rgba(63, 185, 80, 0.45); color: var(--accent); }
+    .pill.warn { border-color: rgba(210, 153, 34, 0.55); color: var(--warn); }
+    .pill.blocked { border-color: rgba(248, 81, 73, 0.45); color: var(--danger); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 340px minmax(0, 1fr) 420px;
+      gap: 16px;
+      padding-top: 16px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      min-width: 0;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-header h2 {
+      margin: 0;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .panel-body {
+      padding: 12px;
+    }
+
+    .field {
+      display: grid;
+      gap: 5px;
+      margin-bottom: 11px;
+    }
+
+    .field label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      padding: 9px 10px;
+      outline: none;
+      min-width: 0;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.14);
+    }
+
+    textarea {
+      min-height: 180px;
+      resize: vertical;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.55;
+      tab-size: 2;
+    }
+
+    .secret {
+      font-family: var(--mono);
+      letter-spacing: 0;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      gap: 7px;
+      padding: 7px 11px;
+      border-radius: 6px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-2);
+      color: var(--text);
+      font-weight: 650;
+      font-size: 13px;
+    }
+
+    .btn:hover:not(:disabled) { border-color: var(--accent-2); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #08110b; }
+    .btn.danger { border-color: rgba(248, 81, 73, 0.5); color: var(--danger); }
+    .btn.ghost { background: transparent; }
+
+    .tools {
+      display: grid;
+      gap: 6px;
+    }
+
+    .tool-btn {
+      width: 100%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      text-align: left;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .tool-btn:hover { border-color: var(--accent-2); }
+    .tool-btn.active { border-color: var(--accent); background: rgba(63, 185, 80, 0.08); }
+    .tool-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .tool-kind {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .tool-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .tool-title h2 {
+      margin: 0;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-size: 18px;
+      font-family: var(--mono);
+      letter-spacing: 0;
+    }
+
+    .diagnostic {
+      display: none;
+      margin-bottom: 12px;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .diagnostic.show { display: block; }
+    .diagnostic.error { border-color: rgba(248, 81, 73, 0.55); color: var(--danger); }
+    .diagnostic.warn { border-color: rgba(210, 153, 34, 0.55); color: var(--warn); }
+    .diagnostic.ok { border-color: rgba(63, 185, 80, 0.5); color: var(--accent); }
+
+    .json-panel {
+      display: grid;
+      gap: 10px;
+    }
+
+    pre {
+      min-height: 180px;
+      max-height: 420px;
+      margin: 0;
+      overflow: auto;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      padding: 10px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .mini-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .mini-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      background: var(--bg);
+    }
+
+    .mini-row code {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-family: var(--mono);
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 13px 0;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .footer {
+      padding: 14px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 1220px) {
+      .grid { grid-template-columns: 320px minmax(0, 1fr); }
+      .right-col { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 820px) {
+      .app { padding: 12px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .status-row { justify-content: flex-start; }
+      .grid { grid-template-columns: 1fr; }
+      .two-col { grid-template-columns: 1fr; }
+      .tool-title { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <script type="application/json" id="commerce-playground-manifest">
+{
+  "tools": [
+    "merchant.get_profile",
+    "catalog.search",
+    "catalog.get_item",
+    "inventory.check",
+    "cart.create",
+    "checkout.create",
+    "payment.create_intent",
+    "payment.get_status"
+  ],
+  "request_examples": {
+    "merchant.get_profile": {
+      "merchant_id": "mch_demo"
+    },
+    "catalog.search": {
+      "merchant_id": "mch_demo",
+      "query": "toaster",
+      "filters": {
+        "availability_status": "in_stock"
+      },
+      "limit": 10
+    },
+    "catalog.get_item": {
+      "merchant_id": "mch_demo",
+      "product_id": "cprd_demo"
+    },
+    "inventory.check": {
+      "merchant_id": "mch_demo",
+      "variant_ids": ["cvar_demo_1"]
+    },
+    "cart.create": {
+      "merchant_id": "mch_demo",
+      "currency": "INR",
+      "line_items": [
+        {
+          "variant_id": "cvar_demo_1",
+          "quantity": 1
+        }
+      ],
+      "idempotency_key": ""
+    },
+    "checkout.create": {
+      "payment_intent_id": "cpi_demo",
+      "success_url": "https://example.test/success",
+      "cancel_url": "https://example.test/cancel",
+      "passport_jwt": "",
+      "idempotency_key": ""
+    },
+    "payment.create_intent": {
+      "merchant_id": "mch_demo",
+      "cart_id": "ccart_demo",
+      "amount_minor_units": 250000,
+      "currency": "INR",
+      "provider_key": "mock",
+      "metadata": {
+        "demo": "true"
+      },
+      "passport_jwt": "",
+      "idempotency_key": ""
+    },
+    "payment.get_status": {
+      "payment_intent_id": "cpi_demo"
+    }
+  }
+}
+  </script>
+
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <h1>Grantex Commerce MCP Playground</h1>
+        <p>JSON-RPC console for the commerce V1 tools exposed by auth-service.</p>
+      </div>
+      <div class="status-row">
+        <span class="pill ok">MCP JSON-RPC HTTP</span>
+        <span class="pill warn">Sandbox demo mode</span>
+        <span class="pill blocked">Live payment mode unavailable</span>
+        <span class="pill blocked">Plural provider blocked until configured</span>
+      </div>
+    </header>
+
+    <section class="grid" aria-label="Commerce MCP playground">
+      <aside class="panel">
+        <div class="panel-header">
+          <h2>Connection</h2>
+          <button id="save-config" class="btn ghost" type="button">Save</button>
+        </div>
+        <div class="panel-body">
+          <div class="field">
+            <label for="api-base">API base URL</label>
+            <input id="api-base" autocomplete="off" spellcheck="false" value="http://localhost:3001">
+          </div>
+          <div class="field">
+            <label for="merchant-id">Merchant ID</label>
+            <input id="merchant-id" autocomplete="off" spellcheck="false" placeholder="mch_...">
+          </div>
+          <div class="field">
+            <label for="caller-kind">Caller mode</label>
+            <select id="caller-kind">
+              <option value="agent">CommerceAgent token</option>
+              <option value="merchant">Merchant or operator token</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="auth-token">Authorization token</label>
+            <input id="auth-token" class="secret" type="password" autocomplete="off" spellcheck="false" placeholder="Bearer token">
+            <div class="hint">Tokens and passports stay in memory for this page.</div>
+          </div>
+          <div class="field">
+            <label for="browse-passport">Browse passport</label>
+            <textarea id="browse-passport" class="secret" autocomplete="off" spellcheck="false" placeholder="Commerce Passport with catalog or inventory scope"></textarea>
+          </div>
+          <div class="field">
+            <label for="checkout-passport">Checkout passport</label>
+            <textarea id="checkout-passport" class="secret" autocomplete="off" spellcheck="false" placeholder="Commerce Passport with checkout or payment scope"></textarea>
+          </div>
+          <div class="field">
+            <label for="idempotency-key">Idempotency key</label>
+            <input id="idempotency-key" autocomplete="off" spellcheck="false" placeholder="demo-key-...">
+          </div>
+          <div class="button-row">
+            <button id="generate-key" class="btn" type="button">Generate key</button>
+            <button id="clear-secrets" class="btn danger" type="button">Clear secrets</button>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="button-row">
+            <button id="fetch-well-known" class="btn primary" type="button">Fetch profile</button>
+            <button id="initialize-mcp" class="btn" type="button">Initialize</button>
+            <button id="list-tools" class="btn" type="button">List tools</button>
+          </div>
+          <div id="connection-diagnostic" class="diagnostic"></div>
+        </div>
+      </aside>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Tool Runner</h2>
+          <span id="selected-kind" class="pill">Read</span>
+        </div>
+        <div class="panel-body">
+          <div class="tool-title">
+            <h2 id="selected-tool">merchant.get_profile</h2>
+            <div class="button-row">
+              <button id="load-example" class="btn" type="button">Reset example</button>
+              <button id="run-tool" class="btn primary" type="button">Run tool</button>
+            </div>
+          </div>
+          <div id="tool-diagnostic" class="diagnostic"></div>
+          <div class="two-col">
+            <div>
+              <div class="field">
+                <label for="tool-body">Tool arguments</label>
+                <textarea id="tool-body" spellcheck="false"></textarea>
+              </div>
+            </div>
+            <div>
+              <div class="field">
+                <label>V1 commerce tools</label>
+                <div id="tool-list" class="tools" aria-label="Available commerce tools"></div>
+              </div>
+            </div>
+          </div>
+          <div class="mini-list" id="remote-tools"></div>
+        </div>
+      </section>
+
+      <section class="panel right-col">
+        <div class="panel-header">
+          <h2>Request / Response</h2>
+          <button id="clear-panels" class="btn ghost" type="button">Clear</button>
+        </div>
+        <div class="panel-body json-panel">
+          <div>
+            <div class="field">
+              <label>Last request</label>
+              <pre id="request-panel">{}</pre>
+            </div>
+          </div>
+          <div>
+            <div class="field">
+              <label>Last response</label>
+              <pre id="response-panel">{}</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <div class="footer">
+      This playground calls a configurable auth-service base URL and does not contain credentials or production payment configuration.
+    </div>
+  </main>
+
+  <script>
+    const manifest = JSON.parse(document.getElementById('commerce-playground-manifest').textContent);
+    const toolDescriptions = {
+      'merchant.get_profile': 'Safe merchant profile and capability list.',
+      'catalog.search': 'Catalog search with product summaries and variant summaries.',
+      'catalog.get_item': 'Product detail read for catalog.get_item.',
+      'inventory.check': 'Variant availability and freshness check.',
+      'cart.create': 'Pre-consent immutable cart draft.',
+      'checkout.create': 'Hosted checkout handoff for an existing payment intent.',
+      'payment.create_intent': 'Provider-neutral payment intent with checkout passport and policy checks.',
+      'payment.get_status': 'Payment intent status read.'
+    };
+    const readTools = new Set(['merchant.get_profile', 'catalog.search', 'catalog.get_item', 'inventory.check', 'payment.get_status']);
+    const browsePassportTools = new Set(['catalog.search', 'catalog.get_item', 'inventory.check']);
+    const checkoutPassportTools = new Set(['checkout.create', 'payment.create_intent']);
+    const idempotencyTools = new Set(['cart.create', 'checkout.create', 'payment.create_intent']);
+    const requiredAuthTools = new Set(manifest.tools);
+
+    let selectedTool = manifest.tools[0];
+    let rpcCounter = 1;
+
+    function $(id) {
+      return document.getElementById(id);
+    }
+
+    function pretty(value) {
+      return JSON.stringify(value, null, 2);
+    }
+
+    function safeParseJson(text) {
+      try {
+        return { ok: true, value: JSON.parse(text) };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+
+    function apiBase() {
+      return $('api-base').value.trim().replace(/\/+$/, '');
+    }
+
+    function authToken() {
+      return $('auth-token').value.trim();
+    }
+
+    function bearerHeader() {
+      const token = authToken();
+      if (!token) return null;
+      return token.toLowerCase().startsWith('bearer ') ? token : `Bearer ${token}`;
+    }
+
+    function merchantId() {
+      return $('merchant-id').value.trim();
+    }
+
+    function browsePassport() {
+      return $('browse-passport').value.trim();
+    }
+
+    function checkoutPassport() {
+      return $('checkout-passport').value.trim();
+    }
+
+    function idempotencyKey() {
+      return $('idempotency-key').value.trim();
+    }
+
+    function setDiagnostic(id, message, kind) {
+      const node = $(id);
+      node.textContent = message || '';
+      node.className = `diagnostic${message ? ' show' : ''}${kind ? ` ${kind}` : ''}`;
+    }
+
+    function setPanels(request, response) {
+      if (request !== undefined) $('request-panel').textContent = pretty(request);
+      if (response !== undefined) $('response-panel').textContent = pretty(response);
+    }
+
+    function requestHeaders() {
+      const headers = { 'Content-Type': 'application/json' };
+      const bearer = bearerHeader();
+      if (bearer) headers.Authorization = bearer;
+      return headers;
+    }
+
+    function nextId() {
+      return `commerce-playground-${rpcCounter++}`;
+    }
+
+    function cloneExample(tool) {
+      return JSON.parse(JSON.stringify(manifest.request_examples[tool]));
+    }
+
+    function applyConnectionDefaults(args) {
+      const next = { ...args };
+      const configuredMerchantId = merchantId();
+      if ('merchant_id' in next && configuredMerchantId) next.merchant_id = configuredMerchantId;
+      if (browsePassportTools.has(selectedTool) && browsePassport() && !next.passport_jwt) {
+        next.passport_jwt = browsePassport();
+      }
+      if (checkoutPassportTools.has(selectedTool) && checkoutPassport()) {
+        next.passport_jwt = checkoutPassport();
+      }
+      if (selectedTool === 'payment.get_status' && $('caller-kind').value === 'agent' && checkoutPassport() && !next.passport_jwt) {
+        next.passport_jwt = checkoutPassport();
+      }
+      if (idempotencyTools.has(selectedTool) && idempotencyKey() && !next.idempotency_key) {
+        next.idempotency_key = idempotencyKey();
+      }
+      return next;
+    }
+
+    function loadExample() {
+      const example = applyConnectionDefaults(cloneExample(selectedTool));
+      $('tool-body').value = pretty(example);
+      setDiagnostic('tool-diagnostic', toolDescriptions[selectedTool], '');
+    }
+
+    function classifyToolKind(tool) {
+      if (tool === 'cart.create') return 'Draft write';
+      if (tool === 'checkout.create' || tool === 'payment.create_intent') return 'Protected write';
+      if (tool === 'payment.get_status') return 'Status read';
+      return readTools.has(tool) ? 'Read' : 'Tool';
+    }
+
+    function renderToolButtons() {
+      $('tool-list').innerHTML = '';
+      for (const tool of manifest.tools) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `tool-btn${tool === selectedTool ? ' active' : ''}`;
+        button.innerHTML = `<span class="tool-name"></span><span class="tool-kind"></span>`;
+        button.querySelector('.tool-name').textContent = tool;
+        button.querySelector('.tool-kind').textContent = classifyToolKind(tool);
+        button.addEventListener('click', () => selectTool(tool));
+        $('tool-list').appendChild(button);
+      }
+    }
+
+    function selectTool(tool) {
+      selectedTool = tool;
+      $('selected-tool').textContent = tool;
+      $('selected-kind').textContent = classifyToolKind(tool);
+      renderToolButtons();
+      loadExample();
+    }
+
+    function localValidationError(code, message, details) {
+      return {
+        error: {
+          code,
+          message,
+          details: details || {},
+          retryable: false
+        }
+      };
+    }
+
+    function validateBeforeCall(args) {
+      if (requiredAuthTools.has(selectedTool) && !authToken()) {
+        return localValidationError('missing_auth', 'Authorization token is required for commerce MCP tool calls.');
+      }
+      if (selectedTool === 'cart.create' && !args.idempotency_key) {
+        return localValidationError('idempotency_key_required', 'cart.create requires an idempotency_key.');
+      }
+      if (selectedTool === 'payment.create_intent') {
+        if (!args.passport_jwt) {
+          return localValidationError('missing_passport', 'payment.create_intent requires a checkout Commerce Passport.');
+        }
+        if (!args.idempotency_key) {
+          return localValidationError('idempotency_key_required', 'payment.create_intent requires an idempotency_key.');
+        }
+      }
+      if (selectedTool === 'checkout.create') {
+        if (!args.passport_jwt) {
+          return localValidationError('missing_passport', 'checkout.create requires a checkout Commerce Passport.');
+        }
+        if (!args.idempotency_key) {
+          return localValidationError('idempotency_key_required', 'checkout.create requires an idempotency_key.');
+        }
+      }
+      if ($('caller-kind').value === 'agent' && browsePassportTools.has(selectedTool) && !args.passport_jwt) {
+        return localValidationError('missing_passport', `${selectedTool} requires a browse Commerce Passport for agent access.`);
+      }
+      if ($('caller-kind').value === 'agent' && selectedTool === 'payment.get_status' && !args.passport_jwt) {
+        return localValidationError('missing_passport', 'payment.get_status requires a payment status Commerce Passport for agent access.');
+      }
+      return null;
+    }
+
+    function classifyRemoteError(response) {
+      const rpcError = response && response.error;
+      if (rpcError) return { message: rpcError.message || 'JSON-RPC error', kind: 'error' };
+      const result = response && response.result;
+      if (!result || !result.isError || !Array.isArray(result.content) || !result.content[0]) {
+        return { message: 'Request completed.', kind: 'ok' };
+      }
+      const parsed = safeParseJson(result.content[0].text || '{}');
+      const payload = parsed.ok ? parsed.value : {};
+      const code = String(payload?.error?.code || '').toLowerCase();
+      const message = payload?.error?.message || result.content[0].text || 'Tool returned an error.';
+      const combined = `${code} ${message}`.toLowerCase();
+      if (combined.includes('auth')) return { message: `Missing auth: ${message}`, kind: 'error' };
+      if (combined.includes('passport')) return { message: `Missing or invalid passport: ${message}`, kind: 'error' };
+      if (combined.includes('policy')) return { message: `Policy denial: ${message}`, kind: 'error' };
+      if (combined.includes('disabled') || combined.includes('emergency')) return { message: `Disabled merchant: ${message}`, kind: 'error' };
+      if (combined.includes('plural') || combined.includes('provider') || combined.includes('configuration')) {
+        return { message: `Provider blocked or not configured: ${message}`, kind: 'warn' };
+      }
+      return { message, kind: 'error' };
+    }
+
+    async function sendJsonRpc(method, params) {
+      const requestBody = {
+        jsonrpc: '2.0',
+        id: nextId(),
+        method,
+        ...(params ? { params } : {})
+      };
+      setPanels({
+        method: 'POST',
+        url: `${apiBase()}/mcp`,
+        headers: { ...requestHeaders(), Authorization: bearerHeader() ? 'Bearer [redacted]' : undefined },
+        body: requestBody
+      });
+      const response = await fetch(`${apiBase()}/mcp`, {
+        method: 'POST',
+        headers: requestHeaders(),
+        body: JSON.stringify(requestBody)
+      });
+      const payload = await response.json().catch(() => ({ error: { code: 'invalid_json', message: response.statusText } }));
+      setPanels(undefined, { status: response.status, body: payload });
+      return payload;
+    }
+
+    async function fetchWellKnown() {
+      setDiagnostic('connection-diagnostic', '', '');
+      const url = new URL(`${apiBase()}/.well-known/grantex-commerce`);
+      if (merchantId()) url.searchParams.set('merchant_id', merchantId());
+      setPanels({ method: 'GET', url: url.toString(), headers: {} });
+      try {
+        const response = await fetch(url.toString());
+        const payload = await response.json().catch(() => ({ error: { code: 'invalid_json', message: response.statusText } }));
+        setPanels(undefined, { status: response.status, body: payload });
+        setDiagnostic('connection-diagnostic', response.ok ? 'Well-known profile loaded.' : 'Well-known profile request returned an error.', response.ok ? 'ok' : 'error');
+      } catch (err) {
+        setPanels(undefined, { error: err instanceof Error ? err.message : String(err) });
+        setDiagnostic('connection-diagnostic', 'Network or CORS error while fetching the well-known profile.', 'error');
+      }
+    }
+
+    async function initializeMcp() {
+      setDiagnostic('connection-diagnostic', '', '');
+      try {
+        const payload = await sendJsonRpc('initialize', {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'grantex-commerce-playground', version: '0.1.0' }
+        });
+        const diag = classifyRemoteError(payload);
+        setDiagnostic('connection-diagnostic', diag.message, diag.kind);
+      } catch (err) {
+        setPanels(undefined, { error: err instanceof Error ? err.message : String(err) });
+        setDiagnostic('connection-diagnostic', 'Network or CORS error while initializing MCP.', 'error');
+      }
+    }
+
+    async function listTools() {
+      setDiagnostic('connection-diagnostic', '', '');
+      try {
+        const payload = await sendJsonRpc('tools/list');
+        const remoteTools = payload?.result?.tools || [];
+        $('remote-tools').innerHTML = '';
+        for (const tool of remoteTools) {
+          const row = document.createElement('div');
+          row.className = 'mini-row';
+          row.innerHTML = '<code></code><span class="pill"></span>';
+          row.querySelector('code').textContent = tool.name || 'unknown';
+          row.querySelector('.pill').textContent = tool.inputSchema ? 'schema' : 'no schema';
+          $('remote-tools').appendChild(row);
+        }
+        const diag = classifyRemoteError(payload);
+        setDiagnostic('connection-diagnostic', remoteTools.length ? `Loaded ${remoteTools.length} MCP tools.` : diag.message, remoteTools.length ? 'ok' : diag.kind);
+      } catch (err) {
+        setPanels(undefined, { error: err instanceof Error ? err.message : String(err) });
+        setDiagnostic('connection-diagnostic', 'Network or CORS error while listing MCP tools.', 'error');
+      }
+    }
+
+    async function runTool() {
+      setDiagnostic('tool-diagnostic', '', '');
+      const parsed = safeParseJson($('tool-body').value);
+      if (!parsed.ok) {
+        setDiagnostic('tool-diagnostic', `Invalid JSON: ${parsed.error}`, 'error');
+        return;
+      }
+      const args = applyConnectionDefaults(parsed.value);
+      $('tool-body').value = pretty(args);
+      const localError = validateBeforeCall(args);
+      if (localError) {
+        setPanels({
+          method: 'POST',
+          url: `${apiBase()}/mcp`,
+          blocked_locally: true,
+          tool: selectedTool,
+          arguments: args
+        }, localError);
+        setDiagnostic('tool-diagnostic', localError.error.message, 'error');
+        return;
+      }
+
+      try {
+        const payload = await sendJsonRpc('tools/call', {
+          name: selectedTool,
+          arguments: args
+        });
+        const diag = classifyRemoteError(payload);
+        setDiagnostic('tool-diagnostic', diag.message, diag.kind);
+      } catch (err) {
+        setPanels(undefined, { error: err instanceof Error ? err.message : String(err) });
+        setDiagnostic('tool-diagnostic', 'Network or CORS error while calling the MCP tool.', 'error');
+      }
+    }
+
+    function saveConfig() {
+      localStorage.setItem('grantex-commerce-playground-api-base', apiBase());
+      localStorage.setItem('grantex-commerce-playground-merchant-id', merchantId());
+      setDiagnostic('connection-diagnostic', 'Connection settings saved without token or passport material.', 'ok');
+    }
+
+    function restoreConfig() {
+      const savedBase = localStorage.getItem('grantex-commerce-playground-api-base');
+      const savedMerchant = localStorage.getItem('grantex-commerce-playground-merchant-id');
+      if (savedBase) $('api-base').value = savedBase;
+      else if (location.protocol === 'http:' || location.protocol === 'https:') $('api-base').value = location.origin;
+      if (savedMerchant) $('merchant-id').value = savedMerchant;
+    }
+
+    function generateIdempotencyKey() {
+      const value = crypto.randomUUID ? crypto.randomUUID() : `demo-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      $('idempotency-key').value = value;
+      loadExample();
+    }
+
+    function clearSecrets() {
+      $('auth-token').value = '';
+      $('browse-passport').value = '';
+      $('checkout-passport').value = '';
+      $('idempotency-key').value = '';
+      loadExample();
+      setDiagnostic('connection-diagnostic', 'Secret fields cleared.', 'ok');
+    }
+
+    function clearPanels() {
+      setPanels({}, {});
+      setDiagnostic('connection-diagnostic', '', '');
+      setDiagnostic('tool-diagnostic', '', '');
+    }
+
+    $('save-config').addEventListener('click', saveConfig);
+    $('fetch-well-known').addEventListener('click', fetchWellKnown);
+    $('initialize-mcp').addEventListener('click', initializeMcp);
+    $('list-tools').addEventListener('click', listTools);
+    $('run-tool').addEventListener('click', runTool);
+    $('load-example').addEventListener('click', loadExample);
+    $('generate-key').addEventListener('click', generateIdempotencyKey);
+    $('clear-secrets').addEventListener('click', clearSecrets);
+    $('clear-panels').addEventListener('click', clearPanels);
+    $('merchant-id').addEventListener('input', loadExample);
+    $('idempotency-key').addEventListener('input', loadExample);
+    $('browse-passport').addEventListener('input', loadExample);
+    $('checkout-passport').addEventListener('input', loadExample);
+    $('caller-kind').addEventListener('change', loadExample);
+
+    restoreConfig();
+    renderToolButtons();
+    loadExample();
+  </script>
+</body>
+</html>

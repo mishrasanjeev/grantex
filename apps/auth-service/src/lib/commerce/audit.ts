@@ -1,5 +1,6 @@
 import type postgres from 'postgres';
 import { newCommerceAuditId } from './ids.js';
+import { commerceAuditWriteFailuresTotal } from '../metrics.js';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -90,35 +91,40 @@ export async function appendCommerceAudit(
   input: AppendCommerceAuditInput,
 ): Promise<CommerceAuditWriteResult> {
   const id = newCommerceAuditId();
-  const rows = await sql<{ id: string; occurred_at: string }[]>`
-    INSERT INTO commerce_audit_events (
-      id, tenant_id, merchant_id, agent_id, user_principal_id,
-      event_type, resource_type, resource_id,
-      passport_jti, policy_version, decision_id,
-      idempotency_key_hash, request_id, metadata
-    ) VALUES (
-      ${id},
-      ${input.tenantId},
-      ${input.merchantId ?? null},
-      ${input.agentId ?? null},
-      ${input.userPrincipalId ?? null},
-      ${input.eventType},
-      ${input.resourceType ?? null},
-      ${input.resourceId ?? null},
-      ${input.passportJti ?? null},
-      ${input.policyVersion ?? null},
-      ${input.decisionId ?? null},
-      ${input.idempotencyKeyHash ?? null},
-      ${input.requestId ?? null},
-      ${JSON.stringify(input.metadata ?? {})}::jsonb
-    )
-    RETURNING id, occurred_at
-  `;
-  const row = rows[0];
-  if (!row) {
-    throw new Error('commerce audit insert returned no row');
+  try {
+    const rows = await sql<{ id: string; occurred_at: string }[]>`
+      INSERT INTO commerce_audit_events (
+        id, tenant_id, merchant_id, agent_id, user_principal_id,
+        event_type, resource_type, resource_id,
+        passport_jti, policy_version, decision_id,
+        idempotency_key_hash, request_id, metadata
+      ) VALUES (
+        ${id},
+        ${input.tenantId},
+        ${input.merchantId ?? null},
+        ${input.agentId ?? null},
+        ${input.userPrincipalId ?? null},
+        ${input.eventType},
+        ${input.resourceType ?? null},
+        ${input.resourceId ?? null},
+        ${input.passportJti ?? null},
+        ${input.policyVersion ?? null},
+        ${input.decisionId ?? null},
+        ${input.idempotencyKeyHash ?? null},
+        ${input.requestId ?? null},
+        ${JSON.stringify(input.metadata ?? {})}::jsonb
+      )
+      RETURNING id, occurred_at
+    `;
+    const row = rows[0];
+    if (!row) {
+      throw new Error('commerce audit insert returned no row');
+    }
+    return { id: row.id, occurredAt: new Date(row.occurred_at).toISOString() };
+  } catch (err) {
+    commerceAuditWriteFailuresTotal.labels(input.eventType).inc();
+    throw err;
   }
-  return { id: row.id, occurredAt: new Date(row.occurred_at).toISOString() };
 }
 
 // Intentionally NOT exported: updateCommerceAudit, deleteCommerceAudit.

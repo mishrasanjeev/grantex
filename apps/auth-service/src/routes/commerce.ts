@@ -16,9 +16,17 @@ import {
 } from '../lib/commerce/ids.js';
 import { isCommerceCategoryPreset } from '../lib/commerce/presets.js';
 import { resolveCommerceCaller, type CommerceCaller } from '../lib/commerce/caller.js';
+import {
+  readCatalogItem,
+  searchCatalog,
+} from '../lib/commerce/catalog.js';
 import { commerceTenantsRoutes } from './commerce-tenants.js';
 import { commercePassportRoutes } from './commerce-passport.js';
 import { commerceConsentRoutes } from './commerce-consent.js';
+import { commercePolicyRoutes } from './commerce-policy.js';
+import { commerceProviderCredentialRoutes } from './commerce-provider-credentials.js';
+import { commerceCartPaymentRoutes } from './commerce-cart-payment.js';
+import { commerceOpsRoutes } from './commerce-ops.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -85,6 +93,14 @@ interface ProductCreateBody {
   variants?: unknown;
 }
 
+interface CatalogSearchBody {
+  merchant_id?: unknown;
+  query?: unknown;
+  filters?: unknown;
+  limit?: unknown;
+  cursor?: unknown;
+}
+
 const AVAILABILITY = new Set(['in_stock', 'out_of_stock', 'pre_order', 'back_order', 'unknown']);
 
 function isString(v: unknown): v is string {
@@ -97,6 +113,63 @@ function asInt(v: unknown): number | null {
   if (typeof v === 'number' && Number.isFinite(v) && Math.trunc(v) === v) return v;
   if (typeof v === 'string' && /^\d+$/.test(v)) return Number.parseInt(v, 10);
   return null;
+}
+
+function merchantIdForCatalogRead(request: FastifyRequest, rawMerchantId: unknown): string {
+  const caller = request.commerceCaller;
+  if (caller.kind === 'merchant') {
+    if (rawMerchantId !== undefined && rawMerchantId !== caller.merchantId) {
+      throw new CommerceHttpError(403, 'merchant_scope_violation',
+        'Merchant callers may only read their own catalog');
+    }
+    return caller.merchantId;
+  }
+  if (caller.kind === 'operator' || caller.kind === 'agent') {
+    if (!isString(rawMerchantId)) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
+        { details: { fields: { merchant_id: 'required string' } }, retryable: false });
+    }
+    return rawMerchantId;
+  }
+  throw new CommerceHttpError(403, 'caller_not_authorized',
+    'Catalog reads require operator, merchant, or CommerceAgent caller');
+}
+
+function parseCatalogFilters(value: unknown, fieldErrors: Record<string, string>): {
+  brand?: string;
+  category_preset?: string;
+  availability_status?: string;
+  currency?: string;
+} {
+  if (value === undefined) return {};
+  if (!isPlainObject(value)) {
+    fieldErrors['filters'] = 'must be an object';
+    return {};
+  }
+  const allowed = new Set(['brand', 'category_preset', 'availability_status', 'currency']);
+  const filters: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (!allowed.has(key)) {
+      fieldErrors[`filters.${key}`] = 'unknown filter';
+      continue;
+    }
+    if (!isString(raw)) {
+      fieldErrors[`filters.${key}`] = 'must be a string';
+      continue;
+    }
+    filters[key] = raw;
+  }
+  if (filters['availability_status'] && !AVAILABILITY.has(filters['availability_status'])) {
+    fieldErrors['filters.availability_status'] =
+      'must be one of: in_stock, out_of_stock, pre_order, back_order, unknown';
+  }
+  if (filters['category_preset'] && !isCommerceCategoryPreset(filters['category_preset'])) {
+    fieldErrors['filters.category_preset'] = 'must be a known commerce category preset';
+  }
+  if (filters['currency'] && !/^[A-Z]{3}$/.test(filters['currency'])) {
+    fieldErrors['filters.currency'] = 'must be an ISO 4217 uppercase currency code';
+  }
+  return filters;
 }
 
 /**
@@ -543,65 +616,83 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.get<{ Params: { productId: string } }>('/catalog/products/:productId', async (request, reply) => {
-    // GET /catalog/products/:productId — operator OR merchant for own
-    // merchant. Agent denied (this is the admin product detail endpoint;
-    // agent-facing catalog reads land in M5 via MCP catalog tools with
-    // their own caller-kind matrix and read-scoping rules).
+  app.get<{
+    Params: { productId: string };
+    Querystring: { merchant_id?: string };
+  }>('/catalog/products/:productId', async (request, reply) => {
+    // GET /catalog/products/:productId supports scoped catalog item reads for
+    // merchant, agent, or operator when scoped by tenant/merchant.
     //
-    // Finding 4 (P2): authorize BEFORE the product lookup so a denied
-    // caller never receives information about whether the product
-    // exists. Specifically:
-    //   - agent/service callers → 403 immediately, no SQL.
-    //   - merchant callers → product query bound to (tenant_id,
-    //     merchant_id), so cross-merchant product IDs return 404 (same
-    //     shape as not-in-tenant), not 403.
-    //   - operator → existing tenant-scoped query.
+    // Tenant and merchant filters are applied before item data is returned.
     const caller = request.commerceCaller;
-    if (caller.kind === 'agent' || caller.kind === 'service') {
+    if (caller.kind === 'service') {
       throw new CommerceHttpError(403, 'caller_not_authorized',
-        'This endpoint requires operator or the merchant whose data is being read');
+        'Catalog reads require operator, merchant, or CommerceAgent caller');
     }
 
-    const sql = getSql();
-    const productRows = caller.kind === 'merchant'
-      ? await sql<Record<string, unknown>[]>`
-          SELECT id, tenant_id, merchant_id, product_id, title, brand, description,
-                 image_url, category_preset, source_system, manually_maintained,
-                 archived_at, created_at, updated_at
-            FROM commerce_products
-           WHERE id = ${request.params.productId}
-             AND tenant_id = ${caller.tenantId}
-             AND merchant_id = ${caller.merchantId}
-           LIMIT 1
-        `
-      : await sql<Record<string, unknown>[]>`
-          SELECT id, tenant_id, merchant_id, product_id, title, brand, description,
-                 image_url, category_preset, source_system, manually_maintained,
-                 archived_at, created_at, updated_at
-            FROM commerce_products
-           WHERE id = ${request.params.productId}
-             AND tenant_id = ${request.commerceTenantId}
-           LIMIT 1
-        `;
-    if (!productRows[0]) {
+    let merchantId: string | null = null;
+    if (caller.kind === 'merchant') {
+      if (request.query.merchant_id !== undefined && request.query.merchant_id !== caller.merchantId) {
+        throw new CommerceHttpError(403, 'merchant_scope_violation',
+          'Merchant callers may only read their own catalog');
+      }
+      merchantId = caller.merchantId;
+    } else if (caller.kind === 'agent') {
+      if (!isString(request.query.merchant_id)) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
+          { details: { fields: { merchant_id: 'required string' } }, retryable: false });
+      }
+      merchantId = request.query.merchant_id;
+    } else if (isString(request.query.merchant_id)) {
+      merchantId = request.query.merchant_id;
+    }
+
+    const item = await readCatalogItem(getSql(), {
+      tenantId: request.commerceTenantId,
+      merchantId,
+      productRef: request.params.productId,
+    });
+    if (!item) {
       throw new CommerceHttpError(404, 'product_not_found', 'Product not found in this tenant');
     }
-    const variantRows = await sql<Record<string, unknown>[]>`
-      SELECT id, sku, parent_sku, model, variant_title, attributes,
-             price_amount, currency, tax_inclusive, gst_slab, tax_rate,
-             hsn_code, availability_status, warranty_summary,
-             return_policy_summary, source_system, last_synced_at,
-             archived_at
-      FROM commerce_product_variants
-      WHERE product_id = ${request.params.productId}
-        AND tenant_id = ${request.commerceTenantId}
-      ORDER BY created_at ASC
-    `;
-    return reply.status(200).send({
-      data: { ...productRows[0], variants: variantRows },
-    });
+    return reply.status(200).send({ data: item });
   });
+
+  app.post<{ Body: CatalogSearchBody }>(
+    '/catalog/search',
+    { config: { rateLimit: { max: 600, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+    const body = request.body ?? {};
+    const fieldErrors: Record<string, string> = {};
+    const merchantId = merchantIdForCatalogRead(request, body.merchant_id);
+    const filters = parseCatalogFilters(body.filters, fieldErrors);
+
+    if (body.query !== undefined && body.query !== null && typeof body.query !== 'string') {
+      fieldErrors['query'] = 'must be a string';
+    }
+    if (body.cursor !== undefined && body.cursor !== null && typeof body.cursor !== 'string') {
+      fieldErrors['cursor'] = 'must be a string';
+    }
+    const limit = body.limit === undefined ? 25 : asInt(body.limit);
+    if (limit === null || limit < 1 || limit > 100) {
+      fieldErrors['limit'] = 'must be an integer between 1 and 100';
+    }
+    if (Object.keys(fieldErrors).length > 0) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
+        { details: { fields: fieldErrors }, retryable: false });
+    }
+
+    const result = await searchCatalog(getSql(), {
+      tenantId: request.commerceTenantId,
+      merchantId,
+      query: typeof body.query === 'string' ? body.query : null,
+      filters,
+      limit: limit ?? 25,
+      cursor: typeof body.cursor === 'string' ? body.cursor : null,
+    });
+    return reply.status(200).send(result);
+    },
+  );
 
   app.delete<{ Params: { productId: string } }>('/catalog/products/:productId', async (request, reply) => {
     requireOperator(request);
@@ -721,4 +812,8 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   await app.register(commerceTenantsRoutes);
   await app.register(commercePassportRoutes);
   await app.register(commerceConsentRoutes);
+  await app.register(commercePolicyRoutes);
+  await app.register(commerceProviderCredentialRoutes);
+  await app.register(commerceCartPaymentRoutes);
+  await app.register(commerceOpsRoutes);
 }

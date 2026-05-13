@@ -26,19 +26,20 @@ describe('Sidebar', () => {
       'Overview', 'Agents', 'Grants', 'Bundles', 'Audit Log', 'Webhooks',
       'Policies', 'Anomalies', 'Compliance', 'Consent Records', 'Grievances',
       'Exports', 'Budgets', 'Usage', 'Domains', 'WebAuthn', 'Credentials',
-      'Events', 'MCP Servers', 'Trust Registry', 'Billing', 'Settings',
-      'SSO', 'SCIM', 'Admin',
+      'Events', 'MCP Servers', 'Commerce Payments', 'Commerce Audit',
+      'Commerce Passports', 'Commerce Settings', 'Commerce Playground',
+      'Commerce Ops', 'Trust Registry', 'Billing', 'Settings', 'SSO', 'SCIM', 'Admin',
     ];
     for (const label of expectedLinks) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });
 
-  it('renders at least 25 nav links', () => {
+  it('renders at least 30 nav links', () => {
     renderSidebar();
     const links = screen.getAllByRole('link');
-    // At least 25 NavLinks + the logo link
-    expect(links.length).toBeGreaterThanOrEqual(25);
+    // At least 30 NavLinks + the logo link
+    expect(links.length).toBeGreaterThanOrEqual(30);
   });
 
   it('applies translate-x-0 class when open', () => {
@@ -112,5 +113,9 @@ describe('Sidebar', () => {
     expect(grantsLink).toHaveAttribute('href', '/dashboard/grants');
     const settingsLink = screen.getByText('Settings').closest('a');
     expect(settingsLink).toHaveAttribute('href', '/dashboard/settings');
+    const commercePaymentsLink = screen.getByText('Commerce Payments').closest('a');
+    expect(commercePaymentsLink).toHaveAttribute('href', '/dashboard/commerce/payments');
+    const commerceOpsLink = screen.getByText('Commerce Ops').closest('a');
+    expect(commerceOpsLink).toHaveAttribute('href', '/dashboard/commerce/ops');
   });
 });

@@ -62,7 +62,8 @@ describe('Plural neutrality — core commerce models carry no Plural-specific id
   });
 
   it('lib/commerce/* modules have no "plural" outside of comments', () => {
-    const files = gather(join(root, 'lib', 'commerce'), ['.ts']);
+    const files = gather(join(root, 'lib', 'commerce'), ['.ts'])
+      .filter((f) => !f.split(/[\\/]/).includes('payment-providers'));
     expect(files.length).toBeGreaterThan(0);
     for (const f of files) {
       const content = stripTsComments(readFileSync(f, 'utf8'));

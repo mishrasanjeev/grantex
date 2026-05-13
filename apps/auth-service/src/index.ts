@@ -9,6 +9,10 @@ import { hashApiKey } from './lib/hash.js';
 import { newDeveloperId } from './lib/ids.js';
 import { startWebhookDeliveryWorker, stopWebhookDeliveryWorker } from './workers/webhookDelivery.js';
 import { startAnomalyDetectionWorker, stopAnomalyDetectionWorker } from './workers/anomalyDetection.js';
+import {
+  startCommercePaymentReconciliationWorker,
+  stopCommercePaymentReconciliationWorker,
+} from './workers/commercePaymentReconciliation.js';
 import { closeSql } from './db/client.js';
 import { closeRedis } from './redis/client.js';
 import { seedTrustRegistry } from './db/seeds/trust-registry.js';
@@ -81,12 +85,19 @@ async function main() {
   // Start background workers after the server is listening
   startWebhookDeliveryWorker(sql);
   startAnomalyDetectionWorker(sql);
+  if (config.commerceReconciliationWorkerEnabled) {
+    startCommercePaymentReconciliationWorker(sql, {
+      intervalMs: config.commerceReconciliationIntervalMs,
+      limit: config.commerceReconciliationLimit,
+    });
+  }
 
   // Graceful shutdown: stop workers, close server, then close DB/Redis connections
   const shutdown = async (signal: string) => {
     app.log.info(`Received ${signal}, shutting down gracefully...`);
     stopWebhookDeliveryWorker();
     stopAnomalyDetectionWorker();
+    stopCommercePaymentReconciliationWorker();
     await app.close();
     await closeRedis();
     await closeSql();

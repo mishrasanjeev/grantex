@@ -12,6 +12,7 @@ import { vi, beforeEach } from 'vitest';
 export const sqlMock = Object.assign(vi.fn().mockResolvedValue([]), {
   // Support sql.begin(async (tx) => { ... }) — passes sqlMock itself as the tx
   begin: vi.fn().mockImplementation(async (cb: (tx: unknown) => unknown) => cb(sqlMock)),
+  json: vi.fn((value: unknown) => value),
 });
 
 export const mockRedis = {
@@ -240,6 +241,8 @@ beforeEach(() => {
   sqlMock.mockResolvedValue([]);
   sqlMock.begin.mockReset();
   sqlMock.begin.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(sqlMock));
+  sqlMock.json.mockReset();
+  sqlMock.json.mockImplementation((value: unknown) => value);
   mockRedis.get.mockReset().mockResolvedValue(null);
   mockRedis.set.mockReset().mockResolvedValue('OK');
   mockRedis.del.mockReset().mockResolvedValue(1);

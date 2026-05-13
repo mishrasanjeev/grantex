@@ -1,0 +1,35 @@
+{
+  "purpose": "Internal sandbox pilot merchant template only. Do not use for production or live payments.",
+  "environment": "sandbox",
+  "tenant": {
+    "id": "cten_internal_sandbox",
+    "status": "active",
+    "owner_review_required": true
+  },
+  "merchant": {
+    "id": "mch_internal_sandbox_pilot",
+    "display_name": "Grantex Internal Sandbox Pilot",
+    "category_preset": "electronics_appliances",
+    "country_code": "IN",
+    "default_currency": "INR",
+    "agentic_commerce_enabled": true,
+    "verification_status": "internal_sandbox_only"
+  },
+  "provider": {
+    "provider_key": "mock",
+    "plural_live_enabled": false,
+    "plural_sandbox_ready": false,
+    "plural_blocker": "Plural API and webhook signature contract unconfirmed"
+  },
+  "policy": {
+    "active_policy_required": true,
+    "amount_cap_minor_units": 500000,
+    "currency": "INR",
+    "emergency_disable_review_required": true
+  },
+  "support": {
+    "owner": "TBD before external pilot",
+    "on_call": "TBD before external pilot",
+    "escalation": "Use docs/guides/commerce-v1-operations.mdx"
+  }
+}

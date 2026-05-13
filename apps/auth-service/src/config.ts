@@ -99,6 +99,9 @@ export const config = {
   pluralSandboxEnabled: process.env['PLURAL_SANDBOX_ENABLED'] === 'true',
   pluralLiveEnabled: process.env['PLURAL_LIVE_ENABLED'] === 'true',
   commerceLiveModeEnabled: process.env['COMMERCE_LIVE_MODE_ENABLED'] === 'true',
+  commerceReconciliationWorkerEnabled: process.env['COMMERCE_RECONCILIATION_WORKER_ENABLED'] === 'true',
+  commerceReconciliationIntervalMs: parseInt(optional('COMMERCE_RECONCILIATION_INTERVAL_MS', '300000'), 10),
+  commerceReconciliationLimit: parseInt(optional('COMMERCE_RECONCILIATION_LIMIT', '50'), 10),
 } as const;
 
 if (!config.rsaPrivateKey && !config.autoGenerateKeys) {

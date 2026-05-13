@@ -38,6 +38,20 @@ export const webhookDeliveriesTotal = new Counter({
   registers: [registry],
 });
 
+export const commerceCriticalFlowTotal = new Counter({
+  name: 'grantex_commerce_critical_flow_total',
+  help: 'Total commerce critical flow events',
+  labelNames: ['flow', 'status', 'error_code'] as const,
+  registers: [registry],
+});
+
+export const commerceAuditWriteFailuresTotal = new Counter({
+  name: 'grantex_commerce_audit_write_failures_total',
+  help: 'Total failed commerce audit writes',
+  labelNames: ['event_type'] as const,
+  registers: [registry],
+});
+
 export const anomaliesDetectedTotal = new Counter({
   name: 'grantex_anomalies_detected_total',
   help: 'Total anomalies detected',

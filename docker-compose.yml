@@ -43,6 +43,17 @@ services:
       AUTO_GENERATE_KEYS: "true"
       SEED_API_KEY: dev-api-key-local
       SEED_SANDBOX_KEY: sandbox-api-key-local
+      NODE_ENV: production
+      PUBLIC_BASE_URL: http://localhost:3001
+      ADMIN_API_KEY: local-admin-api-key
+      METRICS_API_KEY: local-metrics-api-key
+      VAULT_ENCRYPTION_KEY: 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
+      COMMERCE_V1_ENABLED: "true"
+      COMMERCE_ALLOW_AUTO_TENANT: "true"
+      COMMERCE_LOCAL_LOAD_TEST: "true"
+      PLURAL_SANDBOX_ENABLED: "true"
+      PLURAL_LIVE_ENABLED: "false"
+      COMMERCE_LIVE_MODE_ENABLED: "false"
       PORT: "3001"
       HOST: "0.0.0.0"
       # Stripe billing (optional — set these to enable billing endpoints)

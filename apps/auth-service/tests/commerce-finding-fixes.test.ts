@@ -119,10 +119,8 @@ describe('Finding 2 — caller matrix enforcement', () => {
     expect(res.json<{ error: { code: string } }>().error.code).toBe('merchant_not_found');
   });
 
-  it('GET /catalog/products/:id denies agent (admin endpoint, not for MCP catalog use)', async () => {
+  it('GET /catalog/products/:id allows a scoped agent catalog item read', async () => {
     primeTrustedAgent();
-    // The route loads the product first, then runs requireOperatorOrSelfMerchant.
-    // Prime a product so we reach the caller check.
     sqlMock.mockResolvedValueOnce([{
       id: 'cprd_X', tenant_id: TEST_COMMERCE_TENANT_ID, merchant_id: 'mch_M',
       product_id: 'P1', title: 'X', brand: null, description: null, image_url: null,
@@ -130,12 +128,16 @@ describe('Finding 2 — caller matrix enforcement', () => {
       manually_maintained: false, archived_at: null,
       created_at: new Date(), updated_at: new Date(),
     }]);
+    sqlMock.mockResolvedValueOnce([]);
     const res = await app.inject({
-      method: 'GET', url: '/v1/commerce/catalog/products/cprd_X',
+      method: 'GET', url: '/v1/commerce/catalog/products/cprd_X?merchant_id=mch_M',
       headers: { authorization: `Bearer ${await agentJwt()}` },
     });
-    expect(res.statusCode).toBe(403);
-    expect(res.json<{ error: { code: string } }>().error.code).toBe('caller_not_authorized');
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { id: string; variants: unknown[] } }>().data).toMatchObject({
+      id: 'cprd_X',
+      variants: [],
+    });
   });
 });
 
@@ -739,7 +741,7 @@ describe('Finding 3 (round 2) — disabled tenant blocks merchant/agent/consent/
 });
 
 describe('Finding 4 (round 2) — product GET no existence leak', () => {
-  it('agent caller → 403 caller_not_authorized BEFORE any product SQL', async () => {
+  it('agent caller without merchant_id -> 422 before any product SQL', async () => {
     const kp = await generateKeyPair('ES256');
     const jwk = await exportJWK(kp.publicKey) as JWK;
     const now = Math.floor(Date.now() / 1000);
@@ -762,8 +764,8 @@ describe('Finding 4 (round 2) — product GET no existence leak', () => {
       method: 'GET', url: '/v1/commerce/catalog/products/cprd_X',
       headers: { authorization: `Bearer ${jwt}` },
     });
-    expect(res.statusCode).toBe(403);
-    expect(res.json<{ error: { code: string } }>().error.code).toBe('caller_not_authorized');
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('validation_failed');
 
     // Crucially: NO SELECT against commerce_products fired.
     const productSelect = sqlMock.mock.calls.find((c) => {

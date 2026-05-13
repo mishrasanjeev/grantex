@@ -65,12 +65,12 @@ describe('Rate limiting', () => {
     // Build a fresh app so the rate limit counter is clean
     const freshApp = await buildTestApp();
 
-    // Use the lowest rate-limited endpoint: POST /v1/trust-registry/verify-dns (10/min)
-    // Send 11 requests; the 11th should be rate limited
+    // Use the lowest rate-limited endpoint: POST /v1/trust-registry/verify-dns (10/min).
+    // The handler performs DNS for a valid domain, so intentionally omit the
+    // domain and let the first 10 requests fail fast with 400. The 11th should
+    // still be blocked by rate limiting before route validation/handler work.
     for (let i = 0; i < 11; i++) {
       seedAuth();
-      // DNS verification will fail (mock returns false), but that's fine
-      sqlMock.mockResolvedValueOnce([]); // existing check (if reached)
     }
 
     let lastRes;
@@ -79,7 +79,7 @@ describe('Rate limiting', () => {
         method: 'POST',
         url: '/v1/trust-registry/verify-dns',
         headers: authHeader(),
-        payload: { domain: 'test.com' },
+        payload: {},
       });
 
       if (lastRes.statusCode === 429) break;

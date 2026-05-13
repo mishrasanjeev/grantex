@@ -44,6 +44,9 @@ import { consentBundlesRoutes } from './routes/consent-bundles.js';
 import { mcpServersRoutes } from './routes/mcp-servers.js';
 import { dpdpRoutes } from './routes/dpdp.js';
 import { commerceRoutes } from './routes/commerce.js';
+import { commerceWellKnownRoutes } from './routes/commerce-well-known.js';
+import { commerceMcpRoutes } from './routes/commerce-mcp.js';
+import { commerceProviderWebhookRoutes } from './routes/commerce-provider-webhooks.js';
 import { metricsHookPlugin } from './plugins/metricsHook.js';
 import websocket from '@fastify/websocket';
 
@@ -124,8 +127,11 @@ export async function buildApp(opts: AppOptions = {}) {
     timeWindow: '1 minute',
     keyGenerator: (req) => req.ip,
     allowList: (req) => {
-      // Skip rate limiting for JWKS (public key distribution must never be throttled)
-      return req.url.startsWith('/.well-known/');
+      // Skip rate limiting only for JWKS (public key distribution must
+      // never be throttled). Other well-known routes, including the
+      // commerce publishing profile, keep their route/global limiters.
+      return req.url === '/.well-known/jwks.json'
+        || req.url.startsWith('/.well-known/jwks.json?');
     },
   });
 
@@ -144,6 +150,8 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(consentRoutes);
   await app.register(dashboardRoutes);
   await app.register(metricsRoutes);
+  await app.register(commerceWellKnownRoutes);
+  await app.register(commerceMcpRoutes);
 
   // Protected routes
   await app.register(agentsRoutes);
@@ -184,6 +192,7 @@ export async function buildApp(opts: AppOptions = {}) {
   // The plugin's preHandler enforces the COMMERCE_V1_ENABLED flag and
   // resolves request.commerceTenantId.
   await app.register(commerceRoutes, { prefix: '/v1/commerce' });
+  await app.register(commerceProviderWebhookRoutes, { prefix: '/v1/webhooks/providers' });
 
   return app;
 }
