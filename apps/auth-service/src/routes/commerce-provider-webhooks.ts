@@ -19,7 +19,7 @@ import {
   type CommercePaymentStatus,
 } from '../lib/commerce/payment-state.js';
 import { commerceCriticalFlowTotal } from '../lib/metrics.js';
-import { commerceLogContext } from '../lib/commerce/observability.js';
+import { commerceLogContext, hashedReference } from '../lib/commerce/observability.js';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -199,7 +199,7 @@ async function insertWebhookEvent(
       ${input.replayStatus},
       ${input.processingStatus},
       ${input.payloadHash},
-      ${null},
+      NULL,
       ${JSON.stringify(input.providerMetadata ?? {})}::jsonb,
       ${input.errorCode ?? null},
       ${input.errorMessage ?? null},
@@ -447,8 +447,10 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
             request.log.warn(commerceLogContext({
               requestId: request.id,
               providerKey,
-              webhookProviderEventId: parsedFallback.event_id,
-              providerPaymentId: parsedFallback.provider_payment_id,
+              webhookProviderEventIdRef: hashedReference(parsedFallback.event_id, 'provider_event'),
+              providerPaymentIdRef: parsedFallback.provider_payment_id
+                ? hashedReference(parsedFallback.provider_payment_id, 'provider_payment')
+                : undefined,
               errorCode: err.normalized.code,
             }), 'commerce.provider_webhook.signature_failed');
             throw new CommerceHttpError(401, err.normalized.code, err.normalized.message, errorOptions);
@@ -477,8 +479,10 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
             request.log.warn(commerceLogContext({
               requestId: request.id,
               providerKey,
-              webhookProviderEventId: parsedFallback.event_id,
-              providerPaymentId: parsedFallback.provider_payment_id,
+              webhookProviderEventIdRef: hashedReference(parsedFallback.event_id, 'provider_event'),
+              providerPaymentIdRef: parsedFallback.provider_payment_id
+                ? hashedReference(parsedFallback.provider_payment_id, 'provider_payment')
+                : undefined,
               errorCode: err.normalized.code,
             }), 'commerce.provider_webhook.replay_rejected');
             throw new CommerceHttpError(409, err.normalized.code, err.normalized.message, errorOptions);
@@ -510,7 +514,7 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
           requestId: request.id,
           providerKey,
           webhookEventId: existing.id,
-          webhookProviderEventId: providerEvent.event_id,
+          webhookProviderEventIdRef: hashedReference(providerEvent.event_id, 'provider_event'),
           paymentIntentId: existing.payment_intent_id,
           status: existing.processing_status,
         }), 'commerce.provider_webhook.duplicate');
@@ -745,8 +749,10 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
         passportJti: paymentIntent?.passport_jti,
         paymentIntentId: paymentIntent?.id,
         providerKey,
-        providerPaymentId: parsed.provider_payment_id,
-        webhookProviderEventId: parsed.event_id,
+        providerPaymentIdRef: parsed.provider_payment_id
+          ? hashedReference(parsed.provider_payment_id, 'provider_payment')
+          : undefined,
+        webhookProviderEventIdRef: hashedReference(parsed.event_id, 'provider_event'),
         policyVersion: paymentIntent?.policy_version,
         decisionId: paymentIntent?.decision_id,
         status: typeof responseData['status'] === 'string' ? responseData['status'] : undefined,

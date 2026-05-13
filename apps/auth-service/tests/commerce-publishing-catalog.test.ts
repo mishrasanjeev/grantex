@@ -11,7 +11,7 @@ const OPENAPI_PATH = join(TEST_DIR, '..', '..', '..', 'docs', 'api', 'grantex-co
 const MERCHANT = 'mch_M5A';
 const OTHER_MERCHANT = 'mch_OTHER_M5A';
 const PRODUCT = 'cprd_M5A';
-const NOW = new Date('2026-05-12T10:00:00.000Z').toISOString();
+const NOW = new Date().toISOString();
 const OLD = new Date('2026-05-09T10:00:00.000Z').toISOString();
 const V1_TOOLS = [
   'merchant.get_profile',

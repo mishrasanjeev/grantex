@@ -22,7 +22,7 @@ import {
   type VerifyPassportError,
 } from '../lib/commerce/passport.js';
 import { isCommerceCategoryPreset } from '../lib/commerce/presets.js';
-import { isCommercePolicyScope, type CommercePolicyScope } from '../lib/commerce/policy.js';
+import { type CommercePolicyScope } from '../lib/commerce/policy.js';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -443,11 +443,13 @@ function validateToolArguments(
   const properties = TOOL_SCHEMAS[name]['properties'];
   if (!isPlainObject(properties)) return;
   const allowed = new Set(Object.keys(properties));
-  const fields: Record<string, string> = {};
+  const unknownKeys: string[] = [];
   for (const key of Object.keys(args)) {
-    if (!allowed.has(key)) fields[key] = 'unknown argument';
+    if (!allowed.has(key)) unknownKeys.push(key.replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 64));
   }
-  if (Object.keys(fields).length > 0) throw validationError(fields);
+  if (unknownKeys.length > 0) {
+    throw validationError({ arguments: `unknown argument(s): ${unknownKeys.join(', ')}` });
+  }
 }
 
 function normalizePaymentIntent(row: McpPaymentIntentRow): Record<string, unknown> {

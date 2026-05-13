@@ -39,7 +39,7 @@ import {
   type PaymentReconciliationResult,
 } from '../lib/commerce/payment-reconciliation.js';
 import { commerceCriticalFlowTotal } from '../lib/metrics.js';
-import { commerceLogContext } from '../lib/commerce/observability.js';
+import { commerceLogContext, hashedReference } from '../lib/commerce/observability.js';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -67,12 +67,16 @@ function isLocalLoadTestRuntime(): boolean {
     && isLocalPublicBaseUrl(process.env['PUBLIC_BASE_URL']);
 }
 
-function localLoadRateLimitAllowList(_request: FastifyRequest, key: string): boolean {
+function isLocalLoadTestClientAddress(value: string | undefined): boolean {
+  return value === '127.0.0.1'
+    || value === '::1'
+    || value === '::ffff:127.0.0.1'
+    || (typeof value === 'string' && /^172\.(1[6-9]|2\d|3[0-1])\./.test(value));
+}
+
+function localLoadRateLimitAllowList(request: FastifyRequest, key: string): boolean {
   if (!isLocalLoadTestRuntime()) return false;
-  return key === '127.0.0.1'
-    || key === '::1'
-    || key === '::ffff:127.0.0.1'
-    || key.startsWith('172.');
+  return isLocalLoadTestClientAddress(request.ip) && isLocalLoadTestClientAddress(key);
 }
 
 interface CartCreateBody {
@@ -574,7 +578,23 @@ function metadataForProvider(v: unknown): Record<string, string> {
   if (!isPlainObject(v)) return {};
   const out: Record<string, string> = {};
   for (const [k, val] of Object.entries(v)) {
-    if (typeof val === 'string' && k.length > 0) out[k] = val;
+    if (typeof val !== 'string') continue;
+    switch (k) {
+      case 'agent_session_id':
+        out.agent_session_id = val;
+        break;
+      case 'cart_reference':
+        out.cart_reference = val;
+        break;
+      case 'customer_reference':
+        out.customer_reference = val;
+        break;
+      case 'order_reference':
+        out.order_reference = val;
+        break;
+      default:
+        break;
+    }
   }
   return out;
 }
@@ -766,7 +786,7 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
           subtotal_amount, tax_amount, total_amount, status,
           expires_at, line_items_snapshot_hash, idempotency_key_hash
         ) VALUES (
-          ${cartId}, ${tenantId}, ${merchantId}, ${caller.agentId}, ${null},
+          ${cartId}, ${tenantId}, ${merchantId}, ${caller.agentId}, NULL,
           ${tx.json(asJson(lineItems))},
           ${tx.json(asJson(snapshot))},
           ${currency},
@@ -1093,7 +1113,7 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
           ${amountMinorUnits}, ${currency}, ${providerKey}, ${merchant.environment},
           ${providerResult.provider_payment_id},
           ${providerResult.provider_order_id ?? null},
-          ${null},
+          NULL,
           ${providerResult.status},
           ${tx.json(asJson(cart.line_items_snapshot))},
           ${idempotency.keyHash},
@@ -1188,7 +1208,7 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
       cartId: cart.id,
       paymentIntentId,
       providerKey,
-      providerPaymentId: providerResult.provider_payment_id,
+      providerPaymentIdRef: hashedReference(providerResult.provider_payment_id, 'provider_payment'),
       passportJti: passport.jti,
       policyVersion: policy.version,
       decisionId,
@@ -1210,9 +1230,15 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
       const fieldErrors: Record<string, string> = {};
       const successUrl = parseCheckoutUrl(body.success_url, 'success_url', fieldErrors);
       const cancelUrl = parseCheckoutUrl(body.cancel_url, 'cancel_url', fieldErrors);
+      const checkoutPassportJwt = isString(body.passport_jwt) ? body.passport_jwt : null;
+      if (!checkoutPassportJwt) fieldErrors['passport_jwt'] = 'required string';
       if (Object.keys(fieldErrors).length > 0) {
         throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
           { details: { fields: fieldErrors }, retryable: false });
+      }
+      if (!checkoutPassportJwt) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
+          { details: { fields: { passport_jwt: 'required string' } }, retryable: false });
       }
 
       const scope = cartReadScope(request);
@@ -1250,88 +1276,79 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
           'Checkout links require stored passport and policy decision evidence', { retryable: false });
       }
 
-      let checkoutPolicyVersion = paymentIntent.policy_version;
-      let checkoutDecisionId = paymentIntent.decision_id;
-      let checkoutPassportJti = paymentIntent.passport_jti;
-      if (body.passport_jwt !== undefined) {
-        if (!isString(body.passport_jwt)) {
-          throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
-            { details: { fields: { passport_jwt: 'must be a string' } }, retryable: false });
-        }
-        const policy = await loadActivePolicy(sql, tenantId, paymentIntent.merchant_id);
-        if (!policy) {
-          throw new CommerceHttpError(409, 'active_policy_required',
-            'Checkout creation requires an active merchant policy', { retryable: false });
-        }
-        const rules = validateRulesOrThrow(policy.rules);
-        const passportResult = await verifyCommercePassport(sql, getRedis(), body.passport_jwt, {
-          expectedTenantId: tenantId,
-          expectedMerchantId: paymentIntent.merchant_id,
-          mode: 'payment_affecting',
-        });
-        if (!passportResult.ok) {
-          throw new CommerceHttpError(403, passportFailureReason(passportResult.error),
-            `Commerce passport rejected: ${passportFailureReason(passportResult.error)}`, { retryable: false });
-        }
-        const passport = passportResult.passport;
-        if (passport.agentId !== paymentIntent.agent_id) {
-          throw new CommerceHttpError(403, 'agent_mismatch',
-            'Commerce Passport agent does not match the payment intent agent', { retryable: false });
-        }
-        if (passport.passportType !== 'checkout') {
-          await throwPolicyDeny(sql, request, {
-            tenantId,
-            merchantId: paymentIntent.merchant_id,
-            agentId: paymentIntent.agent_id,
-            policy,
-            decisionId: newCommercePolicyDecisionId(),
-            decision: 'deny',
-            reason: 'checkout_passport_required',
-            passportJti: passport.jti,
-            resourceType: 'commerce_payment_intent',
-            resourceId: paymentIntent.id,
-          });
-        }
-        if (passport.environment !== paymentIntent.provider_environment) {
-          throw new CommerceHttpError(403, 'environment_mismatch',
-            'Commerce Passport environment does not match payment environment', { retryable: false });
-        }
-        if (passportTtlExceeded(passport, rules)) {
-          throw new CommerceHttpError(403, 'passport_ttl_exceeded',
-            'Commerce Passport exceeds the active policy TTL cap', { retryable: false });
-        }
-        const agent = await loadAgentContext(sql, tenantId, paymentIntent.agent_id);
-        if (!agent || agent.disabled_at !== null || agent.trust_status !== 'trusted') {
-          throw new CommerceHttpError(403, 'agent_not_trusted',
-            'CommerceAgent must be trusted and enabled for checkout creation', { retryable: false });
-        }
-        const decisionId = newCommercePolicyDecisionId();
-        const evaluation = evaluateCommercePolicyRules(rules, {
-          actionScope: 'commerce:checkout.create',
-          amountMinorUnits: rowAmount(paymentIntent.amount),
-          currency: paymentIntent.currency,
-          passportScopes: passport.scopes,
-          passportMaxAmount: passport.maxAmount,
-          passportCurrency: passport.currency,
-        });
-        if (evaluation.decision !== 'allow') {
-          await throwPolicyDeny(sql, request, {
-            tenantId,
-            merchantId: paymentIntent.merchant_id,
-            agentId: paymentIntent.agent_id,
-            policy,
-            decisionId,
-            decision: evaluation.decision,
-            reason: evaluation.reason,
-            passportJti: passport.jti,
-            resourceType: 'commerce_payment_intent',
-            resourceId: paymentIntent.id,
-          });
-        }
-        checkoutPolicyVersion = policy.version;
-        checkoutDecisionId = decisionId;
-        checkoutPassportJti = passport.jti;
+      const policy = await loadActivePolicy(sql, tenantId, paymentIntent.merchant_id);
+      if (!policy) {
+        throw new CommerceHttpError(409, 'active_policy_required',
+          'Checkout creation requires an active merchant policy', { retryable: false });
       }
+      const rules = validateRulesOrThrow(policy.rules);
+      const passportResult = await verifyCommercePassport(sql, getRedis(), checkoutPassportJwt, {
+        expectedTenantId: tenantId,
+        expectedMerchantId: paymentIntent.merchant_id,
+        mode: 'payment_affecting',
+      });
+      if (!passportResult.ok) {
+        throw new CommerceHttpError(403, passportFailureReason(passportResult.error),
+          `Commerce passport rejected: ${passportFailureReason(passportResult.error)}`, { retryable: false });
+      }
+      const passport = passportResult.passport;
+      if (passport.agentId !== paymentIntent.agent_id) {
+        throw new CommerceHttpError(403, 'agent_mismatch',
+          'Commerce Passport agent does not match the payment intent agent', { retryable: false });
+      }
+      if (passport.passportType !== 'checkout') {
+        await throwPolicyDeny(sql, request, {
+          tenantId,
+          merchantId: paymentIntent.merchant_id,
+          agentId: paymentIntent.agent_id,
+          policy,
+          decisionId: newCommercePolicyDecisionId(),
+          decision: 'deny',
+          reason: 'checkout_passport_required',
+          passportJti: passport.jti,
+          resourceType: 'commerce_payment_intent',
+          resourceId: paymentIntent.id,
+        });
+      }
+      if (passport.environment !== paymentIntent.provider_environment) {
+        throw new CommerceHttpError(403, 'environment_mismatch',
+          'Commerce Passport environment does not match payment environment', { retryable: false });
+      }
+      if (passportTtlExceeded(passport, rules)) {
+        throw new CommerceHttpError(403, 'passport_ttl_exceeded',
+          'Commerce Passport exceeds the active policy TTL cap', { retryable: false });
+      }
+      const agent = await loadAgentContext(sql, tenantId, paymentIntent.agent_id);
+      if (!agent || agent.disabled_at !== null || agent.trust_status !== 'trusted') {
+        throw new CommerceHttpError(403, 'agent_not_trusted',
+          'CommerceAgent must be trusted and enabled for checkout creation', { retryable: false });
+      }
+      const decisionId = newCommercePolicyDecisionId();
+      const evaluation = evaluateCommercePolicyRules(rules, {
+        actionScope: 'commerce:checkout.create',
+        amountMinorUnits: rowAmount(paymentIntent.amount),
+        currency: paymentIntent.currency,
+        passportScopes: passport.scopes,
+        passportMaxAmount: passport.maxAmount,
+        passportCurrency: passport.currency,
+      });
+      if (evaluation.decision !== 'allow') {
+        await throwPolicyDeny(sql, request, {
+          tenantId,
+          merchantId: paymentIntent.merchant_id,
+          agentId: paymentIntent.agent_id,
+          policy,
+          decisionId,
+          decision: evaluation.decision,
+          reason: evaluation.reason,
+          passportJti: passport.jti,
+          resourceType: 'commerce_payment_intent',
+          resourceId: paymentIntent.id,
+        });
+      }
+      const checkoutPolicyVersion = policy.version;
+      const checkoutDecisionId = decisionId;
+      const checkoutPassportJti = passport.jti;
 
       try {
         assertPaymentStatusTransition(paymentIntent.status, 'checkout_created');
@@ -1423,7 +1440,7 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
             agentId: paymentIntent.agent_id,
             paymentIntentId: paymentIntent.id,
             providerKey: paymentIntent.provider,
-            providerPaymentId: paymentIntent.provider_payment_id,
+            providerPaymentIdRef: hashedReference(paymentIntent.provider_payment_id, 'provider_payment'),
             errorCode: err.normalized.code,
             idempotencyKeyHash: idempotency.keyHash,
           }), 'commerce.checkout_link.provider_error');
@@ -1534,7 +1551,7 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
         cartId: paymentIntent.cart_id,
         paymentIntentId: paymentIntent.id,
         providerKey: paymentIntent.provider,
-        providerPaymentId: paymentIntent.provider_payment_id,
+        providerPaymentIdRef: hashedReference(paymentIntent.provider_payment_id, 'provider_payment'),
         passportJti: checkoutPassportJti,
         policyVersion: checkoutPolicyVersion,
         decisionId: checkoutDecisionId,
@@ -1592,7 +1609,9 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
         agentId: paymentIntent.agent_id,
         paymentIntentId: paymentIntent.id,
         providerKey: paymentIntent.provider,
-        providerPaymentId: paymentIntent.provider_payment_id,
+        providerPaymentIdRef: paymentIntent.provider_payment_id
+          ? hashedReference(paymentIntent.provider_payment_id, 'provider_payment')
+          : undefined,
         errorCode: result.error.code,
       }), 'commerce.payment_intent.reconcile_provider_error');
       const statusCode = result.error.provider_error_code === 'provider_payment_missing' ? 409 : 503;
@@ -1624,7 +1643,9 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
       agentId: result.paymentIntent.agent_id,
       paymentIntentId: result.paymentIntent.id,
       providerKey: result.paymentIntent.provider,
-      providerPaymentId: result.paymentIntent.provider_payment_id,
+      providerPaymentIdRef: result.paymentIntent.provider_payment_id
+        ? hashedReference(result.paymentIntent.provider_payment_id, 'provider_payment')
+        : undefined,
       status: result.kind,
     }), 'commerce.payment_intent.reconciled');
     return reply.status(200).send(response);

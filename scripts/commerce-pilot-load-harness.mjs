@@ -52,11 +52,20 @@ function boolArg(name) {
 function isLocalBaseUrl(value) {
   try {
     const url = new URL(value);
-    return (url.protocol === 'http:' || url.protocol === 'https:')
-      && ['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
+    return url.protocol === 'http:'
+      && ['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname)
+      && url.username === ''
+      && url.password === '';
   } catch {
     return false;
   }
+}
+
+function requireLocalBaseUrl(value) {
+  if (!isLocalBaseUrl(value)) {
+    throw new Error('Refusing to run commerce pilot load harness against a non-local API base URL');
+  }
+  return new URL(value).origin;
 }
 
 function parseCsv(value) {
@@ -76,6 +85,9 @@ function loadEnvFile(path) {
     const eq = line.indexOf('=');
     if (eq <= 0) continue;
     out[line.slice(0, eq)] = line.slice(eq + 1);
+  }
+  if (out.COMMERCE_LOAD_API_BASE) {
+    out.COMMERCE_LOAD_API_BASE = requireLocalBaseUrl(out.COMMERCE_LOAD_API_BASE);
   }
   return out;
 }
@@ -494,10 +506,10 @@ async function main() {
   }
 
   const envFileValues = loadEnvFile(arg('--env-file'));
-  const baseUrl = arg('--api-base', envValue(envFileValues, 'COMMERCE_LOAD_API_BASE', 'http://localhost:3001'));
-  if (!isLocalBaseUrl(baseUrl)) {
-    throw new Error('Refusing to run commerce pilot load harness against a non-local API base URL');
-  }
+  const baseUrl = requireLocalBaseUrl(arg(
+    '--api-base',
+    envValue(envFileValues, 'COMMERCE_LOAD_API_BASE', 'http://localhost:3001'),
+  ));
 
   const selected = selectedTargets();
   const context = buildContext(selected, envFileValues);

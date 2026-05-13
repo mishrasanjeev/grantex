@@ -316,8 +316,8 @@ export async function reconcilePaymentIntent(
              provider_metadata = COALESCE(provider_metadata, '{}'::jsonb)
                || ${JSON.stringify(providerMetadata)}::jsonb,
              last_reconciliation_attempt_at = NOW(),
-             last_reconciliation_error = ${null},
-             last_reconciliation_retryable = ${null},
+             last_reconciliation_error = NULL,
+             last_reconciliation_retryable = NULL,
              reconciled_at = NOW(),
              updated_at = NOW()
        WHERE id = ${row.id}

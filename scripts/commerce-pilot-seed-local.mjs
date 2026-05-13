@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from '../apps/auth-service/node_modules/postgres/src/index.js';
@@ -16,8 +16,9 @@ const repoRoot = resolve(__dirname, '..');
 const migrationsDir = join(repoRoot, 'apps', 'auth-service', 'src', 'db', 'migrations');
 
 const LOCAL_VAULT_KEY_HEX = '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
-const OPERATOR_API_KEY = 'sandbox-api-key-local';
 const AGENT_API_KEY = 'grtx_agent_local_pilot_seed_00000000000000000001';
+const OPERATOR_API_KEY_HASH = 'd0b2ccd622b1e449a13665965a6466cf8664e3183c659812350e60240f6877be';
+const AGENT_API_KEY_HASH = '77b132333ea116c123bc1642432b7a9e0cbca9ee1232c4b21f5edad0b880928a';
 const MOCK_WEBHOOK_SECRET = 'mock-webhook-secret';
 const TENANT_ID = 'cten_internal_sandbox';
 const DEVELOPER_ID = 'dev_commerce_local_pilot';
@@ -53,6 +54,12 @@ function boolArg(name) {
 
 function sha256hex(value) {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function syntheticLocalApiKeyHash(kind) {
+  if (kind === 'operator') return OPERATOR_API_KEY_HASH;
+  if (kind === 'agent') return AGENT_API_KEY_HASH;
+  throw new Error(`Unknown synthetic local API key kind: ${kind}`);
 }
 
 function isLocalDatabaseUrl(value) {
@@ -245,7 +252,7 @@ async function signCheckoutPassport(sql, runId, jwtIssuer) {
 }
 
 async function ensureDeveloper(sql) {
-  const keyHash = sha256hex(OPERATOR_API_KEY);
+  const keyHash = syntheticLocalApiKeyHash('operator');
   const existing = await sql`SELECT id FROM developers WHERE api_key_hash = ${keyHash} LIMIT 1`;
   if (existing[0]?.id) return existing[0].id;
   await sql`
@@ -298,7 +305,7 @@ async function seedBaseData(sql) {
       id, tenant_id, display_name, agent_type, api_key_hash, trust_status, disabled_at
     ) VALUES (
       ${AGENT_ID}, ${TENANT_ID}, 'Commerce Local Pilot Agent', 'sales',
-      ${sha256hex(AGENT_API_KEY)}, 'trusted', NULL
+      ${syntheticLocalApiKeyHash('agent')}, 'trusted', NULL
     )
     ON CONFLICT (id) DO UPDATE SET
       api_key_hash = EXCLUDED.api_key_hash,

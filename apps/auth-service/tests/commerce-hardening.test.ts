@@ -16,6 +16,9 @@ const OPENAPI_PATH = join(TEST_DIR, '..', '..', '..', 'docs', 'api', 'grantex-co
 const ROUTES_DIR = join(TEST_DIR, '..', 'src', 'routes');
 const OPS_GUIDE_PATH = join(TEST_DIR, '..', '..', '..', 'docs', 'guides', 'commerce-v1-operations.mdx');
 const COMPOSE_PATH = join(TEST_DIR, '..', '..', '..', 'docker-compose.yml');
+const WEB_VALIDATE_PATH = join(TEST_DIR, '..', '..', '..', 'web', 'commerce-playground.validate.mjs');
+const SEED_SCRIPT_PATH = join(TEST_DIR, '..', '..', '..', 'scripts', 'commerce-pilot-seed-local.mjs');
+const LOAD_HARNESS_PATH = join(TEST_DIR, '..', '..', '..', 'scripts', 'commerce-pilot-load-harness.mjs');
 
 function readRoute(name: string): string {
   return readFileSync(join(ROUTES_DIR, name), 'utf8');
@@ -58,12 +61,30 @@ describe('Commerce M6A observability hardening', () => {
       agent_id: 'cag_TEST',
       passport_jti_ref: `sha256:${sha256hex(rawPassportJti).slice(0, 16)}`,
       payment_intent_id: 'cpi_TEST',
-      provider_payment_id: 'mock_pay_TEST',
+      provider_payment_id_ref: `provider_payment:${sha256hex('mock_pay_TEST').slice(0, 16)}`,
       idempotency_key_hash: sha256hex(rawIdempotencyKey),
       error_code: 'provider_timeout',
     });
     expect(serialized).not.toContain(rawPassportJti);
     expect(serialized).not.toContain(rawIdempotencyKey);
+    expect(serialized).not.toContain('mock_pay_TEST');
+  });
+
+  it('sanitizes log control characters and hashes provider-controlled webhook identifiers', () => {
+    const context = commerceLogContext({
+      requestId: 'req_TEST',
+      providerPaymentId: 'mock_pay_UNSAFE\nVALUE',
+      webhookProviderEventId: 'evt_UNSAFE\rVALUE',
+      status: 'processed\tok',
+    });
+
+    const serialized = JSON.stringify(context);
+    expect(context.provider_payment_id_ref).toBe(`provider_payment:${sha256hex('mock_pay_UNSAFE\nVALUE').slice(0, 16)}`);
+    expect(context.webhook_provider_event_id_ref).toBe(`provider_event:${sha256hex('evt_UNSAFE\rVALUE').slice(0, 16)}`);
+    expect(context.status).toBe('processed_ok');
+    expect(serialized).not.toContain('mock_pay_UNSAFE');
+    expect(serialized).not.toContain('evt_UNSAFE');
+    expect(serialized).not.toMatch(/[\r\n\t]/);
   });
 
   it('mock provider metadata stores idempotency hash only, not plaintext prefixes', async () => {
@@ -297,10 +318,50 @@ describe('Commerce M6C security and rate-limit hardening', () => {
     expect(cartPayment).toContain('PLURAL_LIVE_ENABLED');
     expect(cartPayment).toContain('PUBLIC_BASE_URL');
     expect(cartPayment).toContain('isLocalPublicBaseUrl');
+    expect(cartPayment).toContain('isLocalLoadTestClientAddress(request.ip)');
+    expect(cartPayment).toContain('isLocalLoadTestClientAddress(key)');
     expect(compose).toContain('COMMERCE_LOCAL_LOAD_TEST: "true"');
     expect(compose).toContain('COMMERCE_LIVE_MODE_ENABLED: "false"');
     expect(compose).toContain('PLURAL_LIVE_ENABLED: "false"');
     expect(compose).toContain('PUBLIC_BASE_URL: http://localhost:3001');
+  });
+
+  it('keeps CodeQL review hardening in static commerce scripts and route validators', () => {
+    const playgroundValidate = readFileSync(WEB_VALIDATE_PATH, 'utf8');
+    const seedScript = readFileSync(SEED_SCRIPT_PATH, 'utf8');
+    const loadHarness = readFileSync(LOAD_HARNESS_PATH, 'utf8');
+    const mcpRoute = readRoute('commerce-mcp.ts');
+    const cartPayment = readRoute('commerce-cart-payment.ts');
+    const webhooks = readRoute('commerce-provider-webhooks.ts');
+    const reconciliation = readFileSync(join(ROUTES_DIR, '..', 'lib', 'commerce', 'payment-reconciliation.ts'), 'utf8');
+
+    expect(playgroundValidate).toContain('matchAll(/<script\\b([^>]*)>([\\s\\S]*?)<\\/script\\s*>/gi)');
+    expect(playgroundValidate).toContain("/\\btype=[\"']application\\/json[\"']/i");
+
+    expect(seedScript).not.toContain('existsSync');
+    expect(seedScript).not.toContain("const OPERATOR_API_KEY =");
+    expect(seedScript).toContain('syntheticLocalApiKeyHash');
+    expect(seedScript).toContain('OPERATOR_API_KEY_HASH');
+    expect(seedScript).toContain('AGENT_API_KEY_HASH');
+
+    expect(mcpRoute).toContain('unknownKeys.push');
+    expect(mcpRoute).toContain("validationError({ arguments:");
+
+    expect(cartPayment).toContain("case 'order_reference':");
+    expect(cartPayment).toContain("fieldErrors['passport_jwt'] = 'required string'");
+    expect(cartPayment).toContain("providerPaymentIdRef: hashedReference");
+    expect(cartPayment).not.toContain('if (body.passport_jwt !== undefined)');
+
+    expect(webhooks).toContain('webhookProviderEventIdRef: hashedReference');
+    expect(webhooks).toContain('providerPaymentIdRef:');
+
+    expect(reconciliation).toContain('last_reconciliation_error = NULL');
+    expect(reconciliation).toContain('last_reconciliation_retryable = NULL');
+
+    expect(loadHarness).toContain('function requireLocalBaseUrl');
+    expect(loadHarness).toContain('out.COMMERCE_LOAD_API_BASE = requireLocalBaseUrl(out.COMMERCE_LOAD_API_BASE)');
+    expect(loadHarness).toContain("url.protocol === 'http:'");
+    expect(loadHarness).toContain("url.password === ''");
   });
 
   it('documents deferred webhook replay and emergency re-enable blockers', () => {

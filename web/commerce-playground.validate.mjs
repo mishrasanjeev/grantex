@@ -9,7 +9,7 @@ const repoRoot = join(currentDir, '..');
 const catalogSource = readFileSync(join(repoRoot, 'apps', 'auth-service', 'src', 'lib', 'commerce', 'catalog.ts'), 'utf8');
 
 const manifestMatch = html.match(
-  /<script type="application\/json" id="commerce-playground-manifest">([\s\S]*?)<\/script>/,
+  /<script\b[^>]*\btype=["']application\/json["'][^>]*\bid=["']commerce-playground-manifest["'][^>]*>([\s\S]*?)<\/script\s*>/i,
 );
 assert.ok(manifestMatch, 'commerce playground manifest is present');
 
@@ -60,7 +60,9 @@ assert.deepEqual(
   'localStorage is limited to non-secret connection settings',
 );
 
-const runnableScripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
+const runnableScripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)]
+  .filter((match) => !/\btype=["']application\/json["']/i.test(match[1]))
+  .map((match) => match[2]);
 assert.ok(runnableScripts.length > 0, 'playground browser script is present');
 for (const script of runnableScripts) {
   new Function(script);

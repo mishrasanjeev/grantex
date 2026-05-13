@@ -21,7 +21,7 @@ const SUBJECT = 'user_M5B';
 const KID = 'commerce-passport-20260512-aabbccdd';
 const AGENT_TOKEN = 'grtx_agent_M5BXXXXXXXXXXXXXXXXXXXXXXXX';
 const MERCHANT_TOKEN = 'grtx_sk_sandbox_M5BXXXXXXXXXXXXXXXXXXXXXXXX';
-const NOW = new Date('2026-05-12T10:00:00.000Z').toISOString();
+const NOW = new Date().toISOString();
 
 const V1_TOOLS = [
   'merchant.get_profile',
@@ -391,7 +391,7 @@ describe('POST /mcp JSON-RPC protocol', () => {
 
     expectToolError(res, 'validation_failed');
     const body = resultJson<{ error: { details: { fields: Record<string, string> } } }>(res);
-    expect(body.error.details.fields).toMatchObject({ unexpected: 'unknown argument' });
+    expect(body.error.details.fields).toMatchObject({ arguments: 'unknown argument(s): unexpected' });
   });
 });
 

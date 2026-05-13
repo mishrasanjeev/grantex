@@ -201,10 +201,11 @@ function cartPayload(): Record<string, unknown> {
   };
 }
 
-function checkoutPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+async function checkoutPayload(overrides: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
   return {
     success_url: 'https://merchant.example/success',
     cancel_url: 'https://merchant.example/cancel',
+    passport_jwt: await passport(),
     ...overrides,
   };
 }
@@ -309,12 +310,16 @@ function primePaymentDenyBase(opts: {
 
 function primeCheckoutBase(opts: {
   paymentRow?: Record<string, unknown>;
+  policyRow?: Record<string, unknown>;
+  agentRow?: Record<string, unknown>;
+  revocationRows?: Record<string, unknown>[];
   updatedRow?: Record<string, unknown>;
   auditId?: string;
 } = {}): void {
   seedAgentAuth();
   const base = opts.paymentRow ?? paymentIntentRow({ status: 'authorized' });
   sqlMock.mockResolvedValueOnce([base]);
+  primeCheckoutSecurity(opts);
   sqlMock.mockResolvedValueOnce([]);
   const checkoutCreated = {
     ...base,
@@ -332,6 +337,17 @@ function primeCheckoutBase(opts: {
   }]);
   sqlMock.mockResolvedValueOnce([{ id: opts.auditId ?? 'caud_CHECKOUT_LINK_CREATED', occurred_at: new Date().toISOString() }]);
   sqlMock.mockResolvedValueOnce([]);
+}
+
+function primeCheckoutSecurity(opts: {
+  policyRow?: Record<string, unknown>;
+  agentRow?: Record<string, unknown>;
+  revocationRows?: Record<string, unknown>[];
+} = {}): void {
+  sqlMock.mockResolvedValueOnce([opts.policyRow ?? policy()]);
+  sqlMock.mockResolvedValueOnce([{ public_key_jwk: publicJwk, retired_at: null }]);
+  sqlMock.mockResolvedValueOnce(opts.revocationRows ?? []);
+  sqlMock.mockResolvedValueOnce([opts.agentRow ?? agentContext()]);
 }
 
 function flattenedSqlCalls(): string {
@@ -668,7 +684,7 @@ describe('Commerce checkout link API', () => {
       method: 'POST',
       url: `/v1/commerce/payments/intents/${PAYMENT_INTENT}/checkout-link`,
       headers: { ...agentHeader(), 'idempotency-key': 'checkout-key-1' },
-      payload: checkoutPayload(),
+      payload: await checkoutPayload(),
     });
 
     expect(res.statusCode).toBe(201);
@@ -689,16 +705,17 @@ describe('Commerce checkout link API', () => {
       method: 'POST',
       url: `/v1/commerce/payments/intents/${PAYMENT_INTENT}/checkout-link`,
       headers: agentHeader(),
-      payload: checkoutPayload(),
+      payload: await checkoutPayload(),
     });
     expect(res.statusCode).toBe(400);
     expect(res.json<{ error: { code: string } }>().error.code).toBe('idempotency_key_required');
   });
 
   it('replays checkout link creation for the same idempotency key and body', async () => {
-    const payload = checkoutPayload();
+    const payload = await checkoutPayload();
     seedAgentAuth();
     sqlMock.mockResolvedValueOnce([paymentIntentRow({ status: 'authorized' })]);
+    primeCheckoutSecurity();
     sqlMock.mockResolvedValueOnce([{
       id: 'cidm_CHECKOUT',
       request_body_hash: hashRequestBody(payload),
@@ -726,9 +743,10 @@ describe('Commerce checkout link API', () => {
   });
 
   it('rejects checkout link idempotency conflicts and audits them', async () => {
-    const payload = checkoutPayload();
+    const payload = await checkoutPayload();
     seedAgentAuth();
     sqlMock.mockResolvedValueOnce([paymentIntentRow({ status: 'authorized' })]);
+    primeCheckoutSecurity();
     sqlMock.mockResolvedValueOnce([{
       id: 'cidm_CHECKOUT_CONFLICT',
       request_body_hash: hashRequestBody({ ...payload, cancel_url: 'https://merchant.example/other-cancel' }),
@@ -756,7 +774,7 @@ describe('Commerce checkout link API', () => {
       method: 'POST',
       url: `/v1/commerce/payments/intents/${PAYMENT_INTENT}/checkout-link`,
       headers: { ...agentHeader(), 'idempotency-key': 'checkout-key-bad-url' },
-      payload: checkoutPayload({
+      payload: await checkoutPayload({
         success_url: 'http://evil.example/success',
         cancel_url: 'not-a-url',
       }),
@@ -774,7 +792,7 @@ describe('Commerce checkout link API', () => {
       method: 'POST',
       url: '/v1/commerce/payments/intents/cpi_CROSS_TENANT/checkout-link',
       headers: { ...agentHeader(), 'idempotency-key': 'checkout-key-missing' },
-      payload: checkoutPayload(),
+      payload: await checkoutPayload(),
     });
     expect(res.statusCode).toBe(404);
     expect(res.json<{ error: { code: string } }>().error.code).toBe('payment_intent_not_found');
@@ -783,13 +801,14 @@ describe('Commerce checkout link API', () => {
   it('rejects and audits invalid checkout link status transitions', async () => {
     seedAgentAuth();
     sqlMock.mockResolvedValueOnce([paymentIntentRow({ status: 'created' })]);
+    primeCheckoutSecurity();
     sqlMock.mockResolvedValueOnce([{ id: 'caud_INVALID_CHECKOUT_TRANSITION', occurred_at: new Date().toISOString() }]);
 
     const res = await app.inject({
       method: 'POST',
       url: `/v1/commerce/payments/intents/${PAYMENT_INTENT}/checkout-link`,
       headers: { ...agentHeader(), 'idempotency-key': 'checkout-key-invalid-status' },
-      payload: checkoutPayload(),
+      payload: await checkoutPayload(),
     });
 
     expect(res.statusCode).toBe(409);
@@ -801,13 +820,14 @@ describe('Commerce checkout link API', () => {
   it('returns explicit safe provider error while configured provider remains blocked', async () => {
     seedAgentAuth();
     sqlMock.mockResolvedValueOnce([paymentIntentRow({ status: 'authorized', provider: 'plural' })]);
+    primeCheckoutSecurity();
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'POST',
       url: `/v1/commerce/payments/intents/${PAYMENT_INTENT}/checkout-link`,
       headers: { ...agentHeader(), 'idempotency-key': 'checkout-key-blocked-provider' },
-      payload: checkoutPayload(),
+      payload: await checkoutPayload(),
     });
 
     expect(res.statusCode).toBe(503);
