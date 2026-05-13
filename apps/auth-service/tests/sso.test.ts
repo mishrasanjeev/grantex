@@ -47,6 +47,7 @@ import {
   verifyIdToken,
   parseSamlResponse,
 } from '../src/lib/sso.js';
+import { setSafeFetchForTests } from '../src/lib/url-security.js';
 import { signSsoState } from '../src/routes/sso.js';
 
 const mockedResolveConnection = vi.mocked(resolveConnection);
@@ -61,6 +62,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  setSafeFetchForTests(null);
   mockedResolveConnection.mockReset();
   mockedVerifyIdToken.mockReset().mockResolvedValue({
     sub: 'idp_user_01',
@@ -600,6 +602,7 @@ describe('POST /sso/callback/oidc', () => {
         json: () => Promise.resolve({ id_token: 'mock.id.token', access_token: 'at_xxx' }),
       }),
     );
+    setSafeFetchForTests(async (url, init, _policy) => fetch(url, init));
 
     const res = await app.inject({
       method: 'POST',
@@ -634,6 +637,7 @@ describe('POST /sso/callback/oidc', () => {
       json: () => Promise.resolve({ id_token: 'mock.id.token', access_token: 'at_xxx' }),
     });
     vi.stubGlobal('fetch', fetchMock);
+    setSafeFetchForTests(async (url, init, policy) => fetchMock(url, init, policy));
 
     const res = await app.inject({
       method: 'POST',
@@ -711,6 +715,7 @@ describe('POST /sso/callback/oidc', () => {
       'fetch',
       vi.fn().mockResolvedValue({ ok: false, status: 400 }),
     );
+    setSafeFetchForTests(async (url, init, _policy) => fetch(url, init));
 
     const res = await app.inject({
       method: 'POST',
@@ -732,6 +737,7 @@ describe('POST /sso/callback/oidc', () => {
         json: () => Promise.resolve({ id_token: 'bad.token.sig', access_token: 'at_xxx' }),
       }),
     );
+    setSafeFetchForTests(async (url, init, _policy) => fetch(url, init));
 
     const res = await app.inject({
       method: 'POST',
@@ -915,6 +921,7 @@ describe('GET /sso/callback (legacy)', () => {
         json: () => Promise.resolve({ id_token: mockIdToken, access_token: 'at_xxx' }),
       }),
     );
+    setSafeFetchForTests(async (url, init, _policy) => fetch(url, init));
 
     const res = await app.inject({
       method: 'GET',
@@ -938,6 +945,7 @@ describe('GET /sso/callback (legacy)', () => {
         json: () => Promise.resolve({ id_token: 'bad.token.sig', access_token: 'at_xxx' }),
       }),
     );
+    setSafeFetchForTests(async (url, init, _policy) => fetch(url, init));
 
     const res = await app.inject({
       method: 'GET',
@@ -953,6 +961,7 @@ describe('GET /sso/callback (legacy)', () => {
     sqlMock.mockResolvedValueOnce([SSO_CONFIG_ROW]);
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400 }));
+    setSafeFetchForTests(async (url, init, _policy) => fetch(url, init));
 
     const res = await app.inject({
       method: 'GET',

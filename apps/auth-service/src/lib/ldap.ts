@@ -12,7 +12,7 @@
  */
 
 import { config as appConfig } from '../config.js';
-import { validateOutboundUrl } from './url-security.js';
+import { safeConnect, validateOutboundUrl } from './url-security.js';
 
 export interface LdapConfig {
   ldapUrl: string;
@@ -109,10 +109,6 @@ export function getLdapClient(): LdapClient {
 function createDefaultLdapClient(): LdapClient {
   return {
     async authenticate(config, username, password): Promise<LdapUserInfo> {
-      // Dynamic import to avoid loading net/tls in test environments
-      const net = await import('node:net');
-      const tls = await import('node:tls');
-
       const url = validateOutboundUrl(config.ldapUrl, {
         allowedProtocols: ['ldap:', 'ldaps:'],
         allowPrivateHosts: appConfig.allowPrivateSsoHosts,
@@ -121,18 +117,20 @@ function createDefaultLdapClient(): LdapClient {
       if (url.protocol === 'ldap:' && !config.tlsEnabled && !appConfig.allowInsecureSsoUrls) {
         throw new Error('Insecure LDAP URLs are disabled; use LDAPS or enable SSO_ALLOW_INSECURE_URLS');
       }
-      const host = url.hostname;
       const port = parseInt(url.port || (config.tlsEnabled ? '636' : '389'), 10);
 
       // Helper: create a connected socket
       const connect = (): Promise<import('node:net').Socket> =>
-        new Promise((resolve, reject) => {
-          const socket = config.tlsEnabled
-            ? tls.connect({ host, port, servername: host, rejectUnauthorized: appConfig.ldapTlsRejectUnauthorized }, () => resolve(socket as unknown as import('node:net').Socket))
-            : net.createConnection({ host, port }, () => resolve(socket));
-          socket.on('error', reject);
-          socket.setTimeout(10_000);
-          socket.on('timeout', () => { socket.destroy(); reject(new Error('LDAP connection timeout')); });
+        safeConnect(config.ldapUrl, {
+          port,
+          tls: config.tlsEnabled,
+          rejectUnauthorized: appConfig.ldapTlsRejectUnauthorized,
+          timeoutMs: 10_000,
+          policy: {
+            allowedProtocols: ['ldap:', 'ldaps:'],
+            allowPrivateHosts: appConfig.allowPrivateSsoHosts,
+            allowInsecureHttp: true,
+          },
         });
 
       // Helper: send LDAP bind request (simplified BER encoding)
@@ -201,9 +199,6 @@ function createDefaultLdapClient(): LdapClient {
     },
 
     async testConnection(config): Promise<{ success: boolean; error?: string }> {
-      const net = await import('node:net');
-      const tls = await import('node:tls');
-
       try {
         const url = validateOutboundUrl(config.ldapUrl, {
           allowedProtocols: ['ldap:', 'ldaps:'],
@@ -213,17 +208,20 @@ function createDefaultLdapClient(): LdapClient {
         if (url.protocol === 'ldap:' && !config.tlsEnabled && !appConfig.allowInsecureSsoUrls) {
           throw new Error('Insecure LDAP URLs are disabled; use LDAPS or enable SSO_ALLOW_INSECURE_URLS');
         }
-        const host = url.hostname;
         const port = parseInt(url.port || (config.tlsEnabled ? '636' : '389'), 10);
 
-        await new Promise<void>((resolve, reject) => {
-          const socket = config.tlsEnabled
-            ? tls.connect({ host, port, servername: host, rejectUnauthorized: appConfig.ldapTlsRejectUnauthorized }, () => { socket.destroy(); resolve(); })
-            : net.createConnection({ host, port }, () => { socket.destroy(); resolve(); });
-          socket.on('error', reject);
-          socket.setTimeout(5_000);
-          socket.on('timeout', () => { socket.destroy(); reject(new Error('Connection timeout')); });
+        const socket = await safeConnect(config.ldapUrl, {
+          port,
+          tls: config.tlsEnabled,
+          rejectUnauthorized: appConfig.ldapTlsRejectUnauthorized,
+          timeoutMs: 5_000,
+          policy: {
+            allowedProtocols: ['ldap:', 'ldaps:'],
+            allowPrivateHosts: appConfig.allowPrivateSsoHosts,
+            allowInsecureHttp: true,
+          },
         });
+        socket.destroy();
 
         return { success: true };
       } catch (err) {
