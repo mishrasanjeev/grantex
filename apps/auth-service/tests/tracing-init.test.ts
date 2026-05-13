@@ -32,7 +32,7 @@ vi.mock('@opentelemetry/exporter-trace-otlp-http', () => ({
 }));
 
 vi.mock('@opentelemetry/resources', () => ({
-  Resource: vi.fn(function () {}),
+  resourceFromAttributes: vi.fn().mockReturnValue({}),
 }));
 
 vi.mock('@opentelemetry/semantic-conventions', () => ({
