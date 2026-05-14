@@ -102,14 +102,18 @@ function isLocalhost(url) {
   return ['localhost', '127.0.0.1', '::1', '[::1]'].includes(url.hostname);
 }
 
-function validateUrl(input, label, dryRun, allowLocalhost) {
+function parseUrl(input, label) {
   let url;
   try {
     url = new URL(input);
   } catch {
     fail(`Refusing invalid ${label}: ${input}`);
   }
+  return url;
+}
 
+function validateUrl(input, label, dryRun, allowLocalhost, allowedSmokeOrigin) {
+  const url = parseUrl(input, label);
   if (url.username || url.password) {
     fail(`Refusing credentialed URL for ${label}`);
   }
@@ -139,10 +143,38 @@ function validateUrl(input, label, dryRun, allowLocalhost) {
     fail(`Refusing non-HTTPS staging URL for ${label}`);
   }
 
+  if (allowedSmokeOrigin && url.origin === allowedSmokeOrigin) {
+    return url.origin;
+  }
+
   if (!ALLOWED_STAGING_ORIGINS.includes(url.origin)) {
     fail(`Refusing non-staging ${label}: ${url.origin}`);
   }
 
+  return url.origin;
+}
+
+function validateSmokeCloudRunUrl(input) {
+  if (!input) return null;
+  const url = parseUrl(input, 'smoke Cloud Run URL');
+  if (url.username || url.password) {
+    fail('Refusing credentialed URL for smoke Cloud Run allowlist');
+  }
+  if (url.search) {
+    fail('Refusing query string in smoke Cloud Run allowlist URL');
+  }
+  if (url.pathname !== '/' && url.pathname !== '') {
+    fail('Refusing path in smoke Cloud Run allowlist URL; provide the service origin only');
+  }
+  if (REFUSED_PRODUCTION_ORIGINS.includes(url.origin)) {
+    fail(`Refusing production domain for smoke Cloud Run allowlist: ${url.origin}`);
+  }
+  if (url.protocol !== 'https:') {
+    fail('Refusing non-HTTPS smoke Cloud Run allowlist URL');
+  }
+  if (!url.hostname.endsWith('.run.app')) {
+    fail('Refusing smoke Cloud Run allowlist URL that is not a run.app service origin');
+  }
   return url.origin;
 }
 
@@ -243,6 +275,9 @@ const portalBase = argValue('--portal-base', DEFAULT_PORTAL_BASE);
 const agenticorgBase = argValue('--agenticorg-base', DEFAULT_AGENTICORG_BASE);
 const manifestPath = argValue('--manifest', DEFAULT_MANIFEST);
 const reportPath = argValue('--report', DEFAULT_REPORT);
+const allowedSmokeOrigin = validateSmokeCloudRunUrl(
+  argValue('--allow-smoke-cloud-run-url', process.env.COMMERCE_STAGING_ALLOWED_SMOKE_URL ?? ''),
+);
 
 if (provider !== 'mock') {
   fail('Refusing non-mock provider; future --allow-provider-sandbox mode is not implemented');
@@ -257,9 +292,9 @@ if (reportPath.includes('.tmp') || !reportPath.includes('hosted-staging-e2e')) {
   fail('Refusing non-staging or local-only report path');
 }
 
-const normalizedApiBase = validateUrl(apiBase, 'Grantex API base', dryRun, allowLocalhost);
-const normalizedPortalBase = validateUrl(portalBase, 'Grantex portal base', dryRun, allowLocalhost);
-const normalizedAgenticOrgBase = validateUrl(agenticorgBase, 'AgenticOrg base', dryRun, allowLocalhost);
+const normalizedApiBase = validateUrl(apiBase, 'Grantex API base', dryRun, allowLocalhost, allowedSmokeOrigin);
+const normalizedPortalBase = validateUrl(portalBase, 'Grantex portal base', dryRun, allowLocalhost, allowedSmokeOrigin);
+const normalizedAgenticOrgBase = validateUrl(agenticorgBase, 'AgenticOrg base', dryRun, allowLocalhost, allowedSmokeOrigin);
 const manifestSummary = loadManifest(manifestPath);
 
 const output = {
@@ -269,6 +304,7 @@ const output = {
     no_requests_made: true,
     production_domains_refused: REFUSED_PRODUCTION_ORIGINS,
     staging_domains_allowed: ALLOWED_STAGING_ORIGINS,
+    smoke_cloud_run_origin_allowed: allowedSmokeOrigin,
     non_mock_provider_refused: true,
     live_payment_flags_refused: true,
     secret_values_printed: false,

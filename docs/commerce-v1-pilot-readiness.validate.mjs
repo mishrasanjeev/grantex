@@ -14,6 +14,7 @@ const loadReport = readFileSync(join(docsDir, 'reports', 'commerce-v1-local-pilo
 const hostedStagingPlan = readFileSync(join(docsDir, 'guides', 'commerce-v1-hosted-staging-plan.md'), 'utf8');
 const stagingDataSetup = readFileSync(join(docsDir, 'guides', 'commerce-v1-staging-data-setup.md'), 'utf8');
 const hostedStagingE2E = readFileSync(join(docsDir, 'guides', 'commerce-v1-hosted-staging-e2e.md'), 'utf8');
+const optionASmokeSetup = readFileSync(join(docsDir, 'guides', 'commerce-v1-option-a-smoke-setup.md'), 'utf8');
 const hostedStagingE2ETemplate = readFileSync(join(docsDir, 'reports', 'commerce-v1-hosted-staging-e2e.template.md'), 'utf8');
 const contractGapReport = readFileSync(join(docsDir, 'reports', 'commerce-v1-contract-completeness-gap-report.md'), 'utf8');
 const harness = readFileSync(join(repoRoot, 'scripts', 'commerce-pilot-load-harness.mjs'), 'utf8');
@@ -277,6 +278,44 @@ for (const required of [
 }
 
 for (const required of [
+  'Commerce V1 Option A Smoke Setup',
+  'temporary hosted smoke path',
+  'Direct Cloud Run URLs are allowed only for Option A smoke',
+  'No custom DNS',
+  'No hosted AgenticOrg',
+  'No Firebase deploy',
+  'min-instances=0',
+  'max-instances=1',
+  'Mock provider only',
+  'No production database',
+  'No production Redis',
+  'No production secrets',
+  'Delete temporary Redis',
+  'Delete temporary Cloud SQL',
+  'Commands Proposed But Not Run',
+  'Cleanup Commands Proposed But Not Run',
+  'COMMERCE_LIVE_MODE_ENABLED=false',
+  'PLURAL_LIVE_ENABLED=false',
+  'grantex-auth-smoke',
+  'grantex-commerce-smoke-pg',
+  'grantex-commerce-smoke-redis',
+  '--allow-smoke-cloud-run-url',
+  'COMMERCE_STAGING_ALLOWED_SMOKE_URL',
+]) {
+  assert.ok(optionASmokeSetup.includes(required), `Option A smoke setup guide includes ${required}`);
+}
+for (const forbidden of [
+  'sk_live_',
+  'pk_live_',
+  'Bearer ',
+  'passport.jwt',
+  'idempotency-key:',
+  'mock-webhook-secret',
+]) {
+  assert.equal(optionASmokeSetup.includes(forbidden), false, `Option A smoke setup guide does not include ${forbidden}`);
+}
+
+for (const required of [
   'https://api-staging.grantex.dev',
   'https://staging.grantex.dev',
   'https://staging.agenticorg.ai',
@@ -291,6 +330,10 @@ for (const required of [
   'Refusing PLURAL_LIVE_ENABLED=true',
   'Refusing non-mock provider',
   'Run mode is intentionally disabled for M11 dry-run-only harness',
+  '--allow-smoke-cloud-run-url',
+  'COMMERCE_STAGING_ALLOWED_SMOKE_URL',
+  'smoke_cloud_run_origin_allowed',
+  'Refusing smoke Cloud Run allowlist URL that is not a run.app service origin',
 ]) {
   assert.ok(stagingE2EHarness.includes(required), `hosted staging E2E harness includes ${required}`);
 }
@@ -447,6 +490,39 @@ assert.ok(
   'hosted staging E2E production refusal explains the safety guard',
 );
 
+const smokeUrl = 'https://grantex-auth-smoke-abc123-uc.a.run.app';
+const stagingE2ESmokeDryRun = execFileSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-staging-e2e-harness.mjs'),
+    '--dry-run',
+    `--api-base=${smokeUrl}`,
+    `--allow-smoke-cloud-run-url=${smokeUrl}`,
+  ],
+  { encoding: 'utf8' },
+);
+const stagingE2ESmokeReport = JSON.parse(stagingE2ESmokeDryRun);
+assert.equal(stagingE2ESmokeReport.mode, 'dry-run');
+assert.equal(stagingE2ESmokeReport.status, 'not_executed');
+assert.equal(stagingE2ESmokeReport.targets.api_base, smokeUrl);
+assert.equal(stagingE2ESmokeReport.safety.smoke_cloud_run_origin_allowed, smokeUrl);
+assert.equal(stagingE2ESmokeReport.safety.no_requests_made, true);
+
+const stagingE2ESmokeNoAllowlist = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-staging-e2e-harness.mjs'),
+    '--dry-run',
+    `--api-base=${smokeUrl}`,
+  ],
+  { encoding: 'utf8' },
+);
+assert.notEqual(stagingE2ESmokeNoAllowlist.status, 0, 'hosted staging E2E harness refuses arbitrary run.app without allowlist');
+assert.ok(
+  `${stagingE2ESmokeNoAllowlist.stdout}${stagingE2ESmokeNoAllowlist.stderr}`.includes('Refusing non-staging Grantex API base'),
+  'hosted staging E2E run.app refusal explains the smoke allowlist guard',
+);
+
 const nonLocalSeed = spawnSync(
   process.execPath,
   [
@@ -514,6 +590,7 @@ assert.equal(/[^\u0000-\u007F]/.test(loadReport), false, 'pilot load report stay
 assert.equal(/[^\u0000-\u007F]/.test(hostedStagingPlan), false, 'hosted staging plan stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(stagingDataSetup), false, 'staging data setup guide stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(hostedStagingE2E), false, 'hosted staging E2E guide stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(optionASmokeSetup), false, 'Option A smoke setup guide stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(hostedStagingE2ETemplate), false, 'hosted staging E2E template stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(contractGapReport), false, 'contract gap report stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(harness), false, 'load harness stays ASCII-only');
