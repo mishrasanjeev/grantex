@@ -1,9 +1,13 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type postgres from 'postgres';
 import { config } from '../config.js';
-import { getSql } from '../db/client.js';
+import { getSql, type TxSql } from '../db/client.js';
+import { appendCommerceAudit } from '../lib/commerce/audit.js';
 import { CommerceHttpError } from '../lib/commerce/errors.js';
 import { getPaymentProvider, type CommerceEnvironment, type ProviderKey } from '../lib/commerce/payment-providers/index.js';
+import { assertPaymentStatusTransition, type CommercePaymentStatus } from '../lib/commerce/payment-state.js';
+import { sha256hex } from '../lib/hash.js';
+import { decrypt } from '../lib/vault-crypto.js';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -19,6 +23,15 @@ interface CommerceOpsWebhookEventsQuery {
   processing_status?: WebhookProcessingStatus;
   provider_key?: ProviderKey;
   limit?: string;
+}
+
+interface ProviderWebhookReplayParams {
+  event_id: string;
+}
+
+interface ProviderWebhookReplayBody {
+  reason?: unknown;
+  dry_run?: unknown;
 }
 
 interface WebhookHealthRow {
@@ -42,8 +55,34 @@ interface WebhookEventRow {
   error_code: string | null;
   error_message: string | null;
   attempt_count: number | string;
+  replay_count: number | string | null;
+  last_replayed_at: Date | string | null;
+  has_replay_payload?: boolean | null;
   received_at: Date | string;
   processed_at: Date | string | null;
+  updated_at: Date | string;
+}
+
+interface ProviderWebhookReplayRow extends WebhookEventRow {
+  merchant_ref: string | null;
+  encrypted_payload: string | null;
+  safe_headers_json: unknown;
+}
+
+interface PaymentIntentForWebhookRow {
+  id: string;
+  tenant_id: string;
+  merchant_id: string;
+  agent_id: string;
+  passport_jti: string;
+  amount: number | string;
+  currency: string;
+  provider: ProviderKey;
+  provider_payment_id: string;
+  status: CommercePaymentStatus;
+  provider_raw_status: string | null;
+  policy_version: string | null;
+  decision_id: string | null;
   updated_at: Date | string;
 }
 
@@ -79,7 +118,73 @@ function asLimit(v: unknown): number {
   return 50;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function parseReplayPayload(rawBody: string, fallback: ProviderWebhookReplayRow): {
+  event_id: string;
+  event_type: string;
+  merchant_ref?: string;
+  provider_payment_id?: string;
+  status?: string;
+} {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody) as unknown;
+  } catch {
+    parsed = {};
+  }
+  const obj = isPlainObject(parsed) ? parsed : {};
+  const out: {
+    event_id: string;
+    event_type: string;
+    merchant_ref?: string;
+    provider_payment_id?: string;
+    status?: string;
+  } = {
+    event_id: typeof obj['event_id'] === 'string' ? obj['event_id'] : fallback.provider_event_id,
+    event_type: typeof obj['event_type'] === 'string' ? obj['event_type'] : fallback.provider_event_type,
+  };
+  if (typeof obj['merchant_ref'] === 'string') out.merchant_ref = obj['merchant_ref'];
+  else if (fallback.merchant_ref) out.merchant_ref = fallback.merchant_ref;
+  if (typeof obj['provider_payment_id'] === 'string') out.provider_payment_id = obj['provider_payment_id'];
+  else if (fallback.provider_payment_id) out.provider_payment_id = fallback.provider_payment_id;
+  if (typeof obj['status'] === 'string') out.status = obj['status'];
+  return out;
+}
+
+function targetStatusForWebhook(eventType: string, providerStatus?: string): CommercePaymentStatus | null {
+  if (eventType === 'payment.paid') return 'paid';
+  if (eventType === 'payment.failed') return 'failed';
+  if (eventType === 'payment.expired') return 'expired';
+  if (eventType !== 'payment.updated') return null;
+  const status = providerStatus?.toLowerCase();
+  if (status === 'paid' || status === 'succeeded' || status === 'success' || status === 'mock_paid') return 'paid';
+  if (status === 'failed' || status === 'declined' || status === 'mock_failed') return 'failed';
+  if (status === 'expired' || status === 'mock_expired') return 'expired';
+  return null;
+}
+
+function isReplayTerminalStatus(status: CommercePaymentStatus | null): status is 'paid' | 'failed' | 'expired' {
+  return status === 'paid' || status === 'failed' || status === 'expired';
+}
+
+function replayBlocker(row: WebhookEventRow): string | null {
+  if (row.signature_validation_status !== 'valid') return 'original_signature_not_valid';
+  if (row.provider_key !== 'mock') return 'provider_replay_not_supported';
+  if (row.replay_status !== 'fresh') return 'webhook_event_duplicate_or_stale';
+  if (row.processing_status !== 'failed') return 'webhook_event_not_failed';
+  if (row.has_replay_payload !== true) return 'encrypted_payload_not_available';
+  return null;
+}
+
 function normalizeWebhookEvent(row: WebhookEventRow): Record<string, unknown> {
+  const blocker = replayBlocker(row);
   return {
     id: row.id,
     tenant_id: row.tenant_id,
@@ -96,12 +201,46 @@ function normalizeWebhookEvent(row: WebhookEventRow): Record<string, unknown> {
     error_code: row.error_code,
     error_message: row.error_message,
     attempt_count: countFromRow(row.attempt_count),
+    replay_count: countFromRow(row.replay_count),
+    last_replayed_at: row.last_replayed_at,
     received_at: row.received_at,
     processed_at: row.processed_at,
     updated_at: row.updated_at,
-    replay_available: false,
-    replay_blocker: 'webhook_failed_event_replay_requires_safe_raw_payload_storage',
+    replay_available: blocker === null,
+    replay_blocker: blocker,
   };
+}
+
+async function findPaymentIntentForReplay(
+  sql: Sql,
+  input: {
+    providerKey: ProviderKey;
+    providerPaymentId?: string;
+    merchantRef?: string;
+  },
+): Promise<PaymentIntentForWebhookRow | null> {
+  if (!input.providerPaymentId || !input.merchantRef) return null;
+  const rows = await sql<PaymentIntentForWebhookRow[]>`
+    SELECT pi.id, pi.tenant_id, pi.merchant_id, pi.agent_id, pi.passport_jti,
+           pi.amount, pi.currency, pi.provider, pi.provider_payment_id,
+           pi.status, pi.provider_raw_status, pi.policy_version, pi.decision_id,
+           pi.updated_at
+      FROM commerce_payment_intents pi
+      JOIN commerce_merchants m
+        ON m.tenant_id = pi.tenant_id
+       AND m.id = pi.merchant_id
+     WHERE pi.provider = ${input.providerKey}
+       AND pi.provider_payment_id = ${input.providerPaymentId}
+       AND pi.merchant_id = ${input.merchantRef}
+     LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+function paymentAuditEventForTarget(status: 'paid' | 'failed' | 'expired') {
+  if (status === 'paid') return 'payment_intent.paid';
+  if (status === 'failed') return 'payment_intent.failed';
+  return 'payment_intent.expired';
 }
 
 async function providerHealth(
@@ -224,7 +363,7 @@ export async function commerceOpsRoutes(app: FastifyInstance): Promise<void> {
       blockers.push('reconciliation_worker_not_enabled_for_runtime');
     }
     blockers.push('plural_api_and_webhook_contract_unconfirmed');
-    blockers.push('webhook_failed_event_list_and_replay_api_contract_deferred');
+    blockers.push('provider_webhook_replay_mock_only_until_plural_contract');
     const dbOk = database['ok'] === true;
 
     const body = {
@@ -268,25 +407,440 @@ export async function commerceOpsRoutes(app: FastifyInstance): Promise<void> {
       const limit = asLimit(request.query.limit);
       const sql = getSql();
       const rows = await sql<WebhookEventRow[]>`
-        SELECT id, tenant_id, provider_key, merchant_id, payment_intent_id,
+        SELECT e.id, e.tenant_id, e.provider_key, e.merchant_id, e.payment_intent_id,
                provider_payment_id, provider_event_id, provider_event_type,
                signature_validation_status, replay_status, processing_status,
                payload_hash, error_code, error_message, attempt_count,
-               received_at, processed_at, updated_at
-          FROM commerce_provider_webhook_events
-         WHERE tenant_id = ${tenantId}
-           AND (${merchantId}::text IS NULL OR merchant_id = ${merchantId})
-           AND (${providerKey}::text IS NULL OR provider_key = ${providerKey})
-           AND processing_status = ${processingStatus}
-         ORDER BY received_at DESC
+               replay_count, last_replayed_at,
+               (p.webhook_event_id IS NOT NULL) AS has_replay_payload,
+               e.received_at, e.processed_at, e.updated_at
+          FROM commerce_provider_webhook_events e
+          LEFT JOIN commerce_provider_webhook_event_payloads p
+            ON p.tenant_id = e.tenant_id
+           AND p.webhook_event_id = e.id
+         WHERE e.tenant_id = ${tenantId}
+           AND (${merchantId}::text IS NULL OR e.merchant_id = ${merchantId})
+           AND (${providerKey}::text IS NULL OR e.provider_key = ${providerKey})
+           AND e.processing_status = ${processingStatus}
+         ORDER BY e.received_at DESC
          LIMIT ${limit}
       `;
       return reply.status(200).send({
         items: rows.map(normalizeWebhookEvent),
         next_cursor: null,
-        replay_available: false,
-        replay_blocker: 'webhook_failed_event_replay_requires_safe_raw_payload_storage',
+        replay_available: rows.some((row) => replayBlocker(row) === null),
+        replay_blocker: rows.some((row) => replayBlocker(row) === null) ? null : 'no_replayable_failed_provider_webhook_events',
       });
+    },
+  );
+
+  app.post<{
+    Params: ProviderWebhookReplayParams;
+    Body: ProviderWebhookReplayBody;
+  }>(
+    '/ops/provider-webhook-events/:event_id/replay',
+    { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      requireOperator(request);
+      const tenantId = request.commerceTenantId;
+      if (!tenantId) {
+        throw new CommerceHttpError(422, 'tenant_context_required',
+          'Commerce provider webhook replay requires a tenant-bound operator',
+          { retryable: false });
+      }
+      if (request.body !== undefined && !isPlainObject(request.body)) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
+          { details: { fields: { body: 'must be a JSON object' } }, retryable: false });
+      }
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const fieldErrors: Record<string, string> = {};
+      for (const key of Object.keys(body)) {
+        if (key !== 'reason' && key !== 'dry_run') fieldErrors[key] = 'field is unsupported';
+      }
+      if (!nonEmptyString(body['reason'])) fieldErrors['reason'] = 'required non-empty string';
+      if (body['dry_run'] !== undefined && typeof body['dry_run'] !== 'boolean') {
+        fieldErrors['dry_run'] = 'must be a boolean';
+      }
+      if (Object.keys(fieldErrors).length > 0) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
+          { details: { fields: fieldErrors }, retryable: false });
+      }
+      const reason = (body['reason'] as string).trim();
+      const dryRun = body['dry_run'] === true;
+      const sql = getSql();
+      const rows = await sql<ProviderWebhookReplayRow[]>`
+        SELECT e.id, e.tenant_id, e.provider_key, e.merchant_id, e.payment_intent_id,
+               e.provider_payment_id, e.merchant_ref, e.provider_event_id,
+               e.provider_event_type, e.signature_validation_status,
+               e.replay_status, e.processing_status, e.payload_hash,
+               e.error_code, e.error_message, e.attempt_count,
+               e.replay_count, e.last_replayed_at,
+               (p.webhook_event_id IS NOT NULL) AS has_replay_payload,
+               p.encrypted_payload, p.safe_headers_json,
+               e.received_at, e.processed_at, e.updated_at
+          FROM commerce_provider_webhook_events e
+          LEFT JOIN commerce_provider_webhook_event_payloads p
+            ON p.tenant_id = e.tenant_id
+           AND p.webhook_event_id = e.id
+         WHERE e.tenant_id = ${tenantId}
+           AND e.id = ${request.params.event_id}
+         LIMIT 1
+      `;
+      const event = rows[0];
+      if (!event) {
+        throw new CommerceHttpError(404, 'provider_webhook_event_not_found',
+          'Provider webhook event not found in this tenant');
+      }
+      let blocker = replayBlocker(event);
+      let rawBody: string | null = null;
+      if (!blocker && event.encrypted_payload) {
+        rawBody = decrypt(event.encrypted_payload);
+        if (sha256hex(rawBody) !== event.payload_hash) {
+          blocker = 'payload_hash_mismatch';
+        }
+      }
+      if (blocker || !rawBody || !isProviderKey(event.provider_key)) {
+        const audit = await appendCommerceAudit(sql, {
+          tenantId,
+          merchantId: event.merchant_id,
+          eventType: 'provider_webhook.replay_denied',
+          resourceType: 'commerce_provider_webhook_event',
+          resourceId: event.id,
+          requestId: request.id,
+          metadata: {
+            provider_key: event.provider_key,
+            provider_event_id: event.provider_event_id,
+            provider_event_type: event.provider_event_type,
+            reason,
+            blocker: blocker ?? 'provider_replay_not_supported',
+            dry_run: dryRun,
+          },
+        });
+        throw new CommerceHttpError(409, 'provider_webhook_replay_denied',
+          'Provider webhook event is not eligible for replay',
+          { retryable: false, auditEventId: audit.id, details: { blocker: blocker ?? 'provider_replay_not_supported' } });
+      }
+
+      const parsed = parseReplayPayload(rawBody, event);
+      const targetStatus = targetStatusForWebhook(parsed.event_type, parsed.status);
+      const paymentIntentLookup: {
+        providerKey: ProviderKey;
+        providerPaymentId?: string;
+        merchantRef?: string;
+      } = { providerKey: event.provider_key };
+      if (parsed.provider_payment_id !== undefined) {
+        paymentIntentLookup.providerPaymentId = parsed.provider_payment_id;
+      }
+      if (parsed.merchant_ref !== undefined) {
+        paymentIntentLookup.merchantRef = parsed.merchant_ref;
+      }
+      const paymentIntent = await findPaymentIntentForReplay(sql, paymentIntentLookup);
+      if (!paymentIntent || paymentIntent.tenant_id !== tenantId || paymentIntent.id !== event.payment_intent_id) {
+        const audit = await appendCommerceAudit(sql, {
+          tenantId,
+          merchantId: event.merchant_id,
+          eventType: 'provider_webhook.replay_denied',
+          resourceType: 'commerce_provider_webhook_event',
+          resourceId: event.id,
+          requestId: request.id,
+          metadata: {
+            provider_key: event.provider_key,
+            provider_event_id: event.provider_event_id,
+            provider_event_type: event.provider_event_type,
+            reason,
+            blocker: 'payment_intent_not_found',
+            dry_run: dryRun,
+          },
+        });
+        throw new CommerceHttpError(409, 'provider_webhook_replay_denied',
+          'Provider webhook event cannot be replayed without its tenant-bound payment intent',
+          { retryable: false, auditEventId: audit.id, details: { blocker: 'payment_intent_not_found' } });
+      }
+      if (!isReplayTerminalStatus(targetStatus)) {
+        const audit = await appendCommerceAudit(sql, {
+          tenantId,
+          merchantId: paymentIntent.merchant_id,
+          agentId: paymentIntent.agent_id,
+          eventType: 'provider_webhook.replay_denied',
+          resourceType: 'commerce_provider_webhook_event',
+          resourceId: event.id,
+          passportJti: paymentIntent.passport_jti,
+          policyVersion: paymentIntent.policy_version,
+          decisionId: paymentIntent.decision_id,
+          requestId: request.id,
+          metadata: {
+            provider_key: event.provider_key,
+            provider_event_id: event.provider_event_id,
+            provider_event_type: event.provider_event_type,
+            reason,
+            blocker: 'unsupported_provider_event',
+            dry_run: dryRun,
+          },
+        });
+        throw new CommerceHttpError(409, 'provider_webhook_replay_denied',
+          'Provider webhook event type or status is not replayable',
+          { retryable: false, auditEventId: audit.id, details: { blocker: 'unsupported_provider_event' } });
+      }
+      if (dryRun) {
+        return reply.status(200).send({
+          data: {
+            status: 'eligible',
+            dry_run: true,
+            event_id: event.id,
+            provider_key: event.provider_key,
+            provider_event_id: event.provider_event_id,
+            provider_event_type: event.provider_event_type,
+            payment_intent_id: paymentIntent.id,
+            current_payment_status: paymentIntent.status,
+            target_payment_status: targetStatus,
+            replay_count: countFromRow(event.replay_count),
+          },
+        });
+      }
+
+      const result = await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const requestedAudit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId,
+          merchantId: paymentIntent.merchant_id,
+          agentId: paymentIntent.agent_id,
+          eventType: 'provider_webhook.replay_requested',
+          resourceType: 'commerce_provider_webhook_event',
+          resourceId: event.id,
+          passportJti: paymentIntent.passport_jti,
+          policyVersion: paymentIntent.policy_version,
+          decisionId: paymentIntent.decision_id,
+          requestId: request.id,
+          metadata: {
+            provider_key: event.provider_key,
+            provider_event_id: event.provider_event_id,
+            provider_event_type: event.provider_event_type,
+            reason,
+          },
+        });
+
+        if (paymentIntent.status === targetStatus) {
+          await tx`
+            UPDATE commerce_provider_webhook_events
+               SET processing_status = 'ignored',
+                   error_code = 'transition_already_applied',
+                   error_message = 'Payment intent is already in the provider webhook target state',
+                   replay_count = replay_count + 1,
+                   last_replayed_at = NOW(),
+                   processed_at = NOW(),
+                   updated_at = NOW()
+             WHERE id = ${event.id}
+               AND tenant_id = ${tenantId}
+          `;
+          const replayedAudit = await appendCommerceAudit(tx as unknown as Sql, {
+            tenantId,
+            merchantId: paymentIntent.merchant_id,
+            agentId: paymentIntent.agent_id,
+            eventType: 'provider_webhook.replayed',
+            resourceType: 'commerce_provider_webhook_event',
+            resourceId: event.id,
+            passportJti: paymentIntent.passport_jti,
+            policyVersion: paymentIntent.policy_version,
+            decisionId: paymentIntent.decision_id,
+            requestId: request.id,
+            metadata: {
+              provider_key: event.provider_key,
+              provider_event_id: event.provider_event_id,
+              provider_event_type: event.provider_event_type,
+              result: 'duplicate',
+              from_status: paymentIntent.status,
+              to_status: targetStatus,
+              reason,
+            },
+          });
+          return {
+            data: {
+              status: 'duplicate',
+              event_id: event.id,
+              provider_event_id: event.provider_event_id,
+              payment_intent_id: paymentIntent.id,
+              payment_status: paymentIntent.status,
+            },
+            requested_audit_event_id: requestedAudit.id,
+            audit_event_id: replayedAudit.id,
+          };
+        }
+
+        try {
+          assertPaymentStatusTransition(paymentIntent.status, targetStatus);
+        } catch {
+          const deniedAudit = await appendCommerceAudit(tx as unknown as Sql, {
+            tenantId,
+            merchantId: paymentIntent.merchant_id,
+            agentId: paymentIntent.agent_id,
+            eventType: 'provider_webhook.replay_denied',
+            resourceType: 'commerce_provider_webhook_event',
+            resourceId: event.id,
+            passportJti: paymentIntent.passport_jti,
+            policyVersion: paymentIntent.policy_version,
+            decisionId: paymentIntent.decision_id,
+            requestId: request.id,
+            metadata: {
+              provider_key: event.provider_key,
+              provider_event_id: event.provider_event_id,
+              provider_event_type: event.provider_event_type,
+              reason,
+              blocker: 'invalid_payment_status_transition',
+              from_status: paymentIntent.status,
+              to_status: targetStatus,
+            },
+          });
+          return {
+            error: {
+              statusCode: 409,
+              code: 'invalid_payment_status_transition',
+              message: `Cannot replay provider webhook transition ${paymentIntent.status} -> ${targetStatus}`,
+              auditEventId: deniedAudit.id,
+            },
+            requested_audit_event_id: requestedAudit.id,
+          };
+        }
+
+        const updatedRows = await tx<PaymentIntentForWebhookRow[]>`
+          UPDATE commerce_payment_intents
+             SET status = ${targetStatus},
+                 provider_raw_status = ${parsed.status ?? parsed.event_type},
+                 provider_metadata = COALESCE(provider_metadata, '{}'::jsonb)
+                   || ${JSON.stringify({
+                     last_webhook_event_id: parsed.event_id,
+                     last_webhook_event_type: parsed.event_type,
+                     replayed_webhook_event_id: event.id,
+                   })}::jsonb,
+                 updated_at = NOW()
+           WHERE id = ${paymentIntent.id}
+             AND tenant_id = ${paymentIntent.tenant_id}
+             AND merchant_id = ${paymentIntent.merchant_id}
+             AND provider = ${event.provider_key}
+             AND provider_payment_id = ${parsed.provider_payment_id ?? null}
+             AND status = ${paymentIntent.status}
+          RETURNING id, tenant_id, merchant_id, agent_id, passport_jti,
+                    amount, currency, provider, provider_payment_id,
+                    status, provider_raw_status, policy_version, decision_id,
+                    updated_at
+        `;
+        const updated = updatedRows[0];
+        if (!updated) {
+          const deniedAudit = await appendCommerceAudit(tx as unknown as Sql, {
+            tenantId,
+            merchantId: paymentIntent.merchant_id,
+            agentId: paymentIntent.agent_id,
+            eventType: 'provider_webhook.replay_denied',
+            resourceType: 'commerce_provider_webhook_event',
+            resourceId: event.id,
+            passportJti: paymentIntent.passport_jti,
+            policyVersion: paymentIntent.policy_version,
+            decisionId: paymentIntent.decision_id,
+            requestId: request.id,
+            metadata: {
+              provider_key: event.provider_key,
+              provider_event_id: event.provider_event_id,
+              provider_event_type: event.provider_event_type,
+              reason,
+              blocker: 'payment_status_changed',
+            },
+          });
+          return {
+            error: {
+              statusCode: 409,
+              code: 'payment_status_changed',
+              message: 'Payment intent status changed before provider webhook replay completed',
+              auditEventId: deniedAudit.id,
+            },
+            requested_audit_event_id: requestedAudit.id,
+          };
+        }
+
+        await tx`
+          UPDATE commerce_provider_webhook_events
+             SET processing_status = 'processed',
+                 error_code = NULL,
+                 error_message = NULL,
+                 replay_count = replay_count + 1,
+                 attempt_count = attempt_count + 1,
+                 last_replayed_at = NOW(),
+                 processed_at = NOW(),
+                 updated_at = NOW()
+           WHERE id = ${event.id}
+             AND tenant_id = ${tenantId}
+        `;
+        const paymentAudit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId: updated.tenant_id,
+          merchantId: updated.merchant_id,
+          agentId: updated.agent_id,
+          eventType: paymentAuditEventForTarget(targetStatus),
+          resourceType: 'commerce_payment_intent',
+          resourceId: updated.id,
+          passportJti: updated.passport_jti,
+          policyVersion: updated.policy_version,
+          decisionId: updated.decision_id,
+          requestId: request.id,
+          metadata: {
+            provider_key: event.provider_key,
+            provider_event_id: parsed.event_id,
+            provider_event_type: parsed.event_type,
+            provider_payment_id: parsed.provider_payment_id ?? null,
+            webhook_event_id: event.id,
+            replay: true,
+            from_status: paymentIntent.status,
+            to_status: updated.status,
+          },
+        });
+        const replayedAudit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId: updated.tenant_id,
+          merchantId: updated.merchant_id,
+          agentId: updated.agent_id,
+          eventType: 'provider_webhook.replayed',
+          resourceType: 'commerce_provider_webhook_event',
+          resourceId: event.id,
+          passportJti: updated.passport_jti,
+          policyVersion: updated.policy_version,
+          decisionId: updated.decision_id,
+          requestId: request.id,
+          metadata: {
+            provider_key: event.provider_key,
+            provider_event_id: parsed.event_id,
+            provider_event_type: parsed.event_type,
+            provider_payment_id: parsed.provider_payment_id ?? null,
+            payment_audit_event_id: paymentAudit.id,
+            result: 'processed',
+            from_status: paymentIntent.status,
+            to_status: updated.status,
+            reason,
+          },
+        });
+        return {
+          data: {
+            status: 'processed',
+            event_id: event.id,
+            provider_event_id: parsed.event_id,
+            payment_intent_id: updated.id,
+            payment_status: updated.status,
+          },
+          requested_audit_event_id: requestedAudit.id,
+          audit_event_id: replayedAudit.id,
+          payment_audit_event_id: paymentAudit.id,
+        };
+      });
+
+      if ('error' in result) {
+        const error = result.error as {
+          statusCode: number;
+          code: string;
+          message: string;
+          auditEventId?: string;
+        };
+        throw new CommerceHttpError(error.statusCode, error.code, error.message, {
+          retryable: false,
+          ...(error.auditEventId ? { auditEventId: error.auditEventId } : {}),
+        });
+      }
+
+      return reply.status(200).send(result);
     },
   );
 }

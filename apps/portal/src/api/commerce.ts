@@ -323,7 +323,9 @@ export interface CommerceProviderWebhookEvent {
   processed_at: string | null;
   updated_at: string;
   replay_available: boolean;
-  replay_blocker: string;
+  replay_blocker: string | null;
+  replay_count: number | string;
+  last_replayed_at: string | null;
 }
 
 export interface CommerceWellKnownProfile {
@@ -430,6 +432,39 @@ export function disableMerchantAgenticCommerce(
     data: { merchant_id: string; agentic_commerce_enabled: boolean; disabled: boolean };
     audit_event_id: string;
   }>(`/v1/commerce/merchants/${encodeURIComponent(merchantId)}/disable-agentic-commerce`, { reason });
+}
+
+export function enableMerchantAgenticCommerce(
+  merchantId: string,
+  input: {
+    reason: string;
+    reviewedPolicyId: string;
+    incidentReference?: string;
+    confirmReenable: boolean;
+  },
+): Promise<{
+  data: {
+    merchant_id: string;
+    agentic_commerce_enabled: boolean;
+    disabled: boolean;
+    reviewed_policy_id: string;
+  };
+  audit_event_id: string;
+}> {
+  return api.post<{
+    data: {
+      merchant_id: string;
+      agentic_commerce_enabled: boolean;
+      disabled: boolean;
+      reviewed_policy_id: string;
+    };
+    audit_event_id: string;
+  }>(`/v1/commerce/merchants/${encodeURIComponent(merchantId)}/enable-agentic-commerce`, {
+    reason: input.reason,
+    reviewed_policy_id: input.reviewedPolicyId,
+    ...(input.incidentReference ? { incident_reference: input.incidentReference } : {}),
+    confirm_reenable: input.confirmReenable,
+  });
 }
 
 export function listCommerceAgents(params: {
@@ -625,19 +660,63 @@ export function listCommerceProviderWebhookEvents(params: {
   items: CommerceProviderWebhookEvent[];
   next_cursor: string | null;
   replay_available: boolean;
-  replay_blocker: string;
+  replay_blocker: string | null;
 }> {
   return api.get<{
     items: CommerceProviderWebhookEvent[];
     next_cursor: string | null;
     replay_available: boolean;
-    replay_blocker: string;
+    replay_blocker: string | null;
   }>(`/v1/commerce/ops/provider-webhook-events${qs({
     merchant_id: params.merchantId,
     provider_key: params.providerKey,
     processing_status: params.processingStatus,
     limit: params.limit,
   })}`);
+}
+
+export function replayCommerceProviderWebhookEvent(
+  eventId: string,
+  input: { reason: string; dryRun?: boolean },
+): Promise<{
+  data: {
+    status: 'eligible' | 'processed' | 'duplicate';
+    dry_run?: boolean;
+    event_id: string;
+    provider_key?: CommerceProviderKey;
+    provider_event_id: string;
+    provider_event_type?: string;
+    payment_intent_id: string;
+    current_payment_status?: CommercePaymentStatus;
+    target_payment_status?: CommercePaymentStatus;
+    payment_status?: CommercePaymentStatus;
+    replay_count?: number | string;
+  };
+  requested_audit_event_id?: string;
+  audit_event_id?: string;
+  payment_audit_event_id?: string;
+}> {
+  return api.post<{
+    data: {
+      status: 'eligible' | 'processed' | 'duplicate';
+      dry_run?: boolean;
+      event_id: string;
+      provider_key?: CommerceProviderKey;
+      provider_event_id: string;
+      provider_event_type?: string;
+      payment_intent_id: string;
+      current_payment_status?: CommercePaymentStatus;
+      target_payment_status?: CommercePaymentStatus;
+      payment_status?: CommercePaymentStatus;
+      replay_count?: number | string;
+    };
+    requested_audit_event_id?: string;
+    audit_event_id?: string;
+    payment_audit_event_id?: string;
+  }>(`/v1/commerce/ops/provider-webhook-events/${encodeURIComponent(eventId)}/replay`, {
+    reason: input.reason,
+    dry_run: input.dryRun ?? false,
+  });
 }
 
 export function getCommerceWellKnownProfile(

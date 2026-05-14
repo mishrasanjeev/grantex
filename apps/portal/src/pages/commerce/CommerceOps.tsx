@@ -4,6 +4,7 @@ import {
   listCommercePaymentIntents,
   listCommerceProviderWebhookEvents,
   reconcileCommercePaymentIntent,
+  replayCommerceProviderWebhookEvent,
   type CommerceOpsHealth,
   type CommercePaymentIntent,
   type CommerceProviderWebhookEvent,
@@ -81,6 +82,9 @@ export function CommerceOps() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reconcilingId, setReconcilingId] = useState<string | null>(null);
+  const [replayEvent, setReplayEvent] = useState<CommerceProviderWebhookEvent | null>(null);
+  const [replayReason, setReplayReason] = useState('');
+  const [replayingId, setReplayingId] = useState<string | null>(null);
   const { show } = useToast();
 
   async function load() {
@@ -123,6 +127,27 @@ export function CommerceOps() {
       show('Payment reconciliation failed', 'error');
     } finally {
       setReconcilingId(null);
+    }
+  }
+
+  async function replayProviderWebhook(dryRun: boolean) {
+    if (!replayEvent) return;
+    const reason = replayReason.trim();
+    if (!reason) {
+      show('Enter a replay reason before continuing', 'error');
+      return;
+    }
+    setReplayingId(replayEvent.id);
+    try {
+      await replayCommerceProviderWebhookEvent(replayEvent.id, { reason, dryRun });
+      show(dryRun ? 'Provider webhook replay dry-run passed' : 'Provider webhook replay completed', 'success');
+      setReplayEvent(null);
+      setReplayReason('');
+      await load();
+    } catch {
+      show('Provider webhook replay was denied', 'error');
+    } finally {
+      setReplayingId(null);
     }
   }
 
@@ -288,7 +313,9 @@ export function CommerceOps() {
                   <h2 className="text-base font-semibold text-gx-text">Failed provider webhook events</h2>
                   <p className="mt-1 text-sm text-gx-muted">Metadata-only view. Raw provider payloads, signatures, and secrets are not exposed.</p>
                 </div>
-                <Badge variant="danger">Replay blocked</Badge>
+                <Badge variant={webhookEvents.some((event) => event.replay_available) ? 'warning' : 'danger'}>
+                  {webhookEvents.some((event) => event.replay_available) ? 'Replay available' : 'Replay blocked'}
+                </Badge>
               </div>
             </div>
             {webhookEvents.length === 0 ? (
@@ -305,12 +332,71 @@ export function CommerceOps() {
                     { key: 'signature', header: 'Signature', render: (event) => <Badge variant={event.signature_validation_status === 'valid' ? 'success' : 'danger'}>{event.signature_validation_status}</Badge> },
                     { key: 'payment', header: 'Payment', render: (event) => <IdText value={event.payment_intent_id} /> },
                     { key: 'error', header: 'Error', render: (event) => <IdText value={event.error_code} /> },
+                    { key: 'replay', header: 'Replay', render: (event) => (
+                      <div className="space-y-1">
+                        <Badge variant={event.replay_available ? 'warning' : 'default'}>
+                          {event.replay_available ? 'available' : 'blocked'}
+                        </Badge>
+                        <div className="text-xs text-gx-muted">count {event.replay_count ?? 0}</div>
+                        {event.last_replayed_at ? <DateText value={event.last_replayed_at} /> : null}
+                      </div>
+                    ) },
                     { key: 'received', header: 'Received', render: (event) => <DateText value={event.received_at} /> },
+                    {
+                      key: 'actions',
+                      header: '',
+                      className: 'text-right',
+                      render: (event) => (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={!event.replay_available}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReplayEvent(event);
+                            setReplayReason('');
+                          }}
+                        >
+                          Replay
+                        </Button>
+                      ),
+                    },
                   ]}
                 />
-                <p className="mt-3 text-xs text-gx-muted">
-                  Replay requires safe raw payload storage and redaction design. This pilot slice intentionally exposes no replay control.
-                </p>
+                {replayEvent ? (
+                  <div className="mt-4 rounded-md border border-gx-border p-3">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-end">
+                      <Input
+                        id="provider-webhook-replay-reason"
+                        label="Replay reason"
+                        placeholder="incident review reference"
+                        value={replayReason}
+                        onChange={(e) => setReplayReason(e.target.value)}
+                      />
+                      <Button
+                        variant="secondary"
+                        disabled={replayingId === replayEvent.id || !replayReason.trim()}
+                        onClick={() => void replayProviderWebhook(true)}
+                      >
+                        Dry-run replay
+                      </Button>
+                      <Button
+                        disabled={replayingId === replayEvent.id || !replayReason.trim()}
+                        onClick={() => void replayProviderWebhook(false)}
+                      >
+                        Replay webhook
+                      </Button>
+                      <Button variant="ghost" onClick={() => setReplayEvent(null)}>Cancel</Button>
+                    </div>
+                    <p className="mt-2 text-xs text-gx-muted">
+                      Replay uses encrypted stored payload material and never displays raw payloads, signatures, or provider secrets.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-xs text-gx-muted">
+                    Replay is operator-only and available only for failed provider events with valid original signatures and encrypted replay material.
+                  </p>
+                )}
               </div>
             )}
           </Card>
