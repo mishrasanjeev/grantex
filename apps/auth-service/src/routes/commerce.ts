@@ -28,6 +28,7 @@ import { commercePolicyRoutes } from './commerce-policy.js';
 import { commerceProviderCredentialRoutes } from './commerce-provider-credentials.js';
 import { commerceCartPaymentRoutes } from './commerce-cart-payment.js';
 import { commerceOpsRoutes } from './commerce-ops.js';
+import { commerceWebhookSourceRoutes } from './commerce-webhook-sources.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -1929,6 +1930,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   await app.register(commerceConsentRoutes);
   await app.register(commercePolicyRoutes);
   await app.register(commerceProviderCredentialRoutes);
+  await app.register(commerceWebhookSourceRoutes);
   await app.register(commerceCartPaymentRoutes);
   await app.register(commerceOpsRoutes);
 }
