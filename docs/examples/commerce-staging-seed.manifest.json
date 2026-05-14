@@ -1,0 +1,403 @@
+{
+  "manifest_version": "m10-staging-seed-v1",
+  "purpose": "Synthetic hosted staging seed manifest for Grantex Commerce V1. Planning and validation only; no resources are created by this file.",
+  "environment": "staging",
+  "synthetic_only": true,
+  "resource_creation_allowed": false,
+  "live_flags": {
+    "commerce_live_mode_enabled": false,
+    "plural_live_enabled": false,
+    "plural_sandbox_enabled": false
+  },
+  "tenant": {
+    "id": "cten_staging_commerce",
+    "display_name": "Grantex Commerce Staging Tenant",
+    "status": "active",
+    "data_classification": "synthetic"
+  },
+  "merchant": {
+    "id": "mch_staging_electronics_pilot",
+    "tenant_id": "cten_staging_commerce",
+    "display_name": "Staging Electronics Pilot",
+    "category": "electronics_appliances",
+    "country_code": "IN",
+    "currency": "INR",
+    "verification_status": "staging_verified",
+    "agentic_commerce_enabled": true,
+    "environment": "staging",
+    "data_classification": "synthetic"
+  },
+  "agent": {
+    "id": "cag_staging_agenticorg_sales",
+    "tenant_id": "cten_staging_commerce",
+    "display_name": "AgenticOrg Commerce Sales Agent Staging",
+    "agent_type": "sales",
+    "trust_status": "trusted",
+    "enabled_for_staging": true,
+    "data_classification": "synthetic"
+  },
+  "category": {
+    "id": "electronics_appliances",
+    "scope_allowlist": [
+      "commerce:catalog.read",
+      "commerce:inventory.read",
+      "commerce:checkout.create",
+      "commerce:payment.initiate",
+      "commerce:payment.status.read"
+    ]
+  },
+  "provider": {
+    "provider_key": "mock",
+    "environment": "sandbox",
+    "credential_material_included": false,
+    "live_payments_enabled": false,
+    "plural_live_enabled": false,
+    "plural_sandbox_enabled": false,
+    "capabilities": [
+      "payment_intent.create",
+      "checkout_link.create",
+      "payment_status.read",
+      "mock_webhook.receive"
+    ]
+  },
+  "policy": {
+    "id": "cpol_staging_commerce_v1",
+    "version": "m10-staging-commerce-v1",
+    "status": "active",
+    "currency": "INR",
+    "amount_cap_minor_units": 750000,
+    "checkout_passport_max_ttl_seconds": 600,
+    "browse_passport_max_ttl_seconds": 3600,
+    "stale_price_max_age_seconds": 86400,
+    "allow_unknown_inventory_checkout": false,
+    "emergency_disable": false
+  },
+  "catalog": {
+    "currency": "INR",
+    "tax_inclusive_pricing": true,
+    "default_gst_rate": 0.18,
+    "source_system": "synthetic_staging_manifest",
+    "last_synced_at": "2026-05-14T00:00:00Z",
+    "products": [
+      {
+        "id": "cprd_stg_induction_cooktop",
+        "title": "Staging Induction Cooktop",
+        "brand": "Grantex Demo",
+        "category": "electronics_appliances",
+        "price_minor_units": 329900,
+        "currency": "INR",
+        "tax_inclusive": true,
+        "gst_rate": 0.18,
+        "hsn_code": "85166000",
+        "warranty_summary": "Synthetic staging warranty: 12 months parts coverage.",
+        "return_policy_summary": "Synthetic staging returns: 7 days for unopened units.",
+        "availability_status": "in_stock",
+        "source_system": "synthetic_staging_manifest",
+        "last_synced_at": "2026-05-14T00:00:00Z",
+        "variants": [
+          {
+            "id": "cvar_stg_induction_black",
+            "sku": "STG-COOKTOP-BLK",
+            "title": "Black 1800W",
+            "attributes": {
+              "color": "black",
+              "wattage": "1800W"
+            },
+            "price_minor_units": 329900,
+            "availability_status": "in_stock"
+          },
+          {
+            "id": "cvar_stg_induction_silver",
+            "sku": "STG-COOKTOP-SLV",
+            "title": "Silver 2000W",
+            "attributes": {
+              "color": "silver",
+              "wattage": "2000W"
+            },
+            "price_minor_units": 359900,
+            "availability_status": "in_stock"
+          }
+        ]
+      },
+      {
+        "id": "cprd_stg_air_purifier",
+        "title": "Staging Smart Air Purifier",
+        "brand": "Grantex Demo",
+        "category": "electronics_appliances",
+        "price_minor_units": 899900,
+        "currency": "INR",
+        "tax_inclusive": true,
+        "gst_rate": 0.18,
+        "hsn_code": "84213990",
+        "warranty_summary": "Synthetic staging warranty: 24 months motor coverage.",
+        "return_policy_summary": "Synthetic staging returns: 10 days after delivery.",
+        "availability_status": "in_stock",
+        "source_system": "synthetic_staging_manifest",
+        "last_synced_at": "2026-05-14T00:00:00Z",
+        "variants": [
+          {
+            "id": "cvar_stg_air_purifier_room",
+            "sku": "STG-AIR-ROOM",
+            "title": "Room 300 sqft",
+            "attributes": {
+              "coverage": "300 sqft"
+            },
+            "price_minor_units": 899900,
+            "availability_status": "in_stock"
+          },
+          {
+            "id": "cvar_stg_air_purifier_hall",
+            "sku": "STG-AIR-HALL",
+            "title": "Hall 600 sqft",
+            "attributes": {
+              "coverage": "600 sqft"
+            },
+            "price_minor_units": 1299900,
+            "availability_status": "limited"
+          }
+        ]
+      },
+      {
+        "id": "cprd_stg_mixer_grinder",
+        "title": "Staging Mixer Grinder",
+        "brand": "Grantex Demo",
+        "category": "electronics_appliances",
+        "price_minor_units": 459900,
+        "currency": "INR",
+        "tax_inclusive": true,
+        "gst_rate": 0.18,
+        "hsn_code": "85094090",
+        "warranty_summary": "Synthetic staging warranty: 18 months appliance coverage.",
+        "return_policy_summary": "Synthetic staging returns: 7 days for sealed jars.",
+        "availability_status": "in_stock",
+        "source_system": "synthetic_staging_manifest",
+        "last_synced_at": "2026-05-14T00:00:00Z",
+        "variants": [
+          {
+            "id": "cvar_stg_mixer_500w",
+            "sku": "STG-MIX-500",
+            "title": "500W 3 Jar",
+            "attributes": {
+              "power": "500W",
+              "jars": "3"
+            },
+            "price_minor_units": 459900,
+            "availability_status": "in_stock"
+          },
+          {
+            "id": "cvar_stg_mixer_750w",
+            "sku": "STG-MIX-750",
+            "title": "750W 4 Jar",
+            "attributes": {
+              "power": "750W",
+              "jars": "4"
+            },
+            "price_minor_units": 629900,
+            "availability_status": "in_stock"
+          }
+        ]
+      },
+      {
+        "id": "cprd_stg_water_purifier",
+        "title": "Staging RO Water Purifier",
+        "brand": "Grantex Demo",
+        "category": "electronics_appliances",
+        "price_minor_units": 1149900,
+        "currency": "INR",
+        "tax_inclusive": true,
+        "gst_rate": 0.18,
+        "hsn_code": "84212190",
+        "warranty_summary": "Synthetic staging warranty: 12 months filter system coverage.",
+        "return_policy_summary": "Synthetic staging returns: service inspection required.",
+        "availability_status": "limited",
+        "source_system": "synthetic_staging_manifest",
+        "last_synced_at": "2026-05-14T00:00:00Z",
+        "variants": [
+          {
+            "id": "cvar_stg_ro_7l",
+            "sku": "STG-RO-7L",
+            "title": "7L Storage",
+            "attributes": {
+              "storage": "7L"
+            },
+            "price_minor_units": 1149900,
+            "availability_status": "limited"
+          },
+          {
+            "id": "cvar_stg_ro_10l",
+            "sku": "STG-RO-10L",
+            "title": "10L Storage",
+            "attributes": {
+              "storage": "10L"
+            },
+            "price_minor_units": 1399900,
+            "availability_status": "in_stock"
+          }
+        ]
+      },
+      {
+        "id": "cprd_stg_egg_boiler",
+        "title": "Staging Electric Egg Boiler",
+        "brand": "Grantex Demo",
+        "category": "electronics_appliances",
+        "price_minor_units": 129900,
+        "currency": "INR",
+        "tax_inclusive": true,
+        "gst_rate": 0.18,
+        "hsn_code": "85167990",
+        "warranty_summary": "Synthetic staging warranty: 6 months appliance coverage.",
+        "return_policy_summary": "Synthetic staging returns: 7 days unused.",
+        "availability_status": "in_stock",
+        "source_system": "synthetic_staging_manifest",
+        "last_synced_at": "2026-05-14T00:00:00Z",
+        "variants": []
+      },
+      {
+        "id": "cprd_stg_hand_blender",
+        "title": "Staging Hand Blender",
+        "brand": "Grantex Demo",
+        "category": "electronics_appliances",
+        "price_minor_units": 219900,
+        "currency": "INR",
+        "tax_inclusive": true,
+        "gst_rate": 0.18,
+        "hsn_code": "85094090",
+        "warranty_summary": "Synthetic staging warranty: 12 months motor coverage.",
+        "return_policy_summary": "Synthetic staging returns: 7 days for sealed units.",
+        "availability_status": "in_stock",
+        "source_system": "synthetic_staging_manifest",
+        "last_synced_at": "2026-05-14T00:00:00Z",
+        "variants": []
+      },
+      {
+        "id": "cprd_stg_room_heater",
+        "title": "Staging Room Heater",
+        "brand": "Grantex Demo",
+        "category": "electronics_appliances",
+        "price_minor_units": 279900,
+        "currency": "INR",
+        "tax_inclusive": true,
+        "gst_rate": 0.18,
+        "hsn_code": "85162900",
+        "warranty_summary": "Synthetic staging warranty: 12 months heating element coverage.",
+        "return_policy_summary": "Synthetic staging returns: 7 days unopened.",
+        "availability_status": "in_stock",
+        "source_system": "synthetic_staging_manifest",
+        "last_synced_at": "2026-05-14T00:00:00Z",
+        "variants": []
+      },
+      {
+        "id": "cprd_stg_robot_vacuum",
+        "title": "Staging Robot Vacuum",
+        "brand": "Grantex Demo",
+        "category": "electronics_appliances",
+        "price_minor_units": 2299900,
+        "currency": "INR",
+        "tax_inclusive": true,
+        "gst_rate": 0.18,
+        "hsn_code": "85081100",
+        "warranty_summary": "Synthetic staging warranty: 24 months device coverage.",
+        "return_policy_summary": "Synthetic staging returns: 10 days with accessory check.",
+        "availability_status": "preorder",
+        "source_system": "synthetic_staging_manifest",
+        "last_synced_at": "2026-05-14T00:00:00Z",
+        "variants": []
+      },
+      {
+        "id": "cprd_stg_smart_kettle",
+        "title": "Staging Smart Electric Kettle",
+        "brand": "Grantex Demo",
+        "category": "electronics_appliances",
+        "price_minor_units": 349900,
+        "currency": "INR",
+        "tax_inclusive": true,
+        "gst_rate": 0.18,
+        "hsn_code": "85167990",
+        "warranty_summary": "Synthetic staging warranty: 12 months heating element coverage.",
+        "return_policy_summary": "Synthetic staging returns: 7 days unused.",
+        "availability_status": "in_stock",
+        "source_system": "synthetic_staging_manifest",
+        "last_synced_at": "2026-05-14T00:00:00Z",
+        "variants": []
+      },
+      {
+        "id": "cprd_stg_table_fan",
+        "title": "Staging BLDC Table Fan",
+        "brand": "Grantex Demo",
+        "category": "electronics_appliances",
+        "price_minor_units": 399900,
+        "currency": "INR",
+        "tax_inclusive": true,
+        "gst_rate": 0.18,
+        "hsn_code": "84145190",
+        "warranty_summary": "Synthetic staging warranty: 24 months motor coverage.",
+        "return_policy_summary": "Synthetic staging returns: 7 days for complete package.",
+        "availability_status": "in_stock",
+        "source_system": "synthetic_staging_manifest",
+        "last_synced_at": "2026-05-14T00:00:00Z",
+        "variants": []
+      },
+      {
+        "id": "cprd_stg_toaster",
+        "title": "Staging Pop-Up Toaster",
+        "brand": "Grantex Demo",
+        "category": "electronics_appliances",
+        "price_minor_units": 259900,
+        "currency": "INR",
+        "tax_inclusive": true,
+        "gst_rate": 0.18,
+        "hsn_code": "85167200",
+        "warranty_summary": "Synthetic staging warranty: 12 months appliance coverage.",
+        "return_policy_summary": "Synthetic staging returns: 7 days unopened.",
+        "availability_status": "in_stock",
+        "source_system": "synthetic_staging_manifest",
+        "last_synced_at": "2026-05-14T00:00:00Z",
+        "variants": []
+      },
+      {
+        "id": "cprd_stg_washing_machine",
+        "title": "Staging Compact Washing Machine",
+        "brand": "Grantex Demo",
+        "category": "electronics_appliances",
+        "price_minor_units": 1849900,
+        "currency": "INR",
+        "tax_inclusive": true,
+        "gst_rate": 0.18,
+        "hsn_code": "84501100",
+        "warranty_summary": "Synthetic staging warranty: 24 months motor coverage.",
+        "return_policy_summary": "Synthetic staging returns: installation inspection required.",
+        "availability_status": "in_stock",
+        "source_system": "synthetic_staging_manifest",
+        "last_synced_at": "2026-05-14T00:00:00Z",
+        "variants": []
+      }
+    ]
+  },
+  "webhook_test_reference_requirements": {
+    "reference_generation": "Generate mock payment references at staging seed execution time only; do not commit generated references.",
+    "required_cases": [
+      "paid",
+      "failed",
+      "expired",
+      "duplicate",
+      "invalid_signature",
+      "stale_timestamp",
+      "unsupported_event"
+    ],
+    "raw_payloads_included": false
+  },
+  "consent_passport_test_user_requirements": {
+    "synthetic_user_principal_id": "user_staging_synthetic_buyer",
+    "real_contact_data_allowed": false,
+    "passport_material_included": false,
+    "required_cases": [
+      "approved_consent",
+      "denied_consent",
+      "missing_consent",
+      "revoked_passport",
+      "expired_passport",
+      "amount_cap_exceeded",
+      "untrusted_agent"
+    ]
+  }
+}
