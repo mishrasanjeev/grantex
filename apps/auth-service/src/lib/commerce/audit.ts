@@ -6,6 +6,7 @@ type Sql = ReturnType<typeof postgres>;
 
 export type CommerceAuditEventType =
   | 'merchant.created'
+  | 'merchant.updated'
   | 'merchant.disabled'
   | 'merchant.credentials.updated'
   | 'merchant.feature_flag.updated'
@@ -13,6 +14,7 @@ export type CommerceAuditEventType =
   | 'merchant.webhook_source.created'
   | 'merchant.webhook_source.secret_rotated'
   | 'commerce_agent.created'
+  | 'agent.updated'
   | 'commerce_agent.trust_status.updated'
   | 'commerce_agent.disabled'
   | 'product.created'

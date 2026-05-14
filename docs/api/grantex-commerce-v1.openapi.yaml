@@ -134,6 +134,23 @@ components:
         country_code: { type: string, default: IN }
         support_email: { type: string, nullable: true }
 
+    UpdateMerchantRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        legal_name: { type: string }
+        display_name: { type: string }
+        category_preset: { type: string, enum: [electronics_appliances] }
+        default_currency: { type: string, pattern: "^[A-Z]{3}$" }
+        country_code: { type: string, pattern: "^[A-Z]{2}$" }
+        support_email: { type: string, nullable: true }
+        agentic_commerce_enabled: { type: boolean }
+      description: >-
+        Mutable merchant fields only. Tenant, ownership, environment,
+        provider account references, audit fields, created_at, and updated_at
+        are immutable on this endpoint.
+
     Agent:
       type: object
       properties:
@@ -143,6 +160,7 @@ components:
         agent_type: { type: string }
         public_key_jwk: { type: object, additionalProperties: true, nullable: true }
         trust_status: { type: string, enum: [pending, trusted, suspended, disabled] }
+        status: { type: string, enum: [active, disabled] }
         disabled_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -159,7 +177,21 @@ components:
         Note: trust_status is server-controlled. New agents are always
         created in 'pending'. The field accepts 'pending' (no-op) for
         forward compatibility but rejects any other value with 422. Trust
-        changes will land on a future admin/operator endpoint (M2+).
+        changes are handled by the operator-only updateAgent endpoint.
+
+    UpdateAgentRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name: { type: string }
+        status: { type: string, enum: [active, disabled] }
+        trust_status: { type: string, enum: [pending, trusted, suspended, disabled] }
+      description: >-
+        Operator-only mutable CommerceAgent fields. API key hashes, public key
+        material, tenant_id, merchant_id, audit fields, provider credentials,
+        and created_at/updated_at are immutable here. Key rotation requires a
+        separate explicit rotation contract.
 
     Variant:
       type: object
@@ -874,10 +906,29 @@ paths:
     patch:
       tags: [Merchants]
       summary: Update merchant (mutable fields only)
-      x-implemented: false
+      operationId: updateMerchant
+      x-implemented: true
       x-milestone: M2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateMerchantRequest" }
       responses:
-        "501": { description: Not implemented in M1 }
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Merchant" }
+                  audit_event_id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator or owning merchant caller required; CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
 
   /v1/commerce/merchants/{merchant_id}/disable-agentic-commerce:
     parameters:
@@ -931,10 +982,39 @@ paths:
     get:
       tags: [Commerce Agents]
       summary: List CommerceAgents
-      x-implemented: false
+      description: >-
+        Lists tenant-bound CommerceAgents without API key hashes or private
+        key/provider credential material. Operator callers list tenant agents.
+        Merchant callers may request their own merchant scope; the current
+        CommerceAgent schema is tenant-scoped, so merchant_id is verified for
+        tenant ownership and does not expose a secret-bearing merchant-agent
+        join. CommerceAgent callers list only their own agent record.
+      operationId: listAgents
+      x-implemented: true
       x-milestone: M2
+      parameters:
+        - { in: query, name: merchant_id, required: false, schema: { type: string } }
+        - { in: query, name: status, required: false, schema: { type: string, enum: [active, disabled] } }
+        - { in: query, name: trust_status, required: false, schema: { type: string, enum: [pending, trusted, suspended, disabled] } }
+        - { in: query, name: limit, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { in: query, name: cursor, required: false, schema: { type: string } }
       responses:
-        "501": { description: Not implemented in M1 }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Agent" }
+                  next_cursor: { type: string, nullable: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Caller is outside the allowed tenant/merchant/agent scope }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
 
   /v1/commerce/agents/{agent_id}:
     parameters:
@@ -960,10 +1040,29 @@ paths:
     patch:
       tags: [Commerce Agents]
       summary: Update agent
-      x-implemented: false
+      operationId: updateAgent
+      x-implemented: true
       x-milestone: M2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateAgentRequest" }
       responses:
-        "501": { description: Not implemented in M1 }
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Agent" }
+                  audit_event_id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator caller required; CommerceAgents cannot self-elevate status or trust }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
 
   /v1/commerce/catalog/products:
     post:
