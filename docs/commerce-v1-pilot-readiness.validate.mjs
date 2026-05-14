@@ -10,6 +10,7 @@ const guide = readFileSync(join(docsDir, 'guides', 'commerce-v1-operations.mdx')
 const openapi = readFileSync(join(docsDir, 'api', 'grantex-commerce-v1.openapi.yaml'), 'utf8');
 const template = readFileSync(join(docsDir, 'examples', 'commerce-pilot-merchant.sandbox.json'), 'utf8');
 const loadReport = readFileSync(join(docsDir, 'reports', 'commerce-v1-local-pilot-load.md'), 'utf8');
+const hostedStagingPlan = readFileSync(join(docsDir, 'guides', 'commerce-v1-hosted-staging-plan.md'), 'utf8');
 const harness = readFileSync(join(repoRoot, 'scripts', 'commerce-pilot-load-harness.mjs'), 'utf8');
 const seed = readFileSync(join(repoRoot, 'scripts', 'commerce-pilot-seed-local.mjs'), 'utf8');
 
@@ -37,6 +38,42 @@ for (const required of [
 assert.ok(openapi.includes('/v1/commerce/ops/provider-webhook-events:'), 'OpenAPI documents provider webhook event listing');
 assert.ok(openapi.includes('x-milestone: M7A'), 'OpenAPI marks M7A implemented endpoint');
 assert.ok(openapi.includes('Replay remains blocked'), 'OpenAPI keeps replay blocked');
+
+for (const required of [
+  'grantex-auth-staging',
+  'grantex-portal-staging',
+  'api-staging.grantex.dev',
+  'staging.grantex.dev',
+  'Dedicated staging Cloud SQL Postgres',
+  'Dedicated staging Redis',
+  'No production DB or Redis',
+  'COMMERCE_V1_ENABLED=true',
+  'COMMERCE_SANDBOX_ENABLED=true',
+  'COMMERCE_LIVE_MODE_ENABLED=false',
+  'PLURAL_SANDBOX_ENABLED=false',
+  'PLURAL_LIVE_ENABLED=false',
+  'METRICS_REQUIRE_AUTH=true',
+  'DATABASE_URL',
+  'REDIS_URL',
+  'MOCK_PAYMENT_WEBHOOK_SECRET',
+  'Commerce Passport signing key material',
+  'workflow_dispatch',
+  'authorized -> checkout_created -> payment_pending',
+  'invalid webhook signature',
+  'No deploy was performed',
+]) {
+  assert.ok(hostedStagingPlan.includes(required), `hosted staging plan includes ${required}`);
+}
+
+for (const forbidden of [
+  'COMMERCE_LIVE_MODE_ENABLED=true',
+  'PLURAL_LIVE_ENABLED=true',
+  'sk_live_',
+  'pk_live_',
+  'Bearer ',
+]) {
+  assert.equal(hostedStagingPlan.includes(forbidden), false, `hosted staging plan does not include ${forbidden}`);
+}
 
 const parsedTemplate = JSON.parse(template);
 assert.equal(parsedTemplate.environment, 'sandbox', 'pilot template is sandbox only');
@@ -146,6 +183,7 @@ for (const required of [
 assert.equal(/[^\u0000-\u007F]/.test(guide), false, 'operations guide stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(template), false, 'pilot template stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(loadReport), false, 'pilot load report stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(hostedStagingPlan), false, 'hosted staging plan stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(harness), false, 'load harness stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(seed), false, 'local seed script stays ASCII-only');
 
