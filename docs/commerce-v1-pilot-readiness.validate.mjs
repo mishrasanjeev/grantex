@@ -13,7 +13,10 @@ const stagingSeedManifestText = readFileSync(join(docsDir, 'examples', 'commerce
 const loadReport = readFileSync(join(docsDir, 'reports', 'commerce-v1-local-pilot-load.md'), 'utf8');
 const hostedStagingPlan = readFileSync(join(docsDir, 'guides', 'commerce-v1-hosted-staging-plan.md'), 'utf8');
 const stagingDataSetup = readFileSync(join(docsDir, 'guides', 'commerce-v1-staging-data-setup.md'), 'utf8');
+const hostedStagingE2E = readFileSync(join(docsDir, 'guides', 'commerce-v1-hosted-staging-e2e.md'), 'utf8');
+const hostedStagingE2ETemplate = readFileSync(join(docsDir, 'reports', 'commerce-v1-hosted-staging-e2e.template.md'), 'utf8');
 const harness = readFileSync(join(repoRoot, 'scripts', 'commerce-pilot-load-harness.mjs'), 'utf8');
+const stagingE2EHarness = readFileSync(join(repoRoot, 'scripts', 'commerce-staging-e2e-harness.mjs'), 'utf8');
 const seed = readFileSync(join(repoRoot, 'scripts', 'commerce-pilot-seed-local.mjs'), 'utf8');
 
 for (const required of [
@@ -200,6 +203,98 @@ for (const forbidden of [
   assert.equal(stagingDataSetup.includes(forbidden), false, `staging data setup guide does not include ${forbidden}`);
 }
 
+for (const required of [
+  'Commerce V1 Hosted Staging E2E Harness',
+  'does not create resources',
+  'No production URL may be used as an E2E target',
+  'https://api-staging.grantex.dev',
+  'https://staging.grantex.dev',
+  'https://staging.agenticorg.ai',
+  'https://grantex.dev',
+  'https://api.grantex.dev',
+  'https://app.agenticorg.ai',
+  'cten_staging_commerce',
+  'mch_staging_electronics_pilot',
+  'cag_staging_agenticorg_sales',
+  'ADMIN_API_KEY',
+  'MOCK_PAYMENT_WEBHOOK_SECRET',
+  'Commerce Passport signing key material',
+  'Grantex health',
+  'Grantex JWKS',
+  'Grantex commerce well-known',
+  'MCP initialize',
+  'MCP tools/list',
+  'MCP catalog search/get item',
+  'MCP inventory check',
+  'REST cart create',
+  'REST consent request',
+  'passport exchange',
+  'payment intent create',
+  'checkout create',
+  'mock webhook paid/failed/expired',
+  'duplicate webhook check',
+  'manual reconciliation',
+  'audit timeline check',
+  'portal route smoke',
+  'AgenticOrg real-staging demo/eval handoff',
+  'missing consent',
+  'denied consent',
+  'revoked passport',
+  'expired passport',
+  'amount cap breach',
+  'disabled merchant',
+  'untrusted agent',
+  'stale inventory',
+  'unsupported EMI/discount/warranty claim',
+  'invalid webhook signature',
+  'docs/reports/commerce-v1-hosted-staging-e2e.md',
+]) {
+  assert.ok(hostedStagingE2E.includes(required), `hosted staging E2E guide includes ${required}`);
+}
+
+for (const required of [
+  'https://api-staging.grantex.dev',
+  'https://staging.grantex.dev',
+  'https://staging.agenticorg.ai',
+  'https://grantex.dev',
+  'https://api.grantex.dev',
+  'https://app.agenticorg.ai',
+  "const dryRun = boolArg('--dry-run') || !run;",
+  'docs/reports/commerce-v1-hosted-staging-e2e.md',
+  'Refusing production domain',
+  'Refusing credentialed URL',
+  'Refusing COMMERCE_LIVE_MODE_ENABLED=true',
+  'Refusing PLURAL_LIVE_ENABLED=true',
+  'Refusing non-mock provider',
+  'Run mode is intentionally disabled for M11 dry-run-only harness',
+]) {
+  assert.ok(stagingE2EHarness.includes(required), `hosted staging E2E harness includes ${required}`);
+}
+
+for (const forbiddenDefault of [
+  "DEFAULT_API_BASE = 'https://api.grantex.dev'",
+  "DEFAULT_PORTAL_BASE = 'https://grantex.dev'",
+  "DEFAULT_AGENTICORG_BASE = 'https://app.agenticorg.ai'",
+]) {
+  assert.equal(stagingE2EHarness.includes(forbiddenDefault), false, `hosted staging E2E harness does not default to ${forbiddenDefault}`);
+}
+
+for (const required of [
+  'Commerce V1 Hosted Staging E2E Evidence Template',
+  'https://api-staging.grantex.dev',
+  'https://staging.grantex.dev',
+  'https://staging.agenticorg.ai',
+  'cten_staging_commerce',
+  'mch_staging_electronics_pilot',
+  'cag_staging_agenticorg_sales',
+  'Provider: mock',
+  'Live payments enabled: false',
+  'Live Plural enabled: false',
+  'secret values recorded: false',
+]) {
+  assert.ok(hostedStagingE2ETemplate.includes(required), `hosted staging E2E template includes ${required}`);
+}
+
 assert.ok(harness.includes('Refusing to run commerce pilot load harness against a non-local API base URL'));
 assert.ok(harness.includes('/v1/commerce/payments/intents'));
 assert.ok(harness.includes('/v1/commerce/catalog/search'));
@@ -239,6 +334,37 @@ assert.equal(seedReport.local_only, true);
 assert.equal(seedReport.database_url_allowed, true);
 assert.equal(seedReport.would_seed.cart_count, 100);
 assert.equal(seedReport.would_seed.pending_provider_payment_count, 51);
+
+const stagingE2EDryRun = execFileSync(
+  process.execPath,
+  [join(repoRoot, 'scripts', 'commerce-staging-e2e-harness.mjs'), '--dry-run'],
+  { encoding: 'utf8' },
+);
+const stagingE2EReport = JSON.parse(stagingE2EDryRun);
+assert.equal(stagingE2EReport.mode, 'dry-run');
+assert.equal(stagingE2EReport.status, 'not_executed');
+assert.equal(stagingE2EReport.safety.no_requests_made, true);
+assert.equal(stagingE2EReport.targets.api_base, 'https://api-staging.grantex.dev');
+assert.equal(stagingE2EReport.targets.agenticorg_base, 'https://staging.agenticorg.ai');
+assert.equal(stagingE2EReport.report_path, 'docs/reports/commerce-v1-hosted-staging-e2e.md');
+assert.equal(stagingE2EReport.manifest.provider, 'mock');
+assert.ok(stagingE2EReport.positive_checks.includes('checkout create'));
+assert.ok(stagingE2EReport.negative_checks.includes('invalid webhook signature'));
+
+const stagingE2EProdRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-staging-e2e-harness.mjs'),
+    '--dry-run',
+    '--api-base=https://api.grantex.dev',
+  ],
+  { encoding: 'utf8' },
+);
+assert.notEqual(stagingE2EProdRefusal.status, 0, 'hosted staging E2E harness refuses production API base');
+assert.ok(
+  `${stagingE2EProdRefusal.stdout}${stagingE2EProdRefusal.stderr}`.includes('Refusing production domain'),
+  'hosted staging E2E production refusal explains the safety guard',
+);
 
 const nonLocalSeed = spawnSync(
   process.execPath,
@@ -306,7 +432,10 @@ assert.equal(/[^\u0000-\u007F]/.test(stagingSeedManifestText), false, 'staging s
 assert.equal(/[^\u0000-\u007F]/.test(loadReport), false, 'pilot load report stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(hostedStagingPlan), false, 'hosted staging plan stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(stagingDataSetup), false, 'staging data setup guide stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(hostedStagingE2E), false, 'hosted staging E2E guide stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(hostedStagingE2ETemplate), false, 'hosted staging E2E template stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(harness), false, 'load harness stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(stagingE2EHarness), false, 'hosted staging E2E harness stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(seed), false, 'local seed script stays ASCII-only');
 
 console.log('commerce-v1 pilot readiness validation passed');
