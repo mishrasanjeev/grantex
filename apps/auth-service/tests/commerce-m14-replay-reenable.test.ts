@@ -205,6 +205,25 @@ describe('M14 provider webhook replay', () => {
     expect(res.body).not.toContain(MOCK_WEBHOOK_SECRET);
   });
 
+  it('qualifies replay availability payload hash to avoid joined-table ambiguity', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([replayRow()]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/ops/provider-webhook-events?merchant_id=mch_M14&processing_status=failed',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const calls = flattenedSqlCalls();
+    expect(calls).toContain('e.payload_hash');
+    expect(calls).not.toMatch(/[^.]payload_hash, e\.error_code/);
+    expect(res.body).not.toContain('encrypted_payload');
+    expect(res.body).not.toContain('safe_headers_json');
+    expect(res.body).not.toContain(MOCK_WEBHOOK_SECRET);
+  });
+
   it('supports replay dry-run with a required reason', async () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([replayRow()]);
