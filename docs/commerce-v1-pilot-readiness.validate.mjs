@@ -16,6 +16,7 @@ const stagingDataSetup = readFileSync(join(docsDir, 'guides', 'commerce-v1-stagi
 const hostedStagingE2E = readFileSync(join(docsDir, 'guides', 'commerce-v1-hosted-staging-e2e.md'), 'utf8');
 const optionASmokeSetup = readFileSync(join(docsDir, 'guides', 'commerce-v1-option-a-smoke-setup.md'), 'utf8');
 const hostedStagingE2ETemplate = readFileSync(join(docsDir, 'reports', 'commerce-v1-hosted-staging-e2e.template.md'), 'utf8');
+const optionASmokeEvidence = readFileSync(join(docsDir, 'reports', 'commerce-v1-option-a-smoke-evidence.md'), 'utf8');
 const contractGapReport = readFileSync(join(docsDir, 'reports', 'commerce-v1-contract-completeness-gap-report.md'), 'utf8');
 const harness = readFileSync(join(repoRoot, 'scripts', 'commerce-pilot-load-harness.mjs'), 'utf8');
 const stagingE2EHarness = readFileSync(join(repoRoot, 'scripts', 'commerce-staging-e2e-harness.mjs'), 'utf8');
@@ -280,6 +281,12 @@ for (const required of [
 for (const required of [
   'Commerce V1 Option A Smoke Setup',
   'temporary hosted smoke path',
+  'Option A hosted smoke was executed after explicit approval and is now complete',
+  '22 passed checks, 0 failed checks, and 9 skipped negative checks',
+  'Temporary smoke resources were deleted after evidence capture',
+  'Full hosted staging is still not provisioned',
+  'Live payments and live Plural remain blocked',
+  'AgenticOrg local-to-smoke was not run as valid hosted evidence',
   'Direct Cloud Run URLs are allowed only for Option A smoke',
   'No custom DNS',
   'No hosted AgenticOrg',
@@ -314,6 +321,48 @@ for (const forbidden of [
 ]) {
   assert.equal(optionASmokeSetup.includes(forbidden), false, `Option A smoke setup guide does not include ${forbidden}`);
 }
+
+for (const required of [
+  'Commerce V1 Option A Smoke Evidence',
+  'Passed checks | 22',
+  'Failed checks | 0',
+  'provider webhook replay dry-run | pass | 200',
+  'Temporary smoke resources cleaned up: yes',
+  'Cleanup Completed',
+  'Production DB/Redis used: no',
+  'Plural live: false',
+  'Commerce live mode: false',
+  'AgenticOrg hosted-staging mode is documented for a later pass',
+  'grantex-auth-smoke` was absent',
+  'grantex-commerce-smoke-pg` was absent',
+  'grantex-commerce-smoke-redis` was absent',
+  'Production `grantex-auth`, `grantex-pg16`, and `grantex-redis` still existed',
+]) {
+  assert.ok(optionASmokeEvidence.includes(required), `Option A smoke evidence includes ${required}`);
+}
+
+for (const forbidden of [
+  'Bearer ',
+  'sk_live_',
+  'pk_live_',
+  'postgres://',
+  'redis://',
+  'idempotency-key:',
+  'idempotency_key',
+  'webhook_secret',
+  'encrypted_payload',
+  'raw_payload',
+  'safe_headers_json',
+  'provider_credentials',
+  '-----BEGIN',
+]) {
+  assert.equal(optionASmokeEvidence.includes(forbidden), false, `Option A smoke evidence does not include ${forbidden}`);
+}
+assert.equal(
+  /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/.test(optionASmokeEvidence),
+  false,
+  'Option A smoke evidence does not include JWT-like passport or bearer material',
+);
 
 for (const required of [
   'https://api-staging.grantex.dev',
@@ -592,6 +641,7 @@ assert.equal(/[^\u0000-\u007F]/.test(stagingDataSetup), false, 'staging data set
 assert.equal(/[^\u0000-\u007F]/.test(hostedStagingE2E), false, 'hosted staging E2E guide stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(optionASmokeSetup), false, 'Option A smoke setup guide stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(hostedStagingE2ETemplate), false, 'hosted staging E2E template stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(optionASmokeEvidence), false, 'Option A smoke evidence stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(contractGapReport), false, 'contract gap report stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(harness), false, 'load harness stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(stagingE2EHarness), false, 'hosted staging E2E harness stays ASCII-only');
