@@ -268,8 +268,14 @@ V1 is not ready for external pilot if any item is true:
 
 ## CSV Product And Variant Import Columns
 
-Commerce V1 currently exposes API-backed product and variant creation. CSV import remains an
-operator workflow specification until a dedicated importer is implemented.
+Commerce V1 exposes API-backed product and variant creation plus a local dry-run CSV
+validator. The validator does not connect to a database, call Grantex APIs, create cloud
+resources, or import data. Use it to normalize and validate catalog files before a later
+operator-controlled importer exists:
+
+```bash
+node scripts/commerce-catalog-csv-validate.mjs --input=docs/examples/commerce-catalog-import.sample.csv --dry-run
+```
 
 Required product columns:
 
@@ -315,13 +321,17 @@ Optional variant columns:
 | `return_policy_summary` | string | Short return policy text. |
 | `source_system` | string | Source system for the variant row. |
 
-Importer safety requirements before implementation:
+Importer safety requirements before write-mode implementation:
 
 - Validate tenant and merchant ownership before inserting rows.
 - Reject archived or duplicate variant references in the same import.
 - Do not infer inventory guarantees when availability is `unknown`.
 - Emit append-only audit events for created or updated products.
 - Keep raw import files out of application logs.
+
+M12B status: the local CSV validator covers column shape, required values, duplicate
+SKUs within the file, JSON attributes, and secret-like content refusal. It intentionally
+does not insert rows or upload files.
 
 ## Provider Outage Runbook
 

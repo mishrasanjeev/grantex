@@ -1,6 +1,6 @@
 # Commerce V1 Contract Completeness Gap Report
 
-Status: M12 gap analysis plus M12A merchant/agent API completion. This pass did not deploy, merge, create cloud resources, change production config, enable production Commerce V1, enable live payments, enable live Plural, touch production secrets, or commit local-only artifacts.
+Status: M12 gap analysis plus M12A/M12B API completion. This pass did not deploy, merge, create cloud resources, change production config, enable production Commerce V1, enable live payments, enable live Plural, touch production secrets, or commit local-only artifacts.
 
 ## Classification Key
 
@@ -16,7 +16,7 @@ Status: M12 gap analysis plus M12A merchant/agent API completion. This pass did 
 | --- | --- | --- |
 | Core consent, passport, mock payment, checkout, webhook, reconciliation, audit path | `done` | Strong internal sandbox core after the M8 mock-provider `authorized` fix. |
 | Merchant/agent mutable control-plane APIs | `done` | M12A implements tenant-bound merchant update plus CommerceAgent list/update with allowlisted fields, no secret disclosure, audit, OpenAPI, and focused tests. |
-| Product list/update/bulk/CSV | `not-started` | Product create/get/archive/search exist, but list/update/bulk and CSV ingestion are missing. |
+| Product list/update/bulk/CSV | `partial` | M12B implements product list, product patch, bulk dry-run/upsert, and a local CSV dry-run validator. Full dashboard CSV upload/import remains out of scope. |
 | Inbound merchant webhook source APIs | `not-started` | All source management and inbound merchant webhook endpoints remain `x-implemented: false`. |
 | Portal merchant control plane | `partial` | Payments, audit, passports, settings, playground, and ops views exist; onboarding/catalog/CSV/webhook-source/policy/publish controls do not. |
 | Failed provider webhook replay | `blocked` | Failed metadata exists, but safe raw payload storage, redaction, authorization, and replay audit semantics are absent. |
@@ -32,10 +32,10 @@ Status: M12 gap analysis plus M12A merchant/agent API completion. This pass did 
 | `PATCH /v1/commerce/merchants/{merchant_id}` | `done` | M12A route is implemented with operator/own-merchant auth, tenant filter, mutable allowlist, field validation, and `merchant.updated` audit. | Hosted staging evidence after infrastructure exists. |
 | `GET /v1/commerce/agents` | `done` | M12A route lists tenant-bound CommerceAgents for operators, verifies merchant caller scope, supports status/trust_status/limit/cursor filters, and excludes API key hashes/private/provider credentials. | Hosted staging evidence after infrastructure exists. |
 | `PATCH /v1/commerce/agents/{agent_id}` | `done` | M12A route is operator-only, rejects agent self-elevation, validates status/trust_status/display_name, filters by tenant, and writes `agent.updated` audit. | Hosted staging evidence after infrastructure exists. |
-| `GET /v1/commerce/catalog/products` | `not-started` | OpenAPI `x-implemented: false`; only get-by-id and search exist. | M12B paginated list with merchant/agent/operator scoping. |
-| `PATCH /v1/commerce/catalog/products/{product_id}` | `not-started` | OpenAPI `x-implemented: false`; only create/get/archive exist. | M12B mutable product/variant allowlist with price-change safety. |
-| `POST /v1/commerce/catalog/products/bulk` | `not-started` | OpenAPI `x-implemented: false`; no route. | M12B bulk ingest with per-row validation and audit. |
-| CSV import path | `not-started` | PRD/workplan require CSV; no route or portal import path is present. | M12B define CSV spec, dry-run validation, then import endpoint/UI. |
+| `GET /v1/commerce/catalog/products` | `done` | M12B route lists tenant/merchant-scoped product summaries with status/query/category filters, cursor pagination, and archived products excluded by default. | Hosted staging evidence after infrastructure exists. |
+| `PATCH /v1/commerce/catalog/products/{product_id}` | `done` | M12B route supports allowlisted product/variant updates, merchant/operator auth, tenant boundary, variant ownership checks, price validation, immutable snapshot posture, and `product.updated` audit. | Hosted staging evidence and portal controls after infrastructure exists. |
+| `POST /v1/commerce/catalog/products/bulk` | `done` | M12B route supports dry-run validation by default, transactional upsert on explicit write, per-row results, tenant/merchant boundary, and `catalog.bulk_ingested` audit on writes. | Hosted staging evidence and dashboard import UX remain later. |
+| CSV import path | `partial` | M12B adds `scripts/commerce-catalog-csv-validate.mjs` plus a safe sample CSV for local dry-run validation only. No DB/API/network importer or portal upload exists. | M12D dashboard CSV dry-run/upload UX and a later controlled import path. |
 | `POST /v1/commerce/webhook-sources` | `not-started` | OpenAPI `x-implemented: false`; no route. | M12C source registration, signing key generation, redacted responses. |
 | `GET /v1/commerce/webhook-sources` | `not-started` | OpenAPI `x-implemented: false`; no route. | M12C source metadata list with no secret disclosure. |
 | `PATCH /v1/commerce/webhook-sources/{source_key}` | `not-started` | OpenAPI `x-implemented: false`; no route. | M12C enable/disable and schema controls with audit. |
@@ -50,9 +50,6 @@ Status: M12 gap analysis plus M12A merchant/agent API completion. This pass did 
 
 The validator pins this current set so the gap report cannot silently drift:
 
-- `GET /v1/commerce/catalog/products`
-- `POST /v1/commerce/catalog/products/bulk`
-- `PATCH /v1/commerce/catalog/products/{product_id}`
 - `POST /v1/webhooks/merchant/{merchant_id}/{source_key}`
 - `POST /v1/commerce/webhook-sources`
 - `GET /v1/commerce/webhook-sources`
@@ -99,6 +96,15 @@ The validator pins this current set so the gap report cannot silently drift:
 - Implemented `GET /v1/commerce/agents` with tenant-bound listing, operator/merchant/agent caller scoping, status/trust filters, cursor pagination, and no API key hash, private key, provider credential, bearer token, or secret output.
 - Implemented `PATCH /v1/commerce/agents/{agent_id}` as operator-only with mutable-field allowlist, trust/status validation, self-elevation denial by caller matrix, tenant-bound update, and `agent.updated` audit metadata containing changed field names only.
 - Updated OpenAPI to mark the three M12A operations `x-implemented: true`; product, CSV, webhook-source, inbound webhook, portal, failed replay, emergency re-enable, and Plural work remain out of scope.
+
+## Safe Fixes Made In M12B
+
+- Implemented `GET /v1/commerce/catalog/products` for tenant/merchant-scoped product summaries with active-by-default status filtering, query/category filters, and cursor pagination.
+- Implemented `PATCH /v1/commerce/catalog/products/{product_id}` with product and variant mutable-field allowlists, merchant/operator write scoping, variant ownership validation, currency/price validation, and `product.updated` audit metadata containing changed field names only.
+- Preserved the existing immutable cart and payment intent snapshot posture: catalog price patches update product variant rows only and do not update `commerce_carts` or `commerce_payment_intents` snapshots.
+- Implemented `POST /v1/commerce/catalog/products/bulk` with dry-run validation by default, explicit transactional upsert mode, per-row result reporting, tenant/merchant boundary checks, and `catalog.bulk_ingested` audit on writes.
+- Added local-only CSV dry-run validation via `scripts/commerce-catalog-csv-validate.mjs` and `docs/examples/commerce-catalog-import.sample.csv`; no DB/API/network importer, portal upload, webhook-source, failed replay, emergency re-enable, or Plural integration was added.
+- Updated OpenAPI to mark the three M12B operations `x-implemented: true`; webhook-source and inbound merchant webhook routes remain `x-implemented: false`.
 
 ## Exact Future Implementation Prompts
 
