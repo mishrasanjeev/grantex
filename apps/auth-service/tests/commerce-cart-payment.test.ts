@@ -282,7 +282,10 @@ function primePaymentBase(opts: {
   sqlMock.mockResolvedValueOnce([opts.agentRow ?? agentContext()]);
   sqlMock.mockResolvedValueOnce([{ public_key_jwk: publicJwk, retired_at: null }]);
   sqlMock.mockResolvedValueOnce(opts.revocationRows ?? []);
-  sqlMock.mockResolvedValueOnce([opts.paymentRow ?? paymentIntentRow()]);
+  sqlMock.mockResolvedValueOnce([opts.paymentRow ?? paymentIntentRow({
+    status: 'authorized',
+    provider_raw_status: 'mock_authorized',
+  })]);
   sqlMock.mockResolvedValueOnce([]);
   sqlMock.mockResolvedValueOnce([{ id: opts.auditIds?.[0] ?? 'caud_PAYMENT_CREATED', occurred_at: new Date().toISOString() }]);
   sqlMock.mockResolvedValueOnce([{ id: opts.auditIds?.[1] ?? 'caud_PAYMENT_METER', occurred_at: new Date().toISOString() }]);
@@ -472,7 +475,7 @@ describe('Commerce payment intent APIs', () => {
     const body = res.json<{ data: { payment_intent_id: string; status: string; provider_payment_id: string }; audit_event_id: string; meter_event_id: string }>();
     expect(body.data).toMatchObject({
       payment_intent_id: PAYMENT_INTENT,
-      status: 'created',
+      status: 'authorized',
       provider_payment_id: `mock_pay_${PAYMENT_INTENT}`,
     });
     expect(body.audit_event_id).toBe('caud_PAYMENT_CREATED');
@@ -697,6 +700,8 @@ describe('Commerce checkout link API', () => {
     expect(flattenedSqlCalls()).toContain('checkout_expires_at');
     expect(flattenedSqlCalls()).toContain('checkout_created');
     expect(flattenedSqlCalls()).toContain('payment_pending');
+    expect(flattenedSqlCalls()).toContain('authorized->checkout_created');
+    expect(flattenedSqlCalls()).toContain('checkout_created->payment_pending');
   });
 
   it('requires Idempotency-Key for checkout link creation', async () => {

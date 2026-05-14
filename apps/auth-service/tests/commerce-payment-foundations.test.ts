@@ -87,8 +87,8 @@ describe('Payment provider adapters', () => {
     expect(result).toMatchObject({
       provider_payment_id: 'mock_pay_cpi_TEST',
       provider_order_id: 'mock_order_cpi_TEST',
-      status: 'created',
-      raw_status: 'mock_created',
+      status: 'authorized',
+      raw_status: 'mock_authorized',
     });
   });
 
