@@ -564,6 +564,47 @@ components:
           items: { $ref: "#/components/schemas/BulkProductRowResult" }
         audit_event_id: { type: string, nullable: true }
 
+    MerchantWebhookProductInput:
+      type: object
+      additionalProperties: false
+      required: [product_id, title, category_preset, variants]
+      properties:
+        product_id: { type: string }
+        title: { type: string }
+        brand: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        image_url: { type: string, nullable: true }
+        category_preset: { type: string, enum: [electronics_appliances] }
+        source_system: { type: string, default: webhook }
+        manually_maintained: { type: boolean, default: false }
+        variants:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [sku, price_amount]
+            properties:
+              sku: { type: string }
+              parent_sku: { type: string, nullable: true }
+              model: { type: string, nullable: true }
+              variant_title: { type: string, nullable: true }
+              attributes: { type: object, additionalProperties: true }
+              price_amount: { type: integer, minimum: 0 }
+              currency: { type: string, pattern: "^[A-Z]{3}$", default: INR }
+              tax_inclusive: { type: boolean, default: true }
+              gst_slab: { type: string, nullable: true }
+              tax_rate: { type: number, nullable: true }
+              hsn_code: { type: string, nullable: true }
+              availability_status:
+                type: string
+                enum: [in_stock, out_of_stock, pre_order, back_order, unknown]
+                default: unknown
+              warranty_summary: { type: string, nullable: true }
+              return_policy_summary: { type: string, nullable: true }
+              source_system: { type: string, default: webhook }
+              last_synced_at: { type: string, format: date-time }
+
     CommercePolicyRules:
       type: object
       additionalProperties: false
@@ -862,6 +903,110 @@ components:
               type: string
               nullable: true
               enum: [created, authorized, checkout_created, payment_pending, paid, failed, cancelled, expired, null]
+            processing_status: { type: string, nullable: true }
+        received_audit_event_id: { type: string, nullable: true }
+        audit_event_id: { type: string, nullable: true }
+
+    CommerceWebhookSource:
+      type: object
+      description: >-
+        Safe merchant webhook source metadata. Secret values, encrypted
+        secret material, and secret hashes are never returned by list/read
+        responses.
+      properties:
+        tenant_id: { type: string }
+        merchant_id: { type: string }
+        source_key:
+          type: string
+          pattern: "^[a-z0-9_-]{3,64}$"
+        display_name: { type: string }
+        status: { type: string, enum: [active, disabled] }
+        secret_last_rotated_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CreateWebhookSourceRequest:
+      type: object
+      additionalProperties: false
+      required: [merchant_id, source_key, display_name]
+      properties:
+        merchant_id: { type: string }
+        source_key:
+          type: string
+          pattern: "^[a-z0-9_-]{3,64}$"
+        display_name: { type: string }
+
+    CreateWebhookSourceResponse:
+      type: object
+      description: >-
+        Creation returns the one-time signing secret exactly once. Store it in
+        the merchant system; later list, patch, and rotate metadata responses
+        never expose previous secret material or hashes.
+      properties:
+        data:
+          allOf:
+            - $ref: "#/components/schemas/CommerceWebhookSource"
+            - type: object
+              properties:
+                webhook_secret:
+                  type: string
+                  description: One-time HMAC signing secret returned only on creation or rotation.
+        audit_event_id: { type: string }
+
+    ListWebhookSourcesResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CommerceWebhookSource" }
+
+    UpdateWebhookSourceRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name: { type: string }
+        status: { type: string, enum: [active, disabled] }
+      description: >-
+        Mutable fields only. tenant_id, merchant_id, source_key, secret,
+        secret_hash, encrypted secret material, created_at, updated_at, and
+        audit fields are immutable.
+
+    RotateWebhookSourceSecretRequest:
+      type: object
+      additionalProperties: false
+      required: [merchant_id]
+      properties:
+        merchant_id: { type: string }
+
+    MerchantCatalogProductUpdatedWebhook:
+      type: object
+      additionalProperties: false
+      required: [event_id, event_type, occurred_at, product]
+      description: >-
+        Complete-state merchant catalog event. The HMAC signature is computed
+        over `${timestamp}.${canonical_json_body}` using the source signing
+        secret. The server stores metadata and payload_hash only; it does not
+        store raw payloads, raw signatures, or webhook secrets.
+      properties:
+        event_id: { type: string }
+        event_type: { type: string, const: catalog.product.updated }
+        occurred_at: { type: string, format: date-time }
+        product: { $ref: "#/components/schemas/MerchantWebhookProductInput" }
+
+    MerchantWebhookResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          required: [status, event_id]
+          properties:
+            status: { type: string, enum: [processed, duplicate] }
+            event_id: { type: string }
+            product_id: { type: string, nullable: true }
+            product_internal_id: { type: string, nullable: true }
+            variant_count: { type: integer, nullable: true }
             processing_status: { type: string, nullable: true }
         received_audit_event_id: { type: string, nullable: true }
         audit_event_id: { type: string, nullable: true }
@@ -2618,21 +2763,178 @@ paths:
     parameters:
       - { in: path, name: merchant_id, required: true, schema: { type: string } }
       - { in: path, name: source_key, required: true, schema: { type: string } }
-    post: { tags: [Webhooks], summary: "M2/M5 — catalog.product.updated only", x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+    post:
+      tags: [Webhooks]
+      summary: Handle signed merchant catalog.product.updated webhook
+      operationId: handleMerchantCatalogWebhook
+      x-implemented: true
+      x-milestone: M12C
+      security: []
+      description: >-
+        Signed merchant inbound catalog webhook. M12C accepts only complete
+        `catalog.product.updated` events. Required headers are
+        `X-Grantex-Merchant-Timestamp` and
+        `X-Grantex-Merchant-Signature`. The signature format is
+        `v1=<hex_hmac_sha256(timestamp.canonical_json_body)>`, the replay
+        window is five minutes, disabled sources are rejected, and duplicate
+        event IDs are accepted idempotently without another catalog update.
+        Route merchant_id and source_key are authoritative; tenant_id,
+        merchant_id, and provider fields inside the payload are not trusted.
+        Raw payloads, raw signatures, and webhook secrets are not stored.
+      parameters:
+        - in: header
+          name: X-Grantex-Merchant-Timestamp
+          required: true
+          schema: { type: string }
+          description: Unix timestamp in seconds; must be within the five minute replay window.
+        - in: header
+          name: X-Grantex-Merchant-Signature
+          required: true
+          schema: { type: string }
+          description: v1-prefixed HMAC SHA-256 signature over timestamp and canonical JSON body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MerchantCatalogProductUpdatedWebhook" }
+      responses:
+        "200":
+          description: Webhook processed or duplicate accepted idempotently
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MerchantWebhookResponse" }
+        "401": { description: Signature verification failed }
+        "403": { description: Webhook source is disabled }
+        "404": { description: Merchant webhook source was not found }
+        "409": { description: Timestamp is outside the replay window or catalog upsert conflicts }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
 
   /v1/commerce/webhook-sources:
-    post: { tags: [Webhooks], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
-    get:  { tags: [Webhooks], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+    post:
+      tags: [Webhooks]
+      summary: Create a merchant webhook source
+      operationId: createWebhookSource
+      x-implemented: true
+      x-milestone: M12C
+      description: >-
+        Operator or owning merchant endpoint. Creates a tenant-bound webhook
+        source and returns the generated HMAC signing secret exactly once.
+        The server stores encrypted secret material plus a secret hash and
+        never returns existing secrets on later reads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateWebhookSourceRequest" }
+      responses:
+        "201":
+          description: Created with one-time signing secret
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateWebhookSourceResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Duplicate source_key for this merchant }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+    get:
+      tags: [Webhooks]
+      summary: List merchant webhook sources
+      operationId: listWebhookSources
+      x-implemented: true
+      x-milestone: M12C
+      description: >-
+        Lists safe webhook source metadata for an operator-selected merchant
+        or the authenticated merchant caller. Responses never include signing
+        secrets, secret hashes, encrypted secret blobs, raw payloads, or raw
+        signatures.
+      parameters:
+        - in: query
+          name: merchant_id
+          schema: { type: string }
+          description: Required for operator callers; inferred for merchant callers.
+        - in: query
+          name: status
+          schema: { type: string, enum: [active, disabled] }
+      responses:
+        "200":
+          description: Safe webhook source metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ListWebhookSourcesResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
 
   /v1/commerce/webhook-sources/{source_key}:
     parameters:
       - { in: path, name: source_key, required: true, schema: { type: string } }
-    patch: { tags: [Webhooks], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+    patch:
+      tags: [Webhooks]
+      summary: Update a merchant webhook source
+      operationId: updateWebhookSource
+      x-implemented: true
+      x-milestone: M12C
+      description: >-
+        Updates only display_name or active/disabled status. The caller must
+        be an operator scoped by query merchant_id or the owning merchant.
+        The endpoint rejects merchant_id, source_key, secret, secret_hash,
+        encrypted secret material, created_at, and audit fields.
+      parameters:
+        - in: query
+          name: merchant_id
+          schema: { type: string }
+          description: Required for operator callers; inferred for merchant callers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateWebhookSourceRequest" }
+      responses:
+        "200":
+          description: Updated safe metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/CommerceWebhookSource" }
+                  audit_event_id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
 
   /v1/commerce/webhook-sources/{source_key}/rotate-secret:
     parameters:
       - { in: path, name: source_key, required: true, schema: { type: string } }
-    post: { tags: [Webhooks], summary: M2, x-implemented: false, x-milestone: M2, responses: { "501": { description: Not implemented in M1 } } }
+    post:
+      tags: [Webhooks]
+      summary: Rotate a merchant webhook source secret
+      operationId: rotateWebhookSourceSecret
+      x-implemented: true
+      x-milestone: M12C
+      description: >-
+        Replaces the stored encrypted signing secret and hash, then returns
+        the new signing secret exactly once. Old signing secrets stop
+        validating immediately. Responses never disclose prior secrets,
+        secret hashes, or encrypted secret material.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RotateWebhookSourceSecretRequest" }
+      responses:
+        "200":
+          description: Rotated with one-time replacement signing secret
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateWebhookSourceResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
 
   /.well-known/grantex-commerce:
     get:

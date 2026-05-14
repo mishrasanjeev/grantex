@@ -318,13 +318,7 @@ for (const required of [
   assert.ok(hostedStagingE2ETemplate.includes(required), `hosted staging E2E template includes ${required}`);
 }
 
-const expectedFalseImplementedRoutes = [
-  'POST /v1/webhooks/merchant/{merchant_id}/{source_key}',
-  'POST /v1/commerce/webhook-sources',
-  'GET /v1/commerce/webhook-sources',
-  'PATCH /v1/commerce/webhook-sources/{source_key}',
-  'POST /v1/commerce/webhook-sources/{source_key}/rotate-secret',
-].sort();
+const expectedFalseImplementedRoutes = [].sort();
 assert.deepEqual(
   extractFalseImplementedRoutes(openapi),
   expectedFalseImplementedRoutes,
@@ -358,6 +352,9 @@ for (const required of [
   'M12A Merchant/Agent Mutable/List API Completion',
   'M12B Product List/Patch/Bulk/CSV Completion',
   'M12C Inbound Merchant Webhook Source APIs And `catalog.product.updated`',
+  'Inbound merchant webhook source APIs',
+  'one-time signing secret',
+  'complete-state `catalog.product.updated`',
   'M12D Portal Onboarding/Catalog/Webhook-Source/Policy/Publish Controls',
   'M14 Failed Webhook Replay And Emergency Re-enable',
   'M13 Plural Sandbox Integration After External Contract',

@@ -1,6 +1,6 @@
 # Commerce V1 Contract Completeness Gap Report
 
-Status: M12 gap analysis plus M12A/M12B API completion. This pass did not deploy, merge, create cloud resources, change production config, enable production Commerce V1, enable live payments, enable live Plural, touch production secrets, or commit local-only artifacts.
+Status: M12 gap analysis plus M12A/M12B/M12C API completion. This pass did not deploy, merge, create cloud resources, change production config, enable production Commerce V1, enable live payments, enable live Plural, touch production secrets, or commit local-only artifacts.
 
 ## Classification Key
 
@@ -17,7 +17,7 @@ Status: M12 gap analysis plus M12A/M12B API completion. This pass did not deploy
 | Core consent, passport, mock payment, checkout, webhook, reconciliation, audit path | `done` | Strong internal sandbox core after the M8 mock-provider `authorized` fix. |
 | Merchant/agent mutable control-plane APIs | `done` | M12A implements tenant-bound merchant update plus CommerceAgent list/update with allowlisted fields, no secret disclosure, audit, OpenAPI, and focused tests. |
 | Product list/update/bulk/CSV | `partial` | M12B implements product list, product patch, bulk dry-run/upsert, and a local CSV dry-run validator. Full dashboard CSV upload/import remains out of scope. |
-| Inbound merchant webhook source APIs | `not-started` | All source management and inbound merchant webhook endpoints remain `x-implemented: false`. |
+| Inbound merchant webhook source APIs | `done` | M12C implements webhook-source management, one-time signing secret creation/rotation, signed complete-state `catalog.product.updated` ingestion, replay checks, idempotency, safe metadata persistence, and audit. |
 | Portal merchant control plane | `partial` | Payments, audit, passports, settings, playground, and ops views exist; onboarding/catalog/CSV/webhook-source/policy/publish controls do not. |
 | Failed provider webhook replay | `blocked` | Failed metadata exists, but safe raw payload storage, redaction, authorization, and replay audit semantics are absent. |
 | Emergency re-enable | `blocked` | Emergency disable exists; safe re-enable contract and UI/API do not. |
@@ -36,11 +36,11 @@ Status: M12 gap analysis plus M12A/M12B API completion. This pass did not deploy
 | `PATCH /v1/commerce/catalog/products/{product_id}` | `done` | M12B route supports allowlisted product/variant updates, merchant/operator auth, tenant boundary, variant ownership checks, price validation, immutable snapshot posture, and `product.updated` audit. | Hosted staging evidence and portal controls after infrastructure exists. |
 | `POST /v1/commerce/catalog/products/bulk` | `done` | M12B route supports dry-run validation by default, transactional upsert on explicit write, per-row results, tenant/merchant boundary, and `catalog.bulk_ingested` audit on writes. | Hosted staging evidence and dashboard import UX remain later. |
 | CSV import path | `partial` | M12B adds `scripts/commerce-catalog-csv-validate.mjs` plus a safe sample CSV for local dry-run validation only. No DB/API/network importer or portal upload exists. | M12D dashboard CSV dry-run/upload UX and a later controlled import path. |
-| `POST /v1/commerce/webhook-sources` | `not-started` | OpenAPI `x-implemented: false`; no route. | M12C source registration, signing key generation, redacted responses. |
-| `GET /v1/commerce/webhook-sources` | `not-started` | OpenAPI `x-implemented: false`; no route. | M12C source metadata list with no secret disclosure. |
-| `PATCH /v1/commerce/webhook-sources/{source_key}` | `not-started` | OpenAPI `x-implemented: false`; no route. | M12C enable/disable and schema controls with audit. |
-| `POST /v1/commerce/webhook-sources/{source_key}/rotate-secret` | `not-started` | OpenAPI `x-implemented: false`; no route. | M12C staged secret rotation with old/new validation window. |
-| `POST /v1/webhooks/merchant/{merchant_id}/{source_key}` | `not-started` | OpenAPI `x-implemented: false`; no route; unsigned inbound merchant webhooks are not accepted. | M12C implement `catalog.product.updated` complete-state ingestion with signature and replay checks. |
+| `POST /v1/commerce/webhook-sources` | `done` | M12C route creates tenant/merchant-bound sources for operator or owning merchant callers, generates a one-time signing secret, stores encrypted secret material plus a hash, rejects duplicates, and writes `webhook_source.created` audit. | Hosted staging evidence and portal source manager remain later. |
+| `GET /v1/commerce/webhook-sources` | `done` | M12C route lists safe source metadata for operator-selected or owning merchant scope without returning signing secrets, secret hashes, encrypted material, raw payloads, or signatures. | Hosted staging evidence and portal source manager remain later. |
+| `PATCH /v1/commerce/webhook-sources/{source_key}` | `done` | M12C route updates only `display_name` and `status`, rejects immutable/sensitive fields, filters by tenant/merchant/source, and writes `webhook_source.updated` audit. | Hosted staging evidence and portal source manager remain later. |
+| `POST /v1/commerce/webhook-sources/{source_key}/rotate-secret` | `done` | M12C route replaces encrypted signing material/hash, returns the new one-time signing secret exactly once, and writes `webhook_source.secret_rotated` audit. Old secrets stop validating immediately. | Hosted staging evidence and portal source manager remain later. |
+| `POST /v1/webhooks/merchant/{merchant_id}/{source_key}` | `done` | M12C route accepts only signed complete-state `catalog.product.updated` events, requires timestamp/signature headers, enforces a five-minute replay window, rejects disabled sources, accepts duplicate event IDs without double update, stores payload hashes only, upserts product/variants atomically, and writes `merchant_webhook.received` plus `catalog.product.updated` audit. | Hosted staging evidence and failed-event replay remain later. |
 | Failed provider webhook replay | `blocked` | Provider webhook metadata and failed-event listing exist; replay is intentionally blocked. | M14 raw payload storage/redaction/replay authorization design. |
 | Emergency re-enable | `blocked` | `POST /merchants/{merchant_id}/disable-agentic-commerce` exists; no safe re-enable contract. | M14 re-enable API with operator role, reason, policy evidence, incident acknowledgement, audit. |
 | Policy simulator/UI | `partial` | Policy create/list/read/activate/evaluate API exists; portal simulator/control UI is not complete. | M12D policy console and simulator UI backed by existing evaluate API. |
@@ -50,11 +50,10 @@ Status: M12 gap analysis plus M12A/M12B API completion. This pass did not deploy
 
 The validator pins this current set so the gap report cannot silently drift:
 
-- `POST /v1/webhooks/merchant/{merchant_id}/{source_key}`
-- `POST /v1/commerce/webhook-sources`
-- `GET /v1/commerce/webhook-sources`
-- `PATCH /v1/commerce/webhook-sources/{source_key}`
-- `POST /v1/commerce/webhook-sources/{source_key}/rotate-secret`
+- None. The remaining gaps in this report are portal controls, failed provider
+  webhook replay, emergency re-enable, hosted staging evidence, and Plural
+  sandbox/live integrations; they are not represented as current
+  `x-implemented: false` OpenAPI paths.
 
 ## Grantex MCP Contract
 
@@ -79,7 +78,7 @@ The validator pins this current set so the gap report cannot silently drift:
 | Plural sandbox adapter status | `blocked` | `PluralPaymentProvider` returns explicit blocked validation errors until API/signature details are confirmed. | M13 external contract required. |
 | Plural live status | `blocked` | Live mode remains gated and not enabled. | Legal, provider, production, and readiness approvals required later. |
 | Checkout state machine | `done` | State transitions enforce `authorized -> checkout_created -> payment_pending` and reject invalid transitions. | Hosted staging evidence still needed. |
-| Webhook idempotency | `done` | Provider webhook processing records provider events and duplicate handling for mock provider. | Failed replay is still blocked. |
+| Webhook idempotency | `done` | Provider webhook processing records provider events and duplicate handling for mock provider; M12C adds merchant webhook event idempotency for `catalog.product.updated`. | Failed replay is still blocked. |
 | Reconciliation | `done` | Manual reconciliation endpoint and worker support exist for payment intents. | Hosted staging evidence still needed. |
 | Audit evidence | `done` | Commerce audit events are appended for critical protected actions. | Database-level append-only hardening should be separately verified before external pilot. |
 | No live payment exposure | `done` | Docs, flags, and harnesses keep live payments and live Plural off. | Continue refusing live flags in staging tooling. |
@@ -104,7 +103,15 @@ The validator pins this current set so the gap report cannot silently drift:
 - Preserved the existing immutable cart and payment intent snapshot posture: catalog price patches update product variant rows only and do not update `commerce_carts` or `commerce_payment_intents` snapshots.
 - Implemented `POST /v1/commerce/catalog/products/bulk` with dry-run validation by default, explicit transactional upsert mode, per-row result reporting, tenant/merchant boundary checks, and `catalog.bulk_ingested` audit on writes.
 - Added local-only CSV dry-run validation via `scripts/commerce-catalog-csv-validate.mjs` and `docs/examples/commerce-catalog-import.sample.csv`; no DB/API/network importer, portal upload, webhook-source, failed replay, emergency re-enable, or Plural integration was added.
-- Updated OpenAPI to mark the three M12B operations `x-implemented: true`; webhook-source and inbound merchant webhook routes remain `x-implemented: false`.
+- Updated OpenAPI to mark the three M12B operations `x-implemented: true`; webhook-source and inbound merchant webhook implementation remained for M12C.
+
+## Safe Fixes Made In M12C
+
+- Added `commerce_webhook_sources` and `commerce_merchant_webhook_events` persistence with encrypted signing material, secret hashes, metadata-only event rows, payload hashes, idempotency, and no raw payload/signature/secret storage.
+- Implemented `POST /v1/commerce/webhook-sources`, `GET /v1/commerce/webhook-sources`, `PATCH /v1/commerce/webhook-sources/{source_key}`, and `POST /v1/commerce/webhook-sources/{source_key}/rotate-secret` with operator/owning-merchant auth, agent denial, tenant/merchant boundary checks, immutable/sensitive field rejection, one-time signing secret behavior, and audit.
+- Implemented `POST /v1/webhooks/merchant/{merchant_id}/{source_key}` for signed complete-state `catalog.product.updated` only. It uses `X-Grantex-Merchant-Timestamp` and `X-Grantex-Merchant-Signature`, rejects unsigned/invalid/stale/disabled/malformed/unsupported events, accepts duplicate event IDs idempotently, and upserts product/variant catalog state without mutating active cart or payment intent snapshots.
+- Updated OpenAPI to mark all M12C routes `x-implemented: true` and document the signature contract, replay behavior, one-time secret behavior, and no-secret/no-raw-payload storage posture.
+- Did not implement portal controls, failed provider webhook replay, emergency re-enable, Plural sandbox/live integration, cloud deployment, production config changes, or live payment enablement.
 
 ## Exact Future Implementation Prompts
 

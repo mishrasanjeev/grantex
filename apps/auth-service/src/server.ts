@@ -46,6 +46,7 @@ import { dpdpRoutes } from './routes/dpdp.js';
 import { commerceRoutes } from './routes/commerce.js';
 import { commerceWellKnownRoutes } from './routes/commerce-well-known.js';
 import { commerceMcpRoutes } from './routes/commerce-mcp.js';
+import { commerceMerchantWebhookRoutes } from './routes/commerce-merchant-webhooks.js';
 import { commerceProviderWebhookRoutes } from './routes/commerce-provider-webhooks.js';
 import { metricsHookPlugin } from './plugins/metricsHook.js';
 import websocket from '@fastify/websocket';
@@ -193,6 +194,7 @@ export async function buildApp(opts: AppOptions = {}) {
   // resolves request.commerceTenantId.
   await app.register(commerceRoutes, { prefix: '/v1/commerce' });
   await app.register(commerceProviderWebhookRoutes, { prefix: '/v1/webhooks/providers' });
+  await app.register(commerceMerchantWebhookRoutes, { prefix: '/v1/webhooks/merchant' });
 
   return app;
 }
