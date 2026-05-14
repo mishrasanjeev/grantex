@@ -19,6 +19,7 @@ export type CommerceAuditEventType =
   | 'commerce_agent.disabled'
   | 'product.created'
   | 'product.updated'
+  | 'catalog.bulk_ingested'
   | 'product.archived'
   | 'policy.created'
   | 'policy.activated'

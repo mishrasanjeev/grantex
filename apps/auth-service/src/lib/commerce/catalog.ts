@@ -64,6 +64,17 @@ export interface CatalogSearchInput {
   now?: Date;
 }
 
+export interface CatalogListInput {
+  tenantId: string;
+  merchantId: string;
+  query?: string | null;
+  categoryPreset?: string | null;
+  status?: 'active' | 'archived' | 'all';
+  limit?: number;
+  cursor?: string | null;
+  now?: Date;
+}
+
 export interface VariantSummary {
   variant_id: string;
   sku: string;
@@ -368,6 +379,85 @@ export async function searchCatalog(
        AND v.archived_at IS NULL
        AND (${availability}::text IS NULL OR v.availability_status = ${availability})
        AND (${currency}::text IS NULL OR v.currency = ${currency})
+     ORDER BY p.updated_at DESC, p.id DESC, v.created_at ASC
+  `;
+
+  const grouped = new Map<string, CatalogProductSummary>();
+  for (const row of rows) {
+    let product = grouped.get(row.id);
+    if (!product) {
+      product = {
+        id: row.id,
+        product_id: row.product_id,
+        merchant_id: row.merchant_id,
+        title: row.title,
+        brand: row.brand,
+        image_url: row.image_url,
+        category_preset: row.category_preset,
+        variants_summary: [],
+        updated_at: row.updated_at,
+      };
+      grouped.set(row.id, product);
+    }
+    const variant = normalizeVariantSummary(row, now);
+    if (variant) product.variants_summary.push(variant);
+  }
+
+  const products = [...grouped.values()];
+  const items = products.slice(0, limit);
+  const last = items[items.length - 1];
+  const nextCursor = products.length > limit && last ? encodeCursor(last) : null;
+  return { items, next_cursor: nextCursor };
+}
+
+export async function listCatalogProducts(
+  sql: Sql,
+  input: CatalogListInput,
+): Promise<CatalogSearchResult> {
+  const limit = Math.min(Math.max(input.limit ?? 25, 1), 100);
+  const now = input.now ?? new Date();
+  const query = input.query && input.query.trim().length > 0 ? input.query.trim() : null;
+  const categoryPreset = input.categoryPreset ?? null;
+  const status = input.status ?? 'active';
+  const cursor = decodeCursor(input.cursor);
+
+  const rows = await sql<CatalogSearchRow[]>`
+    WITH matched_products AS (
+      SELECT p.id, p.product_id, p.merchant_id, p.title, p.brand,
+             p.image_url, p.category_preset, p.updated_at
+        FROM commerce_products p
+       WHERE p.tenant_id = ${input.tenantId}
+         AND p.merchant_id = ${input.merchantId}
+         AND (
+           ${status}::text = 'all'
+           OR (${status}::text = 'active' AND p.archived_at IS NULL)
+           OR (${status}::text = 'archived' AND p.archived_at IS NOT NULL)
+         )
+         AND (${query}::text IS NULL
+              OR p.title ILIKE ('%' || ${query} || '%')
+              OR p.brand ILIKE ('%' || ${query} || '%')
+              OR p.product_id ILIKE ('%' || ${query} || '%'))
+         AND (${categoryPreset}::text IS NULL OR p.category_preset = ${categoryPreset})
+         AND (
+           ${cursor.updatedAt}::timestamptz IS NULL
+           OR (p.updated_at, p.id) < (${cursor.updatedAt}::timestamptz, ${cursor.id}::text)
+         )
+       ORDER BY p.updated_at DESC, p.id DESC
+       LIMIT ${limit + 1}
+    )
+    SELECT p.id, p.product_id, p.merchant_id, p.title, p.brand,
+           p.image_url, p.category_preset, p.updated_at,
+           v.id AS variant_id, v.sku, v.variant_title, v.model,
+           v.price_amount, v.currency, v.availability_status, v.last_synced_at
+      FROM matched_products p
+      LEFT JOIN commerce_product_variants v
+        ON v.tenant_id = ${input.tenantId}
+       AND v.merchant_id = p.merchant_id
+       AND v.product_id = p.id
+       AND (
+         ${status}::text IN ('all', 'archived')
+         OR v.archived_at IS NULL
+       )
      ORDER BY p.updated_at DESC, p.id DESC, v.created_at ASC
   `;
 

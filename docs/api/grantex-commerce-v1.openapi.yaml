@@ -398,6 +398,15 @@ components:
           items: { $ref: "#/components/schemas/CatalogProductSummary" }
         next_cursor: { type: string, nullable: true }
 
+    CatalogProductListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CatalogProductSummary" }
+        next_cursor: { type: string, nullable: true }
+
     CreateProductRequest:
       type: object
       required: [merchant_id, product_id, title, category_preset, variants]
@@ -430,6 +439,130 @@ components:
                 default: unknown
               warranty_summary: { type: string }
               return_policy_summary: { type: string }
+
+    ProductPatchVariant:
+      type: object
+      additionalProperties: false
+      properties:
+        variant_id: { type: string, description: Existing commerce_product_variants.id }
+        id: { type: string, description: Alias for variant_id }
+        sku: { type: string }
+        parent_sku: { type: string, nullable: true }
+        model: { type: string, nullable: true }
+        variant_title: { type: string, nullable: true }
+        attributes: { type: object, additionalProperties: true }
+        price_amount: { type: integer, minimum: 0 }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        tax_inclusive: { type: boolean }
+        gst_slab: { type: string, nullable: true }
+        tax_rate: { type: number, nullable: true }
+        hsn_code: { type: string, nullable: true }
+        availability_status:
+          type: string
+          enum: [in_stock, out_of_stock, pre_order, back_order, unknown]
+        warranty_summary: { type: string, nullable: true }
+        return_policy_summary: { type: string, nullable: true }
+        source_system: { type: string, nullable: true }
+        last_synced_at: { type: string, format: date-time }
+      description: Existing variant update. One of `variant_id` or `id` is required.
+
+    UpdateProductRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title: { type: string }
+        brand: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        image_url: { type: string, nullable: true }
+        category_preset: { type: string, enum: [electronics_appliances] }
+        status: { type: string, enum: [active, archived] }
+        source_system: { type: string, nullable: true }
+        manually_maintained: { type: boolean }
+        variants:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/ProductPatchVariant" }
+      description: >-
+        Mutable product and variant fields only. Product/variant primary IDs,
+        tenant_id, merchant_id, provider/payment references, cart/payment
+        snapshots, audit fields, and created_at are immutable. Price changes
+        update catalog variant rows only; existing cart and payment intent
+        line_items_snapshot values remain immutable.
+
+    BulkProductInput:
+      type: object
+      required: [product_id, title, category_preset, variants]
+      properties:
+        merchant_id: { type: string, description: Optional row echo; must match request merchant_id if present. }
+        product_id: { type: string }
+        title: { type: string }
+        brand: { type: string }
+        description: { type: string }
+        image_url: { type: string }
+        category_preset: { type: string, enum: [electronics_appliances] }
+        source_system: { type: string, default: api }
+        manually_maintained: { type: boolean, default: false }
+        variants:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [sku, price_amount]
+            properties:
+              sku: { type: string }
+              parent_sku: { type: string }
+              model: { type: string }
+              variant_title: { type: string }
+              attributes: { type: object, additionalProperties: true }
+              price_amount: { type: integer, minimum: 0 }
+              currency: { type: string, default: INR }
+              tax_inclusive: { type: boolean, default: true }
+              gst_slab: { type: string }
+              tax_rate: { type: number, nullable: true }
+              hsn_code: { type: string }
+              availability_status:
+                type: string
+                enum: [in_stock, out_of_stock, pre_order, back_order, unknown]
+                default: unknown
+              warranty_summary: { type: string }
+              return_policy_summary: { type: string }
+              source_system: { type: string, default: api }
+
+    BulkProductIngestRequest:
+      type: object
+      required: [merchant_id, products]
+      properties:
+        merchant_id: { type: string }
+        dry_run: { type: boolean, default: true }
+        products:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: "#/components/schemas/BulkProductInput" }
+
+    BulkProductRowResult:
+      type: object
+      properties:
+        index: { type: integer }
+        product_id: { type: string, nullable: true }
+        status: { type: string, enum: [valid, invalid, upserted] }
+        variant_count: { type: integer, nullable: true }
+        field_errors:
+          type: object
+          additionalProperties: { type: string }
+
+    BulkProductIngestResponse:
+      type: object
+      properties:
+        dry_run: { type: boolean }
+        summary:
+          type: object
+          additionalProperties: true
+        rows:
+          type: array
+          items: { $ref: "#/components/schemas/BulkProductRowResult" }
+        audit_event_id: { type: string, nullable: true }
 
     CommercePolicyRules:
       type: object
@@ -1093,19 +1226,52 @@ paths:
     get:
       tags: [Catalog]
       summary: List products
-      x-implemented: false
+      operationId: listProducts
+      x-implemented: true
       x-milestone: M2
+      parameters:
+        - { in: query, name: merchant_id, required: false, schema: { type: string }, description: Required for operator and CommerceAgent callers; inferred for merchant callers. }
+        - { in: query, name: status, required: false, schema: { type: string, enum: [active, archived, all], default: active } }
+        - { in: query, name: query, required: false, schema: { type: string } }
+        - { in: query, name: category_preset, required: false, schema: { type: string, enum: [electronics_appliances] } }
+        - { in: query, name: limit, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+        - { in: query, name: cursor, required: false, schema: { type: string } }
       responses:
-        "501": { description: Not implemented in M1 }
+        "200":
+          description: Product summaries with variant summaries
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogProductListResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Caller is outside the allowed tenant/merchant scope }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
 
   /v1/commerce/catalog/products/bulk:
     post:
       tags: [Catalog]
-      summary: Bulk create products
-      x-implemented: false
+      summary: Bulk dry-run or upsert products
+      operationId: bulkIngestProducts
+      x-implemented: true
       x-milestone: M2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkProductIngestRequest" }
       responses:
-        "501": { description: Not implemented in M1 }
+        "200":
+          description: Dry-run validation or transactional upsert result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkProductIngestResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator or owning merchant caller required }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Bulk ingest conflict }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
 
   /v1/commerce/catalog/products/{product_id}:
     parameters:
@@ -1131,10 +1297,31 @@ paths:
     patch:
       tags: [Catalog]
       summary: Update product
-      x-implemented: false
+      operationId: updateProduct
+      x-implemented: true
       x-milestone: M2
+      parameters:
+        - { in: query, name: merchant_id, required: false, schema: { type: string }, description: Required for operator callers; inferred for merchant callers. }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateProductRequest" }
       responses:
-        "501": { description: Not implemented in M1 }
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Product" }
+                  audit_event_id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator or owning merchant caller required; CommerceAgent callers cannot patch catalog products }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
     delete:
       tags: [Catalog]
       summary: Soft-delete (archive) a product

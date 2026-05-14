@@ -17,6 +17,7 @@ import {
 import { isCommerceCategoryPreset } from '../lib/commerce/presets.js';
 import { resolveCommerceCaller, type CommerceCaller } from '../lib/commerce/caller.js';
 import {
+  listCatalogProducts,
   readCatalogItem,
   searchCatalog,
 } from '../lib/commerce/catalog.js';
@@ -117,6 +118,33 @@ interface ProductCreateBody {
   variants?: unknown;
 }
 
+interface ProductListQuery {
+  merchant_id?: string;
+  status?: string;
+  query?: string;
+  category_preset?: string;
+  limit?: string;
+  cursor?: string;
+}
+
+interface ProductPatchBody {
+  title?: unknown;
+  brand?: unknown;
+  description?: unknown;
+  image_url?: unknown;
+  category_preset?: unknown;
+  status?: unknown;
+  source_system?: unknown;
+  manually_maintained?: unknown;
+  variants?: unknown;
+}
+
+interface ProductBulkBody {
+  merchant_id?: unknown;
+  dry_run?: unknown;
+  products?: unknown;
+}
+
 interface CatalogSearchBody {
   merchant_id?: unknown;
   query?: unknown;
@@ -128,6 +156,7 @@ interface CatalogSearchBody {
 const AVAILABILITY = new Set(['in_stock', 'out_of_stock', 'pre_order', 'back_order', 'unknown']);
 const AGENT_TRUST_STATUSES = new Set(['pending', 'trusted', 'suspended', 'disabled']);
 const AGENT_STATUSES = new Set(['active', 'disabled']);
+const PRODUCT_STATUSES = new Set(['active', 'archived', 'all']);
 
 const MERCHANT_PATCH_FIELDS = new Set([
   'legal_name',
@@ -143,6 +172,39 @@ const AGENT_PATCH_FIELDS = new Set([
   'display_name',
   'status',
   'trust_status',
+]);
+
+const PRODUCT_PATCH_FIELDS = new Set([
+  'title',
+  'brand',
+  'description',
+  'image_url',
+  'category_preset',
+  'status',
+  'source_system',
+  'manually_maintained',
+  'variants',
+]);
+
+const VARIANT_PATCH_FIELDS = new Set([
+  'id',
+  'variant_id',
+  'sku',
+  'parent_sku',
+  'model',
+  'variant_title',
+  'attributes',
+  'price_amount',
+  'currency',
+  'tax_inclusive',
+  'gst_slab',
+  'tax_rate',
+  'hsn_code',
+  'availability_status',
+  'warranty_summary',
+  'return_policy_summary',
+  'source_system',
+  'last_synced_at',
 ]);
 
 function isString(v: unknown): v is string {
@@ -171,6 +233,116 @@ function validatePatchKeys(
   return changedFields.filter((key) => allowed.has(key));
 }
 
+function isNullableString(v: unknown): v is string | null {
+  return v === null || isString(v);
+}
+
+function isValidCurrency(v: unknown): v is string {
+  return isString(v) && /^[A-Z]{3}$/.test(v);
+}
+
+function parseBoolean(v: unknown): boolean | null {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'string') {
+    const normalized = v.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
+  return null;
+}
+
+function isValidIsoDate(v: unknown): v is string {
+  return isString(v) && !Number.isNaN(new Date(v).getTime());
+}
+
+function normalizeSourceSystem(v: unknown, fallback = 'manual'): string {
+  return isString(v) ? v : fallback;
+}
+
+function validateVariantInput(
+  variant: VariantInput,
+  prefix: string,
+  fieldErrors: Record<string, string>,
+): void {
+  if (!isString(variant.sku)) fieldErrors[`${prefix}.sku`] = 'required string';
+  if (asInt(variant.price_amount) === null || (asInt(variant.price_amount) as number) < 0) {
+    fieldErrors[`${prefix}.price_amount`] = 'required non-negative integer (minor units)';
+  }
+  if (variant.currency !== undefined && !isValidCurrency(variant.currency)) {
+    fieldErrors[`${prefix}.currency`] = 'must be an ISO 4217 uppercase currency code';
+  }
+  if (variant.tax_inclusive !== undefined && typeof variant.tax_inclusive !== 'boolean') {
+    fieldErrors[`${prefix}.tax_inclusive`] = 'must be a boolean';
+  }
+  if (variant.tax_rate !== undefined && variant.tax_rate !== null
+    && (typeof variant.tax_rate !== 'number' || !Number.isFinite(variant.tax_rate))) {
+    fieldErrors[`${prefix}.tax_rate`] = 'must be a finite number or null';
+  }
+  const avail = isString(variant.availability_status) ? variant.availability_status : 'unknown';
+  if (!AVAILABILITY.has(avail)) {
+    fieldErrors[`${prefix}.availability_status`] =
+      'must be one of: in_stock, out_of_stock, pre_order, back_order, unknown';
+  }
+}
+
+function validateProductCreateLike(
+  value: unknown,
+  index: number,
+  merchantId: string,
+): { ok: true; product: ProductCreateBody } | { ok: false; productId: string | null; fields: Record<string, string> } {
+  const fields: Record<string, string> = {};
+  if (!isPlainObject(value)) {
+    return { ok: false, productId: null, fields: { body: 'must be an object' } };
+  }
+  const row = value as ProductCreateBody;
+  if (row.merchant_id !== undefined && row.merchant_id !== merchantId) {
+    fields['merchant_id'] = 'must match request merchant_id';
+  }
+  if (!isString(row.product_id)) fields['product_id'] = 'required string';
+  if (!isString(row.title)) fields['title'] = 'required string';
+  if (!isCommerceCategoryPreset(row.category_preset)) {
+    fields['category_preset'] = 'must be a known commerce category preset';
+  }
+  if (row.image_url !== undefined && row.image_url !== null && !isString(row.image_url)) {
+    fields['image_url'] = 'must be a string or null';
+  }
+  if (row.manually_maintained !== undefined && typeof row.manually_maintained !== 'boolean') {
+    fields['manually_maintained'] = 'must be a boolean';
+  }
+  if (!Array.isArray(row.variants) || row.variants.length === 0) {
+    fields['variants'] = 'at least one variant is required';
+  } else {
+    const seenSkus = new Set<string>();
+    const currencies = new Set<string>();
+    row.variants.forEach((raw, variantIndex) => {
+      if (!isPlainObject(raw)) {
+        fields[`variants[${variantIndex}]`] = 'must be an object';
+        return;
+      }
+      const variant = raw as VariantInput;
+      validateVariantInput(variant, `variants[${variantIndex}]`, fields);
+      if (isString(variant.sku)) {
+        if (seenSkus.has(variant.sku)) {
+          fields[`variants[${variantIndex}].sku`] = 'duplicate SKU in import row';
+        }
+        seenSkus.add(variant.sku);
+      }
+      if (isString(variant.currency)) currencies.add(variant.currency);
+    });
+    if (currencies.size > 1) {
+      fields['variants.currency'] = 'all variants in one product row must use one currency';
+    }
+  }
+  if (Object.keys(fields).length > 0) {
+    return {
+      ok: false,
+      productId: isString(row.product_id) ? row.product_id : `row_${index}`,
+      fields,
+    };
+  }
+  return { ok: true, product: row };
+}
+
 function merchantIdForCatalogRead(request: FastifyRequest, rawMerchantId: unknown): string {
   const caller = request.commerceCaller;
   if (caller.kind === 'merchant') {
@@ -189,6 +361,26 @@ function merchantIdForCatalogRead(request: FastifyRequest, rawMerchantId: unknow
   }
   throw new CommerceHttpError(403, 'caller_not_authorized',
     'Catalog reads require operator, merchant, or CommerceAgent caller');
+}
+
+function merchantIdForCatalogWrite(request: FastifyRequest, rawMerchantId: unknown): string {
+  const caller = request.commerceCaller;
+  if (caller.kind === 'merchant') {
+    if (rawMerchantId !== undefined && rawMerchantId !== caller.merchantId) {
+      throw new CommerceHttpError(403, 'merchant_scope_violation',
+        'Merchant callers may only write their own catalog');
+    }
+    return caller.merchantId;
+  }
+  if (caller.kind === 'operator') {
+    if (!isString(rawMerchantId)) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
+        { details: { fields: { merchant_id: 'required string' } }, retryable: false });
+    }
+    return rawMerchantId;
+  }
+  throw new CommerceHttpError(403, 'caller_not_authorized',
+    'Catalog writes require operator or merchant caller');
 }
 
 function parseCatalogFilters(value: unknown, fieldErrors: Record<string, string>): {
@@ -998,6 +1190,284 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  app.get<{ Querystring: ProductListQuery }>('/catalog/products', async (request, reply) => {
+    const fieldErrors: Record<string, string> = {};
+    const merchantId = merchantIdForCatalogRead(request, request.query.merchant_id);
+    const limit = request.query.limit === undefined ? 25 : asInt(request.query.limit);
+    if (limit === null || limit < 1 || limit > 100) {
+      fieldErrors['limit'] = 'must be an integer between 1 and 100';
+    }
+    const status = request.query.status ?? 'active';
+    if (!PRODUCT_STATUSES.has(status)) {
+      fieldErrors['status'] = 'must be one of: active, archived, all';
+    }
+    if (request.query.query !== undefined && typeof request.query.query !== 'string') {
+      fieldErrors['query'] = 'must be a string';
+    }
+    if (request.query.cursor !== undefined && typeof request.query.cursor !== 'string') {
+      fieldErrors['cursor'] = 'must be a string';
+    }
+    if (request.query.category_preset !== undefined
+      && !isCommerceCategoryPreset(request.query.category_preset)) {
+      fieldErrors['category_preset'] = 'must be a known commerce category preset';
+    }
+    if (Object.keys(fieldErrors).length > 0) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
+        { details: { fields: fieldErrors }, retryable: false });
+    }
+
+    const merchantRows = await getSql()<{ id: string }[]>`
+      SELECT id FROM commerce_merchants
+       WHERE id = ${merchantId}
+         AND tenant_id = ${request.commerceTenantId}
+       LIMIT 1
+    `;
+    if (!merchantRows[0]) {
+      throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+    }
+
+    const result = await listCatalogProducts(getSql(), {
+      tenantId: request.commerceTenantId,
+      merchantId,
+      query: request.query.query ?? null,
+      categoryPreset: request.query.category_preset ?? null,
+      status: status as 'active' | 'archived' | 'all',
+      limit: limit ?? 25,
+      cursor: request.query.cursor ?? null,
+    });
+    return reply.status(200).send(result);
+  });
+
+  app.post<{ Body: ProductBulkBody }>('/catalog/products/bulk', async (request, reply) => {
+    if (request.body !== undefined && !isPlainObject(request.body)) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { body: 'must be a JSON object' } },
+        retryable: false,
+      });
+    }
+    const body = (request.body ?? {}) as ProductBulkBody;
+    const merchantId = merchantIdForCatalogWrite(request, body.merchant_id);
+    const dryRun = body.dry_run === undefined ? true : parseBoolean(body.dry_run);
+    if (dryRun === null) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { dry_run: 'must be a boolean' } },
+        retryable: false,
+      });
+    }
+    if (!Array.isArray(body.products) || body.products.length === 0) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { products: 'at least one product row is required' } },
+        retryable: false,
+      });
+    }
+    if (body.products.length > 100) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { products: 'must contain at most 100 product rows per request' } },
+        retryable: false,
+      });
+    }
+
+    const sql = getSql();
+    const tenantId = request.commerceTenantId;
+    const merchantRows = await sql<{ id: string }[]>`
+      SELECT id FROM commerce_merchants
+       WHERE id = ${merchantId}
+         AND tenant_id = ${tenantId}
+       LIMIT 1
+    `;
+    if (!merchantRows[0]) {
+      throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+    }
+
+    const seenProductIds = new Set<string>();
+    const seenSkus = new Set<string>();
+    const validationRows = body.products.map((row, index) => {
+      const validation = validateProductCreateLike(row, index, merchantId);
+      if (!validation.ok) {
+        return {
+          index,
+          product_id: validation.productId,
+          status: 'invalid',
+          field_errors: validation.fields,
+        };
+      }
+      const productId = validation.product.product_id as string;
+      const rowErrors: Record<string, string> = {};
+      if (seenProductIds.has(productId)) {
+        rowErrors['product_id'] = 'duplicate product_id in bulk request';
+      }
+      seenProductIds.add(productId);
+      for (const variant of validation.product.variants as VariantInput[]) {
+        const sku = variant.sku as string;
+        if (seenSkus.has(sku)) {
+          rowErrors[`variants.${sku}`] = 'duplicate SKU in bulk request';
+        }
+        seenSkus.add(sku);
+      }
+      if (Object.keys(rowErrors).length > 0) {
+        return { index, product_id: productId, status: 'invalid', field_errors: rowErrors };
+      }
+      return {
+        index,
+        product_id: productId,
+        status: 'valid',
+        field_errors: {},
+        product: validation.product,
+      };
+    });
+    const invalidRows = validationRows.filter((row) => row.status === 'invalid');
+    const publicRows = validationRows.map((row) => ({
+      index: row.index,
+      product_id: row.product_id,
+      status: row.status,
+      field_errors: row.field_errors,
+    }));
+    if (dryRun) {
+      return reply.status(200).send({
+        dry_run: true,
+        summary: {
+          total: validationRows.length,
+          valid: validationRows.length - invalidRows.length,
+          invalid: invalidRows.length,
+        },
+        rows: publicRows,
+      });
+    }
+    if (invalidRows.length > 0) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Bulk product validation failed', {
+        details: { rows: publicRows },
+        retryable: false,
+      });
+    }
+
+    const result = await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      const writtenRows: Array<{ index: number; product_id: string; status: string; variant_count: number }> = [];
+      for (const row of validationRows) {
+        if (row.status !== 'valid' || !('product' in row)) continue;
+        const product = row.product;
+        const productInternalId = newCommerceProductId();
+        const productRows = await tx<Array<{ id: string }>>`
+          INSERT INTO commerce_products (
+            id, tenant_id, merchant_id, product_id, title, brand, description,
+            image_url, category_preset, source_system, manually_maintained
+          ) VALUES (
+            ${productInternalId}, ${tenantId}, ${merchantId},
+            ${product.product_id as string},
+            ${product.title as string},
+            ${isString(product.brand) ? product.brand as string : null},
+            ${isString(product.description) ? product.description as string : null},
+            ${isString(product.image_url) ? product.image_url as string : null},
+            ${product.category_preset as string},
+            ${normalizeSourceSystem(product.source_system, 'api')},
+            ${typeof product.manually_maintained === 'boolean' ? product.manually_maintained : false}
+          )
+          ON CONFLICT (tenant_id, merchant_id, product_id) WHERE archived_at IS NULL
+          DO UPDATE SET
+            title = EXCLUDED.title,
+            brand = EXCLUDED.brand,
+            description = EXCLUDED.description,
+            image_url = EXCLUDED.image_url,
+            category_preset = EXCLUDED.category_preset,
+            source_system = EXCLUDED.source_system,
+            manually_maintained = EXCLUDED.manually_maintained,
+            updated_at = NOW()
+          RETURNING id
+        `;
+        const persistedProductId = productRows[0]?.id;
+        if (!persistedProductId) {
+          throw new CommerceHttpError(409, 'catalog_bulk_conflict',
+            'Bulk product ingest could not create or update a product row');
+        }
+        let variantCount = 0;
+        for (const rawVariant of product.variants as VariantInput[]) {
+          const variantId = newCommerceVariantId();
+          const inserted = await tx<Array<{ id: string }>>`
+            INSERT INTO commerce_product_variants (
+              id, tenant_id, merchant_id, product_id, sku, parent_sku, model,
+              variant_title, attributes, price_amount, currency, tax_inclusive,
+              gst_slab, tax_rate, hsn_code, availability_status,
+              warranty_summary, return_policy_summary, source_system
+            ) VALUES (
+              ${variantId}, ${tenantId}, ${merchantId}, ${persistedProductId},
+              ${rawVariant.sku as string},
+              ${isString(rawVariant.parent_sku) ? rawVariant.parent_sku as string : null},
+              ${isString(rawVariant.model) ? rawVariant.model as string : null},
+              ${isString(rawVariant.variant_title) ? rawVariant.variant_title as string : null},
+              ${JSON.stringify(isPlainObject(rawVariant.attributes) ? rawVariant.attributes : {})}::jsonb,
+              ${asInt(rawVariant.price_amount) as number},
+              ${isString(rawVariant.currency) ? rawVariant.currency as string : 'INR'},
+              ${typeof rawVariant.tax_inclusive === 'boolean' ? rawVariant.tax_inclusive : true},
+              ${isString(rawVariant.gst_slab) ? rawVariant.gst_slab as string : null},
+              ${typeof rawVariant.tax_rate === 'number' ? rawVariant.tax_rate : null},
+              ${isString(rawVariant.hsn_code) ? rawVariant.hsn_code as string : null},
+              ${isString(rawVariant.availability_status) ? rawVariant.availability_status as string : 'unknown'},
+              ${isString(rawVariant.warranty_summary) ? rawVariant.warranty_summary as string : null},
+              ${isString(rawVariant.return_policy_summary) ? rawVariant.return_policy_summary as string : null},
+              ${normalizeSourceSystem(rawVariant.source_system, 'api')}
+            )
+            ON CONFLICT (tenant_id, merchant_id, sku) WHERE archived_at IS NULL
+            DO UPDATE SET
+              parent_sku = EXCLUDED.parent_sku,
+              model = EXCLUDED.model,
+              variant_title = EXCLUDED.variant_title,
+              attributes = EXCLUDED.attributes,
+              price_amount = EXCLUDED.price_amount,
+              currency = EXCLUDED.currency,
+              tax_inclusive = EXCLUDED.tax_inclusive,
+              gst_slab = EXCLUDED.gst_slab,
+              tax_rate = EXCLUDED.tax_rate,
+              hsn_code = EXCLUDED.hsn_code,
+              availability_status = EXCLUDED.availability_status,
+              warranty_summary = EXCLUDED.warranty_summary,
+              return_policy_summary = EXCLUDED.return_policy_summary,
+              source_system = EXCLUDED.source_system,
+              last_synced_at = NOW(),
+              updated_at = NOW()
+            WHERE commerce_product_variants.product_id = ${persistedProductId}
+            RETURNING id
+          `;
+          if (!inserted[0]) {
+            throw new CommerceHttpError(409, 'catalog_bulk_conflict',
+              'Bulk product ingest found an active SKU assigned to another product',
+              { details: { row_index: row.index, sku: rawVariant.sku }, retryable: false });
+          }
+          variantCount += 1;
+        }
+        writtenRows.push({
+          index: row.index,
+          product_id: product.product_id as string,
+          status: 'upserted',
+          variant_count: variantCount,
+        });
+      }
+      const audit = await appendCommerceAudit(tx as unknown as Sql, {
+        tenantId,
+        merchantId,
+        eventType: 'catalog.bulk_ingested',
+        resourceType: 'catalog',
+        resourceId: merchantId,
+        requestId: request.id,
+        metadata: {
+          product_count: writtenRows.length,
+          row_indexes: writtenRows.map((row) => row.index),
+          variant_count: writtenRows.reduce((sum, row) => sum + row.variant_count, 0),
+        },
+      });
+      return { rows: writtenRows, auditEventId: audit.id };
+    });
+
+    return reply.status(200).send({
+      dry_run: false,
+      summary: {
+        total: result.rows.length,
+        upserted: result.rows.length,
+      },
+      rows: result.rows,
+      audit_event_id: result.auditEventId,
+    });
+  });
+
   app.get<{
     Params: { productId: string };
     Querystring: { merchant_id?: string };
@@ -1038,6 +1508,269 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       throw new CommerceHttpError(404, 'product_not_found', 'Product not found in this tenant');
     }
     return reply.status(200).send({ data: item });
+  });
+
+  app.patch<{
+    Params: { productId: string };
+    Querystring: { merchant_id?: string };
+    Body: ProductPatchBody;
+  }>('/catalog/products/:productId', async (request, reply) => {
+    const merchantId = merchantIdForCatalogWrite(request, request.query.merchant_id);
+    if (request.body !== undefined && !isPlainObject(request.body)) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { body: 'must be a JSON object' } },
+        retryable: false,
+      });
+    }
+
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const fieldErrors: Record<string, string> = {};
+    const changedFields = validatePatchKeys(body, PRODUCT_PATCH_FIELDS, fieldErrors);
+    if (changedFields.length === 0 && Object.keys(fieldErrors).length === 0) {
+      fieldErrors['body'] = 'at least one mutable field is required';
+    }
+    if (body['title'] !== undefined && !isString(body['title'])) {
+      fieldErrors['title'] = 'must be a non-empty string';
+    }
+    for (const key of ['brand', 'description', 'image_url', 'source_system']) {
+      if (body[key] !== undefined && !isNullableString(body[key])) {
+        fieldErrors[key] = 'must be a non-empty string or null';
+      }
+    }
+    if (body['category_preset'] !== undefined && !isCommerceCategoryPreset(body['category_preset'])) {
+      fieldErrors['category_preset'] = 'must be a known commerce category preset';
+    }
+    if (body['status'] !== undefined
+      && (typeof body['status'] !== 'string' || !new Set(['active', 'archived']).has(body['status']))) {
+      fieldErrors['status'] = 'must be one of: active, archived';
+    }
+    if (body['manually_maintained'] !== undefined && typeof body['manually_maintained'] !== 'boolean') {
+      fieldErrors['manually_maintained'] = 'must be a boolean';
+    }
+
+    const variants = body['variants'];
+    const variantChangedFields = new Set<string>();
+    if (variants !== undefined) {
+      if (!Array.isArray(variants) || variants.length === 0) {
+        fieldErrors['variants'] = 'must be a non-empty array';
+      } else {
+        const currencies = new Set<string>();
+        variants.forEach((raw, index) => {
+          if (!isPlainObject(raw)) {
+            fieldErrors[`variants[${index}]`] = 'must be an object';
+            return;
+          }
+          const variant = raw as Record<string, unknown>;
+          const variantKeys = Object.keys(variant);
+          for (const key of variantKeys) {
+            if (!VARIANT_PATCH_FIELDS.has(key)) {
+              fieldErrors[`variants[${index}].${key}`] = 'field is immutable or unsupported';
+            }
+          }
+          const allowedFields = variantKeys.filter((key) => VARIANT_PATCH_FIELDS.has(key));
+          const variantRef = isString(variant['variant_id']) ? variant['variant_id']
+            : isString(variant['id']) ? variant['id']
+              : null;
+          if (!variantRef) {
+            fieldErrors[`variants[${index}].variant_id`] = 'variant_id or id is required';
+          }
+          const mutableFields = allowedFields.filter((key) => key !== 'id' && key !== 'variant_id');
+          if (mutableFields.length === 0) {
+            fieldErrors[`variants[${index}]`] = 'at least one mutable variant field is required';
+          }
+          for (const key of mutableFields) variantChangedFields.add(`variants.${key}`);
+          if (variant['sku'] !== undefined && !isString(variant['sku'])) {
+            fieldErrors[`variants[${index}].sku`] = 'must be a non-empty string';
+          }
+          for (const key of ['parent_sku', 'model', 'variant_title', 'gst_slab', 'hsn_code',
+            'warranty_summary', 'return_policy_summary', 'source_system']) {
+            if (variant[key] !== undefined && !isNullableString(variant[key])) {
+              fieldErrors[`variants[${index}].${key}`] = 'must be a non-empty string or null';
+            }
+          }
+          if (variant['attributes'] !== undefined && !isPlainObject(variant['attributes'])) {
+            fieldErrors[`variants[${index}].attributes`] = 'must be an object';
+          }
+          if (variant['price_amount'] !== undefined
+            && (asInt(variant['price_amount']) === null || (asInt(variant['price_amount']) as number) < 0)) {
+            fieldErrors[`variants[${index}].price_amount`] = 'must be a non-negative integer (minor units)';
+          }
+          if (variant['currency'] !== undefined) {
+            if (!isValidCurrency(variant['currency'])) {
+              fieldErrors[`variants[${index}].currency`] = 'must be an ISO 4217 uppercase currency code';
+            } else {
+              currencies.add(variant['currency']);
+            }
+          }
+          if (variant['tax_inclusive'] !== undefined && typeof variant['tax_inclusive'] !== 'boolean') {
+            fieldErrors[`variants[${index}].tax_inclusive`] = 'must be a boolean';
+          }
+          if (variant['tax_rate'] !== undefined && variant['tax_rate'] !== null
+            && (typeof variant['tax_rate'] !== 'number' || !Number.isFinite(variant['tax_rate']))) {
+            fieldErrors[`variants[${index}].tax_rate`] = 'must be a finite number or null';
+          }
+          if (variant['availability_status'] !== undefined
+            && (typeof variant['availability_status'] !== 'string' || !AVAILABILITY.has(variant['availability_status']))) {
+            fieldErrors[`variants[${index}].availability_status`] =
+              'must be one of: in_stock, out_of_stock, pre_order, back_order, unknown';
+          }
+          if (variant['last_synced_at'] !== undefined && !isValidIsoDate(variant['last_synced_at'])) {
+            fieldErrors[`variants[${index}].last_synced_at`] = 'must be an ISO date-time string';
+          }
+        });
+        if (currencies.size > 1) {
+          fieldErrors['variants.currency'] = 'all currency changes in one patch must use one currency';
+        }
+      }
+    }
+    if (Object.keys(fieldErrors).length > 0) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: fieldErrors },
+        retryable: false,
+      });
+    }
+
+    const sql = getSql();
+    const tenantId = request.commerceTenantId;
+    const productRef = request.params.productId;
+    const hasTitle = Object.prototype.hasOwnProperty.call(body, 'title');
+    const hasBrand = Object.prototype.hasOwnProperty.call(body, 'brand');
+    const hasDescription = Object.prototype.hasOwnProperty.call(body, 'description');
+    const hasImageUrl = Object.prototype.hasOwnProperty.call(body, 'image_url');
+    const hasCategoryPreset = Object.prototype.hasOwnProperty.call(body, 'category_preset');
+    const hasStatus = Object.prototype.hasOwnProperty.call(body, 'status');
+    const hasSourceSystem = Object.prototype.hasOwnProperty.call(body, 'source_system');
+    const hasManuallyMaintained = Object.prototype.hasOwnProperty.call(body, 'manually_maintained');
+    const patchTitle = hasTitle ? body['title'] as string : null;
+    const patchBrand = hasBrand ? body['brand'] as string | null : null;
+    const patchDescription = hasDescription ? body['description'] as string | null : null;
+    const patchImageUrl = hasImageUrl ? body['image_url'] as string | null : null;
+    const patchCategoryPreset = hasCategoryPreset ? body['category_preset'] as string : null;
+    const patchStatus = hasStatus ? body['status'] as string : null;
+    const patchSourceSystem = hasSourceSystem ? body['source_system'] as string | null : null;
+    const patchManuallyMaintained = hasManuallyMaintained ? body['manually_maintained'] as boolean : null;
+
+    const result = await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      const productRows = await tx<Array<{ id: string; merchant_id: string }>>`
+        SELECT id, merchant_id
+          FROM commerce_products
+         WHERE tenant_id = ${tenantId}
+           AND merchant_id = ${merchantId}
+           AND (id = ${productRef} OR product_id = ${productRef})
+         LIMIT 1
+      `;
+      const product = productRows[0];
+      if (!product) return null;
+
+      await tx`
+        UPDATE commerce_products
+           SET title = CASE WHEN ${hasTitle}::boolean THEN ${patchTitle}::text ELSE title END,
+               brand = CASE WHEN ${hasBrand}::boolean THEN ${patchBrand}::text ELSE brand END,
+               description = CASE WHEN ${hasDescription}::boolean THEN ${patchDescription}::text ELSE description END,
+               image_url = CASE WHEN ${hasImageUrl}::boolean THEN ${patchImageUrl}::text ELSE image_url END,
+               category_preset = CASE WHEN ${hasCategoryPreset}::boolean THEN ${patchCategoryPreset}::text ELSE category_preset END,
+               source_system = CASE WHEN ${hasSourceSystem}::boolean THEN ${patchSourceSystem}::text ELSE source_system END,
+               manually_maintained = CASE WHEN ${hasManuallyMaintained}::boolean THEN ${patchManuallyMaintained}::boolean ELSE manually_maintained END,
+               archived_at = CASE
+                 WHEN ${hasStatus}::boolean AND ${patchStatus}::text = 'archived' THEN NOW()
+                 WHEN ${hasStatus}::boolean AND ${patchStatus}::text = 'active' THEN NULL::timestamptz
+                 ELSE archived_at
+               END,
+               updated_at = NOW()
+         WHERE id = ${product.id}
+           AND tenant_id = ${tenantId}
+           AND merchant_id = ${merchantId}
+      `;
+
+      if (Array.isArray(variants)) {
+        for (let index = 0; index < variants.length; index += 1) {
+          const variant = variants[index] as Record<string, unknown>;
+          const variantRef = isString(variant['variant_id']) ? variant['variant_id'] as string : variant['id'] as string;
+          const belongs = await tx<Array<{ id: string }>>`
+            SELECT id
+              FROM commerce_product_variants
+             WHERE tenant_id = ${tenantId}
+               AND merchant_id = ${merchantId}
+               AND product_id = ${product.id}
+               AND id = ${variantRef}
+             LIMIT 1
+          `;
+          if (!belongs[0]) {
+            throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+              details: { fields: { [`variants[${index}].variant_id`]: 'variant must belong to this product' } },
+              retryable: false,
+            });
+          }
+          const hasSku = Object.prototype.hasOwnProperty.call(variant, 'sku');
+          const hasParentSku = Object.prototype.hasOwnProperty.call(variant, 'parent_sku');
+          const hasModel = Object.prototype.hasOwnProperty.call(variant, 'model');
+          const hasVariantTitle = Object.prototype.hasOwnProperty.call(variant, 'variant_title');
+          const hasAttributes = Object.prototype.hasOwnProperty.call(variant, 'attributes');
+          const hasPrice = Object.prototype.hasOwnProperty.call(variant, 'price_amount');
+          const hasCurrency = Object.prototype.hasOwnProperty.call(variant, 'currency');
+          const hasTaxInclusive = Object.prototype.hasOwnProperty.call(variant, 'tax_inclusive');
+          const hasGstSlab = Object.prototype.hasOwnProperty.call(variant, 'gst_slab');
+          const hasTaxRate = Object.prototype.hasOwnProperty.call(variant, 'tax_rate');
+          const hasHsnCode = Object.prototype.hasOwnProperty.call(variant, 'hsn_code');
+          const hasAvailability = Object.prototype.hasOwnProperty.call(variant, 'availability_status');
+          const hasWarranty = Object.prototype.hasOwnProperty.call(variant, 'warranty_summary');
+          const hasReturnPolicy = Object.prototype.hasOwnProperty.call(variant, 'return_policy_summary');
+          const hasVariantSource = Object.prototype.hasOwnProperty.call(variant, 'source_system');
+          const hasLastSynced = Object.prototype.hasOwnProperty.call(variant, 'last_synced_at');
+          await tx`
+            UPDATE commerce_product_variants
+               SET sku = CASE WHEN ${hasSku}::boolean THEN ${hasSku ? variant['sku'] as string : null}::text ELSE sku END,
+                   parent_sku = CASE WHEN ${hasParentSku}::boolean THEN ${hasParentSku ? variant['parent_sku'] as string | null : null}::text ELSE parent_sku END,
+                   model = CASE WHEN ${hasModel}::boolean THEN ${hasModel ? variant['model'] as string | null : null}::text ELSE model END,
+                   variant_title = CASE WHEN ${hasVariantTitle}::boolean THEN ${hasVariantTitle ? variant['variant_title'] as string | null : null}::text ELSE variant_title END,
+                   attributes = CASE WHEN ${hasAttributes}::boolean THEN ${JSON.stringify(hasAttributes ? variant['attributes'] : {})}::jsonb ELSE attributes END,
+                   price_amount = CASE WHEN ${hasPrice}::boolean THEN ${hasPrice ? asInt(variant['price_amount']) : null}::bigint ELSE price_amount END,
+                   currency = CASE WHEN ${hasCurrency}::boolean THEN ${hasCurrency ? variant['currency'] as string : null}::text ELSE currency END,
+                   tax_inclusive = CASE WHEN ${hasTaxInclusive}::boolean THEN ${hasTaxInclusive ? variant['tax_inclusive'] as boolean : null}::boolean ELSE tax_inclusive END,
+                   gst_slab = CASE WHEN ${hasGstSlab}::boolean THEN ${hasGstSlab ? variant['gst_slab'] as string | null : null}::text ELSE gst_slab END,
+                   tax_rate = CASE WHEN ${hasTaxRate}::boolean THEN ${hasTaxRate ? variant['tax_rate'] as number | null : null}::numeric ELSE tax_rate END,
+                   hsn_code = CASE WHEN ${hasHsnCode}::boolean THEN ${hasHsnCode ? variant['hsn_code'] as string | null : null}::text ELSE hsn_code END,
+                   availability_status = CASE WHEN ${hasAvailability}::boolean THEN ${hasAvailability ? variant['availability_status'] as string : null}::text ELSE availability_status END,
+                   warranty_summary = CASE WHEN ${hasWarranty}::boolean THEN ${hasWarranty ? variant['warranty_summary'] as string | null : null}::text ELSE warranty_summary END,
+                   return_policy_summary = CASE WHEN ${hasReturnPolicy}::boolean THEN ${hasReturnPolicy ? variant['return_policy_summary'] as string | null : null}::text ELSE return_policy_summary END,
+                   source_system = CASE WHEN ${hasVariantSource}::boolean THEN ${hasVariantSource ? variant['source_system'] as string | null : null}::text ELSE source_system END,
+                   last_synced_at = CASE WHEN ${hasLastSynced}::boolean THEN ${hasLastSynced ? variant['last_synced_at'] as string : null}::timestamptz ELSE last_synced_at END,
+                   updated_at = NOW()
+             WHERE id = ${variantRef}
+               AND tenant_id = ${tenantId}
+               AND merchant_id = ${merchantId}
+               AND product_id = ${product.id}
+          `;
+        }
+      }
+
+      const item = await readCatalogItem(tx as unknown as Sql, {
+        tenantId,
+        merchantId,
+        productRef: product.id,
+        includeArchived: true,
+      });
+      const audit = await appendCommerceAudit(tx as unknown as Sql, {
+        tenantId,
+        merchantId,
+        eventType: 'product.updated',
+        resourceType: 'product',
+        resourceId: product.id,
+        requestId: request.id,
+        metadata: {
+          changed_fields: [
+            ...changedFields.filter((field) => field !== 'variants'),
+            ...Array.from(variantChangedFields),
+          ],
+        },
+      });
+      return { item, auditEventId: audit.id };
+    });
+    if (!result) {
+      throw new CommerceHttpError(404, 'product_not_found', 'Product not found in this tenant');
+    }
+    return reply.status(200).send({ data: result.item, audit_event_id: result.auditEventId });
   });
 
   app.post<{ Body: CatalogSearchBody }>(

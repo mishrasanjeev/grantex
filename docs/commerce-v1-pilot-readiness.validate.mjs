@@ -319,9 +319,6 @@ for (const required of [
 }
 
 const expectedFalseImplementedRoutes = [
-  'GET /v1/commerce/catalog/products',
-  'POST /v1/commerce/catalog/products/bulk',
-  'PATCH /v1/commerce/catalog/products/{product_id}',
   'POST /v1/webhooks/merchant/{merchant_id}/{source_key}',
   'POST /v1/commerce/webhook-sources',
   'GET /v1/commerce/webhook-sources',
