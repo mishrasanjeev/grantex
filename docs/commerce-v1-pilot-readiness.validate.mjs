@@ -15,9 +15,32 @@ const hostedStagingPlan = readFileSync(join(docsDir, 'guides', 'commerce-v1-host
 const stagingDataSetup = readFileSync(join(docsDir, 'guides', 'commerce-v1-staging-data-setup.md'), 'utf8');
 const hostedStagingE2E = readFileSync(join(docsDir, 'guides', 'commerce-v1-hosted-staging-e2e.md'), 'utf8');
 const hostedStagingE2ETemplate = readFileSync(join(docsDir, 'reports', 'commerce-v1-hosted-staging-e2e.template.md'), 'utf8');
+const contractGapReport = readFileSync(join(docsDir, 'reports', 'commerce-v1-contract-completeness-gap-report.md'), 'utf8');
 const harness = readFileSync(join(repoRoot, 'scripts', 'commerce-pilot-load-harness.mjs'), 'utf8');
 const stagingE2EHarness = readFileSync(join(repoRoot, 'scripts', 'commerce-staging-e2e-harness.mjs'), 'utf8');
 const seed = readFileSync(join(repoRoot, 'scripts', 'commerce-pilot-seed-local.mjs'), 'utf8');
+
+function extractFalseImplementedRoutes(openapiText) {
+  const routes = [];
+  let currentPath = null;
+  let currentMethod = null;
+  for (const line of openapiText.split(/\r?\n/)) {
+    const pathMatch = line.match(/^ {2}(\/[^:]+):/);
+    if (pathMatch) {
+      currentPath = pathMatch[1];
+      currentMethod = null;
+      continue;
+    }
+    const methodMatch = line.match(/^ {4}(get|post|patch|delete):/);
+    if (methodMatch) {
+      currentMethod = methodMatch[1].toUpperCase();
+    }
+    if (currentPath && currentMethod && line.includes('x-implemented: false')) {
+      routes.push(`${currentMethod} ${currentPath}`);
+    }
+  }
+  return routes.sort();
+}
 
 for (const required of [
   'Pilot SLA And Readiness Dashboard',
@@ -295,6 +318,72 @@ for (const required of [
   assert.ok(hostedStagingE2ETemplate.includes(required), `hosted staging E2E template includes ${required}`);
 }
 
+const expectedFalseImplementedRoutes = [
+  'PATCH /v1/commerce/merchants/{merchant_id}',
+  'GET /v1/commerce/agents',
+  'PATCH /v1/commerce/agents/{agent_id}',
+  'GET /v1/commerce/catalog/products',
+  'POST /v1/commerce/catalog/products/bulk',
+  'PATCH /v1/commerce/catalog/products/{product_id}',
+  'POST /v1/webhooks/merchant/{merchant_id}/{source_key}',
+  'POST /v1/commerce/webhook-sources',
+  'GET /v1/commerce/webhook-sources',
+  'PATCH /v1/commerce/webhook-sources/{source_key}',
+  'POST /v1/commerce/webhook-sources/{source_key}/rotate-secret',
+].sort();
+assert.deepEqual(
+  extractFalseImplementedRoutes(openapi),
+  expectedFalseImplementedRoutes,
+  'OpenAPI x-implemented:false route inventory is pinned by M12 gap report',
+);
+
+for (const required of [
+  'Commerce V1 Contract Completeness Gap Report',
+  '`done`',
+  '`partial`',
+  '`blocked`',
+  '`deferred`',
+  '`not-started`',
+  'Merchant/agent mutable control-plane APIs',
+  'Product list/update/bulk/CSV',
+  'Inbound merchant webhook source APIs',
+  'Failed provider webhook replay',
+  'Emergency re-enable',
+  'Plural sandbox',
+  'Hosted staging E2E evidence',
+  'merchant.get_profile',
+  'catalog.search',
+  'catalog.get_item',
+  'inventory.check',
+  'cart.create',
+  'checkout.create',
+  'payment.create_intent',
+  'payment.get_status',
+  'JSON-RPC over HTTP caveat',
+  'No UCP/ACP/AP2/MPP certification claims',
+  'M12A Merchant/Agent Mutable/List API Completion',
+  'M12B Product List/Patch/Bulk/CSV Completion',
+  'M12C Inbound Merchant Webhook Source APIs And `catalog.product.updated`',
+  'M12D Portal Onboarding/Catalog/Webhook-Source/Policy/Publish Controls',
+  'M14 Failed Webhook Replay And Emergency Re-enable',
+  'M13 Plural Sandbox Integration After External Contract',
+]) {
+  assert.ok(contractGapReport.includes(required), `contract gap report includes ${required}`);
+}
+for (const route of expectedFalseImplementedRoutes) {
+  assert.ok(contractGapReport.includes(route), `contract gap report names incomplete route ${route}`);
+}
+for (const forbidden of [
+  'sk_live_',
+  'pk_live_',
+  'Bearer ',
+  'passport.jwt',
+  'idempotency-key:',
+  'mock-webhook-secret',
+]) {
+  assert.equal(contractGapReport.includes(forbidden), false, `contract gap report does not include ${forbidden}`);
+}
+
 assert.ok(harness.includes('Refusing to run commerce pilot load harness against a non-local API base URL'));
 assert.ok(harness.includes('/v1/commerce/payments/intents'));
 assert.ok(harness.includes('/v1/commerce/catalog/search'));
@@ -434,6 +523,7 @@ assert.equal(/[^\u0000-\u007F]/.test(hostedStagingPlan), false, 'hosted staging 
 assert.equal(/[^\u0000-\u007F]/.test(stagingDataSetup), false, 'staging data setup guide stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(hostedStagingE2E), false, 'hosted staging E2E guide stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(hostedStagingE2ETemplate), false, 'hosted staging E2E template stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(contractGapReport), false, 'contract gap report stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(harness), false, 'load harness stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(stagingE2EHarness), false, 'hosted staging E2E harness stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(seed), false, 'local seed script stays ASCII-only');
