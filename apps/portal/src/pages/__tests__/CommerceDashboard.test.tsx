@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { CommerceAudit } from '../commerce/CommerceAudit';
+import { CommerceCatalog } from '../commerce/CommerceCatalog';
+import { CommerceOnboarding } from '../commerce/CommerceOnboarding';
 import { CommercePassports } from '../commerce/CommercePassports';
 import { CommercePayments } from '../commerce/CommercePayments';
 import { CommerceOps } from '../commerce/CommerceOps';
 import { CommercePlayground } from '../commerce/CommercePlayground';
 import { CommerceSettings } from '../commerce/CommerceSettings';
+import { CommerceWebhooks } from '../commerce/CommerceWebhooks';
 
 const mockListCommercePaymentIntents = vi.fn();
 const mockReconcileCommercePaymentIntent = vi.fn();
@@ -16,7 +19,19 @@ const mockListCommerceAuditEvents = vi.fn();
 const mockListCommercePassports = vi.fn();
 const mockRevokeCommercePassport = vi.fn();
 const mockGetCommerceMerchant = vi.fn();
+const mockUpdateCommerceMerchant = vi.fn();
 const mockDisableMerchantAgenticCommerce = vi.fn();
+const mockListCommerceAgents = vi.fn();
+const mockUpdateCommerceAgent = vi.fn();
+const mockListCommerceProducts = vi.fn();
+const mockUpdateCommerceProduct = vi.fn();
+const mockBulkIngestCommerceProducts = vi.fn();
+const mockListCommercePolicies = vi.fn();
+const mockEvaluateCommercePolicy = vi.fn();
+const mockListCommerceWebhookSources = vi.fn();
+const mockCreateCommerceWebhookSource = vi.fn();
+const mockUpdateCommerceWebhookSource = vi.fn();
+const mockRotateCommerceWebhookSourceSecret = vi.fn();
 const mockListCommerceProviderCredentials = vi.fn();
 const mockValidateCommerceProviderCredential = vi.fn();
 const mockGetCommerceOpsHealth = vi.fn();
@@ -31,7 +46,19 @@ vi.mock('../../api/commerce', () => ({
   listCommercePassports: (...a: unknown[]) => mockListCommercePassports(...a),
   revokeCommercePassport: (...a: unknown[]) => mockRevokeCommercePassport(...a),
   getCommerceMerchant: (...a: unknown[]) => mockGetCommerceMerchant(...a),
+  updateCommerceMerchant: (...a: unknown[]) => mockUpdateCommerceMerchant(...a),
   disableMerchantAgenticCommerce: (...a: unknown[]) => mockDisableMerchantAgenticCommerce(...a),
+  listCommerceAgents: (...a: unknown[]) => mockListCommerceAgents(...a),
+  updateCommerceAgent: (...a: unknown[]) => mockUpdateCommerceAgent(...a),
+  listCommerceProducts: (...a: unknown[]) => mockListCommerceProducts(...a),
+  updateCommerceProduct: (...a: unknown[]) => mockUpdateCommerceProduct(...a),
+  bulkIngestCommerceProducts: (...a: unknown[]) => mockBulkIngestCommerceProducts(...a),
+  listCommercePolicies: (...a: unknown[]) => mockListCommercePolicies(...a),
+  evaluateCommercePolicy: (...a: unknown[]) => mockEvaluateCommercePolicy(...a),
+  listCommerceWebhookSources: (...a: unknown[]) => mockListCommerceWebhookSources(...a),
+  createCommerceWebhookSource: (...a: unknown[]) => mockCreateCommerceWebhookSource(...a),
+  updateCommerceWebhookSource: (...a: unknown[]) => mockUpdateCommerceWebhookSource(...a),
+  rotateCommerceWebhookSourceSecret: (...a: unknown[]) => mockRotateCommerceWebhookSourceSecret(...a),
   listCommerceProviderCredentials: (...a: unknown[]) => mockListCommerceProviderCredentials(...a),
   validateCommerceProviderCredential: (...a: unknown[]) => mockValidateCommerceProviderCredential(...a),
   getCommerceOpsHealth: (...a: unknown[]) => mockGetCommerceOpsHealth(...a),
@@ -152,6 +179,54 @@ const credential = {
   updated_at: '2026-01-01T00:00:00Z',
   rotated_at: null,
   encrypted_secret_blob: 'encrypted-secret-must-not-render',
+};
+
+const agent = {
+  id: 'cag_1',
+  tenant_id: 'cten_1',
+  display_name: 'AgenticOrg Sales',
+  agent_type: 'sales',
+  public_key_jwk: null,
+  trust_status: 'trusted' as const,
+  status: 'active' as const,
+  disabled_at: null,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+};
+
+const product = {
+  id: 'cprd_1',
+  product_id: 'TOASTER-V1',
+  merchant_id: 'mch_1',
+  title: 'Acme Toaster',
+  brand: 'Acme',
+  image_url: null,
+  category_preset: 'electronics_appliances',
+  updated_at: '2026-01-01T00:00:00Z',
+  variants_summary: [{
+    variant_id: 'cvar_1',
+    sku: 'TOASTER-V1-WHITE',
+    variant_title: 'White',
+    model: 'T100',
+    price_amount: 250000,
+    currency: 'INR',
+    availability_status: 'in_stock' as const,
+    last_synced_at: '2026-01-01T00:00:00Z',
+    stale: false,
+    freshness: 'fresh' as const,
+  }],
+};
+
+const webhookSource = {
+  tenant_id: 'cten_1',
+  merchant_id: 'mch_1',
+  source_key: 'erp_sync',
+  display_name: 'ERP Sync',
+  status: 'active' as const,
+  secret_last_rotated_at: '2026-01-01T00:00:00Z',
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+  secret_hash: 'redacted-hash-must-not-render',
 };
 
 const health = {
@@ -367,6 +442,197 @@ describe('CommerceSettings', () => {
     await user.click(screen.getByRole('button', { name: 'Emergency disable' }));
     await user.click(screen.getByRole('button', { name: 'Disable' }));
     await waitFor(() => expect(mockDisableMerchantAgenticCommerce).toHaveBeenCalledWith('mch_1', 'dashboard_emergency_disable'));
+  });
+});
+
+describe('CommerceOnboarding', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetCommerceMerchant.mockResolvedValue({ data: merchant });
+    mockUpdateCommerceMerchant.mockResolvedValue({ data: { ...merchant, display_name: 'Grantex Store Updated' }, audit_event_id: 'aud_merchant' });
+    mockListCommerceAgents.mockResolvedValue({ items: [agent], next_cursor: null });
+    mockListCommercePolicies.mockResolvedValue({ items: [{ id: 'cpol_1', status: 'active' }], next_cursor: null });
+    mockListCommerceProducts.mockResolvedValue({ items: [product], next_cursor: null });
+    mockListCommerceProviderCredentials.mockResolvedValue({ items: [credential], next_cursor: null });
+    mockListCommerceWebhookSources.mockResolvedValue({ items: [webhookSource] });
+    mockGetCommerceWellKnownProfile.mockResolvedValue({
+      version: '1.0.0',
+      merchant: { merchant_id: 'mch_1', display_name: 'Grantex Store', legal_name: 'Grantex Commerce Pvt Ltd', environment: 'sandbox', capabilities: ['catalog.search'] },
+      environment: 'sandbox',
+      supported_tools: ['merchant.get_profile', 'catalog.search'],
+      capabilities: ['mcp_json_rpc_http'],
+    });
+    mockEvaluateCommercePolicy.mockResolvedValue({
+      data: { decision: 'allow', reason: 'policy_allow', policy_id: 'cpol_1', policy_version: 'v1', decision_id: 'cpdec_1' },
+    });
+  });
+
+  it('loads merchant onboarding checklist, saves safe profile fields, and evaluates policy without raw passport display', async () => {
+    const user = userEvent.setup();
+    r(<CommerceOnboarding />);
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
+    await waitFor(() => expect(screen.getByText('Readiness checklist')).toBeInTheDocument());
+    expect(screen.getByText('Trusted agent')).toBeInTheDocument();
+    expect(screen.getByText('Mock provider credential metadata')).toBeInTheDocument();
+    expect(screen.getByText('Publish/unpublish controls require a reviewed backend API and remain blocked.')).toBeInTheDocument();
+    expect(screen.queryByText(/enable live plural/i)).not.toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('Display name'));
+    await user.type(screen.getByLabelText('Display name'), 'Grantex Store Updated');
+    await user.click(screen.getByRole('button', { name: 'Save merchant' }));
+    await waitFor(() => expect(mockUpdateCommerceMerchant).toHaveBeenCalledWith('mch_1', expect.objectContaining({
+      display_name: 'Grantex Store Updated',
+      agentic_commerce_enabled: true,
+    })));
+
+    await user.click(screen.getByRole('button', { name: 'Evaluate policy' }));
+    await waitFor(() => expect(mockEvaluateCommercePolicy).toHaveBeenCalledWith(expect.objectContaining({
+      merchantId: 'mch_1',
+      agentId: 'cag_1',
+      passportJwt: 'portal-simulator:checkout:cpsp_preview',
+    })));
+    expect(screen.getByText('policy_allow')).toBeInTheDocument();
+    expect(screen.queryByText(/passport_jwt/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('CommerceCatalog', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListCommerceProducts.mockResolvedValue({ items: [product], next_cursor: null });
+    mockUpdateCommerceProduct.mockResolvedValue({ data: { ...product, variants: [] }, audit_event_id: 'aud_product' });
+    mockBulkIngestCommerceProducts.mockResolvedValue({
+      dry_run: true,
+      summary: { total: 1, valid: 1, invalid: 0 },
+      rows: [{ index: 0, product_id: 'TOASTER-CSV', status: 'valid', field_errors: {} }],
+    });
+  });
+
+  it('lists products and patches selected product/variant fields', async () => {
+    const user = userEvent.setup();
+    r(<CommerceCatalog />);
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load catalog' }));
+    await waitFor(() => expect(screen.getByText('Acme Toaster')).toBeInTheDocument());
+    await user.clear(screen.getByLabelText('Title'));
+    await user.type(screen.getByLabelText('Title'), 'Acme Toaster Pro');
+    await user.click(screen.getByRole('button', { name: 'Save product' }));
+    await waitFor(() => expect(mockUpdateCommerceProduct).toHaveBeenCalledWith('TOASTER-V1', expect.objectContaining({
+      title: 'Acme Toaster Pro',
+      variants: [expect.objectContaining({ variant_id: 'cvar_1', price_amount: 250000 })],
+    }), 'mch_1'));
+  });
+
+  it('runs local CSV validation and API bulk dry-run without production upload claims', async () => {
+    const user = userEvent.setup();
+    r(<CommerceCatalog />);
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    const csv = [
+      'product_id,title,brand,category_preset,sku,price_amount,currency,availability_status,warranty_summary,return_policy_summary',
+      'TOASTER-CSV,CSV Toaster,Acme,electronics_appliances,TOASTER-CSV-WHITE,-1,INR,in_stock,1 year,7 days',
+    ].join('\n');
+    fireEvent.change(screen.getByLabelText('CSV rows'), { target: { value: csv } });
+    await user.click(screen.getByRole('button', { name: 'Local CSV dry-run' }));
+    expect(screen.getByText('price_amount')).toBeInTheDocument();
+    expect(mockBulkIngestCommerceProducts).not.toHaveBeenCalled();
+
+    const validCsv = csv.replace('-1', '1000');
+    fireEvent.change(screen.getByLabelText('CSV rows'), { target: { value: validCsv } });
+    await user.click(screen.getByRole('button', { name: 'Local CSV dry-run' }));
+    await user.click(screen.getByRole('button', { name: 'API bulk dry-run' }));
+    await waitFor(() => expect(mockBulkIngestCommerceProducts).toHaveBeenCalledWith(expect.objectContaining({
+      merchantId: 'mch_1',
+      dryRun: true,
+    })));
+    expect(screen.getByText('dry-run')).toBeInTheDocument();
+    expect(screen.queryByText(/production upload/i)).not.toBeInTheDocument();
+  });
+
+  it('shows empty and error states for product list', async () => {
+    mockListCommerceProducts.mockResolvedValueOnce({ items: [], next_cursor: null });
+    const user = userEvent.setup();
+    const first = r(<CommerceCatalog />);
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load catalog' }));
+    await waitFor(() => expect(screen.getByText('No catalog products')).toBeInTheDocument());
+    first.unmount();
+
+    mockListCommerceProducts.mockRejectedValueOnce(new Error('fail'));
+    r(<CommerceCatalog />);
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load catalog' }));
+    await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Failed to load commerce catalog', 'error'));
+  });
+});
+
+describe('CommerceWebhooks', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListCommerceWebhookSources.mockResolvedValue({ items: [webhookSource] });
+    mockCreateCommerceWebhookSource.mockResolvedValue({
+      data: { ...webhookSource, source_key: 'shopify_sync', display_name: 'Shopify Sync', webhook_secret: 'one-time-created-value' },
+      audit_event_id: 'aud_created',
+    });
+    mockUpdateCommerceWebhookSource.mockResolvedValue({
+      data: { ...webhookSource, source_key: 'shopify_sync', display_name: 'ERP Sync v2', status: 'disabled' },
+      audit_event_id: 'aud_updated',
+    });
+    mockRotateCommerceWebhookSourceSecret.mockResolvedValue({
+      data: { ...webhookSource, webhook_secret: 'one-time-rotated-value' },
+      audit_event_id: 'aud_rotated',
+    });
+  });
+
+  it('lists, creates, updates, and rotates webhook sources without rendering list secret material', async () => {
+    const storageSpy = vi.spyOn(Storage.prototype, 'setItem');
+    const user = userEvent.setup();
+    r(<CommerceWebhooks />);
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load webhooks' }));
+    await waitFor(() => expect(screen.getByText('ERP Sync')).toBeInTheDocument());
+    expect(screen.queryByText('redacted-hash-must-not-render')).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Source key'), 'shopify_sync');
+    await user.type(screen.getByLabelText('New display name'), 'Shopify Sync');
+    await user.click(screen.getByRole('button', { name: 'Create source' }));
+    await waitFor(() => expect(screen.getByText('one-time-created-value')).toBeInTheDocument());
+    expect(storageSpy).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Clear secret' }));
+    expect(screen.queryByText('one-time-created-value')).not.toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText('Display name'));
+    await user.type(screen.getByLabelText('Display name'), 'ERP Sync v2');
+    await user.selectOptions(screen.getByLabelText('Status'), 'disabled');
+    await user.click(screen.getByRole('button', { name: 'Save source' }));
+    await waitFor(() => expect(mockUpdateCommerceWebhookSource).toHaveBeenCalledWith('shopify_sync', expect.objectContaining({
+      merchantId: 'mch_1',
+      displayName: 'ERP Sync v2',
+      status: 'disabled',
+    })));
+
+    await user.click(screen.getByRole('button', { name: 'Rotate secret' }));
+    const rotateButtons = screen.getAllByRole('button', { name: 'Rotate' });
+    await user.click(rotateButtons[rotateButtons.length - 1]!);
+    await waitFor(() => expect(screen.getByText('one-time-rotated-value')).toBeInTheDocument());
+    expect(storageSpy).not.toHaveBeenCalled();
+    storageSpy.mockRestore();
+  });
+
+  it('shows webhook empty and error states', async () => {
+    mockListCommerceWebhookSources.mockResolvedValueOnce({ items: [] });
+    const user = userEvent.setup();
+    const first = r(<CommerceWebhooks />);
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load webhooks' }));
+    await waitFor(() => expect(screen.getByText('No webhook sources')).toBeInTheDocument());
+    first.unmount();
+
+    mockListCommerceWebhookSources.mockRejectedValueOnce(new Error('fail'));
+    r(<CommerceWebhooks />);
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load webhooks' }));
+    await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Failed to load webhook sources', 'error'));
   });
 });
 

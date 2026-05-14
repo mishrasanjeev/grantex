@@ -35,6 +35,9 @@ import { BundleDetail } from './pages/bundles/BundleDetail';
 import { McpServerList } from './pages/mcp/McpServerList';
 import { McpServerForm } from './pages/mcp/McpServerForm';
 import { McpServerDetail } from './pages/mcp/McpServerDetail';
+import { CommerceOnboarding } from './pages/commerce/CommerceOnboarding';
+import { CommerceCatalog } from './pages/commerce/CommerceCatalog';
+import { CommerceWebhooks } from './pages/commerce/CommerceWebhooks';
 import { CommercePayments } from './pages/commerce/CommercePayments';
 import { CommerceAudit } from './pages/commerce/CommerceAudit';
 import { CommercePassports } from './pages/commerce/CommercePassports';
@@ -96,6 +99,9 @@ export const routes: RouteObject[] = [
       { path: '/dashboard/mcp', element: <McpServerList /> },
       { path: '/dashboard/mcp/new', element: <McpServerForm /> },
       { path: '/dashboard/mcp/:serverId', element: <McpServerDetail /> },
+      { path: '/dashboard/commerce/onboarding', element: <CommerceOnboarding /> },
+      { path: '/dashboard/commerce/catalog', element: <CommerceCatalog /> },
+      { path: '/dashboard/commerce/webhooks', element: <CommerceWebhooks /> },
       { path: '/dashboard/commerce/payments', element: <CommercePayments /> },
       { path: '/dashboard/commerce/audit', element: <CommerceAudit /> },
       { path: '/dashboard/commerce/passports', element: <CommercePassports /> },
