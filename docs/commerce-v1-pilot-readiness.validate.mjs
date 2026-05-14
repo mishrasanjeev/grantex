@@ -65,7 +65,8 @@ for (const required of [
 
 assert.ok(openapi.includes('/v1/commerce/ops/provider-webhook-events:'), 'OpenAPI documents provider webhook event listing');
 assert.ok(openapi.includes('x-milestone: M7A'), 'OpenAPI marks M7A implemented endpoint');
-assert.ok(openapi.includes('Replay remains blocked'), 'OpenAPI keeps replay blocked');
+assert.ok(openapi.includes('/v1/commerce/ops/provider-webhook-events/{event_id}/replay'), 'OpenAPI documents provider webhook replay');
+assert.ok(openapi.includes('/v1/commerce/merchants/{merchant_id}/enable-agentic-commerce'), 'OpenAPI documents emergency re-enable');
 
 for (const required of [
   'grantex-auth-staging',

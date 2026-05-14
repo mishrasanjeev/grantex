@@ -21,6 +21,7 @@ const mockRevokeCommercePassport = vi.fn();
 const mockGetCommerceMerchant = vi.fn();
 const mockUpdateCommerceMerchant = vi.fn();
 const mockDisableMerchantAgenticCommerce = vi.fn();
+const mockEnableMerchantAgenticCommerce = vi.fn();
 const mockListCommerceAgents = vi.fn();
 const mockUpdateCommerceAgent = vi.fn();
 const mockListCommerceProducts = vi.fn();
@@ -36,6 +37,7 @@ const mockListCommerceProviderCredentials = vi.fn();
 const mockValidateCommerceProviderCredential = vi.fn();
 const mockGetCommerceOpsHealth = vi.fn();
 const mockListCommerceProviderWebhookEvents = vi.fn();
+const mockReplayCommerceProviderWebhookEvent = vi.fn();
 const mockGetCommerceWellKnownProfile = vi.fn();
 const mockShow = vi.fn();
 
@@ -48,6 +50,7 @@ vi.mock('../../api/commerce', () => ({
   getCommerceMerchant: (...a: unknown[]) => mockGetCommerceMerchant(...a),
   updateCommerceMerchant: (...a: unknown[]) => mockUpdateCommerceMerchant(...a),
   disableMerchantAgenticCommerce: (...a: unknown[]) => mockDisableMerchantAgenticCommerce(...a),
+  enableMerchantAgenticCommerce: (...a: unknown[]) => mockEnableMerchantAgenticCommerce(...a),
   listCommerceAgents: (...a: unknown[]) => mockListCommerceAgents(...a),
   updateCommerceAgent: (...a: unknown[]) => mockUpdateCommerceAgent(...a),
   listCommerceProducts: (...a: unknown[]) => mockListCommerceProducts(...a),
@@ -63,6 +66,7 @@ vi.mock('../../api/commerce', () => ({
   validateCommerceProviderCredential: (...a: unknown[]) => mockValidateCommerceProviderCredential(...a),
   getCommerceOpsHealth: (...a: unknown[]) => mockGetCommerceOpsHealth(...a),
   listCommerceProviderWebhookEvents: (...a: unknown[]) => mockListCommerceProviderWebhookEvents(...a),
+  replayCommerceProviderWebhookEvent: (...a: unknown[]) => mockReplayCommerceProviderWebhookEvent(...a),
   getCommerceWellKnownProfile: (...a: unknown[]) => mockGetCommerceWellKnownProfile(...a),
 }));
 vi.mock('../../store/toast', () => ({ useToast: () => ({ show: mockShow }) }));
@@ -268,9 +272,21 @@ const failedWebhookEvent = {
   processed_at: null,
   updated_at: '2026-01-01T00:03:00Z',
   replay_available: false,
-  replay_blocker: 'webhook_failed_event_replay_requires_safe_raw_payload_storage',
+  replay_blocker: 'encrypted_payload_not_available',
+  replay_count: 0,
+  last_replayed_at: null,
   raw_payload_ref: 'raw-payload-ref-must-not-render',
   raw_signature: 'signature-must-not-render',
+};
+
+const replayableWebhookEvent = {
+  ...failedWebhookEvent,
+  id: 'cwh_replayable',
+  provider_event_id: 'evt_replayable',
+  replay_available: true,
+  replay_blocker: null,
+  replay_count: 1,
+  last_replayed_at: '2026-01-01T00:04:00Z',
 };
 
 describe('CommercePayments', () => {
@@ -278,6 +294,10 @@ describe('CommercePayments', () => {
     vi.clearAllMocks();
     mockListCommercePaymentIntents.mockResolvedValue({ items: [payment], next_cursor: null });
     mockReconcileCommercePaymentIntent.mockResolvedValue({ data: { ...payment, status: 'paid' }, reconciliation: {} });
+    mockReplayCommerceProviderWebhookEvent.mockResolvedValue({
+      data: { status: 'processed', event_id: 'cwh_replayable', provider_event_id: 'evt_replayable', payment_intent_id: 'cpi_pending', payment_status: 'paid' },
+      audit_event_id: 'aud_replay',
+    });
   });
 
   it('lists payment intents and exposes manual reconcile for pending payments', async () => {
@@ -311,7 +331,7 @@ describe('CommerceOps', () => {
       items: [failedWebhookEvent],
       next_cursor: null,
       replay_available: false,
-      replay_blocker: 'webhook_failed_event_replay_requires_safe_raw_payload_storage',
+      replay_blocker: 'encrypted_payload_not_available',
     });
     mockReconcileCommercePaymentIntent.mockResolvedValue({ data: { ...payment, status: 'paid' }, reconciliation: {} });
   });
@@ -332,6 +352,29 @@ describe('CommerceOps', () => {
     expect(screen.queryByText('signature-must-not-render')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reconcile' }));
     await waitFor(() => expect(mockReconcileCommercePaymentIntent).toHaveBeenCalledWith('cpi_pending'));
+  });
+
+  it('requires reason and calls provider webhook replay without rendering raw material', async () => {
+    mockListCommerceProviderWebhookEvents.mockResolvedValueOnce({
+      items: [replayableWebhookEvent],
+      next_cursor: null,
+      replay_available: true,
+      replay_blocker: null,
+    });
+    const user = userEvent.setup();
+    r(<CommerceOps />);
+    await waitFor(() => expect(screen.getByText('evt_replayable')).toBeInTheDocument());
+    expect(screen.getByText('Replay available')).toBeInTheDocument();
+    expect(screen.queryByText('raw-payload-ref-must-not-render')).not.toBeInTheDocument();
+    expect(screen.queryByText('signature-must-not-render')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Replay' }));
+    expect(screen.getByRole('button', { name: 'Replay webhook' })).toBeDisabled();
+    await user.type(screen.getByLabelText('Replay reason'), 'ops review');
+    await user.click(screen.getByRole('button', { name: 'Dry-run replay' }));
+    await waitFor(() => expect(mockReplayCommerceProviderWebhookEvent).toHaveBeenCalledWith('cwh_replayable', {
+      reason: 'ops review',
+      dryRun: true,
+    }));
   });
 
   it('supports empty and error states', async () => {
@@ -416,6 +459,10 @@ describe('CommerceSettings', () => {
       data: { merchant_id: 'mch_1', agentic_commerce_enabled: false, disabled: true },
       audit_event_id: 'aud_1',
     });
+    mockEnableMerchantAgenticCommerce.mockResolvedValue({
+      data: { merchant_id: 'mch_1', agentic_commerce_enabled: true, disabled: false, reviewed_policy_id: 'cpol_1' },
+      audit_event_id: 'aud_reenabled',
+    });
     mockValidateCommerceProviderCredential.mockResolvedValue({ data: credential, audit_event_id: 'aud_2' });
   });
 
@@ -442,6 +489,28 @@ describe('CommerceSettings', () => {
     await user.click(screen.getByRole('button', { name: 'Emergency disable' }));
     await user.click(screen.getByRole('button', { name: 'Disable' }));
     await waitFor(() => expect(mockDisableMerchantAgenticCommerce).toHaveBeenCalledWith('mch_1', 'dashboard_emergency_disable'));
+  });
+
+  it('requires reviewed policy evidence before emergency re-enable', async () => {
+    mockGetCommerceMerchant.mockResolvedValueOnce({ data: { ...merchant, agentic_commerce_enabled: false } });
+    const user = userEvent.setup();
+    r(<CommerceSettings />);
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load settings' }));
+    await waitFor(() => expect(screen.getByText('Emergency re-enable')).toBeInTheDocument());
+    expect(screen.getByText(/Live payments and Plural remain disabled/i)).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: 'Re-enable agentic commerce' });
+    expect(button).toBeDisabled();
+    await user.type(screen.getByLabelText('Reason'), 'ops review');
+    await user.type(screen.getByLabelText('Reviewed policy ID'), 'cpol_1');
+    await user.click(screen.getByLabelText(/I confirm the active policy/i));
+    await user.click(screen.getByRole('button', { name: 'Re-enable agentic commerce' }));
+    await waitFor(() => expect(mockEnableMerchantAgenticCommerce).toHaveBeenCalledWith('mch_1', expect.objectContaining({
+      reason: 'ops review',
+      reviewedPolicyId: 'cpol_1',
+      confirmReenable: true,
+    })));
+    expect(screen.queryByText(/enable live plural/i)).not.toBeInTheDocument();
   });
 });
 

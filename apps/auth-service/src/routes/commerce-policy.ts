@@ -44,6 +44,13 @@ interface PolicyEvaluateBody {
   resource_id?: unknown;
 }
 
+interface MerchantReenableBody {
+  reason?: unknown;
+  reviewed_policy_id?: unknown;
+  incident_reference?: unknown;
+  confirm_reenable?: unknown;
+}
+
 interface MerchantPolicyContext {
   id: string;
   tenant_id: string;
@@ -130,6 +137,13 @@ function requirePolicyManagerForMerchant(request: FastifyRequest, merchantId: st
   if (caller.kind === 'merchant' && caller.merchantId === merchantId) return;
   throw new CommerceHttpError(403, 'policy_manager_required',
     'This endpoint requires an operator or the merchant whose policy is being managed');
+}
+
+function requireOperator(request: FastifyRequest): void {
+  if (request.commerceCaller.kind !== 'operator') {
+    throw new CommerceHttpError(403, 'operator_required',
+      'This endpoint requires an operator caller');
+  }
 }
 
 function requireEvaluatorScope(request: FastifyRequest, merchantId: string, agentId: string): void {
@@ -570,6 +584,105 @@ export async function commercePolicyRoutes(app: FastifyInstance): Promise<void> 
           merchant_id: result.merchant.id,
           agentic_commerce_enabled: result.merchant.agentic_commerce_enabled,
           disabled: true,
+        },
+        audit_event_id: result.auditEventId,
+      });
+    },
+  );
+
+  app.post<{ Params: { merchantId: string }; Body: MerchantReenableBody }>(
+    '/merchants/:merchantId/enable-agentic-commerce',
+    { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const tenantId = tenantIdOrThrow(request);
+      requireOperator(request);
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const fieldErrors: Record<string, string> = {};
+      for (const key of Object.keys(body)) {
+        if (!['reason', 'reviewed_policy_id', 'incident_reference', 'confirm_reenable'].includes(key)) {
+          fieldErrors[key] = 'field is unsupported';
+        }
+      }
+      if (!isString(body['reason'])) fieldErrors['reason'] = 'required non-empty string';
+      if (!isString(body['reviewed_policy_id'])) {
+        fieldErrors['reviewed_policy_id'] = 'required string';
+      }
+      if (body['incident_reference'] !== undefined && typeof body['incident_reference'] !== 'string') {
+        fieldErrors['incident_reference'] = 'must be a string';
+      }
+      if (body['confirm_reenable'] !== true) {
+        fieldErrors['confirm_reenable'] = 'must be true';
+      }
+      if (Object.keys(fieldErrors).length > 0) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
+          { details: { fields: fieldErrors }, retryable: false });
+      }
+
+      const sql = getSql();
+      const merchant = await loadMerchantContext(sql, tenantId, request.params.merchantId);
+      if (!merchant) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      if (merchant.agentic_commerce_enabled === true) {
+        throw new CommerceHttpError(409, 'merchant_already_enabled',
+          'Merchant agentic commerce is already enabled');
+      }
+      const activePolicy = await loadActivePolicy(sql, tenantId, request.params.merchantId);
+      if (!activePolicy || activePolicy.id !== body['reviewed_policy_id']) {
+        throw new CommerceHttpError(409, 'reviewed_policy_not_active',
+          'Reviewed policy must match the merchant active policy');
+      }
+
+      const result = await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const rows = await tx<Array<{
+          id: string;
+          tenant_id: string;
+          agentic_commerce_enabled: boolean;
+          updated_at: Date | string;
+        }>>`
+          UPDATE commerce_merchants
+             SET agentic_commerce_enabled = TRUE,
+                 updated_at = NOW()
+           WHERE id = ${request.params.merchantId}
+             AND tenant_id = ${tenantId}
+             AND agentic_commerce_enabled = FALSE
+             AND disabled_at IS NULL
+          RETURNING id, tenant_id, agentic_commerce_enabled, updated_at
+        `;
+        const updated = rows[0];
+        if (!updated) return null;
+        const audit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId,
+          merchantId: updated.id,
+          eventType: 'merchant.agentic_commerce_reenabled',
+          resourceType: 'merchant',
+          resourceId: updated.id,
+          policyVersion: activePolicy.version,
+          requestId: request.id,
+          metadata: {
+            flag: 'agentic_commerce_enabled',
+            value: true,
+            reason: body['reason'] as string,
+            reviewed_policy_id: activePolicy.id,
+            incident_reference: isString(body['incident_reference']) ? body['incident_reference'] : null,
+            operator: actorId(request.commerceCaller),
+            live_payments_enabled: false,
+            plural_enabled: false,
+          },
+        });
+        return { merchant: updated, auditEventId: audit.id };
+      });
+      if (!result) {
+        throw new CommerceHttpError(409, 'merchant_reenable_conflict',
+          'Merchant could not be re-enabled from the disabled agentic commerce state');
+      }
+      return reply.status(200).send({
+        data: {
+          merchant_id: result.merchant.id,
+          agentic_commerce_enabled: result.merchant.agentic_commerce_enabled,
+          disabled: false,
+          reviewed_policy_id: activePolicy.id,
         },
         audit_event_id: result.auditEventId,
       });

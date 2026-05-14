@@ -77,7 +77,8 @@ M7B dashboard status:
 - SLA target cards are visible as target indicators; measured local load evidence is recorded in
   `docs/reports/commerce-v1-local-pilot-load.md`.
 - Live Plural readiness is marked `blocked`.
-- Failed webhook replay is marked `blocked`; metadata-only listing is available for operator review.
+- Failed provider webhook replay is operator-only and mock-provider-only until the Plural contract is confirmed.
+  Replay is available only for future failed events with valid original signatures and encrypted replay material.
 
 ## Local Pilot Load Harness
 
@@ -262,8 +263,9 @@ V1 is not ready for external pilot if any item is true:
 - No named support or on-call owner exists.
 - No approved sandbox pilot merchant exists.
 - Local load evidence is missing or fails the p95 targets.
-- Failed webhook replay is required but safe raw payload storage and redaction are not implemented.
-- Emergency re-enable is required but the reviewed recovery API contract does not exist.
+- Failed webhook replay is required for a non-mock provider.
+- Failed webhook replay is required for an event that lacks valid original signature status or encrypted replay material.
+- Emergency re-enable is required without operator review, active policy evidence, and audit.
 - Backup/restore/RPO review is required for the pilot but not approved.
 
 ## CSV Product And Variant Import Columns
@@ -369,14 +371,21 @@ Immediate actions:
 2. Confirm no raw payload, raw signature, or webhook secret is present in logs or audit metadata.
 3. Confirm duplicate provider event IDs are accepted idempotently without a second payment transition.
 4. Do not replay failed events through ad hoc scripts.
+5. Use `POST /v1/commerce/ops/provider-webhook-events/{event_id}/replay` only after operator review.
 
-Deferred blocker:
+Safe replay rules:
 
-- A safe failed webhook listing and replay API needs an explicit V1 contract before implementation.
-  Ops health reports this as `webhook_failed_event_list_and_replay_api_contract_deferred`.
-  Required fields are tenant, merchant, payment intent, provider key, provider event ID, safe status,
-  safe error code, timestamps, and operator audit references. Raw provider payload replay requires a
-  storage and redaction design that is not part of M6A or M6C. Do not fake replay from partial data.
+- Ops health reports mock-only replay as `provider_webhook_replay_mock_only_until_plural_contract`.
+- Replay is available only when the original provider signature was valid, the provider is `mock`,
+  `processing_status=failed`, `replay_status=fresh`, and encrypted replay material exists.
+- Do not replay invalid-signature, stale, unsupported-provider, malformed, or unauthenticated events.
+- Dry-run with `{ "reason": "...", "dry_run": true }` before real replay when investigating.
+- Real replay requires a non-empty reason, uses the payment state machine, and must not double-transition
+  payments that already reached the target terminal state.
+- Responses, logs, audit metadata, and portal UI must never include raw payloads, raw signatures,
+  encrypted payload material, webhook secrets, provider credentials, bearer tokens, passports, or
+  plaintext idempotency keys.
+- Plural replay remains blocked until the external Plural API and webhook signature contract is confirmed.
 
 ## Reconciliation Failure Runbook
 
@@ -438,14 +447,18 @@ Immediate actions:
 3. Verify audit events for denied policy decisions.
 4. Do not create payment intents or checkout links for the merchant until a new policy version and
    activation explicitly restore access.
-5. Communicate sandbox or pilot status to the operator team.
+5. Emergency re-enable is operator-only through
+   `POST /v1/commerce/merchants/{merchant_id}/enable-agentic-commerce`.
+6. Re-enable requires a non-empty reason, a reviewed active policy ID, and `confirm_reenable=true`.
+7. Re-enable does not modify provider credentials, live payment flags, Plural flags, or production config.
+8. Communicate sandbox or pilot status to the operator team.
 
 Re-enable decision:
 
-- The emergency disable API remains one-way in M6C. There is no re-enable route in the V1 API.
-- Re-enabling agentic commerce requires a reviewed recovery contract with operator authorization,
-  incident review, policy version and activation evidence, and audit semantics. Until that contract
-  exists, dashboard re-enable controls must remain unavailable.
+- M14 implements a reviewed operator-only recovery route and portal control.
+- Merchant self-service re-enable remains blocked.
+- Re-enable requires incident review, active policy evidence, and audit semantics.
+- Re-enable must not enable live payments, live Plural, provider credentials, or production config.
 
 ## Legal And Live Mode Blockers
 

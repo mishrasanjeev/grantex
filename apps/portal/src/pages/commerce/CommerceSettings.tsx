@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   disableMerchantAgenticCommerce,
+  enableMerchantAgenticCommerce,
   getCommerceMerchant,
   getCommerceOpsHealth,
   listCommerceProviderCredentials,
@@ -33,6 +34,11 @@ export function CommerceSettings() {
   const [loading, setLoading] = useState(false);
   const [disableOpen, setDisableOpen] = useState(false);
   const [disabling, setDisabling] = useState(false);
+  const [reenableReason, setReenableReason] = useState('');
+  const [reviewedPolicyId, setReviewedPolicyId] = useState('');
+  const [incidentReference, setIncidentReference] = useState('');
+  const [confirmReenable, setConfirmReenable] = useState(false);
+  const [reenabling, setReenabling] = useState(false);
   const [validatingId, setValidatingId] = useState<string | null>(null);
   const { show } = useToast();
   const mockProviderHealth = health?.checks.provider_adapters.mock;
@@ -66,12 +72,40 @@ export function CommerceSettings() {
     try {
       await disableMerchantAgenticCommerce(merchant.id, 'dashboard_emergency_disable');
       setMerchant({ ...merchant, agentic_commerce_enabled: false });
+      setConfirmReenable(false);
       show('Agentic commerce disabled', 'success');
     } catch {
       show('Failed to disable agentic commerce', 'error');
     } finally {
       setDisabling(false);
       setDisableOpen(false);
+    }
+  }
+
+  async function reenableAgenticCommerce() {
+    if (!merchant) return;
+    if (!reenableReason.trim() || !reviewedPolicyId.trim() || !confirmReenable) {
+      show('Reason, reviewed policy, and confirmation are required', 'error');
+      return;
+    }
+    setReenabling(true);
+    try {
+      await enableMerchantAgenticCommerce(merchant.id, {
+        reason: reenableReason.trim(),
+        reviewedPolicyId: reviewedPolicyId.trim(),
+        incidentReference: incidentReference.trim() || undefined,
+        confirmReenable,
+      });
+      setMerchant({ ...merchant, agentic_commerce_enabled: true });
+      setReenableReason('');
+      setReviewedPolicyId('');
+      setIncidentReference('');
+      setConfirmReenable(false);
+      show('Agentic commerce re-enabled', 'success');
+    } catch {
+      show('Failed to re-enable agentic commerce', 'error');
+    } finally {
+      setReenabling(false);
     }
   }
 
@@ -157,13 +191,57 @@ export function CommerceSettings() {
               >
                 Emergency disable
               </Button>
-              <Button variant="secondary" disabled title="No safe enable API exists for M6B">
-                Re-enable unavailable
-              </Button>
             </div>
-            <p className="mt-3 text-xs text-gx-muted">
-              Re-enable is intentionally unavailable until a reviewed API contract exists for policy/versioned recovery.
-            </p>
+            {!merchant.agentic_commerce_enabled ? (
+              <div className="mt-5 space-y-3 rounded-md border border-gx-border p-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-gx-text">Emergency re-enable</h3>
+                  <p className="mt-1 text-xs text-gx-muted">
+                    Operator-only recovery requires a reason, reviewed active policy, and explicit confirmation. Live payments and Plural remain disabled.
+                  </p>
+                </div>
+                <Input
+                  id="reenable-reason"
+                  label="Reason"
+                  placeholder="incident review summary"
+                  value={reenableReason}
+                  onChange={(e) => setReenableReason(e.target.value)}
+                />
+                <Input
+                  id="reviewed-policy"
+                  label="Reviewed policy ID"
+                  placeholder="cpol_..."
+                  value={reviewedPolicyId}
+                  onChange={(e) => setReviewedPolicyId(e.target.value)}
+                />
+                <Input
+                  id="incident-reference"
+                  label="Incident reference"
+                  placeholder="optional"
+                  value={incidentReference}
+                  onChange={(e) => setIncidentReference(e.target.value)}
+                />
+                <label className="flex items-start gap-2 text-sm text-gx-text">
+                  <input
+                    type="checkbox"
+                    checked={confirmReenable}
+                    onChange={(e) => setConfirmReenable(e.target.checked)}
+                  />
+                  <span>I confirm the active policy was reviewed and no live payment or Plural setting will be enabled.</span>
+                </label>
+                <Button
+                  variant="secondary"
+                  disabled={reenabling || !reenableReason.trim() || !reviewedPolicyId.trim() || !confirmReenable}
+                  onClick={() => void reenableAgenticCommerce()}
+                >
+                  {reenabling ? 'Re-enabling' : 'Re-enable agentic commerce'}
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-gx-muted">
+                Re-enable controls appear only after emergency disable and require reviewed policy evidence.
+              </p>
+            )}
           </Card>
 
           <Card>

@@ -147,7 +147,7 @@ describe('Commerce operations health', () => {
       recent_failure_count: 1,
     });
     expect(body.blockers).toContain('plural_api_and_webhook_contract_unconfirmed');
-    expect(body.blockers).toContain('webhook_failed_event_list_and_replay_api_contract_deferred');
+    expect(body.blockers).toContain('provider_webhook_replay_mock_only_until_plural_contract');
     expect(res.body).not.toContain('mock-webhook-secret');
     expect(res.body).not.toContain('Bearer');
     expect(res.body).not.toContain('encrypted_secret_blob');
@@ -220,13 +220,13 @@ describe('Commerce operations health', () => {
       processing_status: 'failed',
       payload_hash: 'payload_hash_safe',
       replay_available: false,
-      replay_blocker: 'webhook_failed_event_replay_requires_safe_raw_payload_storage',
+      replay_blocker: 'encrypted_payload_not_available',
     });
     expect(body.replay_available).toBe(false);
     expect(res.body).not.toContain('raw-ref-must-not-render');
     expect(res.body).not.toContain('signature-must-not-render');
     expect(res.body).not.toContain('mock-webhook-secret');
-    expect(JSON.stringify(sqlMock.mock.calls)).toContain('WHERE tenant_id = ');
+    expect(JSON.stringify(sqlMock.mock.calls)).toContain('WHERE e.tenant_id = ');
   });
 
   it('denies merchant callers for provider webhook event visibility', async () => {
@@ -306,6 +306,7 @@ describe('Commerce M6C security and rate-limit hardening', () => {
     expectRouteRateLimit(readRoute('commerce-well-known.ts'), '/.well-known/grantex-commerce', 60);
     expectRouteRateLimit(readRoute('commerce-ops.ts'), '/ops/health', 60);
     expectRouteRateLimit(readRoute('commerce-ops.ts'), '/ops/provider-webhook-events', 60);
+    expectRouteRateLimit(readRoute('commerce-ops.ts'), '/ops/provider-webhook-events/:event_id/replay', 30);
     expectRouteRateLimit(readRoute('commerce.ts'), '/catalog/search', 600);
   });
 
@@ -368,16 +369,16 @@ describe('Commerce M6C security and rate-limit hardening', () => {
 
   it('documents deferred webhook replay and emergency re-enable blockers', () => {
     const guide = readFileSync(OPS_GUIDE_PATH, 'utf8');
-    expect(guide).toContain('webhook_failed_event_list_and_replay_api_contract_deferred');
-    expect(guide).toContain('Do not fake replay from partial data');
-    expect(guide).toContain('The emergency disable API remains one-way in M6C');
-    expect(guide).toContain('There is no re-enable route in the V1 API');
+    expect(guide).toContain('provider_webhook_replay_mock_only_until_plural_contract');
+    expect(guide).toContain('Do not replay invalid-signature, stale, unsupported-provider, malformed, or unauthenticated events');
+    expect(guide).toContain('Emergency re-enable is operator-only');
+    expect(guide).toContain('reviewed active policy');
 
     const openapi = readFileSync(OPENAPI_PATH, 'utf8');
     const healthStart = openapi.indexOf('/v1/commerce/ops/health:');
     expect(healthStart).toBeGreaterThan(-1);
     const healthSection = openapi.slice(healthStart, openapi.indexOf('# =====================================================================', healthStart));
-    expect(healthSection).toContain('safe webhook replay remain explicit');
-    expect(healthSection).toContain('re-enable remains deferred');
+    expect(healthSection).toContain('mock-provider replay');
+    expect(healthSection).toContain('operator-only emergency re-enable');
   });
 });

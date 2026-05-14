@@ -79,6 +79,7 @@ function primeWebhookTransition(targetStatus: 'paid' | 'failed' | 'expired'): vo
   sqlMock.mockResolvedValueOnce([]);
   sqlMock.mockResolvedValueOnce([paymentIntentRow()]);
   sqlMock.mockResolvedValueOnce([webhookEventRow()]);
+  sqlMock.mockResolvedValueOnce([]);
   sqlMock.mockResolvedValueOnce([{ id: 'caud_WEBHOOK_RECEIVED', occurred_at: new Date().toISOString() }]);
   sqlMock.mockResolvedValueOnce([paymentIntentRow({
     status: targetStatus,
@@ -216,6 +217,7 @@ describe('Commerce provider webhook route', () => {
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([paymentIntentRow()]);
     sqlMock.mockResolvedValueOnce([webhookEventRow({ id: 'cwh_UNSUPPORTED' })]);
+    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_WEBHOOK_RECEIVED', occurred_at: new Date().toISOString() }]);
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_UNSUPPORTED_DENY', occurred_at: new Date().toISOString() }]);
@@ -239,6 +241,7 @@ describe('Commerce provider webhook route', () => {
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([paymentIntentRow({ status: 'authorized' })]);
     sqlMock.mockResolvedValueOnce([webhookEventRow({ id: 'cwh_INVALID_TRANSITION' })]);
+    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_WEBHOOK_RECEIVED', occurred_at: new Date().toISOString() }]);
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_INVALID_TRANSITION_DENY', occurred_at: new Date().toISOString() }]);

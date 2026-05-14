@@ -9,6 +9,7 @@ import { appendCommerceAudit } from '../lib/commerce/audit.js';
 import { newCommerceWebhookEventId } from '../lib/commerce/ids.js';
 import { stableJson } from '../lib/commerce/idempotency.js';
 import { sha256hex } from '../lib/hash.js';
+import { encrypt } from '../lib/vault-crypto.js';
 import {
   getPaymentProvider,
   isPaymentProviderError,
@@ -58,6 +59,14 @@ interface ExistingWebhookRow {
   processing_status: string;
 }
 
+interface ProviderWebhookRouteError {
+  statusCode: number;
+  code: string;
+  message: string;
+  retryable: boolean;
+  auditEventId?: string;
+}
+
 const providerKeys = new Set<string>(['mock', 'plural']);
 const supportedEventTypes = new Set([
   'payment.updated',
@@ -87,6 +96,20 @@ function requestBodyToRaw(body: unknown): string {
   if (Buffer.isBuffer(body)) return body.toString('utf8');
   if (typeof body === 'string') return body;
   return stableJson(body ?? {});
+}
+
+function safeHeaderMetadata(
+  providerKey: ProviderKey,
+  headers: FastifyRequest['headers'],
+): Record<string, unknown> {
+  if (providerKey === 'mock') {
+    return {
+      signature_scheme: 'mock-hmac-sha256-v1',
+      timestamp_header_present: headers['x-mock-timestamp'] !== undefined,
+      signature_header_present: headers['x-mock-signature'] !== undefined,
+    };
+  }
+  return { signature_scheme: 'unsupported_provider_replay_contract' };
 }
 
 function parseWebhookPayload(rawBody: string, payloadHash: string): ParsedWebhookPayload {
@@ -230,6 +253,34 @@ async function updateWebhookEventStatus(
            processed_at = NOW(),
            updated_at = NOW()
      WHERE id = ${input.id}
+  `;
+}
+
+async function storeProviderWebhookReplayPayload(
+  sql: TxSql,
+  input: {
+    tenantId: string;
+    webhookEventId: string | null;
+    providerKey: ProviderKey;
+    signatureValid: boolean;
+    payloadHash: string;
+    rawBody: string;
+    safeHeaders: Record<string, unknown>;
+  },
+): Promise<void> {
+  if (!input.webhookEventId || !input.signatureValid || input.providerKey !== 'mock') {
+    return;
+  }
+  await sql`
+    INSERT INTO commerce_provider_webhook_event_payloads (
+      tenant_id, webhook_event_id, provider_key, payload_hash,
+      encrypted_payload, safe_headers_json
+    ) VALUES (
+      ${input.tenantId}, ${input.webhookEventId}, ${input.providerKey},
+      ${input.payloadHash}, ${encrypt(input.rawBody)},
+      ${JSON.stringify(input.safeHeaders)}::jsonb
+    )
+    ON CONFLICT (webhook_event_id) DO NOTHING
   `;
 }
 
@@ -564,6 +615,17 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
             },
           };
         }
+        if (paymentIntent) {
+          await storeProviderWebhookReplayPayload(tx, {
+            tenantId: paymentIntent.tenant_id,
+            webhookEventId,
+            providerKey,
+            signatureValid: providerEvent.signature_valid,
+            payloadHash,
+            rawBody,
+            safeHeaders: safeHeaderMetadata(providerKey, request.headers),
+          });
+        }
         if (!paymentIntent) {
           await updateWebhookEventStatus(tx, {
             id: webhookEventId,
@@ -639,7 +701,7 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
         } catch {
           await updateWebhookEventStatus(tx, {
             id: webhookEventId,
-            processingStatus: 'ignored',
+            processingStatus: 'failed',
             errorCode: 'invalid_payment_status_transition',
             errorMessage: `Invalid payment status transition: ${paymentIntent.status} -> ${targetStatus}`,
           });
@@ -652,9 +714,15 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
             fromStatus: paymentIntent.status,
             toStatus: targetStatus,
           });
-          throw new CommerceHttpError(409, 'invalid_payment_status_transition',
-            `Cannot apply provider webhook transition ${paymentIntent.status} -> ${targetStatus}`,
-            { retryable: false, auditEventId: deniedAuditId });
+          return {
+            error: {
+              statusCode: 409,
+              code: 'invalid_payment_status_transition',
+              message: `Cannot apply provider webhook transition ${paymentIntent.status} -> ${targetStatus}`,
+              retryable: false,
+              auditEventId: deniedAuditId,
+            } satisfies ProviderWebhookRouteError,
+          };
         }
 
         const updatedRows = await tx<PaymentIntentForWebhookRow[]>`
@@ -684,13 +752,18 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
         if (!updated) {
           await updateWebhookEventStatus(tx, {
             id: webhookEventId,
-            processingStatus: 'ignored',
+            processingStatus: 'failed',
             errorCode: 'payment_status_changed',
             errorMessage: 'Payment intent status changed before provider webhook processing completed',
           });
-          throw new CommerceHttpError(409, 'payment_status_changed',
-            'Payment intent status changed before provider webhook processing completed',
-            { retryable: true });
+          return {
+            error: {
+              statusCode: 409,
+              code: 'payment_status_changed',
+              message: 'Payment intent status changed before provider webhook processing completed',
+              retryable: true,
+            } satisfies ProviderWebhookRouteError,
+          };
         }
 
         await updateWebhookEventStatus(tx, {
@@ -734,6 +807,15 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
           audit_event_id: paymentAudit.id,
         };
       });
+
+      if ('error' in response) {
+        const error = response.error as ProviderWebhookRouteError;
+        commerceCriticalFlowTotal.labels('provider_webhook.process', 'failed', error.code).inc();
+        throw new CommerceHttpError(error.statusCode, error.code, error.message, {
+          retryable: error.retryable,
+          ...(error.auditEventId ? { auditEventId: error.auditEventId } : {}),
+        });
+      }
 
       const responseData = response.data as Record<string, unknown>;
       commerceCriticalFlowTotal.labels(

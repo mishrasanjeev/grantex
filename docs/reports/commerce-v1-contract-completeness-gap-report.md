@@ -41,8 +41,8 @@ Status: M12 gap analysis plus M12A/M12B/M12C API completion and M12D portal cont
 | `PATCH /v1/commerce/webhook-sources/{source_key}` | `done` | M12C route updates only `display_name` and `status`, rejects immutable/sensitive fields, filters by tenant/merchant/source, and writes `webhook_source.updated` audit. M12D adds portal update controls. | Hosted staging evidence remains later. |
 | `POST /v1/commerce/webhook-sources/{source_key}/rotate-secret` | `done` | M12C route replaces encrypted signing material/hash, returns the new one-time signing secret exactly once, and writes `webhook_source.secret_rotated` audit. Old secrets stop validating immediately. M12D adds confirm-before-rotate UI and one-time display. | Hosted staging evidence remains later. |
 | `POST /v1/webhooks/merchant/{merchant_id}/{source_key}` | `done` | M12C route accepts only signed complete-state `catalog.product.updated` events, requires timestamp/signature headers, enforces a five-minute replay window, rejects disabled sources, accepts duplicate event IDs without double update, stores payload hashes only, upserts product/variants atomically, and writes `merchant_webhook.received` plus `catalog.product.updated` audit. | Hosted staging evidence and failed-event replay remain later. |
-| Failed provider webhook replay | `blocked` | Provider webhook metadata and failed-event listing exist; replay is intentionally blocked. | M14 raw payload storage/redaction/replay authorization design. |
-| Emergency re-enable | `blocked` | `POST /merchants/{merchant_id}/disable-agentic-commerce` exists; no safe re-enable contract. | M14 re-enable API with operator role, reason, policy evidence, incident acknowledgement, audit. |
+| Failed provider webhook replay | `partial` | M14 adds encrypted replay payload storage for future valid mock-provider webhook events, metadata-only replay availability, and operator-only dry-run/real replay that uses the payment state machine and audit. | Plural replay remains blocked until external contract; historical events without encrypted payloads remain non-replayable. |
+| Emergency re-enable | `done` | M14 adds operator-only `POST /merchants/{merchant_id}/enable-agentic-commerce` with reason, reviewed active policy ID, explicit confirmation, tenant boundary, audit, and no live/provider flag mutation. | Merchant self-service re-enable remains blocked. |
 | Policy simulator/UI | `partial` | Policy create/list/read/activate/evaluate API exists. M12D adds a portal simulator that does not collect raw passport JWT material; allow-path proof remains in hosted staging harnesses. | Full policy editing console and hosted staging evidence remain later. |
 | Portal onboarding/catalog/CSV/webhook-source/policy/publish controls | `done` | M12D adds onboarding, catalog manager, local CSV dry-run plus bulk endpoint handoff, webhook-source manager with one-time secret display, policy simulator, and explicit publish/unpublish unavailable state because a reviewed backend publish API does not exist. | Hosted staging evidence and reviewed publish backend contract remain later. |
 
@@ -78,7 +78,7 @@ The validator pins this current set so the gap report cannot silently drift:
 | Plural sandbox adapter status | `blocked` | `PluralPaymentProvider` returns explicit blocked validation errors until API/signature details are confirmed. | M13 external contract required. |
 | Plural live status | `blocked` | Live mode remains gated and not enabled. | Legal, provider, production, and readiness approvals required later. |
 | Checkout state machine | `done` | State transitions enforce `authorized -> checkout_created -> payment_pending` and reject invalid transitions. | Hosted staging evidence still needed. |
-| Webhook idempotency | `done` | Provider webhook processing records provider events and duplicate handling for mock provider; M12C adds merchant webhook event idempotency for `catalog.product.updated`. | Failed replay is still blocked. |
+| Webhook idempotency | `done` | Provider webhook processing records provider events and duplicate handling for mock provider; M12C adds merchant webhook event idempotency for `catalog.product.updated`; M14 replay refuses unsafe events and does not double-transition already-applied states. | Plural replay remains blocked until external contract. |
 | Reconciliation | `done` | Manual reconciliation endpoint and worker support exist for payment intents. | Hosted staging evidence still needed. |
 | Audit evidence | `done` | Commerce audit events are appended for critical protected actions. | Database-level append-only hardening should be separately verified before external pilot. |
 | No live payment exposure | `done` | Docs, flags, and harnesses keep live payments and live Plural off. | Continue refusing live flags in staging tooling. |
@@ -122,6 +122,15 @@ The validator pins this current set so the gap report cannot silently drift:
 - Added webhook-source manager controls for list/create/update/rotate, immediate one-time signing value display after create/rotate only, copy/clear action state, and no list rendering of secret hashes or encrypted material.
 - Added portal tests covering API calls, routes/sidebar entries, onboarding, catalog, CSV dry-run, webhook-source one-time display, no browser-storage persistence of one-time signing values, and no live Plural/payment enablement controls.
 - Did not implement failed provider webhook replay, emergency re-enable, Plural sandbox/live integration, cloud deployment, production config changes, or live payment enablement.
+
+## Safe Fixes Made In M14
+
+- Added `commerce_provider_webhook_event_payloads` encrypted payload storage for future valid mock-provider webhook events, plus replay counters on provider webhook event metadata.
+- Added operator-only `POST /v1/commerce/ops/provider-webhook-events/{event_id}/replay` with required reason, dry-run mode, eligibility blockers, payment state-machine replay, idempotent already-applied handling, and `provider_webhook.replay_requested` / `provider_webhook.replayed` / `provider_webhook.replay_denied` audit.
+- Updated provider webhook metadata listing to expose `replay_available`, `replay_blocker`, `replay_count`, and `last_replayed_at` without raw payloads, encrypted payloads, signatures, signing secrets, or provider credentials.
+- Added operator-only `POST /v1/commerce/merchants/{merchant_id}/enable-agentic-commerce` with reviewed active policy evidence, explicit confirmation, audit, and no provider/live flag mutation.
+- Added portal replay and re-enable controls backed by the M14 APIs with required reasons and no raw payload/signature/secret rendering.
+- Did not implement Plural sandbox/live integration, merchant inbound webhook replay, cloud deployment, production config changes, or live payment enablement.
 
 ## Exact Future Implementation Prompts
 

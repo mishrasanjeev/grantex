@@ -1036,8 +1036,78 @@ components:
         received_at: { type: string, format: date-time }
         processed_at: { type: string, format: date-time, nullable: true }
         updated_at: { type: string, format: date-time }
-        replay_available: { type: boolean, const: false }
-        replay_blocker: { type: string }
+        replay_count: { type: integer }
+        last_replayed_at: { type: string, format: date-time, nullable: true }
+        replay_available: { type: boolean }
+        replay_blocker: { type: string, nullable: true }
+
+    ReplayProviderWebhookRequest:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          description: Operator review reason. Must not contain raw provider payloads, signatures, or secrets.
+        dry_run:
+          type: boolean
+          default: false
+
+    ReplayProviderWebhookResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            status: { type: string, enum: [eligible, processed, duplicate] }
+            dry_run: { type: boolean }
+            event_id: { type: string }
+            provider_key: { type: string, enum: [mock, plural] }
+            provider_event_id: { type: string }
+            provider_event_type: { type: string }
+            payment_intent_id: { type: string }
+            current_payment_status:
+              type: string
+              enum: [created, authorized, checkout_created, payment_pending, paid, failed, cancelled, expired]
+            target_payment_status:
+              type: string
+              enum: [paid, failed, expired]
+            payment_status:
+              type: string
+              enum: [paid, failed, expired, cancelled]
+            replay_count: { type: integer }
+        requested_audit_event_id: { type: string, nullable: true }
+        audit_event_id: { type: string, nullable: true }
+        payment_audit_event_id: { type: string, nullable: true }
+      description: >-
+        Safe operator replay result. Raw provider payloads, signatures,
+        encrypted payload material, signing secrets, provider credentials, and
+        idempotency keys are never returned.
+
+    EnableMerchantAgenticCommerceRequest:
+      type: object
+      required: [reason, reviewed_policy_id, confirm_reenable]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 1 }
+        reviewed_policy_id: { type: string }
+        incident_reference: { type: string }
+        confirm_reenable:
+          type: boolean
+          enum: [true]
+
+    EnableMerchantAgenticCommerceResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            merchant_id: { type: string }
+            agentic_commerce_enabled: { type: boolean }
+            disabled: { type: boolean }
+            reviewed_policy_id: { type: string }
+        audit_event_id: { type: string }
 
     CommerceOpsHealth:
       type: object
@@ -1046,7 +1116,7 @@ components:
         status:
           type: string
           enum: [healthy, degraded, down]
-          description: Overall commerce operations status. Expected M6A status is degraded while Plural and replay APIs remain blocked.
+          description: Overall commerce operations status. Expected M14 status is degraded while Plural remains externally blocked and provider webhook replay is mock-only.
         checked_at: { type: string, format: date-time }
         tenant_id: { type: string }
         merchant_id: { type: string, nullable: true }
@@ -1230,6 +1300,39 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: Operator or merchant caller required }
         "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/enable-agentic-commerce:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    post:
+      tags: [Merchants]
+      summary: Emergency re-enable agentic commerce for a merchant
+      operationId: enableMerchantAgenticCommerce
+      x-implemented: true
+      x-milestone: M14
+      description: >-
+        Operator-only reviewed recovery endpoint. The merchant must currently
+        have `agentic_commerce_enabled=false`, the reviewed policy ID must match
+        the active policy, and `confirm_reenable=true` is required. This route
+        does not change provider credentials, live payment flags, Plural flags,
+        or production configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EnableMerchantAgenticCommerceRequest" }
+      responses:
+        "200":
+          description: Agentic commerce re-enabled after reviewed recovery
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnableMerchantAgenticCommerceResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator caller required }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Merchant already enabled or reviewed policy is not active }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
         "503": { $ref: "#/components/responses/CommerceDisabled" }
 
   /v1/commerce/agents:
@@ -1543,10 +1646,9 @@ paths:
       description: >-
         Operator-only readiness view for Commerce V1 API, database,
         provider adapter health, reconciliation worker configuration, and
-        webhook backlog counts. Plural and safe webhook replay remain explicit
-        blockers until their contracts are confirmed. Agentic commerce
-        re-enable remains deferred until a reviewed recovery and audit contract
-        exists.
+        webhook backlog counts. Plural remains externally blocked. M14 adds
+        mock-provider replay for eligible failed events with encrypted payload
+        material and operator-only emergency re-enable.
       parameters:
         - { in: query, name: merchant_id, schema: { type: string }, description: Optional merchant scope for webhook backlog counts and provider adapter probe. }
         - { in: query, name: environment, schema: { type: string, enum: [sandbox, live], default: sandbox } }
@@ -1574,8 +1676,9 @@ paths:
       description: >-
         Operator-only metadata view for failed or otherwise filtered provider
         webhook events. Raw provider payloads, signatures, webhook secrets, and
-        raw credential material are not returned. Replay remains blocked until
-        safe raw payload storage and redaction design exists.
+        raw credential material are not returned. Replay is available only for
+        failed mock-provider events whose original signature was valid and whose
+        encrypted payload material exists.
       parameters:
         - { in: query, name: merchant_id, schema: { type: string } }
         - { in: query, name: provider_key, schema: { type: string, enum: [mock, plural] } }
@@ -1593,10 +1696,47 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/CommerceProviderWebhookEvent" }
                   next_cursor: { type: string, nullable: true }
-                  replay_available: { type: boolean, const: false }
-                  replay_blocker: { type: string }
+                  replay_available: { type: boolean }
+                  replay_blocker: { type: string, nullable: true }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: Operator caller required }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /v1/commerce/ops/provider-webhook-events/{event_id}/replay:
+    parameters:
+      - { in: path, name: event_id, required: true, schema: { type: string } }
+    post:
+      tags: [Operations]
+      summary: Replay an eligible failed provider webhook event
+      operationId: replayCommerceProviderWebhookEvent
+      x-implemented: true
+      x-milestone: M14
+      description: >-
+        Operator-only replay for future provider webhook events with valid
+        original signatures, mock-provider support, failed processing status,
+        fresh replay status, and encrypted payload material. Invalid-signature,
+        stale, unsupported-provider, malformed, unauthenticated, non-failed, or
+        payload-missing events are refused. Dry-run validates eligibility without
+        changing payment state. Real replay uses the payment state machine and
+        does not double-transition terminal or already-applied states. API
+        responses, logs, audits, and portal UI never expose raw payloads,
+        signatures, signing secrets, encrypted payload material, provider
+        credentials, bearer tokens, passports, or idempotency keys.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReplayProviderWebhookRequest" }
+      responses:
+        "200":
+          description: Replay dry-run passed or replay completed idempotently
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReplayProviderWebhookResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator caller required }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Replay denied by eligibility, state machine, or payment status conflict }
         "422": { $ref: "#/components/responses/ValidationFailed" }
 
   # =====================================================================
@@ -2732,8 +2872,10 @@ paths:
       description: >-
         Provider-neutral webhook intake. Mock provider webhooks are verified
         with the deterministic HMAC test contract and processed idempotently
-        by provider event ID. Plural returns an explicit blocked configuration
-        error until its signature and replay scheme is confirmed.
+        by provider event ID. Valid mock events store encrypted replay payload
+        material plus a payload hash for future operator-only failed-event
+        replay. Plural returns an explicit blocked configuration error until
+        its signature and replay scheme is confirmed.
       parameters:
         - in: header
           name: X-Mock-Timestamp
