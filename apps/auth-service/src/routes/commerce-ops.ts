@@ -408,10 +408,10 @@ export async function commerceOpsRoutes(app: FastifyInstance): Promise<void> {
       const sql = getSql();
       const rows = await sql<WebhookEventRow[]>`
         SELECT e.id, e.tenant_id, e.provider_key, e.merchant_id, e.payment_intent_id,
-               provider_payment_id, provider_event_id, provider_event_type,
-               signature_validation_status, replay_status, processing_status,
-               payload_hash, error_code, error_message, attempt_count,
-               replay_count, last_replayed_at,
+               e.provider_payment_id, e.provider_event_id, e.provider_event_type,
+               e.signature_validation_status, e.replay_status, e.processing_status,
+               e.payload_hash, e.error_code, e.error_message, e.attempt_count,
+               e.replay_count, e.last_replayed_at,
                (p.webhook_event_id IS NOT NULL) AS has_replay_payload,
                e.received_at, e.processed_at, e.updated_at
           FROM commerce_provider_webhook_events e
