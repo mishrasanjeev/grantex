@@ -54,11 +54,35 @@ interface MerchantCreateBody {
   support_email?: unknown;
 }
 
+interface MerchantPatchBody {
+  legal_name?: unknown;
+  display_name?: unknown;
+  category_preset?: unknown;
+  country_code?: unknown;
+  default_currency?: unknown;
+  support_email?: unknown;
+  agentic_commerce_enabled?: unknown;
+}
+
 interface AgentCreateBody {
   display_name?: unknown;
   agent_type?: unknown;
   public_key_jwk?: unknown;
   api_key_hash?: unknown;
+  trust_status?: unknown;
+}
+
+interface AgentListQuery {
+  merchant_id?: string;
+  status?: string;
+  trust_status?: string;
+  limit?: string;
+  cursor?: string;
+}
+
+interface AgentPatchBody {
+  display_name?: unknown;
+  status?: unknown;
   trust_status?: unknown;
 }
 
@@ -102,6 +126,24 @@ interface CatalogSearchBody {
 }
 
 const AVAILABILITY = new Set(['in_stock', 'out_of_stock', 'pre_order', 'back_order', 'unknown']);
+const AGENT_TRUST_STATUSES = new Set(['pending', 'trusted', 'suspended', 'disabled']);
+const AGENT_STATUSES = new Set(['active', 'disabled']);
+
+const MERCHANT_PATCH_FIELDS = new Set([
+  'legal_name',
+  'display_name',
+  'category_preset',
+  'country_code',
+  'default_currency',
+  'support_email',
+  'agentic_commerce_enabled',
+]);
+
+const AGENT_PATCH_FIELDS = new Set([
+  'display_name',
+  'status',
+  'trust_status',
+]);
 
 function isString(v: unknown): v is string {
   return typeof v === 'string' && v.length > 0;
@@ -113,6 +155,20 @@ function asInt(v: unknown): number | null {
   if (typeof v === 'number' && Number.isFinite(v) && Math.trunc(v) === v) return v;
   if (typeof v === 'string' && /^\d+$/.test(v)) return Number.parseInt(v, 10);
   return null;
+}
+
+function validatePatchKeys(
+  body: Record<string, unknown>,
+  allowed: Set<string>,
+  fieldErrors: Record<string, string>,
+): string[] {
+  const changedFields = Object.keys(body);
+  for (const key of changedFields) {
+    if (!allowed.has(key)) {
+      fieldErrors[key] = 'field is immutable or unsupported';
+    }
+  }
+  return changedFields.filter((key) => allowed.has(key));
 }
 
 function merchantIdForCatalogRead(request: FastifyRequest, rawMerchantId: unknown): string {
@@ -408,6 +464,119 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ----------------------------------------------------------------------
+  // PATCH /merchants/:merchantId — operator OR merchant for own merchant.
+  // Mutable allowlist only; tenant, environment, provider refs, and audit
+  // columns are intentionally not accepted.
+  // ----------------------------------------------------------------------
+  app.patch<{ Params: { merchantId: string }; Body: MerchantPatchBody }>(
+    '/merchants/:merchantId',
+    async (request, reply) => {
+      requireOperatorOrSelfMerchant(request, request.params.merchantId);
+      if (request.body !== undefined && !isPlainObject(request.body)) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+          details: { fields: { body: 'must be a JSON object' } },
+          retryable: false,
+        });
+      }
+
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const fieldErrors: Record<string, string> = {};
+      const changedFields = validatePatchKeys(body, MERCHANT_PATCH_FIELDS, fieldErrors);
+      if (changedFields.length === 0 && Object.keys(fieldErrors).length === 0) {
+        fieldErrors['body'] = 'at least one mutable field is required';
+      }
+
+      if (body['legal_name'] !== undefined && !isString(body['legal_name'])) {
+        fieldErrors['legal_name'] = 'must be a non-empty string';
+      }
+      if (body['display_name'] !== undefined && !isString(body['display_name'])) {
+        fieldErrors['display_name'] = 'must be a non-empty string';
+      }
+      if (body['category_preset'] !== undefined && !isCommerceCategoryPreset(body['category_preset'])) {
+        fieldErrors['category_preset'] = 'must be a known commerce category preset';
+      }
+      if (body['default_currency'] !== undefined
+        && (!isString(body['default_currency']) || !/^[A-Z]{3}$/.test(body['default_currency']))) {
+        fieldErrors['default_currency'] = 'must be an ISO 4217 uppercase currency code';
+      }
+      if (body['country_code'] !== undefined
+        && (!isString(body['country_code']) || !/^[A-Z]{2}$/.test(body['country_code']))) {
+        fieldErrors['country_code'] = 'must be an ISO 3166-1 alpha-2 uppercase country code';
+      }
+      if (body['support_email'] !== undefined
+        && body['support_email'] !== null
+        && !isString(body['support_email'])) {
+        fieldErrors['support_email'] = 'must be a non-empty string or null';
+      }
+      if (body['agentic_commerce_enabled'] !== undefined
+        && typeof body['agentic_commerce_enabled'] !== 'boolean') {
+        fieldErrors['agentic_commerce_enabled'] = 'must be a boolean';
+      }
+      if (Object.keys(fieldErrors).length > 0) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+          details: { fields: fieldErrors },
+          retryable: false,
+        });
+      }
+
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const merchantId = request.params.merchantId;
+      const hasLegalName = Object.prototype.hasOwnProperty.call(body, 'legal_name');
+      const hasDisplayName = Object.prototype.hasOwnProperty.call(body, 'display_name');
+      const hasCategoryPreset = Object.prototype.hasOwnProperty.call(body, 'category_preset');
+      const hasDefaultCurrency = Object.prototype.hasOwnProperty.call(body, 'default_currency');
+      const hasCountryCode = Object.prototype.hasOwnProperty.call(body, 'country_code');
+      const hasSupportEmail = Object.prototype.hasOwnProperty.call(body, 'support_email');
+      const hasAgenticCommerce = Object.prototype.hasOwnProperty.call(body, 'agentic_commerce_enabled');
+      const patchLegalName = hasLegalName ? body['legal_name'] as string : null;
+      const patchDisplayName = hasDisplayName ? body['display_name'] as string : null;
+      const patchCategoryPreset = hasCategoryPreset ? body['category_preset'] as string : null;
+      const patchDefaultCurrency = hasDefaultCurrency ? body['default_currency'] as string : null;
+      const patchCountryCode = hasCountryCode ? body['country_code'] as string : null;
+      const patchSupportEmail = hasSupportEmail ? body['support_email'] as string | null : null;
+      const patchAgenticCommerce = hasAgenticCommerce ? body['agentic_commerce_enabled'] as boolean : null;
+
+      const result = await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const rows = await tx<Record<string, unknown>[]>`
+          UPDATE commerce_merchants
+             SET legal_name = CASE WHEN ${hasLegalName}::boolean THEN ${patchLegalName}::text ELSE legal_name END,
+                 display_name = CASE WHEN ${hasDisplayName}::boolean THEN ${patchDisplayName}::text ELSE display_name END,
+                 category_preset = CASE WHEN ${hasCategoryPreset}::boolean THEN ${patchCategoryPreset}::text ELSE category_preset END,
+                 default_currency = CASE WHEN ${hasDefaultCurrency}::boolean THEN ${patchDefaultCurrency}::text ELSE default_currency END,
+                 country_code = CASE WHEN ${hasCountryCode}::boolean THEN ${patchCountryCode}::text ELSE country_code END,
+                 support_email = CASE WHEN ${hasSupportEmail}::boolean THEN ${patchSupportEmail}::text ELSE support_email END,
+                 agentic_commerce_enabled = CASE WHEN ${hasAgenticCommerce}::boolean THEN ${patchAgenticCommerce}::boolean ELSE agentic_commerce_enabled END,
+                 updated_at = NOW()
+           WHERE id = ${merchantId}
+             AND tenant_id = ${tenantId}
+           RETURNING id, tenant_id, legal_name, display_name, category_preset,
+                     verification_status, environment, agentic_commerce_enabled,
+                     default_currency, country_code, support_email,
+                     disabled_at, created_at, updated_at
+        `;
+        const merchant = rows[0];
+        if (!merchant) return null;
+        const audit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId,
+          merchantId,
+          eventType: 'merchant.updated',
+          resourceType: 'merchant',
+          resourceId: merchantId,
+          requestId: request.id,
+          metadata: { changed_fields: changedFields },
+        });
+        return { merchant, auditEventId: audit.id };
+      });
+      if (!result) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      return reply.status(200).send({ data: result.merchant, audit_event_id: result.auditEventId });
+    },
+  );
+
+  // ----------------------------------------------------------------------
   // POST /agents — operator only; trust_status server-controlled (M1 hardening)
   // ----------------------------------------------------------------------
   app.post<{ Body: AgentCreateBody }>('/agents', async (request, reply) => {
@@ -471,6 +640,113 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ----------------------------------------------------------------------
+  // GET /agents — tenant-bound list. Operator callers list tenant agents;
+  // merchant callers may request their own merchant scope. CommerceAgents
+  // are tenant-scoped in the current schema, so merchant_id is verified as
+  // tenant-owned but is not treated as an exclusive join.
+  // ----------------------------------------------------------------------
+  app.get<{ Querystring: AgentListQuery }>('/agents', async (request, reply) => {
+    const caller = request.commerceCaller;
+    if (caller.kind === 'service') {
+      throw new CommerceHttpError(403, 'caller_not_authorized',
+        'CommerceAgent listing requires operator, merchant, or the agent itself');
+    }
+
+    const fieldErrors: Record<string, string> = {};
+    const limit = request.query.limit === undefined ? 25 : asInt(request.query.limit);
+    if (limit === null || limit < 1 || limit > 100) {
+      fieldErrors['limit'] = 'must be an integer between 1 and 100';
+    }
+    const trustStatus = request.query.trust_status ?? null;
+    if (trustStatus !== null && !AGENT_TRUST_STATUSES.has(trustStatus)) {
+      fieldErrors['trust_status'] = 'must be one of: pending, trusted, suspended, disabled';
+    }
+    const status = request.query.status ?? null;
+    if (status !== null && !AGENT_STATUSES.has(status)) {
+      fieldErrors['status'] = 'must be one of: active, disabled';
+    }
+    if (request.query.cursor !== undefined && typeof request.query.cursor !== 'string') {
+      fieldErrors['cursor'] = 'must be a string';
+    }
+
+    let merchantId = request.query.merchant_id ?? null;
+    if (caller.kind === 'merchant') {
+      if (merchantId !== null && merchantId !== caller.merchantId) {
+        throw new CommerceHttpError(403, 'merchant_scope_violation',
+          'Merchant callers may only list CommerceAgents for their own merchant scope');
+      }
+      merchantId = caller.merchantId;
+    }
+    if (caller.kind === 'agent' && merchantId !== null) {
+      throw new CommerceHttpError(403, 'caller_not_authorized',
+        'CommerceAgent callers may only list their own agent record');
+    }
+    if (Object.keys(fieldErrors).length > 0) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed',
+        { details: { fields: fieldErrors }, retryable: false });
+    }
+
+    let cursorCreated: string | null = null;
+    let cursorId: string | null = null;
+    if (request.query.cursor) {
+      try {
+        const decoded = Buffer.from(request.query.cursor, 'base64url').toString('utf8');
+        const [created, id] = decoded.split('|');
+        if (created && id) { cursorCreated = created; cursorId = id; }
+      } catch { /* ignore malformed cursor */ }
+    }
+
+    const sql = getSql();
+    const tenantId = request.commerceTenantId;
+    if (merchantId !== null) {
+      const merchantRows = await sql<{ id: string }[]>`
+        SELECT id FROM commerce_merchants
+         WHERE id = ${merchantId}
+           AND tenant_id = ${tenantId}
+         LIMIT 1
+      `;
+      if (!merchantRows[0]) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+    }
+
+    const selfAgentId = caller.kind === 'agent' ? caller.agentId : null;
+    const rows = await sql<Record<string, unknown>[]>`
+      SELECT id, tenant_id, display_name, agent_type,
+             public_key_jwk, trust_status,
+             CASE WHEN disabled_at IS NULL THEN 'active' ELSE 'disabled' END AS status,
+             disabled_at, created_at, updated_at
+        FROM commerce_agents
+       WHERE tenant_id = ${tenantId}
+         AND (${selfAgentId}::text IS NULL OR id = ${selfAgentId})
+         AND (${trustStatus}::text IS NULL OR trust_status = ${trustStatus})
+         AND (
+           ${status}::text IS NULL
+           OR (${status}::text = 'active' AND disabled_at IS NULL)
+           OR (${status}::text = 'disabled' AND disabled_at IS NOT NULL)
+         )
+         AND (
+           ${cursorCreated}::timestamptz IS NULL
+           OR (created_at, id) < (${cursorCreated}::timestamptz, ${cursorId}::text)
+         )
+       ORDER BY created_at DESC, id DESC
+       LIMIT ${(limit ?? 25) + 1}
+    `;
+    let nextCursor: string | null = null;
+    const safeLimit = limit ?? 25;
+    if (rows.length > safeLimit) {
+      const last = rows[safeLimit - 1];
+      if (last) {
+        const createdVal = last['created_at'];
+        const createdIso = createdVal instanceof Date ? createdVal.toISOString() : String(createdVal);
+        nextCursor = Buffer.from(`${createdIso}|${last['id'] as string}`, 'utf8').toString('base64url');
+      }
+      rows.length = safeLimit;
+    }
+    return reply.status(200).send({ items: rows, next_cursor: nextCursor });
+  });
+
+  // ----------------------------------------------------------------------
   // GET /agents/:agentId — operator OR the agent reading own record.
   // Merchant denied.
   // ----------------------------------------------------------------------
@@ -491,6 +767,112 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     }
     return reply.status(200).send({ data: rows[0] });
   });
+
+  // ----------------------------------------------------------------------
+  // PATCH /agents/:agentId — operator only. Agent self-updates are denied
+  // so an agent cannot self-elevate trust/status.
+  // ----------------------------------------------------------------------
+  app.patch<{ Params: { agentId: string }; Body: AgentPatchBody }>(
+    '/agents/:agentId',
+    async (request, reply) => {
+      requireOperator(request);
+      if (request.body !== undefined && !isPlainObject(request.body)) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+          details: { fields: { body: 'must be a JSON object' } },
+          retryable: false,
+        });
+      }
+
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const fieldErrors: Record<string, string> = {};
+      const changedFields = validatePatchKeys(body, AGENT_PATCH_FIELDS, fieldErrors);
+      if (changedFields.length === 0 && Object.keys(fieldErrors).length === 0) {
+        fieldErrors['body'] = 'at least one mutable field is required';
+      }
+      if (body['display_name'] !== undefined && !isString(body['display_name'])) {
+        fieldErrors['display_name'] = 'must be a non-empty string';
+      }
+      if (body['trust_status'] !== undefined
+        && (typeof body['trust_status'] !== 'string' || !AGENT_TRUST_STATUSES.has(body['trust_status']))) {
+        fieldErrors['trust_status'] = 'must be one of: pending, trusted, suspended, disabled';
+      }
+      if (body['status'] !== undefined
+        && (typeof body['status'] !== 'string' || !AGENT_STATUSES.has(body['status']))) {
+        fieldErrors['status'] = 'must be one of: active, disabled';
+      }
+      if (Object.keys(fieldErrors).length > 0) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+          details: { fields: fieldErrors },
+          retryable: false,
+        });
+      }
+
+      const hasDisplayName = Object.prototype.hasOwnProperty.call(body, 'display_name');
+      const hasTrustStatus = Object.prototype.hasOwnProperty.call(body, 'trust_status');
+      const hasStatus = Object.prototype.hasOwnProperty.call(body, 'status');
+      const targetTrustStatus = hasTrustStatus ? body['trust_status'] as string : null;
+      const targetStatus = hasStatus ? body['status'] as string : null;
+      const patchDisplayName = hasDisplayName ? body['display_name'] as string : null;
+
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const agentId = request.params.agentId;
+      const result = await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const existingRows = await tx<Array<{ id: string; disabled_at: string | Date | null }>>`
+          SELECT id, disabled_at
+            FROM commerce_agents
+           WHERE id = ${agentId}
+             AND tenant_id = ${tenantId}
+           LIMIT 1
+        `;
+        const existing = existingRows[0];
+        if (!existing) return null;
+        const wouldBeDisabled = targetStatus === 'disabled'
+          || (targetStatus === null && existing.disabled_at !== null);
+        if (targetTrustStatus === 'trusted' && wouldBeDisabled) {
+          throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+            details: { fields: { trust_status: 'disabled agents cannot be marked trusted' } },
+            retryable: false,
+          });
+        }
+
+        const rows = await tx<Record<string, unknown>[]>`
+          UPDATE commerce_agents
+             SET display_name = CASE WHEN ${hasDisplayName}::boolean THEN ${patchDisplayName}::text ELSE display_name END,
+                 trust_status = CASE WHEN ${hasTrustStatus}::boolean THEN ${targetTrustStatus}::text ELSE trust_status END,
+                 disabled_at = CASE
+                   WHEN ${hasStatus}::boolean AND ${targetStatus}::text = 'disabled' THEN NOW()
+                   WHEN ${hasStatus}::boolean AND ${targetStatus}::text = 'active' THEN NULL::timestamptz
+                   ELSE disabled_at
+                 END,
+                 updated_at = NOW()
+           WHERE id = ${agentId}
+             AND tenant_id = ${tenantId}
+           RETURNING id, tenant_id, display_name, agent_type,
+                     public_key_jwk, trust_status,
+                     CASE WHEN disabled_at IS NULL THEN 'active' ELSE 'disabled' END AS status,
+                     disabled_at, created_at, updated_at
+        `;
+        const agent = rows[0];
+        if (!agent) return null;
+        const audit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId,
+          agentId,
+          eventType: 'agent.updated',
+          resourceType: 'commerce_agent',
+          resourceId: agentId,
+          requestId: request.id,
+          metadata: { changed_fields: changedFields },
+        });
+        return { agent, auditEventId: audit.id };
+      });
+      if (!result) {
+        throw new CommerceHttpError(404, 'agent_not_found', 'Agent not found in this tenant');
+      }
+      return reply.status(200).send({ data: result.agent, audit_event_id: result.auditEventId });
+    },
+  );
 
   // ----------------------------------------------------------------------
   // POST /catalog/products — operator only

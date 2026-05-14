@@ -319,9 +319,6 @@ for (const required of [
 }
 
 const expectedFalseImplementedRoutes = [
-  'PATCH /v1/commerce/merchants/{merchant_id}',
-  'GET /v1/commerce/agents',
-  'PATCH /v1/commerce/agents/{agent_id}',
   'GET /v1/commerce/catalog/products',
   'POST /v1/commerce/catalog/products/bulk',
   'PATCH /v1/commerce/catalog/products/{product_id}',

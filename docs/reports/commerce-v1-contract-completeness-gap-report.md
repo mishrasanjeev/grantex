@@ -1,6 +1,6 @@
 # Commerce V1 Contract Completeness Gap Report
 
-Status: M12 gap analysis and safe static guards only. This pass did not deploy, merge, create cloud resources, change production config, enable production Commerce V1, enable live payments, enable live Plural, touch production secrets, or commit local-only artifacts.
+Status: M12 gap analysis plus M12A merchant/agent API completion. This pass did not deploy, merge, create cloud resources, change production config, enable production Commerce V1, enable live payments, enable live Plural, touch production secrets, or commit local-only artifacts.
 
 ## Classification Key
 
@@ -15,7 +15,7 @@ Status: M12 gap analysis and safe static guards only. This pass did not deploy, 
 | Area | Status | Assessment |
 | --- | --- | --- |
 | Core consent, passport, mock payment, checkout, webhook, reconciliation, audit path | `done` | Strong internal sandbox core after the M8 mock-provider `authorized` fix. |
-| Merchant/agent mutable control-plane APIs | `not-started` | OpenAPI still marks list/update gaps as `x-implemented: false`; routes are absent. |
+| Merchant/agent mutable control-plane APIs | `done` | M12A implements tenant-bound merchant update plus CommerceAgent list/update with allowlisted fields, no secret disclosure, audit, OpenAPI, and focused tests. |
 | Product list/update/bulk/CSV | `not-started` | Product create/get/archive/search exist, but list/update/bulk and CSV ingestion are missing. |
 | Inbound merchant webhook source APIs | `not-started` | All source management and inbound merchant webhook endpoints remain `x-implemented: false`. |
 | Portal merchant control plane | `partial` | Payments, audit, passports, settings, playground, and ops views exist; onboarding/catalog/CSV/webhook-source/policy/publish controls do not. |
@@ -29,9 +29,9 @@ Status: M12 gap analysis and safe static guards only. This pass did not deploy, 
 
 | Contract item | Status | Current evidence | Required next slice |
 | --- | --- | --- | --- |
-| `PATCH /v1/commerce/merchants/{merchant_id}` | `not-started` | OpenAPI `x-implemented: false`; `commerce.ts` has create/get only. | M12A mutable merchant allowlist with audit and tenant boundary tests. |
-| `GET /v1/commerce/agents` | `not-started` | OpenAPI `x-implemented: false`; `commerce.ts` has create/get by id only. | M12A scoped list endpoint with operator filters and no secret fields. |
-| `PATCH /v1/commerce/agents/{agent_id}` | `not-started` | OpenAPI `x-implemented: false`; trust/status update path absent. | M12A mutable agent allowlist, trust/status controls, audit. |
+| `PATCH /v1/commerce/merchants/{merchant_id}` | `done` | M12A route is implemented with operator/own-merchant auth, tenant filter, mutable allowlist, field validation, and `merchant.updated` audit. | Hosted staging evidence after infrastructure exists. |
+| `GET /v1/commerce/agents` | `done` | M12A route lists tenant-bound CommerceAgents for operators, verifies merchant caller scope, supports status/trust_status/limit/cursor filters, and excludes API key hashes/private/provider credentials. | Hosted staging evidence after infrastructure exists. |
+| `PATCH /v1/commerce/agents/{agent_id}` | `done` | M12A route is operator-only, rejects agent self-elevation, validates status/trust_status/display_name, filters by tenant, and writes `agent.updated` audit. | Hosted staging evidence after infrastructure exists. |
 | `GET /v1/commerce/catalog/products` | `not-started` | OpenAPI `x-implemented: false`; only get-by-id and search exist. | M12B paginated list with merchant/agent/operator scoping. |
 | `PATCH /v1/commerce/catalog/products/{product_id}` | `not-started` | OpenAPI `x-implemented: false`; only create/get/archive exist. | M12B mutable product/variant allowlist with price-change safety. |
 | `POST /v1/commerce/catalog/products/bulk` | `not-started` | OpenAPI `x-implemented: false`; no route. | M12B bulk ingest with per-row validation and audit. |
@@ -50,9 +50,6 @@ Status: M12 gap analysis and safe static guards only. This pass did not deploy, 
 
 The validator pins this current set so the gap report cannot silently drift:
 
-- `PATCH /v1/commerce/merchants/{merchant_id}`
-- `GET /v1/commerce/agents`
-- `PATCH /v1/commerce/agents/{agent_id}`
 - `GET /v1/commerce/catalog/products`
 - `POST /v1/commerce/catalog/products/bulk`
 - `PATCH /v1/commerce/catalog/products/{product_id}`
@@ -95,6 +92,13 @@ The validator pins this current set so the gap report cannot silently drift:
 - Added this gap report.
 - Added validator coverage that reads the report, extracts current OpenAPI `x-implemented: false` routes, and fails if the report or pinned inventory drifts.
 - Did not implement broad API families, portal redesign, Plural integration, or hosted run mode.
+
+## Safe Fixes Made In M12A
+
+- Implemented `PATCH /v1/commerce/merchants/{merchant_id}` with mutable-field allowlist, tenant-bound update, non-enumerating 404 for missing/cross-tenant merchants, and `merchant.updated` audit metadata containing changed field names only.
+- Implemented `GET /v1/commerce/agents` with tenant-bound listing, operator/merchant/agent caller scoping, status/trust filters, cursor pagination, and no API key hash, private key, provider credential, bearer token, or secret output.
+- Implemented `PATCH /v1/commerce/agents/{agent_id}` as operator-only with mutable-field allowlist, trust/status validation, self-elevation denial by caller matrix, tenant-bound update, and `agent.updated` audit metadata containing changed field names only.
+- Updated OpenAPI to mark the three M12A operations `x-implemented: true`; product, CSV, webhook-source, inbound webhook, portal, failed replay, emergency re-enable, and Plural work remain out of scope.
 
 ## Exact Future Implementation Prompts
 
