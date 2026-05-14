@@ -92,7 +92,7 @@ export class MockPaymentProvider implements PaymentProvider {
   }): Promise<{
     provider_payment_id: string;
     provider_order_id: string;
-    status: 'created';
+    status: 'authorized';
     raw_status: string;
     provider_metadata: Record<string, unknown>;
   }> {
@@ -110,8 +110,8 @@ export class MockPaymentProvider implements PaymentProvider {
     return {
       provider_payment_id: `mock_pay_${input.payment_intent_id}`,
       provider_order_id: `mock_order_${input.payment_intent_id}`,
-      status: 'created',
-      raw_status: 'mock_created',
+      status: 'authorized',
+      raw_status: 'mock_authorized',
       provider_metadata: {
         environment: input.environment,
         amount_minor_units: input.amount.amount_minor_units,
