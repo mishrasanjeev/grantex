@@ -96,6 +96,166 @@ export interface CommerceMerchant {
   updated_at: string;
 }
 
+export interface CommerceAgent {
+  id: string;
+  tenant_id: string;
+  display_name: string;
+  agent_type: string;
+  public_key_jwk: Record<string, unknown> | null;
+  trust_status: 'pending' | 'trusted' | 'suspended' | 'disabled';
+  status: 'active' | 'disabled';
+  disabled_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommerceCatalogVariantSummary {
+  variant_id: string;
+  sku: string;
+  variant_title: string | null;
+  model: string | null;
+  price_amount: number | string;
+  currency: string;
+  availability_status: 'in_stock' | 'out_of_stock' | 'pre_order' | 'back_order' | 'unknown';
+  last_synced_at: string | null;
+  stale: boolean;
+  freshness: 'fresh' | 'stale';
+}
+
+export interface CommerceCatalogProductSummary {
+  id: string;
+  product_id: string;
+  merchant_id: string;
+  title: string;
+  brand: string | null;
+  image_url: string | null;
+  category_preset: string;
+  variants_summary: CommerceCatalogVariantSummary[];
+  updated_at: string;
+}
+
+export interface CommerceProductVariant {
+  id: string;
+  sku: string;
+  parent_sku: string | null;
+  model: string | null;
+  variant_title: string | null;
+  attributes: Record<string, unknown>;
+  price_amount: number | string;
+  currency: string;
+  tax_inclusive: boolean;
+  gst_slab: string | null;
+  tax_rate: number | string | null;
+  hsn_code: string | null;
+  availability_status: 'in_stock' | 'out_of_stock' | 'pre_order' | 'back_order' | 'unknown';
+  warranty_summary: string | null;
+  return_policy_summary: string | null;
+  last_synced_at: string | null;
+  archived_at: string | null;
+  stale?: boolean;
+  freshness?: 'fresh' | 'stale';
+}
+
+export interface CommerceProduct {
+  id: string;
+  tenant_id: string;
+  merchant_id: string;
+  product_id: string;
+  title: string;
+  brand: string | null;
+  description: string | null;
+  image_url: string | null;
+  category_preset: string;
+  source_system: string;
+  manually_maintained: boolean;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+  variants: CommerceProductVariant[];
+}
+
+export type CommerceBulkProductInput = {
+  merchant_id?: string;
+  product_id: string;
+  title: string;
+  brand?: string | null;
+  description?: string | null;
+  image_url?: string | null;
+  category_preset: string;
+  source_system?: string;
+  manually_maintained?: boolean;
+  variants: Array<{
+    sku: string;
+    parent_sku?: string | null;
+    model?: string | null;
+    variant_title?: string | null;
+    attributes?: Record<string, unknown>;
+    price_amount: number;
+    currency?: string;
+    tax_inclusive?: boolean;
+    gst_slab?: string | null;
+    tax_rate?: number | null;
+    hsn_code?: string | null;
+    availability_status?: 'in_stock' | 'out_of_stock' | 'pre_order' | 'back_order' | 'unknown';
+    warranty_summary?: string | null;
+    return_policy_summary?: string | null;
+    source_system?: string;
+  }>;
+};
+
+export interface CommerceBulkProductRowResult {
+  index: number;
+  product_id: string | null;
+  status: 'valid' | 'invalid' | 'upserted';
+  variant_count?: number | null;
+  field_errors: Record<string, string>;
+}
+
+export interface CommerceBulkProductIngestResponse {
+  dry_run: boolean;
+  summary: Record<string, number | string | boolean>;
+  rows: CommerceBulkProductRowResult[];
+  audit_event_id?: string | null;
+}
+
+export interface CommerceWebhookSource {
+  tenant_id: string;
+  merchant_id: string;
+  source_key: string;
+  display_name: string;
+  status: 'active' | 'disabled';
+  secret_last_rotated_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommerceWebhookSourceWithSecret extends CommerceWebhookSource {
+  webhook_secret: string;
+}
+
+export interface CommercePolicy {
+  id: string;
+  tenant_id: string;
+  merchant_id: string;
+  version: string;
+  rules: Record<string, unknown>;
+  status: 'draft' | 'active' | 'archived';
+  created_by: string;
+  activated_by: string | null;
+  activated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommercePolicyDecision {
+  decision: 'allow' | 'deny' | 'requires_user_consent';
+  reason: string;
+  policy_id: string;
+  policy_version: string;
+  decision_id: string;
+  passport_jti?: string | null;
+}
+
 export interface CommerceProviderCredential {
   id: string;
   tenant_id: string;
@@ -251,6 +411,17 @@ export function getCommerceMerchant(merchantId: string): Promise<{ data: Commerc
   return api.get<{ data: CommerceMerchant }>(`/v1/commerce/merchants/${encodeURIComponent(merchantId)}`);
 }
 
+export function updateCommerceMerchant(
+  merchantId: string,
+  patch: Partial<Pick<CommerceMerchant,
+    'legal_name' | 'display_name' | 'category_preset' | 'default_currency' | 'country_code' | 'support_email' | 'agentic_commerce_enabled'>>,
+): Promise<{ data: CommerceMerchant; audit_event_id: string }> {
+  return api.patch<{ data: CommerceMerchant; audit_event_id: string }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}`,
+    patch,
+  );
+}
+
 export function disableMerchantAgenticCommerce(
   merchantId: string,
   reason: string,
@@ -259,6 +430,160 @@ export function disableMerchantAgenticCommerce(
     data: { merchant_id: string; agentic_commerce_enabled: boolean; disabled: boolean };
     audit_event_id: string;
   }>(`/v1/commerce/merchants/${encodeURIComponent(merchantId)}/disable-agentic-commerce`, { reason });
+}
+
+export function listCommerceAgents(params: {
+  merchantId?: string;
+  status?: 'active' | 'disabled';
+  trustStatus?: 'pending' | 'trusted' | 'suspended' | 'disabled';
+  limit?: number;
+  cursor?: string;
+} = {}): Promise<{ items: CommerceAgent[]; next_cursor: string | null }> {
+  return api.get<{ items: CommerceAgent[]; next_cursor: string | null }>(`/v1/commerce/agents${qs({
+    merchant_id: params.merchantId,
+    status: params.status,
+    trust_status: params.trustStatus,
+    limit: params.limit,
+    cursor: params.cursor,
+  })}`);
+}
+
+export function updateCommerceAgent(
+  agentId: string,
+  patch: Partial<Pick<CommerceAgent, 'display_name' | 'status' | 'trust_status'>>,
+): Promise<{ data: CommerceAgent; audit_event_id: string }> {
+  return api.patch<{ data: CommerceAgent; audit_event_id: string }>(
+    `/v1/commerce/agents/${encodeURIComponent(agentId)}`,
+    patch,
+  );
+}
+
+export function listCommerceProducts(params: {
+  merchantId?: string;
+  status?: 'active' | 'archived' | 'all';
+  query?: string;
+  categoryPreset?: string;
+  limit?: number;
+  cursor?: string;
+} = {}): Promise<{ items: CommerceCatalogProductSummary[]; next_cursor: string | null }> {
+  return api.get<{ items: CommerceCatalogProductSummary[]; next_cursor: string | null }>(`/v1/commerce/catalog/products${qs({
+    merchant_id: params.merchantId,
+    status: params.status,
+    query: params.query,
+    category_preset: params.categoryPreset,
+    limit: params.limit,
+    cursor: params.cursor,
+  })}`);
+}
+
+export function updateCommerceProduct(
+  productId: string,
+  patch: Record<string, unknown>,
+  merchantId?: string,
+): Promise<{ data: CommerceProduct; audit_event_id: string }> {
+  return api.patch<{ data: CommerceProduct; audit_event_id: string }>(
+    `/v1/commerce/catalog/products/${encodeURIComponent(productId)}${qs({ merchant_id: merchantId })}`,
+    patch,
+  );
+}
+
+export function bulkIngestCommerceProducts(input: {
+  merchantId: string;
+  dryRun?: boolean;
+  products: CommerceBulkProductInput[];
+}): Promise<CommerceBulkProductIngestResponse> {
+  return api.post<CommerceBulkProductIngestResponse>('/v1/commerce/catalog/products/bulk', {
+    merchant_id: input.merchantId,
+    dry_run: input.dryRun ?? true,
+    products: input.products,
+  });
+}
+
+export function listCommerceWebhookSources(params: {
+  merchantId?: string;
+  status?: 'active' | 'disabled';
+} = {}): Promise<{ items: CommerceWebhookSource[] }> {
+  return api.get<{ items: CommerceWebhookSource[] }>(`/v1/commerce/webhook-sources${qs({
+    merchant_id: params.merchantId,
+    status: params.status,
+  })}`);
+}
+
+export function createCommerceWebhookSource(input: {
+  merchantId: string;
+  sourceKey: string;
+  displayName: string;
+}): Promise<{ data: CommerceWebhookSourceWithSecret; audit_event_id: string }> {
+  return api.post<{ data: CommerceWebhookSourceWithSecret; audit_event_id: string }>(
+    '/v1/commerce/webhook-sources',
+    {
+      merchant_id: input.merchantId,
+      source_key: input.sourceKey,
+      display_name: input.displayName,
+    },
+  );
+}
+
+export function updateCommerceWebhookSource(
+  sourceKey: string,
+  input: { merchantId: string; displayName?: string; status?: 'active' | 'disabled' },
+): Promise<{ data: CommerceWebhookSource; audit_event_id: string }> {
+  return api.patch<{ data: CommerceWebhookSource; audit_event_id: string }>(
+    `/v1/commerce/webhook-sources/${encodeURIComponent(sourceKey)}${qs({ merchant_id: input.merchantId })}`,
+    {
+      ...(input.displayName !== undefined ? { display_name: input.displayName } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+    },
+  );
+}
+
+export function rotateCommerceWebhookSourceSecret(
+  sourceKey: string,
+  merchantId: string,
+): Promise<{ data: CommerceWebhookSourceWithSecret; audit_event_id: string }> {
+  return api.post<{ data: CommerceWebhookSourceWithSecret; audit_event_id: string }>(
+    `/v1/commerce/webhook-sources/${encodeURIComponent(sourceKey)}/rotate-secret`,
+    { merchant_id: merchantId },
+  );
+}
+
+export function listCommercePolicies(params: {
+  merchantId?: string;
+  status?: 'draft' | 'active' | 'archived';
+  limit?: number;
+} = {}): Promise<{ items: CommercePolicy[]; next_cursor: string | null }> {
+  return api.get<{ items: CommercePolicy[]; next_cursor: string | null }>(`/v1/commerce/policies${qs({
+    merchant_id: params.merchantId,
+    status: params.status,
+    limit: params.limit,
+  })}`);
+}
+
+export function evaluateCommercePolicy(input: {
+  merchantId: string;
+  agentId: string;
+  actionScope: string;
+  passportJwt: string;
+  amountMinorUnits?: number;
+  currency?: string;
+  environment?: CommerceEnvironment;
+  resourceType?: string;
+  resourceId?: string;
+}): Promise<{ data: CommercePolicyDecision; audit_event_id?: string | null }> {
+  return api.post<{ data: CommercePolicyDecision; audit_event_id?: string | null }>(
+    '/v1/commerce/policies/evaluate',
+    {
+      merchant_id: input.merchantId,
+      agent_id: input.agentId,
+      passport_jwt: input.passportJwt,
+      action_scope: input.actionScope,
+      amount_minor_units: input.amountMinorUnits,
+      currency: input.currency,
+      environment: input.environment,
+      resource_type: input.resourceType,
+      resource_id: input.resourceId,
+    },
+  );
 }
 
 export function listCommerceProviderCredentials(params: {

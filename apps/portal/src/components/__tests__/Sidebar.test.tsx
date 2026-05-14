@@ -27,6 +27,7 @@ describe('Sidebar', () => {
       'Policies', 'Anomalies', 'Compliance', 'Consent Records', 'Grievances',
       'Exports', 'Budgets', 'Usage', 'Domains', 'WebAuthn', 'Credentials',
       'Events', 'MCP Servers', 'Commerce Payments', 'Commerce Audit',
+      'Commerce Onboarding', 'Commerce Catalog', 'Commerce Webhooks',
       'Commerce Passports', 'Commerce Settings', 'Commerce Playground',
       'Commerce Ops', 'Trust Registry', 'Billing', 'Settings', 'SSO', 'SCIM', 'Admin',
     ];
@@ -115,6 +116,12 @@ describe('Sidebar', () => {
     expect(settingsLink).toHaveAttribute('href', '/dashboard/settings');
     const commercePaymentsLink = screen.getByText('Commerce Payments').closest('a');
     expect(commercePaymentsLink).toHaveAttribute('href', '/dashboard/commerce/payments');
+    const commerceOnboardingLink = screen.getByText('Commerce Onboarding').closest('a');
+    expect(commerceOnboardingLink).toHaveAttribute('href', '/dashboard/commerce/onboarding');
+    const commerceCatalogLink = screen.getByText('Commerce Catalog').closest('a');
+    expect(commerceCatalogLink).toHaveAttribute('href', '/dashboard/commerce/catalog');
+    const commerceWebhooksLink = screen.getByText('Commerce Webhooks').closest('a');
+    expect(commerceWebhooksLink).toHaveAttribute('href', '/dashboard/commerce/webhooks');
     const commerceOpsLink = screen.getByText('Commerce Ops').closest('a');
     expect(commerceOpsLink).toHaveAttribute('href', '/dashboard/commerce/ops');
   });
