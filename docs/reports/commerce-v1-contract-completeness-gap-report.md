@@ -1,6 +1,6 @@
 # Commerce V1 Contract Completeness Gap Report
 
-Status: M12 gap analysis plus M12A/M12B/M12C API completion and M12D portal control-plane UI slices. This pass did not deploy, merge, create cloud resources, change production config, enable production Commerce V1, enable live payments, enable live Plural, touch production secrets, or commit local-only artifacts.
+Status: M12 gap analysis plus M12A/M12B/M12C/M12D, M14, M14.1, and Option A hosted smoke evidence. Option A was a temporary approved smoke run only; its resources were deleted after evidence capture. This pass did not merge, change production config, enable production Commerce V1, enable live payments, enable live Plural, touch production secrets, or commit local-only artifacts.
 
 ## Classification Key
 
@@ -18,12 +18,12 @@ Status: M12 gap analysis plus M12A/M12B/M12C API completion and M12D portal cont
 | Merchant/agent mutable control-plane APIs | `done` | M12A implements tenant-bound merchant update plus CommerceAgent list/update with allowlisted fields, no secret disclosure, audit, OpenAPI, and focused tests. |
 | Product list/update/bulk/CSV | `partial` | M12B implements product list, product patch, bulk dry-run/upsert, and a local CSV dry-run validator. M12D adds a portal catalog manager and CSV dry-run surface backed by the bulk endpoint; a production/cloud importer remains out of scope. |
 | Inbound merchant webhook source APIs | `done` | M12C implements webhook-source management, one-time signing secret creation/rotation, signed complete-state `catalog.product.updated` ingestion, replay checks, idempotency, safe metadata persistence, and audit. |
-| Portal merchant control plane | `partial` | M12D adds onboarding, catalog, CSV dry-run/bulk, webhook-source, policy simulator, and explicit publish-unavailable controls. Publish/unpublish backend APIs, emergency re-enable, failed replay, and hosted evidence remain blocked/later. |
-| Failed provider webhook replay | `blocked` | Failed metadata exists, but safe raw payload storage, redaction, authorization, and replay audit semantics are absent. |
-| Emergency re-enable | `blocked` | Emergency disable exists; safe re-enable contract and UI/API do not. |
+| Portal merchant control plane | `partial` | M12D adds onboarding, catalog, CSV dry-run/bulk, webhook-source, policy simulator, and explicit publish-unavailable controls. M14 adds replay and re-enable controls. Publish/unpublish backend APIs and full hosted portal staging remain later. |
+| Failed provider webhook replay | `partial` | M14 adds safe encrypted storage and operator replay for future valid mock-provider events; M14.1 fixes replay listing SQL ambiguity; Option A smoke proved replay dry-run. Plural replay remains blocked until the external contract exists. |
+| Emergency re-enable | `done` | M14 adds an operator-only re-enable API and portal controls with reason, reviewed policy, explicit confirmation, tenant boundary, audit, and no provider/live flag mutation. |
 | Plural sandbox | `blocked` | The adapter fails closed until the real API and webhook signature contract is confirmed. |
 | Live payments and live Plural | `blocked` | Correctly unavailable for V1 staging and this pass. |
-| Hosted staging E2E evidence | `blocked` | M11 added dry-run planning only; no hosted services exist yet. |
+| Hosted staging E2E evidence | `partial` | Option A hosted API smoke passed 22 checks with 0 failures, then all temporary smoke resources were deleted. Full custom-domain hosted staging, hosted AgenticOrg, and portal staging remain unprovisioned. |
 
 ## Grantex API Contract
 
@@ -41,7 +41,7 @@ Status: M12 gap analysis plus M12A/M12B/M12C API completion and M12D portal cont
 | `PATCH /v1/commerce/webhook-sources/{source_key}` | `done` | M12C route updates only `display_name` and `status`, rejects immutable/sensitive fields, filters by tenant/merchant/source, and writes `webhook_source.updated` audit. M12D adds portal update controls. | Hosted staging evidence remains later. |
 | `POST /v1/commerce/webhook-sources/{source_key}/rotate-secret` | `done` | M12C route replaces encrypted signing material/hash, returns the new one-time signing secret exactly once, and writes `webhook_source.secret_rotated` audit. Old secrets stop validating immediately. M12D adds confirm-before-rotate UI and one-time display. | Hosted staging evidence remains later. |
 | `POST /v1/webhooks/merchant/{merchant_id}/{source_key}` | `done` | M12C route accepts only signed complete-state `catalog.product.updated` events, requires timestamp/signature headers, enforces a five-minute replay window, rejects disabled sources, accepts duplicate event IDs without double update, stores payload hashes only, upserts product/variants atomically, and writes `merchant_webhook.received` plus `catalog.product.updated` audit. | Hosted staging evidence and failed-event replay remain later. |
-| Failed provider webhook replay | `partial` | M14 adds encrypted replay payload storage for future valid mock-provider webhook events, metadata-only replay availability, and operator-only dry-run/real replay that uses the payment state machine and audit. | Plural replay remains blocked until external contract; historical events without encrypted payloads remain non-replayable. |
+| Failed provider webhook replay | `partial` | M14 adds encrypted replay payload storage for future valid mock-provider webhook events, metadata-only replay availability, and operator-only dry-run/real replay that uses the payment state machine and audit. M14.1 qualifies replay listing SQL columns so joined payload metadata cannot make `payload_hash` ambiguous. Option A smoke proved replay dry-run returns safe metadata. | Plural replay remains blocked until external contract; historical events without encrypted payloads remain non-replayable. |
 | Emergency re-enable | `done` | M14 adds operator-only `POST /merchants/{merchant_id}/enable-agentic-commerce` with reason, reviewed active policy ID, explicit confirmation, tenant boundary, audit, and no live/provider flag mutation. | Merchant self-service re-enable remains blocked. |
 | Policy simulator/UI | `partial` | Policy create/list/read/activate/evaluate API exists. M12D adds a portal simulator that does not collect raw passport JWT material; allow-path proof remains in hosted staging harnesses. | Full policy editing console and hosted staging evidence remain later. |
 | Portal onboarding/catalog/CSV/webhook-source/policy/publish controls | `done` | M12D adds onboarding, catalog manager, local CSV dry-run plus bulk endpoint handoff, webhook-source manager with one-time secret display, policy simulator, and explicit publish/unpublish unavailable state because a reviewed backend publish API does not exist. | Hosted staging evidence and reviewed publish backend contract remain later. |
@@ -59,12 +59,12 @@ The validator pins this current set so the gap report cannot silently drift:
 
 | Contract item | Status | Current evidence | Gap |
 | --- | --- | --- | --- |
-| `merchant.get_profile` | `done` | Implemented in `commerce-mcp.ts` and profile docs. | Hosted staging evidence still absent. |
-| `catalog.search` | `done` | MCP tool maps to implemented catalog search. | Product list API remains separate and missing. |
-| `catalog.get_item` | `done` | MCP tool maps to implemented get item. | No bulk/catalog manager parity yet. |
-| `inventory.check` | `done` | MCP tool computes variant availability/freshness buckets. | Hosted staging evidence still absent. |
-| `cart.create` | `done` | MCP tool maps to implemented cart create and idempotency. | Hosted staging evidence still absent. |
-| `checkout.create` | `done` | MCP tool maps to checkout creation; M8 state fix aligns `authorized -> checkout_created -> payment_pending`. | Hosted staging evidence still absent. |
+| `merchant.get_profile` | `done` | Implemented in `commerce-mcp.ts` and profile docs. | Option A hosted smoke evidence exists; full hosted staging remains later. |
+| `catalog.search` | `done` | MCP tool maps to implemented catalog search and passed Option A hosted smoke. | Full hosted staging remains later. |
+| `catalog.get_item` | `done` | MCP tool maps to implemented get item and passed Option A hosted smoke. | Full hosted staging remains later. |
+| `inventory.check` | `done` | MCP tool computes variant availability/freshness buckets and passed Option A hosted smoke. | Full hosted staging remains later. |
+| `cart.create` | `done` | MCP tool maps to implemented cart create and idempotency and passed Option A hosted smoke. | Full hosted staging remains later. |
+| `checkout.create` | `done` | MCP tool maps to checkout creation; M8 state fix aligns `authorized -> checkout_created -> payment_pending`, and Option A smoke proved `payment_pending`. | Full hosted staging remains later. |
 | `payment.create_intent` | `done` | MCP tool maps to provider-neutral payment intent. | Plural sandbox remains blocked. |
 | `payment.get_status` | `done` | MCP tool maps to payment status read. | Hosted staging evidence still absent. |
 | JSON-RPC over HTTP caveat | `partial` | `/mcp` handles `initialize`, `tools/list`, and `tools/call` over HTTP JSON-RPC. | This is a minimal streamable HTTP-compatible slice, not a broad conformance claim. |
@@ -74,12 +74,12 @@ The validator pins this current set so the gap report cannot silently drift:
 
 | Contract item | Status | Current evidence | Gap |
 | --- | --- | --- | --- |
-| Mock provider | `done` | Provider-neutral mock path creates authorized intents and checkout links. | Hosted staging smoke still needed. |
+| Mock provider | `done` | Provider-neutral mock path creates authorized intents and checkout links; Option A hosted smoke proved payment intent and checkout handoff. | Full hosted staging remains later. |
 | Plural sandbox adapter status | `blocked` | `PluralPaymentProvider` returns explicit blocked validation errors until API/signature details are confirmed. | M13 external contract required. |
 | Plural live status | `blocked` | Live mode remains gated and not enabled. | Legal, provider, production, and readiness approvals required later. |
-| Checkout state machine | `done` | State transitions enforce `authorized -> checkout_created -> payment_pending` and reject invalid transitions. | Hosted staging evidence still needed. |
+| Checkout state machine | `done` | State transitions enforce `authorized -> checkout_created -> payment_pending` and reject invalid transitions; Option A hosted smoke proved the positive handoff. | Full hosted staging remains later. |
 | Webhook idempotency | `done` | Provider webhook processing records provider events and duplicate handling for mock provider; M12C adds merchant webhook event idempotency for `catalog.product.updated`; M14 replay refuses unsafe events and does not double-transition already-applied states. | Plural replay remains blocked until external contract. |
-| Reconciliation | `done` | Manual reconciliation endpoint and worker support exist for payment intents. | Hosted staging evidence still needed. |
+| Reconciliation | `done` | Manual reconciliation endpoint and worker support exist for payment intents; Option A hosted smoke proved manual reconciliation. | Full hosted staging remains later. |
 | Audit evidence | `done` | Commerce audit events are appended for critical protected actions. | Database-level append-only hardening should be separately verified before external pilot. |
 | No live payment exposure | `done` | Docs, flags, and harnesses keep live payments and live Plural off. | Continue refusing live flags in staging tooling. |
 
@@ -131,6 +131,22 @@ The validator pins this current set so the gap report cannot silently drift:
 - Added operator-only `POST /v1/commerce/merchants/{merchant_id}/enable-agentic-commerce` with reviewed active policy evidence, explicit confirmation, audit, and no provider/live flag mutation.
 - Added portal replay and re-enable controls backed by the M14 APIs with required reasons and no raw payload/signature/secret rendering.
 - Did not implement Plural sandbox/live integration, merchant inbound webhook replay, cloud deployment, production config changes, or live payment enablement.
+
+## Safe Fixes Made In M14.1
+
+- Qualified provider webhook replay listing SQL columns with the event table alias so the joined replay payload table cannot make `payload_hash` ambiguous.
+- Added a focused regression proving replay availability listing uses `e.payload_hash` and does not expose encrypted payloads, safe header metadata, webhook secrets, or signing material.
+- Redeployed only the temporary Option A smoke service to prove replay dry-run returned safe metadata, then cleaned up the temporary smoke resources.
+
+## Option A Hosted Smoke Evidence
+
+- Redacted evidence report: `docs/reports/commerce-v1-option-a-smoke-evidence.md`.
+- Final result: 22 passed checks, 0 failed checks, and 9 skipped negative checks.
+- Passed checks covered health, JWKS, commerce well-known, MCP initialize/tools/list, catalog search/get item, inventory check, cart create, consent request, passport exchange, payment intent, checkout, mock paid/failed/expired webhooks, duplicate webhook idempotency, manual reconciliation, audit timeline, invalid webhook signature refusal, missing consent refusal, provider webhook replay dry-run, and emergency re-enable negative check.
+- Temporary resources were cleaned up after evidence capture: `grantex-auth-smoke`, `grantex-commerce-smoke-pg`, `grantex-commerce-smoke-redis`, `grantex-smoke-*` secrets, and smoke image tags.
+- Full hosted staging remains unprovisioned: no custom staging DNS, no hosted AgenticOrg services, no Firebase portal staging, and no production-like scale posture.
+- Live payments and live Plural remain blocked. Option A used mock provider only and did not touch production config, production DB/Redis, production secrets, live payment settings, or live Plural settings.
+- AgenticOrg local-to-smoke was not run as valid hosted evidence because the current local demo/eval path is mocked.
 
 ## Exact Future Implementation Prompts
 

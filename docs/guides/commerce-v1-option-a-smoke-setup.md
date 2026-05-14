@@ -6,6 +6,17 @@ Status: preparation only. This document does not deploy, create cloud resources,
 
 Option A is the cheapest temporary hosted smoke path for Grantex Commerce V1. It is not full staging. It exists only to prove that the hosted Grantex API can run the Commerce V1 mock-provider path over HTTPS with isolated staging data stores and staging-only secrets.
 
+## Execution Outcome
+
+Option A hosted smoke was executed after explicit approval and is now complete. The redacted evidence report is `docs/reports/commerce-v1-option-a-smoke-evidence.md`.
+
+- Final smoke evidence recorded 22 passed checks, 0 failed checks, and 9 skipped negative checks.
+- Health, JWKS, commerce well-known, MCP initialize/tools/list, catalog, inventory, cart, consent, passport exchange, mock payment intent, checkout, mock provider webhooks, duplicate webhook idempotency, manual reconciliation, audit timeline, provider webhook replay dry-run, and emergency re-enable negative check passed.
+- Temporary smoke resources were deleted after evidence capture: `grantex-auth-smoke`, `grantex-commerce-smoke-pg`, `grantex-commerce-smoke-redis`, `grantex-smoke-*` secrets, and smoke image tags.
+- Full hosted staging is still not provisioned. Option A did not create custom DNS, hosted AgenticOrg, Firebase portal staging, production-like scaling, or long-lived staging services.
+- Live payments and live Plural remain blocked. The smoke used mock provider only with live flags false.
+- AgenticOrg local-to-smoke was not run as valid hosted evidence because the current local demo/eval path is mocked.
+
 ## Cheapest Temporary Topology
 
 | Component | Option A choice | Cost control |
