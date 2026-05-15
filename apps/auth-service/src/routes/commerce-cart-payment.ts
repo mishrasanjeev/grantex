@@ -831,15 +831,7 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
     });
 
     commerceCriticalFlowTotal.labels('cart.create', 'success', '').inc();
-    request.log.info(commerceLogContext({
-      requestId: request.id,
-      tenantId: tenantId.replace(/[\r\n\t]/g, '_'),
-      merchantId: merchantId.replace(/[\r\n\t]/g, '_'),
-      agentId: caller.agentId?.replace(/[\r\n\t]/g, '_'),
-      cartId: cartId.replace(/[\r\n\t]/g, '_'),
-      idempotencyKeyHash: idempotency.keyHash,
-      status: 'draft',
-    }), 'commerce.cart.created');
+    request.log.info({ flow: 'cart.create', status: 'draft' }, 'commerce.cart.created');
 
     return reply.status(201).send(responseBody);
     },
@@ -1077,16 +1069,8 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
           'provider_error',
           err.normalized.code,
         ).inc();
-        request.log.warn(commerceLogContext({
-          requestId: request.id,
-          tenantId: tenantId.replace(/[\r\n\t]/g, '_'),
-          merchantId: merchantId.replace(/[\r\n\t]/g, '_'),
-          agentId: caller.agentId?.replace(/[\r\n\t]/g, '_'),
-          cartId: cart.id.replace(/[\r\n\t]/g, '_'),
-          providerKey: providerKey.replace(/[\r\n\t]/g, '_'),
-          errorCode: err.normalized.code.replace(/[\r\n\t]/g, '_'),
-          idempotencyKeyHash: idempotency.keyHash,
-        }), 'commerce.payment_intent.provider_error');
+        request.log.warn({ flow: 'payment_intent.create', status: 'provider_error' },
+          'commerce.payment_intent.provider_error');
         throw new CommerceHttpError(503, err.normalized.code, err.normalized.message, {
           retryable: err.normalized.retryable,
           details: {
@@ -1200,21 +1184,8 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
     });
 
     commerceCriticalFlowTotal.labels('payment_intent.create', 'success', '').inc();
-    request.log.info(commerceLogContext({
-      requestId: request.id,
-      tenantId: tenantId.replace(/[\r\n\t]/g, '_'),
-      merchantId: merchantId.replace(/[\r\n\t]/g, '_'),
-      agentId: caller.agentId?.replace(/[\r\n\t]/g, '_'),
-      cartId: cart.id.replace(/[\r\n\t]/g, '_'),
-      paymentIntentId: paymentIntentId.replace(/[\r\n\t]/g, '_'),
-      providerKey: providerKey.replace(/[\r\n\t]/g, '_'),
-      providerPaymentIdRef: hashedReference(providerResult.provider_payment_id.replace(/[\r\n\t]/g, '_'), 'provider_payment'),
-      passportJtiRef: hashedReference(passport.jti.replace(/[\r\n\t]/g, '_')),
-      policyVersion: policy.version.replace(/[\r\n\t]/g, '_'),
-      decisionId: decisionId.replace(/[\r\n\t]/g, '_'),
-      idempotencyKeyHash: idempotency.keyHash,
-      status: providerResult.status.replace(/[\r\n\t]/g, '_'),
-    }), 'commerce.payment_intent.created');
+    request.log.info({ flow: 'payment_intent.create', status: 'created' },
+      'commerce.payment_intent.created');
 
     return reply.status(201).send(responseBody);
     },

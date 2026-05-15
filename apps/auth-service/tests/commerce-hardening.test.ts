@@ -87,14 +87,20 @@ describe('Commerce M6A observability hardening', () => {
     expect(serialized).not.toMatch(/[\r\n\t]/);
   });
 
-  it('pre-sanitizes cart and payment route log values before structured logging', () => {
+  it('keeps CodeQL-sensitive cart and payment route log entries static', () => {
     const cartPayment = readRoute('commerce-cart-payment.ts');
 
-    expect(cartPayment).toContain("merchantId: merchantId.replace(/[\\r\\n\\t]/g, '_')");
-    expect(cartPayment).toContain("cartId: cartId.replace(/[\\r\\n\\t]/g, '_')");
-    expect(cartPayment).toContain("providerKey: providerKey.replace(/[\\r\\n\\t]/g, '_')");
-    expect(cartPayment).toContain("providerPaymentIdRef: hashedReference(providerResult.provider_payment_id.replace(/[\\r\\n\\t]/g, '_'), 'provider_payment')");
-    expect(cartPayment).toContain("passportJtiRef: hashedReference(passport.jti.replace(/[\\r\\n\\t]/g, '_'))");
+    expect(cartPayment).toContain(
+      "request.log.info({ flow: 'cart.create', status: 'draft' }, 'commerce.cart.created');",
+    );
+    expect(cartPayment).toContain(
+      "request.log.warn({ flow: 'payment_intent.create', status: 'provider_error' },",
+    );
+    expect(cartPayment).toContain(
+      "request.log.info({ flow: 'payment_intent.create', status: 'created' },",
+    );
+    expect(cartPayment).not.toContain("merchantId: merchantId.replace(/[\\r\\n\\t]/g, '_')");
+    expect(cartPayment).not.toContain("providerPaymentIdRef: hashedReference(providerResult.provider_payment_id");
   });
 
   it('mock provider metadata stores idempotency hash only, not plaintext prefixes', async () => {
