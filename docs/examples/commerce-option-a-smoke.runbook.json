@@ -1,0 +1,109 @@
+{
+  "runbook_version": "c2a-option-a-smoke-v1",
+  "purpose": "Repeatable lowest-cost temporary hosted smoke workflow for Grantex Commerce V1.",
+  "status": "planning_and_command_generation_only",
+  "creates_resources": false,
+  "runs_deploy": false,
+  "project": {
+    "default": "grantex-prod",
+    "approval_required": true
+  },
+  "region": {
+    "default": "us-central1",
+    "approval_required": true
+  },
+  "resources": {
+    "cloud_run_service": "grantex-auth-smoke",
+    "cloud_sql_instance": "grantex-commerce-smoke-pg",
+    "cloud_sql_database": "grantex_commerce_smoke",
+    "cloud_sql_user": "grantex_commerce_smoke_app",
+    "redis_instance": "grantex-commerce-smoke-redis",
+    "sql_tier_default": "db-f1-micro",
+    "redis_tier": "basic",
+    "redis_size_gb": 1,
+    "min_instances": 0,
+    "max_instances": 1
+  },
+  "cleanup": {
+    "cleanup_by": "<required ISO-8601 timestamp>",
+    "max_window_hours": 24,
+    "allow_long_cleanup_window_flag": "--allow-long-cleanup-window",
+    "delete_cloud_run_service": true,
+    "delete_cloud_sql_instance": true,
+    "delete_redis_instance": true,
+    "delete_smoke_secret_names": true,
+    "delete_smoke_image_tags_if_safe": true
+  },
+  "provider": {
+    "required": "mock",
+    "live_payments_enabled": false,
+    "plural_live_enabled": false,
+    "plural_sandbox_enabled": false
+  },
+  "secret_names_only": [
+    "grantex-smoke-database-url",
+    "grantex-smoke-redis-url",
+    "grantex-smoke-admin-api-key",
+    "grantex-smoke-vault-encryption-key",
+    "grantex-smoke-rsa-private-key",
+    "grantex-smoke-sso-state-secret",
+    "grantex-smoke-metrics-api-key",
+    "grantex-smoke-mock-payment-webhook-secret",
+    "grantex-smoke-commerce-passport-signing-key"
+  ],
+  "allowed_url_rules": {
+    "custom_staging_domains": [
+      "https://api-staging.grantex.dev",
+      "https://staging.grantex.dev",
+      "https://staging.agenticorg.ai"
+    ],
+    "option_a_smoke_run_app": "exact approved run.app origin only with allowlist flag",
+    "localhost": "local dry-run comparison only"
+  },
+  "refused_url_rules": [
+    "https://grantex.dev",
+    "https://api.grantex.dev",
+    "https://app.agenticorg.ai",
+    "credentialed URLs",
+    "arbitrary run.app URLs",
+    "non-HTTPS URLs outside local dry-run comparison"
+  ],
+  "refused_resource_names": [
+    "grantex-auth",
+    "grantex-pg16",
+    "grantex-redis"
+  ],
+  "validation_commands": [
+    "node docs/commerce-v1-pilot-readiness.validate.mjs",
+    "node scripts/commerce-option-a-smoke-plan.mjs --dry-run --project=grantex-prod --region=us-central1 --sql-tier=db-f1-micro --cleanup-by=<cleanup timestamp>",
+    "node scripts/commerce-option-a-smoke-seed.mjs --dry-run --manifest=docs/examples/commerce-staging-seed.manifest.json",
+    "node scripts/commerce-staging-e2e-harness.mjs --dry-run --api-base=<approved smoke URL> --allow-smoke-cloud-run-url=<approved smoke URL>",
+    "node scripts/commerce-staging-e2e-harness.mjs --dry-run --api-base=https://api.grantex.dev"
+  ],
+  "cleanup_commands": [
+    "gcloud run services delete grantex-auth-smoke --project=<project> --region=<region> --quiet",
+    "gcloud redis instances delete grantex-commerce-smoke-redis --project=<project> --region=<region> --quiet",
+    "gcloud sql instances delete grantex-commerce-smoke-pg --project=<project> --quiet",
+    "gcloud secrets delete <grantex-smoke-secret-name> --project=<project> --quiet"
+  ],
+  "agenticorg_local_real_staging": {
+    "hosted_agenticorg_required": false,
+    "env_names_only": [
+      "GRANTEX_COMMERCE_BASE_URL",
+      "GRANTEX_BASE_URL",
+      "AGENTICORG_COMMERCE_ALLOWED_SMOKE_URL",
+      "AGENTICORG_COMMERCE_REAL_STAGING",
+      "GRANTEX_COMMERCE_BEARER_TOKEN",
+      "GRANTEX_AGENT_ASSERTION",
+      "GRANTEX_API_KEY"
+    ],
+    "command": "python demos/commerce_sales_agent_demo.py --mode=real-staging --grantex-base <approved smoke URL> --allow-smoke-cloud-run-url <approved smoke URL>"
+  },
+  "redaction": {
+    "secret_values_included": false,
+    "tokens_included": false,
+    "passports_included": false,
+    "provider_credentials_included": false,
+    "raw_payloads_included": false
+  }
+}
