@@ -87,6 +87,16 @@ describe('Commerce M6A observability hardening', () => {
     expect(serialized).not.toMatch(/[\r\n\t]/);
   });
 
+  it('pre-sanitizes cart and payment route log values before structured logging', () => {
+    const cartPayment = readRoute('commerce-cart-payment.ts');
+
+    expect(cartPayment).toContain("merchantId: merchantId.replace(/[\\r\\n\\t]/g, '_')");
+    expect(cartPayment).toContain("cartId: cartId.replace(/[\\r\\n\\t]/g, '_')");
+    expect(cartPayment).toContain("providerKey: providerKey.replace(/[\\r\\n\\t]/g, '_')");
+    expect(cartPayment).toContain("providerPaymentIdRef: hashedReference(providerResult.provider_payment_id.replace(/[\\r\\n\\t]/g, '_'), 'provider_payment')");
+    expect(cartPayment).toContain("passportJtiRef: hashedReference(passport.jti.replace(/[\\r\\n\\t]/g, '_'))");
+  });
+
   it('mock provider metadata stores idempotency hash only, not plaintext prefixes', async () => {
     const rawIdempotencyKey = 'idem_SECRET_PREFIX_SHOULD_NOT_LEAK';
     const result = await new MockPaymentProvider().createPaymentIntent({

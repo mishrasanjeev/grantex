@@ -226,10 +226,10 @@ function validatePatchKeys(
   fieldErrors: Record<string, string>,
 ): string[] {
   const changedFields = Object.keys(body);
-  for (const key of changedFields) {
-    if (!allowed.has(key)) {
-      fieldErrors[key] = 'field is immutable or unsupported';
-    }
+  const unsupportedFields = changedFields.filter((key) => !allowed.has(key));
+  if (unsupportedFields.length > 0) {
+    fieldErrors['unsupported_fields'] =
+      `immutable or unsupported fields: ${unsupportedFields.map((key) => key.replace(/[\r\n\t]/g, '_')).join(', ')}`;
   }
   return changedFields.filter((key) => allowed.has(key));
 }

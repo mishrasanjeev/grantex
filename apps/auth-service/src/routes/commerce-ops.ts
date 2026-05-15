@@ -454,8 +454,10 @@ export async function commerceOpsRoutes(app: FastifyInstance): Promise<void> {
       }
       const body = (request.body ?? {}) as Record<string, unknown>;
       const fieldErrors: Record<string, string> = {};
-      for (const key of Object.keys(body)) {
-        if (key !== 'reason' && key !== 'dry_run') fieldErrors[key] = 'field is unsupported';
+      const unsupportedFields = Object.keys(body).filter((key) => key !== 'reason' && key !== 'dry_run');
+      if (unsupportedFields.length > 0) {
+        fieldErrors['unsupported_fields'] =
+          `unsupported fields: ${unsupportedFields.map((key) => key.replace(/[\r\n\t]/g, '_')).join(', ')}`;
       }
       if (!nonEmptyString(body['reason'])) fieldErrors['reason'] = 'required non-empty string';
       if (body['dry_run'] !== undefined && typeof body['dry_run'] !== 'boolean') {

@@ -264,10 +264,10 @@ describe('M12B PATCH /v1/commerce/catalog/products/:productId', () => {
 
     expect(res.statusCode).toBe(422);
     const fields = res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields;
-    expect(fields).toHaveProperty('id');
-    expect(fields).toHaveProperty('tenant_id');
-    expect(fields).toHaveProperty('merchant_id');
-    expect(fields).toHaveProperty('provider_payment_id');
+    expect(fields.unsupported_fields).toContain('id');
+    expect(fields.unsupported_fields).toContain('tenant_id');
+    expect(fields.unsupported_fields).toContain('merchant_id');
+    expect(fields.unsupported_fields).toContain('provider_payment_id');
   });
 
   it('rejects invalid price and currency patches', async () => {

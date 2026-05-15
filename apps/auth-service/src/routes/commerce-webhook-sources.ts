@@ -249,10 +249,10 @@ export async function commerceWebhookSourceRoutes(app: FastifyInstance): Promise
     const sourceKey = validateSourceKey(request.params.source_key, fieldErrors);
     const merchantId = merchantIdForWebhookSourceWrite(request, request.query.merchant_id);
     const changedFields = Object.keys(body);
-    for (const key of changedFields) {
-      if (!WEBHOOK_SOURCE_PATCH_FIELDS.has(key)) {
-        fieldErrors[key] = 'field is immutable or unsupported';
-      }
+    const unsupportedFields = changedFields.filter((key) => !WEBHOOK_SOURCE_PATCH_FIELDS.has(key));
+    if (unsupportedFields.length > 0) {
+      fieldErrors['unsupported_fields'] =
+        `immutable or unsupported fields: ${unsupportedFields.map((key) => key.replace(/[\r\n\t]/g, '_')).join(', ')}`;
     }
     const mutableFields = changedFields.filter((key) => WEBHOOK_SOURCE_PATCH_FIELDS.has(key));
     if (mutableFields.length === 0 && Object.keys(fieldErrors).length === 0) {

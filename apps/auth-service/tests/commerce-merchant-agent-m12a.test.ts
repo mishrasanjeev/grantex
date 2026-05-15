@@ -134,9 +134,9 @@ describe('M12A PATCH /v1/commerce/merchants/:merchantId', () => {
 
     expect(res.statusCode).toBe(422);
     const fields = res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields;
-    expect(fields).toHaveProperty('tenant_id');
-    expect(fields).toHaveProperty('environment');
-    expect(fields).toHaveProperty('provider_account_refs');
+    expect(fields.unsupported_fields).toContain('tenant_id');
+    expect(fields.unsupported_fields).toContain('environment');
+    expect(fields.unsupported_fields).toContain('provider_account_refs');
   });
 
   it('returns non-enumerating 404 when merchant is absent or outside the tenant', async () => {
@@ -269,10 +269,10 @@ describe('M12A PATCH /v1/commerce/agents/:agentId', () => {
 
     expect(res.statusCode).toBe(422);
     const fields = res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields;
-    expect(fields).toHaveProperty('tenant_id');
-    expect(fields).toHaveProperty('merchant_id');
-    expect(fields).toHaveProperty('api_key_hash');
-    expect(fields).toHaveProperty('public_key_jwk');
+    expect(fields.unsupported_fields).toContain('tenant_id');
+    expect(fields.unsupported_fields).toContain('merchant_id');
+    expect(fields.unsupported_fields).toContain('api_key_hash');
+    expect(fields.unsupported_fields).toContain('public_key_jwk');
   });
 
   it('prevents CommerceAgent self-elevation of trust/status', async () => {
