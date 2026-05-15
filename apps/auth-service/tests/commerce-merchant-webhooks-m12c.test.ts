@@ -231,11 +231,11 @@ describe('M12C webhook source management APIs', () => {
 
     expect(res.statusCode).toBe(422);
     const fields = res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields;
-    expect(fields).toHaveProperty('merchant_id');
-    expect(fields).toHaveProperty('source_key');
-    expect(fields).toHaveProperty('secret');
-    expect(fields).toHaveProperty('secret_hash');
-    expect(fields).toHaveProperty('created_at');
+    expect(fields.unsupported_fields).toContain('merchant_id');
+    expect(fields.unsupported_fields).toContain('source_key');
+    expect(fields.unsupported_fields).toContain('secret');
+    expect(fields.unsupported_fields).toContain('secret_hash');
+    expect(fields.unsupported_fields).toContain('created_at');
   });
 
   it('rotates a source secret once and never exposes previous material', async () => {

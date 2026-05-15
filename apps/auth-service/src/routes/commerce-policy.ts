@@ -598,10 +598,11 @@ export async function commercePolicyRoutes(app: FastifyInstance): Promise<void> 
       requireOperator(request);
       const body = (request.body ?? {}) as Record<string, unknown>;
       const fieldErrors: Record<string, string> = {};
-      for (const key of Object.keys(body)) {
-        if (!['reason', 'reviewed_policy_id', 'incident_reference', 'confirm_reenable'].includes(key)) {
-          fieldErrors[key] = 'field is unsupported';
-        }
+      const supportedFields = new Set(['reason', 'reviewed_policy_id', 'incident_reference', 'confirm_reenable']);
+      const unsupportedFields = Object.keys(body).filter((key) => !supportedFields.has(key));
+      if (unsupportedFields.length > 0) {
+        fieldErrors['unsupported_fields'] =
+          `unsupported fields: ${unsupportedFields.map((key) => key.replace(/[\r\n\t]/g, '_')).join(', ')}`;
       }
       if (!isString(body['reason'])) fieldErrors['reason'] = 'required non-empty string';
       if (!isString(body['reviewed_policy_id'])) {

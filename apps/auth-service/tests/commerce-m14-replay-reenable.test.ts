@@ -242,6 +242,22 @@ describe('M14 provider webhook replay', () => {
     expect(flattenedSqlCalls()).not.toContain('UPDATE commerce_payment_intents');
   });
 
+  it('rejects replay request unsupported fields under a constant validation key', async () => {
+    seedCommerceContext();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/commerce/ops/provider-webhook-events/${WEBHOOK_EVENT}/replay`,
+      headers: authHeader(),
+      payload: { reason: 'ops_review', signature: 'do-not-accept' },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const fields = res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields;
+    expect(Object.keys(fields)).not.toContain('signature');
+    expect(fields.unsupported_fields).toContain('signature');
+  });
+
   it('replays a valid failed provider webhook through the payment state machine', async () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([replayRow()]);
@@ -338,6 +354,26 @@ describe('M14 emergency re-enable', () => {
     expect(res.statusCode).toBe(422);
     expect(res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields)
       .toHaveProperty('confirm_reenable');
+  });
+
+  it('rejects re-enable unsupported fields under a constant validation key', async () => {
+    seedCommerceContext();
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/commerce/merchants/${MERCHANT}/enable-agentic-commerce`,
+      headers: authHeader(),
+      payload: {
+        reason: 'review',
+        reviewed_policy_id: POLICY_ID,
+        confirm_reenable: true,
+        secret: 'do-not-accept',
+      },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const fields = res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields;
+    expect(Object.keys(fields)).not.toContain('secret');
+    expect(fields.unsupported_fields).toContain('secret');
   });
 
   it('rejects invalid reviewed policy evidence', async () => {
