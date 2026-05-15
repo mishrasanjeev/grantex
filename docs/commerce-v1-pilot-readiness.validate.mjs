@@ -15,11 +15,19 @@ const hostedStagingPlan = readFileSync(join(docsDir, 'guides', 'commerce-v1-host
 const stagingDataSetup = readFileSync(join(docsDir, 'guides', 'commerce-v1-staging-data-setup.md'), 'utf8');
 const hostedStagingE2E = readFileSync(join(docsDir, 'guides', 'commerce-v1-hosted-staging-e2e.md'), 'utf8');
 const optionASmokeSetup = readFileSync(join(docsDir, 'guides', 'commerce-v1-option-a-smoke-setup.md'), 'utf8');
+const repeatableOptionASmokeWorkflow = readFileSync(
+  join(docsDir, 'guides', 'commerce-v1-repeatable-option-a-smoke-workflow.md'),
+  'utf8',
+);
 const hostedStagingE2ETemplate = readFileSync(join(docsDir, 'reports', 'commerce-v1-hosted-staging-e2e.template.md'), 'utf8');
 const optionASmokeEvidence = readFileSync(join(docsDir, 'reports', 'commerce-v1-option-a-smoke-evidence.md'), 'utf8');
 const contractGapReport = readFileSync(join(docsDir, 'reports', 'commerce-v1-contract-completeness-gap-report.md'), 'utf8');
+const optionASmokeRunbookText = readFileSync(join(docsDir, 'examples', 'commerce-option-a-smoke.runbook.json'), 'utf8');
 const harness = readFileSync(join(repoRoot, 'scripts', 'commerce-pilot-load-harness.mjs'), 'utf8');
 const stagingE2EHarness = readFileSync(join(repoRoot, 'scripts', 'commerce-staging-e2e-harness.mjs'), 'utf8');
+const optionASmokePlan = readFileSync(join(repoRoot, 'scripts', 'commerce-option-a-smoke-plan.mjs'), 'utf8');
+const optionASmokeSeed = readFileSync(join(repoRoot, 'scripts', 'commerce-option-a-smoke-seed.mjs'), 'utf8');
+const optionASmokeEvidenceTool = readFileSync(join(repoRoot, 'scripts', 'commerce-option-a-smoke-evidence.mjs'), 'utf8');
 const seed = readFileSync(join(repoRoot, 'scripts', 'commerce-pilot-seed-local.mjs'), 'utf8');
 
 function extractFalseImplementedRoutes(openapiText) {
@@ -323,6 +331,108 @@ for (const forbidden of [
 }
 
 for (const required of [
+  'Commerce V1 Repeatable Option A Smoke Workflow',
+  'C2A planning and tooling only',
+  'manual approval gates',
+  'min-instances=0',
+  'max-instances=1',
+  'grantex-auth-smoke',
+  'grantex-commerce-smoke-pg',
+  'grantex-commerce-smoke-redis',
+  'Mock provider only',
+  'COMMERCE_LIVE_MODE_ENABLED=true',
+  'PLURAL_LIVE_ENABLED=true',
+  'Cleanup Guarantees',
+  'more than 24 hours',
+  '--allow-long-cleanup-window',
+  'AgenticOrg Local Real-Staging Eval Fit',
+  'AGENTICORG_COMMERCE_REAL_STAGING',
+  'GRANTEX_COMMERCE_BASE_URL',
+  'GRANTEX_BASE_URL',
+  'AGENTICORG_COMMERCE_ALLOWED_SMOKE_URL',
+  'No hosted AgenticOrg deploy',
+]) {
+  assert.ok(repeatableOptionASmokeWorkflow.includes(required), `repeatable Option A workflow includes ${required}`);
+}
+for (const forbidden of [
+  'sk_live_',
+  'pk_live_',
+  'Bearer ',
+  'passport.jwt',
+  'idempotency-key:',
+  'mock-webhook-secret',
+]) {
+  assert.equal(
+    repeatableOptionASmokeWorkflow.includes(forbidden),
+    false,
+    `repeatable Option A workflow does not include ${forbidden}`,
+  );
+}
+
+const optionASmokeRunbook = JSON.parse(optionASmokeRunbookText);
+assert.equal(optionASmokeRunbook.resources.cloud_run_service, 'grantex-auth-smoke', 'Option A runbook pins smoke service');
+assert.equal(optionASmokeRunbook.resources.cloud_sql_instance, 'grantex-commerce-smoke-pg', 'Option A runbook pins smoke SQL');
+assert.equal(optionASmokeRunbook.resources.redis_instance, 'grantex-commerce-smoke-redis', 'Option A runbook pins smoke Redis');
+assert.equal(optionASmokeRunbook.resources.min_instances, 0, 'Option A runbook documents min instances 0');
+assert.equal(optionASmokeRunbook.resources.max_instances, 1, 'Option A runbook documents max instances 1');
+assert.equal(optionASmokeRunbook.provider.required, 'mock', 'Option A runbook requires mock provider');
+assert.equal(optionASmokeRunbook.provider.live_payments_enabled, false, 'Option A runbook blocks live payments');
+assert.equal(optionASmokeRunbook.provider.plural_live_enabled, false, 'Option A runbook blocks live Plural');
+assert.ok(
+  optionASmokeRunbook.refused_resource_names.includes('grantex-auth')
+    && optionASmokeRunbook.refused_resource_names.includes('grantex-pg16')
+    && optionASmokeRunbook.refused_resource_names.includes('grantex-redis'),
+  'Option A runbook documents production resource name refusals',
+);
+assert.ok(
+  optionASmokeRunbook.secret_names_only.every((name) => name.startsWith('grantex-smoke-')),
+  'Option A runbook lists smoke secret names only',
+);
+assert.equal(optionASmokeRunbook.redaction.secret_values_included, false, 'Option A runbook excludes secret values');
+for (const forbidden of ['sk_live_', 'pk_live_', 'Bearer ', 'passport.jwt', 'idempotency-key:', 'mock-webhook-secret']) {
+  assert.equal(optionASmokeRunbookText.includes(forbidden), false, `Option A runbook does not include ${forbidden}`);
+}
+
+for (const required of [
+  'dry-run command generation only',
+  'Refusing production resource name',
+  'Refusing production URL',
+  'Refusing non-mock provider',
+  'min-instances=0',
+  'max-instances=1',
+  'Refusing cleanup window more than 24 hours',
+  'create_cloud_sql',
+  'create_redis',
+  'create_smoke_secret_names',
+  'deploy_smoke_service',
+  'agenticorg_local_real_staging_eval',
+  '# NOT RUN',
+]) {
+  assert.ok(optionASmokePlan.includes(required), `Option A smoke plan script includes ${required}`);
+}
+for (const required of [
+  'Run mode is blocked for C2A',
+  'Smoke seed provider must be mock',
+  'Smoke seed live payments flag must be false',
+  'Smoke seed tenant id is pinned',
+  'Smoke seed manifest must include 10-25 products',
+  'generated harness env under .tmp only',
+]) {
+  assert.ok(optionASmokeSeed.includes(required), `Option A smoke seed script includes ${required}`);
+}
+for (const required of [
+  'Refusing production domain',
+  'Refusing arbitrary run.app URL without exact --allow-smoke-cloud-run-url',
+  'Refusing non-mock provider',
+  'Refusing COMMERCE_LIVE_MODE_ENABLED=true',
+  'Refusing PLURAL_LIVE_ENABLED=true',
+  'Run mode is blocked for C2A',
+  'commerce-v1-option-a-smoke-evidence.md',
+]) {
+  assert.ok(optionASmokeEvidenceTool.includes(required), `Option A smoke evidence tool includes ${required}`);
+}
+
+for (const required of [
   'Commerce V1 Option A Smoke Evidence',
   'Passed checks | 22',
   'Failed checks | 0',
@@ -572,6 +682,139 @@ assert.ok(
   'hosted staging E2E run.app refusal explains the smoke allowlist guard',
 );
 
+const nearCleanup = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+const optionASmokePlanDryRun = execFileSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-plan.mjs'),
+    '--dry-run',
+    '--project=grantex-prod',
+    '--region=us-central1',
+    '--sql-tier=db-f1-micro',
+    `--cleanup-by=${nearCleanup}`,
+  ],
+  { encoding: 'utf8' },
+);
+const optionASmokePlanReport = JSON.parse(optionASmokePlanDryRun);
+assert.equal(optionASmokePlanReport.mode, 'dry-run');
+assert.equal(optionASmokePlanReport.status, 'not_executed');
+assert.equal(optionASmokePlanReport.creates_resources, false);
+assert.equal(optionASmokePlanReport.deploys, false);
+assert.equal(optionASmokePlanReport.service_name, 'grantex-auth-smoke');
+assert.equal(optionASmokePlanReport.cloud_sql_instance, 'grantex-commerce-smoke-pg');
+assert.equal(optionASmokePlanReport.redis_instance, 'grantex-commerce-smoke-redis');
+assert.equal(optionASmokePlanReport.provider, 'mock');
+assert.equal(optionASmokePlanReport.min_instances, 0);
+assert.equal(optionASmokePlanReport.max_instances, 1);
+assert.ok(
+  optionASmokePlanReport.commands.every((entry) => entry.command.startsWith('# NOT RUN')),
+  'Option A smoke planner prints commands as NOT RUN',
+);
+
+const optionASmokeLongCleanupRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-plan.mjs'),
+    '--dry-run',
+    '--project=grantex-prod',
+    '--region=us-central1',
+    '--sql-tier=db-f1-micro',
+    '--cleanup-by=2099-01-01T00:00:00+05:30',
+  ],
+  { encoding: 'utf8' },
+);
+assert.notEqual(optionASmokeLongCleanupRefusal.status, 0, 'Option A smoke planner refuses long cleanup windows');
+assert.ok(
+  `${optionASmokeLongCleanupRefusal.stdout}${optionASmokeLongCleanupRefusal.stderr}`.includes('Refusing cleanup window more than 24 hours'),
+  'Option A smoke planner explains long cleanup window refusal',
+);
+
+const optionASmokeProdNameRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-plan.mjs'),
+    '--dry-run',
+    '--project=grantex-prod',
+    '--region=us-central1',
+    '--sql-tier=db-f1-micro',
+    `--cleanup-by=${nearCleanup}`,
+    '--service-name=grantex-auth',
+  ],
+  { encoding: 'utf8' },
+);
+assert.notEqual(optionASmokeProdNameRefusal.status, 0, 'Option A smoke planner refuses production service name');
+assert.ok(
+  `${optionASmokeProdNameRefusal.stdout}${optionASmokeProdNameRefusal.stderr}`.includes('Refusing production resource name'),
+  'Option A smoke planner explains production resource name refusal',
+);
+
+const optionASmokeSeedDryRun = execFileSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-seed.mjs'),
+    '--dry-run',
+    '--manifest=docs/examples/commerce-staging-seed.manifest.json',
+  ],
+  { encoding: 'utf8' },
+);
+const optionASmokeSeedReport = JSON.parse(optionASmokeSeedDryRun);
+assert.equal(optionASmokeSeedReport.mode, 'dry-run');
+assert.equal(optionASmokeSeedReport.status, 'not_executed');
+assert.equal(optionASmokeSeedReport.would_write, false);
+assert.equal(optionASmokeSeedReport.provider, 'mock');
+assert.equal(optionASmokeSeedReport.live_flags.commerce_live_mode_enabled, false);
+assert.equal(optionASmokeSeedReport.staging_ids.tenant_id, 'cten_staging_commerce');
+assert.ok(optionASmokeSeedReport.catalog.product_count >= 10);
+assert.ok(optionASmokeSeedReport.catalog.products_with_variants >= 3);
+
+const optionASmokeEvidenceDryRun = execFileSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-evidence.mjs'),
+    '--dry-run',
+    `--api-base=${smokeUrl}`,
+    `--allow-smoke-cloud-run-url=${smokeUrl}`,
+  ],
+  { encoding: 'utf8' },
+);
+const optionASmokeEvidenceDryRunReport = JSON.parse(optionASmokeEvidenceDryRun);
+assert.equal(optionASmokeEvidenceDryRunReport.mode, 'dry-run');
+assert.equal(optionASmokeEvidenceDryRunReport.status, 'not_executed');
+assert.equal(optionASmokeEvidenceDryRunReport.requests_made, false);
+assert.equal(optionASmokeEvidenceDryRunReport.api_base, smokeUrl);
+assert.equal(optionASmokeEvidenceDryRunReport.provider, 'mock');
+assert.equal(optionASmokeEvidenceDryRunReport.safety.exact_smoke_run_app_allowed, smokeUrl);
+
+const optionASmokeEvidenceRunAppRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-evidence.mjs'),
+    '--dry-run',
+    `--api-base=${smokeUrl}`,
+  ],
+  { encoding: 'utf8' },
+);
+assert.notEqual(optionASmokeEvidenceRunAppRefusal.status, 0, 'Option A smoke evidence tool refuses arbitrary run.app');
+assert.ok(
+  `${optionASmokeEvidenceRunAppRefusal.stdout}${optionASmokeEvidenceRunAppRefusal.stderr}`.includes('Refusing arbitrary run.app URL'),
+  'Option A smoke evidence run.app refusal explains exact allowlist guard',
+);
+
+const optionASmokeEvidenceProdRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-evidence.mjs'),
+    '--dry-run',
+    '--api-base=https://api.grantex.dev',
+  ],
+  { encoding: 'utf8' },
+);
+assert.notEqual(optionASmokeEvidenceProdRefusal.status, 0, 'Option A smoke evidence tool refuses production API base');
+assert.ok(
+  `${optionASmokeEvidenceProdRefusal.stdout}${optionASmokeEvidenceProdRefusal.stderr}`.includes('Refusing production domain'),
+  'Option A smoke evidence production refusal explains production guard',
+);
+
 const nonLocalSeed = spawnSync(
   process.execPath,
   [
@@ -640,11 +883,16 @@ assert.equal(/[^\u0000-\u007F]/.test(hostedStagingPlan), false, 'hosted staging 
 assert.equal(/[^\u0000-\u007F]/.test(stagingDataSetup), false, 'staging data setup guide stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(hostedStagingE2E), false, 'hosted staging E2E guide stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(optionASmokeSetup), false, 'Option A smoke setup guide stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(repeatableOptionASmokeWorkflow), false, 'repeatable Option A smoke workflow stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(hostedStagingE2ETemplate), false, 'hosted staging E2E template stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(optionASmokeEvidence), false, 'Option A smoke evidence stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(contractGapReport), false, 'contract gap report stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(optionASmokeRunbookText), false, 'Option A smoke runbook stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(harness), false, 'load harness stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(stagingE2EHarness), false, 'hosted staging E2E harness stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(optionASmokePlan), false, 'Option A smoke plan script stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(optionASmokeSeed), false, 'Option A smoke seed script stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(optionASmokeEvidenceTool), false, 'Option A smoke evidence tool stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(seed), false, 'local seed script stays ASCII-only');
 
 console.log('commerce-v1 pilot readiness validation passed');

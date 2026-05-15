@@ -282,9 +282,11 @@ Run mode must remain fail-closed until a reviewed implementation exists and the 
 # NOT RUN
 $env:GRANTEX_COMMERCE_BASE_URL=$env:SMOKE_URL
 $env:GRANTEX_BASE_URL=$env:SMOKE_URL
-$env:AGENTICORG_BASE_URL='http://localhost:3000'
-python demos/commerce_sales_agent_demo.py --mode=hosted-staging
-python -m pytest tests/evals/test_commerce_sales_agent_evals.py -q --hosted-staging
+$env:AGENTICORG_COMMERCE_ALLOWED_SMOKE_URL=$env:SMOKE_URL
+$env:AGENTICORG_COMMERCE_REAL_STAGING='1'
+# Set exactly one Grantex auth env var securely outside logs.
+python demos/commerce_sales_agent_demo.py --mode=real-staging --grantex-base $env:SMOKE_URL --allow-smoke-cloud-run-url $env:SMOKE_URL --evidence-report docs/reports/commerce-agent-real-staging-evidence.md
+python -m pytest tests/evals/test_commerce_sales_agent_real_staging.py -q
 ```
 
 Use only approved local AgenticOrg auth material. Do not print or commit bearer tokens, passports, idempotency keys, provider credentials, webhook secrets, raw payloads, or secret values.
