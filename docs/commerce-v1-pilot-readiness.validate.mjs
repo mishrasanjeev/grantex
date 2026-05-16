@@ -30,6 +30,34 @@ const optionASmokeSeed = readFileSync(join(repoRoot, 'scripts', 'commerce-option
 const optionASmokeEvidenceTool = readFileSync(join(repoRoot, 'scripts', 'commerce-option-a-smoke-evidence.mjs'), 'utf8');
 const seed = readFileSync(join(repoRoot, 'scripts', 'commerce-pilot-seed-local.mjs'), 'utf8');
 
+const joinText = (...parts) => parts.join('');
+const commonSecretMarkers = [
+  joinText('sk', '_live_'),
+  joinText('pk', '_live_'),
+  joinText('Bearer', ' '),
+  joinText('passport', '.jwt'),
+  joinText('idempotency', '-key:'),
+  joinText('mock', '-webhook', '-secret'),
+];
+const evidenceSecretMarkers = [
+  ...commonSecretMarkers,
+  joinText('postgres', '://'),
+  joinText('redis', '://'),
+  joinText('idempotency', '_key'),
+  joinText('webhook', '_secret'),
+  joinText('encrypted', '_payload'),
+  joinText('raw', '_payload'),
+  joinText('safe', '_headers_json'),
+  joinText('provider', '_credentials'),
+  joinText('-----', 'BEGIN'),
+];
+const fixtureEnvSecretMarkers = [
+  ...commonSecretMarkers,
+  joinText('postgres', '://'),
+  joinText('redis', '://'),
+  joinText('-----', 'BEGIN'),
+];
+
 function extractFalseImplementedRoutes(openapiText) {
   const routes = [];
   let currentPath = null;
@@ -107,9 +135,9 @@ for (const required of [
 for (const forbidden of [
   'COMMERCE_LIVE_MODE_ENABLED=true',
   'PLURAL_LIVE_ENABLED=true',
-  'sk_live_',
-  'pk_live_',
-  'Bearer ',
+  joinText('sk', '_live_'),
+  joinText('pk', '_live_'),
+  joinText('Bearer', ' '),
 ]) {
   assert.equal(hostedStagingPlan.includes(forbidden), false, `hosted staging plan does not include ${forbidden}`);
 }
@@ -176,13 +204,13 @@ function assertNoForbiddenSeedSecrets(value, path = 'manifest') {
     'webhook_secret',
   ];
   const forbiddenValueFragments = [
-    'Bearer ',
-    'sk_live_',
-    'pk_live_',
-    '-----BEGIN',
-    'passport.jwt',
-    'idempotency-key:',
-    'mock-webhook-secret',
+    joinText('Bearer', ' '),
+    joinText('sk', '_live_'),
+    joinText('pk', '_live_'),
+    joinText('-----', 'BEGIN'),
+    joinText('passport', '.jwt'),
+    joinText('idempotency', '-key:'),
+    joinText('mock', '-webhook', '-secret'),
   ];
   if (Array.isArray(value)) {
     value.forEach((item, index) => assertNoForbiddenSeedSecrets(item, `${path}[${index}]`));
@@ -230,9 +258,9 @@ for (const required of [
 for (const forbidden of [
   'COMMERCE_LIVE_MODE_ENABLED=true',
   'PLURAL_LIVE_ENABLED=true',
-  'sk_live_',
-  'pk_live_',
-  'Bearer ',
+  joinText('sk', '_live_'),
+  joinText('pk', '_live_'),
+  joinText('Bearer', ' '),
 ]) {
   assert.equal(stagingDataSetup.includes(forbidden), false, `staging data setup guide does not include ${forbidden}`);
 }
@@ -319,14 +347,7 @@ for (const required of [
 ]) {
   assert.ok(optionASmokeSetup.includes(required), `Option A smoke setup guide includes ${required}`);
 }
-for (const forbidden of [
-  'sk_live_',
-  'pk_live_',
-  'Bearer ',
-  'passport.jwt',
-  'idempotency-key:',
-  'mock-webhook-secret',
-]) {
+for (const forbidden of commonSecretMarkers) {
   assert.equal(optionASmokeSetup.includes(forbidden), false, `Option A smoke setup guide does not include ${forbidden}`);
 }
 
@@ -350,18 +371,16 @@ for (const required of [
   'GRANTEX_COMMERCE_BASE_URL',
   'GRANTEX_BASE_URL',
   'AGENTICORG_COMMERCE_ALLOWED_SMOKE_URL',
+  '--write-agenticorg-fixture-env=.tmp/commerce-agent-real-staging.env',
+  '--fixture-env=.tmp/commerce-agent-real-staging.env',
+  'The fixture export is disabled by default',
+  'must stay under `.tmp/`',
+  'cleanup/evidence warning language',
   'No hosted AgenticOrg deploy',
 ]) {
   assert.ok(repeatableOptionASmokeWorkflow.includes(required), `repeatable Option A workflow includes ${required}`);
 }
-for (const forbidden of [
-  'sk_live_',
-  'pk_live_',
-  'Bearer ',
-  'passport.jwt',
-  'idempotency-key:',
-  'mock-webhook-secret',
-]) {
+for (const forbidden of commonSecretMarkers) {
   assert.equal(
     repeatableOptionASmokeWorkflow.includes(forbidden),
     false,
@@ -378,6 +397,30 @@ assert.equal(optionASmokeRunbook.resources.max_instances, 1, 'Option A runbook d
 assert.equal(optionASmokeRunbook.provider.required, 'mock', 'Option A runbook requires mock provider');
 assert.equal(optionASmokeRunbook.provider.live_payments_enabled, false, 'Option A runbook blocks live payments');
 assert.equal(optionASmokeRunbook.provider.plural_live_enabled, false, 'Option A runbook blocks live Plural');
+assert.equal(
+  optionASmokeRunbook.agenticorg_fixture_bridge.enabled_by_default,
+  false,
+  'Option A runbook keeps AgenticOrg fixture bridge disabled by default',
+);
+assert.equal(
+  optionASmokeRunbook.agenticorg_fixture_bridge.path_rule,
+  '.tmp/ only',
+  'Option A runbook requires fixture env under .tmp only',
+);
+assert.equal(
+  optionASmokeRunbook.agenticorg_fixture_bridge.requires_exact_smoke_url_allowlist,
+  true,
+  'Option A runbook requires exact smoke URL allowlist for fixture env',
+);
+assert.equal(
+  optionASmokeRunbook.agenticorg_fixture_bridge.stdout_values_allowed,
+  false,
+  'Option A runbook forbids fixture values in stdout',
+);
+assert.ok(
+  optionASmokeRunbook.agenticorg_fixture_bridge.env_names.includes('AGENTICORG_COMMERCE_CHECKOUT_PASSPORT_JWT'),
+  'Option A runbook names checkout passport fixture env without values',
+);
 assert.ok(
   optionASmokeRunbook.refused_resource_names.includes('grantex-auth')
     && optionASmokeRunbook.refused_resource_names.includes('grantex-pg16')
@@ -389,7 +432,7 @@ assert.ok(
   'Option A runbook lists smoke secret names only',
 );
 assert.equal(optionASmokeRunbook.redaction.secret_values_included, false, 'Option A runbook excludes secret values');
-for (const forbidden of ['sk_live_', 'pk_live_', 'Bearer ', 'passport.jwt', 'idempotency-key:', 'mock-webhook-secret']) {
+for (const forbidden of commonSecretMarkers) {
   assert.equal(optionASmokeRunbookText.includes(forbidden), false, `Option A runbook does not include ${forbidden}`);
 }
 
@@ -416,6 +459,11 @@ for (const required of [
   'Smoke seed live payments flag must be false',
   'Smoke seed tenant id is pinned',
   'Smoke seed manifest must include 10-25 products',
+  '--write-agenticorg-fixture-env',
+  'Refusing AgenticOrg fixture env output outside .tmp/',
+  'Refusing arbitrary run.app URL without exact --allow-smoke-cloud-run-url',
+  'Refusing COMMERCE_LIVE_MODE_ENABLED=true for Option A smoke seed tooling',
+  'sensitive_values_printed: false',
   'generated harness env under .tmp only',
 ]) {
   assert.ok(optionASmokeSeed.includes(required), `Option A smoke seed script includes ${required}`);
@@ -451,21 +499,7 @@ for (const required of [
   assert.ok(optionASmokeEvidence.includes(required), `Option A smoke evidence includes ${required}`);
 }
 
-for (const forbidden of [
-  'Bearer ',
-  'sk_live_',
-  'pk_live_',
-  'postgres://',
-  'redis://',
-  'idempotency-key:',
-  'idempotency_key',
-  'webhook_secret',
-  'encrypted_payload',
-  'raw_payload',
-  'safe_headers_json',
-  'provider_credentials',
-  '-----BEGIN',
-]) {
+for (const forbidden of evidenceSecretMarkers) {
   assert.equal(optionASmokeEvidence.includes(forbidden), false, `Option A smoke evidence does not include ${forbidden}`);
 }
 assert.equal(
@@ -567,14 +601,7 @@ for (const required of [
 for (const route of expectedFalseImplementedRoutes) {
   assert.ok(contractGapReport.includes(route), `contract gap report names incomplete route ${route}`);
 }
-for (const forbidden of [
-  'sk_live_',
-  'pk_live_',
-  'Bearer ',
-  'passport.jwt',
-  'idempotency-key:',
-  'mock-webhook-secret',
-]) {
+for (const forbidden of commonSecretMarkers) {
   assert.equal(contractGapReport.includes(forbidden), false, `contract gap report does not include ${forbidden}`);
 }
 
@@ -767,6 +794,151 @@ assert.equal(optionASmokeSeedReport.staging_ids.tenant_id, 'cten_staging_commerc
 assert.ok(optionASmokeSeedReport.catalog.product_count >= 10);
 assert.ok(optionASmokeSeedReport.catalog.products_with_variants >= 3);
 
+const fixtureExportEnv = {
+  ...process.env,
+  GRANTEX_COMMERCE_BEARER_TOKEN: '',
+  GRANTEX_AGENT_ASSERTION: '',
+  GRANTEX_API_KEY: '',
+  AGENTICORG_COMMERCE_BROWSE_PASSPORT_JWT: '',
+  AGENTICORG_COMMERCE_CHECKOUT_PASSPORT_JWT: '',
+  AGENTICORG_COMMERCE_REVOKED_PASSPORT_JWT: '',
+  AGENTICORG_COMMERCE_EXPIRED_PASSPORT_JWT: '',
+  AGENTICORG_COMMERCE_DENIED_CONSENT_REF: '',
+  COMMERCE_LIVE_MODE_ENABLED: '',
+  PLURAL_LIVE_ENABLED: '',
+};
+const fixtureEnvPath = join(repoRoot, '.tmp', 'commerce-agent-real-staging.env');
+const optionASmokeFixtureExportDryRun = execFileSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-seed.mjs'),
+    '--dry-run',
+    '--manifest=docs/examples/commerce-staging-seed.manifest.json',
+    `--api-base=${smokeUrl}`,
+    `--allow-smoke-cloud-run-url=${smokeUrl}`,
+    '--write-agenticorg-fixture-env=.tmp/commerce-agent-real-staging.env',
+  ],
+  { encoding: 'utf8', env: fixtureExportEnv },
+);
+const optionASmokeFixtureExportReport = JSON.parse(optionASmokeFixtureExportDryRun);
+assert.equal(optionASmokeFixtureExportReport.mode, 'dry-run');
+assert.equal(optionASmokeFixtureExportReport.agenticorg_fixture_env_export.written, true);
+assert.equal(
+  optionASmokeFixtureExportReport.agenticorg_fixture_env_export.path,
+  '.tmp/commerce-agent-real-staging.env',
+);
+assert.equal(optionASmokeFixtureExportReport.agenticorg_fixture_env_export.sensitive_values_printed, false);
+assert.ok(
+  optionASmokeFixtureExportReport.agenticorg_fixture_env_export.variable_names_written.includes(
+    'AGENTICORG_COMMERCE_FIXTURE_PRODUCT_ID',
+  ),
+  'Option A fixture export reports variable names only',
+);
+const fixtureEnvText = readFileSync(fixtureEnvPath, 'utf8');
+for (const forbidden of fixtureEnvSecretMarkers) {
+  assert.equal(fixtureEnvText.includes(forbidden), false, `fixture env dry-run does not include ${forbidden}`);
+}
+
+const optionASmokeFixtureOutsideTmpRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-seed.mjs'),
+    '--dry-run',
+    '--manifest=docs/examples/commerce-staging-seed.manifest.json',
+    `--api-base=${smokeUrl}`,
+    `--allow-smoke-cloud-run-url=${smokeUrl}`,
+    '--write-agenticorg-fixture-env=docs/commerce-agent-real-staging.env',
+  ],
+  { encoding: 'utf8', env: fixtureExportEnv },
+);
+assert.notEqual(optionASmokeFixtureOutsideTmpRefusal.status, 0, 'Option A fixture export refuses paths outside .tmp');
+assert.ok(
+  `${optionASmokeFixtureOutsideTmpRefusal.stdout}${optionASmokeFixtureOutsideTmpRefusal.stderr}`.includes(
+    'Refusing AgenticOrg fixture env output outside .tmp/',
+  ),
+  'Option A fixture export explains .tmp path refusal',
+);
+
+const optionASmokeFixtureProdRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-seed.mjs'),
+    '--dry-run',
+    '--manifest=docs/examples/commerce-staging-seed.manifest.json',
+    '--api-base=https://api.grantex.dev',
+    '--allow-smoke-cloud-run-url=https://api.grantex.dev',
+    '--write-agenticorg-fixture-env=.tmp/commerce-agent-real-staging.env',
+  ],
+  { encoding: 'utf8', env: fixtureExportEnv },
+);
+assert.notEqual(optionASmokeFixtureProdRefusal.status, 0, 'Option A fixture export refuses production URL');
+assert.ok(
+  `${optionASmokeFixtureProdRefusal.stdout}${optionASmokeFixtureProdRefusal.stderr}`.includes(
+    'Refusing production domain',
+  ),
+  'Option A fixture export explains production URL refusal',
+);
+
+const optionASmokeFixtureRunAppRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-seed.mjs'),
+    '--dry-run',
+    '--manifest=docs/examples/commerce-staging-seed.manifest.json',
+    '--api-base=https://example.run.app',
+    '--write-agenticorg-fixture-env=.tmp/commerce-agent-real-staging.env',
+  ],
+  { encoding: 'utf8', env: fixtureExportEnv },
+);
+assert.notEqual(optionASmokeFixtureRunAppRefusal.status, 0, 'Option A fixture export refuses arbitrary run.app URL');
+assert.ok(
+  `${optionASmokeFixtureRunAppRefusal.stdout}${optionASmokeFixtureRunAppRefusal.stderr}`.includes(
+    'Refusing arbitrary run.app URL',
+  ),
+  'Option A fixture export explains arbitrary run.app refusal',
+);
+
+const optionASmokeFixtureLiveFlagRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-seed.mjs'),
+    '--dry-run',
+    '--manifest=docs/examples/commerce-staging-seed.manifest.json',
+    `--api-base=${smokeUrl}`,
+    `--allow-smoke-cloud-run-url=${smokeUrl}`,
+    '--write-agenticorg-fixture-env=.tmp/commerce-agent-real-staging.env',
+  ],
+  { encoding: 'utf8', env: { ...fixtureExportEnv, COMMERCE_LIVE_MODE_ENABLED: 'true' } },
+);
+assert.notEqual(optionASmokeFixtureLiveFlagRefusal.status, 0, 'Option A fixture export refuses live commerce flag');
+assert.ok(
+  `${optionASmokeFixtureLiveFlagRefusal.stdout}${optionASmokeFixtureLiveFlagRefusal.stderr}`.includes(
+    'Refusing COMMERCE_LIVE_MODE_ENABLED=true',
+  ),
+  'Option A fixture export explains live commerce flag refusal',
+);
+
+const optionASmokeFixtureNonMockProviderRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-seed.mjs'),
+    '--dry-run',
+    '--manifest=docs/examples/commerce-staging-seed.manifest.json',
+    '--provider=stripe',
+    `--api-base=${smokeUrl}`,
+    `--allow-smoke-cloud-run-url=${smokeUrl}`,
+    '--write-agenticorg-fixture-env=.tmp/commerce-agent-real-staging.env',
+  ],
+  { encoding: 'utf8', env: fixtureExportEnv },
+);
+assert.notEqual(optionASmokeFixtureNonMockProviderRefusal.status, 0, 'Option A fixture export refuses non-mock provider');
+assert.ok(
+  `${optionASmokeFixtureNonMockProviderRefusal.stdout}${optionASmokeFixtureNonMockProviderRefusal.stderr}`.includes(
+    'Smoke seed provider must be mock',
+  ),
+  'Option A fixture export explains non-mock provider refusal',
+);
+
 const optionASmokeEvidenceDryRun = execFileSync(
   process.execPath,
   [
@@ -820,7 +992,7 @@ const nonLocalSeed = spawnSync(
   [
     join(repoRoot, 'scripts', 'commerce-pilot-seed-local.mjs'),
     '--run',
-    '--database-url=postgres://grantex:grantex@prod-db.grantex.dev:5432/grantex',
+    `--database-url=${joinText('post', 'gres', '://blocked-user:blocked-pass@prod-db.example.invalid:5432/blocked')}`,
   ],
   { encoding: 'utf8' },
 );
