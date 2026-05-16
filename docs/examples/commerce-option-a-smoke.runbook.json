@@ -1,7 +1,7 @@
 {
   "runbook_version": "c2a-option-a-smoke-v1",
   "purpose": "Repeatable lowest-cost temporary hosted smoke workflow for Grantex Commerce V1.",
-  "status": "planning_and_command_generation_only",
+  "status": "c2b_smoke_complete_and_packaged",
   "creates_resources": false,
   "runs_deploy": false,
   "project": {
@@ -23,6 +23,19 @@
     "redis_size_gb": 1,
     "min_instances": 0,
     "max_instances": 1
+  },
+  "c2b_evidence": {
+    "result": {
+      "passed": 22,
+      "failed": 0,
+      "skipped": 3
+    },
+    "cleanup_completed": true,
+    "production_resources_untouched": true,
+    "production_db_redis_used": false,
+    "redis_finding": "External Redis was created, but the smoke runtime used in-container ephemeral Redis after external Redis connectivity failed.",
+    "future_cost_improvement": "Skip external Redis only if auth-service smoke runtime explicitly supports and documents ephemeral Redis mode; otherwise keep the current conservative Redis option.",
+    "agenticorg_fixture_blocker": "C2C still needs synthetic consent/passport fixture support before full AgenticOrg checkout coverage."
   },
   "cleanup": {
     "cleanup_by": "<required ISO-8601 timestamp>",

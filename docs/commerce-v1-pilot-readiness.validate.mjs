@@ -332,7 +332,13 @@ for (const forbidden of [
 
 for (const required of [
   'Commerce V1 Repeatable Option A Smoke Workflow',
-  'C2A planning and tooling only',
+  'C2B smoke complete and packaged',
+  'C2B result: 22 passed, 0 failed, 3 skipped',
+  'Cleanup completed: temporary smoke Cloud Run',
+  'Production resources untouched',
+  'Redis finding: external Redis was created',
+  'Future cost improvement: skip external Redis only if auth-service smoke runtime explicitly supports and documents ephemeral Redis mode',
+  'AgenticOrg fixture blocker remains',
   'manual approval gates',
   'min-instances=0',
   'max-instances=1',
@@ -370,6 +376,7 @@ for (const forbidden of [
 }
 
 const optionASmokeRunbook = JSON.parse(optionASmokeRunbookText);
+assert.equal(optionASmokeRunbook.status, 'c2b_smoke_complete_and_packaged', 'Option A runbook records C2B status');
 assert.equal(optionASmokeRunbook.resources.cloud_run_service, 'grantex-auth-smoke', 'Option A runbook pins smoke service');
 assert.equal(optionASmokeRunbook.resources.cloud_sql_instance, 'grantex-commerce-smoke-pg', 'Option A runbook pins smoke SQL');
 assert.equal(optionASmokeRunbook.resources.redis_instance, 'grantex-commerce-smoke-redis', 'Option A runbook pins smoke Redis');
@@ -378,6 +385,32 @@ assert.equal(optionASmokeRunbook.resources.max_instances, 1, 'Option A runbook d
 assert.equal(optionASmokeRunbook.provider.required, 'mock', 'Option A runbook requires mock provider');
 assert.equal(optionASmokeRunbook.provider.live_payments_enabled, false, 'Option A runbook blocks live payments');
 assert.equal(optionASmokeRunbook.provider.plural_live_enabled, false, 'Option A runbook blocks live Plural');
+assert.deepEqual(
+  optionASmokeRunbook.c2b_evidence.result,
+  { passed: 22, failed: 0, skipped: 3 },
+  'Option A runbook records C2B smoke result',
+);
+assert.equal(optionASmokeRunbook.c2b_evidence.cleanup_completed, true, 'Option A runbook records cleanup completion');
+assert.equal(
+  optionASmokeRunbook.c2b_evidence.production_resources_untouched,
+  true,
+  'Option A runbook records production resources untouched',
+);
+assert.ok(
+  optionASmokeRunbook.c2b_evidence.redis_finding.includes('External Redis was created')
+    && optionASmokeRunbook.c2b_evidence.redis_finding.includes('in-container ephemeral Redis'),
+  'Option A runbook records Redis finding',
+);
+assert.ok(
+  optionASmokeRunbook.c2b_evidence.future_cost_improvement.includes(
+    'Skip external Redis only if auth-service smoke runtime explicitly supports and documents ephemeral Redis mode',
+  ),
+  'Option A runbook records Redis cost improvement condition',
+);
+assert.ok(
+  optionASmokeRunbook.c2b_evidence.agenticorg_fixture_blocker.includes('synthetic consent/passport fixture support'),
+  'Option A runbook records AgenticOrg fixture blocker',
+);
 assert.ok(
   optionASmokeRunbook.refused_resource_names.includes('grantex-auth')
     && optionASmokeRunbook.refused_resource_names.includes('grantex-pg16')
@@ -436,13 +469,17 @@ for (const required of [
   'Commerce V1 Option A Smoke Evidence',
   'Passed checks | 22',
   'Failed checks | 0',
+  'C2B result: 22 passed, 0 failed, 3 skipped',
+  'external Redis was created as `grantex-commerce-smoke-redis`; smoke runtime used in-container ephemeral Redis',
   'provider webhook replay dry-run | pass | 200',
   'Temporary smoke resources cleaned up: yes',
   'Cleanup Completed',
+  'Production resources untouched: yes',
   'Production DB/Redis used: no',
   'Plural live: false',
   'Commerce live mode: false',
   'AgenticOrg hosted-staging mode is documented for a later pass',
+  'AgenticOrg fixture blocker remains',
   'grantex-auth-smoke` was absent',
   'grantex-commerce-smoke-pg` was absent',
   'grantex-commerce-smoke-redis` was absent',

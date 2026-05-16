@@ -1,12 +1,21 @@
 # Commerce V1 Repeatable Option A Smoke Workflow
 
-Status: C2A planning and tooling only. This workflow does not deploy, create cloud resources, merge, change production config, enable production Commerce V1, enable live payments, enable live Plural, read secret values, or write secret values.
+Status: C2B smoke complete and packaged. This workflow does not deploy, create cloud resources, merge, change production config, enable production Commerce V1, enable live payments, enable live Plural, read secret values, or write secret values.
 
 ## Purpose And Scope
 
 This guide turns the successful one-off Option A smoke into a repeatable, approval-gated workflow with manual approval gates. Option A is the cheapest temporary hosted smoke path for Grantex Commerce V1. It proves the hosted Grantex API mock-provider commerce path over HTTPS while using isolated smoke resources that are deleted immediately after evidence capture.
 
 Option A is not full hosted staging. It does not create custom DNS, Firebase portal staging, hosted AgenticOrg staging, production-like scaling, Plural sandbox, or live payment evidence.
+
+## C2B Evidence Findings
+
+- C2B result: 22 passed, 0 failed, 3 skipped.
+- Cleanup completed: temporary smoke Cloud Run, Cloud SQL, Redis, smoke secrets, and smoke image tags for this run were deleted after evidence capture.
+- Production resources untouched: `grantex-auth`, `grantex-pg16`, and `grantex-redis` still existed after cleanup verification, and production DB/Redis were not used.
+- Redis finding: external Redis was created as the conservative Option A resource, but the smoke runtime succeeded with in-container ephemeral Redis after external Redis connectivity failed.
+- Future cost improvement: skip external Redis only if auth-service smoke runtime explicitly supports and documents ephemeral Redis mode; otherwise keep the current conservative Redis option.
+- AgenticOrg fixture blocker remains: C2C still needs synthetic consent/passport fixture support before full AgenticOrg checkout coverage.
 
 ## Cheapest Temporary Topology
 
@@ -16,7 +25,7 @@ Option A is not full hosted staging. It does not create custom DNS, Firebase por
 | API runtime | Separate Cloud Run service `grantex-auth-smoke` | `min-instances=0`, `max-instances=1` |
 | API URL | Direct approved Cloud Run `run.app` URL | No custom DNS |
 | Database | Temporary tiny Cloud SQL Postgres `grantex-commerce-smoke-pg` | Delete after evidence |
-| Redis | Temporary Basic 1GB Redis `grantex-commerce-smoke-redis` | Delete after evidence |
+| Redis | Temporary Basic 1GB Redis `grantex-commerce-smoke-redis` | Delete after evidence; keep until ephemeral Redis mode is explicitly supported and documented |
 | Provider | `mock` only | No live payment provider |
 | Portal | Local or skipped | No Firebase deploy |
 | AgenticOrg | Local real-staging eval against approved smoke URL | No hosted AgenticOrg deploy |
@@ -92,7 +101,8 @@ The plan script refuses cleanup windows more than 24 hours in the future unless 
 - Keep Cloud Run `min-instances=0`.
 - Keep Cloud Run `max-instances=1`.
 - Use the approved cheapest SQL tier, such as `db-f1-micro` when available.
-- Use temporary Basic Redis 1GB only because the current auth-service requires `REDIS_URL`.
+- Use temporary Basic Redis 1GB as the conservative default because the current auth-service smoke workflow expects `REDIS_URL`.
+- Skip external Redis only if auth-service smoke runtime explicitly supports and documents in-container ephemeral Redis mode; otherwise keep the current conservative Redis option.
 - Do not configure custom DNS.
 - Do not deploy Firebase portal.
 - Do not deploy hosted AgenticOrg.
@@ -133,6 +143,8 @@ python -m pytest tests/evals/test_commerce_sales_agent_real_staging.py -q
 ```
 
 AgenticOrg must continue to use only `grantex_commerce:*` aliases. It must not call Stripe, Plural, Pine, or provider credential paths for commerce.
+
+C2B local AgenticOrg real-staging against the temporary Grantex smoke URL recorded 2 passed, 2 failed-safe, and 10 skipped. The failed-safe/skipped coverage confirms the Grantex-only path and leaves C2C blocked on synthetic consent/passport fixture support.
 
 ## Automation Versus Manual Boundaries
 
