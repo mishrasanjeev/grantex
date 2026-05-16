@@ -130,8 +130,110 @@ function assertNotProductionResourceName(value, label) {
   }
 }
 
+function safeString(value, label, { min = 0, max = 256, pattern = null, allowEmpty = false } = {}) {
+  if (typeof value !== 'string') {
+    fail(`Refusing non-string ${label}`);
+  }
+  const trimmed = value.trim();
+  if (!allowEmpty && trimmed.length === 0) {
+    fail(`Refusing empty ${label}`);
+  }
+  if (trimmed.length < min || trimmed.length > max) {
+    fail(`Refusing ${label} with invalid length`);
+  }
+  if (/[\r\n]/.test(trimmed)) {
+    fail(`Refusing ${label} with line breaks`);
+  }
+  if (pattern && !pattern.test(trimmed)) {
+    fail(`Refusing ${label} with unsupported characters`);
+  }
+  return trimmed;
+}
+
+function optionalSafeString(value, label, options = {}) {
+  if (value === null || value === undefined || value === '') return null;
+  return safeString(String(value), label, { ...options, allowEmpty: false });
+}
+
+function safeSyntheticId(value, label) {
+  return safeString(String(value ?? ''), label, {
+    min: 3,
+    max: 128,
+    pattern: /^[A-Za-z0-9_.:-]+$/,
+  });
+}
+
+function safeText(value, label) {
+  return safeString(String(value ?? ''), label, {
+    min: 1,
+    max: 512,
+    pattern: /^[A-Za-z0-9 .,()_:/+-]+$/,
+  });
+}
+
+function optionalSafeText(value, label) {
+  return optionalSafeString(value, label, {
+    max: 512,
+    pattern: /^[A-Za-z0-9 .,()_:/+-]+$/,
+  });
+}
+
+function safeCurrency(value, label) {
+  return safeString(String(value ?? ''), label, {
+    min: 3,
+    max: 3,
+    pattern: /^[A-Z]{3}$/,
+  });
+}
+
+function safeBoolean(value, label) {
+  if (typeof value !== 'boolean') {
+    fail(`Refusing non-boolean ${label}`);
+  }
+  return value;
+}
+
+function safeMinorUnits(value, label) {
+  if (!Number.isInteger(value) || value < 0 || value > 10_000_000) {
+    fail(`Refusing invalid ${label}`);
+  }
+  return value;
+}
+
+function safeRate(value, label) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
+    fail(`Refusing invalid ${label}`);
+  }
+  return value;
+}
+
+function safeAttributes(value, label) {
+  if (value === null || value === undefined) return {};
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    fail(`Refusing non-object ${label}`);
+  }
+  const safe = {};
+  for (const [key, nested] of Object.entries(value)) {
+    const safeKey = safeString(key, `${label} key`, {
+      min: 1,
+      max: 64,
+      pattern: /^[A-Za-z0-9_.:-]+$/,
+    });
+    safe[safeKey] = safeString(String(nested ?? ''), `${label}.${safeKey}`, {
+      max: 256,
+      pattern: /^[A-Za-z0-9 .,()_:/+-]*$/,
+      allowEmpty: true,
+    });
+  }
+  return safe;
+}
+
 function dotenvValue(value) {
-  return `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  const text = String(value);
+  if (/[\r\n]/.test(text)) {
+    fail('Refusing fixture env value with line breaks');
+  }
+  return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
 function firstManifestProductWithVariant(manifest) {
@@ -159,6 +261,7 @@ function requireExactlyOneAuthSource() {
 
 function authorizationHeader(authSource) {
   const value = authSource.value.replace(/^Bearer\s+/i, '');
+  safeString(value, authSource.name, { min: 8, max: 8192, pattern: /^[A-Za-z0-9._~+/=-]+$/ });
   return `Bearer ${value}`;
 }
 
@@ -171,10 +274,15 @@ function writeAgenticOrgFixtureEnv({ outputPath, apiBase, manifest, provider, se
     fail('Refusing fixture env export with more than one Grantex auth env value present');
   }
 
-  const merchantId = selectedIds?.merchant_id ?? manifest.merchant.id;
-  const agentId = selectedIds?.agent_id ?? manifest.agent.id;
-  const productId = selectedIds?.product_id ?? selectedProduct?.id ?? '';
-  const variantId = selectedIds?.variant_id ?? selectedVariant?.id ?? '';
+  const merchantId = safeSyntheticId(selectedIds?.merchant_id ?? manifest.merchant.id, 'fixture merchant id');
+  const agentId = safeSyntheticId(selectedIds?.agent_id ?? manifest.agent.id, 'fixture agent id');
+  const productId = safeSyntheticId(selectedIds?.product_id ?? selectedProduct?.id ?? '', 'fixture product id');
+  const variantId = safeSyntheticId(selectedIds?.variant_id ?? selectedVariant?.id ?? '', 'fixture variant id');
+  const currency = safeCurrency(manifest.catalog.currency, 'fixture currency');
+  const amountMinorUnits = safeMinorUnits(
+    selectedVariant?.price_minor_units ?? selectedProduct?.price_minor_units ?? 0,
+    'fixture amount minor units',
+  );
   const sensitiveNamesWritten = [];
   const lines = [
     '# AgenticOrg Commerce real-staging fixture env.',
@@ -191,8 +299,8 @@ function writeAgenticOrgFixtureEnv({ outputPath, apiBase, manifest, provider, se
     `AGENTICORG_COMMERCE_FIXTURE_AGENT_ID=${dotenvValue(agentId)}`,
     `AGENTICORG_COMMERCE_FIXTURE_PRODUCT_ID=${dotenvValue(productId)}`,
     `AGENTICORG_COMMERCE_FIXTURE_VARIANT_ID=${dotenvValue(variantId)}`,
-    `AGENTICORG_COMMERCE_FIXTURE_CURRENCY=${dotenvValue(manifest.catalog.currency)}`,
-    `AGENTICORG_COMMERCE_FIXTURE_AMOUNT_MINOR_UNITS=${dotenvValue(selectedVariant?.price_minor_units ?? selectedProduct?.price_minor_units ?? 0)}`,
+    `AGENTICORG_COMMERCE_FIXTURE_CURRENCY=${dotenvValue(currency)}`,
+    `AGENTICORG_COMMERCE_FIXTURE_AMOUNT_MINOR_UNITS=${dotenvValue(amountMinorUnits)}`,
     'AGENTICORG_COMMERCE_FIXTURE_PASSPORT_MAX_AMOUNT_MINOR_UNITS="250000"',
   ];
 
@@ -316,31 +424,79 @@ function validateManifest(manifest) {
 }
 
 function catalogProductsForApi(manifest) {
-  return manifest.catalog.products.map((product) => ({
-    product_id: product.id,
-    title: product.title,
-    brand: product.brand ?? null,
-    description: product.description ?? null,
-    image_url: product.image_url ?? null,
-    category_preset: manifest.category.id,
-    source_system: product.source_system ?? manifest.catalog.source_system,
+  const categoryPreset = safeSyntheticId(manifest.category.id, 'manifest category id');
+  const catalogSource = safeSyntheticId(manifest.catalog.source_system, 'manifest catalog source system');
+  const defaultCurrency = safeCurrency(manifest.catalog.currency, 'manifest catalog currency');
+  const defaultTaxRate = safeRate(manifest.catalog.default_gst_rate, 'manifest default GST rate');
+  return manifest.catalog.products.map((product, productIndex) => ({
+    product_id: safeSyntheticId(product.id, `manifest product ${productIndex} id`),
+    title: safeText(product.title, `manifest product ${productIndex} title`),
+    brand: optionalSafeText(product.brand, `manifest product ${productIndex} brand`),
+    description: optionalSafeText(product.description, `manifest product ${productIndex} description`),
+    image_url: optionalSafeString(product.image_url, `manifest product ${productIndex} image url`, {
+      max: 512,
+      pattern: /^https:\/\/[A-Za-z0-9./:_?=&%-]+$/,
+    }),
+    category_preset: categoryPreset,
+    source_system: optionalSafeString(product.source_system, `manifest product ${productIndex} source system`, {
+      max: 128,
+      pattern: /^[A-Za-z0-9_.:-]+$/,
+    }) ?? catalogSource,
     manually_maintained: true,
-    variants: (product.variants ?? []).map((variant) => ({
-      sku: variant.sku,
-      parent_sku: variant.parent_sku ?? null,
-      model: variant.model ?? null,
-      variant_title: variant.title ?? variant.variant_title ?? null,
-      attributes: variant.attributes ?? {},
-      price_amount: variant.price_minor_units ?? product.price_minor_units,
-      currency: variant.currency ?? product.currency ?? manifest.catalog.currency,
-      tax_inclusive: variant.tax_inclusive ?? product.tax_inclusive ?? true,
-      gst_slab: variant.gst_slab ?? null,
-      tax_rate: variant.gst_rate ?? product.gst_rate ?? manifest.catalog.default_gst_rate,
-      hsn_code: variant.hsn_code ?? product.hsn_code ?? null,
-      availability_status: variant.availability_status ?? product.availability_status ?? 'unknown',
-      warranty_summary: variant.warranty_summary ?? product.warranty_summary ?? null,
-      return_policy_summary: variant.return_policy_summary ?? product.return_policy_summary ?? null,
-      source_system: variant.source_system ?? product.source_system ?? manifest.catalog.source_system,
+    variants: (product.variants ?? []).map((variant, variantIndex) => ({
+      sku: safeSyntheticId(variant.sku, `manifest product ${productIndex} variant ${variantIndex} sku`),
+      parent_sku: optionalSafeString(variant.parent_sku, `manifest product ${productIndex} variant ${variantIndex} parent sku`, {
+        max: 128,
+        pattern: /^[A-Za-z0-9_.:-]+$/,
+      }),
+      model: optionalSafeText(variant.model, `manifest product ${productIndex} variant ${variantIndex} model`),
+      variant_title: optionalSafeText(
+        variant.title ?? variant.variant_title,
+        `manifest product ${productIndex} variant ${variantIndex} title`,
+      ),
+      attributes: safeAttributes(variant.attributes, `manifest product ${productIndex} variant ${variantIndex} attributes`),
+      price_amount: safeMinorUnits(
+        variant.price_minor_units ?? product.price_minor_units,
+        `manifest product ${productIndex} variant ${variantIndex} price`,
+      ),
+      currency: safeCurrency(
+        variant.currency ?? product.currency ?? defaultCurrency,
+        `manifest product ${productIndex} variant ${variantIndex} currency`,
+      ),
+      tax_inclusive: safeBoolean(
+        variant.tax_inclusive ?? product.tax_inclusive ?? true,
+        `manifest product ${productIndex} variant ${variantIndex} tax inclusive`,
+      ),
+      gst_slab: optionalSafeString(variant.gst_slab, `manifest product ${productIndex} variant ${variantIndex} GST slab`, {
+        max: 64,
+        pattern: /^[A-Za-z0-9_.:-]+$/,
+      }),
+      tax_rate: safeRate(
+        variant.gst_rate ?? product.gst_rate ?? defaultTaxRate,
+        `manifest product ${productIndex} variant ${variantIndex} tax rate`,
+      ),
+      hsn_code: optionalSafeString(variant.hsn_code ?? product.hsn_code, `manifest product ${productIndex} variant ${variantIndex} HSN`, {
+        max: 32,
+        pattern: /^[A-Za-z0-9_.:-]+$/,
+      }),
+      availability_status: safeString(
+        String(variant.availability_status ?? product.availability_status ?? 'unknown'),
+        `manifest product ${productIndex} variant ${variantIndex} availability`,
+        { min: 1, max: 64, pattern: /^[A-Za-z0-9_.:-]+$/ },
+      ),
+      warranty_summary: optionalSafeText(
+        variant.warranty_summary ?? product.warranty_summary,
+        `manifest product ${productIndex} variant ${variantIndex} warranty`,
+      ),
+      return_policy_summary: optionalSafeText(
+        variant.return_policy_summary ?? product.return_policy_summary,
+        `manifest product ${productIndex} variant ${variantIndex} return policy`,
+      ),
+      source_system: optionalSafeString(
+        variant.source_system ?? product.source_system,
+        `manifest product ${productIndex} variant ${variantIndex} source system`,
+        { max: 128, pattern: /^[A-Za-z0-9_.:-]+$/ },
+      ) ?? catalogSource,
     })),
   }));
 }
@@ -396,10 +552,10 @@ function selectedIdsFromCatalogResponse(manifest, body) {
   const variants = Array.isArray(data.variants) ? data.variants : [];
   const selectedVariant = variants[0] && typeof variants[0] === 'object' ? variants[0] : null;
   return {
-    merchant_id: manifest.merchant.id,
-    agent_id: manifest.agent.id,
-    product_id: String(data.id ?? data.product_id ?? selectedProduct?.id ?? ''),
-    variant_id: String(selectedVariant?.id ?? selectedProduct?.variants?.[0]?.id ?? ''),
+    merchant_id: safeSyntheticId(manifest.merchant.id, 'manifest merchant id'),
+    agent_id: safeSyntheticId(manifest.agent.id, 'manifest agent id'),
+    product_id: safeSyntheticId(String(data.id ?? data.product_id ?? selectedProduct?.id ?? ''), 'seeded product id'),
+    variant_id: safeSyntheticId(String(selectedVariant?.id ?? selectedProduct?.variants?.[0]?.id ?? ''), 'seeded variant id'),
   };
 }
 
@@ -407,6 +563,8 @@ async function executeSeedRun({ apiBase, manifest, fixtureEnvOutput, provider })
   const authSource = requireExactlyOneAuthSource();
   const catalogProducts = catalogProductsForApi(manifest);
   const selectedProduct = firstManifestProductWithVariant(manifest);
+  const merchantId = safeSyntheticId(manifest.merchant.id, 'manifest merchant id');
+  const selectedProductId = safeSyntheticId(selectedProduct.id, 'manifest selected product id');
   const results = [];
 
   for (const request of [
@@ -420,7 +578,7 @@ async function executeSeedRun({ apiBase, manifest, fixtureEnvOutput, provider })
   }
 
   const bulkPayload = {
-    merchant_id: manifest.merchant.id,
+    merchant_id: merchantId,
     dry_run: true,
     products: catalogProducts,
   };
@@ -445,7 +603,7 @@ async function executeSeedRun({ apiBase, manifest, fixtureEnvOutput, provider })
   const catalogRead = await requestJson(apiBase, {
     label: 'catalog_get_seeded_item',
     method: 'GET',
-    path: `/v1/commerce/catalog/products/${encodeURIComponent(selectedProduct.id)}?merchant_id=${encodeURIComponent(manifest.merchant.id)}`,
+    path: `/v1/commerce/catalog/products/${encodeURIComponent(selectedProductId)}?merchant_id=${encodeURIComponent(merchantId)}`,
   }, authSource);
   assertOk(catalogRead);
   results.push(catalogRead);
@@ -506,7 +664,6 @@ function validateStaticGuardrails() {
 
 async function main() {
   const run = hasFlag('--run');
-  const dryRun = hasFlag('--dry-run') || !run;
   if (run && hasFlag('--dry-run')) {
     fail('Refusing both --run and --dry-run for Option A smoke seed tooling');
   }

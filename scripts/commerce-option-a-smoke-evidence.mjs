@@ -156,6 +156,68 @@ function assertInsideTmp(pathInput) {
   return { resolved, relativePath };
 }
 
+function safeString(value, label, { min = 0, max = 256, pattern = null, allowEmpty = false } = {}) {
+  if (typeof value !== 'string') {
+    fail(`Failing closed because ${label} is not a string`);
+  }
+  const trimmed = value.trim();
+  if (!allowEmpty && trimmed.length === 0) {
+    fail(`Failing closed because ${label} is empty`);
+  }
+  if (trimmed.length < min || trimmed.length > max) {
+    fail(`Failing closed because ${label} has invalid length`);
+  }
+  if (/[\r\n]/.test(trimmed)) {
+    fail(`Failing closed because ${label} contains line breaks`);
+  }
+  if (pattern && !pattern.test(trimmed)) {
+    fail(`Failing closed because ${label} contains unsupported characters`);
+  }
+  return trimmed;
+}
+
+function optionalSafeString(value, label, options = {}) {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  return safeString(text, label, options);
+}
+
+function safeSyntheticId(value, label) {
+  return safeString(String(value ?? ''), label, {
+    min: 3,
+    max: 128,
+    pattern: /^[A-Za-z0-9_.:-]+$/,
+  });
+}
+
+function safeCurrency(value, label) {
+  return safeString(String(value ?? ''), label, {
+    min: 3,
+    max: 3,
+    pattern: /^[A-Z]{3}$/,
+  });
+}
+
+function safeMinorUnits(value, label) {
+  const text = String(value ?? '').trim();
+  if (!/^\d+$/.test(text)) {
+    fail(`Failing closed because ${label} is invalid`);
+  }
+  const amount = Number.parseInt(text, 10);
+  if (!Number.isInteger(amount) || amount < 0 || amount > 10_000_000) {
+    fail(`Failing closed because ${label} is invalid`);
+  }
+  return amount;
+}
+
+function safeSensitiveRuntimeValue(value, label) {
+  return safeString(String(value ?? '').replace(/^Bearer\s+/i, ''), label, {
+    min: 8,
+    max: 8192,
+    pattern: /^[A-Za-z0-9._~+/=-]+$/,
+  });
+}
+
 function parseDotenv(text) {
   const values = {};
   for (const rawLine of text.split(/\r?\n/)) {
@@ -171,6 +233,58 @@ function parseDotenv(text) {
     values[key] = value;
   }
   return values;
+}
+
+function validateFixtureForNetwork(values, authName, apiBase) {
+  if (values.AGENTICORG_COMMERCE_FIXTURE_PROVIDER && values.AGENTICORG_COMMERCE_FIXTURE_PROVIDER !== 'mock') {
+    fail('Failing closed because AgenticOrg fixture env is not mock provider');
+  }
+  if (values.AGENTICORG_COMMERCE_FIXTURE_SYNTHETIC_ONLY && values.AGENTICORG_COMMERCE_FIXTURE_SYNTHETIC_ONLY !== 'true') {
+    fail('Failing closed because AgenticOrg fixture env is not synthetic-only');
+  }
+
+  const authValue = values[authName] || process.env[authName] || '';
+  const safe = {
+    apiBase: safeString(apiBase, 'approved smoke URL', {
+      min: 12,
+      max: 256,
+      pattern: /^https:\/\/[A-Za-z0-9.-]+\.run\.app$/,
+    }),
+    authName,
+    authValue: safeSensitiveRuntimeValue(authValue, authName),
+    merchantId: safeSyntheticId(values.AGENTICORG_COMMERCE_FIXTURE_MERCHANT_ID, 'fixture merchant id'),
+    agentId: safeSyntheticId(values.AGENTICORG_COMMERCE_FIXTURE_AGENT_ID, 'fixture agent id'),
+    productId: safeSyntheticId(values.AGENTICORG_COMMERCE_FIXTURE_PRODUCT_ID, 'fixture product id'),
+    variantId: safeSyntheticId(values.AGENTICORG_COMMERCE_FIXTURE_VARIANT_ID, 'fixture variant id'),
+    currency: safeCurrency(values.AGENTICORG_COMMERCE_FIXTURE_CURRENCY || 'INR', 'fixture currency'),
+    amountMinorUnits: safeMinorUnits(values.AGENTICORG_COMMERCE_FIXTURE_AMOUNT_MINOR_UNITS || '0', 'fixture amount minor units'),
+    browsePassport: optionalSafeString(values.AGENTICORG_COMMERCE_BROWSE_PASSPORT_JWT || process.env.AGENTICORG_COMMERCE_BROWSE_PASSPORT_JWT, 'browse passport', {
+      min: 8,
+      max: 8192,
+      pattern: /^[A-Za-z0-9._~+/=-]+$/,
+    }),
+    checkoutPassport: optionalSafeString(values.AGENTICORG_COMMERCE_CHECKOUT_PASSPORT_JWT || process.env.AGENTICORG_COMMERCE_CHECKOUT_PASSPORT_JWT, 'checkout passport', {
+      min: 8,
+      max: 8192,
+      pattern: /^[A-Za-z0-9._~+/=-]+$/,
+    }),
+    revokedPassport: optionalSafeString(values.AGENTICORG_COMMERCE_REVOKED_PASSPORT_JWT || process.env.AGENTICORG_COMMERCE_REVOKED_PASSPORT_JWT, 'revoked passport', {
+      min: 8,
+      max: 8192,
+      pattern: /^[A-Za-z0-9._~+/=-]+$/,
+    }),
+    expiredPassport: optionalSafeString(values.AGENTICORG_COMMERCE_EXPIRED_PASSPORT_JWT || process.env.AGENTICORG_COMMERCE_EXPIRED_PASSPORT_JWT, 'expired passport', {
+      min: 8,
+      max: 8192,
+      pattern: /^[A-Za-z0-9._~+/=-]+$/,
+    }),
+    deniedConsentRef: optionalSafeString(values.AGENTICORG_COMMERCE_DENIED_CONSENT_REF || process.env.AGENTICORG_COMMERCE_DENIED_CONSENT_REF, 'denied consent ref', {
+      min: 3,
+      max: 256,
+      pattern: /^[A-Za-z0-9_.:-]+$/,
+    }),
+  };
+  return Object.freeze(safe);
 }
 
 function loadFixtureEnv(pathInput, apiBase) {
@@ -204,16 +318,12 @@ function loadFixtureEnv(pathInput, apiBase) {
   if (authNames.length !== 1) {
     fail('Failing closed because AgenticOrg fixture env must provide exactly one Grantex auth source');
   }
-  return { relativePath, values, authName: authNames[0] };
-}
-
-function mergedFixtureValue(fixture, name) {
-  return String(fixture.values[name] || process.env[name] || '').trim();
+  const authName = authNames[0];
+  return { relativePath, values, authName, safe: validateFixtureForNetwork(values, authName, apiBase) };
 }
 
 function authorizationHeader(fixture) {
-  const value = mergedFixtureValue(fixture, fixture.authName).replace(/^Bearer\s+/i, '');
-  return `Bearer ${value}`;
+  return `Bearer ${fixture.safe.authValue}`;
 }
 
 function redactErrorCode(body) {
@@ -333,10 +443,6 @@ function dataFromMcp(result) {
   return payload.data ?? payload;
 }
 
-function fixturePassport(fixture, preferredName) {
-  return mergedFixtureValue(fixture, preferredName);
-}
-
 async function executeEvidenceRun({ apiBase, reportPath, fixture }) {
   const rows = [];
   const varsUsed = [
@@ -349,14 +455,14 @@ async function executeEvidenceRun({ apiBase, reportPath, fixture }) {
     'AGENTICORG_COMMERCE_FIXTURE_VARIANT_ID',
     fixture.authName,
   ];
-  const merchantId = fixture.values.AGENTICORG_COMMERCE_FIXTURE_MERCHANT_ID;
-  const agentId = fixture.values.AGENTICORG_COMMERCE_FIXTURE_AGENT_ID;
-  const productId = fixture.values.AGENTICORG_COMMERCE_FIXTURE_PRODUCT_ID;
-  const variantId = fixture.values.AGENTICORG_COMMERCE_FIXTURE_VARIANT_ID;
-  const currency = fixture.values.AGENTICORG_COMMERCE_FIXTURE_CURRENCY || 'INR';
-  const amount = Number.parseInt(fixture.values.AGENTICORG_COMMERCE_FIXTURE_AMOUNT_MINOR_UNITS || '0', 10);
-  const browsePassport = fixturePassport(fixture, 'AGENTICORG_COMMERCE_BROWSE_PASSPORT_JWT');
-  const checkoutPassport = fixturePassport(fixture, 'AGENTICORG_COMMERCE_CHECKOUT_PASSPORT_JWT');
+  const merchantId = fixture.safe.merchantId;
+  const agentId = fixture.safe.agentId;
+  const productId = fixture.safe.productId;
+  const variantId = fixture.safe.variantId;
+  const currency = fixture.safe.currency;
+  const amount = fixture.safe.amountMinorUnits;
+  const browsePassport = fixture.safe.browsePassport;
+  const checkoutPassport = fixture.safe.checkoutPassport;
 
   for (const request of [
     { case: 'health', method: 'GET', path: '/health', auth: false },
@@ -507,7 +613,9 @@ async function executeEvidenceRun({ apiBase, reportPath, fixture }) {
     ['revoked_passport_refusal', 'AGENTICORG_COMMERCE_REVOKED_PASSPORT_JWT'],
     ['expired_passport_refusal', 'AGENTICORG_COMMERCE_EXPIRED_PASSPORT_JWT'],
   ]) {
-    const passport = fixturePassport(fixture, envName);
+    const passport = envName === 'AGENTICORG_COMMERCE_REVOKED_PASSPORT_JWT'
+      ? fixture.safe.revokedPassport
+      : fixture.safe.expiredPassport;
     if (!cartId || !passport) {
       rows.push(caseRow(caseName, { skipped: true, reason: `missing_${envName}` }));
       continue;
@@ -525,7 +633,7 @@ async function executeEvidenceRun({ apiBase, reportPath, fixture }) {
     rows.push(caseRow(caseName, refusal, { expectedFailure: true }));
   }
 
-  const deniedRef = fixturePassport(fixture, 'AGENTICORG_COMMERCE_DENIED_CONSENT_REF');
+  const deniedRef = fixture.safe.deniedConsentRef;
   if (deniedRef) {
     const denied = await requestJson(apiBase, {
       case: 'denied_consent_refusal',
