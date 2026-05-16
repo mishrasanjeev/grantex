@@ -1,6 +1,6 @@
 # Commerce V1 Repeatable Option A Smoke Workflow
 
-Status: C2A planning and tooling only. This workflow does not deploy, create cloud resources, merge, change production config, enable production Commerce V1, enable live payments, enable live Plural, read secret values, or write secret values.
+Status: C2D-prep executable runner tooling only. This workflow does not deploy, create cloud resources, merge, change production config, enable production Commerce V1, enable live payments, enable live Plural, read secret values, or write secret values.
 
 ## Purpose And Scope
 
@@ -31,7 +31,7 @@ Stop for explicit human approval before each mutating phase:
 4. Smoke evidence approval: approved exact Cloud Run smoke URL and auth material names.
 5. Cleanup approval is pre-approved as part of the spend window. Cleanup must run immediately after evidence.
 
-The smoke plan script prints commands as `NOT RUN` only. Running those commands is a separate approved C2B action.
+The smoke plan script prints commands as `NOT RUN` only. The seed and evidence scripts now have guarded `--run` modes, but running them against a hosted smoke service is a separate approved C2D action after temporary smoke resources exist.
 
 ## Production Refusal Rules
 
@@ -71,6 +71,14 @@ node scripts/commerce-option-a-smoke-seed.mjs --dry-run --manifest=docs/examples
 
 The fixture export is disabled by default. The `--write-agenticorg-fixture-env` path must stay under `.tmp/`; committed docs and reports may name variables but must never contain usable auth material, passports, idempotency keys, webhook secrets, provider credentials, raw payloads, DB/Redis URLs, private keys, or secret values.
 
+Future approved C2D seed run after resources, deploy, migrations, and smoke auth setup:
+
+```powershell
+node scripts/commerce-option-a-smoke-seed.mjs --run --manifest=docs/examples/commerce-staging-seed.manifest.json --api-base=<approved-smoke-run-app-origin> --allow-smoke-cloud-run-url=<approved-smoke-run-app-origin> --write-agenticorg-fixture-env=.tmp/commerce-agent-real-staging.env --provider=mock
+```
+
+The seed runner executes only approved smoke API requests: `/health`, JWKS, commerce well-known metadata, catalog bulk validation, catalog bulk upsert, and a catalog readback for the selected fixture item. It fails closed if the smoke URL is not the exact allowlisted HTTPS `run.app` origin, if the provider is not `mock`, if live flags are true, if production resource names are supplied, or if run mode lacks exactly one runtime auth source.
+
 Validate the existing hosted smoke harness with an approved exact smoke URL:
 
 ```powershell
@@ -82,6 +90,14 @@ Generate the redacted evidence schema without requests:
 ```powershell
 node scripts/commerce-option-a-smoke-evidence.mjs --dry-run --api-base=<approved-smoke-run-app-origin> --allow-smoke-cloud-run-url=<approved-smoke-run-app-origin>
 ```
+
+Future approved C2D evidence run after the seed runner writes the `.tmp` fixture env:
+
+```powershell
+node scripts/commerce-option-a-smoke-evidence.mjs --run --api-base=<approved-smoke-run-app-origin> --allow-smoke-cloud-run-url=<approved-smoke-run-app-origin> --fixture-env=.tmp/commerce-agent-real-staging.env --provider=mock
+```
+
+The evidence runner records only the approved smoke host, variable names, synthetic IDs, case status, HTTP status, latency, error code, and cleanup placeholders. It fails closed if the AgenticOrg fixture env is missing, outside `.tmp/`, or does not match the approved smoke URL. It skips optional passport-negative cases when the fixture file does not contain the corresponding synthetic runtime material.
 
 ## Cleanup Guarantees
 
@@ -154,15 +170,17 @@ AgenticOrg must continue to use only `grantex_commerce:*` aliases. It must not c
 
 ## Automation Versus Manual Boundaries
 
-Automated in C2A:
+Automated in C2D-prep:
 
 - Command generation as `NOT RUN`
 - Manifest dry-run validation
 - Smoke URL refusal validation
-- Evidence schema generation without requests
+- Guarded seed runner execution path for a later approved smoke service
+- Guarded evidence runner execution path for a later approved smoke service
+- Evidence schema generation without requests by default
 - Validator assertions
 
-Manual or later C2B:
+Manual or later C2D:
 
 - Creating GCP resources
 - Adding secret versions
