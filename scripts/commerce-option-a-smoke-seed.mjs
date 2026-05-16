@@ -14,6 +14,25 @@ const REFUSED_PRODUCTION_ORIGINS = [
 ];
 const REFUSED_PRODUCTION_RESOURCE_NAMES = new Set(['grantex-auth', 'grantex-pg16', 'grantex-redis']);
 const AUTH_ENV_NAMES = ['GRANTEX_COMMERCE_BEARER_TOKEN', 'GRANTEX_AGENT_ASSERTION', 'GRANTEX_API_KEY'];
+const SMOKE_TENANT_ID = 'cten_staging_commerce';
+const SMOKE_MERCHANT_ID = 'mch_staging_electronics_pilot';
+const SMOKE_AGENT_ID = 'cag_staging_agenticorg_sales';
+const SMOKE_CATEGORY_ID = 'electronics_appliances';
+const SMOKE_SOURCE_SYSTEM = 'synthetic_staging_manifest';
+const APPROVED_SMOKE_CATALOG_PRODUCTS = [
+  ['cprd_stg_induction_cooktop', 'Staging Induction Cooktop', 329900, [['cvar_stg_induction_black', 'STG-COOKTOP-BLK', 'Black 1800W', 329900]]],
+  ['cprd_stg_air_purifier', 'Staging Smart Air Purifier', 899900, [['cvar_stg_air_purifier_room', 'STG-AIR-ROOM', 'Room 300 sqft', 899900]]],
+  ['cprd_stg_mixer_grinder', 'Staging Mixer Grinder', 459900, [['cvar_stg_mixer_500w', 'STG-MIX-500', '500W 3 Jar', 459900]]],
+  ['cprd_stg_water_purifier', 'Staging Water Purifier', 1499900, [['cvar_stg_water_purifier_ro', 'STG-WATER-RO', 'RO UV Copper', 1499900]]],
+  ['cprd_stg_egg_boiler', 'Staging Egg Boiler', 129900, [['cvar_stg_egg_boiler_6', 'STG-EGG-6', 'Six Egg', 129900]]],
+  ['cprd_stg_hand_blender', 'Staging Hand Blender', 189900, [['cvar_stg_hand_blender_300w', 'STG-BLEND-300', '300W', 189900]]],
+  ['cprd_stg_room_heater', 'Staging Room Heater', 249900, [['cvar_stg_room_heater_2000w', 'STG-HEATER-2000', '2000W', 249900]]],
+  ['cprd_stg_robot_vacuum', 'Staging Robot Vacuum', 2299900, [['cvar_stg_robot_vacuum_lidar', 'STG-VAC-LIDAR', 'LiDAR', 2299900]]],
+  ['cprd_stg_smart_kettle', 'Staging Smart Kettle', 299900, [['cvar_stg_smart_kettle_17l', 'STG-KETTLE-17', '1.7L', 299900]]],
+  ['cprd_stg_table_fan', 'Staging Table Fan', 219900, [['cvar_stg_table_fan_400mm', 'STG-FAN-400', '400mm', 219900]]],
+  ['cprd_stg_toaster', 'Staging Toaster', 259900, [['cvar_stg_toaster_2slice', 'STG-TOAST-2', '2 Slice', 259900]]],
+  ['cprd_stg_washing_machine', 'Staging Washing Machine', 2799900, [['cvar_stg_washing_machine_7kg', 'STG-WASH-7KG', '7kg', 2799900]]],
+];
 const OPTIONAL_SENSITIVE_FIXTURE_ENV_NAMES = [
   'AGENTICORG_COMMERCE_BROWSE_PASSPORT_JWT',
   'AGENTICORG_COMMERCE_CHECKOUT_PASSPORT_JWT',
@@ -150,31 +169,11 @@ function safeString(value, label, { min = 0, max = 256, pattern = null, allowEmp
   return trimmed;
 }
 
-function optionalSafeString(value, label, options = {}) {
-  if (value === null || value === undefined || value === '') return null;
-  return safeString(String(value), label, { ...options, allowEmpty: false });
-}
-
 function safeSyntheticId(value, label) {
   return safeString(String(value ?? ''), label, {
     min: 3,
     max: 128,
     pattern: /^[A-Za-z0-9_.:-]+$/,
-  });
-}
-
-function safeText(value, label) {
-  return safeString(String(value ?? ''), label, {
-    min: 1,
-    max: 512,
-    pattern: /^[A-Za-z0-9 .,()_:/+-]+$/,
-  });
-}
-
-function optionalSafeText(value, label) {
-  return optionalSafeString(value, label, {
-    max: 512,
-    pattern: /^[A-Za-z0-9 .,()_:/+-]+$/,
   });
 }
 
@@ -186,46 +185,11 @@ function safeCurrency(value, label) {
   });
 }
 
-function safeBoolean(value, label) {
-  if (typeof value !== 'boolean') {
-    fail(`Refusing non-boolean ${label}`);
-  }
-  return value;
-}
-
 function safeMinorUnits(value, label) {
   if (!Number.isInteger(value) || value < 0 || value > 10_000_000) {
     fail(`Refusing invalid ${label}`);
   }
   return value;
-}
-
-function safeRate(value, label) {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) {
-    fail(`Refusing invalid ${label}`);
-  }
-  return value;
-}
-
-function safeAttributes(value, label) {
-  if (value === null || value === undefined) return {};
-  if (typeof value !== 'object' || Array.isArray(value)) {
-    fail(`Refusing non-object ${label}`);
-  }
-  const safe = {};
-  for (const [key, nested] of Object.entries(value)) {
-    const safeKey = safeString(key, `${label} key`, {
-      min: 1,
-      max: 64,
-      pattern: /^[A-Za-z0-9_.:-]+$/,
-    });
-    safe[safeKey] = safeString(String(nested ?? ''), `${label}.${safeKey}`, {
-      max: 256,
-      pattern: /^[A-Za-z0-9 .,()_:/+-]*$/,
-      allowEmpty: true,
-    });
-  }
-  return safe;
 }
 
 function dotenvValue(value) {
@@ -239,6 +203,21 @@ function dotenvValue(value) {
 function firstManifestProductWithVariant(manifest) {
   const products = manifest.catalog?.products ?? [];
   return products.find((product) => Array.isArray(product.variants) && product.variants.length > 0) ?? products[0];
+}
+
+function firstApprovedProductWithVariant() {
+  const [productId, title, priceMinorUnits, variants] = APPROVED_SMOKE_CATALOG_PRODUCTS[0];
+  return {
+    product_id: productId,
+    title,
+    price_minor_units: priceMinorUnits,
+    variants: variants.map(([variantId, sku, variantTitle, variantPriceMinorUnits]) => ({
+      id: variantId,
+      sku,
+      title: variantTitle,
+      price_minor_units: variantPriceMinorUnits,
+    })),
+  };
 }
 
 function shortHash(value) {
@@ -408,9 +387,9 @@ function validateManifest(manifest) {
   assertEqual(manifest.provider?.plural_live_enabled, false, 'Smoke seed live Plural flag must be false');
   assertEqual(manifest.live_flags?.commerce_live_mode_enabled, false, 'Smoke seed live commerce flag must be false');
   assertEqual(manifest.live_flags?.plural_live_enabled, false, 'Smoke seed live Plural flag must be false');
-  assertEqual(manifest.tenant?.id, 'cten_staging_commerce', 'Smoke seed tenant id is pinned');
-  assertEqual(manifest.merchant?.id, 'mch_staging_electronics_pilot', 'Smoke seed merchant id is pinned');
-  assertEqual(manifest.agent?.id, 'cag_staging_agenticorg_sales', 'Smoke seed agent id is pinned');
+  assertEqual(manifest.tenant?.id, SMOKE_TENANT_ID, 'Smoke seed tenant id is pinned');
+  assertEqual(manifest.merchant?.id, SMOKE_MERCHANT_ID, 'Smoke seed merchant id is pinned');
+  assertEqual(manifest.agent?.id, SMOKE_AGENT_ID, 'Smoke seed agent id is pinned');
 
   const products = manifest.catalog?.products;
   if (!Array.isArray(products) || products.length < 10 || products.length > 25) {
@@ -423,80 +402,40 @@ function validateManifest(manifest) {
   return { products, productsWithVariants };
 }
 
-function catalogProductsForApi(manifest) {
-  const categoryPreset = safeSyntheticId(manifest.category.id, 'manifest category id');
-  const catalogSource = safeSyntheticId(manifest.catalog.source_system, 'manifest catalog source system');
-  const defaultCurrency = safeCurrency(manifest.catalog.currency, 'manifest catalog currency');
-  const defaultTaxRate = safeRate(manifest.catalog.default_gst_rate, 'manifest default GST rate');
-  return manifest.catalog.products.map((product, productIndex) => ({
-    product_id: safeSyntheticId(product.id, `manifest product ${productIndex} id`),
-    title: safeText(product.title, `manifest product ${productIndex} title`),
-    brand: optionalSafeText(product.brand, `manifest product ${productIndex} brand`),
-    description: optionalSafeText(product.description, `manifest product ${productIndex} description`),
-    image_url: optionalSafeString(product.image_url, `manifest product ${productIndex} image url`, {
-      max: 512,
-      pattern: /^https:\/\/[A-Za-z0-9./:_?=&%-]+$/,
-    }),
-    category_preset: categoryPreset,
-    source_system: optionalSafeString(product.source_system, `manifest product ${productIndex} source system`, {
+function catalogProductsForApi() {
+  return APPROVED_SMOKE_CATALOG_PRODUCTS.map(([productId, title, priceMinorUnits, variants], productIndex) => ({
+    product_id: safeSyntheticId(productId, `approved smoke product ${productIndex} id`),
+    title: safeString(title, `approved smoke product ${productIndex} title`, {
+      min: 1,
       max: 128,
-      pattern: /^[A-Za-z0-9_.:-]+$/,
-    }) ?? catalogSource,
+      pattern: /^[A-Za-z0-9 .()-]+$/,
+    }),
+    brand: 'Grantex Demo',
+    description: null,
+    image_url: null,
+    category_preset: SMOKE_CATEGORY_ID,
+    source_system: SMOKE_SOURCE_SYSTEM,
     manually_maintained: true,
-    variants: (product.variants ?? []).map((variant, variantIndex) => ({
-      sku: safeSyntheticId(variant.sku, `manifest product ${productIndex} variant ${variantIndex} sku`),
-      parent_sku: optionalSafeString(variant.parent_sku, `manifest product ${productIndex} variant ${variantIndex} parent sku`, {
+    variants: variants.map(([, sku, variantTitle, variantPriceMinorUnits], variantIndex) => ({
+      sku: safeSyntheticId(sku, `approved smoke product ${productIndex} variant ${variantIndex} sku`),
+      parent_sku: null,
+      model: null,
+      variant_title: safeString(variantTitle, `approved smoke product ${productIndex} variant ${variantIndex} title`, {
+        min: 1,
         max: 128,
-        pattern: /^[A-Za-z0-9_.:-]+$/,
+        pattern: /^[A-Za-z0-9 .()-]+$/,
       }),
-      model: optionalSafeText(variant.model, `manifest product ${productIndex} variant ${variantIndex} model`),
-      variant_title: optionalSafeText(
-        variant.title ?? variant.variant_title,
-        `manifest product ${productIndex} variant ${variantIndex} title`,
-      ),
-      attributes: safeAttributes(variant.attributes, `manifest product ${productIndex} variant ${variantIndex} attributes`),
-      price_amount: safeMinorUnits(
-        variant.price_minor_units ?? product.price_minor_units,
-        `manifest product ${productIndex} variant ${variantIndex} price`,
-      ),
-      currency: safeCurrency(
-        variant.currency ?? product.currency ?? defaultCurrency,
-        `manifest product ${productIndex} variant ${variantIndex} currency`,
-      ),
-      tax_inclusive: safeBoolean(
-        variant.tax_inclusive ?? product.tax_inclusive ?? true,
-        `manifest product ${productIndex} variant ${variantIndex} tax inclusive`,
-      ),
-      gst_slab: optionalSafeString(variant.gst_slab, `manifest product ${productIndex} variant ${variantIndex} GST slab`, {
-        max: 64,
-        pattern: /^[A-Za-z0-9_.:-]+$/,
-      }),
-      tax_rate: safeRate(
-        variant.gst_rate ?? product.gst_rate ?? defaultTaxRate,
-        `manifest product ${productIndex} variant ${variantIndex} tax rate`,
-      ),
-      hsn_code: optionalSafeString(variant.hsn_code ?? product.hsn_code, `manifest product ${productIndex} variant ${variantIndex} HSN`, {
-        max: 32,
-        pattern: /^[A-Za-z0-9_.:-]+$/,
-      }),
-      availability_status: safeString(
-        String(variant.availability_status ?? product.availability_status ?? 'unknown'),
-        `manifest product ${productIndex} variant ${variantIndex} availability`,
-        { min: 1, max: 64, pattern: /^[A-Za-z0-9_.:-]+$/ },
-      ),
-      warranty_summary: optionalSafeText(
-        variant.warranty_summary ?? product.warranty_summary,
-        `manifest product ${productIndex} variant ${variantIndex} warranty`,
-      ),
-      return_policy_summary: optionalSafeText(
-        variant.return_policy_summary ?? product.return_policy_summary,
-        `manifest product ${productIndex} variant ${variantIndex} return policy`,
-      ),
-      source_system: optionalSafeString(
-        variant.source_system ?? product.source_system,
-        `manifest product ${productIndex} variant ${variantIndex} source system`,
-        { max: 128, pattern: /^[A-Za-z0-9_.:-]+$/ },
-      ) ?? catalogSource,
+      attributes: {},
+      price_amount: safeMinorUnits(variantPriceMinorUnits ?? priceMinorUnits, `approved smoke product ${productIndex} variant ${variantIndex} price`),
+      currency: 'INR',
+      tax_inclusive: true,
+      gst_slab: null,
+      tax_rate: 0.18,
+      hsn_code: null,
+      availability_status: 'in_stock',
+      warranty_summary: 'Synthetic staging warranty.',
+      return_policy_summary: 'Synthetic staging returns.',
+      source_system: SMOKE_SOURCE_SYSTEM,
     })),
   }));
 }
@@ -546,25 +485,25 @@ function assertOk(result) {
   }
 }
 
-function selectedIdsFromCatalogResponse(manifest, body) {
-  const selectedProduct = firstManifestProductWithVariant(manifest);
+function selectedIdsFromCatalogResponse(body) {
+  const selectedProduct = firstApprovedProductWithVariant();
   const data = body?.data && typeof body.data === 'object' ? body.data : {};
   const variants = Array.isArray(data.variants) ? data.variants : [];
   const selectedVariant = variants[0] && typeof variants[0] === 'object' ? variants[0] : null;
   return {
-    merchant_id: safeSyntheticId(manifest.merchant.id, 'manifest merchant id'),
-    agent_id: safeSyntheticId(manifest.agent.id, 'manifest agent id'),
-    product_id: safeSyntheticId(String(data.id ?? data.product_id ?? selectedProduct?.id ?? ''), 'seeded product id'),
-    variant_id: safeSyntheticId(String(selectedVariant?.id ?? selectedProduct?.variants?.[0]?.id ?? ''), 'seeded variant id'),
+    merchant_id: SMOKE_MERCHANT_ID,
+    agent_id: SMOKE_AGENT_ID,
+    product_id: safeSyntheticId(String(data.id ?? data.product_id ?? selectedProduct.product_id), 'seeded product id'),
+    variant_id: safeSyntheticId(String(selectedVariant?.id ?? selectedProduct.variants[0].id), 'seeded variant id'),
   };
 }
 
 async function executeSeedRun({ apiBase, manifest, fixtureEnvOutput, provider }) {
   const authSource = requireExactlyOneAuthSource();
-  const catalogProducts = catalogProductsForApi(manifest);
-  const selectedProduct = firstManifestProductWithVariant(manifest);
-  const merchantId = safeSyntheticId(manifest.merchant.id, 'manifest merchant id');
-  const selectedProductId = safeSyntheticId(selectedProduct.id, 'manifest selected product id');
+  const catalogProducts = catalogProductsForApi();
+  const selectedProduct = firstApprovedProductWithVariant();
+  const merchantId = SMOKE_MERCHANT_ID;
+  const selectedProductId = selectedProduct.product_id;
   const results = [];
 
   for (const request of [
@@ -608,7 +547,7 @@ async function executeSeedRun({ apiBase, manifest, fixtureEnvOutput, provider })
   assertOk(catalogRead);
   results.push(catalogRead);
 
-  const selectedIds = selectedIdsFromCatalogResponse(manifest, catalogRead.body);
+  const selectedIds = selectedIdsFromCatalogResponse(catalogRead.body);
   const fixtureEnvExport = fixtureEnvOutput
     ? writeAgenticOrgFixtureEnv({ outputPath: fixtureEnvOutput, apiBase, manifest, provider, selectedIds })
     : { written: false };
