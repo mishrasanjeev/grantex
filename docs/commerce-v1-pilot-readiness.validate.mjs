@@ -353,7 +353,7 @@ for (const forbidden of commonSecretMarkers) {
 
 for (const required of [
   'Commerce V1 Repeatable Option A Smoke Workflow',
-  'C2A planning and tooling only',
+  'C2D-prep executable runner tooling only',
   'manual approval gates',
   'min-instances=0',
   'max-instances=1',
@@ -373,6 +373,11 @@ for (const required of [
   'AGENTICORG_COMMERCE_ALLOWED_SMOKE_URL',
   '--write-agenticorg-fixture-env=.tmp/commerce-agent-real-staging.env',
   '--fixture-env=.tmp/commerce-agent-real-staging.env',
+  'node scripts/commerce-option-a-smoke-seed.mjs --run',
+  'node scripts/commerce-option-a-smoke-evidence.mjs --run',
+  'approved smoke API requests',
+  'Guarded seed runner execution path',
+  'Guarded evidence runner execution path',
   'The fixture export is disabled by default',
   'must stay under `.tmp/`',
   'cleanup/evidence warning language',
@@ -389,6 +394,33 @@ for (const forbidden of commonSecretMarkers) {
 }
 
 const optionASmokeRunbook = JSON.parse(optionASmokeRunbookText);
+assert.equal(
+  optionASmokeRunbook.status,
+  'guarded_runner_available_for_later_approved_c2d',
+  'Option A runbook records guarded C2D-prep runner status',
+);
+assert.equal(optionASmokeRunbook.runner.dry_run_default, true, 'Option A runbook keeps dry-run as default');
+assert.equal(
+  optionASmokeRunbook.runner.run_requires_separate_c2d_approval,
+  true,
+  'Option A runbook requires separate C2D approval for run mode',
+);
+assert.ok(
+  optionASmokeRunbook.runner.seed_run_command.includes('--write-agenticorg-fixture-env=.tmp/commerce-agent-real-staging.env'),
+  'Option A runbook documents fixture env seed run command',
+);
+assert.ok(
+  optionASmokeRunbook.runner.evidence_run_command.includes('--fixture-env=.tmp/commerce-agent-real-staging.env'),
+  'Option A runbook documents fixture env evidence run command',
+);
+assert.ok(
+  optionASmokeRunbook.runner.approved_seed_requests.includes('POST /v1/commerce/catalog/products/bulk dry_run=false'),
+  'Option A runbook documents approved catalog upsert request',
+);
+assert.ok(
+  optionASmokeRunbook.runner.approved_evidence_cases.includes('payment_intent_create'),
+  'Option A runbook documents approved payment intent evidence case',
+);
 assert.equal(optionASmokeRunbook.resources.cloud_run_service, 'grantex-auth-smoke', 'Option A runbook pins smoke service');
 assert.equal(optionASmokeRunbook.resources.cloud_sql_instance, 'grantex-commerce-smoke-pg', 'Option A runbook pins smoke SQL');
 assert.equal(optionASmokeRunbook.resources.redis_instance, 'grantex-commerce-smoke-redis', 'Option A runbook pins smoke Redis');
@@ -436,6 +468,26 @@ for (const forbidden of commonSecretMarkers) {
   assert.equal(optionASmokeRunbookText.includes(forbidden), false, `Option A runbook does not include ${forbidden}`);
 }
 
+const committedDocAndExampleTexts = {
+  'commerce-v1-repeatable-option-a-smoke-workflow.md': repeatableOptionASmokeWorkflow,
+  'commerce-option-a-smoke.runbook.json': optionASmokeRunbookText,
+  'commerce-v1-option-a-smoke-evidence.md': optionASmokeEvidence,
+};
+const committedSecretValuePatterns = [
+  [/Bearer\s+[A-Za-z0-9._~+/=-]{12,}/, 'bearer token value'],
+  [/eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/, 'JWT-like value'],
+  [/\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9]{12,}/, 'provider key value'],
+  [/\b(?:postgres|postgresql):\/\/[^\s<>"']+/, 'DB URL value'],
+  [/\bredis:\/\/[^\s<>"']+/, 'Redis URL value'],
+  [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, 'private key block'],
+  [/\bwhsec_[A-Za-z0-9]{12,}/, 'webhook secret value'],
+];
+for (const [path, text] of Object.entries(committedDocAndExampleTexts)) {
+  for (const [pattern, label] of committedSecretValuePatterns) {
+    assert.equal(pattern.test(text), false, `${path} does not include ${label}`);
+  }
+}
+
 for (const required of [
   'dry-run command generation only',
   'Refusing production resource name',
@@ -454,7 +506,9 @@ for (const required of [
   assert.ok(optionASmokePlan.includes(required), `Option A smoke plan script includes ${required}`);
 }
 for (const required of [
-  'Run mode is blocked for C2A',
+  'guarded_and_executable_after_approved_smoke_deploy',
+  'executeSeedRun',
+  'Smoke seed run requires exactly one Grantex auth env value present',
   'Smoke seed provider must be mock',
   'Smoke seed live payments flag must be false',
   'Smoke seed tenant id is pinned',
@@ -463,8 +517,9 @@ for (const required of [
   'Refusing AgenticOrg fixture env output outside .tmp/',
   'Refusing arbitrary run.app URL without exact --allow-smoke-cloud-run-url',
   'Refusing COMMERCE_LIVE_MODE_ENABLED=true for Option A smoke seed tooling',
-  'sensitive_values_printed: false',
-  'generated harness env under .tmp only',
+  'Refusing non-HTTPS URL',
+  'sensitive_values_printed',
+  'AgenticOrg fixture env under .tmp only',
 ]) {
   assert.ok(optionASmokeSeed.includes(required), `Option A smoke seed script includes ${required}`);
 }
@@ -474,7 +529,11 @@ for (const required of [
   'Refusing non-mock provider',
   'Refusing COMMERCE_LIVE_MODE_ENABLED=true',
   'Refusing PLURAL_LIVE_ENABLED=true',
-  'Run mode is blocked for C2A',
+  'executeEvidenceRun',
+  'Failing closed because AgenticOrg fixture env is missing',
+  'Refusing AgenticOrg fixture env input outside .tmp/',
+  'writeEvidenceReport',
+  'idempotency_keys_recorded: false',
   'commerce-v1-option-a-smoke-evidence.md',
 ]) {
   assert.ok(optionASmokeEvidenceTool.includes(required), `Option A smoke evidence tool includes ${required}`);
@@ -787,7 +846,8 @@ const optionASmokeSeedDryRun = execFileSync(
 const optionASmokeSeedReport = JSON.parse(optionASmokeSeedDryRun);
 assert.equal(optionASmokeSeedReport.mode, 'dry-run');
 assert.equal(optionASmokeSeedReport.status, 'not_executed');
-assert.equal(optionASmokeSeedReport.would_write, false);
+assert.equal(optionASmokeSeedReport.would_write_catalog, false);
+assert.equal(optionASmokeSeedReport.requests_made, false);
 assert.equal(optionASmokeSeedReport.provider, 'mock');
 assert.equal(optionASmokeSeedReport.live_flags.commerce_live_mode_enabled, false);
 assert.equal(optionASmokeSeedReport.staging_ids.tenant_id, 'cten_staging_commerce');
@@ -898,6 +958,26 @@ assert.ok(
   'Option A fixture export explains arbitrary run.app refusal',
 );
 
+const optionASmokeFixtureHttpLocalhostRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-seed.mjs'),
+    '--dry-run',
+    '--manifest=docs/examples/commerce-staging-seed.manifest.json',
+    '--api-base=http://localhost:3001',
+    '--allow-smoke-cloud-run-url=http://localhost:3001',
+    '--write-agenticorg-fixture-env=.tmp/commerce-agent-real-staging.env',
+  ],
+  { encoding: 'utf8', env: fixtureExportEnv },
+);
+assert.notEqual(optionASmokeFixtureHttpLocalhostRefusal.status, 0, 'Option A fixture export refuses HTTP localhost');
+assert.ok(
+  `${optionASmokeFixtureHttpLocalhostRefusal.stdout}${optionASmokeFixtureHttpLocalhostRefusal.stderr}`.includes(
+    'Refusing non-HTTPS URL',
+  ),
+  'Option A fixture export explains HTTP localhost refusal',
+);
+
 const optionASmokeFixtureLiveFlagRefusal = spawnSync(
   process.execPath,
   [
@@ -985,6 +1065,60 @@ assert.notEqual(optionASmokeEvidenceProdRefusal.status, 0, 'Option A smoke evide
 assert.ok(
   `${optionASmokeEvidenceProdRefusal.stdout}${optionASmokeEvidenceProdRefusal.stderr}`.includes('Refusing production domain'),
   'Option A smoke evidence production refusal explains production guard',
+);
+
+const optionASmokeEvidenceHttpLocalhostRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-evidence.mjs'),
+    '--dry-run',
+    '--api-base=http://localhost:3001',
+  ],
+  { encoding: 'utf8' },
+);
+assert.notEqual(optionASmokeEvidenceHttpLocalhostRefusal.status, 0, 'Option A smoke evidence tool refuses HTTP localhost');
+assert.ok(
+  `${optionASmokeEvidenceHttpLocalhostRefusal.stdout}${optionASmokeEvidenceHttpLocalhostRefusal.stderr}`.includes(
+    'Refusing non-HTTPS URL',
+  ),
+  'Option A smoke evidence HTTP localhost refusal explains HTTPS guard',
+);
+
+const optionASmokeEvidenceLiveFlagRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-evidence.mjs'),
+    '--dry-run',
+    `--api-base=${smokeUrl}`,
+    `--allow-smoke-cloud-run-url=${smokeUrl}`,
+  ],
+  { encoding: 'utf8', env: { ...process.env, COMMERCE_LIVE_MODE_ENABLED: 'true' } },
+);
+assert.notEqual(optionASmokeEvidenceLiveFlagRefusal.status, 0, 'Option A smoke evidence tool refuses live commerce flag');
+assert.ok(
+  `${optionASmokeEvidenceLiveFlagRefusal.stdout}${optionASmokeEvidenceLiveFlagRefusal.stderr}`.includes(
+    'Refusing COMMERCE_LIVE_MODE_ENABLED=true',
+  ),
+  'Option A smoke evidence live flag refusal explains live commerce guard',
+);
+
+const optionASmokeEvidenceNonMockProviderRefusal = spawnSync(
+  process.execPath,
+  [
+    join(repoRoot, 'scripts', 'commerce-option-a-smoke-evidence.mjs'),
+    '--dry-run',
+    '--provider=stripe',
+    `--api-base=${smokeUrl}`,
+    `--allow-smoke-cloud-run-url=${smokeUrl}`,
+  ],
+  { encoding: 'utf8' },
+);
+assert.notEqual(optionASmokeEvidenceNonMockProviderRefusal.status, 0, 'Option A smoke evidence tool refuses non-mock provider');
+assert.ok(
+  `${optionASmokeEvidenceNonMockProviderRefusal.stdout}${optionASmokeEvidenceNonMockProviderRefusal.stderr}`.includes(
+    'Refusing non-mock provider',
+  ),
+  'Option A smoke evidence non-mock refusal explains provider guard',
 );
 
 const nonLocalSeed = spawnSync(

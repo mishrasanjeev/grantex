@@ -1,9 +1,45 @@
 {
-  "runbook_version": "c2a-option-a-smoke-v1",
+  "runbook_version": "c2d-prep-option-a-smoke-v1",
   "purpose": "Repeatable lowest-cost temporary hosted smoke workflow for Grantex Commerce V1.",
-  "status": "planning_and_command_generation_only",
+  "status": "guarded_runner_available_for_later_approved_c2d",
   "creates_resources": false,
   "runs_deploy": false,
+  "runner": {
+    "dry_run_default": true,
+    "run_requires_separate_c2d_approval": true,
+    "seed_run_command": "node scripts/commerce-option-a-smoke-seed.mjs --run --manifest=docs/examples/commerce-staging-seed.manifest.json --api-base=<approved smoke URL> --allow-smoke-cloud-run-url=<approved smoke URL> --write-agenticorg-fixture-env=.tmp/commerce-agent-real-staging.env --provider=mock",
+    "evidence_run_command": "node scripts/commerce-option-a-smoke-evidence.mjs --run --api-base=<approved smoke URL> --allow-smoke-cloud-run-url=<approved smoke URL> --fixture-env=.tmp/commerce-agent-real-staging.env --provider=mock",
+    "approved_seed_requests": [
+      "GET /health",
+      "GET /.well-known/jwks.json",
+      "GET /.well-known/grantex-commerce",
+      "POST /v1/commerce/catalog/products/bulk dry_run=true",
+      "POST /v1/commerce/catalog/products/bulk dry_run=false",
+      "GET /v1/commerce/catalog/products/{product_id}"
+    ],
+    "approved_evidence_cases": [
+      "health",
+      "jwks",
+      "commerce_well_known",
+      "mcp_initialize",
+      "mcp_tools_list",
+      "merchant_profile",
+      "catalog_search",
+      "catalog_get_item",
+      "inventory_check",
+      "cart_create",
+      "consent_request",
+      "consent_exchange",
+      "payment_intent_create",
+      "checkout_create",
+      "payment_status",
+      "missing_consent_refusal",
+      "amount_cap_breach_refusal",
+      "revoked_passport_refusal",
+      "expired_passport_refusal",
+      "denied_consent_refusal"
+    ]
+  },
   "project": {
     "default": "grantex-prod",
     "approval_required": true
@@ -112,6 +148,7 @@
     "node docs/commerce-v1-pilot-readiness.validate.mjs",
     "node scripts/commerce-option-a-smoke-plan.mjs --dry-run --project=grantex-prod --region=us-central1 --sql-tier=db-f1-micro --cleanup-by=<cleanup timestamp>",
     "node scripts/commerce-option-a-smoke-seed.mjs --dry-run --manifest=docs/examples/commerce-staging-seed.manifest.json",
+    "node scripts/commerce-option-a-smoke-evidence.mjs --dry-run --api-base=<approved smoke URL> --allow-smoke-cloud-run-url=<approved smoke URL>",
     "node scripts/commerce-staging-e2e-harness.mjs --dry-run --api-base=<approved smoke URL> --allow-smoke-cloud-run-url=<approved smoke URL>",
     "node scripts/commerce-staging-e2e-harness.mjs --dry-run --api-base=https://api.grantex.dev"
   ],
