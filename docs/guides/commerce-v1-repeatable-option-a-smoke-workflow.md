@@ -63,6 +63,14 @@ Validate the seed manifest without writes:
 node scripts/commerce-option-a-smoke-seed.mjs --dry-run --manifest=docs/examples/commerce-staging-seed.manifest.json
 ```
 
+Generate a local AgenticOrg fixture env file only after an exact approved smoke URL exists:
+
+```powershell
+node scripts/commerce-option-a-smoke-seed.mjs --dry-run --manifest=docs/examples/commerce-staging-seed.manifest.json --api-base=<approved-smoke-run-app-origin> --allow-smoke-cloud-run-url=<approved-smoke-run-app-origin> --write-agenticorg-fixture-env=.tmp/commerce-agent-real-staging.env
+```
+
+The fixture export is disabled by default. The `--write-agenticorg-fixture-env` path must stay under `.tmp/`; committed docs and reports may name variables but must never contain usable auth material, passports, idempotency keys, webhook secrets, provider credentials, raw payloads, DB/Redis URLs, private keys, or secret values.
+
 Validate the existing hosted smoke harness with an approved exact smoke URL:
 
 ```powershell
@@ -105,6 +113,7 @@ The plan script refuses cleanup windows more than 24 hours in the future unless 
 - Do not read or print secret values.
 - Do not write generated tokens, passports, idempotency keys, webhook secrets, provider credentials, raw payloads, or secret values to tracked files.
 - Write any future generated harness env material only under `.tmp/` and keep it untracked.
+- Write AgenticOrg real-staging fixture env files only under `.tmp/`, and keep cleanup/evidence warning language with every approved smoke handoff.
 - Mock provider only.
 - Keep mock provider only.
 - Keep `COMMERCE_LIVE_MODE_ENABLED=false`.
@@ -125,10 +134,19 @@ $env:AGENTICORG_COMMERCE_REAL_STAGING='1'
 # Set exactly one of GRANTEX_COMMERCE_BEARER_TOKEN, GRANTEX_AGENT_ASSERTION, or GRANTEX_API_KEY outside logs.
 ```
 
+Optional local fixture bridge:
+
+- Grantex writes `.tmp/commerce-agent-real-staging.env` only when `--write-agenticorg-fixture-env` is explicitly supplied.
+- The file may contain the approved smoke URL, synthetic merchant/agent/product/variant IDs, exactly one auth source value if already present in the approved runtime environment, and optional usable synthetic passport fixture values.
+- Usable passports, bearer tokens, agent assertions, API keys, idempotency keys, webhook secrets, and consent exchange material remain sensitive runtime material even when synthetic.
+- Tool stdout may include variable names, counts, and redaction status only. It must not print values loaded from or written to the fixture env file.
+- AgenticOrg consumes the file with `--fixture-env=.tmp/commerce-agent-real-staging.env` or `AGENTICORG_COMMERCE_FIXTURE_ENV=.tmp/commerce-agent-real-staging.env`.
+
 Run plan after approval:
 
 ```powershell
 python demos/commerce_sales_agent_demo.py --mode=real-staging --grantex-base '<approved-smoke-run-app-origin>' --allow-smoke-cloud-run-url '<approved-smoke-run-app-origin>' --evidence-report docs/reports/commerce-agent-real-staging-evidence.md
+python demos/commerce_sales_agent_demo.py --mode=real-staging --fixture-env .tmp/commerce-agent-real-staging.env --evidence-report docs/reports/commerce-agent-real-staging-evidence.md
 python -m pytest tests/evals/test_commerce_sales_agent_real_staging.py -q
 ```
 
