@@ -541,19 +541,19 @@ for (const required of [
 
 for (const required of [
   'Commerce V1 Option A Smoke Evidence',
-  'Passed checks | 22',
-  'Failed checks | 0',
-  'provider webhook replay dry-run | pass | 200',
-  'Temporary smoke resources cleaned up: yes',
-  'Cleanup Completed',
-  'Production DB/Redis used: no',
-  'Plural live: false',
-  'Commerce live mode: false',
-  'AgenticOrg hosted-staging mode is documented for a later pass',
-  'grantex-auth-smoke` was absent',
-  'grantex-commerce-smoke-pg` was absent',
-  'grantex-commerce-smoke-redis` was absent',
-  'Production `grantex-auth`, `grantex-pg16`, and `grantex-redis` still existed',
+  '- Passed: 14',
+  '- Failed: 0',
+  '- Failed-safe: 6',
+  '- Skipped: 0',
+  'payment_status | passed | 200',
+  'Live flags: Commerce live mode false; live payments false; live Plural false.',
+  'Cleanup completed after evidence capture.',
+  'Deleted temporary Cloud Run service: grantex-auth-smoke',
+  'Deleted temporary Cloud SQL instance: grantex-commerce-smoke-pg',
+  'Deleted temporary Redis instance: grantex-commerce-smoke-redis',
+  'Verified temporary smoke Cloud Run, Cloud SQL, Redis, and smoke secrets absent after cleanup',
+  'Verified production resources still present: grantex-auth, grantex-pg16, grantex-redis',
+  'Production Commerce V1, live payment, and live Plural flags were not changed by this run',
 ]) {
   assert.ok(optionASmokeEvidence.includes(required), `Option A smoke evidence includes ${required}`);
 }
