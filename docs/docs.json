@@ -71,6 +71,18 @@
             ]
           },
           {
+            "group": "Agentic Commerce V1",
+            "pages": [
+              "guides/commerce-v1-overview",
+              "guides/commerce-v1-developer-guide",
+              "guides/commerce-v1-merchant-operator-guide",
+              "guides/commerce-v1-operations",
+              "guides/commerce-v1-repeatable-option-a-smoke-workflow",
+              "guides/commerce-v1-option-a-smoke-setup",
+              "guides/commerce-v1-hosted-staging-e2e"
+            ]
+          },
+          {
             "group": "Compliance",
             "pages": [
               "features/dpdp-compliance",

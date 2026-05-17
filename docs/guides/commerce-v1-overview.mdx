@@ -1,0 +1,118 @@
+---
+title: Commerce V1 Overview
+description: Start here for Grantex Agentic Commerce architecture, readiness, safety gates, and audience-specific paths.
+---
+
+# Commerce V1 Overview
+
+Grantex Commerce V1 is the control plane for agentic commerce. It keeps consent,
+Commerce Passports, merchant policy, amount caps, audit, catalog grounding,
+webhook replay safety, and payment-provider boundaries inside Grantex while
+agents interact through approved REST and MCP surfaces.
+
+This is a documentation and education page. It does not enable production
+Commerce V1, live payments, live Plural, or production discovery.
+
+## Current Posture
+
+| Capability | Status | Evidence or gate |
+| --- | --- | --- |
+| Local/internal sandbox | Implemented | Synthetic catalog, cart, consent, passport, payment, webhook, and audit flows. |
+| Temporary Grantex Option A smoke | Verified | `docs/reports/commerce-v1-option-a-smoke-evidence.md` records 14 passed, 0 failed, 6 failed-safe, 0 skipped. |
+| AgenticOrg real-staging handoff | Verified externally | AgenticOrg evidence records Grantex-only tools and redacted fixture handling. |
+| Hosted AgenticOrg API-only discovery | Verified externally | AgenticOrg C3 evidence records hosted MCP/A2A discovery against temporary Grantex smoke. |
+| Grantex production Commerce V1 discovery | Disabled/fail-closed | `docs/reports/commerce-v1-production-discovery-readiness.md`. |
+| Production checkout/live payments | Blocked | Requires legal, compliance, security, operations, provider, rollback, and human approval gates. |
+| Live Plural | Blocked | Mock provider only in current smoke evidence. |
+
+## Start Here
+
+| Audience | Path |
+| --- | --- |
+| Developers integrating with Grantex Commerce APIs/MCP | Read this overview, then `docs/guides/commerce-v1-developer-guide.mdx` and `docs/api/grantex-commerce-v1.openapi.yaml`. |
+| Merchants and operators | Read `docs/guides/commerce-v1-merchant-operator-guide.mdx`, then `docs/guides/commerce-v1-operations.mdx`. |
+| AgenticOrg integration owners | Read this page, the AgenticOrg commerce docs, and the Option A smoke workflow. |
+| Reviewers assessing readiness | Read the smoke evidence and production discovery readiness report before any enablement proposal. |
+| End users | Use the plain-language consent flow below: agents can prepare a purchase, but Grantex controls what may proceed and records what happened. |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  buyer[End user] --> agent[Commerce agent]
+  agent --> tools[AgenticOrg Grantex-only commerce tools]
+  tools --> api[Grantex Commerce REST/MCP]
+  api --> catalog[Catalog and inventory]
+  api --> consent[Consent request]
+  consent --> passport[Commerce Passport]
+  api --> policy[Policy and amount caps]
+  policy --> audit[Audit and observability]
+  api --> payment[Provider-neutral payment intent]
+  payment --> mock[Mock provider evidence]
+  payment -. future gate .-> live[Live provider / Plural]
+```
+
+The important boundary is that the agent does not own payment-provider access.
+AgenticOrg uses `grantex_commerce:*` tools. Grantex owns provider abstraction,
+policy enforcement, audit, webhook replay safety, and any future live-provider
+enablement.
+
+## Consent And Commerce Passport Lifecycle
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant A as Commerce Agent
+  participant G as Grantex
+  participant P as Provider Adapter
+  A->>G: Search catalog and check inventory
+  A->>G: Create cart draft
+  A->>G: Request consent with supported scopes
+  G-->>U: Consent UI / approval challenge
+  U-->>G: Approve or deny
+  G-->>A: Commerce Passport if approved
+  A->>G: Create payment intent with passport
+  G->>G: Enforce merchant policy and amount cap
+  G->>P: Mock-provider payment path in current evidence
+  A->>G: Create checkout and poll payment status
+```
+
+The Commerce Passport is scoped runtime material. It may be used during approved
+smoke runs, but it must never appear in committed docs, PR bodies, logs, raw
+payload dumps, or chat.
+
+## Readiness Gate Ladder
+
+```mermaid
+flowchart TB
+  local[Local tests and internal sandbox] --> optionA[Temporary Grantex Option A smoke]
+  optionA --> real[Local AgenticOrg real-staging eval]
+  real --> hosted[Temporary hosted AgenticOrg API smoke]
+  hosted --> prodReadOnly[Read-only production discovery proposal]
+  prodReadOnly --> external[External sandbox pilot proposal]
+  external --> live[Live payment and live Plural gate]
+```
+
+Each gate is separate. Passing a temporary smoke run does not imply production
+discovery, production checkout, live payments, live Plural, external pilot
+readiness, or provider certification.
+
+## Allowed And Blocked
+
+| Allowed now | Blocked now |
+| --- | --- |
+| Local mock demo and internal sandbox work. | Production Commerce V1 discovery enablement. |
+| Approved temporary Option A smoke resources. | Production checkout or payment execution. |
+| Mock-provider evidence with scrubbed reports. | Live Plural or live provider credentials. |
+| AgenticOrg Grantex-only commerce tools. | Direct Stripe, Plural, Pine, or provider credential paths from AgenticOrg commerce. |
+| Public JWKS references as verification metadata. | Raw passports, bearer tokens, idempotency key values, secrets, DB/Redis URLs, or raw payloads in docs/evidence. |
+
+## Related Documents
+
+- `docs/guides/commerce-v1-developer-guide.mdx`
+- `docs/guides/commerce-v1-merchant-operator-guide.mdx`
+- `docs/guides/commerce-v1-operations.mdx`
+- `docs/guides/commerce-v1-repeatable-option-a-smoke-workflow.md`
+- `docs/reports/commerce-v1-option-a-smoke-evidence.md`
+- `docs/reports/commerce-v1-production-discovery-readiness.md`
+- `docs/api/grantex-commerce-v1.openapi.yaml`
