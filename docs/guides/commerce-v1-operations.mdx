@@ -382,6 +382,9 @@ Safe replay rules:
 - Dry-run with `{ "reason": "...", "dry_run": true }` before real replay when investigating.
 - Real replay requires a non-empty reason, uses the payment state machine, and must not double-transition
   payments that already reached the target terminal state.
+- Production non-mock replay remains blocked with
+  `webhook_failed_event_list_and_replay_api_contract_deferred` until provider API and signature
+  contracts are explicitly approved.
 - Responses, logs, audit metadata, and portal UI must never include raw payloads, raw signatures,
   encrypted payload material, webhook secrets, provider credentials, bearer tokens, passports, or
   plaintext idempotency keys.

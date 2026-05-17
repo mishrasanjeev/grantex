@@ -35,6 +35,36 @@
 
 </div>
 
+## Agentic Commerce V1
+
+Grantex Commerce V1 is the consent, Commerce Passport, policy, audit, and payment-control layer for agentic checkout. It lets commerce agents discover merchant catalog data, create carts, request user consent, receive a scoped Commerce Passport, and create provider-neutral payment intents without giving the agent direct access to payment providers.
+
+> Production Commerce V1 discovery is currently disabled/fail-closed. Production live checkout, live payments, and live Plural are not enabled.
+
+```mermaid
+flowchart LR
+  user[User] --> agent[AgenticOrg Commerce Sales Agent]
+  agent --> gx[Grantex Commerce REST/MCP]
+  gx --> consent[Consent and Passport]
+  gx --> policy[Policy, amount caps, audit]
+  gx --> catalog[Catalog, cart, inventory]
+  gx --> provider[Provider-neutral payment intent]
+  provider --> mock[Mock provider verified in smoke]
+  provider -. blocked .-> plural[Future live Plural gate]
+```
+
+| Area | Current posture |
+| --- | --- |
+| Internal sandbox | Implemented for synthetic catalog, consent, passport, cart, payment, webhook, and audit flows. |
+| Temporary Option A smoke | Verified with mock provider and cleaned-up smoke resources. |
+| AgenticOrg real-staging handoff | Verified through Grantex-only tools with redacted fixture handling. |
+| Hosted AgenticOrg discovery | Verified in temporary API-only hosted smoke. |
+| Production read-only discovery | Grantex production Commerce V1 discovery remains disabled/fail-closed. |
+| Live checkout/payments | Blocked pending legal, compliance, security, operations, and provider approvals. |
+| Live Plural | Blocked; mock provider only in current evidence. |
+
+Start with the [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx), then use the [developer guide](docs/guides/commerce-v1-developer-guide.mdx), [merchant/operator guide](docs/guides/commerce-v1-merchant-operator-guide.mdx), [operations guide](docs/guides/commerce-v1-operations.mdx), and [repeatable Option A smoke workflow](docs/guides/commerce-v1-repeatable-option-a-smoke-workflow.md). Reference evidence lives in [Option A smoke evidence](docs/reports/commerce-v1-option-a-smoke-evidence.md) and [production discovery readiness](docs/reports/commerce-v1-production-discovery-readiness.md). The public education page is `web/commerce.html`.
+
 ## What's New in v2.5
 
 - **@grantex/gemma**: Day-zero Gemma 4 integration — offline consent bundles,

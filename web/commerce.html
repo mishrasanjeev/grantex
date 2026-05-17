@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Grantex Agentic Commerce V1</title>
+  <meta name="description" content="Plain-language education for Grantex Agentic Commerce V1 consent, Commerce Passport, policy, audit, and payment-control flows." />
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #132018;
+      --muted: #50645a;
+      --line: #d8e4dc;
+      --paper: #f7faf7;
+      --white: #ffffff;
+      --green: #267a4a;
+      --blue: #255f8e;
+      --amber: #9a651f;
+      --red: #a43f31;
+      --shadow: 0 18px 55px rgba(19, 32, 24, 0.11);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.6;
+    }
+    a { color: var(--blue); }
+    header, section { padding: 64px 24px; }
+    .wrap { max-width: 1120px; margin: 0 auto; }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.9);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      backdrop-filter: blur(14px);
+    }
+    .brand { font-weight: 800; color: var(--ink); text-decoration: none; letter-spacing: 0; }
+    .nav { display: flex; gap: 18px; font-size: 14px; }
+    .nav a { color: var(--muted); text-decoration: none; }
+    .hero {
+      background: linear-gradient(135deg, #ffffff 0%, #eef6f1 55%, #f7efe4 100%);
+      border-bottom: 1px solid var(--line);
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+      gap: 42px;
+      align-items: center;
+    }
+    .eyebrow { color: var(--green); font-weight: 800; text-transform: uppercase; font-size: 13px; }
+    h1 { font-size: clamp(36px, 5vw, 64px); line-height: 1.02; margin: 12px 0 18px; letter-spacing: 0; }
+    h2 { font-size: clamp(26px, 3vw, 40px); line-height: 1.14; margin: 0 0 18px; letter-spacing: 0; }
+    h3 { margin: 0 0 8px; font-size: 19px; letter-spacing: 0; }
+    p { margin: 0 0 16px; color: var(--muted); }
+    .badges { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+    .badge { border: 1px solid var(--line); background: var(--white); border-radius: 999px; padding: 8px 12px; font-size: 13px; font-weight: 700; }
+    .badge.blocked { color: var(--red); border-color: #efc8c1; }
+    .badge.review { color: var(--amber); border-color: #edd9b7; }
+    .badge.ready { color: var(--green); border-color: #b8dbc6; }
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 26px;
+    }
+    .flow { display: grid; gap: 12px; }
+    .step {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdfb;
+    }
+    .num {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--green);
+      color: white;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+    }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+    .card {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+    }
+    .status-table { width: 100%; border-collapse: collapse; background: var(--white); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .status-table th, .status-table td { text-align: left; padding: 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .status-table th { background: #eef6f1; font-size: 13px; text-transform: uppercase; color: var(--muted); }
+    .ladder {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+      margin-top: 22px;
+    }
+    .rung {
+      min-height: 110px;
+      padding: 14px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--white);
+      font-weight: 800;
+      font-size: 14px;
+    }
+    .rung span { display: block; margin-top: 8px; color: var(--muted); font-weight: 500; font-size: 13px; }
+    .allowed { border-top: 4px solid var(--green); }
+    .blocked-line { border-top: 4px solid var(--red); }
+    .review-line { border-top: 4px solid var(--amber); }
+    .cta { background: #132018; color: white; }
+    .cta p, .cta a { color: #d8e4dc; }
+    footer { padding: 28px 24px; border-top: 1px solid var(--line); color: var(--muted); background: var(--white); }
+    @media (max-width: 880px) {
+      .hero-grid, .grid-3, .grid-2, .ladder { grid-template-columns: 1fr; }
+      .nav { display: none; }
+      header, section { padding: 44px 18px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="topbar">
+    <a class="brand" href="/">Grantex</a>
+    <div class="nav">
+      <a href="#workflow">Workflow</a>
+      <a href="#readiness">Readiness</a>
+      <a href="#audiences">Audience paths</a>
+      <a href="https://docs.grantex.dev/guides/commerce-v1-overview">Docs</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="eyebrow">Agentic Commerce V1</div>
+        <h1>Consent-first checkout control for commerce agents.</h1>
+        <p>
+          Grantex keeps consent, Commerce Passports, merchant policy, amount caps,
+          audit, and provider boundaries in one control layer while agents use
+          approved catalog, cart, consent, and payment-intent tools.
+        </p>
+        <div class="badges">
+          <span class="badge ready">Internal sandbox ready</span>
+          <span class="badge ready">Hosted smoke verified</span>
+          <span class="badge review">Production discovery disabled</span>
+          <span class="badge blocked">Live payments blocked</span>
+          <span class="badge blocked">Live Plural blocked</span>
+        </div>
+      </div>
+      <div class="panel" aria-label="Agentic checkout flow">
+        <div class="flow">
+          <div class="step"><div class="num">1</div><div><h3>Ground the cart</h3><p>Agents search catalog, retrieve items, and check inventory through Grantex.</p></div></div>
+          <div class="step"><div class="num">2</div><div><h3>Ask for consent</h3><p>Grantex creates a consent request and only approved scope proceeds.</p></div></div>
+          <div class="step"><div class="num">3</div><div><h3>Issue a passport</h3><p>The Commerce Passport carries policy and amount limits as sensitive runtime material.</p></div></div>
+          <div class="step"><div class="num">4</div><div><h3>Control payment</h3><p>Payment intents and checkout handoff stay provider-neutral and audit-visible.</p></div></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section id="workflow">
+    <div class="wrap">
+      <h2>Why Grantex sits between agents and payment providers</h2>
+      <div class="grid-3">
+        <div class="card">
+          <h3>Consent boundary</h3>
+          <p>Agents can prepare a purchase, but Grantex controls whether the requested action matches user consent and merchant policy.</p>
+        </div>
+        <div class="card">
+          <h3>Policy boundary</h3>
+          <p>Amount caps, merchant status, trusted agent checks, and passport state are enforced before payment-affecting work proceeds.</p>
+        </div>
+        <div class="card">
+          <h3>Provider boundary</h3>
+          <p>AgenticOrg commerce does not call Stripe, Plural, Pine, or provider credentials directly. Grantex owns the provider abstraction.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="readiness">
+    <div class="wrap">
+      <h2>Readiness is staged, not implied</h2>
+      <table class="status-table">
+        <thead><tr><th>Layer</th><th>Status</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td>Internal sandbox</td><td>Ready</td><td>Synthetic data and mock-provider paths exist for controlled validation.</td></tr>
+          <tr><td>Temporary smoke</td><td>Verified</td><td>Option A and hosted AgenticOrg smoke evidence used temporary resources and scrubbed reports.</td></tr>
+          <tr><td>Production discovery</td><td>Disabled/fail-closed</td><td>Read-only discovery requires a later approved proposal.</td></tr>
+          <tr><td>Live checkout/payments</td><td>Blocked</td><td>Legal, compliance, security, operations, and provider gates remain required.</td></tr>
+          <tr><td>Live Plural</td><td>Blocked</td><td>No current evidence enables live Plural or live provider credentials.</td></tr>
+        </tbody>
+      </table>
+      <div class="ladder" aria-label="Readiness gate ladder">
+        <div class="rung allowed">Local tests<span>Internal sandbox</span></div>
+        <div class="rung allowed">Option A smoke<span>Temporary Grantex service</span></div>
+        <div class="rung allowed">AgenticOrg eval<span>Grantex-only path</span></div>
+        <div class="rung allowed">Hosted API smoke<span>MCP/A2A discovery</span></div>
+        <div class="rung review-line">Read-only discovery<span>Human proposal required</span></div>
+        <div class="rung blocked-line">Live payments<span>Blocked</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="audiences">
+    <div class="wrap">
+      <h2>Start paths</h2>
+      <div class="grid-2">
+        <div class="card"><h3>Developers</h3><p>Use the Commerce V1 developer guide and OpenAPI contract. Treat all auth, passport, idempotency, and provider material as runtime-sensitive.</p></div>
+        <div class="card"><h3>Merchants and operators</h3><p>Use the operator guide for catalog, policy, audit, webhook, emergency disable, and no-go checks.</p></div>
+        <div class="card"><h3>Agent builders</h3><p>Use Grantex Commerce REST/MCP only. AgenticOrg uses `grantex_commerce:*` tools and no direct provider credential path.</p></div>
+        <div class="card"><h3>End users</h3><p>The agent may help prepare a cart, but consent and policy checks determine whether checkout can proceed.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="wrap">
+      <h2>Use this page as education, not enablement.</h2>
+      <p>
+        Production Commerce V1 discovery, live checkout, live payments, live Plural,
+        external pilot readiness, and provider certification remain blocked until
+        explicit human gates approve them.
+      </p>
+      <p><a href="https://docs.grantex.dev/guides/commerce-v1-overview">Read the Commerce V1 docs</a></p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">No secrets, passports, tokens, raw payloads, provider credentials, or live payment material are included on this page.</div>
+  </footer>
+</body>
+</html>
