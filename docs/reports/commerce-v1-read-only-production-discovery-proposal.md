@@ -167,6 +167,27 @@ Recommended topology for a future C5B implementation:
 8. Keep AgenticOrg public commerce discovery hidden until Grantex read-only
    discovery passes a read-only smoke.
 
+## C5C Implementation Requirements
+
+The future implementation must keep these gate boundaries explicit:
+
+- `COMMERCE_PUBLIC_DISCOVERY_ENABLED` controls only
+  `GET /.well-known/grantex-commerce`.
+- `COMMERCE_PUBLIC_DISCOVERY_ENABLED` does not enable `/mcp`, MCP
+  `tools/list`, MCP `tools/call`, cart creation, checkout creation, payment
+  intent creation, payment status mutation, provider webhooks, merchant
+  webhooks, reconciliation workers, live payments, or live Plural.
+- `COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST` is required when the public
+  read-only discovery gate is enabled.
+- No allowlist must fail closed.
+- A requested merchant outside the allowlist must fail closed.
+- The discovery payload must state that the gate is read-only metadata only,
+  checkout/payment creation is not enabled by the gate, live payments are
+  disabled, live Plural is disabled, and no readiness or certification claim is
+  made.
+- AgenticOrg `AGENTICORG_COMMERCE_PUBLIC_DISCOVERY_ENABLED` remains disabled
+  until Grantex read-only discovery is approved and smoke-tested.
+
 ## Merchant Scoping Proposal
 
 No production merchant is approved by this planning task.

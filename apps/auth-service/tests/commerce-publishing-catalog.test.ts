@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { authHeader, buildTestApp, sqlMock } from './helpers.js';
+import { authHeader, buildTestApp, seedAuth, sqlMock } from './helpers.js';
 import { seedCommerceContext, TEST_COMMERCE_TENANT_ID } from './commerce-helpers.js';
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
@@ -26,6 +26,7 @@ const V1_TOOLS = [
 
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildTestApp(); });
+afterEach(() => { vi.unstubAllEnvs(); });
 
 function merchantProfile(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -82,6 +83,158 @@ function openApiBlock(path: string): string {
 }
 
 describe('GET /.well-known/grantex-commerce', () => {
+  it('fails closed when both Commerce V1 and public discovery are disabled', async () => {
+    vi.stubEnv('COMMERCE_V1_ENABLED', '');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_ENABLED', '');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/.well-known/grantex-commerce?merchant_id=mch_M5A',
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.headers['pragma']).toBe('no-cache');
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('commerce_disabled');
+  });
+
+  it('treats empty or invalid public discovery values as disabled', async () => {
+    vi.stubEnv('COMMERCE_V1_ENABLED', '');
+    for (const value of ['', 'false', 'enabled-but-unsafe']) {
+      vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_ENABLED', value);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/.well-known/grantex-commerce?merchant_id=mch_M5A',
+      });
+
+      expect(res.statusCode).toBe(503);
+      expect(res.json<{ error: { code: string } }>().error.code).toBe('commerce_disabled');
+    }
+  });
+
+  it('requires an allowlisted merchant when public read-only discovery is enabled', async () => {
+    vi.stubEnv('COMMERCE_V1_ENABLED', '');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_ENABLED', 'true');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST', '');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/.well-known/grantex-commerce?merchant_id=mch_M5A',
+    });
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json<{ error: { code: string } }>().error.code)
+      .toBe('commerce_public_discovery_allowlist_required');
+  });
+
+  it.each(['COMMERCE_LIVE_MODE_ENABLED', 'PLURAL_LIVE_ENABLED'])(
+    'fails closed when public discovery is enabled with %s=true',
+    async (liveFlag) => {
+      vi.stubEnv('COMMERCE_V1_ENABLED', '');
+      vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_ENABLED', 'true');
+      vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST', MERCHANT);
+      vi.stubEnv(liveFlag, 'true');
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/.well-known/grantex-commerce?merchant_id=mch_M5A',
+      });
+
+      expect(res.statusCode).toBe(503);
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.headers['pragma']).toBe('no-cache');
+      expect(res.json<{ error: { code: string } }>().error.code)
+        .toBe('commerce_public_discovery_live_flags_forbidden');
+    },
+  );
+
+  it('fails closed when the requested merchant is not allowlisted', async () => {
+    vi.stubEnv('COMMERCE_V1_ENABLED', '');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_ENABLED', 'enabled');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST', OTHER_MERCHANT);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/.well-known/grantex-commerce?merchant_id=mch_M5A',
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('merchant_not_found');
+    expect(sqlMock).not.toHaveBeenCalled();
+  });
+
+  it('returns read-only discovery through the public gate without Commerce V1 runtime enabled', async () => {
+    vi.stubEnv('COMMERCE_V1_ENABLED', '');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_ENABLED', 'true');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST', MERCHANT);
+    sqlMock.mockResolvedValueOnce([merchantProfile()]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/.well-known/grantex-commerce?merchant_id=mch_M5A',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.headers['pragma']).toBe('no-cache');
+    const body = res.json<{
+      merchant: { merchant_id: string };
+      discovery_posture: {
+        mode: string;
+        read_only_discovery_only: boolean;
+        commerce_v1_runtime_enabled: boolean;
+        checkout_payment_creation_enabled_by_discovery_gate: boolean;
+        live_payments_enabled: boolean;
+        live_plural_enabled: boolean;
+        provider_credentials_exposed: boolean;
+        readiness_claim: string;
+        certification_claim: string;
+      };
+    }>();
+    expect(body.merchant.merchant_id).toBe(MERCHANT);
+    expect(body.discovery_posture).toMatchObject({
+      mode: 'public_read_only_discovery',
+      read_only_discovery_only: true,
+      commerce_v1_runtime_enabled: false,
+      checkout_payment_creation_enabled_by_discovery_gate: false,
+      live_payments_enabled: false,
+      live_plural_enabled: false,
+      provider_credentials_exposed: false,
+      readiness_claim: 'none',
+      certification_claim: 'none',
+    });
+  });
+
+  it('uses the single allowlisted merchant when no selector is supplied', async () => {
+    vi.stubEnv('COMMERCE_V1_ENABLED', '');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_ENABLED', '1');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST', ` ${MERCHANT} `);
+    sqlMock.mockResolvedValueOnce([merchantProfile()]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/.well-known/grantex-commerce',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqlMock.mock.calls.flat()).toContain(MERCHANT);
+  });
+
+  it('requires a selector when multiple public discovery merchants are allowlisted', async () => {
+    vi.stubEnv('COMMERCE_V1_ENABLED', '');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_ENABLED', 'yes');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST', `${MERCHANT},${OTHER_MERCHANT}`);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/.well-known/grantex-commerce',
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('merchant_selector_required');
+  });
+
   it('returns the public merchant publishing profile', async () => {
     sqlMock.mockResolvedValueOnce([merchantProfile()]);
 
@@ -119,9 +272,11 @@ describe('GET /.well-known/grantex-commerce', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = JSON.stringify(res.json());
+    const parsed = res.json<{ discovery_posture: { certification_claim: string; readiness_claim: string } }>();
+    const body = JSON.stringify(parsed);
     expect(body).not.toMatch(/\b(UCP|ACP|AP2|MPP|A2A)\b/);
-    expect(body).not.toMatch(/certif/i);
+    expect(parsed.discovery_posture.certification_claim).toBe('none');
+    expect(parsed.discovery_posture.readiness_claim).toBe('none');
   });
 
   it('lists streamable_http MCP transport and all V1 tools', async () => {
@@ -137,6 +292,54 @@ describe('GET /.well-known/grantex-commerce', () => {
     expect(body.mcp.transport).toBe('streamable_http');
     expect(body.mcp.url).toContain('/mcp');
     expect(body.supported_tools).toEqual(V1_TOOLS);
+  });
+
+  it('does not let the public discovery gate enable MCP or Commerce runtime routes', async () => {
+    vi.stubEnv('COMMERCE_V1_ENABLED', '');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_ENABLED', 'true');
+    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST', MERCHANT);
+
+    const mcpList = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: { 'content-type': 'application/json' },
+      payload: { jsonrpc: '2.0', id: 'm5a', method: 'tools/list' },
+    });
+    expect(mcpList.statusCode).toBe(503);
+    expect(mcpList.json<{ error: { data: { error: { code: string } } } }>().error.data.error.code)
+      .toBe('commerce_disabled');
+
+    const mcpCall = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: { 'content-type': 'application/json' },
+      payload: {
+        jsonrpc: '2.0',
+        id: 'm5a',
+        method: 'tools/call',
+        params: { name: 'merchant.get_profile', arguments: { merchant_id: MERCHANT } },
+      },
+    });
+    expect(mcpCall.statusCode).toBe(503);
+
+    seedAuth();
+    const merchantRoute = await app.inject({
+      method: 'GET',
+      url: `/v1/commerce/merchants/${MERCHANT}`,
+      headers: authHeader(),
+    });
+    expect(merchantRoute.statusCode).toBe(503);
+    expect(merchantRoute.json<{ error: { code: string } }>().error.code).toBe('commerce_disabled');
+
+    seedAuth();
+    const cartRoute = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/carts',
+      headers: authHeader(),
+      payload: { merchant_id: MERCHANT, currency: 'INR', line_items: [], idempotency_key: 'idem_test' },
+    });
+    expect(cartRoute.statusCode).toBe(503);
+    expect(cartRoute.json<{ error: { code: string } }>().error.code).toBe('commerce_disabled');
   });
 
   it('keeps the commerce well-known profile rate limited outside the JWKS allowlist', async () => {
@@ -297,6 +500,12 @@ describe('M5A OpenAPI contract', () => {
     expect(wellKnown).toMatch(/operationId:\s*getGrantexCommerceProfile/);
     expect(wellKnown).toMatch(/x-implemented:\s*true/);
     expect(wellKnown).toContain('streamable_http');
+    const content = readFileSync(OPENAPI_PATH, 'utf8');
+    expect(content).toContain('discovery_posture');
+    expect(content).toContain('public_read_only_discovery');
+    expect(content).toContain('checkout_payment_creation_enabled_by_discovery_gate');
+    expect(content).toContain('live_payments_enabled');
+    expect(content).toContain('live_plural_enabled');
 
     const search = openApiBlock('/v1/commerce/catalog/search:');
     expect(search).toMatch(/operationId:\s*searchCommerceCatalog/);
