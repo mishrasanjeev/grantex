@@ -1,4 +1,8 @@
 import 'dotenv/config';
+import {
+  commercePublicDiscoveryMerchantAllowlist,
+  isCommercePublicDiscoveryEnabled,
+} from './lib/commerce/public-discovery.js';
 
 function required(name: string): string {
   const val = process.env[name];
@@ -94,6 +98,8 @@ export const config = {
   // be provisioned via the explicit endpoints planned for M2.
   // ---------------------------------------------------------------------
   commerceV1Enabled: process.env['COMMERCE_V1_ENABLED'] === 'true',
+  commercePublicDiscoveryEnabled: isCommercePublicDiscoveryEnabled(),
+  commercePublicDiscoveryMerchantAllowlist: commercePublicDiscoveryMerchantAllowlist(),
   commerceSandboxEnabled: process.env['COMMERCE_SANDBOX_ENABLED'] !== 'false',
   commerceAllowAutoTenant: process.env['COMMERCE_ALLOW_AUTO_TENANT'] === 'true',
   pluralSandboxEnabled: process.env['PLURAL_SANDBOX_ENABLED'] === 'true',

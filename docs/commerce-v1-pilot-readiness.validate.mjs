@@ -22,6 +22,10 @@ const repeatableOptionASmokeWorkflow = readFileSync(
 const hostedStagingE2ETemplate = readFileSync(join(docsDir, 'reports', 'commerce-v1-hosted-staging-e2e.template.md'), 'utf8');
 const optionASmokeEvidence = readFileSync(join(docsDir, 'reports', 'commerce-v1-option-a-smoke-evidence.md'), 'utf8');
 const contractGapReport = readFileSync(join(docsDir, 'reports', 'commerce-v1-contract-completeness-gap-report.md'), 'utf8');
+const readOnlyDiscoveryProposal = readFileSync(
+  join(docsDir, 'reports', 'commerce-v1-read-only-production-discovery-proposal.md'),
+  'utf8',
+);
 const optionASmokeRunbookText = readFileSync(join(docsDir, 'examples', 'commerce-option-a-smoke.runbook.json'), 'utf8');
 const harness = readFileSync(join(repoRoot, 'scripts', 'commerce-pilot-load-harness.mjs'), 'utf8');
 const stagingE2EHarness = readFileSync(join(repoRoot, 'scripts', 'commerce-staging-e2e-harness.mjs'), 'utf8');
@@ -99,6 +103,41 @@ for (const required of [
   'docker compose up --build',
 ]) {
   assert.ok(guide.includes(required), `operations guide includes ${required}`);
+}
+
+for (const required of [
+  'COMMERCE_PUBLIC_DISCOVERY_ENABLED',
+  'COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST',
+  'controls only',
+  'GET /.well-known/grantex-commerce',
+  'does not enable `/mcp`',
+  'does not enable `/mcp`, MCP',
+  'No allowlist must fail closed',
+  'A requested merchant outside the allowlist must fail closed',
+  'read-only metadata only',
+  'checkout/payment creation is not enabled by the gate',
+  'live payments are',
+  'disabled, live Plural is disabled',
+  'live Plural is disabled',
+  'no readiness or certification claim',
+  'AGENTICORG_COMMERCE_PUBLIC_DISCOVERY_ENABLED',
+]) {
+  assert.ok(readOnlyDiscoveryProposal.includes(required), `read-only discovery proposal includes ${required}`);
+}
+for (const forbidden of [
+  'COMMERCE_PUBLIC_DISCOVERY_ENABLED=true',
+  'COMMERCE_V1_ENABLED=true',
+  'COMMERCE_LIVE_MODE_ENABLED=true',
+  'PLURAL_LIVE_ENABLED=true',
+  joinText('sk', '_live_'),
+  joinText('pk', '_live_'),
+  joinText('Bearer', ' '),
+]) {
+  assert.equal(
+    readOnlyDiscoveryProposal.includes(forbidden),
+    false,
+    `read-only discovery proposal does not include ${forbidden}`,
+  );
 }
 
 assert.ok(openapi.includes('/v1/commerce/ops/provider-webhook-events:'), 'OpenAPI documents provider webhook event listing');
@@ -1193,6 +1232,7 @@ assert.equal(/[^\u0000-\u007F]/.test(repeatableOptionASmokeWorkflow), false, 're
 assert.equal(/[^\u0000-\u007F]/.test(hostedStagingE2ETemplate), false, 'hosted staging E2E template stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(optionASmokeEvidence), false, 'Option A smoke evidence stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(contractGapReport), false, 'contract gap report stays ASCII-only');
+assert.equal(/[^\u0000-\u007F]/.test(readOnlyDiscoveryProposal), false, 'read-only discovery proposal stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(optionASmokeRunbookText), false, 'Option A smoke runbook stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(harness), false, 'load harness stays ASCII-only');
 assert.equal(/[^\u0000-\u007F]/.test(stagingE2EHarness), false, 'hosted staging E2E harness stays ASCII-only');

@@ -68,6 +68,10 @@ describe('Commerce flags exposed on config', () => {
   it('config.commerceV1Enabled is true in test env', async () => {
     const { config } = await import('../src/config.js');
     expect(config.commerceV1Enabled).toBe(true);
+    expect(config).toHaveProperty('commercePublicDiscoveryEnabled');
+    expect(config.commercePublicDiscoveryEnabled).toBe(false);
+    expect(config).toHaveProperty('commercePublicDiscoveryMerchantAllowlist');
+    expect(config.commercePublicDiscoveryMerchantAllowlist).toEqual([]);
     expect(config).toHaveProperty('pluralSandboxEnabled');
     expect(config).toHaveProperty('pluralLiveEnabled');
     expect(config).toHaveProperty('commerceLiveModeEnabled');
