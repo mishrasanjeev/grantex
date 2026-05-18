@@ -53,6 +53,8 @@ export async function commerceWellKnownRoutes(app: FastifyInstance): Promise<voi
     '/.well-known/grantex-commerce',
     { config: { skipAuth: true, rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      reply.header('Pragma', 'no-cache');
       const commerceV1Enabled = isCommerceV1Enabled();
       const publicDiscoveryEnabled = isCommercePublicDiscoveryEnabled();
       if (!commerceV1Enabled && !publicDiscoveryEnabled) {
@@ -77,8 +79,6 @@ export async function commerceWellKnownRoutes(app: FastifyInstance): Promise<voi
           'Multiple commerce merchants are available; pass ?merchant_id=...');
       }
 
-      reply.header('Cache-Control', 'no-store');
-      reply.header('Pragma', 'no-cache');
       return reply.status(200).send({
         version: 'grantex-commerce-v1',
         merchant: result.profile,

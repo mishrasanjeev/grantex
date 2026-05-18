@@ -93,6 +93,8 @@ describe('GET /.well-known/grantex-commerce', () => {
     });
 
     expect(res.statusCode).toBe(503);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.headers['pragma']).toBe('no-cache');
     expect(res.json<{ error: { code: string } }>().error.code).toBe('commerce_disabled');
   });
 
@@ -126,21 +128,26 @@ describe('GET /.well-known/grantex-commerce', () => {
       .toBe('commerce_public_discovery_allowlist_required');
   });
 
-  it('fails closed when public discovery is enabled with live flags true', async () => {
-    vi.stubEnv('COMMERCE_V1_ENABLED', '');
-    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_ENABLED', 'true');
-    vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST', MERCHANT);
-    vi.stubEnv('PLURAL_LIVE_ENABLED', 'true');
+  it.each(['COMMERCE_LIVE_MODE_ENABLED', 'PLURAL_LIVE_ENABLED'])(
+    'fails closed when public discovery is enabled with %s=true',
+    async (liveFlag) => {
+      vi.stubEnv('COMMERCE_V1_ENABLED', '');
+      vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_ENABLED', 'true');
+      vi.stubEnv('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST', MERCHANT);
+      vi.stubEnv(liveFlag, 'true');
 
-    const res = await app.inject({
-      method: 'GET',
-      url: '/.well-known/grantex-commerce?merchant_id=mch_M5A',
-    });
+      const res = await app.inject({
+        method: 'GET',
+        url: '/.well-known/grantex-commerce?merchant_id=mch_M5A',
+      });
 
-    expect(res.statusCode).toBe(503);
-    expect(res.json<{ error: { code: string } }>().error.code)
-      .toBe('commerce_public_discovery_live_flags_forbidden');
-  });
+      expect(res.statusCode).toBe(503);
+      expect(res.headers['cache-control']).toBe('no-store');
+      expect(res.headers['pragma']).toBe('no-cache');
+      expect(res.json<{ error: { code: string } }>().error.code)
+        .toBe('commerce_public_discovery_live_flags_forbidden');
+    },
+  );
 
   it('fails closed when the requested merchant is not allowlisted', async () => {
     vi.stubEnv('COMMERCE_V1_ENABLED', '');
@@ -170,6 +177,7 @@ describe('GET /.well-known/grantex-commerce', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.headers['pragma']).toBe('no-cache');
     const body = res.json<{
       merchant: { merchant_id: string };
       discovery_posture: {
