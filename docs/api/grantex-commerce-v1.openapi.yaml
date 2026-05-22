@@ -19,7 +19,9 @@ info:
     foundation. M5B implements the
     `/mcp` JSON-RPC HTTP tool endpoint. M5C adds a static sandbox
     playground client for the commerce MCP surface. M6A adds operator-only
-    commerce operations health and baseline hardening runbooks.
+    commerce operations health and baseline hardening runbooks. C5C adds a
+    narrow read-only discovery gate for the well-known profile without
+    enabling broader Commerce V1 runtime routes.
 servers:
   - url: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
     description: Production (Cloud Run)
@@ -79,7 +81,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     CommerceDisabled:
-      description: COMMERCE_V1_ENABLED is not set in this environment
+      description: Commerce V1 runtime or read-only public discovery is not enabled or not allowlisted
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -276,6 +278,7 @@ components:
         - mcp
         - native_rest
         - capabilities
+        - discovery_posture
       properties:
         version: { type: string, example: grantex-commerce-v1 }
         merchant: { $ref: "#/components/schemas/MerchantPublishingProfile" }
@@ -321,6 +324,33 @@ components:
         capabilities:
           type: array
           items: { type: string }
+        discovery_posture:
+          type: object
+          required:
+            - mode
+            - read_only_discovery_only
+            - commerce_v1_runtime_enabled
+            - checkout_payment_creation_enabled_by_discovery_gate
+            - live_payments_enabled
+            - live_plural_enabled
+            - provider_credentials_exposed
+            - readiness_claim
+            - certification_claim
+          properties:
+            mode:
+              type: string
+              enum: [public_read_only_discovery, commerce_v1_runtime_discovery]
+            read_only_discovery_only: { type: boolean }
+            commerce_v1_runtime_enabled: { type: boolean }
+            checkout_payment_creation_enabled_by_discovery_gate: { type: boolean }
+            live_payments_enabled: { type: boolean }
+            live_plural_enabled: { type: boolean }
+            provider_credentials_exposed: { type: boolean }
+            readiness_claim: { type: string, enum: [none] }
+            certification_claim: { type: string, enum: [none] }
+            notes:
+              type: array
+              items: { type: string }
 
     CatalogSearchRequest:
       type: object
@@ -3082,7 +3112,7 @@ paths:
     get:
       tags: [Well-Known]
       summary: Merchant publishing profile for Grantex Commerce V1
-      description: Publishes streamable_http MCP transport metadata and native REST entry points without asserting external compliance status.
+      description: Publishes streamable_http MCP transport metadata and native REST entry points without asserting external compliance status. COMMERCE_PUBLIC_DISCOVERY_ENABLED can expose this read-only metadata with an allowlisted merchant without enabling MCP tool calls, cart creation, checkout creation, payment intent creation, live payments, or live Plural.
       operationId: getGrantexCommerceProfile
       x-implemented: true
       x-milestone: M5

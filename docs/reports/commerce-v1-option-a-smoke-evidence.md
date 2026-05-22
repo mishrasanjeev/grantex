@@ -1,95 +1,72 @@
 # Commerce V1 Option A Smoke Evidence
 
-Run date: 2026-05-15
+Status: C2G approved smoke evidence captured from a temporary Option A smoke service. This report is scrubbed and contains no bearer token values, passports, consent runtime material, idempotency key values, webhook secrets, provider credentials, raw payloads, DB/Redis URLs, private keys, or secret values.
+
+Generated at: 2026-05-17T05:54:50.986Z
+
+Target host: grantex-auth-smoke-dd4mtrt2gq-uc.a.run.app
+
+Provider: mock
+
+Live flags: Commerce live mode false; live payments false; live Plural false.
+
+AgenticOrg fixture env: .tmp/commerce-agent-real-staging.env
+
+Variable names used: GRANTEX_COMMERCE_BASE_URL, GRANTEX_BASE_URL, AGENTICORG_COMMERCE_ALLOWED_SMOKE_URL, AGENTICORG_COMMERCE_FIXTURE_MERCHANT_ID, AGENTICORG_COMMERCE_FIXTURE_AGENT_ID, AGENTICORG_COMMERCE_FIXTURE_PRODUCT_ID, AGENTICORG_COMMERCE_FIXTURE_VARIANT_ID, GRANTEX_API_KEY
+
+Synthetic IDs:
+- Merchant: mch_staging_electronics_pilot
+- Agent: cag_staging_agenticorg_sales
+- Product: cprd_01KRT7Y4ZFHB6FE2Z4PDHP3H3K
+- Variant: cvar_01KRT7Y4ZJNS9KQ3NT1HA0AX6D
 
 ## Summary
 
-- Smoke URL host: `grantex-auth-smoke-dd4mtrt2gq-uc.a.run.app`
-- Cloud Run revision: `grantex-auth-smoke-00004-t46`
-- Cloud SQL: `grantex-commerce-smoke-pg`
-- Redis: external Redis was created as `grantex-commerce-smoke-redis`; smoke runtime used in-container ephemeral Redis after external Redis connectivity failed
-- Provider: `mock`
-- Live payments: blocked / not enabled
-- Live Plural: blocked / not enabled
-- Production resources: not targeted
-- Production resources untouched: yes
-- Secrets, bearer tokens, passports, idempotency keys, webhook secrets, provider credentials, encrypted payloads, and raw webhook payloads: not recorded
-
-## Result
-
-- Passed: 22
+- Passed: 14
 - Failed: 0
-- Skipped: 3
-- C2B result: 22 passed, 0 failed, 3 skipped
-- Passed checks | 22
-- Failed checks | 0
+- Failed-safe: 6
+- Skipped: 0
 
-| Check | Status | HTTP | Latency ms | Detail |
-| --- | --- | ---: | ---: | --- |
-| health | passed | 200 | 356.63 |  |
-| jwks | passed | 200 | 324.04 |  |
-| commerce_well_known | passed | 200 | 294.22 | merchant profile available |
-| mcp_initialize | passed | 200 | 288.29 |  |
-| mcp_tools_list | passed | 200 | 296.23 | 8 tools |
-| merchant_get_profile | passed | 200 | 294.46 |  |
-| catalog_search | passed | 200 | 305.72 | 5 products |
-| catalog_get_item | passed | 200 | 307.75 |  |
-| inventory_check | passed | 200 | 342.57 | 1 |
-| cart_create | passed | 200 | 315.2 | created |
-| consent_fixture_present | passed | 200 | 0.06 | seeded synthetic consent and passport fixture used |
-| passport_exchange_fixture_present | passed | 200 | 0.01 | seeded synthetic checkout passport used |
-| payment_create_intent | passed | 200 | 327.54 | authorized |
-| checkout_create | passed | 200 | 343.5 | payment_pending |
-| payment_get_status_after_checkout | passed | 200 | 307.9 | payment_pending |
-| mock_webhook_paid | passed | 200 | 319.3 | paid |
-| mock_webhook_failed | passed | 200 | 327.92 | failed |
-| mock_webhook_expired | passed | 200 | 312.37 | expired |
-| duplicate_webhook_no_double_transition | passed | 200 | 298.11 | duplicate |
-| manual_reconciliation | passed | 200 | 300.2 |  |
-| missing_consent_negative | passed | 200 | 298.63 | passport_required |
-| invalid_webhook_signature_negative | passed | 401 | 297.65 | webhook_signature_invalid |
-| audit_timeline_operator_check | skipped |  |  | operator auth material was not exported; skipped to avoid reading smoke secrets |
-| provider_webhook_replay_dry_run | skipped |  |  | operator auth material was not exported; skipped to avoid reading smoke secrets |
-| emergency_reenable_negative | skipped |  |  | operator auth material was not exported; skipped to avoid reading smoke secrets |
+## Case Results
 
-## Readiness Baseline
+| Case | Status | HTTP | Latency ms | Error code | Synthetic refs |
+| --- | --- | ---: | ---: | --- | --- |
+| health | passed | 200 | 516 |  |  |
+| jwks | passed | 200 | 345 |  |  |
+| commerce_well_known | passed | 200 | 293 |  |  |
+| mcp_initialize | passed | 200 | 294 |  |  |
+| mcp_tools_list | passed | 200 | 288 |  |  |
+| merchant_profile | passed | 200 | 300 |  | merchant_id=mch_staging_electronics_pilot |
+| catalog_search | passed | 200 | 323 |  | merchant_id=mch_staging_electronics_pilot |
+| catalog_get_item | passed | 200 | 303 |  | product_id=cprd_01KRT7Y4ZFHB6FE2Z4PDHP3H3K |
+| inventory_check | passed | 200 | 303 |  | variant_id=cvar_01KRT7Y4ZJNS9KQ3NT1HA0AX6D |
+| cart_create | passed | 200 | 427 |  | cart_id=ccart_01KRT80PTS3BA236ZWA1RW1DZR |
+| consent_request | passed | 201 | 322 |  | consent_request_id=redacted |
+| consent_exchange | failed-safe | 409 | 297 | consent_not_granted |  |
+| payment_intent_create | passed | 200 | 356 |  | payment_intent_id=cpi_01KRT80QSDDAASHJMHNHDJHG7H |
+| checkout_create | passed | 200 | 341 |  | payment_intent_id=cpi_01KRT80QSDDAASHJMHNHDJHG7H |
+| payment_status | passed | 200 | 299 |  | payment_intent_id=cpi_01KRT80QSDDAASHJMHNHDJHG7H |
+| missing_consent_refusal | failed-safe | 200 | 298 | validation_failed |  |
+| amount_cap_breach_refusal | failed-safe | 200 | 303 | cart_not_payable |  |
+| revoked_passport_refusal | failed-safe | 200 | 326 | cart_not_payable |  |
+| expired_passport_refusal | failed-safe | 200 | 302 | cart_not_payable |  |
+| denied_consent_refusal | failed-safe | 403 | 312 | consent_denied |  |
 
-The prior merged Option A readiness baseline remains valid for replay-specific evidence:
+## Cleanup Status
 
-| Baseline check | Status | HTTP | Detail |
-| --- | --- | ---: | --- |
-| provider webhook replay dry-run | pass | 200 | M14.1 replay SQL ambiguity fixed; response did not expose raw or encrypted payload material |
+Cleanup completed after evidence capture.
 
-AgenticOrg hosted-staging mode is documented for a later pass. C2B used local AgenticOrg real-staging mode against the temporary Grantex smoke URL.
-AgenticOrg fixture blocker remains: C2C needs synthetic consent/passport fixture support before full AgenticOrg checkout coverage.
+Deleted temporary Cloud Run service: grantex-auth-smoke
+Deleted temporary Cloud SQL instance: grantex-commerce-smoke-pg
+Deleted temporary Redis instance: grantex-commerce-smoke-redis
+Deleted temporary smoke secrets: grantex-smoke-* only
+Deleted temporary smoke image tag: auth-service-smoke:a664af2d4cae7c50cf6567205c4986ddb54805a1
 
-## Cleanup
+Verified temporary smoke Cloud Run, Cloud SQL, Redis, and smoke secrets absent after cleanup.
+Verified temporary smoke image tag absent after cleanup.
+Verified production resources still present: grantex-auth, grantex-pg16, grantex-redis.
+Production Commerce V1, live payment, and live Plural flags were not changed by this run.
 
-Cleanup deadline: `2026-05-15T23:59:00+05:30`
+## Redaction
 
-Cleanup Completed
-
-Temporary smoke resources cleaned up: yes
-
-Production DB/Redis used: no
-
-Commerce live mode: false
-
-Plural live: false
-
-Cleanup commands were run after evidence collection to delete:
-
-- `grantex-auth-smoke`
-- `grantex-commerce-smoke-pg`
-- `grantex-commerce-smoke-redis`
-- `grantex-smoke-*` secrets
-- smoke image tags, where safe
-
-Cleanup verification after the run:
-
-- `grantex-auth-smoke` was absent after cleanup
-- `grantex-commerce-smoke-pg` was absent after cleanup
-- `grantex-commerce-smoke-redis` was absent after cleanup
-- `grantex-smoke-*` secrets: deleted / absent
-- smoke image tags for this run: deleted
-- Production `grantex-auth`, `grantex-pg16`, and `grantex-redis` still existed
+The runner records only host/origin, variable names, synthetic IDs, case status, HTTP status, latency, and error codes. It never writes raw response payloads, usable passports, auth material, idempotency key values, webhook secrets, provider credentials, DB/Redis URLs, private keys, or secret values to this report.

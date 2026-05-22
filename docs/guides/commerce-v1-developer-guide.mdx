@@ -1,0 +1,140 @@
+---
+title: Commerce V1 Developer Guide
+description: Grantex Commerce REST/MCP model, consent/passport sequence, idempotency, webhooks, sandbox usage, and current blockers.
+---
+
+# Commerce V1 Developer Guide
+
+This guide explains how developers should reason about the Grantex Commerce V1
+contract. It is safe documentation only. It does not enable production Commerce
+V1, live payments, live Plural, or production discovery.
+
+## API And MCP Surface
+
+Developers should use the OpenAPI contract in
+`docs/api/grantex-commerce-v1.openapi.yaml` plus the MCP tool surface exposed by
+the Commerce service. The current AgenticOrg integration uses these Grantex-only
+aliases:
+
+| Area | Tool or API responsibility |
+| --- | --- |
+| Merchant profile | Fetch merchant policy and status metadata. |
+| Catalog search | Search grounded merchant products. |
+| Catalog get item | Retrieve a specific product or variant. |
+| Inventory check | Confirm availability before cart or checkout. |
+| Cart create | Create a cart draft from grounded catalog IDs. |
+| Consent request | Ask for the user permission required for checkout. |
+| Consent exchange | Exchange granted consent for a Commerce Passport when a granted consent fixture exists. |
+| Payment intent | Create a provider-neutral payment intent with passport and policy checks. |
+| Checkout create | Create a checkout handoff through Grantex. |
+| Payment status | Poll Grantex payment status, not a provider directly. |
+
+## Auth And Caller Model
+
+Commerce callers are modeled as agents operating for a tenant, merchant, and
+user. A caller must be authenticated through an approved Grantex auth source in
+runtime configuration. Auth material is runtime-sensitive and must not be
+committed or printed.
+
+The important IDs are not equivalent:
+
+| Identifier | Purpose |
+| --- | --- |
+| Tenant ID | Owns isolation and policy boundaries. |
+| Merchant ID | Owns catalog, provider configuration status, and merchant policy. |
+| Agent ID | Identifies the delegated agent allowed to use commerce tools. |
+| User/principal | The person whose consent controls checkout. |
+| Commerce Passport | Scoped, usable runtime material created after approved consent or smoke fixture export. |
+
+Synthetic tenant, merchant, user, product, and variant IDs may appear in evidence
+when they are non-production fixtures. Usable passports, bearer tokens,
+idempotency key values, secrets, and provider credentials remain sensitive.
+
+## Consent-First Checkout Sequence
+
+```mermaid
+sequenceDiagram
+  participant A as Agent
+  participant G as Grantex
+  A->>G: merchant.get_profile
+  A->>G: catalog.search
+  A->>G: catalog.get_item
+  A->>G: inventory.check
+  A->>G: cart.create
+  A->>G: consent.request
+  G-->>A: consent request ID or blocker
+  A->>G: consent.exchange when consent is granted
+  G-->>A: Commerce Passport or fail-safe error
+  A->>G: payment.create_intent with allowed fields only
+  A->>G: checkout.create
+  A->>G: payment.get_status
+```
+
+During fixture-backed smoke runs, AgenticOrg may already have a checkout passport
+exported by the Grantex smoke runner. In that case, AgenticOrg evidence treats
+`consent_exchange` as skipped only when the blocker is exactly
+`preexported_checkout_passport_without_granted_consent_fixture`.
+
+## Payment Intent Shape
+
+Payment intent calls must send only fields supported by the Grantex Commerce
+contract. Local fixture guardrail data, such as amount cap metadata used by
+AgenticOrg preflight checks, must not be forwarded to Grantex as arbitrary
+top-level request fields.
+
+Keep idempotency values out of docs and logs. Evidence may record that an
+idempotency mechanism was used, but never the value.
+
+## Webhooks And Replay
+
+Grantex owns provider webhook ingestion, verification, replay controls, and
+reconciliation status. Current smoke evidence uses the mock-provider path only.
+Failed webhook replay is an operator-only capability and remains mock-provider
+only until the live provider contract and signature behavior are approved.
+
+Replay safety rules:
+
+- do not log raw provider payloads;
+- do not store or expose webhook secrets in documentation;
+- preserve original signature metadata only in protected runtime storage;
+- replay only through operator-approved controls;
+- treat live provider replay as blocked until provider/legal/ops gates pass.
+
+## Error Handling
+
+Commerce clients should treat validation and policy failures as explicit
+outcomes, not retry storms. Important classes include:
+
+| Class | Expected handling |
+| --- | --- |
+| `validation_failed` | Fix request shape or unsupported field usage. |
+| `consent_not_granted` | Do not proceed without granted consent or an approved checkout passport fixture. |
+| `consent_denied` | Stop the checkout path. |
+| Amount-cap or policy breach | Fail safely before payment/provider work. |
+| Disabled merchant or untrusted agent | Stop and surface an operator-safe blocker. |
+
+## Sandbox And Mock Provider
+
+Use mock-provider/internal sandbox flows for development. Production Commerce V1,
+live payments, and live Plural are disabled. Approved temporary Option A smoke
+uses isolated Cloud Run, Cloud SQL, Redis, smoke secrets, and mock provider
+resources that are deleted immediately after evidence capture.
+
+Developers should use:
+
+- `docs/guides/commerce-v1-repeatable-option-a-smoke-workflow.md` for the
+  approval-gated smoke path;
+- `docs/examples/commerce-option-a-smoke.runbook.json` for runbook fields;
+- `docs/reports/commerce-v1-option-a-smoke-evidence.md` for scrubbed evidence;
+- `docs/reports/commerce-v1-production-discovery-readiness.md` for current
+  production discovery posture.
+
+## Blocked Until Future Approval
+
+- Production Commerce V1 discovery enablement.
+- External pilot readiness claims.
+- Production checkout or live payment execution.
+- Live Plural or live provider credentials.
+- Direct provider calls from AgenticOrg commerce.
+- Public docs that imply AP2, UCP, ACP, Plural, payment-provider, or external
+  pilot certification.

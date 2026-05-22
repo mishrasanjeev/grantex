@@ -35,6 +35,36 @@
 
 </div>
 
+## Agentic Commerce V1
+
+Grantex Commerce V1 is the consent, Commerce Passport, policy, audit, and payment-control layer for agentic checkout. It lets commerce agents discover merchant catalog data, create carts, request user consent, receive a scoped Commerce Passport, and create provider-neutral payment intents without giving the agent direct access to payment providers.
+
+> Production Commerce V1 discovery is currently disabled/fail-closed. Production live checkout, live payments, and live Plural are not enabled.
+
+```mermaid
+flowchart LR
+  user[User] --> agent[AgenticOrg Commerce Sales Agent]
+  agent --> gx[Grantex Commerce REST/MCP]
+  gx --> consent[Consent and Passport]
+  gx --> policy[Policy, amount caps, audit]
+  gx --> catalog[Catalog, cart, inventory]
+  gx --> provider[Provider-neutral payment intent]
+  provider --> mock[Mock provider verified in smoke]
+  provider -. blocked .-> plural[Future live Plural gate]
+```
+
+| Area | Current posture |
+| --- | --- |
+| Internal sandbox | Implemented for synthetic catalog, consent, passport, cart, payment, webhook, and audit flows. |
+| Temporary Option A smoke | Verified with mock provider and cleaned-up smoke resources. |
+| AgenticOrg real-staging handoff | Verified through Grantex-only tools with redacted fixture handling. |
+| Hosted AgenticOrg discovery | Verified in temporary API-only hosted smoke. |
+| Production read-only discovery | Grantex production Commerce V1 discovery remains disabled/fail-closed. |
+| Live checkout/payments | Blocked pending legal, compliance, security, operations, and provider approvals. |
+| Live Plural | Blocked; mock provider only in current evidence. |
+
+Start with the [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx), then use the [developer guide](docs/guides/commerce-v1-developer-guide.mdx), [merchant/operator guide](docs/guides/commerce-v1-merchant-operator-guide.mdx), [operations guide](docs/guides/commerce-v1-operations.mdx), and [repeatable Option A smoke workflow](docs/guides/commerce-v1-repeatable-option-a-smoke-workflow.md). Reference evidence lives in [Option A smoke evidence](docs/reports/commerce-v1-option-a-smoke-evidence.md) and [production discovery readiness](docs/reports/commerce-v1-production-discovery-readiness.md). The public education page is `web/commerce.html`.
+
 ## What's New in v2.5
 
 - **@grantex/gemma**: Day-zero Gemma 4 integration — offline consent bundles,
@@ -75,7 +105,7 @@ go get github.com/mishrasanjeev/grantex-go  # Go
 npm install -g @grantex/cli     # CLI
 ```
 
-> **27 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. 4,147 tests (100% pass rate). Fully self-hostable. Apache 2.0.
+> **28 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, Strands Agents SDK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. 4,147 tests (100% pass rate). Fully self-hostable. Apache 2.0.
 
 ---
 
@@ -1222,7 +1252,7 @@ result = grantex.enforce(grant_token=token, connector="my-crm", tool="delete_acc
 **Bring your own manifests:** define inline, load from JSON files, load from a directory, or auto-generate from source code via CLI.
 **53 pre-built manifests included:** Salesforce, HubSpot, Jira, Stripe, SAP, S3, Gmail, Slack, GitHub, and 44 more — use as-is or as a starting point.
 
-**Framework helpers:** `wrapTool()` wraps LangChain tools with automatic scope enforcement. `enforceMiddleware()` adds one-line enforcement to Express/Fastify routes. FastAPI uses the `GrantexEnforcer` dependency.
+**Framework helpers:** `wrapTool()` wraps LangChain tools with automatic scope enforcement. `create_grantex_tool()` covers OpenAI Agents SDK, Google ADK, and Strands Agents SDK tools. `enforceMiddleware()` adds one-line enforcement to Express/Fastify routes. FastAPI uses the `GrantexEnforcer` dependency.
 
 See the [Scope Enforcement Guide](https://docs.grantex.dev/guides/scope-enforcement) for full documentation.
 
@@ -1276,7 +1306,7 @@ Grantex is built as an **open protocol**, not a closed SaaS product. Here's why 
 
 **Model-neutral.** Works with OpenAI, Anthropic, Google, Llama, Mistral — any model, any framework. No single AI provider can credibly own the authorization layer for their competitors' agents.
 
-**Framework-native.** First-class integrations for LangChain, AutoGen, CrewAI, and plain code. Install one package, get Grantex in your existing stack.
+**Framework-native.** First-class integrations for LangChain, AutoGen, CrewAI, OpenAI Agents SDK, Google ADK, Strands Agents SDK, and plain code. Install one package, get Grantex in your existing stack.
 
 **Offline-verifiable.** Services verify tokens using published JWKS — zero runtime dependency on Grantex infrastructure. Your agent works even if our servers are down.
 
@@ -1318,6 +1348,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **CrewAI** | `grantex-crewai` | `pip install grantex-crewai` | ✅ Shipped |
 | **OpenAI Agents SDK** | `grantex-openai-agents` | `pip install grantex-openai-agents` | ✅ Shipped |
 | **Google ADK** | `grantex-adk` | `pip install grantex-adk` | ✅ Shipped |
+| **Strands Agents SDK** | `grantex-strands` | `pip install grantex-strands` | ✅ Shipped |
 | **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | ✅ Shipped |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | ✅ Shipped |
 | **TypeScript SDK** | `@grantex/sdk` | `npm install @grantex/sdk` | ✅ Shipped |
@@ -1455,6 +1486,21 @@ read_calendar = create_grantex_tool(
     func=get_calendar_events,
 )
 # Returns a plain function — pass directly to google.adk.Agent(tools=[...])
+```
+
+**Strands Agents SDK** (Python):
+
+```python
+from grantex_strands import create_grantex_tool
+
+read_calendar = create_grantex_tool(
+    name="read_calendar",
+    description="Read upcoming calendar events",
+    grant_token=grant_token,
+    required_scope="calendar:read",
+    func=get_calendar_events,
+)
+# Returns a Strands-compatible tool — pass into your Strands agent tools list
 ```
 
 **CLI** (90+ commands, all support `--json` for AI agent / scripting use):

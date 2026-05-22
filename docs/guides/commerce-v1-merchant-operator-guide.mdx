@@ -1,0 +1,121 @@
+---
+title: Commerce V1 Merchant And Operator Guide
+description: Merchant onboarding, catalog, policy, audit, webhook, emergency control, and production no-go guidance for Grantex Commerce V1.
+---
+
+# Commerce V1 Merchant And Operator Guide
+
+This guide is for merchant, support, security, and operations teams. It explains
+what Grantex Commerce V1 can support in internal sandbox and temporary smoke
+runs today, and what remains blocked before any production or live-payment use.
+
+## Operating Principle
+
+Agents may help users find products and prepare checkout, but Grantex controls
+the commercial boundary:
+
+- merchant status and catalog grounding;
+- consent request and Commerce Passport issuance;
+- amount caps and merchant policy;
+- provider-neutral payment intent creation;
+- webhook ingestion, replay controls, and reconciliation;
+- audit records for review and incident response.
+
+AgenticOrg commerce does not call Stripe, Plural, Pine, or provider credential
+paths directly.
+
+## Merchant Onboarding Checklist
+
+| Step | Current guidance |
+| --- | --- |
+| Tenant and merchant registration | Use synthetic fixtures for sandbox and smoke evidence. Production onboarding requires human approval. |
+| Catalog import | Use approved catalog schemas and product/variant IDs. Keep raw supplier or provider payload dumps out of evidence. |
+| Agent trust | Register or allow only approved agent IDs. Untrusted agents must fail safely. |
+| Policy activation | Configure amount caps, allowed scopes, merchant status, and checkout controls. |
+| Provider status | Mock provider only for current evidence. Live provider credentials remain blocked. |
+| Audit review | Confirm consent, passport, cart, payment intent, and webhook metadata are observable without secret values. |
+
+## Catalog And Inventory
+
+Catalog and inventory grounding is the first safety step. Agents must not invent
+products, variants, prices, or availability. Operator checks should verify:
+
+- catalog search returns merchant-owned products;
+- item retrieval uses exact product and variant IDs;
+- inventory checks pass the required browse passport when policy requires it;
+- cart creation uses grounded variant IDs and quantities;
+- evidence records synthetic IDs only when they are safe fixture identifiers.
+
+## Consent, Passport, And Amount Caps
+
+Consent-first checkout is mandatory. A Commerce Passport is scoped runtime
+material and must remain out of docs, logs, PRs, chat, and evidence reports.
+
+Operators should verify:
+
+- consent scopes match the supported Grantex schema;
+- payment amount is less than or equal to the passport cap before positive
+  payment work proceeds;
+- amount-cap breach is preserved as a fail-safe negative case;
+- missing, revoked, expired, or denied passport cases stop before provider work;
+- `consent_exchange` skip evidence uses the stable blocker code when a
+  pre-exported checkout passport fixture is used without granted consent
+  fixture material.
+
+## Webhook And Replay Safety
+
+Provider webhook handling is owned by Grantex. Current evidence covers the mock
+provider path only. For any future live provider review:
+
+- record secret names by name only, never values;
+- avoid raw payload dumps in evidence;
+- keep replay operator-only;
+- verify signature handling with provider-approved material;
+- confirm replay cannot change production state without explicit approval.
+
+## Emergency Disable And Re-Enable
+
+Emergency controls must prefer fail-closed behavior:
+
+1. Disable Commerce V1 discovery or keep it disabled.
+2. Disable merchant checkout policy.
+3. Remove or gate commerce agent discovery.
+4. Stop temporary smoke resources and delete temporary smoke secrets.
+5. Verify production `grantex-auth`, `grantex-pg16`, and `grantex-redis` remain
+   unchanged after smoke runs.
+6. Re-enable only through a reviewed proposal, with rollback and secret-scan
+   evidence.
+
+## Internal Sandbox Checklist
+
+- Use mock provider only.
+- Use synthetic tenant, merchant, agent, product, and variant IDs.
+- Keep usable auth material and passports under `.tmp/` during approved local
+  handoff runs.
+- Record only hosts, case status, HTTP status, latency, error/blocker codes,
+  synthetic IDs, variable names, and redacted hashes.
+- Confirm cleanup of temporary Cloud Run, Cloud SQL, Redis, smoke secrets, and
+  image tags after hosted smoke.
+
+## Production No-Go Checklist
+
+Do not proceed to production discovery, checkout, live payments, live Plural, or
+external pilot claims if any of these are true:
+
+- Grantex production Commerce V1 discovery has not been explicitly approved.
+- AgenticOrg commerce discovery is not gated or reviewed against the approved
+  Grantex production discovery payload.
+- Provider/live-payment/live Plural signoff is missing.
+- Legal, compliance, security, operations, and product approvals are incomplete.
+- The rollback plan is missing.
+- Evidence includes secrets, raw payloads, passports/JWTs, DB/Redis URLs,
+  provider credentials, private keys, or idempotency key values.
+
+## Evidence Links
+
+- Option A smoke: `docs/reports/commerce-v1-option-a-smoke-evidence.md`
+- Production discovery readiness:
+  `docs/reports/commerce-v1-production-discovery-readiness.md`
+- Repeatable workflow:
+  `docs/guides/commerce-v1-repeatable-option-a-smoke-workflow.md`
+- Operations guide: `docs/guides/commerce-v1-operations.mdx`
