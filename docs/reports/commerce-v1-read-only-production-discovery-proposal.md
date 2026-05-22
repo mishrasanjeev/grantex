@@ -1,13 +1,13 @@
 # Grantex Commerce V1 Read-Only Production Discovery Proposal
 
-Status: planning proposal only  
-Date: 2026-05-18  
-Scope: Grantex production Commerce V1 discovery posture and future enablement path  
-Production changes made by this proposal: none  
-Production Commerce V1 enabled by this proposal: no  
-Checkout or payment creation enabled by this proposal: no  
-Live payments enabled by this proposal: no  
-Live Plural enabled by this proposal: no  
+Status: planning proposal only
+Date: 2026-05-18
+Scope: Grantex production Commerce V1 discovery posture and future enablement path
+Production changes made by this proposal: none
+Production Commerce V1 enabled by this proposal: no
+Checkout or payment creation enabled by this proposal: no
+Live payments enabled by this proposal: no
+Live Plural enabled by this proposal: no
 Secrets inspected or changed: no
 
 This document prepares an implementation-ready path for a later human-approved
