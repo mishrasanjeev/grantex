@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "grantex-strands"
 version = "0.1.0"
 description = "Grantex scope enforcement for Strands Agents SDK"
+readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 dependencies = [

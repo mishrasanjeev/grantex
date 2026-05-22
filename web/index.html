@@ -77,7 +77,7 @@
         "name": "What AI agent frameworks does Grantex integrate with?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Grantex has official integrations for Anthropic SDK, LangChain, CrewAI, AutoGen, Vercel AI SDK, OpenAI Agents SDK, Google ADK, and a Model Context Protocol (MCP) server for Claude Desktop and Cursor. SDKs are available for TypeScript, Python, and Go."
+          "text": "Grantex has official integrations for Anthropic SDK, LangChain, CrewAI, AutoGen, Vercel AI SDK, OpenAI Agents SDK, Google ADK, Strands Agents SDK, and a Model Context Protocol (MCP) server for Claude Desktop and Cursor. SDKs are available for TypeScript, Python, and Go."
         }
       },
       {
@@ -2007,6 +2007,10 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">G</span>
         Google ADK
       </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/packages/strands-py" class="integration-pill" style="text-decoration:none;">
+        <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">S</span>
+        Strands Agents
+      </a>
       <a href="/for/anthropic" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">A</span>
         Anthropic SDK
@@ -2159,6 +2163,21 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="example-packages">
           <span class="example-pkg">grantex</span>
           <span class="example-pkg">grantex-adk</span>
+        </div>
+      </a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/packages/strands-py"
+         class="example-card" style="text-decoration:none;">
+        <div class="example-lang">Python</div>
+        <h3>Strands Agents</h3>
+        <p>
+          Strands tools with Grantex scope enforcement at creation time.
+          Supports offline JWT scope checks and online
+          <code style="font-family:var(--mono);font-size:12px;">client.enforce()</code>
+          verification.
+        </p>
+        <div class="example-packages">
+          <span class="example-pkg">grantex</span>
+          <span class="example-pkg">grantex-strands</span>
         </div>
       </a>
       <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/quickstart-go"
