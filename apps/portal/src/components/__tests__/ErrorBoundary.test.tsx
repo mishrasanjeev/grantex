@@ -62,6 +62,36 @@ describe('ErrorBoundary', () => {
     expect(screen.getByRole('button', { name: 'Go to Dashboard' })).toBeInTheDocument();
   });
 
+  it('navigates to /dashboard/ (with trailing slash) when Go to Dashboard is clicked', async () => {
+    // Vite serves the portal under base: '/dashboard/' — without the trailing
+    // slash, Vite shows an educational warning page instead of the SPA.
+    const user = userEvent.setup();
+    const hrefSetter = vi.fn();
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        get href() { return ''; },
+        set href(v: string) { hrefSetter(v); },
+      },
+    });
+
+    try {
+      render(
+        <ErrorBoundary>
+          <ThrowError shouldThrow={true} />
+        </ErrorBoundary>,
+      );
+      await user.click(screen.getByRole('button', { name: 'Go to Dashboard' }));
+      expect(hrefSetter).toHaveBeenCalledWith('/dashboard/');
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
+  });
+
   it('resets error state when Try Again is clicked', async () => {
     const user = userEvent.setup();
 
