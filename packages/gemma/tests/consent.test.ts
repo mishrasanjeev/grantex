@@ -42,6 +42,7 @@ function makeBundleFixture(overrides?: Partial<ConsentBundle>): ConsentBundle {
 
 describe('bundle-refresh', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -87,10 +88,12 @@ describe('bundle-refresh', () => {
     it('returns false at exactly 20% boundary', () => {
       // At exactly 20%, remaining/total = 0.2, so < 0.2 is false
       const totalTTL = 100_000;
-      const now = Date.now();
+      const now = new Date('2026-01-01T00:00:00.000Z').getTime();
+      vi.useFakeTimers();
+      vi.setSystemTime(now);
       const bundle = makeBundleFixture({
         checkpointAt: now - totalTTL * 0.8,
-        offlineExpiresAt: new Date(now + totalTTL * 0.2 + 1).toISOString(), // just above 20%
+        offlineExpiresAt: new Date(now + totalTTL * 0.2).toISOString(),
       });
 
       expect(shouldRefresh(bundle)).toBe(false);
