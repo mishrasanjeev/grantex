@@ -145,8 +145,8 @@ GET /v1/consent-bundles
 |---|---|---|---|
 | `agentId` | `string` | No | Filter by agent ID |
 | `status` | `string` | No | Filter by status: `active`, `expired`, `revoked` |
-| `page` | `number` | No | Page number (default `1`) |
-| `pageSize` | `number` | No | Results per page (default `20`, max `100`) |
+| `cursor` | `string` | No | Pagination cursor from the previous response |
+| `limit` | `number` | No | Results per page (default `50`, max `100`) |
 
 ### Example Request
 
@@ -161,7 +161,7 @@ curl https://api.grantex.dev/v1/consent-bundles?status=active \
 {
   "bundles": [
     {
-      "bundleId": "cb_01HXYZ...",
+      "id": "cb_01HXYZ...",
       "agentId": "ag_01HXYZ...",
       "userId": "user_abc123",
       "scopes": ["calendar:read", "email:send"],
@@ -172,9 +172,7 @@ curl https://api.grantex.dev/v1/consent-bundles?status=active \
       "auditEntryCount": 0
     }
   ],
-  "total": 1,
-  "page": 1,
-  "pageSize": 20
+  "nextCursor": "2026-04-03T12:00:00.000Z"
 }
 ```
 

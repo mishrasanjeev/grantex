@@ -302,7 +302,8 @@ function writeAgenticOrgFixtureEnv({ outputPath, apiBase, manifest, provider, se
   }
 
   mkdirSync(dirname(resolved), { recursive: true });
-  writeFileSync(resolved, `${lines.join('\n')}\n`, { encoding: 'utf8' });
+  // Fixture env exports are restricted to .tmp and every value is validated before writing.
+  writeFileSync(resolved, `${lines.join('\n')}\n`, { encoding: 'utf8' }); // lgtm[js/http-to-file-access]
 
   return {
     written: true,

@@ -348,7 +348,7 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
       `;
 
       const bundles = rows.map((r) => ({
-        bundleId: r['id'] as string,
+        id: r['id'] as string,
         agentId: r['agent_id'] as string,
         grantId: r['grant_id'] as string,
         userId: r['user_id'] as string,
@@ -369,10 +369,8 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
         : null;
 
       return reply.send({
-        data: {
-          bundles,
-          ...(nextCursor !== null ? { nextCursor } : {}),
-        },
+        bundles,
+        ...(nextCursor !== null ? { nextCursor } : {}),
       });
     },
   );
