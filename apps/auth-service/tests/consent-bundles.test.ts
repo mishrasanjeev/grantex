@@ -409,12 +409,12 @@ describe('GET /v1/consent-bundles', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.data.bundles).toHaveLength(2);
-    expect(body.data.bundles[0].bundleId).toBe('bundle_001');
-    expect(body.data.bundles[0].status).toBe('active');
-    expect(body.data.bundles[0].devicePlatform).toBe('raspberry-pi');
-    expect(body.data.bundles[1].bundleId).toBe('bundle_002');
-    expect(body.data.bundles[1].status).toBe('revoked');
+    expect(body.bundles).toHaveLength(2);
+    expect(body.bundles[0].id).toBe('bundle_001');
+    expect(body.bundles[0].status).toBe('active');
+    expect(body.bundles[0].devicePlatform).toBe('raspberry-pi');
+    expect(body.bundles[1].id).toBe('bundle_002');
+    expect(body.bundles[1].status).toBe('revoked');
   });
 
   it('filters by status', async () => {
@@ -428,7 +428,7 @@ describe('GET /v1/consent-bundles', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().data.bundles).toEqual([]);
+    expect(res.json().bundles).toEqual([]);
   });
 
   it('filters by agentId', async () => {
@@ -442,7 +442,7 @@ describe('GET /v1/consent-bundles', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().data.bundles).toEqual([]);
+    expect(res.json().bundles).toEqual([]);
   });
 });
 
