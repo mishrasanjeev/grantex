@@ -245,24 +245,12 @@ describe('Provider credential APIs', () => {
     expect(res.body).not.toContain(RAW_SECRET);
   });
 
-  it('validates plural credentials as explicitly blocked when API details are absent', async () => {
+  it('plural credential validation is blocked by the central live-mode guard before any provider call', async () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([credentialRow({
       provider_key: 'plural',
       encrypted_secret_blob: 'ciphertext',
     })]);
-    sqlMock.mockResolvedValueOnce([credentialRow({
-      provider_key: 'plural',
-      status: 'invalid',
-      last_validation_error: {
-        code: 'provider_validation_failed',
-        provider_key: 'plural',
-        retryable: false,
-        provider_error_code: 'plural_sandbox_blocked',
-      },
-      last_validated_at: new Date().toISOString(),
-    })]);
-    sqlMock.mockResolvedValueOnce([{ id: 'caud_PLURAL_VALIDATE', occurred_at: new Date().toISOString() }]);
 
     const res = await app.inject({
       method: 'POST',
@@ -270,11 +258,18 @@ describe('Provider credential APIs', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(200);
-    const body = res.json<{ data: { status: string; validation: { valid: boolean; error: { provider_error_code: string } } } }>();
-    expect(body.data.status).toBe('invalid');
-    expect(body.data.validation.valid).toBe(false);
-    expect(body.data.validation.error.provider_error_code).toMatch(/plural_/);
+    // P0-23: with PLURAL_SANDBOX_ENABLED unset (the default in
+    // vitest.config.ts), the guard rejects before the credential is
+    // ever validated against the provider stub. The stable contract
+    // — code, reason, provider_key — is the surface partners can rely
+    // on, rather than the provider-stub's normalized 503 payload.
+    expect(res.statusCode).toBe(403);
+    const body = res.json<{ error: { code: string; details?: { reason?: string; provider_key?: string } } }>();
+    expect(body.error.code).toBe('plural_live_disabled');
+    expect(body.error.details?.reason).toBe('plural_sandbox_disabled');
+    expect(body.error.details?.provider_key).toBe('plural');
+    // Provider was never called: only the credential lookup SQL ran.
+    expect(res.body).not.toContain('ciphertext');
   });
 });
 

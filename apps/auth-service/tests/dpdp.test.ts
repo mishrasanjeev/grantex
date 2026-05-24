@@ -543,7 +543,8 @@ describe('POST /v1/dpdp/data-principals/:principalId/erasure', () => {
 
     expect(res.statusCode).toBe(201);
     const body = res.json();
-    expect(body.requestId).toMatch(/^ER-\d{4}-\d{5}$/);
+    // ULID-suffixed, non-enumerable. Crockford base32 excludes I, L, O, U.
+    expect(body.requestId).toMatch(/^ER-\d{4}-[0-9A-HJKMNP-TV-Z]{26}$/);
     expect(body.dataPrincipalId).toBe('user_123');
     expect(body.status).toBe('completed');
     expect(body.recordsErased).toBe(2);
@@ -570,6 +571,34 @@ describe('POST /v1/dpdp/data-principals/:principalId/erasure', () => {
 
     expect(res.statusCode).toBe(404);
     expect(res.json().code).toBe('NOT_FOUND');
+  });
+
+  it('returns non-predictable, non-enumerable erasure request IDs on successive calls', async () => {
+    const ids = new Set<string>();
+    for (let i = 0; i < 5; i++) {
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([{ id: 'crec_1', grant_id: null }]); // records lookup
+      sqlMock.mockResolvedValueOnce([]); // mark erased
+      sqlMock.mockResolvedValueOnce([]); // anonymize audit
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/dpdp/data-principals/user_predictable_test/erasure',
+        headers: authHeader(),
+      });
+      expect(res.statusCode).toBe(201);
+      ids.add(res.json().requestId as string);
+    }
+    expect(ids.size).toBe(5);
+    const arr = [...ids];
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const a = arr[i]!.slice(-26);
+        const b = arr[j]!.slice(-26);
+        let n = 0;
+        while (n < a.length && a[n] === b[n]) n++;
+        expect(n).toBeLessThanOrEqual(20);
+      }
+    }
   });
 
   it('handles records with no associated grants', async () => {
@@ -681,9 +710,48 @@ describe('POST /v1/dpdp/grievances', () => {
     expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.grievanceId).toMatch(/^grv_/);
-    expect(body.referenceNumber).toMatch(/^GRV-\d{4}-\d{5}$/);
+    // ULID-suffixed, non-enumerable.
+    expect(body.referenceNumber).toMatch(/^GRV-\d{4}-[0-9A-HJKMNP-TV-Z]{26}$/);
     expect(body.status).toBe('submitted');
     expect(body.expectedResolutionBy).toBeDefined();
+  });
+
+  it('returns non-predictable, non-enumerable grievance references on successive calls', async () => {
+    const refs = new Set<string>();
+    for (let i = 0; i < 5; i++) {
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([]); // insert
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/dpdp/grievances',
+        headers: authHeader(),
+        payload: {
+          dataPrincipalId: 'user_123',
+          type: 'data-erasure',
+          description: 'Please delete my data',
+        },
+      });
+      expect(res.statusCode).toBe(202);
+      refs.add(res.json().referenceNumber as string);
+    }
+    expect(refs.size).toBe(5);
+    // No reference should differ from any other by a single decimal increment
+    // (which would betray a sequential / Math.random() generator).
+    const arr = [...refs];
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const a = arr[i]!.slice(-26);
+        const b = arr[j]!.slice(-26);
+        const sharedPrefixLen = (() => {
+          let n = 0;
+          while (n < a.length && a[n] === b[n]) n++;
+          return n;
+        })();
+        // ULID's 10-char timestamp prefix can match; the 16-char random tail
+        // must not collide on more than a couple of leading chars by chance.
+        expect(sharedPrefixLen).toBeLessThanOrEqual(20);
+      }
+    }
   });
 
   it('returns 400 for missing fields', async () => {

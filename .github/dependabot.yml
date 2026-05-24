@@ -1,0 +1,278 @@
+# Dependabot configuration — closes brutal-review item H-32.
+#
+# Recent merge history (#373, #375 for qs and express) shows GitHub's
+# default ecosystem detection HAS been picking up some npm directories,
+# but it is not exhaustive: until this file exists nothing was scheduled
+# for python, go, terraform, or github-actions itself. The list below
+# mirrors every real manifest under packages/, apps/, and examples/
+# (`.tmp/` is .gitignored and excluded by definition).
+
+version: 2
+updates:
+  # ─── GitHub Actions workflows themselves ────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions
+
+  # ─── npm — root + every app + every Node package + the TS example ───
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, npm]
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /apps/auth-service
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, npm, auth-service]
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /apps/mpp-demo-service
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, mpp-demo-service]
+
+  - package-ecosystem: npm
+    directory: /apps/portal
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, npm, portal]
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /packages/sdk-ts
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, npm, sdk-ts]
+
+  - package-ecosystem: npm
+    directory: /packages/anthropic
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, anthropic]
+
+  - package-ecosystem: npm
+    directory: /packages/dpdp
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, dpdp]
+
+  - package-ecosystem: npm
+    directory: /packages/x402
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, x402]
+
+  - package-ecosystem: npm
+    directory: /packages/cli
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, cli]
+
+  - package-ecosystem: npm
+    directory: /packages/mcp
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, mcp]
+
+  - package-ecosystem: npm
+    directory: /packages/mcp-auth
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, mcp-auth]
+
+  - package-ecosystem: npm
+    directory: /packages/langchain
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, langchain]
+
+  - package-ecosystem: npm
+    directory: /packages/autogen
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, autogen]
+
+  - package-ecosystem: npm
+    directory: /packages/vercel-ai
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, vercel-ai]
+
+  - package-ecosystem: npm
+    directory: /packages/express
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, express]
+
+  - package-ecosystem: npm
+    directory: /packages/gateway
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, gateway]
+
+  - package-ecosystem: npm
+    directory: /packages/adapters
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, adapters]
+
+  - package-ecosystem: npm
+    directory: /packages/destinations
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, destinations]
+
+  - package-ecosystem: npm
+    directory: /packages/conformance
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, conformance]
+
+  - package-ecosystem: npm
+    directory: /packages/gemma
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, gemma]
+
+  - package-ecosystem: npm
+    directory: /packages/mpp
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, mpp]
+
+  - package-ecosystem: npm
+    directory: /packages/a2a
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, a2a]
+
+  - package-ecosystem: npm
+    directory: /examples/quickstart-ts
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples]
+
+  # ─── pip — every Python package directory with pyproject.toml ───────
+  - package-ecosystem: pip
+    directory: /packages/sdk-py
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, python, sdk-py]
+
+  - package-ecosystem: pip
+    directory: /packages/fastapi
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, fastapi]
+
+  - package-ecosystem: pip
+    directory: /packages/crewai
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, crewai]
+
+  - package-ecosystem: pip
+    directory: /packages/openai-agents
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, openai-agents]
+
+  - package-ecosystem: pip
+    directory: /packages/google-adk
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, google-adk]
+
+  - package-ecosystem: pip
+    directory: /packages/a2a-py
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, a2a-py]
+
+  - package-ecosystem: pip
+    directory: /packages/gemma-py
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, gemma-py]
+
+  - package-ecosystem: pip
+    directory: /packages/strands-py
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, strands-py]
+
+  # ─── gomod — Go SDK, Terraform provider, Go quickstart example ──────
+  - package-ecosystem: gomod
+    directory: /packages/go-sdk
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, go, sdk-go]
+
+  - package-ecosystem: gomod
+    directory: /packages/terraform-provider-grantex
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, go, terraform-provider]
+
+  - package-ecosystem: gomod
+    directory: /examples/quickstart-go
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, go, examples]
+
+  # ─── terraform — providers/modules referenced in the example HCL ────
+  - package-ecosystem: terraform
+    directory: /packages/terraform-provider-grantex/examples
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, terraform]

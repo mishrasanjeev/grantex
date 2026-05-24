@@ -1,3 +1,11 @@
+> **Internal artifact — not public marketing or compliance evidence.**
+> This file was relocated from `docs/reports/` to `docs/internal/commerce-v1/`
+> on 2026-05-24 to mark it as operator-internal documentation. It is
+> excluded from the public Mintlify navigation (`docs/docs.json`). Do
+> not link this file from any public marketing page or external sales
+> material. See `docs/reports/enterprise-readiness-brutal-review-2026-05-24.md`
+> item P0-5 for the audit context.
+
 # Commerce V1 Contract Completeness Gap Report
 
 Status: M12 gap analysis plus M12A/M12B/M12C/M12D, M14, M14.1, and Option A hosted smoke evidence. Option A was a temporary approved smoke run only; its resources were deleted after evidence capture. This pass did not merge, change production config, enable production Commerce V1, enable live payments, enable live Plural, touch production secrets, or commit local-only artifacts.
@@ -140,7 +148,7 @@ The validator pins this current set so the gap report cannot silently drift:
 
 ## Option A Hosted Smoke Evidence
 
-- Redacted evidence report: `docs/reports/commerce-v1-option-a-smoke-evidence.md`.
+- Redacted evidence report: `docs/internal/commerce-v1/commerce-v1-option-a-smoke-evidence.md`.
 - Final result: 22 passed checks, 0 failed checks, and 9 skipped negative checks.
 - Passed checks covered health, JWKS, commerce well-known, MCP initialize/tools/list, catalog search/get item, inventory check, cart create, consent request, passport exchange, payment intent, checkout, mock paid/failed/expired webhooks, duplicate webhook idempotency, manual reconciliation, audit timeline, invalid webhook signature refusal, missing consent refusal, provider webhook replay dry-run, and emergency re-enable negative check.
 - Temporary resources were cleaned up after evidence capture: `grantex-auth-smoke`, `grantex-commerce-smoke-pg`, `grantex-commerce-smoke-redis`, `grantex-smoke-*` secrets, and smoke image tags.

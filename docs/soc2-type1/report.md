@@ -1,46 +1,34 @@
-# SOC 2 Type I Examination Report
+# SOC 2 Readiness Control Mapping
 ## Grantex Delegated Authorization Platform
 
 | Field | Detail |
 |-------|--------|
-| **Prepared by** | Thornfield Assurance Partners LLP |
-| **Examination date** | As of February 20, 2026 |
-| **Report date** | February 28, 2026 |
+| **Prepared by** | Grantex maintainers |
+| **Readiness snapshot date** | February 20, 2026 |
+| **Publication date** | February 28, 2026 |
 | **Trust Service Categories** | Security (CC) · Availability (A) · Confidentiality (C) |
 | **Classification** | Public |
-| **Report type** | SOC 2 Type I |
+| **Report type** | Internal readiness control mapping; not a SOC 2 Type I attestation |
 
 ---
 
-## Part I — Independent Service Auditor's Report
+> This document is not an independent CPA attestation and must not be represented as SOC 2 certification. It is a public readiness mapping that describes controls and evidence Grantex maintains while formal audit work is pending.
 
-To the Management of Grantex:
+## Part I — Readiness Position
 
-We have examined Grantex's description of its Delegated Authorization Platform (the "System") for the period ending February 20, 2026, and the suitability of the design of the controls included in the description to achieve the related trust service criteria set forth in the AICPA's _TSP Section 100, 2017 Trust Services Criteria for Security, Availability, and Confidentiality_.
+This document summarizes Grantex's description of its Delegated Authorization Platform (the "System") and the controls mapped to the AICPA's _TSP Section 100, 2017 Trust Services Criteria for Security, Availability, and Confidentiality_.
 
 **Management's Responsibility**
 
 Grantex's management is responsible for (1) preparing the description of the System and the accompanying assertion, (2) the completeness, accuracy, and method of presentation of both, (3) providing the services covered by the description, (4) specifying the trust service criteria to be applied, and (5) designing, implementing, and operating controls to achieve the stated trust service criteria.
 
-**Service Auditor's Responsibility**
-
-Our responsibility is to express an opinion on the fairness of the presentation of the description and on the suitability of the design of the controls to achieve the related trust service criteria, based on our examination. We conducted our examination in accordance with attestation standards established by the AICPA. We believe the evidence we obtained is sufficient and appropriate to provide a reasonable basis for our opinion.
-
 **Inherent Limitations**
 
 The description is prepared to meet the common needs of a broad range of users and may not include every aspect of the system that each user may consider important. Because of their nature, controls may not prevent or detect all misstatements or unauthorized access to user data. Additionally, the projection of any conclusions about the suitability of controls to achieve the trust service criteria to future periods is subject to the risk that changes in the environment or operations may alter their suitability.
 
-**Opinion**
+**Readiness Statement**
 
-In our opinion, in all material respects:
-
-1. The description fairly presents the System as of February 20, 2026.
-2. The controls stated in the description were suitably designed to provide reasonable assurance that the trust service criteria for **Security**, **Availability**, and **Confidentiality** would be achieved as of February 20, 2026, if the controls operated effectively throughout the period.
-
-**Thornfield Assurance Partners LLP**
-Certified Public Accountants
-New York, New York
-February 28, 2026
+This is a control mapping, not an auditor opinion. It does not conclude that controls were suitably designed, operating effectively, or SOC 2 certified.
 
 ---
 
@@ -110,7 +98,7 @@ The System boundary encompasses the `auth-service`, the PostgreSQL database, and
 
 ### 2.5 Subservice Organizations
 
-The System relies on the following subservice organizations. Controls at these organizations are excluded from the scope of this examination (carve-out method):
+The System relies on the following subservice organizations. Controls at these organizations are excluded from this readiness mapping:
 
 | Subservice | Service Provided |
 |------------|-----------------|
@@ -119,13 +107,13 @@ The System relies on the following subservice organizations. Controls at these o
 
 ---
 
-## Part III — Management's Assertion
+## Part III — Management's Readiness Statement
 
 To the Users of This Report:
 
-We have prepared the description of Grantex's Delegated Authorization Platform as of February 20, 2026, and have designed and implemented controls within the System to provide reasonable assurance that the trust service criteria for **Security**, **Availability**, and **Confidentiality** are achieved.
+We have prepared the description of Grantex's Delegated Authorization Platform as of February 20, 2026, and mapped implemented controls within the System to the trust service criteria for **Security**, **Availability**, and **Confidentiality**.
 
-The description fairly presents the System and the controls are suitably designed to achieve the stated trust service criteria as of February 20, 2026.
+This readiness statement is not an independent attestation and does not certify control design or operating effectiveness.
 
 **Grantex Management**
 February 28, 2026
@@ -386,8 +374,8 @@ The following controls are the responsibility of user entities (Developers using
 
 *Source: Vestige Security Labs, Third-Party Security Assessment, February 21, 2026.*
 
-No findings from the security assessment affect the suitability of design conclusion expressed in Part I of this report. The one open finding (GXT-003) relates to rate limiting and does not affect the authorization, revocation, or audit integrity controls that are the basis of the Security, Availability, and Confidentiality trust service criteria opinions.
+Open findings from the security assessment are remediation items for the readiness program. They must not be treated as approved exceptions by a SOC 2 auditor.
 
 ---
 
-*This report is released under a public disclosure classification and may be freely redistributed. Thornfield Assurance Partners LLP is a fictional CPA firm created for illustrative purposes. This document represents a good-faith implementation of SOC 2 Type I report conventions for the Grantex open-source project.*
+*This readiness mapping is released under a public disclosure classification and may be freely redistributed. It is not a SOC 2 Type I report, does not rely on a CPA firm, and must not be presented as certification.*

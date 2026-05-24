@@ -405,7 +405,7 @@ Check the status of a filed grievance.
 
 #### `generateReferenceNumber(): string`
 
-Generate a grievance reference number in format `GRV-YYYY-NNNNN`.
+Generate a grievance reference number in format `GRV-YYYY-XXXXXXXXXXXXXXXX`, where the suffix is 16 lowercase hex characters drawn from a cryptographically strong source (64 bits of entropy). The older 5-digit format was enumerable and has been removed.
 
 #### `calculateExpectedResolution(fromDate?: Date): Date`
 

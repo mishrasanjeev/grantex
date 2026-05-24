@@ -75,7 +75,9 @@ M7B dashboard status:
 
 - Health checks are measured from the API.
 - SLA target cards are visible as target indicators; measured local load evidence is recorded in
-  `docs/reports/commerce-v1-local-pilot-load.md`.
+  the internal local-pilot-load report (operator-internal artifact in
+  `docs/internal/commerce-v1/`, available to authorized reviewers via
+  `security@grantex.dev`).
 - Live Plural readiness is marked `blocked`.
 - Failed provider webhook replay is operator-only and mock-provider-only until the Plural contract is confirmed.
   Replay is available only for future failed events with valid original signatures and encrypted replay material.
@@ -129,7 +131,7 @@ Measured run command:
 ```bash
 node scripts/commerce-pilot-load-harness.mjs --run \
   --env-file=.tmp/commerce-pilot-load.env \
-  --report=docs/reports/commerce-v1-local-pilot-load.md
+  --report=docs/internal/commerce-v1/commerce-v1-local-pilot-load.md
 ```
 
 Optional target subset for staged local checks:
@@ -161,7 +163,7 @@ For the full M7B target run, seed at least:
 
 The measured report includes request count, success count, error count, p50, p95, max latency,
 per-target pass/fail, and duplicate webhook transition evidence. The report location is
-`docs/reports/commerce-v1-local-pilot-load.md`.
+`docs/internal/commerce-v1/commerce-v1-local-pilot-load.md`.
 
 Do not use production credentials, real provider credentials, live payment mode, or real Plural calls
 with this harness.
@@ -251,7 +253,7 @@ M7C internal-sandbox signoff status:
 | Dry-run harness validation | Passing | `node scripts/commerce-pilot-load-harness.mjs --dry-run` |
 | Non-local URL refusal | Passing | Harness refuses production-like base URLs before network calls |
 | Local sandbox seed path | Available | `node scripts/commerce-pilot-seed-local.mjs --run --migrate --env-output=.tmp/commerce-pilot-load.env` |
-| Measured local load report | Passing | `docs/reports/commerce-v1-local-pilot-load.md` records localhost/mock run results: payment intent create 100/100 p95 16.53 ms, catalog search 500/500 p95 5.41 ms, mock provider webhook 52/52 p95 20.45 ms, duplicate transitions 0 |
+| Measured local load report | Passing | `docs/internal/commerce-v1/commerce-v1-local-pilot-load.md` records localhost/mock run results: payment intent create 100/100 p95 16.53 ms, catalog search 500/500 p95 5.41 ms, mock provider webhook 52/52 p95 20.45 ms, duplicate transitions 0 |
 | Internal sandbox recommendation | Ready for internal sandbox only | External/live pilot remains blocked |
 
 ## Not-Ready-If Checklist

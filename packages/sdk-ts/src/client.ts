@@ -359,7 +359,9 @@ export class Grantex {
 
   #applyEnforceMode(result: EnforceResult): EnforceResult {
     if (!result.allowed && this.#enforceMode === 'permissive') {
-      console.warn(`[grantex] PERMISSIVE MODE — would deny: ${result.reason} (connector=${result.connector}, tool=${result.tool})`);
+      if (process.env['NODE_ENV'] !== 'production') {
+        console.warn(`[grantex] PERMISSIVE MODE — would deny: ${result.reason} (connector=${result.connector}, tool=${result.tool})`);
+      }
       return { ...result, allowed: true };
     }
     return result;

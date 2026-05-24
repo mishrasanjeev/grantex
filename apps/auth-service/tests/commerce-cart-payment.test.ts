@@ -649,9 +649,18 @@ describe('Commerce payment intent APIs', () => {
       headers: { ...agentHeader(), 'idempotency-key': 'pay-key-blocked-provider' },
       payload: await paymentPayload({ provider_key: 'plural' }),
     });
-    expect(blocked.statusCode).toBe(503);
-    expect(blocked.json<{ error: { code: string; details?: { provider_error_code?: string } } }>().error)
-      .toMatchObject({ code: 'provider_validation_failed' });
+    // P0-23: the central live-mode guard now intercepts before the
+    // provider stub runs, returning a stable 403 envelope rather than
+    // the legacy 503 from plural's blockedError(). The guard is the
+    // outer gate; the stub stays the inner gate for when flags ARE set.
+    expect(blocked.statusCode).toBe(403);
+    // The test merchant fixture is environment='sandbox'; the guard
+    // returns the stable 'plural_live_disabled' code with a sandbox-
+    // specific `reason` so callers can distinguish the two paths.
+    expect(blocked.json<{ error: { code: string; details?: { reason?: string } } }>().error)
+      .toMatchObject({ code: 'plural_live_disabled' });
+    expect(blocked.json<{ error: { details?: { reason?: string } } }>().error.details?.reason)
+      .toBe('plural_sandbox_disabled');
   });
 
   it('lists and reads payment intents through tenant-scoped queries', async () => {
@@ -825,8 +834,6 @@ describe('Commerce checkout link API', () => {
   it('returns explicit safe provider error while configured provider remains blocked', async () => {
     seedAgentAuth();
     sqlMock.mockResolvedValueOnce([paymentIntentRow({ status: 'authorized', provider: 'plural' })]);
-    primeCheckoutSecurity();
-    sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'POST',
@@ -835,14 +842,14 @@ describe('Commerce checkout link API', () => {
       payload: await checkoutPayload(),
     });
 
-    expect(res.statusCode).toBe(503);
-    const body = res.json<{ error: { code: string; details?: { provider_error_code?: string; safe_metadata?: Record<string, unknown> } } }>();
-    expect(body.error.code).toBe('provider_validation_failed');
-    expect(body.error.details?.provider_error_code).toMatch(/plural_/);
-    expect(body.error.details?.safe_metadata).toMatchObject({
-      api_contract_confirmed: false,
-      webhook_signature_confirmed: false,
-    });
+    // P0-23: the central live-mode guard intercepts before the provider
+    // stub. The body asserts the new stable contract.
+    expect(res.statusCode).toBe(403);
+    const body = res.json<{ error: { code: string; details?: { reason?: string; provider_key?: string } } }>();
+    expect(body.error.code).toBe('plural_live_disabled');
+    // Test payment intent fixture is sandbox-environment.
+    expect(body.error.details?.reason).toBe('plural_sandbox_disabled');
+    expect(body.error.details?.provider_key).toBe('plural');
   });
 });
 

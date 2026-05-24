@@ -28,6 +28,7 @@ __pycache__/
 # Build outputs
 dist/
 build/
+.tmp/
 
 # Firebase
 .firebase/

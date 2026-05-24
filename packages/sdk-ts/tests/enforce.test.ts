@@ -688,6 +688,19 @@ describe('enforce()', () => {
       warn.mockRestore();
     });
 
+    it('allows denied results in permissive mode without console warning in production', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:read'] }));
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+      vi.stubEnv('NODE_ENV', 'production');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const gx = new Grantex({ apiKey: 'k', enforceMode: 'permissive' } as any);
+      gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
+      const result = await gx.enforce({ grantToken: 'tok', connector: 'salesforce', tool: 'create_lead' });
+      expect(result.allowed).toBe(true);
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
     it('strict mode denies normally (default)', async () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:read'] }));
       vi.stubGlobal('fetch', makeFetch(200, {}));

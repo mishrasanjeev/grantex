@@ -76,10 +76,7 @@
               "guides/commerce-v1-overview",
               "guides/commerce-v1-developer-guide",
               "guides/commerce-v1-merchant-operator-guide",
-              "guides/commerce-v1-operations",
-              "guides/commerce-v1-repeatable-option-a-smoke-workflow",
-              "guides/commerce-v1-option-a-smoke-setup",
-              "guides/commerce-v1-hosted-staging-e2e"
+              "guides/commerce-v1-operations"
             ]
           },
           {
@@ -87,7 +84,13 @@
             "pages": [
               "features/dpdp-compliance",
               "compliance/dpdp-act-2023",
-              "compliance/eu-ai-act"
+              "compliance/eu-ai-act",
+              "compliance/sub-processors",
+              "compliance/data-residency",
+              "compliance/dpa",
+              "compliance/privacy-policy",
+              "compliance/terms-of-service",
+              "compliance/cookie-policy"
             ]
           },
           {

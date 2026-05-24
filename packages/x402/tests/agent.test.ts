@@ -142,5 +142,36 @@ describe('x402 Agent', () => {
       expect(decoded.chain).toBe('base');
       expect(decoded.amount).toBe(0.001);
     });
+
+    it('stub payment handler emits unique 64-hex txHash values per call', async () => {
+      const seen = new Set<string>();
+      for (let i = 0; i < 25; i++) {
+        mockFetch.mockResolvedValueOnce(
+          new Response(null, {
+            status: 402,
+            headers: {
+              [HEADERS.PAYMENT_AMOUNT]: '0.001',
+              [HEADERS.PAYMENT_CURRENCY]: 'USDC',
+              [HEADERS.PAYMENT_RECIPIENT]: '0xrecipient',
+              [HEADERS.PAYMENT_CHAIN]: 'base',
+            },
+          }),
+        );
+        mockFetch.mockResolvedValueOnce(new Response('OK', { status: 200 }));
+
+        const agent = createX402Agent({ gdt: 'test-gdt' });
+        await agent.fetch('https://api.example.com/data');
+
+        const retryHeaders = mockFetch.mock.calls[mockFetch.mock.calls.length - 1]![1]!.headers as Headers;
+        const proof = retryHeaders.get(HEADERS.PAYMENT_PROOF)!;
+        const decoded = JSON.parse(Buffer.from(proof, 'base64url').toString());
+        expect(decoded.txHash).toMatch(/^0x[0-9a-f]{64}$/);
+        seen.add(decoded.txHash);
+      }
+      // All 25 calls produce distinct txHashes — Math.random with a
+      // restart-per-call PRNG state could repeat; crypto.randomBytes
+      // makes that vanishingly unlikely.
+      expect(seen.size).toBe(25);
+    });
   });
 });

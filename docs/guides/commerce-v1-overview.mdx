@@ -18,10 +18,10 @@ Commerce V1, live payments, live Plural, or production discovery.
 | Capability | Status | Evidence or gate |
 | --- | --- | --- |
 | Local/internal sandbox | Implemented | Synthetic catalog, cart, consent, passport, payment, webhook, and audit flows. |
-| Temporary Grantex Option A smoke | Verified | `docs/reports/commerce-v1-option-a-smoke-evidence.md` records 14 passed, 0 failed, 6 failed-safe, 0 skipped. |
+| Temporary Grantex Option A smoke | Verified | internal evidence record (operator-internal, available on request) records 14 passed, 0 failed, 6 failed-safe, 0 skipped. |
 | AgenticOrg real-staging handoff | Verified externally | AgenticOrg evidence records Grantex-only tools and redacted fixture handling. |
 | Hosted AgenticOrg API-only discovery | Verified externally | AgenticOrg C3 evidence records hosted MCP/A2A discovery against temporary Grantex smoke. |
-| Grantex production Commerce V1 discovery | Disabled/fail-closed | `docs/reports/commerce-v1-production-discovery-readiness.md`. |
+| Grantex production Commerce V1 discovery | Disabled/fail-closed | internal production-discovery readiness record (operator-internal, available on request). |
 | Production checkout/live payments | Blocked | Requires legal, compliance, security, operations, provider, rollback, and human approval gates. |
 | Live Plural | Blocked | Mock provider only in current smoke evidence. |
 
@@ -113,6 +113,9 @@ readiness, or provider certification.
 - `docs/guides/commerce-v1-merchant-operator-guide.mdx`
 - `docs/guides/commerce-v1-operations.mdx`
 - `docs/guides/commerce-v1-repeatable-option-a-smoke-workflow.md`
-- `docs/reports/commerce-v1-option-a-smoke-evidence.md`
-- `docs/reports/commerce-v1-production-discovery-readiness.md`
 - `docs/api/grantex-commerce-v1.openapi.yaml`
+
+Internal Option A smoke evidence and production-discovery readiness
+records are operator-internal artifacts kept in `docs/internal/commerce-v1/`
+and are available to authorized reviewers on request via
+`security@grantex.dev`.

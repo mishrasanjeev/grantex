@@ -232,13 +232,12 @@ describe('Commerce payment reconciliation', () => {
     expect(sqlCallCount(/SET status =/i)).toBe(0);
   });
 
-  it('provider blocked error is stored safely and does not transition', async () => {
+  it('central live-mode guard blocks reconcile for plural before any provider call', async () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([paymentIntentRow({
       provider: 'plural',
       provider_payment_id: `plural_pay_${PAYMENT_INTENT}`,
     })]);
-    sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'POST',
@@ -246,14 +245,24 @@ describe('Commerce payment reconciliation', () => {
       headers: authHeader(),
     });
 
-    expect(res.statusCode).toBe(503);
-    expect(res.json<{ error: { code: string; details: { provider_key: string; provider_error_code: string } } }>().error)
+    // P0-23: the central guard intercepts BEFORE reconcilePaymentIntent
+    // runs, so no provider call happens, no transition runs, and no
+    // last_reconciliation_error is persisted (the guard predates the
+    // reconciliation pipeline entirely).
+    expect(res.statusCode).toBe(403);
+    // The test fixture's payment intent is sandbox-environment, so the
+    // guard reports the sandbox-specific reason behind the stable code.
+    expect(res.json<{ error: { code: string; details?: { reason?: string; provider_key?: string } } }>().error)
       .toMatchObject({
-        code: 'provider_validation_failed',
-        details: { provider_key: 'plural', provider_error_code: 'plural_sandbox_blocked' },
+        code: 'plural_live_disabled',
+        details: { reason: 'plural_sandbox_disabled', provider_key: 'plural' },
       });
-    expect(flattenedSqlCalls()).toContain('last_reconciliation_error');
     expect(sqlCallCount(/SET status =/i)).toBe(0);
+    // `last_reconciliation_error` is in the SELECT column list of the
+    // intent lookup, so it appears once in the captured SQL. The proof
+    // that no reconciliation transition ran is the absence of any
+    // statement that WRITES to that column.
+    expect(sqlCallCount(/SET\s+[^;]*last_reconciliation_error/i)).toBe(0);
   });
 
   it('manual reconcile enforces tenant and caller boundary', async () => {

@@ -46,10 +46,10 @@
   <circle cx="123" cy="453" r="5" fill="#3fb950"/>
   <text x="136" y="458" font-family="'JetBrains Mono', monospace" font-size="13" fill="#8b949e">IETF I-D</text>
 
-  <!-- SOC 2 Type I -->
+  <!-- SOC 2 mapping -->
   <rect x="256" y="436" width="152" height="34" rx="17" fill="#161b22" stroke="#30363d" stroke-width="1"/>
   <circle cx="279" cy="453" r="5" fill="#3fb950"/>
-  <text x="292" y="458" font-family="'JetBrains Mono', monospace" font-size="13" fill="#8b949e">SOC 2 Type I</text>
+  <text x="292" y="458" font-family="'JetBrains Mono', monospace" font-size="13" fill="#8b949e">SOC 2 mapping</text>
 
   <!-- Apache 2.0 -->
   <rect x="424" y="436" width="146" height="34" rx="17" fill="#161b22" stroke="#30363d" stroke-width="1"/>

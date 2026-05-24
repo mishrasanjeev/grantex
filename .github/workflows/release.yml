@@ -1,20 +1,156 @@
 name: Release
 
+# A tag push must not produce a public GitHub Release until the critical
+# verification gates below pass. The preflight job exists inside this
+# workflow (rather than depending on the separate `CI` workflow) because
+# `needs:` cannot reach across workflows — `workflow_run` is not a safe
+# gate, since a failing CI run does not prevent a release tag from
+# triggering this workflow on its own.
+
 on:
   push:
     tags:
       - 'v*'
 
+# Default to read-only. The release job re-elevates to `contents: write`
+# explicitly so any new jobs added later inherit the safe default.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  # ─── Preflight: critical verification that gates the release ───────────
+  preflight:
+    name: Preflight (critical verification)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: TypeScript SDK — install + typecheck + test
+        working-directory: packages/sdk-ts
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+
+      - name: TypeScript SDK — build (consumed by Anthropic adapter)
+        working-directory: packages/sdk-ts
+        run: npm run build
+
+      - name: Anthropic adapter — install + typecheck + test
+        working-directory: packages/anthropic
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+
+      - name: Auth service — install + typecheck
+        working-directory: apps/auth-service
+        run: |
+          npm ci
+          npm run typecheck
+
+      - name: Auth service — focused DPDP / multi-tenancy / admin tests
+        working-directory: apps/auth-service
+        run: |
+          npx vitest run \
+            tests/dpdp.test.ts \
+            tests/security-multi-tenancy.test.ts \
+            tests/admin.test.ts \
+            tests/commerce-tenant-provisioning.test.ts \
+            tests/commerce-caller-resolver.test.ts \
+            tests/commerce-finding-fixes.test.ts
+
+      - name: P0-23 — Commerce live-mode guard placeholder
+        # See scripts/check-live-mode-guard.mjs. Until the central
+        # live-mode-guard module lands, this step only documents intent
+        # and never fails. Once the guard exists, the script will be
+        # promoted to a real check that fails CI on regressions.
+        run: node scripts/check-live-mode-guard.mjs
+
+  # ─── Build release artifact + checksum ────────────────────────────────
+  release:
+    name: Create GitHub Release
+    needs: [preflight]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # `id-token: write` is requested here so a follow-up SLSA generator
+      # job (see TODO below) can mint an OIDC token without an extra
+      # permissions change.
+      id-token: write
+    outputs:
+      artifact-name: ${{ steps.archive.outputs.artifact-name }}
+      artifact-sha256: ${{ steps.archive.outputs.artifact-sha256 }}
+      slsa-subjects: ${{ steps.archive.outputs.slsa-subjects }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # SLSA provenance needs the full history for repro-checks.
+          fetch-depth: 0
+
+      - name: Build source archive + SHA-256 checksum
+        id: archive
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          name="grantex-${version}-src.tar.gz"
+          mkdir -p dist
+          git archive --format=tar.gz --prefix="grantex-${version}/" \
+            -o "dist/${name}" HEAD
+          ( cd dist && sha256sum "${name}" | tee "${name}.sha256" )
+          # base64-encoded `sha256(file)  filename` line — the canonical
+          # input shape for slsa-framework/slsa-github-generator's
+          # generator_generic_slsa3.yml `base64-subjects` field.
+          subjects=$(sha256sum "dist/${name}" | base64 -w0)
+          {
+            echo "artifact-name=${name}"
+            echo "artifact-sha256=$(sha256sum "dist/${name}" | awk '{print $1}')"
+            echo "slsa-subjects=${subjects}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact for provenance job
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
+          files: |
+            dist/grantex-*-src.tar.gz
+            dist/grantex-*-src.tar.gz.sha256
+
+  # ─── SLSA L3 build provenance ─────────────────────────────────────────
+  #
+  # The reusable workflow below produces a signed in-toto provenance
+  # attestation for the release artifact and uploads it to the GitHub
+  # Release. The `base64-subjects` input is the base64-encoded line from
+  # `sha256sum` over the release archive (already produced above).
+  #
+  # NOTE — VERSION PIN REQUIRED BEFORE FIRST USE:
+  #   Confirm the latest stable tag of slsa-framework/slsa-github-generator
+  #   at https://github.com/slsa-framework/slsa-github-generator/releases
+  #   and replace `vX.Y.Z` below with that pinned tag (NOT a moving ref
+  #   like `@main` — pinning is a SLSA L3 requirement). Until then this
+  #   job is intentionally disabled so that the release workflow does not
+  #   reference an unverified third-party version.
+  #
+  # provenance:
+  #   needs: [release]
+  #   permissions:
+  #     actions: read
+  #     id-token: write
+  #     contents: write
+  #   uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@vX.Y.Z
+  #   with:
+  #     base64-subjects: ${{ needs.release.outputs.slsa-subjects }}
+  #     upload-assets: true

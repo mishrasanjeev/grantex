@@ -1,3 +1,11 @@
+> **Internal artifact — not public marketing or compliance evidence.**
+> This file was relocated from `docs/reports/` to `docs/internal/commerce-v1/`
+> on 2026-05-24 to mark it as operator-internal documentation. It is
+> excluded from the public Mintlify navigation (`docs/docs.json`). Do
+> not link this file from any public marketing page or external sales
+> material. See `docs/reports/enterprise-readiness-brutal-review-2026-05-24.md`
+> item P0-5 for the audit context.
+
 # Commerce V1 Option A Smoke Evidence
 
 Status: C2G approved smoke evidence captured from a temporary Option A smoke service. This report is scrubbed and contains no bearer token values, passports, consent runtime material, idempotency key values, webhook secrets, provider credentials, raw payloads, DB/Redis URLs, private keys, or secret values.

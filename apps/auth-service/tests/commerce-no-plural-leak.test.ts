@@ -62,8 +62,20 @@ describe('Plural neutrality — core commerce models carry no Plural-specific id
   });
 
   it('lib/commerce/* modules have no "plural" outside of comments', () => {
+    // Exempted directories / files:
+    //   - payment-providers/  (the original carve-out: provider adapters
+    //     and their stubs live here).
+    //   - live-mode-guard.ts (P0-23): the central live-mode authorization
+    //     module is the single source of truth for the COMMERCE_LIVE_MODE
+    //     / PLURAL_LIVE / PLURAL_SANDBOX flag matrix. It must reference
+    //     Plural by name because it implements the provider-specific
+    //     branch that the rest of the code base no longer needs to know
+    //     about (the routes call ensureCommerceLiveMode({ providerKey })
+    //     and stay provider-agnostic).
+    const exemptBasenames = new Set(['live-mode-guard.ts']);
     const files = gather(join(root, 'lib', 'commerce'), ['.ts'])
-      .filter((f) => !f.split(/[\\/]/).includes('payment-providers'));
+      .filter((f) => !f.split(/[\\/]/).includes('payment-providers'))
+      .filter((f) => !exemptBasenames.has(f.split(/[\\/]/).pop()!));
     expect(files.length).toBeGreaterThan(0);
     for (const f of files) {
       const content = stripTsComments(readFileSync(f, 'utf8'));

@@ -11,17 +11,15 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Spec Version](https://img.shields.io/badge/spec-v1.0--final-green)](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
 [![IETF Draft](https://img.shields.io/badge/IETF-draft--mishra--oauth--agent--grants-blue)](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
-[![SOC 2 Type I](https://img.shields.io/badge/SOC%202-Type%20I%20Certified-brightgreen)](https://docs.grantex.dev/security)
 [![CI](https://img.shields.io/github/actions/workflow/status/mishrasanjeev/grantex/ci.yml?branch=main&label=CI)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
-[![4,147 Tests — 100%](https://img.shields.io/badge/tests-4%2C147%20passing%20%7C%20100%25-brightgreen)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@grantex/sdk)](https://www.npmjs.com/package/@grantex/sdk)
 [![PyPI](https://img.shields.io/pypi/v/grantex)](https://pypi.org/project/grantex/)
 [![npm downloads](https://img.shields.io/npm/dm/@grantex/sdk?label=npm%20downloads)](https://www.npmjs.com/package/@grantex/sdk)
 [![GitHub Stars](https://img.shields.io/github/stars/mishrasanjeev/grantex?style=social)](https://github.com/mishrasanjeev/grantex)
 [![Docs](https://img.shields.io/badge/docs-grantex.dev-3fb950)](https://grantex.dev/docs)
 [![MCP Server](https://img.shields.io/badge/MCP-Server-blue)](https://www.npmjs.com/package/@grantex/mcp)
-[![DPDP Compliant](https://img.shields.io/badge/DPDP-Compliant-green)](https://grantex.dev/dpdp)
-[![EU AI Act Ready](https://img.shields.io/badge/EU_AI_Act-Ready-blue)](https://grantex.dev/dpdp)
+[![DPDP Mapping](https://img.shields.io/badge/DPDP-control%20mapping-informational)](https://grantex.dev/dpdp)
+[![EU AI Act Mapping](https://img.shields.io/badge/EU_AI_Act-control%20mapping-informational)](https://grantex.dev/dpdp)
 
 <br/>
 
@@ -35,11 +33,11 @@
 
 </div>
 
-## Agentic Commerce V1
+## Agentic Commerce V1 (closed beta)
 
-Grantex Commerce V1 is the consent, Commerce Passport, policy, audit, and payment-control layer for agentic checkout. It lets commerce agents discover merchant catalog data, create carts, request user consent, receive a scoped Commerce Passport, and create provider-neutral payment intents without giving the agent direct access to payment providers.
+Grantex Commerce V1 is the closed-beta consent, Commerce Passport, policy, audit, and payment-control layer for agentic checkout. It lets commerce agents use sandbox catalog data, create carts, request user consent, receive a scoped Commerce Passport, and exercise mock provider payment intents without giving the agent direct access to payment providers.
 
-> Production Commerce V1 discovery is currently disabled/fail-closed. Production live checkout, live payments, and live Plural are not enabled.
+> Production Commerce V1 discovery is disabled/fail-closed. Live checkout, live payments, and live Plural are not enabled. Public demos and playgrounds are mock-provider only until legal, compliance, security, operations, and provider approvals are complete.
 
 ```mermaid
 flowchart LR
@@ -59,19 +57,19 @@ flowchart LR
 | Temporary Option A smoke | Verified with mock provider and cleaned-up smoke resources. |
 | AgenticOrg real-staging handoff | Verified through Grantex-only tools with redacted fixture handling. |
 | Hosted AgenticOrg discovery | Verified in temporary API-only hosted smoke. |
-| Production read-only discovery | Grantex production Commerce V1 discovery remains disabled/fail-closed. |
+| Production read-only discovery | Disabled/fail-closed. |
 | Live checkout/payments | Blocked pending legal, compliance, security, operations, and provider approvals. |
 | Live Plural | Blocked; mock provider only in current evidence. |
 
-Start with the [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx), then use the [developer guide](docs/guides/commerce-v1-developer-guide.mdx), [merchant/operator guide](docs/guides/commerce-v1-merchant-operator-guide.mdx), [operations guide](docs/guides/commerce-v1-operations.mdx), and [repeatable Option A smoke workflow](docs/guides/commerce-v1-repeatable-option-a-smoke-workflow.md). Reference evidence lives in [Option A smoke evidence](docs/reports/commerce-v1-option-a-smoke-evidence.md) and [production discovery readiness](docs/reports/commerce-v1-production-discovery-readiness.md). The public education page is `web/commerce.html`.
+Start with the [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx), then use the [developer guide](docs/guides/commerce-v1-developer-guide.mdx), [merchant/operator guide](docs/guides/commerce-v1-merchant-operator-guide.mdx), and [operations guide](docs/guides/commerce-v1-operations.mdx). The public education page is `web/commerce.html`.
 
-## What's New in v2.5
+## Current Development Snapshot
 
-- **@grantex/gemma**: Day-zero Gemma 4 integration — offline consent bundles,
-  < 5ms verification on Raspberry Pi, Google ADK adapter
-- **MCP Auth Server v2.0 GA**: OAuth 2.1 + PKCE for any MCP server,
-  managed + self-hosted modes, Bronze/Silver/Gold certification program
-- **@grantex/dpdp**: DPDP Act 2023 & EU AI Act compliance module
+The latest repository changelog currently tops out at v0.3.8. Package versions are being reconciled across SDKs and adapters; use [COMPATIBILITY.md](COMPATIBILITY.md) as the current source of truth for package-specific versions.
+
+- **@grantex/gemma**: Offline consent bundles and on-device verification examples
+- **MCP Auth Server**: OAuth 2.1 + PKCE for MCP servers, managed and self-hosted modes
+- **@grantex/dpdp**: DPDP Act 2023 and EU AI Act control mappings
 - **Trust Registry**: Public DID verification registry — `grantex.dev/registry`
 - **`grantex verify`**: Token inspection CLI — no account needed
 - **Anomaly Detection**: 10 built-in rules, Slack/PagerDuty/Datadog integration
@@ -105,7 +103,7 @@ go get github.com/mishrasanjeev/grantex-go  # Go
 npm install -g @grantex/cli     # CLI
 ```
 
-> **28 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, Strands Agents SDK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. 4,147 tests (100% pass rate). Fully self-hostable. Apache 2.0.
+> **28 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, Strands Agents SDK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. The latest changelog reports 3,536 tests across 28 packages; GitHub Actions is the source of truth for current pass/fail status. Fully self-hostable. Apache 2.0.
 
 ---
 
@@ -1137,7 +1135,7 @@ bundles = client.policies.bundles()
 
 ## DPDP Act 2023 Compliance
 
-Full DPDP Act 2023 compliance built in — structured consent records, purpose limitation, data principal rights (access, erasure, grievance), and audit-ready exports. Available in all SDKs and the CLI.
+DPDP Act 2023 support includes structured consent records, purpose limitation, data principal rights workflows (access, erasure, grievance), and audit-ready exports. Available in all SDKs and the CLI. This is a technical control mapping, not a legal certification.
 
 ```typescript
 // Register a consent notice
@@ -1310,7 +1308,7 @@ Grantex is built as an **open protocol**, not a closed SaaS product. Here's why 
 
 **Offline-verifiable.** Services verify tokens using published JWKS — zero runtime dependency on Grantex infrastructure. Your agent works even if our servers are down.
 
-**Compliance-ready.** The EU AI Act, GDPR, and emerging US AI regulations will mandate auditable agent actions. Grantex gives you that on day one.
+**Compliance-oriented controls.** The EU AI Act, GDPR, and emerging US AI regulations will mandate auditable agent actions. Grantex provides technical controls that can support those programs from day one.
 
 ---
 
@@ -1617,7 +1615,7 @@ All milestones through v1.0 are complete. See [ROADMAP.md](https://github.com/mi
 | **v0.1 — Foundation** | Protocol spec, TypeScript & Python SDKs, auth service, consent UI, audit trail, multi-agent delegation, sandbox mode | ✅ Complete |
 | **v0.2 — Integrations** | LangChain, AutoGen, webhooks, Stripe billing, CLI | ✅ Complete |
 | **v0.3 — Enterprise** | CrewAI, Vercel AI, compliance exports, policy engine, SCIM/SSO, anomaly detection | ✅ Complete |
-| **v1.0 — Stable Protocol** | Protocol spec finalized (v1.0), security audit, SOC2, standards submission | ✅ Complete |
+| **v1.0 — Stable Protocol** | Protocol spec finalized (v1.0), security audit, SOC 2 readiness mapping, standards submission | ✅ Complete |
 | **v2.0 — Platform** | MCP Auth Server, Credential Vault, 7 new adapters, webhook delivery log, examples | ✅ Complete |
 | **v2.1 — Enterprise Scale** | Event streaming, budget controls, observability, Terraform provider, gateway, conformance | ✅ Complete |
 | **v2.2 — Ecosystem** | OPA/Cedar policy backends, A2A protocol bridge, usage metering, custom domains, policy-as-code | ✅ Complete |
@@ -1648,7 +1646,7 @@ Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRI
 | **NIST AI RMF** | Govern 1.1, Map 5.1, Measure 2.5 — NCCoE public comment filed |
 | **IETF** | Internet-Draft submitted to OAuth Working Group ([draft-mishra-oauth-agent-grants-01](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
 | **AuthZEN** | Conformance mapped |
-| **SOC 2** | Type I certification completed |
+| **SOC 2** | Readiness control mapping published; formal third-party attestation not published |
 | **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, open, Apache 2.0 |
 
 Full compliance matrix: [docs.grantex.dev/guides/compliance-matrix](https://docs.grantex.dev/guides/compliance-matrix)

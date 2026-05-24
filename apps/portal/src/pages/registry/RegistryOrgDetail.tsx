@@ -148,9 +148,9 @@ export function RegistryOrgDetail() {
         <Card>
           <h2 className="text-sm font-semibold text-gx-text mb-4">Compliance</h2>
           <div className="space-y-3">
-            <ComplianceRow label="SOC 2 Type II" passed={org.compliance.soc2} />
-            <ComplianceRow label="DPDP Compliant" passed={org.compliance.dpdp} />
-            <ComplianceRow label="GDPR Compliant" passed={org.compliance.gdpr} />
+            <ComplianceRow label="SOC 2 evidence submitted" passed={org.compliance.soc2} />
+            <ComplianceRow label="DPDP mapping" passed={org.compliance.dpdp} />
+            <ComplianceRow label="GDPR mapping" passed={org.compliance.gdpr} />
           </div>
         </Card>
 

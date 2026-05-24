@@ -62,9 +62,9 @@ describe('RegistryOrgDetail', () => {
   it('shows compliance section', async () => {
     r();
     await waitFor(() => expect(screen.getByText('Compliance')).toBeInTheDocument());
-    expect(screen.getByText('SOC 2 Type II')).toBeInTheDocument();
-    expect(screen.getByText('DPDP Compliant')).toBeInTheDocument();
-    expect(screen.getByText('GDPR Compliant')).toBeInTheDocument();
+    expect(screen.getByText('SOC 2 evidence submitted')).toBeInTheDocument();
+    expect(screen.getByText('DPDP mapping')).toBeInTheDocument();
+    expect(screen.getByText('GDPR mapping')).toBeInTheDocument();
   });
 
   it('shows contact info', async () => {

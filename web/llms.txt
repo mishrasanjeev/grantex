@@ -37,10 +37,10 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - FastAPI middleware: `pip install grantex-fastapi`
 - Reverse-proxy gateway: `npm install @grantex/gateway`
 
-## Key Packages (New in v2.5)
+## Key Packages
 - @grantex/gemma: Offline authorization for Gemma 4 on-device agents
 - @grantex/mcp-auth: OAuth 2.1 auth server for MCP servers
-- @grantex/dpdp: DPDP Act 2023 + EU AI Act compliance module
+- @grantex/dpdp: DPDP Act 2023 + EU AI Act control mappings
 
 ## Key Features
 
@@ -76,7 +76,7 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - OWASP Agentic Top 10 (Dec 2025): ASI-01 (goal hijacking), ASI-03 (identity abuse), ASI-05 (privilege escalation), ASI-10 (rogue agents)
 - EU AI Act (binding Aug 2026): Art. 9 (risk management), Art. 13 (transparency), Art. 14 (human oversight)
 - NIST AI RMF + EO 14110: Govern 1.1 (accountability), Map 5.1 (attribution), Measure 2.5 (audit trails)
-- SOC 2 Type I certified
+- SOC 2 readiness control mapping published; formal third-party attestation is not published
 - Full compliance matrix: https://docs.grantex.dev/guides/compliance-matrix
 
 ## Scope Enforcement (v0.3.7)
@@ -118,7 +118,7 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - Config validation on startup (exits if required vars missing)
 - Structured JSON logging via pino (zero console.log remaining)
 - Webhook retry with 20% jitter (prevents thundering herd)
-- 3,604 tests across 28 packages — 100% pass rate
+- Latest changelog reports 3,536 tests across 28 packages; GitHub Actions is the source of truth for pass/fail status
 - Zero known vulnerabilities (npm audit, pip-audit, govulncheck all clean)
 
 ## SDK Parity

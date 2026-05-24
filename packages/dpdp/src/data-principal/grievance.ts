@@ -6,6 +6,7 @@
  * a reasonable period (7 days per implementation).
  */
 
+import { randomBytes } from 'node:crypto';
 import type { Grievance, FileGrievanceParams } from '../types.js';
 import { GrievanceError } from '../errors.js';
 
@@ -15,15 +16,20 @@ const GRIEVANCE_RESOLUTION_DAYS = 7;
 /**
  * Generate a grievance reference number.
  *
- * Format: `GRV-YYYY-NNNNN` where YYYY is the current year and NNNNN
- * is a zero-padded random 5-digit number.
+ * Format: `GRV-YYYY-XXXXXXXXXXXXXXXX` where YYYY is the current year
+ * and XXXXXXXXXXXXXXXX is 16 lowercase hex characters (64 bits) drawn
+ * from a cryptographically strong random source.
+ *
+ * The older `GRV-YYYY-NNNNN` 5-digit format was enumerable — a third
+ * party could iterate through ~100 000 references and probe the API
+ * for other data principals' grievances. 64 bits of entropy puts the
+ * collision and guessing probability beyond practical reach while
+ * keeping the reference short enough to read over the phone.
  */
 export function generateReferenceNumber(): string {
   const year = new Date().getFullYear();
-  const seq = Math.floor(Math.random() * 100_000)
-    .toString()
-    .padStart(5, '0');
-  return `GRV-${year}-${seq}`;
+  const suffix = randomBytes(8).toString('hex');
+  return `GRV-${year}-${suffix}`;
 }
 
 /**

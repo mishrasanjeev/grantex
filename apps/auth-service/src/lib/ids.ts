@@ -34,6 +34,15 @@ export const newConsentRecordId = (): string => `crec_${ulid()}`;
 export const newNoticeId = (): string => `notice_${ulid()}`;
 export const newGrievanceId = (): string => `grv_${ulid()}`;
 export const newExportId = (): string => `exp_${ulid()}`;
+
+// Externally exposed DPDP reference numbers / request IDs.
+// These travel back to the data principal and appear in audit logs, so they
+// must be non-enumerable. ULID gives 26 Crockford-base32 chars (~125 bits of
+// entropy + monotonic time prefix) while still being short and copy-friendly.
+export const newGrievanceReference = (): string =>
+  `GRV-${new Date().getUTCFullYear()}-${ulid()}`;
+export const newErasureRequestId = (): string =>
+  `ER-${new Date().getUTCFullYear()}-${ulid()}`;
 export const newRegistryAgentId = (): string => `ragent_${ulid()}`;
 export const newAnomalyRuleId = (): string => `arule_${ulid()}`;
 export const newAnomalyChannelId = (): string => `achan_${ulid()}`;

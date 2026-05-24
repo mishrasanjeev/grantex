@@ -260,7 +260,7 @@ describe('Commerce provider webhook route', () => {
     expect(sqlCallCount(/UPDATE commerce_payment_intents/i)).toBe(0);
   });
 
-  it('plural provider webhook returns explicit blocked configuration error', async () => {
+  it('plural provider webhook is blocked by the central live-mode guard before any provider call', async () => {
     const payload = webhookPayload({ event_id: 'evt_PLURAL', status: 'paid' });
     const res = await app.inject({
       method: 'POST',
@@ -268,14 +268,14 @@ describe('Commerce provider webhook route', () => {
       payload,
     });
 
-    expect(res.statusCode).toBe(503);
-    expect(res.json<{ error: { code: string; details: { provider_error_code: string; safe_metadata: Record<string, unknown> } } }>().error)
+    // P0-23: with both PLURAL flags unset (default in vitest.config.ts),
+    // the guard rejects before provider.handleWebhook runs. No SQL ran,
+    // no audit row was written.
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: { code: string; details?: { reason?: string; provider_key?: string } } }>().error)
       .toMatchObject({
-        code: 'provider_validation_failed',
-        details: {
-          provider_error_code: 'plural_webhook_signature_unconfirmed',
-          safe_metadata: { webhook_signature_confirmed: false },
-        },
+        code: 'plural_live_disabled',
+        details: { reason: 'plural_live_disabled', provider_key: 'plural' },
       });
     expect(sqlMock).not.toHaveBeenCalled();
   });

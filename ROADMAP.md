@@ -42,7 +42,7 @@
 ### v1.0 Stable Protocol
 - [x] Protocol specification finalized and frozen
 - [x] Independent security audit (Vestige Security Labs)
-- [x] SOC2 Type I certification (Thornfield Assurance Partners)
+- [x] SOC 2 readiness control mapping published (formal third-party attestation not published)
 - [x] On-premise enterprise deployment option
 - [x] IETF Internet-Draft submission
 

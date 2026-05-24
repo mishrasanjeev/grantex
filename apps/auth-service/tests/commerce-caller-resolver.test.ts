@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { generateKeyPair, exportJWK, SignJWT, type KeyLike, type JWK, type JWTPayload } from 'jose';
-import { authHeader, sqlMock, mockRedis, TEST_DEVELOPER, buildTestApp } from './helpers.js';
+import { authHeader, sqlMock, mockRedis, TEST_DEVELOPER, TEST_ADMIN_API_KEY, buildTestApp } from './helpers.js';
 import { TEST_COMMERCE_TENANT_ID } from './commerce-helpers.js';
 
 let app: FastifyInstance;
@@ -110,8 +110,9 @@ describe('Commerce caller resolver — token-shape detection', () => {
   });
 
   it('platform admin key falls through to operator with isPlatformAdmin=true', async () => {
-    // The vitest config sets ADMIN_API_KEY='test-admin-key-secret'.
-    // The admin token isn't in `developers`; loadDeveloperByApiKey returns [].
+    // The vitest config generates a per-run ADMIN_API_KEY and exposes it as
+    // TEST_ADMIN_API_KEY. The admin token isn't in `developers`;
+    // loadDeveloperByApiKey returns [].
     sqlMock.mockResolvedValueOnce([]);  // developer lookup empty (admin only)
 
     // Hit a route the admin caller can use without a tenant (the
@@ -124,7 +125,7 @@ describe('Commerce caller resolver — token-shape detection', () => {
 
     const res = await app.inject({
       method: 'POST', url: '/v1/commerce/tenants',
-      headers: { authorization: 'Bearer test-admin-key-secret' },
+      headers: { authorization: `Bearer ${TEST_ADMIN_API_KEY}` },
       payload: { display_name: 'New Tenant' },
     });
     expect(res.statusCode).toBe(201);
