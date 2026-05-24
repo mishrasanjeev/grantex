@@ -30,6 +30,7 @@ import {
   type CommerceEnvironment,
   type ProviderKey,
 } from '../lib/commerce/payment-providers/index.js';
+import { ensureCommerceLiveMode } from '../lib/commerce/live-mode-guard.js';
 import {
   assertPaymentStatusTransition,
   type CommercePaymentStatus,
@@ -1039,6 +1040,13 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
       });
     }
 
+    // P0-23 — central live-mode gate. Fails closed when live commerce
+    // side effects are not authorized for this deployment. Runs after
+    // policy/passport so the caller still gets the most specific reason
+    // for any deny, but before any provider call that could create
+    // off-platform state.
+    ensureCommerceLiveMode({ environment: merchant.environment, providerKey });
+
     const paymentIntentId = newCommercePaymentIntentId();
     const provider = getPaymentProvider(providerKey);
     let providerResult: {
@@ -1246,6 +1254,14 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
         throw new CommerceHttpError(409, 'payment_intent_missing_policy_evidence',
           'Checkout links require stored passport and policy decision evidence', { retryable: false });
       }
+
+      // P0-23 — fail-closed live-mode gate. Creating a checkout link
+      // hands control to the live provider, so the deployment must be
+      // authorized for live commerce side effects on this provider.
+      ensureCommerceLiveMode({
+        environment: paymentIntent.provider_environment,
+        providerKey: paymentIntent.provider,
+      });
 
       const policy = await loadActivePolicy(sql, tenantId, paymentIntent.merchant_id);
       if (!policy) {
@@ -1565,6 +1581,14 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
       throw new CommerceHttpError(404, 'payment_intent_not_found',
         'Payment intent not found in this tenant');
     }
+
+    // P0-23 — reconciliation pulls fresh status from the live provider
+    // and may transition payment state. Gate it on the same live-mode
+    // switch that protected the original intent creation.
+    ensureCommerceLiveMode({
+      environment: paymentIntent.provider_environment,
+      providerKey: paymentIntent.provider,
+    });
 
     const result = await reconcilePaymentIntent(sql, paymentIntent, {
       requestId: request.id,

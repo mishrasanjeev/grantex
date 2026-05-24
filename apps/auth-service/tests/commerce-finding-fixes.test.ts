@@ -7,7 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   generateKeyPair, exportJWK, SignJWT, type KeyLike, type JWK,
 } from 'jose';
-import { sqlMock, mockRedis, buildTestApp, authHeader, TEST_DEVELOPER } from './helpers.js';
+import { sqlMock, mockRedis, buildTestApp, authHeader, TEST_DEVELOPER, TEST_ADMIN_API_KEY } from './helpers.js';
 import { signPrincipalSessionToken } from '../src/lib/crypto.js';
 import { seedCommerceContext, TEST_COMMERCE_TENANT_ID } from './commerce-helpers.js';
 import {
@@ -733,7 +733,7 @@ describe('Finding 3 (round 2) — disabled tenant blocks merchant/agent/consent/
     sqlMock.mockResolvedValueOnce([{ id: 'caud_T', occurred_at: new Date().toISOString() }]);
     const res = await app.inject({
       method: 'POST', url: '/v1/commerce/tenants',
-      headers: { authorization: 'Bearer test-admin-key-secret' },
+      headers: { authorization: `Bearer ${TEST_ADMIN_API_KEY}` },
       payload: { display_name: 'X' },
     });
     expect(res.statusCode).toBe(201);

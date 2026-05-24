@@ -1,4 +1,11 @@
+import { randomBytes } from 'node:crypto';
 import { defineConfig } from 'vitest/config';
+
+// Fresh per test process. The literal that used to live here ('test-admin-key-secret')
+// was a hardcoded credential that would surface in CI logs on any test-output dump.
+// Tests that need the value should read it from process.env['ADMIN_API_KEY'] or import
+// TEST_ADMIN_API_KEY from tests/helpers.ts.
+const generatedAdminApiKey = randomBytes(32).toString('hex');
 
 export default defineConfig({
   test: {
@@ -26,7 +33,7 @@ export default defineConfig({
       STRIPE_PRICE_PRO: 'price_pro_fake',
       STRIPE_PRICE_ENTERPRISE: 'price_enterprise_fake',
       VAULT_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-      ADMIN_API_KEY: 'test-admin-key-secret',
+      ADMIN_API_KEY: generatedAdminApiKey,
       // Grantex Commerce M1 — flag is checked at request time so tests can
       // toggle it via vi.stubEnv. The feature-flag test stubs it back off.
       COMMERCE_V1_ENABLED: 'true',

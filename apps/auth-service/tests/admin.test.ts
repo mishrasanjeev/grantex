@@ -4,7 +4,11 @@ import type { FastifyInstance } from 'fastify';
 // The admin key must be set BEFORE config.ts is evaluated.
 // vi.hoisted runs before all imports.
 const ADMIN_KEY = vi.hoisted(() => {
-  const key = 'test-admin-key-secret';
+  // Avoid hardcoded literal credentials in the test source. The key is
+  // regenerated for every test run and only lives in this process's memory.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { randomBytes } = require('node:crypto') as typeof import('node:crypto');
+  const key = randomBytes(32).toString('hex');
   process.env['ADMIN_API_KEY'] = key;
   return key;
 });

@@ -145,7 +145,7 @@ Expected command shape:
 
 ```bash
 node scripts/commerce-staging-e2e-harness.mjs --dry-run --api-base=https://api-staging.grantex.dev --merchant-id=mch_staging_electronics_pilot --agent-id=cag_staging_agenticorg_sales
-node scripts/commerce-staging-e2e-harness.mjs --run --api-base=https://api-staging.grantex.dev --merchant-id=mch_staging_electronics_pilot --agent-id=cag_staging_agenticorg_sales --report=docs/reports/commerce-v1-hosted-staging-e2e.md
+node scripts/commerce-staging-e2e-harness.mjs --run --api-base=https://api-staging.grantex.dev --merchant-id=mch_staging_electronics_pilot --agent-id=cag_staging_agenticorg_sales --report=docs/internal/commerce-v1/commerce-v1-hosted-staging-e2e.md
 ```
 
 Smoke coverage should include:

@@ -13,8 +13,8 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - IETF Draft: https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/
 - License: Apache 2.0
 - Protocol Version: 1.0 (Final, frozen)
-- Tests: 3,604 passing (100% pass rate across 28 packages)
-- SOC 2 Type I certified
+- Tests: latest changelog reports 3,536 tests across 28 packages; GitHub Actions is the source of truth for pass/fail status
+- SOC 2: readiness control mapping published; formal third-party attestation is not published
 - Production: Cloud Run at https://grantex-auth-dd4mtrt2gq-uc.a.run.app
 
 ---
@@ -356,8 +356,8 @@ White-label consent UI and API endpoints. DNS TXT verification.
 ### Anomaly Detection
 Runtime behavioral monitoring for agent activity. Detects deviations from established baselines.
 
-### DPDP Act Compliance (India Digital Personal Data Protection Act, 2023)
-Full lifecycle compliance for AI agent data processing under India's DPDP Act.
+### DPDP Act Control Mapping (India Digital Personal Data Protection Act, 2023)
+Technical controls for AI agent data processing workflows under India's DPDP Act. This is not a legal certification.
 
 #### Consent Management
 - `POST /v1/dpdp/consent-records` — Create a consent record linking a Grantex grant to a data principal with explicit purpose limitation. Each record is cryptographically signed (Ed25519) and includes a SHA-256 hash of the consent notice shown to the user.
@@ -519,7 +519,7 @@ MCP Auth is specific to the Model Context Protocol. Grantex works across all fra
 - SD-JWT (IETF draft-ietf-oauth-selective-disclosure-jwt)
 - OAuth 2.1 + PKCE (RFC 7636)
 - JWT (RFC 7519), JWS (RFC 7515), JWKS (RFC 7517)
-- SOC 2 Type I certified
+- SOC 2 readiness control mapping published; formal third-party attestation is not published
 
 ---
 

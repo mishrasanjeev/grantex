@@ -13,6 +13,12 @@ export { sqlMock, mockRedis };
 // Seed data
 // ------------------------------------------------------------------
 export const TEST_API_KEY = 'test-api-key-1234';
+
+// Resolved at module load — vitest.config.ts generates a per-run ADMIN_API_KEY
+// via crypto.randomBytes() and exports it through the env block. Tests that
+// need to call admin-gated endpoints should use this constant rather than a
+// hardcoded literal.
+export const TEST_ADMIN_API_KEY = process.env['ADMIN_API_KEY'] ?? '';
 export const TEST_DEVELOPER = { id: 'dev_TEST', name: 'Test Developer', mode: 'live' };
 export const TEST_SANDBOX_DEVELOPER = { ...TEST_DEVELOPER, mode: 'sandbox' };
 

@@ -956,7 +956,7 @@
   <span class="id">grantex</span>,
   <span class="id">agentId</span>: <span class="str">'ag_your_mcp_server'</span>,
   <span class="id">scopes</span>:  [<span class="str">'tools:read'</span>, <span class="str">'tools:execute'</span>, <span class="str">'resources:read'</span>],
-  <span class="id">issuer</span>:  <span class="str">'https://your-mcp-server.example.com'</span>,
+  <span class="id">issuer</span>:  <span class="str">'https://mcp.yourcompany.com'</span>,
 });
 
 <span class="kw">await</span> <span class="id">authServer</span>.<span class="fn">listen</span>({ <span class="id">port</span>: <span class="id">3001</span> });</pre>
@@ -979,7 +979,7 @@
 
 <span class="cm">// Protect all MCP tool routes</span>
 <span class="id">app</span>.<span class="fn">use</span>(<span class="str">'/mcp'</span>, <span class="fn">requireMcpAuth</span>({
-  <span class="id">issuer</span>: <span class="str">'https://your-mcp-server.example.com'</span>,
+  <span class="id">issuer</span>: <span class="str">'https://mcp.yourcompany.com'</span>,
   <span class="id">scopes</span>: [<span class="str">'tools:execute'</span>],
 }));
 
@@ -1161,7 +1161,7 @@
   }),
   <span class="id">agentId</span>: <span class="str">'ag_your_server'</span>,
   <span class="id">scopes</span>:  [<span class="str">'tools:read'</span>, <span class="str">'tools:execute'</span>],
-  <span class="id">issuer</span>:  <span class="str">'https://your-domain.example.com'</span>,
+  <span class="id">issuer</span>:  <span class="str">'https://mcp.yourcompany.com'</span>,
 });</pre>
         </div>
       </div>
@@ -1297,6 +1297,15 @@
         <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
         <li><a href="https://www.npmjs.com/package/@grantex/mcp-auth">npm</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
+      </ul>
+      <ul class="footer-links" aria-label="Legal and procurement">
+        <li><a href="https://docs.grantex.dev/compliance/privacy-policy">Privacy</a></li>
+        <li><a href="https://docs.grantex.dev/compliance/terms-of-service">Terms</a></li>
+        <li><a href="https://docs.grantex.dev/compliance/dpa">DPA</a></li>
+        <li><a href="https://docs.grantex.dev/compliance/cookie-policy">Cookies</a></li>
+        <li><a href="https://docs.grantex.dev/compliance/sub-processors">Sub-processors</a></li>
+        <li><a href="https://docs.grantex.dev/compliance/data-residency">Data Residency</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/SECURITY.md">Security</a></li>
       </ul>
       <span class="footer-copy">&copy; 2026 Grantex</span>
     </div>

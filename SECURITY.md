@@ -46,18 +46,38 @@ Include in your report:
 - Steps to reproduce or a minimal proof-of-concept
 - Any suggested mitigations you have identified
 
-Encrypt sensitive reports with our PGP key (available at `https://grantex.dev/.well-known/security.asc`).
+### Encrypted reports
+
+If a report contains exploit code, customer data, or other material you do not
+want to send in cleartext, request our PGP key by emailing
+`security@grantex.dev` with the subject **"PGP key request"** and we will reply
+with the current public key and its fingerprint within one business day. The
+fingerprint will also be posted at `https://grantex.dev/.well-known/security.asc`
+**(URL provisioning is TBD — until it is published, email is the source of
+truth).** Do not assume any key you find on a public key server is ours unless
+the fingerprint matches what we emailed you.
 
 ### Response SLA
 
-| Stage                      | Target                          |
-|----------------------------|---------------------------------|
-| Acknowledgement            | 48 hours                        |
-| Substantive response       | 5 business days                 |
-| Patch (Critical / High)    | 7 days from confirmation        |
-| Patch (Medium / Low)       | 30 days from confirmation       |
+Acknowledgement and substantive-response windows apply to every report.
+Remediation targets depend on the assessed severity using the CVSS v3.1
+qualitative scale:
 
-We will keep you informed of progress throughout the remediation process.
+| Stage                       | Target                                       |
+|-----------------------------|----------------------------------------------|
+| Acknowledgement of receipt  | Within **48 hours** (business hours, IST/UTC)|
+| Substantive triage response | Within **5 business days**                   |
+| Remediation — **Critical**  | Patch shipped within **7 calendar days** of confirmation; coordinated disclosure once patched |
+| Remediation — **High**      | Patch shipped within **14 calendar days** of confirmation |
+| Remediation — **Medium**    | Patch shipped within **30 calendar days** of confirmation |
+| Remediation — **Low**       | Patch shipped within **90 calendar days** of confirmation, or in the next regularly scheduled release |
+| Status updates              | Every **7 calendar days** while remediation is open |
+
+Severity is assigned by the Grantex security responder based on CVSS v3.1
+exploitability, scope, and impact. We will share our reasoning with the
+reporter and adjust on substantive feedback. If the issue is in a third-party
+dependency, the calendar starts when the upstream patch (or a Grantex
+mitigation) is available.
 
 ---
 
@@ -107,6 +127,36 @@ We will not pursue legal action against researchers who act in good faith and fo
 
 ---
 
-## Bug Bounty
+## Recognition (no monetary bug bounty)
 
-We do not currently operate a formal bug bounty programme. We recognize impactful reports publicly in release notes and on our [Hall of Thanks](https://grantex.dev/security/thanks).
+Grantex does **not** currently operate a paid bug bounty programme. We are an
+open-source project and a small commercial team; a formal monetary programme
+is on the roadmap but is not in place today, and we will not invent one.
+
+What we do offer:
+
+- **Hall of Thanks** — researchers who report a valid vulnerability and follow
+  this policy are credited by name (or anonymously, on request) at
+  `https://grantex.dev/security/thanks` and in the release notes for the
+  fix. **The page is provisioning-pending; until it is live we will keep an
+  internal list and migrate it once the page ships.** TBD.
+- **CVE assignment** — for qualifying issues we will request a CVE via the
+  GitHub CNA and credit you in it.
+- **Swag** — Grantex stickers / shirt, on request, when shipping logistics
+  allow.
+
+If you are reporting to us under a third-party VDP platform (e.g. HackerOne,
+Bugcrowd) on behalf of one of our customers: please also send a copy to
+`security@grantex.dev` so we can triage in parallel.
+
+---
+
+## Related procurement / compliance documents
+
+- [Data Processing Addendum (template)](docs/compliance/dpa.md)
+- [Sub-processor disclosure](docs/compliance/sub-processors.md)
+- [Data residency statement](docs/compliance/data-residency.md)
+- [Privacy Policy (draft)](docs/compliance/privacy-policy.md)
+- [Terms of Service (draft)](docs/compliance/terms-of-service.md)
+- [Cookie Policy (draft)](docs/compliance/cookie-policy.md)
+- [SOC 2 readiness control mapping](docs/soc2-type1/report.md) — not a third-party attestation; see the file's own warning block.

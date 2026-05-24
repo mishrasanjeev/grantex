@@ -9,6 +9,7 @@
  * 5. Retries the request with payment proof + GDT
  */
 
+import { randomBytes } from 'node:crypto';
 import { getAuditLog } from './audit.js';
 import type { X402AgentConfig, X402FetchOptions, X402PaymentDetails } from './types.js';
 
@@ -180,11 +181,25 @@ export function x402AgentFetch(config: X402AgentConfig = {}) {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Generate `length` lowercase hex characters from a cryptographically
+ * strong source. Used by the default stub payment handler to mint a
+ * 64-character `txHash` that ships inside the base64-encoded payment
+ * proof. Even for the stub, weak `Math.random()` was a hazard:
+ *
+ *   - The proof string travels over the wire and is persisted to audit
+ *     logs that may key off `txHash` for idempotency / replay detection.
+ *   - Two parallel callers could collide and mask each other in those
+ *     audit/idempotency tables.
+ *
+ * `length` must be even (one hex char per nibble, two per byte).
+ */
 function randomHex(length: number): string {
-  const chars = '0123456789abcdef';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars[Math.floor(Math.random() * 16)];
+  if (length < 0 || !Number.isInteger(length)) {
+    throw new RangeError('randomHex length must be a non-negative integer');
   }
-  return result;
+  if (length === 0) return '';
+  // Round byte count up; slice back down so odd lengths still work.
+  const byteCount = Math.ceil(length / 2);
+  return randomBytes(byteCount).toString('hex').slice(0, length);
 }

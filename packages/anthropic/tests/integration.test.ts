@@ -11,7 +11,7 @@
  * Uses realistic Grantex JWT claim structures (not minimal fakes).
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import {
   createGrantexTool,
   getGrantScopes,
@@ -20,7 +20,11 @@ import {
   GrantexToolRegistry,
   GrantexScopeError,
 } from '../src/index.js';
-import type { Grantex } from '@grantex/sdk';
+import { verifyGrantToken, type Grantex, type VerifiedGrant } from '@grantex/sdk';
+
+vi.mock('@grantex/sdk', () => ({
+  verifyGrantToken: vi.fn(),
+}));
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -56,6 +60,28 @@ function makeRealisticToken(overrides: Record<string, unknown> = {}): string {
   return `${b64Header}.${b64Payload}.${fakeSig}`;
 }
 
+function scopesFromToken(token: string): string[] {
+  const parts = token.split('.');
+  if (parts.length !== 3 || !parts[1]) {
+    throw new Error('invalid JWT format');
+  }
+  const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8')) as Record<string, unknown>;
+  return Array.isArray(payload['scp']) ? (payload['scp'] as string[]) : [];
+}
+
+function makeGrant(scopes: string[]): VerifiedGrant {
+  return {
+    tokenId: 'tok_integration_01',
+    grantId: 'grnt_integration_01',
+    principalId: 'user_abc123',
+    agentDid: 'did:grantex:ag_tool_demo',
+    developerId: 'dev_xyz789',
+    scopes,
+    issuedAt: Math.floor(Date.now() / 1000),
+    expiresAt: Math.floor(Date.now() / 1000) + 3600,
+  };
+}
+
 function makeClient(): { client: Grantex; logCalls: unknown[] } {
   const logCalls: unknown[] = [];
   const client = {
@@ -79,6 +105,14 @@ describe('Integration: full developer workflow', () => {
     grantId: 'grnt_integration_01',
     principalId: 'user_abc123',
   };
+
+  beforeEach(() => {
+    vi.mocked(verifyGrantToken).mockImplementation(async (token) => makeGrant(scopesFromToken(token)));
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
 
   it('end-to-end: create → register → execute → audit', async () => {
     // Step 1: Create tools

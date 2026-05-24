@@ -262,8 +262,7 @@
 
   <script>
     // ── Config ──────────────────────────────────────────────────────────────
-    const AUTH_API = window.location.hostname === 'localhost'
-      ? 'http://localhost:3001' : 'https://api.grantex.dev';
+    const AUTH_API = 'https://api.grantex.dev';
 
     // ── State ──────────────────────────────────────────────────────────────
     const spendTotals = { inference: 0, compute: 0, data: 0 };
@@ -555,5 +554,14 @@
       return ts + rand;
     }
   </script>
+  <footer style="margin-top:2rem;padding:1rem;text-align:center;font-size:0.85em;color:#888;border-top:1px solid #2a2a2a;">
+    <a href="https://docs.grantex.dev/compliance/privacy-policy" style="color:#888;">Privacy</a> &middot;
+    <a href="https://docs.grantex.dev/compliance/terms-of-service" style="color:#888;">Terms</a> &middot;
+    <a href="https://docs.grantex.dev/compliance/dpa" style="color:#888;">DPA</a> &middot;
+    <a href="https://docs.grantex.dev/compliance/cookie-policy" style="color:#888;">Cookies</a> &middot;
+    <a href="https://docs.grantex.dev/compliance/sub-processors" style="color:#888;">Sub-processors</a> &middot;
+    <a href="https://docs.grantex.dev/compliance/data-residency" style="color:#888;">Data Residency</a> &middot;
+    <a href="https://github.com/mishrasanjeev/grantex/blob/main/SECURITY.md" style="color:#888;">Security</a>
+  </footer>
 </body>
 </html>

@@ -189,7 +189,7 @@ The third command is a refusal check and must fail before any network request.
 Later hosted staging execution, after M9/M10 prerequisites and a reviewed implementation of run mode:
 
 ```powershell
-node scripts/commerce-staging-e2e-harness.mjs --run --api-base=https://api-staging.grantex.dev --agenticorg-base=https://staging.agenticorg.ai --manifest=docs/examples/commerce-staging-seed.manifest.json --report=docs/reports/commerce-v1-hosted-staging-e2e.md
+node scripts/commerce-staging-e2e-harness.mjs --run --api-base=https://api-staging.grantex.dev --agenticorg-base=https://staging.agenticorg.ai --manifest=docs/examples/commerce-staging-seed.manifest.json --report=docs/internal/commerce-v1/commerce-v1-hosted-staging-e2e.md
 ```
 
 AgenticOrg later real-staging handoff commands:

@@ -1,6 +1,41 @@
-* @mishrasanjeev
-packages/sdk-ts/ @mishrasanjeev
-packages/sdk-py/ @mishrasanjeev
-apps/auth-service/ @mishrasanjeev
-docs/ @mishrasanjeev
-SPEC.md @mishrasanjeev
+# CODEOWNERS — bus-factor remediation per brutal-review item P0-9.
+#
+# IMPORTANT — provisioning prerequisite:
+#   The team @grantex/maintainers MUST be created in the GitHub
+#   organisation hosting this repository and populated with at least
+#   one human reviewer in addition to @mishrasanjeev BEFORE the
+#   branch-protection rule on `main` is set to require approval from
+#   this file's listed owners.
+#
+#   If the team does not exist yet, GitHub silently ignores its
+#   entries here and falls back to @mishrasanjeev as the sole
+#   required reviewer — i.e. the bus-factor is unchanged. Create the
+#   team at:
+#     https://docs.github.com/en/organizations/organizing-members-into-teams/creating-a-team
+#
+# Pattern: every path requires BOTH a team review and the @mishrasanjeev
+# individual fallback. GitHub requires at least one approver from the
+# listed owners; once the team has more than one human member, the
+# single-point-of-failure review constraint is broken without any
+# further change to this file.
+
+* @grantex/maintainers @mishrasanjeev
+
+# Area ownership — same dual-owner pattern. Specific entries override
+# the catch-all above, so each must list both the team and the
+# individual fallback.
+packages/sdk-ts/                                        @grantex/maintainers @mishrasanjeev
+packages/sdk-py/                                        @grantex/maintainers @mishrasanjeev
+apps/auth-service/                                      @grantex/maintainers @mishrasanjeev
+docs/                                                   @grantex/maintainers @mishrasanjeev
+SPEC.md                                                 @grantex/maintainers @mishrasanjeev
+
+# Security- and release-sensitive paths — same review requirements,
+# called out explicitly so a future branch-protection rule that
+# requires team review on these specifically is unambiguous.
+SECURITY.md                                             @grantex/maintainers @mishrasanjeev
+docs/compliance/                                        @grantex/maintainers @mishrasanjeev
+apps/auth-service/src/lib/commerce/live-mode-guard.ts   @grantex/maintainers @mishrasanjeev
+scripts/check-live-mode-guard.mjs                       @grantex/maintainers @mishrasanjeev
+.github/workflows/release.yml                           @grantex/maintainers @mishrasanjeev
+.github/dependabot.yml                                  @grantex/maintainers @mishrasanjeev

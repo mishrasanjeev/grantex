@@ -219,3 +219,27 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+
+  # ─── Examples: quickstart-ts ─────────────────────────────────────────────
+  #
+  # The README's "Try in 30 seconds" snippet uses this example. The CHECK
+  # IT here is intentionally network-free: we install deps and typecheck
+  # against the published SDK shape, but never call `npm start` (which
+  # would attempt to reach a running Grantex API). The auditor's P0-15
+  # complaint was that the example had a stale ^0.1.1 pin against an
+  # 0.3.x SDK; this job catches the same drift in future SDK bumps.
+  quickstart-ts:
+    name: Example — quickstart-ts
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: examples/quickstart-ts
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - name: Install (resolves @grantex/sdk against the public registry)
+        run: npm install --no-audit --no-fund
+      - name: Typecheck (no network calls)
+        run: npx tsc --noEmit

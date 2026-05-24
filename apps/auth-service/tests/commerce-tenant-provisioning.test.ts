@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { sqlMock, buildTestApp, TEST_DEVELOPER, authHeader } from './helpers.js';
+import { sqlMock, buildTestApp, TEST_DEVELOPER, TEST_ADMIN_API_KEY, authHeader } from './helpers.js';
 import { TEST_COMMERCE_TENANT_ID, seedCommerceContext } from './commerce-helpers.js';
 
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildTestApp(); });
 
-const adminAuth = { authorization: 'Bearer test-admin-key-secret' };
+const adminAuth = { authorization: `Bearer ${TEST_ADMIN_API_KEY}` };
 
 describe('POST /v1/commerce/tenants — admin only (Decision C)', () => {
   it('admin caller creates a tenant', async () => {

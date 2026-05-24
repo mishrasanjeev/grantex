@@ -19,11 +19,14 @@ const repeatableOptionASmokeWorkflow = readFileSync(
   join(docsDir, 'guides', 'commerce-v1-repeatable-option-a-smoke-workflow.md'),
   'utf8',
 );
-const hostedStagingE2ETemplate = readFileSync(join(docsDir, 'reports', 'commerce-v1-hosted-staging-e2e.template.md'), 'utf8');
-const optionASmokeEvidence = readFileSync(join(docsDir, 'reports', 'commerce-v1-option-a-smoke-evidence.md'), 'utf8');
-const contractGapReport = readFileSync(join(docsDir, 'reports', 'commerce-v1-contract-completeness-gap-report.md'), 'utf8');
+// Internal commerce-v1 reports moved from docs/reports/ to
+// docs/internal/commerce-v1/ on 2026-05-24 per brutal-review P0-5.
+const internalCommerceV1Dir = join(docsDir, 'internal', 'commerce-v1');
+const hostedStagingE2ETemplate = readFileSync(join(internalCommerceV1Dir, 'commerce-v1-hosted-staging-e2e.template.md'), 'utf8');
+const optionASmokeEvidence = readFileSync(join(internalCommerceV1Dir, 'commerce-v1-option-a-smoke-evidence.md'), 'utf8');
+const contractGapReport = readFileSync(join(internalCommerceV1Dir, 'commerce-v1-contract-completeness-gap-report.md'), 'utf8');
 const readOnlyDiscoveryProposal = readFileSync(
-  join(docsDir, 'reports', 'commerce-v1-read-only-production-discovery-proposal.md'),
+  join(internalCommerceV1Dir, 'commerce-v1-read-only-production-discovery-proposal.md'),
   'utf8',
 );
 const optionASmokeRunbookText = readFileSync(join(docsDir, 'examples', 'commerce-option-a-smoke.runbook.json'), 'utf8');
@@ -348,7 +351,7 @@ for (const required of [
   'stale inventory',
   'unsupported EMI/discount/warranty claim',
   'invalid webhook signature',
-  'docs/reports/commerce-v1-hosted-staging-e2e.md',
+  'docs/internal/commerce-v1/commerce-v1-hosted-staging-e2e.md',
 ]) {
   assert.ok(hostedStagingE2E.includes(required), `hosted staging E2E guide includes ${required}`);
 }
@@ -614,7 +617,7 @@ for (const required of [
   'https://api.grantex.dev',
   'https://app.agenticorg.ai',
   "const dryRun = boolArg('--dry-run') || !run;",
-  'docs/reports/commerce-v1-hosted-staging-e2e.md',
+  'docs/internal/commerce-v1/commerce-v1-hosted-staging-e2e.md',
   'Refusing production domain',
   'Refusing credentialed URL',
   'Refusing COMMERCE_LIVE_MODE_ENABLED=true',
@@ -754,7 +757,7 @@ assert.equal(stagingE2EReport.status, 'not_executed');
 assert.equal(stagingE2EReport.safety.no_requests_made, true);
 assert.equal(stagingE2EReport.targets.api_base, 'https://api-staging.grantex.dev');
 assert.equal(stagingE2EReport.targets.agenticorg_base, 'https://staging.agenticorg.ai');
-assert.equal(stagingE2EReport.report_path, 'docs/reports/commerce-v1-hosted-staging-e2e.md');
+assert.equal(stagingE2EReport.report_path, 'docs/internal/commerce-v1/commerce-v1-hosted-staging-e2e.md');
 assert.equal(stagingE2EReport.manifest.provider, 'mock');
 assert.ok(stagingE2EReport.positive_checks.includes('checkout create'));
 assert.ok(stagingE2EReport.negative_checks.includes('invalid webhook signature'));

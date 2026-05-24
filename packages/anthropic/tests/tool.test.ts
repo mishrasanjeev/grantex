@@ -1,6 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { verifyGrantToken, type VerifiedGrant } from '@grantex/sdk';
 import { createGrantexTool, getGrantScopes } from '../src/tool.js';
 import { GrantexScopeError } from '../src/types.js';
+
+vi.mock('@grantex/sdk', () => ({
+  verifyGrantToken: vi.fn(),
+}));
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -34,9 +39,39 @@ const INPUT_SCHEMA: import('../src/types.js').AnthropicInputSchema = {
   required: ['path'],
 };
 
+function scopesFromToken(token: string): string[] {
+  const parts = token.split('.');
+  if (parts.length !== 3 || !parts[1]) {
+    throw new Error('invalid JWT format');
+  }
+  const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8')) as Record<string, unknown>;
+  return Array.isArray(payload['scp']) ? (payload['scp'] as string[]) : [];
+}
+
+function makeGrant(scopes: string[]): VerifiedGrant {
+  return {
+    tokenId: 'tok_01',
+    grantId: 'grnt_01',
+    principalId: 'user_01',
+    agentDid: 'did:grantex:ag_01',
+    developerId: 'dev_01',
+    scopes,
+    issuedAt: 1,
+    expiresAt: 9999999999,
+  };
+}
+
 // ─── createGrantexTool ────────────────────────────────────────────────────────
 
 describe('createGrantexTool', () => {
+  beforeEach(() => {
+    vi.mocked(verifyGrantToken).mockImplementation(async (token) => makeGrant(scopesFromToken(token)));
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('executes when agent holds the required scope', async () => {
     const fn = vi.fn().mockResolvedValue('file contents');
     const tool = createGrantexTool({
@@ -52,6 +87,49 @@ describe('createGrantexTool', () => {
 
     expect(result).toBe('file contents');
     expect(fn).toHaveBeenCalledWith({ path: '/tmp/config.json' });
+    expect(verifyGrantToken).toHaveBeenCalledWith(TOKEN_WITH_SCOPES, {
+      jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+    });
+  });
+
+  it('passes custom token verification options', async () => {
+    const tool = createGrantexTool({
+      name: 'read_file',
+      description: 'Read a file',
+      inputSchema: INPUT_SCHEMA,
+      grantToken: TOKEN_WITH_SCOPES,
+      jwksUri: 'https://issuer.example/.well-known/jwks.json',
+      issuer: 'https://issuer.example',
+      audience: 'anthropic-tools',
+      clockTolerance: 5,
+      requiredScope: 'file:read',
+      execute: vi.fn().mockResolvedValue('ok'),
+    });
+
+    await tool.execute({ path: '/tmp/config.json' });
+
+    expect(verifyGrantToken).toHaveBeenCalledWith(TOKEN_WITH_SCOPES, {
+      jwksUri: 'https://issuer.example/.well-known/jwks.json',
+      issuer: 'https://issuer.example',
+      audience: 'anthropic-tools',
+      clockTolerance: 5,
+    });
+  });
+
+  it('rejects forged tokens even when they contain the required scope', async () => {
+    vi.mocked(verifyGrantToken).mockRejectedValueOnce(new Error('invalid signature'));
+    const fn = vi.fn();
+    const tool = createGrantexTool({
+      name: 'read_file',
+      description: 'Read a file',
+      inputSchema: INPUT_SCHEMA,
+      grantToken: TOKEN_WITH_SCOPES,
+      requiredScope: 'file:read',
+      execute: fn,
+    });
+
+    await expect(tool.execute({ path: '/tmp/config.json' })).rejects.toThrow('invalid signature');
+    expect(fn).not.toHaveBeenCalled();
   });
 
   it('throws GrantexScopeError when agent lacks the required scope', async () => {

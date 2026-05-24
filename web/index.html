@@ -1012,18 +1012,18 @@
     </div>
     <div class="badge-row">
       <span class="badge"><span class="dot"></span> IETF I-D</span>
-      <span class="badge"><span class="dot"></span> SOC 2 Type I</span>
+      <span class="badge"><span class="dot"></span> SOC 2 readiness mapping</span>
       <span class="badge"><span class="dot"></span> Apache 2.0</span>
       <span class="badge"><span class="dot"></span> v1.0</span>
     </div>
   </div>
 </section>
 
-<!-- ── What's New in v2.5 ─────────────────────────────────────────────────── -->
+<!-- ── Current Development Snapshot ───────────────────────────────────────── -->
 <section id="whats-new" style="padding:48px 0;border-bottom:1px solid var(--border);">
   <div class="container">
-    <div class="section-label">What's new</div>
-    <h2 class="section-title" style="font-size:clamp(24px,4vw,36px);">Grantex v2.5 — April 2026</h2>
+    <div class="section-label">Current snapshot</div>
+    <h2 class="section-title" style="font-size:clamp(24px,4vw,36px);">Recent Grantex capabilities</h2>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:32px;">
 
       <a href="/gemma" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -1031,15 +1031,15 @@
           <span style="background:#3fb950;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">NEW</span>
           <span style="color:var(--text);font-weight:600;">@grantex/gemma</span>
         </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Day-zero Gemma 4 integration — offline consent bundles, &lt;5ms verification on Raspberry Pi, Google ADK adapter.</p>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Offline consent bundles and on-device verification examples for Gemma agents.</p>
       </a>
 
       <a href="/mcp" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="background:#3fb950;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">GA</span>
+          <span style="background:#3fb950;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">PKG</span>
           <span style="color:var(--text);font-weight:600;">MCP Auth Server v2.0.1</span>
         </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">OAuth 2.1 + PKCE for any MCP server. Managed + self-hosted. Bronze/Silver/Gold certification program.</p>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">OAuth 2.1 + PKCE for MCP servers, with managed and self-hosted modes.</p>
       </a>
 
       <a href="/dpdp" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -1047,7 +1047,7 @@
           <span style="background:#3fb950;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">NEW</span>
           <span style="color:var(--text);font-weight:600;">@grantex/dpdp</span>
         </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">DPDP Act 2023 &amp; EU AI Act compliance. Structured consent records, purpose limitation, audit-ready exports.</p>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">DPDP Act 2023 and EU AI Act control mappings, structured consent records, purpose limitation, and audit-ready exports.</p>
       </a>
 
       <a href="/registry" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -1055,7 +1055,7 @@
           <span style="background:#58a6ff;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">LAUNCH</span>
           <span style="color:var(--text);font-weight:600;">Trust Registry</span>
         </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Public DID-based directory of verified AI agent publishers. DNS verification, SOC 2 badges, embeddable widget.</p>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Public DID-based directory of verified AI agent publishers, DNS verification, and embeddable widgets.</p>
       </a>
 
       <a href="/anomaly" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -1643,7 +1643,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
 <span class="cm"># All commands support --json for AI agent / script use</span>
 
 <span class="cm"># 1. Request authorization (sandbox auto-approves)</span>
-<span class="id">grantex</span> <span class="id">authorize</span> <span class="op">--</span><span class="id">agent</span> <span class="str">ag_01J...</span> <span class="op">--</span><span class="id">principal</span> <span class="str">user@example.com</span> \
+<span class="id">grantex</span> <span class="id">authorize</span> <span class="op">--</span><span class="id">agent</span> <span class="str">ag_01J...</span> <span class="op">--</span><span class="id">principal</span> <span class="str">user_123</span> \
   <span class="op">--</span><span class="id">scopes</span> <span class="str">calendar:read,email:send</span>
 
 <span class="cm"># 2. Exchange the code for a grant token</span>
@@ -2340,13 +2340,13 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="auditor">Vestige Security Labs</div>
       </div>
       <div class="trust-card">
-        <div class="trust-label">SOC 2 Type I</div>
-        <h3>SOC 2 Type I Certified</h3>
+        <div class="trust-label">SOC 2 readiness</div>
+        <h3>Control Mapping Published</h3>
         <p>
-          Controls for Security, Availability, and Confidentiality trust service
-          criteria reviewed and attested by an independent CPA firm.
+          Controls for Security, Availability, and Confidentiality are mapped
+          to SOC 2 criteria. Formal third-party attestation is not published.
         </p>
-        <div class="auditor">Thornfield Assurance Partners</div>
+        <div class="auditor">Internal readiness mapping</div>
       </div>
       <div class="trust-card">
         <div class="trust-label">Open Standard</div>
@@ -2363,13 +2363,12 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
       </div>
       <div class="trust-card">
         <div class="trust-label">Testing</div>
-        <h3>4,147 Tests &mdash; 100% Pass Rate</h3>
+        <h3>3,536 Tests Reported In Changelog</h3>
         <p>
-          Every feature tested end-to-end across 27 packages in TypeScript, Python,
-          and Go. Rate limiting, transactions, retry logic, scope enforcement,
-          WebAuthn, VCs, SSO, DPDP &mdash; all verified.
+          The repository changelog reports 3,536 tests across 28 packages.
+          GitHub Actions is the source of truth for current pass/fail status.
         </p>
-        <div class="auditor">27 packages &middot; TypeScript, Python, Go</div>
+        <div class="auditor">28 packages &middot; TypeScript, Python, Go</div>
       </div>
     </div>
   </div>
@@ -2646,6 +2645,15 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <li><a href="/anomaly">Anomaly</a></li>
         <li><a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">IETF Draft</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
+      </ul>
+      <ul class="footer-links" aria-label="Legal and procurement">
+        <li><a href="https://docs.grantex.dev/compliance/privacy-policy">Privacy</a></li>
+        <li><a href="https://docs.grantex.dev/compliance/terms-of-service">Terms</a></li>
+        <li><a href="https://docs.grantex.dev/compliance/dpa">DPA</a></li>
+        <li><a href="https://docs.grantex.dev/compliance/cookie-policy">Cookies</a></li>
+        <li><a href="https://docs.grantex.dev/compliance/sub-processors">Sub-processors</a></li>
+        <li><a href="https://docs.grantex.dev/compliance/data-residency">Data Residency</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/SECURITY.md">Security</a></li>
       </ul>
       <span class="footer-copy">&copy; 2026 Grantex</span>
     </div>

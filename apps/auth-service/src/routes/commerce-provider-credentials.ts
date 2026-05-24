@@ -13,6 +13,7 @@ import {
   type NormalizedProviderError,
   type ProviderKey,
 } from '../lib/commerce/payment-providers/index.js';
+import { ensureCommerceLiveMode } from '../lib/commerce/live-mode-guard.js';
 import type { CommerceCaller } from '../lib/commerce/caller.js';
 
 type Sql = ReturnType<typeof postgres>;
@@ -118,19 +119,14 @@ function credentialRef(
   return `cref_${sha256hex(`${providerKey}:${environment}:${stableJson(payload)}`).slice(0, 32)}`;
 }
 
+// P0-23 — replaced by ensureCommerceLiveMode in lib/commerce/live-mode-guard.ts.
+// The wrapper is kept solely so the existing call sites read naturally; new
+// code should call ensureCommerceLiveMode directly.
 function assertProviderModeAllowed(
   providerKey: ProviderKey,
   environment: CommerceEnvironment,
 ): void {
-  if (providerKey === 'plural' && environment === 'live') {
-    const liveAllowed = process.env['COMMERCE_LIVE_MODE_ENABLED'] === 'true'
-      && process.env['PLURAL_LIVE_ENABLED'] === 'true';
-    if (!liveAllowed) {
-      throw new CommerceHttpError(403, 'plural_live_disabled',
-        'Plural live mode is disabled pending legal, partner, and production readiness review',
-        { retryable: false });
-    }
-  }
+  ensureCommerceLiveMode({ providerKey, environment });
 }
 
 function sanitizeCredential(row: CredentialRow): Record<string, unknown> {
@@ -305,6 +301,18 @@ export async function commerceProviderCredentialRoutes(app: FastifyInstance): Pr
       }
       requireCredentialManager(request, existing.merchant_id);
 
+      // P0-23 — rotating a credential or flipping status on a LIVE
+      // provider credential touches live-mode authorization state, so
+      // it must be gated by the same flag as credential creation.
+      // Disabling is intentionally permitted in any mode so operators
+      // can always lock down a leaked credential.
+      if (!disable) {
+        ensureCommerceLiveMode({
+          providerKey: existing.provider_key,
+          environment: existing.environment,
+        });
+      }
+
       const nextPayload = hasPayload ? body.credential_payload as Record<string, unknown> : null;
       const nextRef = nextPayload ? credentialRef(existing.provider_key, existing.environment, nextPayload) : existing.credential_ref;
       const nextEncrypted = nextPayload ? encrypt(stableJson(nextPayload)) : null;
@@ -380,6 +388,13 @@ export async function commerceProviderCredentialRoutes(app: FastifyInstance): Pr
         throw new CommerceHttpError(409, 'provider_credential_disabled',
           'Disabled provider credentials cannot be validated');
       }
+
+      // P0-23 — validation hits the live provider, so it requires the
+      // same live-mode authorization as creation/rotation.
+      ensureCommerceLiveMode({
+        providerKey: existing.provider_key,
+        environment: existing.environment,
+      });
 
       const provider = getPaymentProvider(existing.provider_key);
       const validation = await provider.validateCredentials({

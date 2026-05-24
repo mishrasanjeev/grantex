@@ -15,6 +15,7 @@ import {
   isPaymentProviderError,
   type ProviderKey,
 } from '../lib/commerce/payment-providers/index.js';
+import { ensureCommerceLiveMode } from '../lib/commerce/live-mode-guard.js';
 import {
   assertPaymentStatusTransition,
   type CommercePaymentStatus,
@@ -444,6 +445,14 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
           'Provider webhook route is not registered for this provider', { retryable: false });
       }
       const providerKey = providerKeyParam;
+      // P0-23 — incoming provider webhooks advance payment state for
+      // their issuing provider. Gate on the same live-mode flag used
+      // by the outbound provider calls so that, for example, a Plural
+      // event arriving at a deployment without PLURAL_LIVE_ENABLED is
+      // rejected before any state transition runs. The environment is
+      // not on the URL; pass providerKey alone — mock is permitted in
+      // every deployment, plural falls under the plural-specific gate.
+      ensureCommerceLiveMode({ providerKey });
       const receivedAt = new Date().toISOString();
       const rawBody = requestBodyToRaw(request.body);
       const payloadHash = sha256hex(rawBody);

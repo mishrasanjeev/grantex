@@ -13,6 +13,7 @@ import {
   TEST_DEVELOPER,
   TEST_AGENT,
 } from './helpers.js';
+import { seedCommerceContext } from './commerce-helpers.js';
 import type { FastifyInstance } from 'fastify';
 import { signGrantToken } from '../src/lib/crypto.js';
 
@@ -304,6 +305,95 @@ describe('Multi-tenancy isolation', () => {
     // The data returned is only for developer A — no cross-org data
     expect(body.agents.total).toBe(3);
     expect(body.plan).toBe('pro');
+  });
+
+  // ── Commerce tenants ────────────────────────────────────────────────────
+  //
+  // The commerce-tenants routes are gated by an operator caller and a
+  // hybrid authorization model: admin sees all tenants; an operator only
+  // sees rows joined to their entry in commerce_tenant_operators. These
+  // tests prove Developer A cannot enumerate or mutate Developer B's
+  // commerce tenants.
+
+  it('non-admin operator listing commerce tenants only sees its own', async () => {
+    seedCommerceContext();
+    // Owner-scoped JOIN returns just A's tenant. If the route forgot the
+    // developer_id filter and returned all tenants, we'd see foreign rows.
+    sqlMock.mockResolvedValueOnce([
+      {
+        id: 'cten_DEV_A_OWNED', display_name: 'A Org', status: 'active',
+        metadata: {}, created_at: new Date(), updated_at: new Date(),
+      },
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/tenants',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ items: Array<{ id: string }> }>();
+    expect(body.items.map((t) => t.id)).toEqual(['cten_DEV_A_OWNED']);
+    expect(body.items.every((t) => t.id !== 'cten_DEV_B_OWNED')).toBe(true);
+
+    // Defence-in-depth: confirm the SQL the route ran is the owner-scoped
+    // JOIN keyed on the caller's developer_id, not the admin-only SELECT.
+    const ownerScopedCall = sqlMock.mock.calls.find((c) => {
+      const tpl = c[0] as unknown;
+      return Array.isArray(tpl)
+        && tpl.some((s) =>
+          typeof s === 'string'
+          && /commerce_tenant_operators/i.test(s)
+          && /op\.developer_id\s*=/i.test(s));
+    });
+    expect(ownerScopedCall).toBeDefined();
+    expect(ownerScopedCall!.slice(1)).toContain(TEST_DEVELOPER.id);
+  });
+
+  it('org A cannot create commerce tenant without admin key (403 admin_required)', async () => {
+    seedCommerceContext();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/tenants',
+      headers: authHeader(),
+      payload: { display_name: 'Hostile Takeover' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('admin_required');
+  });
+
+  it('org A cannot patch a commerce tenant it does not own (403 tenant_owner_required)', async () => {
+    seedCommerceContext();
+    // Ownership check (operator → tenant) returns empty: dev A is not
+    // listed in commerce_tenant_operators for cten_DEV_B_OWNED.
+    sqlMock.mockResolvedValueOnce([]);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/commerce/tenants/cten_DEV_B_OWNED',
+      headers: authHeader(),
+      payload: { display_name: 'Renamed by A' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('tenant_owner_required');
+  });
+
+  it('org A cannot bind another developer to a tenant it does not own (403 tenant_owner_required)', async () => {
+    seedCommerceContext();
+    // Ownership check returns empty for cten_DEV_B_OWNED.
+    sqlMock.mockResolvedValueOnce([]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/developer-tenants',
+      headers: authHeader(),
+      payload: {
+        developer_id: 'dev_OTHER',
+        tenant_id: 'cten_DEV_B_OWNED',
+        is_default: true,
+      },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('tenant_owner_required');
   });
 
   // ── Authorize scoping ──────────────────────────────────────────────────

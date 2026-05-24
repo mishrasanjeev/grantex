@@ -1,7 +1,14 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
-import { newConsentRecordId, newNoticeId, newGrievanceId, newExportId } from '../lib/ids.js';
+import {
+  newConsentRecordId,
+  newNoticeId,
+  newGrievanceId,
+  newExportId,
+  newGrievanceReference,
+  newErasureRequestId,
+} from '../lib/ids.js';
 import { signWithEd25519 } from '../lib/crypto.js';
 import { emitEvent } from '../lib/events.js';
 
@@ -54,12 +61,6 @@ interface CreateExportBody {
 
 function sha256(input: string): string {
   return createHash('sha256').update(input).digest('hex');
-}
-
-function generateGrievanceRef(): string {
-  const year = new Date().getFullYear();
-  const seq = String(Math.floor(Math.random() * 99999) + 1).padStart(5, '0');
-  return `GRV-${year}-${seq}`;
 }
 
 // ── Routes ─────────────────────────────────────────────────────────────────
@@ -387,7 +388,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
 
       const sql = getSql();
       const id = newGrievanceId();
-      const referenceNumber = generateGrievanceRef();
+      const referenceNumber = newGrievanceReference();
       const expectedResolutionBy = new Date(Date.now() + 7 * 86400_000); // 7 days
 
       await sql`
@@ -737,7 +738,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const erasedAt = new Date();
-      const requestId = `ER-${erasedAt.getFullYear()}-${String(Math.floor(Math.random() * 99999) + 1).padStart(5, '0')}`;
+      const requestId = newErasureRequestId();
 
       // Mark all consent records as erased
       const ids = records.map((r) => r['id'] as string);

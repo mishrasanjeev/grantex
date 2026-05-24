@@ -32,7 +32,7 @@ describe('grievance', () => {
             type: 'unauthorized_processing',
             description: 'Data processed without consent',
             status: 'submitted',
-            referenceNumber: 'GRV-2026-00042',
+            referenceNumber: 'GRV-2026-deadbeefcafef00d',
             expectedResolutionBy,
           }),
       }),
@@ -48,7 +48,7 @@ describe('grievance', () => {
     const grievance = await fileGrievance(params, 'test-key', 'https://api.test.local');
 
     expect(grievance.grievanceId).toBe('grv_001');
-    expect(grievance.referenceNumber).toMatch(/^GRV-\d{4}-\d{5}$/);
+    expect(grievance.referenceNumber).toMatch(/^GRV-\d{4}-[0-9a-f]{16}$/);
     expect(grievance.status).toBe('submitted');
   });
 
@@ -62,11 +62,40 @@ describe('grievance', () => {
 
   it('generates valid reference number format', () => {
     const ref = generateReferenceNumber();
-    expect(ref).toMatch(/^GRV-\d{4}-\d{5}$/);
+    // Crypto-strong 64-bit suffix, lowercase hex.
+    expect(ref).toMatch(/^GRV-\d{4}-[0-9a-f]{16}$/);
 
     // Year should be current
     const year = new Date().getFullYear().toString();
     expect(ref).toContain(year);
+  });
+
+  it('generates unique, non-sequential references across repeated calls', () => {
+    const refs = Array.from({ length: 200 }, () => generateReferenceNumber());
+    // All distinct
+    expect(new Set(refs).size).toBe(refs.length);
+    // No two suffixes share a long common prefix — sequential / Math.random
+    // generators tend to produce close-by values when called in rapid
+    // succession.
+    const suffixes = refs.map((r) => r.slice(-16));
+    for (let i = 0; i < suffixes.length; i++) {
+      for (let j = i + 1; j < suffixes.length; j++) {
+        const a = suffixes[i]!;
+        const b = suffixes[j]!;
+        let n = 0;
+        while (n < a.length && a[n] === b[n]) n++;
+        // 16 hex chars = 64 bits; a chance collision of >8 leading chars
+        // across 200 calls would be vanishingly unlikely with real entropy.
+        expect(n).toBeLessThanOrEqual(8);
+      }
+    }
+  });
+
+  it('does not return any of the legacy 5-digit references', () => {
+    for (let i = 0; i < 50; i++) {
+      const ref = generateReferenceNumber();
+      expect(ref).not.toMatch(/^GRV-\d{4}-\d{5}$/);
+    }
   });
 
   it('rejects grievance without required fields', async () => {

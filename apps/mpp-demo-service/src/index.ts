@@ -7,12 +7,41 @@ const app = express();
 app.use(express.json());
 app.use(rateLimit({ windowMs: 60_000, max: 100 }));
 
-// Enable CORS for demo UI
-app.use((_req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Authorization, X-Grantex-Passport, Content-Type');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  if (_req.method === 'OPTIONS') {
+// CORS — explicit allowlist, not wildcard.
+//
+// Origins come from MPP_DEMO_CORS_ALLOWED_ORIGINS (comma-separated). When
+// the env var is unset we fall back to the local dev origins the demo UI
+// is served from. Production deployments must set the env var explicitly;
+// anything not in the list is rejected at the preflight stage.
+const DEFAULT_DEV_ORIGINS = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:3000',
+];
+
+const ALLOWED_ORIGINS: ReadonlySet<string> = new Set(
+  (process.env['MPP_DEMO_CORS_ALLOWED_ORIGINS'] ?? DEFAULT_DEV_ORIGINS.join(','))
+    .split(',')
+    .map((o) => o.trim())
+    .filter((o) => o.length > 0),
+);
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (typeof origin === 'string' && ALLOWED_ORIGINS.has(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+    res.header('Access-Control-Allow-Headers', 'Authorization, X-Grantex-Passport, Content-Type');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  }
+  if (req.method === 'OPTIONS') {
+    // Reject preflights from disallowed origins so misconfigured callers
+    // see a clear error instead of a silent same-origin failure later.
+    if (typeof origin !== 'string' || !ALLOWED_ORIGINS.has(origin)) {
+      res.status(403).json({ error: 'cors_origin_not_allowed' });
+      return;
+    }
     res.sendStatus(204);
     return;
   }

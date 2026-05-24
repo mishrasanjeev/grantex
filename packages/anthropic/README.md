@@ -27,6 +27,7 @@ const readFileTool = createGrantexTool({
     required: ['path'],
   },
   grantToken: process.env.GRANT_TOKEN!,
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
   requiredScope: 'file:read',
   execute: async ({ path }) => fs.readFile(path as string, 'utf-8'),
 });
@@ -47,11 +48,11 @@ for (const block of response.content) {
 
 ## Features
 
-- **`createGrantexTool()`** — Wrap any Anthropic tool definition with offline scope enforcement
+- **`createGrantexTool()`** — Wrap any Anthropic tool definition with JWKS token verification and scope enforcement
 - **`GrantexToolRegistry`** — Manage multiple tools and dispatch `tool_use` blocks by name
 - **`withAuditLogging()`** — Wrap tools to automatically log success/failure to the Grantex audit trail
 - **`handleToolCall()`** — Execute a tool from a `tool_use` block with audit logging in one step
-- **`getGrantScopes()`** — Decode scopes from a grant token offline
+- **`getGrantScopes()`** — Decode scopes from a grant token for diagnostics without signature verification
 
 ## Documentation
 

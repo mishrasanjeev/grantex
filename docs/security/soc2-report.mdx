@@ -1,24 +1,25 @@
 ---
-title: "SOC 2 Type I Report"
-sidebarTitle: "SOC 2 Report"
-description: "SOC 2 Type I examination report for the Grantex Delegated Authorization Platform."
+title: "SOC 2 Readiness Control Mapping"
+sidebarTitle: "SOC 2 Readiness"
+description: "Internal SOC 2 readiness control mapping for the Grantex Delegated Authorization Platform."
 ---
 
 | Field | Detail |
 |-------|--------|
-| **Prepared by** | Thornfield Assurance Partners LLP |
-| **Examination date** | As of February 20, 2026 |
-| **Report date** | February 28, 2026 |
+| **Prepared by** | Grantex maintainers |
+| **Readiness snapshot date** | February 20, 2026 |
+| **Publication date** | February 28, 2026 |
 | **Trust Service Categories** | Security (CC), Availability (A), Confidentiality (C) |
 | **Classification** | Public |
-| **Report type** | SOC 2 Type I |
+| **Report type** | Internal readiness control mapping; not a SOC 2 Type I attestation |
 
-## Opinion
+<Warning>
+  This page is not an independent CPA attestation and should not be represented as SOC 2 certification. It is a public control mapping intended to help reviewers understand the evidence Grantex maintains while formal audit work is pending.
+</Warning>
 
-In our opinion, in all material respects:
+## Readiness Position
 
-1. The description fairly presents the System as of February 20, 2026.
-2. The controls stated in the description were suitably designed to provide reasonable assurance that the trust service criteria for **Security**, **Availability**, and **Confidentiality** would be achieved.
+This document summarizes controls that map to SOC 2 Security, Availability, and Confidentiality criteria. It does not express an auditor opinion on control design or operating effectiveness.
 
 ## System Description
 
@@ -90,8 +91,8 @@ Grantex provides a Delegated Authorization Platform — an open, model-neutral p
 
 ## Findings Summary
 
-All findings from the third-party security assessment (Vestige Security Labs) were remediated before the examination date, except GXT-003 (rate limiting), which was subsequently addressed in v0.1.3. No findings affect the suitability of design conclusion.
+The readiness mapping tracks findings from the referenced third-party security assessment. Open findings must be treated as remediation work, not as exceptions approved by a SOC 2 auditor.
 
 ---
 
-*Thornfield Assurance Partners LLP, New York. February 28, 2026. The full report is maintained at [github.com/mishrasanjeev/grantex/blob/main/docs/soc2-type1/report.md](https://github.com/mishrasanjeev/grantex/blob/main/docs/soc2-type1/report.md).*
+*This public readiness mapping is maintained at [github.com/mishrasanjeev/grantex/blob/main/docs/soc2-type1/report.md](https://github.com/mishrasanjeev/grantex/blob/main/docs/soc2-type1/report.md).*

@@ -8,7 +8,7 @@ Option A is the cheapest temporary hosted smoke path for Grantex Commerce V1. It
 
 ## Execution Outcome
 
-Option A hosted smoke was executed after explicit approval and is now complete. The redacted evidence report is `docs/reports/commerce-v1-option-a-smoke-evidence.md`.
+Option A hosted smoke was executed after explicit approval and is now complete. The redacted evidence report is `docs/internal/commerce-v1/commerce-v1-option-a-smoke-evidence.md`.
 
 - Final smoke evidence recorded 22 passed checks, 0 failed checks, and 9 skipped negative checks.
 - Health, JWKS, commerce well-known, MCP initialize/tools/list, catalog, inventory, cart, consent, passport exchange, mock payment intent, checkout, mock provider webhooks, duplicate webhook idempotency, manual reconciliation, audit timeline, provider webhook replay dry-run, and emergency re-enable negative check passed.
@@ -271,7 +271,7 @@ node scripts/commerce-staging-e2e-harness.mjs --dry-run --api-base=$env:SMOKE_UR
 
 ```powershell
 # NOT RUN
-node scripts/commerce-staging-e2e-harness.mjs --run --api-base=$env:SMOKE_URL --allow-smoke-cloud-run-url=$env:SMOKE_URL --report=docs/reports/commerce-v1-hosted-staging-e2e.md
+node scripts/commerce-staging-e2e-harness.mjs --run --api-base=$env:SMOKE_URL --allow-smoke-cloud-run-url=$env:SMOKE_URL --report=docs/internal/commerce-v1/commerce-v1-hosted-staging-e2e.md
 ```
 
 Run mode must remain fail-closed until a reviewed implementation exists and the required smoke env names are present.
@@ -297,7 +297,7 @@ Create a redacted report only after real smoke checks run:
 
 ```powershell
 # NOT RUN
-node scripts/commerce-staging-e2e-harness.mjs --run --api-base=$env:SMOKE_URL --allow-smoke-cloud-run-url=$env:SMOKE_URL --report=docs/reports/commerce-v1-hosted-staging-e2e.md
+node scripts/commerce-staging-e2e-harness.mjs --run --api-base=$env:SMOKE_URL --allow-smoke-cloud-run-url=$env:SMOKE_URL --report=docs/internal/commerce-v1/commerce-v1-hosted-staging-e2e.md
 ```
 
 The report must include only hostnames, request counts, status codes, redacted request IDs, pass/fail rows, blockers, and no-live-payment confirmation. It must not include secret values, bearer tokens, raw passports, idempotency keys, provider credentials, webhook secrets, encrypted payload material, or raw webhook payloads.

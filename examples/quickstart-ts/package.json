@@ -6,7 +6,7 @@
     "start": "npx tsx src/index.ts"
   },
   "dependencies": {
-    "@grantex/sdk": "^0.1.1"
+    "@grantex/sdk": "^0.3.8"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -48,6 +48,16 @@ export interface CreateGrantexToolOptions<T extends Record<string, unknown>> {
   inputSchema: AnthropicInputSchema;
   /** Grantex grant token obtained from the token exchange. */
   grantToken: string;
+  /** JWKS URL used to verify the grant token. Defaults to https://api.grantex.dev/.well-known/jwks.json. */
+  jwksUri?: string;
+  /** Expected JWT issuer when it differs from the JWKS origin. */
+  issuer?: string;
+  /** did:web issuer used to derive the JWKS URL. */
+  issuerDid?: string;
+  /** Expected JWT audience. */
+  audience?: string;
+  /** Clock tolerance in seconds for token verification. */
+  clockTolerance?: number;
   /** Scope the agent must hold to invoke this tool (e.g. `'file:read'`). */
   requiredScope: string;
   /** The tool implementation. Receives typed args, returns any JSON-serialisable value. */
@@ -58,14 +68,14 @@ export interface CreateGrantexToolOptions<T extends Record<string, unknown>> {
  * A Grantex-authorized tool in Anthropic SDK format.
  *
  * - `definition` — pass this to the `tools` array of `client.messages.create()`
- * - `execute(args)` — call when handling a `tool_use` block; enforces scope offline
+ * - `execute(args)` — call when handling a `tool_use` block; verifies the token, then enforces scope
  */
 export interface GrantexTool<T extends Record<string, unknown>> {
   /** Anthropic tool definition for passing to the model. */
   readonly definition: AnthropicToolDefinition;
   /**
    * Execute the tool with the given arguments.
-   * Verifies the required scope offline before calling the implementation.
+   * Verifies the grant token and required scope before calling the implementation.
    * @throws {GrantexScopeError} if the agent does not hold the required scope.
    */
   execute(args: T): Promise<unknown>;
