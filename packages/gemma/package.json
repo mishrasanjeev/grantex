@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "jose": "^5.2.4",
-    "ulid": "^2.3.0"
+    "ulid": "^3.0.2"
   },
   "overrides": {
     "esbuild": ">=0.25.0"
