@@ -66,7 +66,9 @@ async function main(): Promise<void> {
   // ── 5. Log an audit entry ──────────────────────────────────────────
   const entry = await grantex.audit.log({
     agentId: agent.id,
+    agentDid: agent.did,
     grantId: token.grantId,
+    principalId: verified.principalId,
     action: 'calendar.read',
     status: 'success',
     metadata: { query: 'today', results: 3 },
