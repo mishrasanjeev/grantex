@@ -54,6 +54,19 @@ const actionScopes = [
   'commerce:payment.status.read',
 ];
 
+function readinessVariant(status: string): 'default' | 'success' | 'warning' | 'danger' {
+  if (status === 'pass') return 'success';
+  if (status === 'fail' || status === 'not_applicable' || status === 'recommended') return 'warning';
+  if (status === 'blocked') return 'danger';
+  return 'default';
+}
+
+function severityVariant(severity: string): 'default' | 'success' | 'warning' | 'danger' {
+  if (severity === 'blocked') return 'danger';
+  if (severity === 'required') return 'warning';
+  return 'default';
+}
+
 export function CommerceOnboarding() {
   const [merchantId, setMerchantId] = useState('');
   const [merchant, setMerchant] = useState<CommerceSandboxOnboarding | null>(null);
@@ -311,6 +324,45 @@ export function CommerceOnboarding() {
 
           <Card>
             <h2 className="mb-3 text-base font-semibold text-gx-text">Readiness checklist</h2>
+            <div className="mb-4 rounded-md border border-gx-border p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs text-gx-muted">Category preset</div>
+                  <div className="mt-1 text-sm font-medium text-gx-text">{merchant.readiness.category_readiness.label}</div>
+                  <div className="mt-1 text-xs text-gx-muted">{merchant.readiness.category_readiness.summary}</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={readinessVariant(merchant.readiness.category_readiness.status)}>
+                    {merchant.readiness.category_readiness.status}
+                  </Badge>
+                  <Badge variant="default">{merchant.readiness.category_readiness.score_percent}%</Badge>
+                </div>
+              </div>
+              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-gx-border">
+                <div
+                  className="h-full rounded-full bg-gx-accent"
+                  style={{ width: `${Math.max(0, Math.min(100, merchant.readiness.category_readiness.score_percent))}%` }}
+                />
+              </div>
+              <div className="mt-3 grid gap-2">
+                {merchant.readiness.category_readiness.items.map((item) => (
+                  <div key={item.key} className="rounded-md border border-gx-border p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-gx-text">{item.label}</span>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant={severityVariant(item.severity)}>{item.severity}</Badge>
+                        <Badge variant={readinessVariant(item.status)}>{item.status}</Badge>
+                      </div>
+                    </div>
+                    <div className="mt-1 text-xs text-gx-muted">{item.description}</div>
+                    {item.status !== 'pass' && item.status !== 'not_applicable' ? (
+                      <div className="mt-2 text-xs text-gx-warning">{item.remediation}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <h3 className="mb-3 text-sm font-semibold text-gx-text">Production gates</h3>
             <div className="grid gap-2 md:grid-cols-2">
               {merchant.readiness.checks.map((item) => (
                 <div key={item.key} className="flex items-center justify-between gap-3 rounded-md border border-gx-border p-3">

@@ -124,6 +124,47 @@ export interface CommerceSandboxOnboardingCheck {
   detail: string;
 }
 
+export interface CommerceCategoryReadinessItem {
+  key:
+    | 'category_preset_recognized'
+    | 'public_display_name_present'
+    | 'country_currency_present'
+    | 'public_safe_description_present'
+    | 'support_contact_present'
+    | 'product_data_readiness'
+    | 'warranty_summary'
+    | 'return_policy_summary'
+    | 'tax_gst_metadata'
+    | 'inventory_freshness'
+    | 'private_artifacts_not_stored'
+    | 'no_production_allowlist_config_values'
+    | 'no_live_provider_path'
+    | 'no_checkout_payment_enablement';
+  label: string;
+  description: string;
+  severity: 'required' | 'recommended' | 'blocked';
+  status: 'pass' | 'fail' | 'blocked' | 'not_applicable';
+  remediation: string;
+}
+
+export interface CommerceCategoryReadiness {
+  preset_key: string | null;
+  label: string;
+  status: 'pass' | 'fail' | 'blocked';
+  required_passed: boolean;
+  score_percent: number;
+  score: {
+    passed: number;
+    total: number;
+    percentage: number;
+    required_passed: number;
+    required_total: number;
+    blocked: number;
+  };
+  items: CommerceCategoryReadinessItem[];
+  summary: string;
+}
+
 export interface CommerceSandboxOnboarding {
   merchant_id: string;
   tenant_id: string;
@@ -142,7 +183,10 @@ export interface CommerceSandboxOnboarding {
   sandbox_onboarding_updated_at: string | null;
   readiness: {
     ready: boolean;
+    status: 'pass' | 'fail' | 'blocked';
+    score_percent: number;
     checks: CommerceSandboxOnboardingCheck[];
+    category_readiness: CommerceCategoryReadiness;
     live_mode_status: 'not_live';
     production_approval_status: 'not_approved';
     rollout_status: 'rollout_not_requested';

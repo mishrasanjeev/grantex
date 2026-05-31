@@ -191,9 +191,53 @@ const sandboxOnboarding = {
   sandbox_onboarding_updated_at: '2026-01-01T00:00:00Z',
   readiness: {
     ready: true,
+    status: 'pass' as const,
+    score_percent: 100,
     live_mode_status: 'not_live' as const,
     production_approval_status: 'not_approved' as const,
     rollout_status: 'rollout_not_requested' as const,
+    category_readiness: {
+      preset_key: 'electronics_appliances',
+      label: 'Electronics and appliances',
+      status: 'pass' as const,
+      required_passed: true,
+      score_percent: 100,
+      score: {
+        passed: 14,
+        total: 14,
+        percentage: 100,
+        required_passed: 5,
+        required_total: 5,
+        blocked: 0,
+      },
+      summary: 'Required sandbox category fields pass.',
+      items: [
+        {
+          key: 'category_preset_recognized' as const,
+          label: 'Category preset recognized',
+          description: 'The sandbox profile must select the V1 launch preset for category-specific scoring.',
+          severity: 'required' as const,
+          status: 'pass' as const,
+          remediation: 'Select the electronics_appliances category preset.',
+        },
+        {
+          key: 'warranty_summary' as const,
+          label: 'Warranty summary',
+          description: 'Electronics/appliances variants should expose warranty summary text before agent-facing preview.',
+          severity: 'recommended' as const,
+          status: 'pass' as const,
+          remediation: 'Add warranty_summary on every active sandbox variant.',
+        },
+        {
+          key: 'no_checkout_payment_enablement' as const,
+          label: 'No checkout/payment enablement',
+          description: 'C6A only scores read-only sandbox preview readiness; checkout/payment execution remains disabled.',
+          severity: 'blocked' as const,
+          status: 'pass' as const,
+          remediation: 'Disable agentic commerce execution before marking sandbox onboarding ready.',
+        },
+      ],
+    },
     checks: [
       {
         key: 'merchant_profile_present' as const,
@@ -593,8 +637,11 @@ describe('CommerceOnboarding', () => {
     await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
     await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
     await waitFor(() => expect(screen.getByText('Readiness checklist')).toBeInTheDocument());
+    expect(screen.getByText('Category preset recognized')).toBeInTheDocument();
+    expect(screen.getByText('Electronics and appliances')).toBeInTheDocument();
+    expect(screen.getByText('Warranty summary')).toBeInTheDocument();
     expect(screen.getByText('Merchant profile present')).toBeInTheDocument();
-    expect(screen.getByText('No checkout/payment enablement')).toBeInTheDocument();
+    expect(screen.getAllByText('No checkout/payment enablement').length).toBeGreaterThan(0);
     expect(screen.getByText('Trusted agent')).toBeInTheDocument();
     expect(screen.getByText('Mock provider credential metadata')).toBeInTheDocument();
     expect(screen.getByText('Publish/unpublish controls require a separate reviewed backend API and remain blocked.')).toBeInTheDocument();
