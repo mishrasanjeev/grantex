@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
-    "@types/node": "^20.11.0",
+    "@types/node": "^25.9.1",
     "express": "^4.21.0",
     "typescript": "^5.3.3",
     "vitest": "^4.1.2"
