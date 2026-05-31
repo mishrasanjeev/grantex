@@ -8,6 +8,10 @@ description: Merchant-readable product requirements and gap plan for making Gran
 This document explains what still needs to be built before merchants can
 self-serve into agentic commerce using Grantex and AgenticOrg.
 
+For the consolidated source of truth, read
+`docs/guides/commerce-v1-agentic-commerce-prd.md`. This implementation PRD is a
+supporting summary and must not diverge from that canonical document.
+
 It is written for founders, merchants, operators, product teams, and engineers.
 The short version is simple:
 

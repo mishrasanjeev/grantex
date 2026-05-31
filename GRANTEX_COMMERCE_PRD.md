@@ -572,6 +572,11 @@ This section explains the practical path from the current repos to a merchant-re
 agentic commerce product. It is written for product, sales, merchant success, and
 engineering readers.
 
+The consolidated cross-repo PRD for this path is
+`docs/guides/commerce-v1-agentic-commerce-prd.md`. Keep this master PRD and that
+guide aligned; the guide is the layman-readable source for deciding next
+implementation slices.
+
 Plain-English summary:
 
 > A merchant should not have to rebuild their store for AI agents. The merchant
