@@ -34,7 +34,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "jose": "^5.2.4"
+    "jose": "^6.2.3"
   },
   "overrides": {
     "esbuild": ">=0.25.0"
