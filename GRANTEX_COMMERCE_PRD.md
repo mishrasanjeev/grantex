@@ -746,6 +746,49 @@ Stop and do not go live if any of these are true:
 - UCP, ACP, AP2, schema.org, or live provider compliance is claimed before implementation and tests exist.
 - Production allowlists, public discovery flags, live Plural, checkout/payment creation, or Commerce V1 production flags are changed without a separate approved rollout.
 
+#### Full release gap register
+
+The implementation guide `docs/guides/commerce-v1-agentic-commerce-implementation-prd.md`
+is the merchant-readable companion to this master PRD. It turns the current
+repo evidence into a concrete release backlog. The following register is the
+source-level checklist that must stay aligned with that guide.
+
+| Capability | Current Grantex state | Current AgenticOrg state | Gap before merchant launch | Fast-track owner |
+| --- | --- | --- | --- | --- |
+| Self-serve merchant signup | Operator-led tenant/merchant foundations exist. | AgenticOrg consumes Grantex state only. | Merchant signup, category preset selection, sandbox/live environment split, role invite, checklist UI. | Grantex |
+| Merchant verification and approval | Verification fields and evidence posture are documented; full runtime review workflow is not complete. | AgenticOrg must not approve merchants. | KYB/KYC/legal/compliance/security/product/ops approval model with private evidence references outside Git. | Grantex plus human reviewers |
+| Existing-system connectors | CSV/manual/product APIs and merchant webhook source exist. | No direct merchant-system connector for commerce execution. | Shopify/WooCommerce/Magento/custom REST/ERP/PIM/WMS/OMS/payment/support connector framework. | Grantex |
+| Large catalog imports | Bulk dry-run/upsert exists. | Catalog search uses Grantex. | Async jobs, row-level errors, rollback, import history, retry, source-of-truth conflict handling. | Grantex |
+| Inventory depth | Variant availability and freshness exist. | Agent has stale/unknown inventory caution behavior. | Quantity/location inventory, freshness TTL, reservation/stock hold, delivery feasibility. | Grantex |
+| Pricing, tax, offers, EMI | Variant price/tax fields exist; provider offer execution is not complete. | Guardrails block unsupported claims. | Price freshness, discount/coupon/EMI/reward eligibility, total recalculation, provider-neutral offer metadata. | Grantex |
+| Cart and checkout session lifecycle | Cart draft and payment intent exist. | Agent calls cart/payment/checkouts only through Grantex. | Cart update/cancel/expire, fulfillment option selection, ACP-style checkout state mapping. | Grantex |
+| Order and fulfillment | Not implemented as production order lifecycle. | Agent cannot safely promise order state unless Grantex provides it. | Order create/read/list, order status, shipment/pickup/delivery events, cancellation, OMS/logistics webhooks. | Grantex |
+| Returns and refunds | Refund execution deferred. | Agent must not promise refund/return outcomes. | Return/refund request, eligibility preview, manual approval, audit, later provider execution. | Grantex |
+| Settlement and payouts | Reconciliation metadata exists for payment intents. | No seller payout view. | Provider-neutral settlement, payout reporting, fee/tax export, reconciliation dashboard. | Grantex |
+| Live provider and Plural | Mock/sandbox foundations exist; live remains gated. | Direct provider calls are blocked. | Legal/security/provider/ops approval, live credential validation, webhook signature evidence, rollback. | Grantex |
+| Protocol adapters | Native REST/MCP and well-known Grantex profile exist; public discovery is fail-closed. | AgenticOrg public discovery is gated. | UCP-style profile, ACP-style checkout/order/refund mapping, schema.org JSON-LD, AP2 evidence model and conformance fixtures. | Grantex publishes; AgenticOrg consumes |
+| AgenticOrg buyer workflow | N/A | Commerce Sales Agent demo/evals/guardrails exist. | Buyer-facing UX for grounded comparison, safe cart, consent, status, refusal copy, support handoff. | AgenticOrg |
+| Documentation navigation | Commerce docs group exists in `docs/docs.json`. | Commerce docs exist without a docs.json nav file. | Keep PRD, overview, developer, operator, operations, evidence, and demo docs linked and current. | Both repos |
+| Landing page copy | Grantex docs overview exists; production claims remain blocked. | Product UI landing page exists outside docs-only scope. | Public-safe product copy explaining "connect existing systems, preview agent-ready commerce, request approval" without live/certification claims. | Product/web owners |
+| GitHub workflow safety | Deploy workflows have path filters for runtime deploy paths. | Docs-only cloud build/push guard exists in deploy workflow. | Keep docs-only planning merges from cloud auth/build/push; treat workflow changes as non-docs-only and separately approved. | Both repos |
+
+#### Fast-track implementation backlog
+
+1. Self-serve sandbox merchant profile and role setup.
+2. Category preset checklist with required field scoring.
+3. CSV/manual plus one priority storefront connector.
+4. Async catalog import job with dry-run, rollback, and row-level errors.
+5. Public-safe catalog preview and schema.org JSON-LD draft.
+6. Inventory freshness TTL, stale refusal, and location/quantity model proposal.
+7. Safe cart update/cancel and fulfillment option selection.
+8. Sandbox checkout with Commerce Passport and mock/provider-neutral adapter.
+9. Order and fulfillment backbone before broad checkout.
+10. Return/refund request workflow before refund execution.
+11. Settlement/payout reporting and reconciliation export.
+12. UCP/ACP/AP2/schema.org adapter conformance fixtures.
+13. AgenticOrg buyer workflow, demo, and refusal evals.
+14. One real merchant controlled pilot with separate approval and rollback owner.
+
 ## 6. Core Product Modules
 
 ### 6.1 Merchant Commerce Gateway
