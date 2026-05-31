@@ -35,6 +35,38 @@ paths directly.
 | Provider status | Mock provider only for current evidence. Live provider credentials remain blocked. |
 | Audit review | Confirm consent, passport, cart, payment intent, and webhook metadata are observable without secret values. |
 
+## Seller Self-Serve Sandbox Onboarding
+
+C5Z adds an API-backed sandbox onboarding foundation for a tenant-owned
+merchant workspace. It is for preparing public-safe sandbox profile metadata
+only. It does not approve a merchant, enable public discovery, enable AgenticOrg
+public commerce discovery, enable Commerce V1 production use, create checkout or
+payment paths, collect provider credentials, enable live payments, or enable
+live Plural.
+
+Sandbox onboarding stores only:
+
+- display name;
+- category preset;
+- country and currency;
+- test-safe support email or support URL;
+- public discovery description draft;
+- sandbox environment marker;
+- agentic commerce requested flag;
+- sandbox onboarding state and public-safe blocker/status summaries.
+
+The state machine is:
+
+`draft_created` -> `profile_incomplete` -> `sandbox_ready` ->
+`submitted_for_review`, with `blocked`, `not_approved`, and
+`rollout_not_requested` as fail-closed review states.
+
+Readiness checks require a merchant profile, category preset, public-safe
+description, no private artifacts in public fields, no production allowlist or
+live-mode config values, no provider account references, and no checkout/payment
+enablement. Passing readiness means "sandbox profile can be reviewed"; it is not
+production approval.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent

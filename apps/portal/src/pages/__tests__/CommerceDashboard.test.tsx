@@ -20,6 +20,9 @@ const mockListCommercePassports = vi.fn();
 const mockRevokeCommercePassport = vi.fn();
 const mockGetCommerceMerchant = vi.fn();
 const mockUpdateCommerceMerchant = vi.fn();
+const mockGetCommerceMerchantSandboxOnboarding = vi.fn();
+const mockUpdateCommerceMerchantSandboxOnboarding = vi.fn();
+const mockTransitionCommerceMerchantSandboxOnboarding = vi.fn();
 const mockDisableMerchantAgenticCommerce = vi.fn();
 const mockEnableMerchantAgenticCommerce = vi.fn();
 const mockListCommerceAgents = vi.fn();
@@ -49,6 +52,9 @@ vi.mock('../../api/commerce', () => ({
   revokeCommercePassport: (...a: unknown[]) => mockRevokeCommercePassport(...a),
   getCommerceMerchant: (...a: unknown[]) => mockGetCommerceMerchant(...a),
   updateCommerceMerchant: (...a: unknown[]) => mockUpdateCommerceMerchant(...a),
+  getCommerceMerchantSandboxOnboarding: (...a: unknown[]) => mockGetCommerceMerchantSandboxOnboarding(...a),
+  updateCommerceMerchantSandboxOnboarding: (...a: unknown[]) => mockUpdateCommerceMerchantSandboxOnboarding(...a),
+  transitionCommerceMerchantSandboxOnboarding: (...a: unknown[]) => mockTransitionCommerceMerchantSandboxOnboarding(...a),
   disableMerchantAgenticCommerce: (...a: unknown[]) => mockDisableMerchantAgenticCommerce(...a),
   enableMerchantAgenticCommerce: (...a: unknown[]) => mockEnableMerchantAgenticCommerce(...a),
   listCommerceAgents: (...a: unknown[]) => mockListCommerceAgents(...a),
@@ -165,6 +171,44 @@ const merchant = {
   disabled_at: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+};
+
+const sandboxOnboarding = {
+  merchant_id: 'mch_1',
+  tenant_id: 'cten_1',
+  display_name: 'Grantex Store',
+  category_preset: 'electronics_appliances',
+  country_code: 'IN',
+  default_currency: 'INR',
+  support_email: 'ops@example.test',
+  support_url: 'https://support.example.test/help',
+  public_discovery_description_draft: 'Sandbox catalog profile for test appliances.',
+  environment: 'sandbox' as const,
+  agentic_commerce_requested: true,
+  agentic_commerce_enabled: false,
+  sandbox_onboarding_state: 'sandbox_ready' as const,
+  sandbox_onboarding_blocker: null,
+  sandbox_onboarding_updated_at: '2026-01-01T00:00:00Z',
+  readiness: {
+    ready: true,
+    live_mode_status: 'not_live' as const,
+    production_approval_status: 'not_approved' as const,
+    rollout_status: 'rollout_not_requested' as const,
+    checks: [
+      {
+        key: 'merchant_profile_present' as const,
+        label: 'Merchant profile present',
+        status: 'pass' as const,
+        detail: 'present',
+      },
+      {
+        key: 'no_checkout_payment_enablement' as const,
+        label: 'No checkout/payment enablement',
+        status: 'pass' as const,
+        detail: 'blocked',
+      },
+    ],
+  },
 };
 
 const credential = {
@@ -517,8 +561,15 @@ describe('CommerceSettings', () => {
 describe('CommerceOnboarding', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetCommerceMerchant.mockResolvedValue({ data: merchant });
-    mockUpdateCommerceMerchant.mockResolvedValue({ data: { ...merchant, display_name: 'Grantex Store Updated' }, audit_event_id: 'aud_merchant' });
+    mockGetCommerceMerchantSandboxOnboarding.mockResolvedValue({ data: sandboxOnboarding });
+    mockUpdateCommerceMerchantSandboxOnboarding.mockResolvedValue({
+      data: { ...sandboxOnboarding, display_name: 'Grantex Store Updated' },
+      audit_event_id: 'aud_merchant',
+    });
+    mockTransitionCommerceMerchantSandboxOnboarding.mockResolvedValue({
+      data: { ...sandboxOnboarding, sandbox_onboarding_state: 'submitted_for_review' },
+      audit_event_id: 'aud_review',
+    });
     mockListCommerceAgents.mockResolvedValue({ items: [agent], next_cursor: null });
     mockListCommercePolicies.mockResolvedValue({ items: [{ id: 'cpol_1', status: 'active' }], next_cursor: null });
     mockListCommerceProducts.mockResolvedValue({ items: [product], next_cursor: null });
@@ -542,18 +593,25 @@ describe('CommerceOnboarding', () => {
     await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
     await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
     await waitFor(() => expect(screen.getByText('Readiness checklist')).toBeInTheDocument());
+    expect(screen.getByText('Merchant profile present')).toBeInTheDocument();
+    expect(screen.getByText('No checkout/payment enablement')).toBeInTheDocument();
     expect(screen.getByText('Trusted agent')).toBeInTheDocument();
     expect(screen.getByText('Mock provider credential metadata')).toBeInTheDocument();
-    expect(screen.getByText('Publish/unpublish controls require a reviewed backend API and remain blocked.')).toBeInTheDocument();
+    expect(screen.getByText('Publish/unpublish controls require a separate reviewed backend API and remain blocked.')).toBeInTheDocument();
     expect(screen.queryByText(/enable live plural/i)).not.toBeInTheDocument();
 
     await user.clear(screen.getByLabelText('Display name'));
     await user.type(screen.getByLabelText('Display name'), 'Grantex Store Updated');
-    await user.click(screen.getByRole('button', { name: 'Save merchant' }));
-    await waitFor(() => expect(mockUpdateCommerceMerchant).toHaveBeenCalledWith('mch_1', expect.objectContaining({
+    await user.click(screen.getByRole('button', { name: 'Save sandbox profile' }));
+    await waitFor(() => expect(mockUpdateCommerceMerchantSandboxOnboarding).toHaveBeenCalledWith('mch_1', expect.objectContaining({
       display_name: 'Grantex Store Updated',
-      agentic_commerce_enabled: true,
+      agentic_commerce_requested: true,
     })));
+
+    await user.click(screen.getByRole('button', { name: 'Submit for review' }));
+    await waitFor(() => expect(mockTransitionCommerceMerchantSandboxOnboarding).toHaveBeenCalledWith('mch_1', {
+      targetState: 'submitted_for_review',
+    }));
 
     await user.click(screen.getByRole('button', { name: 'Evaluate policy' }));
     await waitFor(() => expect(mockEvaluateCommercePolicy).toHaveBeenCalledWith(expect.objectContaining({

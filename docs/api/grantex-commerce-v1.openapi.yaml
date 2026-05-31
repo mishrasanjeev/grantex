@@ -21,7 +21,11 @@ info:
     playground client for the commerce MCP surface. M6A adds operator-only
     commerce operations health and baseline hardening runbooks. C5C adds a
     narrow read-only discovery gate for the well-known profile without
-    enabling broader Commerce V1 runtime routes.
+    enabling broader Commerce V1 runtime routes. C5Z adds a sandbox-only
+    seller onboarding foundation that records public-safe profile drafts,
+    readiness checks, and review state without production approval,
+    checkout/payment creation, provider credential capture, public discovery
+    enablement, live payments, or live Plural.
 servers:
   - url: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
     description: Production (Cloud Run)
@@ -121,6 +125,14 @@ components:
         default_currency: { type: string }
         country_code: { type: string }
         support_email: { type: string, nullable: true }
+        support_url: { type: string, nullable: true }
+        public_discovery_description_draft: { type: string, nullable: true }
+        agentic_commerce_requested: { type: boolean, default: false }
+        sandbox_onboarding_state:
+          type: string
+          enum: [draft_created, profile_incomplete, sandbox_ready, submitted_for_review, blocked, not_approved, rollout_not_requested]
+        sandbox_onboarding_blocker: { type: string, nullable: true }
+        sandbox_onboarding_updated_at: { type: string, format: date-time, nullable: true }
         disabled_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -135,6 +147,9 @@ components:
         default_currency: { type: string, default: INR }
         country_code: { type: string, default: IN }
         support_email: { type: string, nullable: true }
+        support_url: { type: string, nullable: true }
+        public_discovery_description_draft: { type: string, nullable: true }
+        agentic_commerce_requested: { type: boolean, default: false }
 
     UpdateMerchantRequest:
       type: object
@@ -152,6 +167,87 @@ components:
         Mutable merchant fields only. Tenant, ownership, environment,
         provider account references, audit fields, created_at, and updated_at
         are immutable on this endpoint.
+
+    SandboxOnboardingState:
+      type: string
+      enum:
+        - draft_created
+        - profile_incomplete
+        - sandbox_ready
+        - submitted_for_review
+        - blocked
+        - not_approved
+        - rollout_not_requested
+
+    SandboxOnboardingUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name: { type: string }
+        category_preset: { type: string, enum: [electronics_appliances] }
+        default_currency: { type: string, pattern: "^[A-Z]{3}$" }
+        country_code: { type: string, pattern: "^[A-Z]{2}$" }
+        support_email:
+          type: string
+          nullable: true
+          description: Test-safe or repo-safe support email only.
+        support_url:
+          type: string
+          nullable: true
+          description: Test-safe or repo-safe support URL only.
+        public_discovery_description_draft:
+          type: string
+          nullable: true
+          description: Public-safe draft with no checkout, payment, live-provider, production approval, readiness, certification, credential, or secret claims.
+        agentic_commerce_requested: { type: boolean }
+
+    SandboxOnboardingTransitionRequest:
+      type: object
+      required: [target_state]
+      properties:
+        target_state: { $ref: "#/components/schemas/SandboxOnboardingState" }
+        reason:
+          type: string
+          nullable: true
+          description: Public-safe reason summary required for blocked or not_approved transitions.
+
+    SandboxOnboarding:
+      type: object
+      properties:
+        merchant_id: { type: string }
+        tenant_id: { type: string }
+        display_name: { type: string, nullable: true }
+        category_preset: { type: string, nullable: true }
+        country_code: { type: string, nullable: true }
+        default_currency: { type: string, nullable: true }
+        support_email: { type: string, nullable: true }
+        support_url: { type: string, nullable: true }
+        public_discovery_description_draft: { type: string, nullable: true }
+        environment: { type: string, enum: [sandbox] }
+        agentic_commerce_requested: { type: boolean }
+        agentic_commerce_enabled:
+          type: boolean
+          description: Existing execution flag, surfaced so readiness can fail closed when true; sandbox onboarding cannot set it.
+        sandbox_onboarding_state: { $ref: "#/components/schemas/SandboxOnboardingState" }
+        sandbox_onboarding_blocker: { type: string, nullable: true }
+        sandbox_onboarding_updated_at: { type: string, format: date-time, nullable: true }
+        readiness:
+          type: object
+          properties:
+            ready: { type: boolean }
+            live_mode_status: { type: string, enum: [not_live] }
+            production_approval_status: { type: string, enum: [not_approved] }
+            rollout_status: { type: string, enum: [rollout_not_requested] }
+            checks:
+              type: array
+              items:
+                type: object
+                properties:
+                  key: { type: string }
+                  label: { type: string }
+                  status: { type: string, enum: [pass, blocked] }
+                  detail: { type: string }
 
     Agent:
       type: object
@@ -1305,6 +1401,104 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: Operator or owning merchant caller required; CommerceAgent callers are denied }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/sandbox-onboarding:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    get:
+      tags: [Merchants]
+      summary: Get sandbox seller onboarding state
+      operationId: getMerchantSandboxOnboarding
+      x-implemented: true
+      x-milestone: C5Z
+      description: >-
+        Returns public-safe sandbox onboarding fields, readiness checks, and
+        fail-closed production statuses. The response never includes provider
+        account references, credentials, secrets, production allowlist values,
+        checkout/payment material, or live-provider paths.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxOnboarding" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator or owning merchant caller required; CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant blocked from sandbox onboarding }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+    put:
+      tags: [Merchants]
+      summary: Update sandbox seller onboarding profile
+      operationId: updateMerchantSandboxOnboarding
+      x-implemented: true
+      x-milestone: C5Z
+      description: >-
+        Updates only non-secret, public-safe sandbox profile fields and the
+        agentic commerce requested flag. It cannot set environment, production
+        approval, public discovery, allowlist, provider credential, checkout,
+        payment, live payment, or live Plural fields.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SandboxOnboardingUpdateRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxOnboarding" }
+                  audit_event_id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator or owning merchant caller required; CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant blocked from sandbox onboarding }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/sandbox-onboarding/transition:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    post:
+      tags: [Merchants]
+      summary: Transition sandbox seller onboarding state
+      operationId: transitionMerchantSandboxOnboarding
+      x-implemented: true
+      x-milestone: C5Z
+      description: >-
+        Moves a sandbox onboarding workspace through the review-oriented state
+        machine. Transitions to sandbox_ready or submitted_for_review require
+        readiness checks to pass. No transition approves production, enables
+        public discovery, enables checkout/payment creation, or enables live
+        payments/live Plural.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SandboxOnboardingTransitionRequest" }
+      responses:
+        "200":
+          description: Transitioned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxOnboarding" }
+                  audit_event_id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator or owning merchant caller required; CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Invalid transition or live merchant blocked }
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "503": { $ref: "#/components/responses/CommerceDisabled" }
 

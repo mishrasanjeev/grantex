@@ -12,6 +12,14 @@ export type CommercePaymentStatus =
 
 export type CommerceEnvironment = 'sandbox' | 'live';
 export type CommerceProviderKey = 'mock' | 'plural';
+export type SandboxOnboardingState =
+  | 'draft_created'
+  | 'profile_incomplete'
+  | 'sandbox_ready'
+  | 'submitted_for_review'
+  | 'blocked'
+  | 'not_approved'
+  | 'rollout_not_requested';
 
 export interface CommercePaymentIntent {
   id: string;
@@ -91,9 +99,54 @@ export interface CommerceMerchant {
   default_currency: string;
   country_code: string;
   support_email: string | null;
+  support_url?: string | null;
+  public_discovery_description_draft?: string | null;
+  agentic_commerce_requested?: boolean;
+  sandbox_onboarding_state?: SandboxOnboardingState;
+  sandbox_onboarding_blocker?: string | null;
+  sandbox_onboarding_updated_at?: string | null;
   disabled_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface CommerceSandboxOnboardingCheck {
+  key:
+    | 'merchant_profile_present'
+    | 'category_preset_selected'
+    | 'public_safe_description_present'
+    | 'private_artifacts_not_stored'
+    | 'no_production_allowlist_config_values'
+    | 'no_live_provider_path'
+    | 'no_checkout_payment_enablement';
+  label: string;
+  status: 'pass' | 'blocked';
+  detail: string;
+}
+
+export interface CommerceSandboxOnboarding {
+  merchant_id: string;
+  tenant_id: string;
+  display_name: string | null;
+  category_preset: string | null;
+  country_code: string | null;
+  default_currency: string | null;
+  support_email: string | null;
+  support_url: string | null;
+  public_discovery_description_draft: string | null;
+  environment: 'sandbox';
+  agentic_commerce_requested: boolean;
+  agentic_commerce_enabled: boolean;
+  sandbox_onboarding_state: SandboxOnboardingState;
+  sandbox_onboarding_blocker: string | null;
+  sandbox_onboarding_updated_at: string | null;
+  readiness: {
+    ready: boolean;
+    checks: CommerceSandboxOnboardingCheck[];
+    live_mode_status: 'not_live';
+    production_approval_status: 'not_approved';
+    rollout_status: 'rollout_not_requested';
+  };
 }
 
 export interface CommerceAgent {
@@ -411,6 +464,38 @@ export function revokeCommercePassport(input: {
 
 export function getCommerceMerchant(merchantId: string): Promise<{ data: CommerceMerchant }> {
   return api.get<{ data: CommerceMerchant }>(`/v1/commerce/merchants/${encodeURIComponent(merchantId)}`);
+}
+
+export function getCommerceMerchantSandboxOnboarding(
+  merchantId: string,
+): Promise<{ data: CommerceSandboxOnboarding }> {
+  return api.get<{ data: CommerceSandboxOnboarding }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/sandbox-onboarding`,
+  );
+}
+
+export function updateCommerceMerchantSandboxOnboarding(
+  merchantId: string,
+  patch: Partial<Pick<CommerceSandboxOnboarding,
+    'display_name' | 'category_preset' | 'default_currency' | 'country_code' | 'support_email' | 'support_url' | 'public_discovery_description_draft' | 'agentic_commerce_requested'>>,
+): Promise<{ data: CommerceSandboxOnboarding; audit_event_id: string }> {
+  return api.put<{ data: CommerceSandboxOnboarding; audit_event_id: string }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/sandbox-onboarding`,
+    patch,
+  );
+}
+
+export function transitionCommerceMerchantSandboxOnboarding(
+  merchantId: string,
+  input: { targetState: SandboxOnboardingState; reason?: string },
+): Promise<{ data: CommerceSandboxOnboarding; audit_event_id: string }> {
+  return api.post<{ data: CommerceSandboxOnboarding; audit_event_id: string }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/sandbox-onboarding/transition`,
+    {
+      target_state: input.targetState,
+      ...(input.reason ? { reason: input.reason } : {}),
+    },
+  );
 }
 
 export function updateCommerceMerchant(
