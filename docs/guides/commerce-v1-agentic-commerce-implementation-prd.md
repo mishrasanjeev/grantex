@@ -196,6 +196,7 @@ evidence exist.
 | Return/refund model | Request, eligibility, manual approval, provider handoff, status, audit. | Refund execution remains blocked until separate provider approval. |
 | Settlement model | Provider-neutral payout/settlement records, fees, taxes, reconciliation status, export. | Merchant can answer "when do I get paid?" without raw provider payloads. |
 | Protocol adapters | UCP-style profile, MCP tools, ACP-style checkout/order mapping, schema.org feed, AP2 evidence draft. | Generated from canonical objects with conformance fixtures and no unsupported claims. |
+| External buyer channels | Capability-safe channel metadata for ChatGPT, Claude, Gemini, WhatsApp, Telegram, web/mobile, and future agent surfaces. | A channel cannot show checkout/payment capability unless Grantex approves the merchant, tool scope, consent, and policy state for that channel. |
 | Audit and observability | Append-only audit, redacted logs, metrics, runbooks, replay controls, incident severity. | No protected action is acknowledged without durable audit evidence. |
 | Security and privacy | Credential isolation, secret redaction, tenant filtering, role checks, webhook signatures, rate limits. | Cross-tenant and secret-exposure tests fail closed. |
 
