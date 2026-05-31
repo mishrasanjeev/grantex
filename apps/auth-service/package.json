@@ -27,7 +27,7 @@
     "@opentelemetry/semantic-conventions": "^1.40.0",
     "@simplewebauthn/server": "^11.0.0",
     "@simplewebauthn/types": "^11.0.0",
-    "dotenv": "^16.4.5",
+    "dotenv": "^17.4.2",
     "fastify": "^5.8.5",
     "ioredis": "^5.3.2",
     "jose": "^5.2.4",
