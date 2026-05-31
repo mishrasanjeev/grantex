@@ -35,10 +35,10 @@
     "@fastify/rate-limit": "^10.2.1",
     "@grantex/sdk": ">=0.1.8",
     "fastify": "^5.2.1",
-    "jose": "^5.10.0"
+    "jose": "^6.2.3"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
+    "@types/node": "^25.9.1",
     "typescript": "^5.3.3",
     "vitest": "^4.0.18"
   },
