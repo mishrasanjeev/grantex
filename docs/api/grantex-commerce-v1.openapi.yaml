@@ -25,7 +25,10 @@ info:
     seller onboarding foundation that records public-safe profile drafts,
     readiness checks, and review state without production approval,
     checkout/payment creation, provider credential capture, public discovery
-    enablement, live payments, or live Plural.
+    enablement, live payments, or live Plural. C6A adds category readiness
+    scoring, and C6B adds catalog readiness preview from existing sandbox
+    catalog data without connectors, checkout, payments, or public discovery
+    enablement.
 servers:
   - url: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
     description: Production (Cloud Run)
@@ -269,6 +272,76 @@ components:
           items: { $ref: "#/components/schemas/CategoryReadinessItem" }
         summary: { type: string }
 
+    CatalogReadinessItem:
+      type: object
+      properties:
+        key:
+          type: string
+          enum:
+            - catalog_products_present
+            - catalog_variants_present
+            - products_public_safe_title
+            - products_public_safe_description
+            - products_category_mapping
+            - variants_sku_present
+            - variants_price_currency_present
+            - products_image_media
+            - variants_availability_freshness
+            - variants_warranty_summary
+            - variants_return_policy_summary
+            - variants_tax_gst_metadata
+            - no_unsafe_catalog_text
+        label: { type: string }
+        description: { type: string }
+        severity: { type: string, enum: [required, recommended, blocked] }
+        status: { type: string, enum: [pass, fail, blocked, not_applicable] }
+        count: { type: integer, minimum: 0, nullable: true }
+        total: { type: integer, minimum: 0, nullable: true }
+        remediation: { type: string }
+
+    CatalogReadiness:
+      type: object
+      description: >-
+        C6B computed sandbox catalog readiness preview. It is derived from
+        tenant-owned sandbox catalog product and variant rows. Passing this
+        checklist only means required catalog fields are ready for sandbox
+        read-only discovery review; it is not merchant approval, production
+        readiness, public discovery enablement, checkout/payment readiness,
+        live payment readiness, or live Plural readiness.
+      properties:
+        status: { $ref: "#/components/schemas/SandboxReadinessStatus" }
+        required_passed: { type: boolean }
+        score_percent: { type: integer, minimum: 0, maximum: 100 }
+        recommended_completion_percent: { type: integer, minimum: 0, maximum: 100 }
+        blocker_count: { type: integer, minimum: 0 }
+        product_count: { type: integer, minimum: 0 }
+        variant_count: { type: integer, minimum: 0 }
+        score:
+          type: object
+          properties:
+            passed: { type: integer, minimum: 0 }
+            total: { type: integer, minimum: 0 }
+            percentage: { type: integer, minimum: 0, maximum: 100 }
+            required_passed: { type: boolean }
+            required_passed_count: { type: integer, minimum: 0 }
+            required_total: { type: integer, minimum: 0 }
+            recommended_passed: { type: integer, minimum: 0 }
+            recommended_total: { type: integer, minimum: 0 }
+            recommended_completion_percentage: { type: integer, minimum: 0, maximum: 100 }
+            blocker_count: { type: integer, minimum: 0 }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CatalogReadinessItem" }
+        summary: { type: string }
+        intake:
+          type: object
+          properties:
+            manual_entry_supported: { type: boolean, const: true }
+            csv_dry_run_supported: { type: boolean, const: true }
+            bulk_api_dry_run_supported: { type: boolean, const: true }
+            async_import_job_supported: { type: boolean, const: false }
+            external_connector_supported: { type: boolean, const: false }
+
     SandboxOnboarding:
       type: object
       properties:
@@ -299,6 +372,7 @@ components:
             production_approval_status: { type: string, enum: [not_approved] }
             rollout_status: { type: string, enum: [rollout_not_requested] }
             category_readiness: { $ref: "#/components/schemas/CategoryReadiness" }
+            catalog_readiness: { $ref: "#/components/schemas/CatalogReadiness" }
             checks:
               type: array
               items:
@@ -1475,8 +1549,9 @@ paths:
       x-milestone: C5Z
       description: >-
         Returns public-safe sandbox onboarding fields, baseline readiness checks,
-        C6A category readiness scoring, and fail-closed production statuses.
-        The response never includes provider
+        C6A category readiness scoring, C6B catalog readiness preview from
+        existing sandbox product/variant rows, and fail-closed production
+        statuses. The response never includes provider
         account references, credentials, secrets, production allowlist values,
         checkout/payment material, or live-provider paths.
       responses:
@@ -1538,9 +1613,9 @@ paths:
       description: >-
         Moves a sandbox onboarding workspace through the review-oriented state
         machine. Transitions to sandbox_ready or submitted_for_review require
-        baseline and category required readiness checks to pass. No transition
-        approves production, enables public discovery, enables checkout/payment
-        creation, or enables live payments/live Plural.
+        baseline, category, and required catalog readiness checks to pass. No
+        transition approves production, enables public discovery, enables
+        checkout/payment creation, or enables live payments/live Plural.
       requestBody:
         required: true
         content:

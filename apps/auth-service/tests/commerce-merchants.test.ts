@@ -44,11 +44,19 @@ function catalogReadySummary(overrides: Record<string, unknown> = {}) {
   return {
     product_count: 1,
     variant_count: 2,
+    products_with_image: 1,
+    products_with_public_safe_title: 1,
+    products_with_public_safe_description: 1,
+    products_with_category_mapping: 1,
+    products_with_unsafe_text: 0,
+    variants_with_sku: 2,
+    variants_with_price_currency: 2,
     variants_with_warranty_summary: 2,
     variants_with_return_policy_summary: 2,
     variants_with_tax_metadata: 2,
     variants_with_fresh_inventory: 2,
     variants_with_known_availability: 2,
+    variants_with_unsafe_text: 0,
     ...overrides,
   };
 }
@@ -57,11 +65,40 @@ function catalogMissingSummary(overrides: Record<string, unknown> = {}) {
   return {
     product_count: 1,
     variant_count: 2,
+    products_with_image: 0,
+    products_with_public_safe_title: 1,
+    products_with_public_safe_description: 1,
+    products_with_category_mapping: 1,
+    products_with_unsafe_text: 0,
+    variants_with_sku: 2,
+    variants_with_price_currency: 2,
     variants_with_warranty_summary: 0,
     variants_with_return_policy_summary: 0,
     variants_with_tax_metadata: 0,
     variants_with_fresh_inventory: 0,
     variants_with_known_availability: 1,
+    variants_with_unsafe_text: 0,
+    ...overrides,
+  };
+}
+
+function catalogEmptySummary(overrides: Record<string, unknown> = {}) {
+  return {
+    product_count: 0,
+    variant_count: 0,
+    products_with_image: 0,
+    products_with_public_safe_title: 0,
+    products_with_public_safe_description: 0,
+    products_with_category_mapping: 0,
+    products_with_unsafe_text: 0,
+    variants_with_sku: 0,
+    variants_with_price_currency: 0,
+    variants_with_warranty_summary: 0,
+    variants_with_return_policy_summary: 0,
+    variants_with_tax_metadata: 0,
+    variants_with_fresh_inventory: 0,
+    variants_with_known_availability: 0,
+    variants_with_unsafe_text: 0,
     ...overrides,
   };
 }
@@ -248,6 +285,7 @@ describe('sandbox onboarding foundation', () => {
           rollout_status: string;
           score_percent: number;
           category_readiness: { status: string; score_percent: number; required_passed: boolean };
+          catalog_readiness: { status: string; score_percent: number; required_passed: boolean; product_count: number; variant_count: number };
         };
       };
     }>();
@@ -258,6 +296,13 @@ describe('sandbox onboarding foundation', () => {
       status: 'pass',
       score_percent: 100,
       required_passed: true,
+    });
+    expect(body.data.readiness.catalog_readiness).toMatchObject({
+      status: 'pass',
+      score_percent: 100,
+      required_passed: true,
+      product_count: 1,
+      variant_count: 2,
     });
     expect(body.data.readiness.production_approval_status).toBe('not_approved');
     expect(body.data.readiness.rollout_status).toBe('rollout_not_requested');
@@ -313,13 +358,18 @@ describe('sandbox onboarding foundation', () => {
     const body = res.json<{
       data: {
         sandbox_onboarding_state: string;
-        readiness: { ready: boolean; category_readiness: { status: string; score_percent: number } };
+        readiness: {
+          ready: boolean;
+          category_readiness: { status: string; score_percent: number };
+          catalog_readiness: { status: string; required_passed: boolean };
+        };
       };
       audit_event_id: string;
     }>();
     expect(body.data.sandbox_onboarding_state).toBe('sandbox_ready');
     expect(body.data.readiness.ready).toBe(true);
     expect(body.data.readiness.category_readiness).toMatchObject({ status: 'pass', score_percent: 100 });
+    expect(body.data.readiness.catalog_readiness).toMatchObject({ status: 'pass', required_passed: true });
     expect(body.audit_event_id).toBe('caud_ONBOARDING');
   });
 
@@ -383,6 +433,110 @@ describe('sandbox onboarding foundation', () => {
       expect(item).toMatchObject({ severity: 'recommended', status: 'fail' });
       expect(item?.remediation.length).toBeGreaterThan(10);
     }
+  });
+
+  it('fails required catalog readiness when no products are present', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow()]);
+    sqlMock.mockResolvedValueOnce([catalogEmptySummary()]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const readiness = res.json<{
+      data: {
+        readiness: {
+          ready: boolean;
+          catalog_readiness: {
+            status: string;
+            required_passed: boolean;
+            product_count: number;
+            variant_count: number;
+            items: Array<{ key: string; severity: string; status: string; remediation: string }>;
+          };
+        };
+      };
+    }>().data.readiness;
+    expect(readiness.ready).toBe(false);
+    expect(readiness.catalog_readiness).toMatchObject({
+      status: 'fail',
+      required_passed: false,
+      product_count: 0,
+      variant_count: 0,
+    });
+    expect(readiness.catalog_readiness.items.find((item) => item.key === 'catalog_products_present'))
+      .toMatchObject({ severity: 'required', status: 'fail' });
+  });
+
+  it('reports remediation for missing catalog fields without enabling production paths', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow()]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary({
+      products_with_image: 0,
+      products_with_public_safe_title: 0,
+      products_with_public_safe_description: 0,
+      products_with_category_mapping: 0,
+      variants_with_sku: 1,
+      variants_with_price_currency: 1,
+    })]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const catalog = res.json<{
+      data: {
+        readiness: {
+          ready: boolean;
+          catalog_readiness: {
+            status: string;
+            items: Array<{ key: string; severity: string; status: string; count?: number; total?: number; remediation: string }>;
+          };
+        };
+      };
+    }>().data.readiness.catalog_readiness;
+    expect(catalog.status).toBe('fail');
+    const expected = [
+      'products_public_safe_title',
+      'products_public_safe_description',
+      'products_category_mapping',
+      'variants_sku_present',
+      'variants_price_currency_present',
+      'products_image_media',
+    ];
+    for (const key of expected) {
+      const item = catalog.items.find((candidate) => candidate.key === key);
+      expect(item).toBeDefined();
+      expect(item?.status).toBe('fail');
+      expect(item?.remediation.length).toBeGreaterThan(10);
+    }
+  });
+
+  it('blocks catalog readiness when unsafe product or variant text is detected', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow()]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary({ products_with_unsafe_text: 1 })]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const catalog = res.json<{
+      data: { readiness: { ready: boolean; catalog_readiness: { status: string; blocker_count: number; items: Array<{ key: string; status: string }> } } };
+    }>().data.readiness.catalog_readiness;
+    expect(catalog).toMatchObject({ status: 'blocked', blocker_count: 1 });
+    expect(catalog.items.find((item) => item.key === 'no_unsafe_catalog_text'))
+      .toMatchObject({ status: 'blocked' });
   });
 
   it('fails required category readiness when category preset is missing', async () => {
@@ -501,6 +655,23 @@ describe('sandbox onboarding foundation', () => {
       sandbox_onboarding_state: 'sandbox_ready',
     })]);
     sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/transition',
+      headers: authHeader(),
+      payload: { target_state: 'submitted_for_review' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: { code: string; message: string } }>().error.code)
+      .toBe('invalid_sandbox_onboarding_transition');
+  });
+
+  it('blocks submit transition when required catalog readiness fails', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'sandbox_ready' })]);
+    sqlMock.mockResolvedValueOnce([catalogEmptySummary()]);
 
     const res = await app.inject({
       method: 'POST',

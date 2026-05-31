@@ -332,15 +332,47 @@ function parseBoolean(v: unknown): boolean | null {
   return null;
 }
 
+const CATALOG_PUBLIC_UNSAFE_PATTERN =
+  '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M';
+
 async function readSandboxOnboardingCatalogSummary(
   sql: Sql,
   tenantId: string,
   merchantId: string,
 ): Promise<SandboxOnboardingCatalogSummary> {
   const rows = await sql<SandboxOnboardingCatalogSummary[]>`
-    SELECT
+      SELECT
       COUNT(DISTINCT p.id)::int AS product_count,
       COUNT(v.id)::int AS variant_count,
+      COUNT(DISTINCT p.id) FILTER (
+        WHERE NULLIF(TRIM(p.image_url), '') IS NOT NULL
+      )::int AS products_with_image,
+      COUNT(DISTINCT p.id) FILTER (
+        WHERE NULLIF(TRIM(p.title), '') IS NOT NULL
+          AND LENGTH(TRIM(p.title)) <= 1000
+          AND p.title !~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+      )::int AS products_with_public_safe_title,
+      COUNT(DISTINCT p.id) FILTER (
+        WHERE NULLIF(TRIM(p.description), '') IS NOT NULL
+          AND LENGTH(TRIM(p.description)) <= 1000
+          AND p.description !~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+      )::int AS products_with_public_safe_description,
+      COUNT(DISTINCT p.id) FILTER (
+        WHERE p.category_preset = 'electronics_appliances'
+      )::int AS products_with_category_mapping,
+      COUNT(DISTINCT p.id) FILTER (
+        WHERE p.title ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(p.brand, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(p.description, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(p.image_url, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+      )::int AS products_with_unsafe_text,
+      COUNT(v.id) FILTER (
+        WHERE NULLIF(TRIM(v.sku), '') IS NOT NULL
+      )::int AS variants_with_sku,
+      COUNT(v.id) FILTER (
+        WHERE v.price_amount >= 0
+          AND v.currency ~ '^[A-Z]{3}$'
+      )::int AS variants_with_price_currency,
       COUNT(v.id) FILTER (
         WHERE NULLIF(TRIM(v.warranty_summary), '') IS NOT NULL
       )::int AS variants_with_warranty_summary,
@@ -357,7 +389,15 @@ async function readSandboxOnboardingCatalogSummary(
       )::int AS variants_with_fresh_inventory,
       COUNT(v.id) FILTER (
         WHERE v.availability_status <> 'unknown'
-      )::int AS variants_with_known_availability
+      )::int AS variants_with_known_availability,
+      COUNT(v.id) FILTER (
+        WHERE COALESCE(v.sku, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(v.parent_sku, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(v.model, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(v.variant_title, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(v.warranty_summary, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(v.return_policy_summary, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+      )::int AS variants_with_unsafe_text
     FROM commerce_products p
     LEFT JOIN commerce_product_variants v
       ON v.tenant_id = p.tenant_id
