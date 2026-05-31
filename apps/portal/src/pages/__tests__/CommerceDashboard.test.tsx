@@ -238,6 +238,77 @@ const sandboxOnboarding = {
         },
       ],
     },
+    catalog_readiness: {
+      status: 'pass' as const,
+      required_passed: true,
+      score_percent: 100,
+      recommended_completion_percent: 100,
+      blocker_count: 0,
+      product_count: 1,
+      variant_count: 2,
+      score: {
+        passed: 13,
+        total: 13,
+        percentage: 100,
+        required_passed: true,
+        required_passed_count: 7,
+        required_total: 7,
+        recommended_passed: 5,
+        recommended_total: 5,
+        recommended_completion_percentage: 100,
+        blocker_count: 0,
+      },
+      summary: 'Required catalog fields pass for sandbox read-only discovery review.',
+      intake: {
+        manual_entry_supported: true as const,
+        csv_dry_run_supported: true as const,
+        bulk_api_dry_run_supported: true as const,
+        async_import_job_supported: false as const,
+        external_connector_supported: false as const,
+      },
+      items: [
+        {
+          key: 'catalog_products_present' as const,
+          label: 'Catalog products present',
+          description: 'Read-only discovery review needs at least one active sandbox product.',
+          severity: 'required' as const,
+          status: 'pass' as const,
+          count: 1,
+          total: 1,
+          remediation: 'Add at least one active sandbox product through manual entry, CSV dry-run plus bulk upsert, or the existing catalog API.',
+        },
+        {
+          key: 'variants_price_currency_present' as const,
+          label: 'Variant price and currency present',
+          description: 'Read-only discovery preview needs price and ISO currency for every active variant.',
+          severity: 'required' as const,
+          status: 'pass' as const,
+          count: 2,
+          total: 2,
+          remediation: 'Add non-negative price_amount and uppercase ISO currency to every active variant.',
+        },
+        {
+          key: 'products_image_media' as const,
+          label: 'Product image/media present',
+          description: 'Images help operators check what agents will show.',
+          severity: 'recommended' as const,
+          status: 'pass' as const,
+          count: 1,
+          total: 1,
+          remediation: 'Add a public-safe image_url for every active product when available.',
+        },
+        {
+          key: 'no_unsafe_catalog_text' as const,
+          label: 'No unsafe catalog text',
+          description: 'Catalog public/runtime fields must not include private artifacts, production claims, provider/payment claims, secrets, or approval claims.',
+          severity: 'blocked' as const,
+          status: 'pass' as const,
+          count: 0,
+          total: 3,
+          remediation: 'Remove private, secret, provider, payment, live, production, approval, readiness, or certification claims from product and variant text.',
+        },
+      ],
+    },
     checks: [
       {
         key: 'merchant_profile_present' as const,
@@ -640,6 +711,14 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('Category preset recognized')).toBeInTheDocument();
     expect(screen.getByText('Electronics and appliances')).toBeInTheDocument();
     expect(screen.getByText('Warranty summary')).toBeInTheDocument();
+    expect(screen.getByText('Catalog readiness')).toBeInTheDocument();
+    expect(screen.getByText('1 products / 2 variants')).toBeInTheDocument();
+    expect(screen.getByText('Catalog products present')).toBeInTheDocument();
+    expect(screen.getByText('Variant price and currency present')).toBeInTheDocument();
+    expect(screen.getByText('CSV dry-run: available')).toBeInTheDocument();
+    expect(screen.getByText('Bulk API dry-run: available')).toBeInTheDocument();
+    expect(screen.getByText('Async import job: deferred')).toBeInTheDocument();
+    expect(screen.getByText('Connector import: deferred')).toBeInTheDocument();
     expect(screen.getByText('Merchant profile present')).toBeInTheDocument();
     expect(screen.getAllByText('No checkout/payment enablement').length).toBeGreaterThan(0);
     expect(screen.getByText('Trusted agent')).toBeInTheDocument();

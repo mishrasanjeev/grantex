@@ -76,9 +76,26 @@ exact inventory quantities in this slice. Blocked checks continue to fail closed
 for private artifacts, production discovery or allowlist config, live provider
 paths, and checkout/payment enablement.
 
-Passing category readiness means only "sandbox profile can be reviewed"; it is
-not merchant approval, production readiness, public discovery approval,
-checkout/payment readiness, live payment readiness, or live Plural readiness.
+C6B adds a computed catalog readiness preview for the same sandbox onboarding
+surface. It reads the merchant-owned sandbox catalog rows already stored in
+Grantex and reports product count, variant count, public-safe title and
+description coverage, category mapping, SKU coverage, price/currency coverage,
+image/media coverage, availability freshness, warranty summaries,
+return-policy summaries, tax/GST metadata where applicable, and unsafe public
+catalog text blockers.
+
+Required catalog gaps block `sandbox_ready` and `submitted_for_review` because
+the profile is not ready for read-only discovery review. Recommended catalog
+gaps lower the readiness score and show remediation, but they do not require a
+catalog connector implementation. Operators can prepare the catalog through the
+existing manual product entry and CSV dry-run/bulk catalog API. Async import
+jobs, Shopify/WooCommerce/Magento connectors, provider credentials, checkout,
+payments, public discovery, live payments, and live Plural remain out of scope.
+
+Passing category or catalog readiness means only "sandbox profile can be
+reviewed"; it is not merchant approval, production readiness, public discovery
+approval, checkout/payment readiness, live payment readiness, or live Plural
+readiness.
 
 ## Catalog And Inventory
 

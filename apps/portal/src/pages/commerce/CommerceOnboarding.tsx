@@ -67,6 +67,13 @@ function severityVariant(severity: string): 'default' | 'success' | 'warning' | 
   return 'default';
 }
 
+function countLabel(count?: number, total?: number): string | null {
+  if (count === undefined && total === undefined) return null;
+  if (count !== undefined && total !== undefined) return `${count}/${total}`;
+  if (count !== undefined) return String(count);
+  return `0/${total}`;
+}
+
 export function CommerceOnboarding() {
   const [merchantId, setMerchantId] = useState('');
   const [merchant, setMerchant] = useState<CommerceSandboxOnboarding | null>(null);
@@ -206,7 +213,7 @@ export function CommerceOnboarding() {
     <div>
       <PageHeader
         title="Commerce Onboarding"
-        description="Merchant control-plane entry point for profile, readiness checklist, trusted agents, policy simulation, and public discovery status."
+        description="Merchant control-plane entry point for sandbox profile, readiness checklist, trusted agents, policy simulation, and blocked discovery status."
         action={<Button variant="secondary" size="sm" onClick={load} disabled={loading}>{loading ? 'Loading' : 'Refresh'}</Button>}
       />
       <BlockerBanner />
@@ -360,6 +367,59 @@ export function CommerceOnboarding() {
                     ) : null}
                   </div>
                 ))}
+              </div>
+            </div>
+            <div className="mb-4 rounded-md border border-gx-border p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs text-gx-muted">Catalog readiness</div>
+                  <div className="mt-1 text-sm font-medium text-gx-text">
+                    {merchant.readiness.catalog_readiness.product_count} products / {merchant.readiness.catalog_readiness.variant_count} variants
+                  </div>
+                  <div className="mt-1 text-xs text-gx-muted">{merchant.readiness.catalog_readiness.summary}</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={readinessVariant(merchant.readiness.catalog_readiness.status)}>
+                    {merchant.readiness.catalog_readiness.status}
+                  </Badge>
+                  <Badge variant="default">{merchant.readiness.catalog_readiness.score_percent}%</Badge>
+                  <Badge variant="default">
+                    recommended {merchant.readiness.catalog_readiness.recommended_completion_percent}%
+                  </Badge>
+                </div>
+              </div>
+              <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-gx-border">
+                <div
+                  className="h-full rounded-full bg-gx-accent"
+                  style={{ width: `${Math.max(0, Math.min(100, merchant.readiness.catalog_readiness.score_percent))}%` }}
+                />
+              </div>
+              <div className="mt-3 grid gap-2">
+                {merchant.readiness.catalog_readiness.items.map((item) => (
+                  <div key={item.key} className="rounded-md border border-gx-border p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-gx-text">{item.label}</span>
+                      <div className="flex flex-wrap gap-2">
+                        {countLabel(item.count, item.total) ? (
+                          <Badge variant="default">{countLabel(item.count, item.total)}</Badge>
+                        ) : null}
+                        <Badge variant={severityVariant(item.severity)}>{item.severity}</Badge>
+                        <Badge variant={readinessVariant(item.status)}>{item.status}</Badge>
+                      </div>
+                    </div>
+                    <div className="mt-1 text-xs text-gx-muted">{item.description}</div>
+                    {item.status !== 'pass' && item.status !== 'not_applicable' ? (
+                      <div className="mt-2 text-xs text-gx-warning">{item.remediation}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 grid gap-2 text-xs text-gx-muted md:grid-cols-3">
+                <div>Manual entry: {merchant.readiness.catalog_readiness.intake.manual_entry_supported ? 'available' : 'unavailable'}</div>
+                <div>CSV dry-run: {merchant.readiness.catalog_readiness.intake.csv_dry_run_supported ? 'available' : 'unavailable'}</div>
+                <div>Bulk API dry-run: {merchant.readiness.catalog_readiness.intake.bulk_api_dry_run_supported ? 'available' : 'unavailable'}</div>
+                <div>Async import job: {merchant.readiness.catalog_readiness.intake.async_import_job_supported ? 'available' : 'deferred'}</div>
+                <div>Connector import: {merchant.readiness.catalog_readiness.intake.external_connector_supported ? 'available' : 'deferred'}</div>
               </div>
             </div>
             <h3 className="mb-3 text-sm font-semibold text-gx-text">Production gates</h3>

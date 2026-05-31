@@ -17,11 +17,19 @@ export type CategoryReadinessItemStatus = 'pass' | 'fail' | 'blocked' | 'not_app
 export interface SandboxOnboardingCatalogSummary {
   product_count?: number | string | null;
   variant_count?: number | string | null;
+  products_with_image?: number | string | null;
+  products_with_public_safe_title?: number | string | null;
+  products_with_public_safe_description?: number | string | null;
+  products_with_category_mapping?: number | string | null;
+  products_with_unsafe_text?: number | string | null;
+  variants_with_sku?: number | string | null;
+  variants_with_price_currency?: number | string | null;
   variants_with_warranty_summary?: number | string | null;
   variants_with_return_policy_summary?: number | string | null;
   variants_with_tax_metadata?: number | string | null;
   variants_with_fresh_inventory?: number | string | null;
   variants_with_known_availability?: number | string | null;
+  variants_with_unsafe_text?: number | string | null;
 }
 
 export interface SandboxOnboardingMerchant {
@@ -75,6 +83,63 @@ export interface CategoryReadinessScore {
   blocked: number;
 }
 
+export interface CatalogReadinessItem {
+  key:
+    | 'catalog_products_present'
+    | 'catalog_variants_present'
+    | 'products_public_safe_title'
+    | 'products_public_safe_description'
+    | 'products_category_mapping'
+    | 'variants_sku_present'
+    | 'variants_price_currency_present'
+    | 'products_image_media'
+    | 'variants_availability_freshness'
+    | 'variants_warranty_summary'
+    | 'variants_return_policy_summary'
+    | 'variants_tax_gst_metadata'
+    | 'no_unsafe_catalog_text';
+  label: string;
+  description: string;
+  severity: CategoryReadinessSeverity;
+  status: CategoryReadinessItemStatus;
+  count?: number;
+  total?: number;
+  remediation: string;
+}
+
+export interface CatalogReadinessScore {
+  passed: number;
+  total: number;
+  percentage: number;
+  required_passed: boolean;
+  required_passed_count: number;
+  required_total: number;
+  recommended_passed: number;
+  recommended_total: number;
+  recommended_completion_percentage: number;
+  blocker_count: number;
+}
+
+export interface SandboxCatalogReadiness {
+  status: SandboxReadinessStatus;
+  required_passed: boolean;
+  score_percent: number;
+  recommended_completion_percent: number;
+  blocker_count: number;
+  product_count: number;
+  variant_count: number;
+  score: CatalogReadinessScore;
+  items: CatalogReadinessItem[];
+  summary: string;
+  intake: {
+    manual_entry_supported: true;
+    csv_dry_run_supported: true;
+    bulk_api_dry_run_supported: true;
+    async_import_job_supported: false;
+    external_connector_supported: false;
+  };
+}
+
 export interface SandboxCategoryReadiness {
   preset_key: string | null;
   label: string;
@@ -106,6 +171,7 @@ export interface SandboxOnboardingReadiness {
   score_percent: number;
   checks: SandboxOnboardingCheck[];
   category_readiness: SandboxCategoryReadiness;
+  catalog_readiness: SandboxCatalogReadiness;
   live_mode_status: 'not_live';
   production_approval_status: 'not_approved';
   rollout_status: 'rollout_not_requested';
@@ -222,6 +288,22 @@ function categoryItem(
   return { key, label, description, severity, status, remediation };
 }
 
+function catalogItem(
+  key: CatalogReadinessItem['key'],
+  label: string,
+  description: string,
+  severity: CategoryReadinessSeverity,
+  status: CategoryReadinessItemStatus,
+  remediation: string,
+  count?: number,
+  total?: number,
+): CatalogReadinessItem {
+  const item: CatalogReadinessItem = { key, label, description, severity, status, remediation };
+  if (count !== undefined) item.count = count;
+  if (total !== undefined) item.total = total;
+  return item;
+}
+
 function passFail(pass: boolean): 'pass' | 'fail' {
   return pass ? 'pass' : 'fail';
 }
@@ -241,10 +323,225 @@ function categoryScore(items: CategoryReadinessItem[]): CategoryReadinessScore {
   };
 }
 
+function catalogScore(items: CatalogReadinessItem[]): CatalogReadinessScore {
+  const applicable = items.filter((item) => item.status !== 'not_applicable');
+  const required = items.filter((item) => item.severity === 'required');
+  const recommended = items.filter((item) => item.severity === 'recommended' && item.status !== 'not_applicable');
+  const passed = applicable.filter((item) => item.status === 'pass').length;
+  const requiredPassedCount = required.filter((item) => item.status === 'pass').length;
+  const recommendedPassed = recommended.filter((item) => item.status === 'pass').length;
+  return {
+    passed,
+    total: applicable.length,
+    percentage: applicable.length === 0 ? 0 : Math.round((passed / applicable.length) * 100),
+    required_passed: requiredPassedCount === required.length,
+    required_passed_count: requiredPassedCount,
+    required_total: required.length,
+    recommended_passed: recommendedPassed,
+    recommended_total: recommended.length,
+    recommended_completion_percentage: recommended.length === 0
+      ? 100
+      : Math.round((recommendedPassed / recommended.length) * 100),
+    blocker_count: items.filter((item) => item.status === 'blocked').length,
+  };
+}
+
+export function computeSandboxCatalogReadiness(
+  merchant: SandboxOnboardingMerchant,
+  catalogSummary: SandboxOnboardingCatalogSummary | null = null,
+): SandboxCatalogReadiness {
+  const productCount = countValue(catalogSummary?.product_count);
+  const variantCount = countValue(catalogSummary?.variant_count);
+  const productsWithImage = countValue(catalogSummary?.products_with_image);
+  const productsWithSafeTitle = countValue(catalogSummary?.products_with_public_safe_title);
+  const productsWithSafeDescription = countValue(catalogSummary?.products_with_public_safe_description);
+  const productsWithCategoryMapping = countValue(catalogSummary?.products_with_category_mapping);
+  const productsWithUnsafeText = countValue(catalogSummary?.products_with_unsafe_text);
+  const variantsWithSku = countValue(catalogSummary?.variants_with_sku);
+  const variantsWithPriceCurrency = countValue(catalogSummary?.variants_with_price_currency);
+  const variantsWithWarranty = countValue(catalogSummary?.variants_with_warranty_summary);
+  const variantsWithReturnPolicy = countValue(catalogSummary?.variants_with_return_policy_summary);
+  const variantsWithTaxMetadata = countValue(catalogSummary?.variants_with_tax_metadata);
+  const variantsWithFreshInventory = countValue(catalogSummary?.variants_with_fresh_inventory);
+  const variantsWithKnownAvailability = countValue(catalogSummary?.variants_with_known_availability);
+  const variantsWithUnsafeText = countValue(catalogSummary?.variants_with_unsafe_text);
+  const taxApplicable = merchant.country_code === 'IN';
+  const unsafeTextCount = productsWithUnsafeText + variantsWithUnsafeText;
+
+  const items: CatalogReadinessItem[] = [
+    catalogItem(
+      'catalog_products_present',
+      'Catalog products present',
+      'Read-only discovery review needs at least one active sandbox product.',
+      'required',
+      passFail(productCount > 0),
+      'Add at least one active sandbox product through manual entry, CSV dry-run plus bulk upsert, or the existing catalog API.',
+      productCount,
+      1,
+    ),
+    catalogItem(
+      'catalog_variants_present',
+      'Catalog variants present',
+      'Every discoverable product needs at least one active purchasable variant.',
+      'required',
+      passFail(variantCount > 0),
+      'Add at least one active variant with SKU, price, and currency.',
+      variantCount,
+      1,
+    ),
+    catalogItem(
+      'products_public_safe_title',
+      'Public-safe product titles',
+      'Product titles must be present and free of private, production, provider, approval, or payment claims.',
+      'required',
+      passFail(productCount > 0 && productsWithSafeTitle >= productCount),
+      'Update every active product with a public-safe title.',
+      productsWithSafeTitle,
+      productCount,
+    ),
+    catalogItem(
+      'products_public_safe_description',
+      'Public-safe product descriptions',
+      'Agent-facing product previews need public-safe descriptions for grounding.',
+      'required',
+      passFail(productCount > 0 && productsWithSafeDescription >= productCount),
+      'Add a public-safe description to every active product.',
+      productsWithSafeDescription,
+      productCount,
+    ),
+    catalogItem(
+      'products_category_mapping',
+      'Product category mapping',
+      'Active products must map to the selected electronics/appliances category preset for this C6B slice.',
+      'required',
+      passFail(productCount > 0
+        && merchant.category_preset === ELECTRONICS_APPLIANCES_PRESET
+        && productsWithCategoryMapping >= productCount),
+      'Map every active product to electronics_appliances before requesting review.',
+      productsWithCategoryMapping,
+      productCount,
+    ),
+    catalogItem(
+      'variants_sku_present',
+      'Variant SKU present',
+      'Agent-safe previews need stable SKU identifiers for every active variant.',
+      'required',
+      passFail(variantCount > 0 && variantsWithSku >= variantCount),
+      'Add SKU values to every active variant.',
+      variantsWithSku,
+      variantCount,
+    ),
+    catalogItem(
+      'variants_price_currency_present',
+      'Variant price and currency present',
+      'Read-only discovery preview needs price and ISO currency for every active variant.',
+      'required',
+      passFail(variantCount > 0 && variantsWithPriceCurrency >= variantCount),
+      'Add non-negative price_amount and uppercase ISO currency to every active variant.',
+      variantsWithPriceCurrency,
+      variantCount,
+    ),
+    catalogItem(
+      'products_image_media',
+      'Product image/media present',
+      'Images help operators check what agents will show, but missing images do not require connector implementation in C6B.',
+      'recommended',
+      passFail(productCount > 0 && productsWithImage >= productCount),
+      'Add a public-safe image_url for every active product when available.',
+      productsWithImage,
+      productCount,
+    ),
+    catalogItem(
+      'variants_availability_freshness',
+      'Availability freshness',
+      'Availability should use known buckets and a 24-hour freshness window without exposing exact quantities.',
+      'recommended',
+      passFail(variantCount > 0
+        && variantsWithFreshInventory >= variantCount
+        && variantsWithKnownAvailability >= variantCount),
+      'Keep variant last_synced_at within 24 hours and avoid unknown availability buckets.',
+      Math.min(variantsWithFreshInventory, variantsWithKnownAvailability),
+      variantCount,
+    ),
+    catalogItem(
+      'variants_warranty_summary',
+      'Warranty summary coverage',
+      'Electronics/appliances variants should carry warranty summary text for operator review.',
+      'recommended',
+      passFail(variantCount > 0 && variantsWithWarranty >= variantCount),
+      'Add warranty_summary to every active variant.',
+      variantsWithWarranty,
+      variantCount,
+    ),
+    catalogItem(
+      'variants_return_policy_summary',
+      'Return-policy summary coverage',
+      'Electronics/appliances variants should carry return-policy summary text for operator review.',
+      'recommended',
+      passFail(variantCount > 0 && variantsWithReturnPolicy >= variantCount),
+      'Add return_policy_summary to every active variant.',
+      variantsWithReturnPolicy,
+      variantCount,
+    ),
+    catalogItem(
+      'variants_tax_gst_metadata',
+      'Tax/GST metadata coverage',
+      'India electronics/appliances variants should carry GST, tax-rate, or HSN metadata.',
+      'recommended',
+      taxApplicable ? passFail(variantCount > 0 && variantsWithTaxMetadata >= variantCount) : 'not_applicable',
+      taxApplicable
+        ? 'Add GST slab, tax rate, or HSN code metadata to every active variant.'
+        : 'Tax/GST metadata is not applicable for the selected country in this sandbox checklist.',
+      variantsWithTaxMetadata,
+      variantCount,
+    ),
+    catalogItem(
+      'no_unsafe_catalog_text',
+      'No unsafe catalog text',
+      'Catalog public/runtime fields must not include private artifacts, production claims, provider/payment claims, secrets, or approval claims.',
+      'blocked',
+      unsafeTextCount === 0 ? 'pass' : 'blocked',
+      'Remove private, secret, provider, payment, live, production, approval, readiness, or certification claims from product and variant text.',
+      unsafeTextCount,
+      productCount + variantCount,
+    ),
+  ];
+
+  const score = catalogScore(items);
+  const status: SandboxReadinessStatus = score.blocker_count > 0
+    ? 'blocked'
+    : score.required_passed ? 'pass' : 'fail';
+
+  return {
+    status,
+    required_passed: score.required_passed,
+    score_percent: score.percentage,
+    recommended_completion_percent: score.recommended_completion_percentage,
+    blocker_count: score.blocker_count,
+    product_count: productCount,
+    variant_count: variantCount,
+    score,
+    items,
+    summary: status === 'pass'
+      ? 'Required catalog fields pass for sandbox read-only discovery review. Recommended catalog details may still improve the preview score.'
+      : status === 'blocked'
+        ? 'Catalog readiness is blocked by unsafe public/runtime catalog text.'
+        : 'Required catalog fields are incomplete for sandbox read-only discovery review.',
+    intake: {
+      manual_entry_supported: true,
+      csv_dry_run_supported: true,
+      bulk_api_dry_run_supported: true,
+      async_import_job_supported: false,
+      external_connector_supported: false,
+    },
+  };
+}
+
 export function computeSandboxCategoryReadiness(
   merchant: SandboxOnboardingMerchant,
   catalogSummary: SandboxOnboardingCatalogSummary | null = null,
   env: NodeJS.ProcessEnv = process.env,
+  catalogReadiness: SandboxCatalogReadiness | null = null,
 ): SandboxCategoryReadiness {
   const publicFields = [
     merchant.display_name,
@@ -272,6 +569,7 @@ export function computeSandboxCategoryReadiness(
   const presetRecognized = preset === ELECTRONICS_APPLIANCES_PRESET;
   const productCount = countValue(catalogSummary?.product_count);
   const variantCount = countValue(catalogSummary?.variant_count);
+  const resolvedCatalogReadiness = catalogReadiness ?? computeSandboxCatalogReadiness(merchant, catalogSummary);
   const warrantyCount = countValue(catalogSummary?.variants_with_warranty_summary);
   const returnPolicyCount = countValue(catalogSummary?.variants_with_return_policy_summary);
   const taxMetadataCount = countValue(catalogSummary?.variants_with_tax_metadata);
@@ -326,10 +624,12 @@ export function computeSandboxCategoryReadiness(
     categoryItem(
       'product_data_readiness',
       'Product data readiness',
-      'Electronics/appliances preview scoring looks for at least one active product with one purchasable variant.',
-      'recommended',
-      passFail(productCount > 0 && variantCount > 0),
-      'Add at least one sandbox product and variant through the existing catalog APIs. Catalog connector work is deferred.',
+      'Electronics/appliances review needs at least one public-safe active product and purchasable variant with critical fields.',
+      'required',
+      resolvedCatalogReadiness.status === 'blocked'
+        ? 'blocked'
+        : passFail(resolvedCatalogReadiness.required_passed),
+      'Complete required catalog readiness items through manual entry, CSV dry-run plus bulk upsert, or the existing catalog APIs. Catalog connector work is deferred.',
     ),
     categoryItem(
       'warranty_summary',
@@ -506,19 +806,25 @@ export function computeSandboxOnboardingReadiness(
     ),
   ];
 
-  const categoryReadiness = computeSandboxCategoryReadiness(merchant, catalogSummary, env);
+  const catalogReadiness = computeSandboxCatalogReadiness(merchant, catalogSummary);
+  const resolvedCategoryReadiness = computeSandboxCategoryReadiness(merchant, catalogSummary, env, catalogReadiness);
   const baselineReady = checks.every((item) => item.status === 'pass');
-  const ready = baselineReady && categoryReadiness.status === 'pass';
-  const status: SandboxReadinessStatus = !baselineReady || categoryReadiness.status === 'blocked'
+  const ready = baselineReady
+    && resolvedCategoryReadiness.status === 'pass'
+    && catalogReadiness.status === 'pass';
+  const status: SandboxReadinessStatus = !baselineReady
+    || resolvedCategoryReadiness.status === 'blocked'
+    || catalogReadiness.status === 'blocked'
     ? 'blocked'
     : ready ? 'pass' : 'fail';
 
   return {
     ready,
     status,
-    score_percent: categoryReadiness.score_percent,
+    score_percent: Math.round((resolvedCategoryReadiness.score_percent + catalogReadiness.score_percent) / 2),
     checks,
-    category_readiness: categoryReadiness,
+    category_readiness: resolvedCategoryReadiness,
+    catalog_readiness: catalogReadiness,
     live_mode_status: 'not_live',
     production_approval_status: 'not_approved',
     rollout_status: 'rollout_not_requested',

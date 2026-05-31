@@ -165,6 +165,61 @@ export interface CommerceCategoryReadiness {
   summary: string;
 }
 
+export interface CommerceCatalogReadinessItem {
+  key:
+    | 'catalog_products_present'
+    | 'catalog_variants_present'
+    | 'products_public_safe_title'
+    | 'products_public_safe_description'
+    | 'products_category_mapping'
+    | 'variants_sku_present'
+    | 'variants_price_currency_present'
+    | 'products_image_media'
+    | 'variants_availability_freshness'
+    | 'variants_warranty_summary'
+    | 'variants_return_policy_summary'
+    | 'variants_tax_gst_metadata'
+    | 'no_unsafe_catalog_text';
+  label: string;
+  description: string;
+  severity: 'required' | 'recommended' | 'blocked';
+  status: 'pass' | 'fail' | 'blocked' | 'not_applicable';
+  count?: number;
+  total?: number;
+  remediation: string;
+}
+
+export interface CommerceCatalogReadiness {
+  status: 'pass' | 'fail' | 'blocked';
+  required_passed: boolean;
+  score_percent: number;
+  recommended_completion_percent: number;
+  blocker_count: number;
+  product_count: number;
+  variant_count: number;
+  score: {
+    passed: number;
+    total: number;
+    percentage: number;
+    required_passed: boolean;
+    required_passed_count: number;
+    required_total: number;
+    recommended_passed: number;
+    recommended_total: number;
+    recommended_completion_percentage: number;
+    blocker_count: number;
+  };
+  items: CommerceCatalogReadinessItem[];
+  summary: string;
+  intake: {
+    manual_entry_supported: true;
+    csv_dry_run_supported: true;
+    bulk_api_dry_run_supported: true;
+    async_import_job_supported: false;
+    external_connector_supported: false;
+  };
+}
+
 export interface CommerceSandboxOnboarding {
   merchant_id: string;
   tenant_id: string;
@@ -187,6 +242,7 @@ export interface CommerceSandboxOnboarding {
     score_percent: number;
     checks: CommerceSandboxOnboardingCheck[];
     category_readiness: CommerceCategoryReadiness;
+    catalog_readiness: CommerceCatalogReadiness;
     live_mode_status: 'not_live';
     production_approval_status: 'not_approved';
     rollout_status: 'rollout_not_requested';
