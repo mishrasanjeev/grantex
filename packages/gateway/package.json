@@ -36,8 +36,8 @@
   },
   "devDependencies": {
     "@grantex/sdk": "^0.3.0",
-    "@types/node": "^20.11.0",
-    "typescript": "~5.3.3",
+    "@types/node": "^25.9.1",
+    "typescript": "~6.0.3",
     "vitest": "^4.1.2"
   },
   "engines": {
