@@ -1,0 +1,72 @@
+{
+  "packet_type": "commerce_c5o_synthetic_demo_artifact_packet",
+  "packet_scope": "internal_demo_only",
+  "decision_state": "not_ready",
+  "synthetic_only": true,
+  "not_production_approval": true,
+  "must_not_be_used_in_production_allowlist": true,
+  "identifiers": {
+    "merchant_id": "mch_synth_demo_readonly_0001",
+    "tenant_id": "cten_synth_demo_readonly_0001",
+    "agent_id": "cag_synth_demo_readonly_sales_0001"
+  },
+  "merchant_identity": {
+    "display_name": "Synthetic Demo Merchant",
+    "category": "Synthetic Internal Demo Category",
+    "discovery_description": "Synthetic read-only discovery profile for internal demo flows only.",
+    "legal_entity_reference": "SYNTHETIC_REFERENCE_ONLY_NOT_REAL"
+  },
+  "approval_references": {
+    "merchant_owner": "SYNTHETIC_PRIVATE_APPROVAL_REFERENCE_PENDING",
+    "legal_compliance": "SYNTHETIC_PRIVATE_APPROVAL_REFERENCE_PENDING",
+    "product_wording": "SYNTHETIC_PRIVATE_APPROVAL_REFERENCE_PENDING",
+    "security": "SYNTHETIC_PRIVATE_APPROVAL_REFERENCE_PENDING",
+    "ops_on_call_support": "SYNTHETIC_PRIVATE_APPROVAL_REFERENCE_PENDING",
+    "backup_rpo": "SYNTHETIC_PRIVATE_APPROVAL_REFERENCE_PENDING",
+    "agenticorg_dependency": "SYNTHETIC_PRIVATE_APPROVAL_REFERENCE_PENDING"
+  },
+  "owner_references": {
+    "rollback_owner": "SYNTHETIC_ROLE_ROLLBACK_OWNER_PENDING",
+    "read_only_smoke_owner": "SYNTHETIC_ROLE_READ_ONLY_SMOKE_OWNER_PENDING",
+    "evidence_retention_owner": "SYNTHETIC_ROLE_EVIDENCE_RETENTION_OWNER_PENDING"
+  },
+  "public_payload_preview": {
+    "merchant_id": "mch_synth_demo_readonly_0001",
+    "tenant_id": "cten_synth_demo_readonly_0001",
+    "agent_id": "cag_synth_demo_readonly_sales_0001",
+    "display_name": "Synthetic Demo Merchant",
+    "category": "Synthetic Internal Demo Category",
+    "discovery_description": "Synthetic read-only discovery profile for internal demo flows only.",
+    "issuer_reference": "SYNTHETIC_ISSUER_REFERENCE_PENDING",
+    "jwks_uri_reference": "SYNTHETIC_JWKS_REFERENCE_PENDING",
+    "supported_read_only_capabilities": [
+      "synthetic_read_only_discovery"
+    ],
+    "posture": {
+      "non_secret_metadata_only": true,
+      "no_checkout_or_payment_creation": true,
+      "no_live_payments": true,
+      "no_live_plural": true,
+      "no_provider_credentials": true,
+      "no_certification_or_readiness_claim": true,
+      "not_production_approval": true
+    }
+  },
+  "scan_summaries": {
+    "secret_private_detail_scan": "pending_demo_only",
+    "overclaim_scan": "pending_demo_only",
+    "merchant_id_name_review": "pending_demo_only",
+    "synthetic_id_production_candidate_scan": "pending_demo_only",
+    "config_allowlist_value_scan": "pending_demo_only"
+  },
+  "blocked_state": {
+    "no_real_merchant_approved": true,
+    "no_allowlist_value_approved": true,
+    "no_public_discovery_enabled": true,
+    "grantex_read_only_discovery_fail_closed": true,
+    "agenticorg_public_discovery_gated": true,
+    "checkout_payment_creation_blocked": true,
+    "live_payments_blocked": true,
+    "live_plural_blocked": true
+  }
+}
