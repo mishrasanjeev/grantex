@@ -118,7 +118,7 @@ describe('ErrorBoundary', () => {
   });
 
   it('shows fallback message when error has no message', () => {
-    function ThrowEmpty(): JSX.Element {
+    function ThrowEmpty(): never {
       throw new Error();
     }
     render(

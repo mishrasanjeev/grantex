@@ -34,15 +34,15 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "jose": "^5.2.4"
+    "jose": "^6.2.3"
   },
   "overrides": {
     "esbuild": ">=0.25.0"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
+    "@types/node": "^25.9.1",
     "@vitest/coverage-v8": "^4.1.2",
-    "typescript": "^5.3.3",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.2"
   },
   "engines": {
