@@ -190,6 +190,13 @@ updates:
     open-pull-requests-limit: 3
     labels: [dependencies, npm, examples]
 
+  - package-ecosystem: npm
+    directory: /examples/x402-weather-api
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples, x402]
+
   # ─── pip — every Python package directory with pyproject.toml ───────
   - package-ecosystem: pip
     directory: /packages/sdk-py

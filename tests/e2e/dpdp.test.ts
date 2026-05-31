@@ -286,7 +286,11 @@ describe('E2E: DPDP Grievances', () => {
     expect(grievance.grievanceId).toBeDefined();
     expect(typeof grievance.grievanceId).toBe('string');
     expect(grievance.referenceNumber).toBeDefined();
-    expect(grievance.referenceNumber).toMatch(/^GRV-\d{4}-\d{5}$/);
+    // Grievance references are crypto-strong ULID-suffixed since the
+    // P0-19 hardening (apps/auth-service/src/lib/ids.ts::newGrievanceReference).
+    // Mirrors the unit-test regex in apps/auth-service/tests/dpdp.test.ts:714.
+    // Crockford base32 alphabet excludes I, L, O, U → [0-9A-HJKMNP-TV-Z].
+    expect(grievance.referenceNumber).toMatch(/^GRV-\d{4}-[0-9A-HJKMNP-TV-Z]{26}$/);
     expect(grievance.type).toBe('data-breach');
     expect(grievance.status).toBe('submitted');
     expect(grievance.expectedResolutionBy).toBeDefined();
