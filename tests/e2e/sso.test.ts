@@ -140,7 +140,7 @@ describe('E2E: SSO LDAP Connection', () => {
     const conn = await grantex.sso.createConnection({
       name: 'test-ldap',
       protocol: 'ldap',
-      ldapUrl: 'ldap://ldap.example.com:389',
+      ldapUrl: 'ldaps://ldap.example.com:636',
       ldapBindDn: 'cn=admin,dc=example,dc=com',
       ldapBindPassword: 'admin-password',
       ldapSearchBase: 'ou=users,dc=example,dc=com',
@@ -152,7 +152,7 @@ describe('E2E: SSO LDAP Connection', () => {
 
     expect(conn.name).toBe('test-ldap');
     expect(conn.protocol).toBe('ldap');
-    expect(conn.ldapUrl).toBe('ldap://ldap.example.com:389');
+    expect(conn.ldapUrl).toBe('ldaps://ldap.example.com:636');
     expect(conn.ldapBindDn).toBe('cn=admin,dc=example,dc=com');
     expect(conn.ldapSearchBase).toBe('ou=users,dc=example,dc=com');
     expect(conn.ldapTlsEnabled).toBe(false);
@@ -203,7 +203,11 @@ describe('E2E: SSO Validation', () => {
       grantex.sso.createConnection({
         name: 'incomplete-ldap',
         protocol: 'ldap',
-        ldapUrl: 'ldap://example.com',
+        // ldaps:// is required by the production validator
+        // (apps/auth-service/src/routes/sso.ts:114). Using LDAPS here so
+        // the test exercises its declared missing-fields rejection path
+        // instead of tripping on the insecure-URL gate.
+        ldapUrl: 'ldaps://example.com',
         // Missing ldapBindDn, ldapBindPassword, ldapSearchBase
       } as any),
     ).rejects.toThrow();
