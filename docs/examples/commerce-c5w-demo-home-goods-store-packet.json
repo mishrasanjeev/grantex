@@ -1,0 +1,75 @@
+{
+  "packet_type": "synthetic_realistic_merchant_demo_packet",
+  "packet_version": "c5w-demo-v1",
+  "decision_state": "demo_ready_not_production",
+  "production_rollout_permitted": false,
+  "merchant_identity": {
+    "merchant_id": "mch_demo_readonly_homegoods_0001",
+    "tenant_reference": "cten_demo_readonly_homegoods_0001",
+    "agent_reference": "cag_demo_readonly_sales_0001",
+    "display_name": "Demo Home Goods Store",
+    "category": "Home and Kitchen",
+    "discovery_description": "Demo read-only discovery profile for a synthetic home goods merchant. This profile is for internal walkthroughs only and is not production approval.",
+    "country_code": "IN",
+    "default_currency": "INR",
+    "legal_entity_reference": "DEMO_REFERENCE_ONLY_NOT_REAL"
+  },
+  "approval_references": {
+    "merchant_owner": "DEMO_APPROVAL_REF_MERCHANT_OWNER_0001",
+    "legal_compliance": "DEMO_APPROVAL_REF_LEGAL_0001",
+    "product_wording": "DEMO_APPROVAL_REF_PRODUCT_0001",
+    "security": "DEMO_APPROVAL_REF_SECURITY_0001",
+    "ops_on_call_support": "DEMO_APPROVAL_REF_OPS_0001",
+    "backup_rpo": "DEMO_APPROVAL_REF_BACKUP_RPO_0001",
+    "agenticorg_dependency": "DEMO_APPROVAL_REF_AGENTICORG_0001"
+  },
+  "owners": {
+    "rollback_owner": "DEMO_ROLE_ROLLBACK_OWNER",
+    "read_only_smoke_owner": "DEMO_ROLE_READ_ONLY_SMOKE_OWNER",
+    "evidence_retention_owner": "DEMO_ROLE_EVIDENCE_RETENTION_OWNER"
+  },
+  "public_payload_preview": {
+    "merchant_id": "mch_demo_readonly_homegoods_0001",
+    "display_name": "Demo Home Goods Store",
+    "category": "Home and Kitchen",
+    "discovery_description": "Demo read-only discovery profile for a synthetic home goods merchant. This profile is for internal walkthroughs only and is not production approval.",
+    "issuer_reference": "https://api.demo.grantex.invalid",
+    "jwks_uri_reference": "https://api.demo.grantex.invalid/.well-known/jwks.json",
+    "supported_read_only_capabilities": [
+      "merchant_profile_read",
+      "catalog_summary_read",
+      "policy_summary_read"
+    ],
+    "blocked_capabilities": [
+      "checkout_creation",
+      "payment_intent_creation",
+      "live_payment_processing",
+      "live_plural_access",
+      "provider_credential_access"
+    ],
+    "posture": {
+      "non_secret_metadata_only": true,
+      "no_checkout_or_payment_creation": true,
+      "no_live_payment_path": true,
+      "no_live_plural_path": true,
+      "no_provider_credentials": true,
+      "no_certification_or_readiness_claim": true
+    }
+  },
+  "validation_summary": {
+    "secret_private_detail_scan": "demo_pass",
+    "overclaim_scan": "demo_pass",
+    "merchant_id_name_review": "demo_pass_demo_name_only",
+    "synthetic_id_production_candidate_scan": "demo_pass_not_candidate",
+    "config_allowlist_value_scan": "demo_pass"
+  },
+  "safety_assertions": {
+    "synthetic_demo_only": true,
+    "not_real_merchant_approval": true,
+    "not_production_allowlist_value": true,
+    "not_public_discovery_enablement": true,
+    "grantex_remains_fail_closed": true,
+    "agenticorg_remains_gated": true,
+    "no_checkout_payment_or_live_provider": true
+  }
+}
