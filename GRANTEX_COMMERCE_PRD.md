@@ -598,6 +598,83 @@ AgenticOrg buyer-agent layer
 Discovery, recommendations, cart drafting, consent UX, safe checkout workflow, refusal behavior
 ```
 
+#### End-to-end buyer and seller flow
+
+The companion guide
+`docs/guides/commerce-v1-end-to-end-agentic-commerce-flow.mdx` is the
+merchant-readable flow that must stay aligned with this PRD. The required
+operating model is:
+
+```text
+Seller one-time setup in Grantex
+Workspace -> verification -> existing-system connections -> source-of-truth
+selection -> catalog/inventory/policy/payment/support setup -> scans -> human
+review gates -> sandbox rehearsal -> rollout request
+
+Buyer one-time setup through AgenticOrg channel
+Preferred chat/channel -> account or session link -> preferences -> capability
+labels -> consent understanding -> revocation/history access
+
+Regular transaction
+Buyer prompt -> AgenticOrg session -> Grantex capability check -> catalog and
+inventory reads -> grounded comparison -> cart draft -> Grantex consent ->
+Commerce Passport status -> payment intent/checkout handoff -> provider webhook
+reconciliation -> order/fulfillment/support/refund/settlement status -> audit
+and rollback
+```
+
+Seller setup requirements:
+
+1. Merchant workspace, tenant, owner roles, category preset, and sandbox/live
+   environment split.
+2. Legal/compliance verification with private artifacts stored outside Git and
+   only non-secret references in product records.
+3. Existing-system connectors for storefront, catalog, ERP/PIM, inventory/WMS,
+   OMS, logistics, payment provider, CRM/support, or CSV/API maintenance.
+4. Source-of-truth precedence for catalog, price, inventory, order, fulfillment,
+   payment, support, return, refund, settlement, and payout data.
+5. Public-safe catalog, price, tax, warranty, return, inventory freshness,
+   delivery/pickup, support, and payment policy setup.
+6. Agent capability selection for browse, compare, cart draft, checkout consent
+   request, order status, support handoff, and return/refund request.
+7. Secret/private-detail, overclaim, stale-data, production-ID, synthetic-ID,
+   config/allowlist, policy, and connector health scans.
+8. Legal, product wording, security, ops/support, rollback, smoke, and evidence
+   retention approval gates.
+9. Sandbox launch rehearsal and rollback proof before any production rollout
+   request.
+
+Buyer setup requirements:
+
+1. Launch from an approved channel such as ChatGPT, Claude, Gemini, WhatsApp,
+   Telegram, web/mobile, or future agent surface.
+2. Create or resume a buyer-agent session without developer setup.
+3. Bind channel identity without exposing private tokens or payment credentials.
+4. Capture safe preferences such as locale, currency, delivery region,
+   notification path, accessibility needs, and optional spend comfort.
+5. Show capability labels for read-only, consent-required, checkout-capable, and
+   blocked actions.
+6. Require Grantex consent and Commerce Passport evidence before every
+   payment-affecting action.
+7. Provide revocation and redacted history access.
+
+Regular transaction requirements:
+
+1. AgenticOrg must ask Grantex for approved merchant and channel capability
+   state before presenting commerce actions.
+2. Product, price, tax, inventory, delivery, return, warranty, support, checkout,
+   payment, order, fulfillment, refund, settlement, and payout facts must come
+   from Grantex.
+3. Cart draft must use exact Grantex product/variant IDs.
+4. Grantex must recalculate totals, policy, amount caps, freshness, eligibility,
+   idempotency, and audit before checkout.
+5. Buyer consent must occur through the Grantex-controlled handoff.
+6. Provider interaction, webhook reconciliation, order creation/reference,
+   fulfillment status, support handoff, return/refund request, settlement, and
+   rollback remain Grantex-owned.
+7. AgenticOrg must show buyer-safe status and refuse stale, unknown, unsupported,
+   or unapproved claims.
+
 AgenticOrg must not call merchant payment providers, Plural, Stripe, Shopify,
 WooCommerce, Magento, ERP, OMS, or private merchant APIs directly for commerce
 execution. Those integrations belong in Grantex because Grantex owns tenant

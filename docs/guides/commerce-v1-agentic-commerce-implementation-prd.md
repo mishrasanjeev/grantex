@@ -55,6 +55,56 @@ questions, draft carts, request consent, and display checkout state, but it must
 not become the source of truth for merchants, products, inventory, price,
 policy, payment credentials, settlement, or refunds.
 
+### End-To-End Operating Flow
+
+The detailed buyer and seller walkthrough is documented in
+`docs/guides/commerce-v1-end-to-end-agentic-commerce-flow.mdx`.
+
+Seller one-time setup:
+
+1. Create Grantex merchant workspace, tenant boundary, owners, roles, and
+   sandbox/live environment split.
+2. Verify merchant identity and keep private artifacts outside repos.
+3. Connect existing systems: storefront, catalog, ERP/PIM, inventory/WMS, OMS,
+   logistics, payment provider, CRM/support, or CSV/API.
+4. Declare source-of-truth precedence for catalog, price, inventory, order,
+   fulfillment, support, and payment data.
+5. Configure category preset, required public fields, return/warranty policy,
+   tax, shipping, payment, support, and rollback ownership.
+6. Select allowed agent capabilities and buyer channels.
+7. Run scans, readiness scoring, human review gates, sandbox rehearsal, and
+   rollback checks.
+8. Request the smallest approved rollout, usually read-only discovery first.
+
+Buyer one-time setup:
+
+1. Choose an approved chat or agent surface, such as ChatGPT, Claude, Gemini,
+   WhatsApp, Telegram, web/mobile, or a future channel.
+2. Link or sign in to create a buyer-agent session.
+3. Set safe preferences such as locale, currency, delivery region, notification
+   path, and accessibility needs.
+4. See what actions the channel can support and what remains blocked.
+5. Approve or deny each payment-affecting action through Grantex consent.
+
+Regular transaction:
+
+1. Buyer asks the agent to discover, compare, or buy.
+2. AgenticOrg asks Grantex for merchant and channel capability state.
+3. AgenticOrg reads product, price, inventory, delivery, return, and checkout
+   facts only from Grantex.
+4. Grantex uses synced seller systems and canonical policy to return grounded
+   answers or blocker codes.
+5. AgenticOrg creates a cart draft only with exact Grantex variant IDs.
+6. Grantex recalculates totals, policy, amount caps, inventory freshness, and
+   eligibility.
+7. Buyer approves or denies consent in the Grantex handoff.
+8. Grantex issues scoped Commerce Passport status only when consent and policy
+   pass.
+9. AgenticOrg requests payment intent and checkout only through Grantex.
+10. Grantex owns provider interaction, webhook reconciliation, order,
+    fulfillment, support, return/refund handoff, settlement, audit, and rollback.
+11. AgenticOrg shows buyer-safe status and refuses unsupported claims.
+
 ## 2. Current Implementation Snapshot
 
 The repo already has important foundations:
@@ -261,6 +311,7 @@ The implementation should update these surfaces as slices land:
 | `GRANTEX_COMMERCE_V1_BUILD_SPEC.md` | Add only committed V1 contracts, not aspirational roadmap claims. |
 | `docs/docs.json` | Keep merchant/developer/operator docs discoverable under Agentic Commerce V1. |
 | Commerce overview guide | Link to this PRD and show current posture, allowed paths, and blocked paths. |
+| End-to-end flow guide | Keep seller one-time setup, buyer one-time setup, regular transaction, exception paths, and source-of-truth rules current. |
 | Developer guide | Document API and connector contracts after implementation exists. |
 | Merchant/operator guide | Explain self-serve, approvals, category presets, and existing-system connectors. |
 | Operations guide | Document rollback, incident, webhook replay, stale sync, and support handoff. |
