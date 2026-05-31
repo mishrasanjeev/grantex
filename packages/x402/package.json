@@ -31,7 +31,7 @@
   "dependencies": {
     "@noble/ed25519": "^2.2.3",
     "@noble/hashes": "^2.0.1",
-    "jose": "^5.2.4"
+    "jose": "^6.2.3"
   },
   "peerDependencies": {
     "express": ">=4.18.0"
