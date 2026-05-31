@@ -42,6 +42,12 @@ jobs:
       - name: Portal features (full API surface)
         env:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+          # /metrics requires Bearer-token auth in production. The value
+          # must match the auth-service's METRICS_API_KEY env var (kept in
+          # GCP Secret Manager and mirrored as a GitHub repo secret of the
+          # same name). See tests/e2e/portal-features.test.ts metrics test
+          # and apps/auth-service/src/routes/metrics.ts for the contract.
+          METRICS_API_KEY: ${{ secrets.METRICS_API_KEY }}
         run: npx vitest run --testTimeout=120000 tests/e2e/portal-features.test.ts
 
       - name: Scope enforcement

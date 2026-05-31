@@ -9,7 +9,7 @@
     "@grantex/sdk": "^0.3.8"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^25.9.1",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0"
   }
