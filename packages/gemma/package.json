@@ -28,14 +28,14 @@
   },
   "dependencies": {
     "jose": "^6.2.3",
-    "ulid": "^2.3.0"
+    "ulid": "^3.0.2"
   },
   "overrides": {
     "esbuild": ">=0.25.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
-    "typescript": "^5.3.3",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.2"
   },
   "engines": {
