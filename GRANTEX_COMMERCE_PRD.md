@@ -566,6 +566,186 @@ Required feature flags:
 
 Feature flags must be tenant-scoped and environment-aware.
 
+### 5.7 Current Implementation Reality And Fast-Track Gap Plan
+
+This section explains the practical path from the current repos to a merchant-ready
+agentic commerce product. It is written for product, sales, merchant success, and
+engineering readers.
+
+Plain-English summary:
+
+> A merchant should not have to rebuild their store for AI agents. The merchant
+> should connect the systems they already use, let Grantex translate those systems
+> into safe agent-ready APIs, and let AgenticOrg agents use only the Grantex
+> permissioned surface.
+
+The correct architecture remains:
+
+```text
+Merchant existing systems
+Shopify / WooCommerce / Magento / custom website / ERP / OMS / inventory / payment provider
+        |
+        v
+Grantex Commerce merchant control plane
+Canonical merchant profile, catalog, inventory, policy, consent, passport, checkout, audit
+        |
+        v
+Protocol and publishing adapters
+Native Grantex API / MCP / UCP-style capability profile / ACP-style checkout / schema.org JSON-LD / future AP2 mandate evidence
+        |
+        v
+AgenticOrg buyer-agent layer
+Discovery, recommendations, cart drafting, consent UX, safe checkout workflow, refusal behavior
+```
+
+AgenticOrg must not call merchant payment providers, Plural, Stripe, Shopify,
+WooCommerce, Magento, ERP, OMS, or private merchant APIs directly for commerce
+execution. Those integrations belong in Grantex because Grantex owns tenant
+boundaries, merchant policy, credential isolation, consent, audit, idempotency,
+and rollback.
+
+#### Current repo evidence
+
+| Area | Current evidence | Status |
+| --- | --- | --- |
+| Merchant control plane | Grantex owns merchant registration, merchant profile, commerce dashboard surfaces, merchant policy, catalog/product/variant routes, cart/payment routes, passport/consent, provider webhook handling, audit, and ops views. | Foundation exists. |
+| Catalog | Grantex has product and variant APIs, catalog search/detail, bulk dry-run/upsert behavior, patch/archive behavior, and CSV/JSON-oriented portal support. | Usable foundation, not yet hardened for large real merchant imports. |
+| Inventory | Current V1 inventory is mainly variant availability and freshness, such as `in_stock`, `out_of_stock`, `pre_order`, `back_order`, `unknown`, and `last_synced_at`. | Good for read-only discovery, incomplete for real reservations and delivery promises. |
+| Payment | Grantex has cart/payment intent/checkout-link flow, Commerce Passport checks, provider-neutral adapter shape, mock provider, provider webhook handling, reconciliation, and ops visibility. | Sandbox/mock foundation exists; live Plural/provider execution remains gated. |
+| Agent layer | AgenticOrg Commerce Sales Agent uses `grantex_commerce:*` aliases such as merchant profile, catalog search, item detail, inventory check, cart create, consent request, payment intent, checkout, and payment status. | Correct boundary exists. |
+| Public discovery | AgenticOrg public commerce discovery is gated and Grantex production discovery remains fail-closed unless separately approved. | Safe posture. |
+| Orders and fulfillment | Current V1 can expose return/warranty summaries and payment status, but does not yet implement full production order, shipment, delivery, pickup, cancellation, or fulfillment lifecycle APIs. | Major gap. |
+| Refunds and returns | Current V1 defers refund execution and refund request APIs; merchants must handle refunds in their existing systems until this is implemented. | Major gap. |
+| Self-serve merchant onboarding | Planning docs exist for self-onboarding, review workflow, validator, rollout proposal, and demo launch rehearsal, but full runtime self-serve onboarding is not complete. | Major gap. |
+| Protocol standards | PRD and V1 spec target future UCP/ACP/AP2 compatibility and MCP/native APIs, but full UCP/ACP/AP2 certification is not implemented or claimed. | Adapter roadmap required. |
+
+#### How this stitches with UCP, ACP, AP2, MCP, and schema.org
+
+Grantex should use one canonical commerce model and publish multiple adapters
+from that model. Do not duplicate merchant state separately for each protocol.
+
+| Standard or surface | What it is for | Grantex role | AgenticOrg role |
+| --- | --- | --- | --- |
+| Native Grantex API | First-party controlled commerce APIs for merchant onboarding, catalog, inventory, consent, policy, checkout, payment, audit, and ops. | Source of truth and enforcement layer. | Calls through approved tools only. |
+| MCP | Tool interface for agents to call merchant-safe actions. | Expose approved tools backed by native APIs and policy checks. | Use MCP/tool aliases; never bypass Grantex. |
+| UCP | Capability discovery and shopping capabilities such as cart, checkout, identity linking, and order updates. See https://ucp.dev/specification/overview/. | Publish UCP-style profiles and map Grantex capabilities to UCP capabilities when approved. | Consume only the Grantex-published capability surface. |
+| ACP | Checkout/session style integration for AI agents and sellers. Stripe describes create/update/complete checkout flows and shared payment token style payment data at https://docs.stripe.com/agentic-commerce/protocol. | Map Grantex cart/payment intent/order state to ACP-compatible checkout metadata where the merchant/provider supports it. | Render buyer-facing checkout state and return to Grantex for completion. |
+| AP2 | Cryptographic authorization for agent-performed payments using checkout and payment mandates. See https://ap2-protocol.org/ap2/specification/. | Treat Commerce Passport, consent records, audit events, and future signed mandate hashes as AP2-compatible evidence inputs. Do not claim AP2 compliance until implemented and tested. | Present mandate/consent status to users only when Grantex provides it. |
+| schema.org | Public web metadata for products, offers, shipping, and returns, including `Product`, `Offer`, `OfferShippingDetails`, and `MerchantReturnPolicy`. See https://schema.org/Product, https://schema.org/Offer, https://schema.org/OfferShippingDetails, and https://schema.org/MerchantReturnPolicy. | Generate public-safe JSON-LD/feed output from approved catalog and policy fields. | May use public-safe discovery metadata, but source remains Grantex. |
+
+Protocol rule:
+
+> Grantex can be "UCP-ready", "ACP-compatible", "schema.org published", or
+> "AP2-evidence-ready" only when the implementation, tests, approval state, and
+> release evidence exist. Until then, docs must say "designed for future
+> compatibility" or "prototype/planning only".
+
+#### How existing merchant APIs are used
+
+Merchants should connect what they already have. Grantex should normalize each
+source into the same safe commerce read/write model.
+
+| Merchant system | Typical source data | Grantex normalized target | Notes |
+| --- | --- | --- | --- |
+| Shopify, WooCommerce, Magento, custom storefront | Products, variants, media, price, availability, collections/categories | `CommerceProduct`, `CommerceProductVariant`, catalog readiness, schema.org feed | Start with read-only sync, then add writeback only when approved. |
+| ERP or PIM | Product master, attributes, tax codes, category hierarchy | Catalog and category preset mapping | ERP/PIM should win for product truth when merchant declares it authoritative. |
+| Inventory or WMS | Stock state, quantity, location, reservations, reorder state | Inventory availability, future `CommerceInventoryLevel`, freshness/confidence | V1 availability is enough for browse; checkout needs stronger freshness and reservation. |
+| OMS | Orders, fulfillment status, cancellation, shipment events | Future `CommerceOrder`, fulfillment events, order timeline | Required before production checkout at scale. |
+| Logistics provider | Delivery promise, tracking, pickup slots, failed delivery events | Fulfillment options and tracking events | Needed for UCP order capability and buyer trust. |
+| Payment provider, Plural, Stripe, Razorpay, Cashfree, Adyen, PhonePe | Payment intent/order, hosted checkout, webhook status, settlement/refund status | Provider-neutral payment intent, webhook event, reconciliation, payout reporting | Provider credentials stay in Grantex, never AgenticOrg. |
+| CRM/support system | Support ticket, return request, refund escalation, customer communication | Support/return/refund request timeline | Start with read-only/manual handoff before automated refund execution. |
+
+Connector rule:
+
+> A connector should never make a merchant "live for agents" by itself. It only
+> brings data into Grantex. Agent access still requires readiness checks,
+> merchant approval, policy activation, consent, and audit.
+
+#### Pending gaps and fast-track plan
+
+| Gap | Why it matters | Fast-track slice | Do not skip |
+| --- | --- | --- | --- |
+| Self-serve merchant onboarding | Merchants must join without engineering tickets. | Build merchant signup, tenant creation, category preset selection, sandbox/live split, owner invite, verification status, and checklist UI. | KYB/KYC/legal/security gates for live mode. |
+| Existing-system connectors | Merchants will not manually maintain duplicate catalogs forever. | Build one priority connector path first: CSV/manual plus Shopify or WooCommerce/custom REST. Add webhook/source freshness and reconciliation. | Credential isolation, source-of-truth selection, stale data handling. |
+| Large catalog import jobs | Real sellers may have thousands of SKUs. | Add async import job, dry-run report, row-level errors, rollback, idempotency, and retry. | Blocking UI-only imports that time out or silently drop rows. |
+| Real inventory | Agents must not promise stock incorrectly. | Add quantity/location model, freshness TTL, availability confidence, and reservation/stock hold proposal. | Checkout promises when stock is stale or unknown. |
+| Order and fulfillment lifecycle | A payment without an order is not a merchant launch. | Add order create/read, fulfillment status, shipment tracking, pickup/delivery slots, cancellation request, merchant webhooks. | Live checkout before order status exists. |
+| Refunds and returns | Buyers and merchants need post-purchase trust. | Add refund/return request and manual approval workflow first; later provider execution. | Automatic refund execution without policy, provider capability, and audit. |
+| Settlement and payout reporting | Merchants need to know when they get paid. | Add provider-neutral settlement/payout read model and reconciliation dashboard. | Raw provider payload exposure or provider-specific core tables. |
+| Live Plural/provider path | Payments need legal, security, and ops approvals. | Keep mock/sandbox; add live readiness checklist, credential validation, webhook signature verification, and rollback. | Live mode, public discovery, or allowlist changes without approval. |
+| UCP/ACP adapters | Big platforms will expect standard surfaces. | Generate adapter responses from Grantex canonical objects: merchant profile, cart, checkout, order, and payment evidence. | Duplicated per-protocol merchant state. |
+| schema.org publishing | Web crawlers and commerce agents need public-safe product facts. | Generate JSON-LD for approved `Product`, `Offer`, shipping, return policy, availability, and merchant identity fields. | Private terms, inventory quantities, secret IDs, or unapproved merchant data. |
+| AP2 mandate evidence | Payment networks and agent platforms will require proof. | Map Commerce Passport consent, checkout amount cap, merchant policy, and audit hashes to future signed mandate evidence. | Claiming AP2 compliance before deterministic verification exists. |
+| AgenticOrg merchant UX | Merchants need to see how agents sell safely. | Package demo scripts, refusal examples, capability previews, and merchant-facing status labels. | Letting agents invent prices, stock, discounts, refunds, or delivery promises. |
+
+#### Recommended fast-track order
+
+1. **Self-serve sandbox onboarding**
+   - Merchant creates account, tenant, category preset, sandbox profile, and owner roles.
+   - Result: merchant can see "not live yet" status and a clear checklist.
+
+2. **Catalog connector MVP**
+   - Support CSV/manual plus one real connector family.
+   - Result: products, variants, prices, public-safe media, warranty, return summary, and availability sync into Grantex.
+
+3. **schema.org and read-only agent discovery**
+   - Generate public-safe product/offer JSON-LD and Grantex read-only discovery.
+   - Result: agents can discover and recommend, but cannot checkout.
+
+4. **Inventory freshness and safe cart draft**
+   - Add stale-data refusal and cart draft from grounded variant IDs only.
+   - Result: agents can prepare a cart but cannot pay without consent.
+
+5. **Sandbox checkout and Commerce Passport**
+   - Use mock/sandbox payment only.
+   - Result: merchant can demo the full buyer consent and checkout journey.
+
+6. **Order and fulfillment model**
+   - Add order create/read, status events, shipment/pickup/delivery fields, and OMS webhook hooks.
+   - Result: a paid order has an operational home.
+
+7. **Returns/refund request workflow**
+   - Add request, approval, manual provider handoff, and audit.
+   - Result: support teams can handle buyer issues without hidden side channels.
+
+8. **Protocol adapter hardening**
+   - Map native objects into UCP/ACP/MCP/schema.org views with conformance tests.
+   - Result: Grantex becomes standards-ready without becoming standards-fragile.
+
+9. **One real merchant pilot**
+   - One category, one merchant, one provider, one geography, one rollback owner.
+   - Result: controlled live rollout proposal after all approvals pass.
+
+#### Layman launch checklist for merchants
+
+A merchant should see this as the simple path:
+
+1. Create a Grantex Commerce account.
+2. Choose what type of business they are: electronics, fashion, pharmacy, home, services, and so on.
+3. Connect their current store or upload a CSV.
+4. Check that products, prices, images, return policy, and availability look right.
+5. Connect a sandbox payment provider.
+6. Preview what an AI agent will see.
+7. Decide what agents are allowed to do: browse only, create cart, request checkout, read order status, or request support.
+8. Run scans and fix missing fields.
+9. Get legal, security, product, and operations approvals.
+10. Run a sandbox launch rehearsal.
+11. Request production rollout.
+12. Go live only after explicit approval and rollback readiness.
+
+#### Stop conditions
+
+Stop and do not go live if any of these are true:
+
+- Merchant identity is not approved.
+- Private contracts, contacts, pricing terms, customer data, credentials, tokens, raw payloads, or secret values are in Git or public docs.
+- Catalog prices, availability, tax, return policy, or warranty data are stale or unverified.
+- Checkout can happen without a valid Commerce Passport and user consent.
+- AgenticOrg can call a payment provider or merchant private API directly.
+- Orders, fulfillment, cancellation, support, or refund handoff are missing for a paid flow.
+- UCP, ACP, AP2, schema.org, or live provider compliance is claimed before implementation and tests exist.
+- Production allowlists, public discovery flags, live Plural, checkout/payment creation, or Commerce V1 production flags are changed without a separate approved rollout.
+
 ## 6. Core Product Modules
 
 ### 6.1 Merchant Commerce Gateway
