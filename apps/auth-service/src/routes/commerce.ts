@@ -21,6 +21,19 @@ import {
   readCatalogItem,
   searchCatalog,
 } from '../lib/commerce/catalog.js';
+import {
+  computeSandboxOnboardingReadiness,
+  deriveSandboxOnboardingState,
+  isPublicSafeText,
+  isSafeSupportEmail,
+  isSafeSupportUrl,
+  isSandboxOnboardingState,
+  toSandboxOnboardingResponse,
+  validateSandboxOnboardingTransition,
+  type SandboxOnboardingCatalogSummary,
+  type SandboxOnboardingMerchant,
+  type SandboxOnboardingState,
+} from '../lib/commerce/sandbox-onboarding.js';
 import { commerceTenantsRoutes } from './commerce-tenants.js';
 import { commercePassportRoutes } from './commerce-passport.js';
 import { commerceConsentRoutes } from './commerce-consent.js';
@@ -54,6 +67,9 @@ interface MerchantCreateBody {
   country_code?: unknown;
   default_currency?: unknown;
   support_email?: unknown;
+  support_url?: unknown;
+  public_discovery_description_draft?: unknown;
+  agentic_commerce_requested?: unknown;
 }
 
 interface MerchantPatchBody {
@@ -64,6 +80,22 @@ interface MerchantPatchBody {
   default_currency?: unknown;
   support_email?: unknown;
   agentic_commerce_enabled?: unknown;
+}
+
+interface SandboxOnboardingUpdateBody {
+  display_name?: unknown;
+  category_preset?: unknown;
+  country_code?: unknown;
+  default_currency?: unknown;
+  support_email?: unknown;
+  support_url?: unknown;
+  public_discovery_description_draft?: unknown;
+  agentic_commerce_requested?: unknown;
+}
+
+interface SandboxOnboardingTransitionBody {
+  target_state?: unknown;
+  reason?: unknown;
 }
 
 interface AgentCreateBody {
@@ -159,6 +191,18 @@ const AGENT_TRUST_STATUSES = new Set(['pending', 'trusted', 'suspended', 'disabl
 const AGENT_STATUSES = new Set(['active', 'disabled']);
 const PRODUCT_STATUSES = new Set(['active', 'archived', 'all']);
 
+const MERCHANT_CREATE_FIELDS = new Set([
+  'legal_name',
+  'display_name',
+  'category_preset',
+  'country_code',
+  'default_currency',
+  'support_email',
+  'support_url',
+  'public_discovery_description_draft',
+  'agentic_commerce_requested',
+]);
+
 const MERCHANT_PATCH_FIELDS = new Set([
   'legal_name',
   'display_name',
@@ -167,6 +211,17 @@ const MERCHANT_PATCH_FIELDS = new Set([
   'default_currency',
   'support_email',
   'agentic_commerce_enabled',
+]);
+
+const SANDBOX_ONBOARDING_UPDATE_FIELDS = new Set([
+  'display_name',
+  'category_preset',
+  'country_code',
+  'default_currency',
+  'support_email',
+  'support_url',
+  'public_discovery_description_draft',
+  'agentic_commerce_requested',
 ]);
 
 const AGENT_PATCH_FIELDS = new Set([
@@ -234,6 +289,31 @@ function validatePatchKeys(
   return changedFields.filter((key) => allowed.has(key));
 }
 
+function validateSupportAndDiscoveryFields(
+  body: Record<string, unknown>,
+  fieldErrors: Record<string, string>,
+): void {
+  if (body['support_email'] !== undefined
+    && body['support_email'] !== null
+    && (!isString(body['support_email']) || !isSafeSupportEmail(body['support_email']))) {
+    fieldErrors['support_email'] =
+      'must be a non-empty repo-safe/test-safe support email such as support@example.test, or null';
+  }
+  if (body['support_url'] !== undefined
+    && body['support_url'] !== null
+    && (!isString(body['support_url']) || !isSafeSupportUrl(body['support_url']))) {
+    fieldErrors['support_url'] =
+      'must be a repo-safe/test-safe http(s) support URL on .example, .test, .invalid, or localhost, or null';
+  }
+  if (body['public_discovery_description_draft'] !== undefined
+    && body['public_discovery_description_draft'] !== null
+    && (!isString(body['public_discovery_description_draft'])
+      || !isPublicSafeText(body['public_discovery_description_draft']))) {
+    fieldErrors['public_discovery_description_draft'] =
+      'must be public-safe text with no secrets, credentials, payment, provider, live, production, approval, readiness, or certification claims';
+  }
+}
+
 function isNullableString(v: unknown): v is string | null {
   return v === null || isString(v);
 }
@@ -250,6 +330,85 @@ function parseBoolean(v: unknown): boolean | null {
     if (normalized === 'false') return false;
   }
   return null;
+}
+
+const CATALOG_PUBLIC_UNSAFE_PATTERN =
+  '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M';
+
+async function readSandboxOnboardingCatalogSummary(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+): Promise<SandboxOnboardingCatalogSummary> {
+  const rows = await sql<SandboxOnboardingCatalogSummary[]>`
+      SELECT
+      COUNT(DISTINCT p.id)::int AS product_count,
+      COUNT(v.id)::int AS variant_count,
+      COUNT(DISTINCT p.id) FILTER (
+        WHERE NULLIF(TRIM(p.image_url), '') IS NOT NULL
+      )::int AS products_with_image,
+      COUNT(DISTINCT p.id) FILTER (
+        WHERE NULLIF(TRIM(p.title), '') IS NOT NULL
+          AND LENGTH(TRIM(p.title)) <= 1000
+          AND p.title !~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+      )::int AS products_with_public_safe_title,
+      COUNT(DISTINCT p.id) FILTER (
+        WHERE NULLIF(TRIM(p.description), '') IS NOT NULL
+          AND LENGTH(TRIM(p.description)) <= 1000
+          AND p.description !~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+      )::int AS products_with_public_safe_description,
+      COUNT(DISTINCT p.id) FILTER (
+        WHERE p.category_preset = 'electronics_appliances'
+      )::int AS products_with_category_mapping,
+      COUNT(DISTINCT p.id) FILTER (
+        WHERE p.title ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(p.brand, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(p.description, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(p.image_url, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+      )::int AS products_with_unsafe_text,
+      COUNT(v.id) FILTER (
+        WHERE NULLIF(TRIM(v.sku), '') IS NOT NULL
+      )::int AS variants_with_sku,
+      COUNT(v.id) FILTER (
+        WHERE v.price_amount >= 0
+          AND v.currency ~ '^[A-Z]{3}$'
+      )::int AS variants_with_price_currency,
+      COUNT(v.id) FILTER (
+        WHERE NULLIF(TRIM(v.warranty_summary), '') IS NOT NULL
+      )::int AS variants_with_warranty_summary,
+      COUNT(v.id) FILTER (
+        WHERE NULLIF(TRIM(v.return_policy_summary), '') IS NOT NULL
+      )::int AS variants_with_return_policy_summary,
+      COUNT(v.id) FILTER (
+        WHERE NULLIF(TRIM(v.gst_slab), '') IS NOT NULL
+           OR v.tax_rate IS NOT NULL
+           OR NULLIF(TRIM(v.hsn_code), '') IS NOT NULL
+      )::int AS variants_with_tax_metadata,
+      COUNT(v.id) FILTER (
+        WHERE v.last_synced_at >= NOW() - INTERVAL '24 hours'
+      )::int AS variants_with_fresh_inventory,
+      COUNT(v.id) FILTER (
+        WHERE v.availability_status <> 'unknown'
+      )::int AS variants_with_known_availability,
+      COUNT(v.id) FILTER (
+        WHERE COALESCE(v.sku, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(v.parent_sku, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(v.model, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(v.variant_title, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(v.warranty_summary, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           OR COALESCE(v.return_policy_summary, '') ~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+      )::int AS variants_with_unsafe_text
+    FROM commerce_products p
+    LEFT JOIN commerce_product_variants v
+      ON v.tenant_id = p.tenant_id
+     AND v.merchant_id = p.merchant_id
+     AND v.product_id = p.id
+     AND v.archived_at IS NULL
+    WHERE p.tenant_id = ${tenantId}
+      AND p.merchant_id = ${merchantId}
+      AND p.archived_at IS NULL
+  `;
+  return rows[0] ?? {};
 }
 
 function isValidIsoDate(v: unknown): v is string {
@@ -581,12 +740,32 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   // ----------------------------------------------------------------------
   app.post<{ Body: MerchantCreateBody }>('/merchants', async (request, reply) => {
     requireOperator(request);
-    const body = request.body ?? {};
+    if (request.body !== undefined && !isPlainObject(request.body)) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { body: 'must be a JSON object' } },
+        retryable: false,
+      });
+    }
+    const body = (request.body ?? {}) as Record<string, unknown>;
     const fieldErrors: Record<string, string> = {};
+    validatePatchKeys(body, MERCHANT_CREATE_FIELDS, fieldErrors);
     if (!isString(body.legal_name)) fieldErrors['legal_name'] = 'required string';
     if (!isString(body.display_name)) fieldErrors['display_name'] = 'required string';
     if (!isCommerceCategoryPreset(body.category_preset)) {
       fieldErrors['category_preset'] = 'must be a known commerce category preset';
+    }
+    if (body['default_currency'] !== undefined
+      && (!isString(body['default_currency']) || !/^[A-Z]{3}$/.test(body['default_currency']))) {
+      fieldErrors['default_currency'] = 'must be an ISO 4217 uppercase currency code';
+    }
+    if (body['country_code'] !== undefined
+      && (!isString(body['country_code']) || !/^[A-Z]{2}$/.test(body['country_code']))) {
+      fieldErrors['country_code'] = 'must be an ISO 3166-1 alpha-2 uppercase country code';
+    }
+    validateSupportAndDiscoveryFields(body, fieldErrors);
+    if (body['agentic_commerce_requested'] !== undefined
+      && typeof body['agentic_commerce_requested'] !== 'boolean') {
+      fieldErrors['agentic_commerce_requested'] = 'must be a boolean';
     }
     if (Object.keys(fieldErrors).length > 0) {
       throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
@@ -603,7 +782,8 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       const rows = await tx<Record<string, unknown>[]>`
         INSERT INTO commerce_merchants (
           id, tenant_id, legal_name, display_name, category_preset,
-          default_currency, country_code, support_email
+          default_currency, country_code, support_email, support_url,
+          public_discovery_description_draft, agentic_commerce_requested
         ) VALUES (
           ${id}, ${tenantId},
           ${body.legal_name as string},
@@ -611,11 +791,17 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
           ${body.category_preset as string},
           ${isString(body.default_currency) ? (body.default_currency as string) : 'INR'},
           ${isString(body.country_code) ? (body.country_code as string) : 'IN'},
-          ${isString(body.support_email) ? (body.support_email as string) : null}
+          ${isString(body.support_email) ? (body.support_email as string) : null},
+          ${isString(body.support_url) ? (body.support_url as string) : null},
+          ${isString(body.public_discovery_description_draft) ? (body.public_discovery_description_draft as string) : null},
+          ${body.agentic_commerce_requested === true}
         )
         RETURNING id, tenant_id, legal_name, display_name, category_preset,
                   verification_status, environment, agentic_commerce_enabled,
-                  default_currency, country_code, support_email,
+                  default_currency, country_code, support_email, support_url,
+                  public_discovery_description_draft, agentic_commerce_requested,
+                  sandbox_onboarding_state, sandbox_onboarding_blocker,
+                  sandbox_onboarding_updated_at,
                   created_at, updated_at
       `;
       const audit = await appendCommerceAudit(tx as unknown as Sql, {
@@ -625,7 +811,12 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         resourceType: 'merchant',
         resourceId: id,
         requestId: request.id,
-        metadata: { display_name: body.display_name },
+        metadata: {
+          display_name: body.display_name,
+          sandbox_onboarding_state: 'draft_created',
+          production_approval_status: 'not_approved',
+          rollout_status: 'rollout_not_requested',
+        },
       });
       return { merchant: rows[0], auditEventId: audit.id };
     });
@@ -643,7 +834,10 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     const rows = await sql<Record<string, unknown>[]>`
       SELECT id, tenant_id, legal_name, display_name, category_preset,
              verification_status, environment, agentic_commerce_enabled,
-             default_currency, country_code, support_email,
+             default_currency, country_code, support_email, support_url,
+             public_discovery_description_draft, agentic_commerce_requested,
+             sandbox_onboarding_state, sandbox_onboarding_blocker,
+             sandbox_onboarding_updated_at,
              disabled_at, created_at, updated_at
       FROM commerce_merchants
       WHERE id = ${request.params.merchantId}
@@ -655,6 +849,340 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     }
     return reply.status(200).send({ data: rows[0] });
   });
+
+  app.get<{ Params: { merchantId: string } }>(
+    '/merchants/:merchantId/sandbox-onboarding',
+    async (request, reply) => {
+      requireOperatorOrSelfMerchant(request, request.params.merchantId);
+      const sql = getSql();
+      const rows = await sql<SandboxOnboardingMerchant[]>`
+        SELECT id, tenant_id, display_name, category_preset, environment,
+               agentic_commerce_enabled, default_currency, country_code,
+               support_email, support_url, public_discovery_description_draft,
+               agentic_commerce_requested, sandbox_onboarding_state,
+               sandbox_onboarding_blocker, sandbox_onboarding_updated_at,
+               provider_account_refs
+          FROM commerce_merchants
+         WHERE id = ${request.params.merchantId}
+           AND tenant_id = ${request.commerceTenantId}
+         LIMIT 1
+      `;
+      const merchant = rows[0];
+      if (!merchant) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      if (merchant.environment !== 'sandbox') {
+        throw new CommerceHttpError(409, 'sandbox_onboarding_live_merchant_blocked',
+          'Sandbox onboarding is only available for sandbox merchants',
+          { retryable: false });
+      }
+      const catalogSummary = await readSandboxOnboardingCatalogSummary(sql, request.commerceTenantId, request.params.merchantId);
+      return reply.status(200).send({
+        data: toSandboxOnboardingResponse(
+          merchant,
+          computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary),
+        ),
+      });
+    },
+  );
+
+  app.put<{ Params: { merchantId: string }; Body: SandboxOnboardingUpdateBody }>(
+    '/merchants/:merchantId/sandbox-onboarding',
+    async (request, reply) => {
+      requireOperatorOrSelfMerchant(request, request.params.merchantId);
+      if (request.body !== undefined && !isPlainObject(request.body)) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+          details: { fields: { body: 'must be a JSON object' } },
+          retryable: false,
+        });
+      }
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const fieldErrors: Record<string, string> = {};
+      const changedFields = validatePatchKeys(body, SANDBOX_ONBOARDING_UPDATE_FIELDS, fieldErrors);
+      if (changedFields.length === 0 && Object.keys(fieldErrors).length === 0) {
+        fieldErrors['body'] = 'at least one sandbox onboarding field is required';
+      }
+      if (body['display_name'] !== undefined && !isString(body['display_name'])) {
+        fieldErrors['display_name'] = 'must be a non-empty string';
+      }
+      if (body['category_preset'] !== undefined && !isCommerceCategoryPreset(body['category_preset'])) {
+        fieldErrors['category_preset'] = 'must be a known commerce category preset';
+      }
+      if (body['default_currency'] !== undefined
+        && (!isString(body['default_currency']) || !/^[A-Z]{3}$/.test(body['default_currency']))) {
+        fieldErrors['default_currency'] = 'must be an ISO 4217 uppercase currency code';
+      }
+      if (body['country_code'] !== undefined
+        && (!isString(body['country_code']) || !/^[A-Z]{2}$/.test(body['country_code']))) {
+        fieldErrors['country_code'] = 'must be an ISO 3166-1 alpha-2 uppercase country code';
+      }
+      validateSupportAndDiscoveryFields(body, fieldErrors);
+      if (body['agentic_commerce_requested'] !== undefined
+        && typeof body['agentic_commerce_requested'] !== 'boolean') {
+        fieldErrors['agentic_commerce_requested'] = 'must be a boolean';
+      }
+      if (Object.keys(fieldErrors).length > 0) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+          details: { fields: fieldErrors },
+          retryable: false,
+        });
+      }
+
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const merchantId = request.params.merchantId;
+      const hasDisplayName = Object.prototype.hasOwnProperty.call(body, 'display_name');
+      const hasCategoryPreset = Object.prototype.hasOwnProperty.call(body, 'category_preset');
+      const hasDefaultCurrency = Object.prototype.hasOwnProperty.call(body, 'default_currency');
+      const hasCountryCode = Object.prototype.hasOwnProperty.call(body, 'country_code');
+      const hasSupportEmail = Object.prototype.hasOwnProperty.call(body, 'support_email');
+      const hasSupportUrl = Object.prototype.hasOwnProperty.call(body, 'support_url');
+      const hasDescription = Object.prototype.hasOwnProperty.call(body, 'public_discovery_description_draft');
+      const hasAgenticRequested = Object.prototype.hasOwnProperty.call(body, 'agentic_commerce_requested');
+      const patchDisplayName = hasDisplayName ? body['display_name'] as string : null;
+      const patchCategoryPreset = hasCategoryPreset ? body['category_preset'] as string : null;
+      const patchDefaultCurrency = hasDefaultCurrency ? body['default_currency'] as string : null;
+      const patchCountryCode = hasCountryCode ? body['country_code'] as string : null;
+      const patchSupportEmail = hasSupportEmail ? body['support_email'] as string | null : null;
+      const patchSupportUrl = hasSupportUrl ? body['support_url'] as string | null : null;
+      const patchDescription = hasDescription ? body['public_discovery_description_draft'] as string | null : null;
+      const patchAgenticRequested = hasAgenticRequested ? body['agentic_commerce_requested'] as boolean : null;
+
+      const result = await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const beforeRows = await tx<SandboxOnboardingMerchant[]>`
+          SELECT id, tenant_id, display_name, category_preset, environment,
+                 agentic_commerce_enabled, default_currency, country_code,
+                 support_email, support_url, public_discovery_description_draft,
+                 agentic_commerce_requested, sandbox_onboarding_state,
+                 sandbox_onboarding_blocker, sandbox_onboarding_updated_at,
+                 provider_account_refs
+            FROM commerce_merchants
+           WHERE id = ${merchantId}
+             AND tenant_id = ${tenantId}
+           LIMIT 1
+        `;
+        const before = beforeRows[0];
+        if (!before) return null;
+        if (before.environment !== 'sandbox') {
+          throw new CommerceHttpError(409, 'sandbox_onboarding_live_merchant_blocked',
+            'Sandbox onboarding is only available for sandbox merchants',
+            { retryable: false });
+        }
+
+        const rows = await tx<SandboxOnboardingMerchant[]>`
+          UPDATE commerce_merchants
+             SET display_name = CASE WHEN ${hasDisplayName}::boolean THEN ${patchDisplayName}::text ELSE display_name END,
+                 category_preset = CASE WHEN ${hasCategoryPreset}::boolean THEN ${patchCategoryPreset}::text ELSE category_preset END,
+                 default_currency = CASE WHEN ${hasDefaultCurrency}::boolean THEN ${patchDefaultCurrency}::text ELSE default_currency END,
+                 country_code = CASE WHEN ${hasCountryCode}::boolean THEN ${patchCountryCode}::text ELSE country_code END,
+                 support_email = CASE WHEN ${hasSupportEmail}::boolean THEN ${patchSupportEmail}::text ELSE support_email END,
+                 support_url = CASE WHEN ${hasSupportUrl}::boolean THEN ${patchSupportUrl}::text ELSE support_url END,
+                 public_discovery_description_draft = CASE WHEN ${hasDescription}::boolean THEN ${patchDescription}::text ELSE public_discovery_description_draft END,
+                 agentic_commerce_requested = CASE WHEN ${hasAgenticRequested}::boolean THEN ${patchAgenticRequested}::boolean ELSE agentic_commerce_requested END,
+                 updated_at = NOW()
+           WHERE id = ${merchantId}
+             AND tenant_id = ${tenantId}
+           RETURNING id, tenant_id, display_name, category_preset, environment,
+                     agentic_commerce_enabled, default_currency, country_code,
+                     support_email, support_url, public_discovery_description_draft,
+                     agentic_commerce_requested, sandbox_onboarding_state,
+                     sandbox_onboarding_blocker, sandbox_onboarding_updated_at,
+                     provider_account_refs
+        `;
+        let merchant = rows[0]!;
+        const catalogSummary = await readSandboxOnboardingCatalogSummary(tx as unknown as Sql, tenantId, merchantId);
+        let readiness = computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary);
+        const currentState = isSandboxOnboardingState(merchant.sandbox_onboarding_state)
+          ? merchant.sandbox_onboarding_state
+          : 'draft_created';
+        if (currentState === 'submitted_for_review' && !readiness.ready) {
+          throw new CommerceHttpError(
+            409,
+            'invalid_sandbox_onboarding_update',
+            'submitted_for_review sandbox onboarding cannot be updated into failing readiness',
+            {
+              details: {
+                sandbox_onboarding_state: currentState,
+                readiness_status: readiness.status,
+                category_readiness_status: readiness.category_readiness.status,
+              },
+              retryable: false,
+            },
+          );
+        }
+        const nextState = deriveSandboxOnboardingState(currentState, readiness);
+        if (nextState !== currentState) {
+          const stateRows = await tx<SandboxOnboardingMerchant[]>`
+            UPDATE commerce_merchants
+               SET sandbox_onboarding_state = ${nextState},
+                   sandbox_onboarding_blocker = CASE
+                     WHEN ${nextState}::text = 'profile_incomplete' THEN 'required sandbox onboarding checks are incomplete'
+                     ELSE NULL::text
+                   END,
+                   sandbox_onboarding_updated_at = NOW(),
+                   updated_at = NOW()
+             WHERE id = ${merchantId}
+               AND tenant_id = ${tenantId}
+             RETURNING id, tenant_id, display_name, category_preset, environment,
+                       agentic_commerce_enabled, default_currency, country_code,
+                       support_email, support_url, public_discovery_description_draft,
+                       agentic_commerce_requested, sandbox_onboarding_state,
+                       sandbox_onboarding_blocker, sandbox_onboarding_updated_at,
+                       provider_account_refs
+          `;
+          merchant = stateRows[0]!;
+          readiness = computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary);
+        }
+        const audit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId,
+          merchantId,
+          eventType: 'merchant.sandbox_onboarding.updated',
+          resourceType: 'merchant',
+          resourceId: merchantId,
+          requestId: request.id,
+          metadata: {
+            changed_fields: changedFields,
+            sandbox_onboarding_state: merchant.sandbox_onboarding_state,
+            readiness_ready: readiness.ready,
+            category_readiness_status: readiness.category_readiness.status,
+            category_readiness_score_percent: readiness.category_readiness.score_percent,
+            production_approval_status: 'not_approved',
+            rollout_status: 'rollout_not_requested',
+          },
+        });
+        return { merchant, readiness, auditEventId: audit.id };
+      });
+      if (!result) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      return reply.status(200).send({
+        data: toSandboxOnboardingResponse(result.merchant, result.readiness),
+        audit_event_id: result.auditEventId,
+      });
+    },
+  );
+
+  app.post<{ Params: { merchantId: string }; Body: SandboxOnboardingTransitionBody }>(
+    '/merchants/:merchantId/sandbox-onboarding/transition',
+    async (request, reply) => {
+      requireOperatorOrSelfMerchant(request, request.params.merchantId);
+      if (request.body !== undefined && !isPlainObject(request.body)) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+          details: { fields: { body: 'must be a JSON object' } },
+          retryable: false,
+        });
+      }
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const fieldErrors: Record<string, string> = {};
+      if (!isSandboxOnboardingState(body['target_state'])) {
+        fieldErrors['target_state'] = 'must be a valid sandbox onboarding state';
+      }
+      if (body['reason'] !== undefined && body['reason'] !== null
+        && (!isString(body['reason']) || !isPublicSafeText(body['reason']))) {
+        fieldErrors['reason'] = 'must be public-safe text with no secrets, credentials, live, production, approval, readiness, provider, or payment claims';
+      }
+      if ((body['target_state'] === 'blocked' || body['target_state'] === 'not_approved')
+        && !isString(body['reason'])) {
+        fieldErrors['reason'] = 'required for blocked or not_approved transitions';
+      }
+      if (Object.keys(fieldErrors).length > 0) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+          details: { fields: fieldErrors },
+          retryable: false,
+        });
+      }
+
+      const targetState = body['target_state'] as SandboxOnboardingState;
+      const reason = isString(body['reason']) ? body['reason'] : null;
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const merchantId = request.params.merchantId;
+
+      const result = await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const beforeRows = await tx<SandboxOnboardingMerchant[]>`
+          SELECT id, tenant_id, display_name, category_preset, environment,
+                 agentic_commerce_enabled, default_currency, country_code,
+                 support_email, support_url, public_discovery_description_draft,
+                 agentic_commerce_requested, sandbox_onboarding_state,
+                 sandbox_onboarding_blocker, sandbox_onboarding_updated_at,
+                 provider_account_refs
+            FROM commerce_merchants
+           WHERE id = ${merchantId}
+             AND tenant_id = ${tenantId}
+           LIMIT 1
+        `;
+        const before = beforeRows[0];
+        if (!before) return null;
+        if (before.environment !== 'sandbox') {
+          throw new CommerceHttpError(409, 'sandbox_onboarding_live_merchant_blocked',
+            'Sandbox onboarding is only available for sandbox merchants',
+            { retryable: false });
+        }
+        const currentState = isSandboxOnboardingState(before.sandbox_onboarding_state)
+          ? before.sandbox_onboarding_state
+          : 'draft_created';
+        const catalogSummary = await readSandboxOnboardingCatalogSummary(tx as unknown as Sql, tenantId, merchantId);
+        const readiness = computeSandboxOnboardingReadiness(before, process.env, catalogSummary);
+        const transitionError = validateSandboxOnboardingTransition(currentState, targetState, readiness);
+        if (transitionError) {
+          throw new CommerceHttpError(409, 'invalid_sandbox_onboarding_transition', transitionError, {
+            details: { from_state: currentState, target_state: targetState },
+            retryable: false,
+          });
+        }
+        const rows = await tx<SandboxOnboardingMerchant[]>`
+          UPDATE commerce_merchants
+             SET sandbox_onboarding_state = ${targetState},
+                 sandbox_onboarding_blocker = CASE
+                   WHEN ${targetState}::text IN ('blocked', 'not_approved') THEN ${reason}::text
+                   ELSE NULL::text
+                 END,
+                 sandbox_onboarding_updated_at = NOW(),
+                 updated_at = NOW()
+           WHERE id = ${merchantId}
+             AND tenant_id = ${tenantId}
+           RETURNING id, tenant_id, display_name, category_preset, environment,
+                     agentic_commerce_enabled, default_currency, country_code,
+                     support_email, support_url, public_discovery_description_draft,
+                     agentic_commerce_requested, sandbox_onboarding_state,
+                     sandbox_onboarding_blocker, sandbox_onboarding_updated_at,
+                     provider_account_refs
+        `;
+        const merchant = rows[0]!;
+        const audit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId,
+          merchantId,
+          eventType: 'merchant.sandbox_onboarding.transitioned',
+          resourceType: 'merchant',
+          resourceId: merchantId,
+          requestId: request.id,
+          metadata: {
+            from_state: currentState,
+            to_state: targetState,
+            reason_present: reason !== null,
+            category_readiness_status: readiness.category_readiness.status,
+            category_readiness_score_percent: readiness.category_readiness.score_percent,
+            production_approval_status: 'not_approved',
+            rollout_status: 'rollout_not_requested',
+          },
+        });
+        return {
+          merchant,
+          readiness: computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary),
+          auditEventId: audit.id,
+        };
+      });
+      if (!result) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      return reply.status(200).send({
+        data: toSandboxOnboardingResponse(result.merchant, result.readiness),
+        audit_event_id: result.auditEventId,
+      });
+    },
+  );
 
   // ----------------------------------------------------------------------
   // PATCH /merchants/:merchantId — operator OR merchant for own merchant.

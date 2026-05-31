@@ -35,6 +35,68 @@ paths directly.
 | Provider status | Mock provider only for current evidence. Live provider credentials remain blocked. |
 | Audit review | Confirm consent, passport, cart, payment intent, and webhook metadata are observable without secret values. |
 
+## Seller Self-Serve Sandbox Onboarding
+
+C5Z adds an API-backed sandbox onboarding foundation for a tenant-owned
+merchant workspace. It is for preparing public-safe sandbox profile metadata
+only. It does not approve a merchant, enable public discovery, enable AgenticOrg
+public commerce discovery, enable Commerce V1 production use, create checkout or
+payment paths, collect provider credentials, enable live payments, or enable
+live Plural.
+
+Sandbox onboarding stores only:
+
+- display name;
+- category preset;
+- country and currency;
+- test-safe support email or support URL;
+- public discovery description draft;
+- sandbox environment marker;
+- agentic commerce requested flag;
+- sandbox onboarding state and public-safe blocker/status summaries.
+
+The state machine is:
+
+`draft_created` -> `profile_incomplete` -> `sandbox_ready` ->
+`submitted_for_review`, with `blocked`, `not_approved`, and
+`rollout_not_requested` as fail-closed review states.
+
+Readiness checks require a merchant profile, category preset, public-safe
+description, no private artifacts in public fields, no production allowlist or
+live-mode config values, no provider account references, and no checkout/payment
+enablement.
+
+C6A extends this with a category readiness checklist and score. For
+`electronics_appliances`, required checks cover a recognized category preset,
+public display name, country/currency, public-safe description, and test-safe
+support contact. Recommended checks score sandbox product/variant presence,
+warranty summary, return-policy summary, India tax/GST metadata where
+applicable, and inventory freshness without requiring a catalog connector or
+exact inventory quantities in this slice. Blocked checks continue to fail closed
+for private artifacts, production discovery or allowlist config, live provider
+paths, and checkout/payment enablement.
+
+C6B adds a computed catalog readiness preview for the same sandbox onboarding
+surface. It reads the merchant-owned sandbox catalog rows already stored in
+Grantex and reports product count, variant count, public-safe title and
+description coverage, category mapping, SKU coverage, price/currency coverage,
+image/media coverage, availability freshness, warranty summaries,
+return-policy summaries, tax/GST metadata where applicable, and unsafe public
+catalog text blockers.
+
+Required catalog gaps block `sandbox_ready` and `submitted_for_review` because
+the profile is not ready for read-only discovery review. Recommended catalog
+gaps lower the readiness score and show remediation, but they do not require a
+catalog connector implementation. Operators can prepare the catalog through the
+existing manual product entry and CSV dry-run/bulk catalog API. Async import
+jobs, Shopify/WooCommerce/Magento connectors, provider credentials, checkout,
+payments, public discovery, live payments, and live Plural remain out of scope.
+
+Passing category or catalog readiness means only "sandbox profile can be
+reviewed"; it is not merchant approval, production readiness, public discovery
+approval, checkout/payment readiness, live payment readiness, or live Plural
+readiness.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent

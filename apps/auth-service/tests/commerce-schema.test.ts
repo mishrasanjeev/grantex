@@ -36,6 +36,29 @@ describe('Commerce schema — tenant_id presence on every tenant-owned table', (
   });
 });
 
+describe('Commerce schema - C5Z sandbox onboarding columns', () => {
+  it('051 extends merchants with safe sandbox onboarding state and no provider credential columns', () => {
+    const s = read('051_commerce_sandbox_onboarding.sql');
+    expect(s).toMatch(/ADD COLUMN IF NOT EXISTS support_url TEXT/);
+    expect(s).toMatch(/ADD COLUMN IF NOT EXISTS public_discovery_description_draft TEXT/);
+    expect(s).toMatch(/ADD COLUMN IF NOT EXISTS agentic_commerce_requested BOOLEAN NOT NULL DEFAULT FALSE/);
+    expect(s).toMatch(/ADD COLUMN IF NOT EXISTS sandbox_onboarding_state TEXT NOT NULL DEFAULT 'draft_created'/);
+    expect(s).toMatch(/sandbox_onboarding_state IN \(/);
+    for (const state of [
+      'draft_created',
+      'profile_incomplete',
+      'sandbox_ready',
+      'submitted_for_review',
+      'blocked',
+      'not_approved',
+      'rollout_not_requested',
+    ]) {
+      expect(s).toContain(`'${state}'`);
+    }
+    expect(s).not.toMatch(/provider_credential|secret|token|jwt/i);
+  });
+});
+
 describe('Commerce schema — required indexes/constraints from spec §15', () => {
   it('commerce_merchants has unique (tenant_id, id) — as CONSTRAINT, not bare index', () => {
     // The hardening migration converted the original CREATE UNIQUE INDEX

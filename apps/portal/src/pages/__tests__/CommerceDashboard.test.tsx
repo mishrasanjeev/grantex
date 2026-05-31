@@ -20,6 +20,9 @@ const mockListCommercePassports = vi.fn();
 const mockRevokeCommercePassport = vi.fn();
 const mockGetCommerceMerchant = vi.fn();
 const mockUpdateCommerceMerchant = vi.fn();
+const mockGetCommerceMerchantSandboxOnboarding = vi.fn();
+const mockUpdateCommerceMerchantSandboxOnboarding = vi.fn();
+const mockTransitionCommerceMerchantSandboxOnboarding = vi.fn();
 const mockDisableMerchantAgenticCommerce = vi.fn();
 const mockEnableMerchantAgenticCommerce = vi.fn();
 const mockListCommerceAgents = vi.fn();
@@ -49,6 +52,9 @@ vi.mock('../../api/commerce', () => ({
   revokeCommercePassport: (...a: unknown[]) => mockRevokeCommercePassport(...a),
   getCommerceMerchant: (...a: unknown[]) => mockGetCommerceMerchant(...a),
   updateCommerceMerchant: (...a: unknown[]) => mockUpdateCommerceMerchant(...a),
+  getCommerceMerchantSandboxOnboarding: (...a: unknown[]) => mockGetCommerceMerchantSandboxOnboarding(...a),
+  updateCommerceMerchantSandboxOnboarding: (...a: unknown[]) => mockUpdateCommerceMerchantSandboxOnboarding(...a),
+  transitionCommerceMerchantSandboxOnboarding: (...a: unknown[]) => mockTransitionCommerceMerchantSandboxOnboarding(...a),
   disableMerchantAgenticCommerce: (...a: unknown[]) => mockDisableMerchantAgenticCommerce(...a),
   enableMerchantAgenticCommerce: (...a: unknown[]) => mockEnableMerchantAgenticCommerce(...a),
   listCommerceAgents: (...a: unknown[]) => mockListCommerceAgents(...a),
@@ -165,6 +171,159 @@ const merchant = {
   disabled_at: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+};
+
+const sandboxOnboarding = {
+  merchant_id: 'mch_1',
+  tenant_id: 'cten_1',
+  display_name: 'Grantex Store',
+  category_preset: 'electronics_appliances',
+  country_code: 'IN',
+  default_currency: 'INR',
+  support_email: 'ops@example.test',
+  support_url: 'https://support.example.test/help',
+  public_discovery_description_draft: 'Sandbox catalog profile for test appliances.',
+  environment: 'sandbox' as const,
+  agentic_commerce_requested: true,
+  agentic_commerce_enabled: false,
+  sandbox_onboarding_state: 'sandbox_ready' as const,
+  sandbox_onboarding_blocker: null,
+  sandbox_onboarding_updated_at: '2026-01-01T00:00:00Z',
+  readiness: {
+    ready: true,
+    status: 'pass' as const,
+    score_percent: 100,
+    live_mode_status: 'not_live' as const,
+    production_approval_status: 'not_approved' as const,
+    rollout_status: 'rollout_not_requested' as const,
+    category_readiness: {
+      preset_key: 'electronics_appliances',
+      label: 'Electronics and appliances',
+      status: 'pass' as const,
+      required_passed: true,
+      score_percent: 100,
+      score: {
+        passed: 14,
+        total: 14,
+        percentage: 100,
+        required_passed: 5,
+        required_total: 5,
+        blocked: 0,
+      },
+      summary: 'Required sandbox category fields pass.',
+      items: [
+        {
+          key: 'category_preset_recognized' as const,
+          label: 'Category preset recognized',
+          description: 'The sandbox profile must select the V1 launch preset for category-specific scoring.',
+          severity: 'required' as const,
+          status: 'pass' as const,
+          remediation: 'Select the electronics_appliances category preset.',
+        },
+        {
+          key: 'warranty_summary' as const,
+          label: 'Warranty summary',
+          description: 'Electronics/appliances variants should expose warranty summary text before agent-facing preview.',
+          severity: 'recommended' as const,
+          status: 'pass' as const,
+          remediation: 'Add warranty_summary on every active sandbox variant.',
+        },
+        {
+          key: 'no_checkout_payment_enablement' as const,
+          label: 'No checkout/payment enablement',
+          description: 'C6A only scores read-only sandbox preview readiness; checkout/payment execution remains disabled.',
+          severity: 'blocked' as const,
+          status: 'pass' as const,
+          remediation: 'Disable agentic commerce execution before marking sandbox onboarding ready.',
+        },
+      ],
+    },
+    catalog_readiness: {
+      status: 'pass' as const,
+      required_passed: true,
+      score_percent: 100,
+      recommended_completion_percent: 100,
+      blocker_count: 0,
+      product_count: 1,
+      variant_count: 2,
+      score: {
+        passed: 13,
+        total: 13,
+        percentage: 100,
+        required_passed: true,
+        required_passed_count: 7,
+        required_total: 7,
+        recommended_passed: 5,
+        recommended_total: 5,
+        recommended_completion_percentage: 100,
+        blocker_count: 0,
+      },
+      summary: 'Required catalog fields pass for sandbox read-only discovery review.',
+      intake: {
+        manual_entry_supported: true as const,
+        csv_dry_run_supported: true as const,
+        bulk_api_dry_run_supported: true as const,
+        async_import_job_supported: false as const,
+        external_connector_supported: false as const,
+      },
+      items: [
+        {
+          key: 'catalog_products_present' as const,
+          label: 'Catalog products present',
+          description: 'Read-only discovery review needs at least one active sandbox product.',
+          severity: 'required' as const,
+          status: 'pass' as const,
+          count: 1,
+          total: 1,
+          remediation: 'Add at least one active sandbox product through manual entry, CSV dry-run plus bulk upsert, or the existing catalog API.',
+        },
+        {
+          key: 'variants_price_currency_present' as const,
+          label: 'Variant price and currency present',
+          description: 'Read-only discovery preview needs price and ISO currency for every active variant.',
+          severity: 'required' as const,
+          status: 'pass' as const,
+          count: 2,
+          total: 2,
+          remediation: 'Add non-negative price_amount and uppercase ISO currency to every active variant.',
+        },
+        {
+          key: 'products_image_media' as const,
+          label: 'Product image/media present',
+          description: 'Images help operators check what agents will show.',
+          severity: 'recommended' as const,
+          status: 'pass' as const,
+          count: 1,
+          total: 1,
+          remediation: 'Add a public-safe image_url for every active product when available.',
+        },
+        {
+          key: 'no_unsafe_catalog_text' as const,
+          label: 'No unsafe catalog text',
+          description: 'Catalog public/runtime fields must not include private artifacts, production claims, provider/payment claims, secrets, or approval claims.',
+          severity: 'blocked' as const,
+          status: 'pass' as const,
+          count: 0,
+          total: 3,
+          remediation: 'Remove private, secret, provider, payment, live, production, approval, readiness, or certification claims from product and variant text.',
+        },
+      ],
+    },
+    checks: [
+      {
+        key: 'merchant_profile_present' as const,
+        label: 'Merchant profile present',
+        status: 'pass' as const,
+        detail: 'present',
+      },
+      {
+        key: 'no_checkout_payment_enablement' as const,
+        label: 'No checkout/payment enablement',
+        status: 'pass' as const,
+        detail: 'blocked',
+      },
+    ],
+  },
 };
 
 const credential = {
@@ -517,8 +676,15 @@ describe('CommerceSettings', () => {
 describe('CommerceOnboarding', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetCommerceMerchant.mockResolvedValue({ data: merchant });
-    mockUpdateCommerceMerchant.mockResolvedValue({ data: { ...merchant, display_name: 'Grantex Store Updated' }, audit_event_id: 'aud_merchant' });
+    mockGetCommerceMerchantSandboxOnboarding.mockResolvedValue({ data: sandboxOnboarding });
+    mockUpdateCommerceMerchantSandboxOnboarding.mockResolvedValue({
+      data: { ...sandboxOnboarding, display_name: 'Grantex Store Updated' },
+      audit_event_id: 'aud_merchant',
+    });
+    mockTransitionCommerceMerchantSandboxOnboarding.mockResolvedValue({
+      data: { ...sandboxOnboarding, sandbox_onboarding_state: 'submitted_for_review' },
+      audit_event_id: 'aud_review',
+    });
     mockListCommerceAgents.mockResolvedValue({ items: [agent], next_cursor: null });
     mockListCommercePolicies.mockResolvedValue({ items: [{ id: 'cpol_1', status: 'active' }], next_cursor: null });
     mockListCommerceProducts.mockResolvedValue({ items: [product], next_cursor: null });
@@ -542,18 +708,36 @@ describe('CommerceOnboarding', () => {
     await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
     await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
     await waitFor(() => expect(screen.getByText('Readiness checklist')).toBeInTheDocument());
+    expect(screen.getByText('Category preset recognized')).toBeInTheDocument();
+    expect(screen.getByText('Electronics and appliances')).toBeInTheDocument();
+    expect(screen.getByText('Warranty summary')).toBeInTheDocument();
+    expect(screen.getByText('Catalog readiness')).toBeInTheDocument();
+    expect(screen.getByText('1 products / 2 variants')).toBeInTheDocument();
+    expect(screen.getByText('Catalog products present')).toBeInTheDocument();
+    expect(screen.getByText('Variant price and currency present')).toBeInTheDocument();
+    expect(screen.getByText('CSV dry-run: available')).toBeInTheDocument();
+    expect(screen.getByText('Bulk API dry-run: available')).toBeInTheDocument();
+    expect(screen.getByText('Async import job: deferred')).toBeInTheDocument();
+    expect(screen.getByText('Connector import: deferred')).toBeInTheDocument();
+    expect(screen.getByText('Merchant profile present')).toBeInTheDocument();
+    expect(screen.getAllByText('No checkout/payment enablement').length).toBeGreaterThan(0);
     expect(screen.getByText('Trusted agent')).toBeInTheDocument();
     expect(screen.getByText('Mock provider credential metadata')).toBeInTheDocument();
-    expect(screen.getByText('Publish/unpublish controls require a reviewed backend API and remain blocked.')).toBeInTheDocument();
+    expect(screen.getByText('Publish/unpublish controls require a separate reviewed backend API and remain blocked.')).toBeInTheDocument();
     expect(screen.queryByText(/enable live plural/i)).not.toBeInTheDocument();
 
     await user.clear(screen.getByLabelText('Display name'));
     await user.type(screen.getByLabelText('Display name'), 'Grantex Store Updated');
-    await user.click(screen.getByRole('button', { name: 'Save merchant' }));
-    await waitFor(() => expect(mockUpdateCommerceMerchant).toHaveBeenCalledWith('mch_1', expect.objectContaining({
+    await user.click(screen.getByRole('button', { name: 'Save sandbox profile' }));
+    await waitFor(() => expect(mockUpdateCommerceMerchantSandboxOnboarding).toHaveBeenCalledWith('mch_1', expect.objectContaining({
       display_name: 'Grantex Store Updated',
-      agentic_commerce_enabled: true,
+      agentic_commerce_requested: true,
     })));
+
+    await user.click(screen.getByRole('button', { name: 'Submit for review' }));
+    await waitFor(() => expect(mockTransitionCommerceMerchantSandboxOnboarding).toHaveBeenCalledWith('mch_1', {
+      targetState: 'submitted_for_review',
+    }));
 
     await user.click(screen.getByRole('button', { name: 'Evaluate policy' }));
     await waitFor(() => expect(mockEvaluateCommercePolicy).toHaveBeenCalledWith(expect.objectContaining({

@@ -12,6 +12,14 @@ export type CommercePaymentStatus =
 
 export type CommerceEnvironment = 'sandbox' | 'live';
 export type CommerceProviderKey = 'mock' | 'plural';
+export type SandboxOnboardingState =
+  | 'draft_created'
+  | 'profile_incomplete'
+  | 'sandbox_ready'
+  | 'submitted_for_review'
+  | 'blocked'
+  | 'not_approved'
+  | 'rollout_not_requested';
 
 export interface CommercePaymentIntent {
   id: string;
@@ -91,9 +99,154 @@ export interface CommerceMerchant {
   default_currency: string;
   country_code: string;
   support_email: string | null;
+  support_url?: string | null;
+  public_discovery_description_draft?: string | null;
+  agentic_commerce_requested?: boolean;
+  sandbox_onboarding_state?: SandboxOnboardingState;
+  sandbox_onboarding_blocker?: string | null;
+  sandbox_onboarding_updated_at?: string | null;
   disabled_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface CommerceSandboxOnboardingCheck {
+  key:
+    | 'merchant_profile_present'
+    | 'category_preset_selected'
+    | 'public_safe_description_present'
+    | 'private_artifacts_not_stored'
+    | 'no_production_allowlist_config_values'
+    | 'no_live_provider_path'
+    | 'no_checkout_payment_enablement';
+  label: string;
+  status: 'pass' | 'blocked';
+  detail: string;
+}
+
+export interface CommerceCategoryReadinessItem {
+  key:
+    | 'category_preset_recognized'
+    | 'public_display_name_present'
+    | 'country_currency_present'
+    | 'public_safe_description_present'
+    | 'support_contact_present'
+    | 'product_data_readiness'
+    | 'warranty_summary'
+    | 'return_policy_summary'
+    | 'tax_gst_metadata'
+    | 'inventory_freshness'
+    | 'private_artifacts_not_stored'
+    | 'no_production_allowlist_config_values'
+    | 'no_live_provider_path'
+    | 'no_checkout_payment_enablement';
+  label: string;
+  description: string;
+  severity: 'required' | 'recommended' | 'blocked';
+  status: 'pass' | 'fail' | 'blocked' | 'not_applicable';
+  remediation: string;
+}
+
+export interface CommerceCategoryReadiness {
+  preset_key: string | null;
+  label: string;
+  status: 'pass' | 'fail' | 'blocked';
+  required_passed: boolean;
+  score_percent: number;
+  score: {
+    passed: number;
+    total: number;
+    percentage: number;
+    required_passed: number;
+    required_total: number;
+    blocked: number;
+  };
+  items: CommerceCategoryReadinessItem[];
+  summary: string;
+}
+
+export interface CommerceCatalogReadinessItem {
+  key:
+    | 'catalog_products_present'
+    | 'catalog_variants_present'
+    | 'products_public_safe_title'
+    | 'products_public_safe_description'
+    | 'products_category_mapping'
+    | 'variants_sku_present'
+    | 'variants_price_currency_present'
+    | 'products_image_media'
+    | 'variants_availability_freshness'
+    | 'variants_warranty_summary'
+    | 'variants_return_policy_summary'
+    | 'variants_tax_gst_metadata'
+    | 'no_unsafe_catalog_text';
+  label: string;
+  description: string;
+  severity: 'required' | 'recommended' | 'blocked';
+  status: 'pass' | 'fail' | 'blocked' | 'not_applicable';
+  count?: number;
+  total?: number;
+  remediation: string;
+}
+
+export interface CommerceCatalogReadiness {
+  status: 'pass' | 'fail' | 'blocked';
+  required_passed: boolean;
+  score_percent: number;
+  recommended_completion_percent: number;
+  blocker_count: number;
+  product_count: number;
+  variant_count: number;
+  score: {
+    passed: number;
+    total: number;
+    percentage: number;
+    required_passed: boolean;
+    required_passed_count: number;
+    required_total: number;
+    recommended_passed: number;
+    recommended_total: number;
+    recommended_completion_percentage: number;
+    blocker_count: number;
+  };
+  items: CommerceCatalogReadinessItem[];
+  summary: string;
+  intake: {
+    manual_entry_supported: true;
+    csv_dry_run_supported: true;
+    bulk_api_dry_run_supported: true;
+    async_import_job_supported: false;
+    external_connector_supported: false;
+  };
+}
+
+export interface CommerceSandboxOnboarding {
+  merchant_id: string;
+  tenant_id: string;
+  display_name: string | null;
+  category_preset: string | null;
+  country_code: string | null;
+  default_currency: string | null;
+  support_email: string | null;
+  support_url: string | null;
+  public_discovery_description_draft: string | null;
+  environment: 'sandbox';
+  agentic_commerce_requested: boolean;
+  agentic_commerce_enabled: boolean;
+  sandbox_onboarding_state: SandboxOnboardingState;
+  sandbox_onboarding_blocker: string | null;
+  sandbox_onboarding_updated_at: string | null;
+  readiness: {
+    ready: boolean;
+    status: 'pass' | 'fail' | 'blocked';
+    score_percent: number;
+    checks: CommerceSandboxOnboardingCheck[];
+    category_readiness: CommerceCategoryReadiness;
+    catalog_readiness: CommerceCatalogReadiness;
+    live_mode_status: 'not_live';
+    production_approval_status: 'not_approved';
+    rollout_status: 'rollout_not_requested';
+  };
 }
 
 export interface CommerceAgent {
@@ -411,6 +564,38 @@ export function revokeCommercePassport(input: {
 
 export function getCommerceMerchant(merchantId: string): Promise<{ data: CommerceMerchant }> {
   return api.get<{ data: CommerceMerchant }>(`/v1/commerce/merchants/${encodeURIComponent(merchantId)}`);
+}
+
+export function getCommerceMerchantSandboxOnboarding(
+  merchantId: string,
+): Promise<{ data: CommerceSandboxOnboarding }> {
+  return api.get<{ data: CommerceSandboxOnboarding }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/sandbox-onboarding`,
+  );
+}
+
+export function updateCommerceMerchantSandboxOnboarding(
+  merchantId: string,
+  patch: Partial<Pick<CommerceSandboxOnboarding,
+    'display_name' | 'category_preset' | 'default_currency' | 'country_code' | 'support_email' | 'support_url' | 'public_discovery_description_draft' | 'agentic_commerce_requested'>>,
+): Promise<{ data: CommerceSandboxOnboarding; audit_event_id: string }> {
+  return api.put<{ data: CommerceSandboxOnboarding; audit_event_id: string }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/sandbox-onboarding`,
+    patch,
+  );
+}
+
+export function transitionCommerceMerchantSandboxOnboarding(
+  merchantId: string,
+  input: { targetState: SandboxOnboardingState; reason?: string },
+): Promise<{ data: CommerceSandboxOnboarding; audit_event_id: string }> {
+  return api.post<{ data: CommerceSandboxOnboarding; audit_event_id: string }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/sandbox-onboarding/transition`,
+    {
+      target_state: input.targetState,
+      ...(input.reason ? { reason: input.reason } : {}),
+    },
+  );
 }
 
 export function updateCommerceMerchant(
