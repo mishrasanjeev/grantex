@@ -40,6 +40,32 @@ function onboardingRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function catalogReadySummary(overrides: Record<string, unknown> = {}) {
+  return {
+    product_count: 1,
+    variant_count: 2,
+    variants_with_warranty_summary: 2,
+    variants_with_return_policy_summary: 2,
+    variants_with_tax_metadata: 2,
+    variants_with_fresh_inventory: 2,
+    variants_with_known_availability: 2,
+    ...overrides,
+  };
+}
+
+function catalogMissingSummary(overrides: Record<string, unknown> = {}) {
+  return {
+    product_count: 1,
+    variant_count: 2,
+    variants_with_warranty_summary: 0,
+    variants_with_return_policy_summary: 0,
+    variants_with_tax_metadata: 0,
+    variants_with_fresh_inventory: 0,
+    variants_with_known_availability: 1,
+    ...overrides,
+  };
+}
+
 describe('POST /v1/commerce/merchants', () => {
   it('creates a merchant and returns 201 with audit_event_id', async () => {
     seedCommerceContext();
@@ -202,6 +228,7 @@ describe('sandbox onboarding foundation', () => {
   it('returns sandbox onboarding state and readiness without provider references', async () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([onboardingRow()]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
 
     const res = await app.inject({
       method: 'GET',
@@ -215,11 +242,23 @@ describe('sandbox onboarding foundation', () => {
         sandbox_onboarding_state: string;
         production_approval_status?: string;
         provider_account_refs?: unknown;
-        readiness: { ready: boolean; production_approval_status: string; rollout_status: string };
+        readiness: {
+          ready: boolean;
+          production_approval_status: string;
+          rollout_status: string;
+          score_percent: number;
+          category_readiness: { status: string; score_percent: number; required_passed: boolean };
+        };
       };
     }>();
     expect(body.data.sandbox_onboarding_state).toBe('sandbox_ready');
     expect(body.data.readiness.ready).toBe(true);
+    expect(body.data.readiness.score_percent).toBe(100);
+    expect(body.data.readiness.category_readiness).toMatchObject({
+      status: 'pass',
+      score_percent: 100,
+      required_passed: true,
+    });
     expect(body.data.readiness.production_approval_status).toBe('not_approved');
     expect(body.data.readiness.rollout_status).toBe('rollout_not_requested');
     expect(body.data.provider_account_refs).toBeUndefined();
@@ -250,6 +289,7 @@ describe('sandbox onboarding foundation', () => {
       sandbox_onboarding_state: 'draft_created',
     })]);
     sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'draft_created' })]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
     sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'sandbox_ready' })]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_ONBOARDING', occurred_at: new Date().toISOString() }]);
 
@@ -270,10 +310,126 @@ describe('sandbox onboarding foundation', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ data: { sandbox_onboarding_state: string; readiness: { ready: boolean } }; audit_event_id: string }>();
+    const body = res.json<{
+      data: {
+        sandbox_onboarding_state: string;
+        readiness: { ready: boolean; category_readiness: { status: string; score_percent: number } };
+      };
+      audit_event_id: string;
+    }>();
     expect(body.data.sandbox_onboarding_state).toBe('sandbox_ready');
     expect(body.data.readiness.ready).toBe(true);
+    expect(body.data.readiness.category_readiness).toMatchObject({ status: 'pass', score_percent: 100 });
     expect(body.audit_event_id).toBe('caud_ONBOARDING');
+  });
+
+  it('rejects submitted_for_review profile updates that would fail required readiness', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce([onboardingRow({
+      sandbox_onboarding_state: 'submitted_for_review',
+      support_email: null,
+      support_url: null,
+    })]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding',
+      headers: authHeader(),
+      payload: {
+        support_email: null,
+        support_url: null,
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: { code: string; details: { category_readiness_status: string } } }>().error)
+      .toMatchObject({
+        code: 'invalid_sandbox_onboarding_update',
+        details: { category_readiness_status: 'fail' },
+      });
+  });
+
+  it('reports recommended electronics catalog remediation without blocking required sandbox review fields', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow()]);
+    sqlMock.mockResolvedValueOnce([catalogMissingSummary()]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const items = res.json<{
+      data: {
+        readiness: {
+          ready: boolean;
+          category_readiness: {
+            status: string;
+            score_percent: number;
+            items: Array<{ key: string; severity: string; status: string; remediation: string }>;
+          };
+        };
+      };
+    }>().data.readiness.category_readiness.items;
+    expect(res.json<{ data: { readiness: { ready: boolean; category_readiness: { status: string } } } }>()
+      .data.readiness).toMatchObject({ ready: true, category_readiness: { status: 'pass' } });
+    for (const key of ['warranty_summary', 'return_policy_summary', 'tax_gst_metadata', 'inventory_freshness']) {
+      const item = items.find((candidate) => candidate.key === key);
+      expect(item).toBeDefined();
+      expect(item).toMatchObject({ severity: 'recommended', status: 'fail' });
+      expect(item?.remediation.length).toBeGreaterThan(10);
+    }
+  });
+
+  it('fails required category readiness when category preset is missing', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ category_preset: null })]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const readiness = res.json<{
+      data: {
+        readiness: {
+          ready: boolean;
+          category_readiness: { status: string; required_passed: boolean; items: Array<{ key: string; status: string }> };
+        };
+      };
+    }>().data.readiness;
+    expect(readiness.ready).toBe(false);
+    expect(readiness.category_readiness).toMatchObject({ status: 'fail', required_passed: false });
+    expect(readiness.category_readiness.items.find((item) => item.key === 'category_preset_recognized'))
+      .toMatchObject({ status: 'fail' });
+  });
+
+  it('fails closed when an existing merchant row has an unsupported category preset', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ category_preset: 'fashion_lifestyle' })]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const category = res.json<{
+      data: { readiness: { ready: boolean; category_readiness: { status: string; summary: string; items: Array<{ key: string; status: string; remediation: string }> } } };
+    }>().data.readiness.category_readiness;
+    expect(category.status).toBe('blocked');
+    expect(category.items.find((item) => item.key === 'category_preset_recognized'))
+      .toMatchObject({ status: 'blocked' });
+    expect(category.summary).toContain('blocked');
   });
 
   it('rejects unsafe sandbox onboarding fields that would imply production or checkout enablement', async () => {
@@ -300,6 +456,7 @@ describe('sandbox onboarding foundation', () => {
   it('transitions a ready sandbox workspace to submitted_for_review with audit evidence', async () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'sandbox_ready' })]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
     sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_TRANSITION', occurred_at: new Date().toISOString() }]);
 
@@ -323,6 +480,7 @@ describe('sandbox onboarding foundation', () => {
       public_discovery_description_draft: null,
       sandbox_onboarding_state: 'sandbox_ready',
     })]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
 
     const res = await app.inject({
       method: 'POST',
@@ -333,6 +491,27 @@ describe('sandbox onboarding foundation', () => {
 
     expect(res.statusCode).toBe(409);
     expect(res.json<{ error: { code: string } }>().error.code).toBe('invalid_sandbox_onboarding_transition');
+  });
+
+  it('blocks submit transition when required category readiness fails', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({
+      support_email: null,
+      support_url: null,
+      sandbox_onboarding_state: 'sandbox_ready',
+    })]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/transition',
+      headers: authHeader(),
+      payload: { target_state: 'submitted_for_review' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: { code: string; message: string } }>().error.code)
+      .toBe('invalid_sandbox_onboarding_transition');
   });
 
   it('blocks sandbox onboarding for live merchants', async () => {

@@ -30,6 +30,7 @@ import {
   isSandboxOnboardingState,
   toSandboxOnboardingResponse,
   validateSandboxOnboardingTransition,
+  type SandboxOnboardingCatalogSummary,
   type SandboxOnboardingMerchant,
   type SandboxOnboardingState,
 } from '../lib/commerce/sandbox-onboarding.js';
@@ -329,6 +330,45 @@ function parseBoolean(v: unknown): boolean | null {
     if (normalized === 'false') return false;
   }
   return null;
+}
+
+async function readSandboxOnboardingCatalogSummary(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+): Promise<SandboxOnboardingCatalogSummary> {
+  const rows = await sql<SandboxOnboardingCatalogSummary[]>`
+    SELECT
+      COUNT(DISTINCT p.id)::int AS product_count,
+      COUNT(v.id)::int AS variant_count,
+      COUNT(v.id) FILTER (
+        WHERE NULLIF(TRIM(v.warranty_summary), '') IS NOT NULL
+      )::int AS variants_with_warranty_summary,
+      COUNT(v.id) FILTER (
+        WHERE NULLIF(TRIM(v.return_policy_summary), '') IS NOT NULL
+      )::int AS variants_with_return_policy_summary,
+      COUNT(v.id) FILTER (
+        WHERE NULLIF(TRIM(v.gst_slab), '') IS NOT NULL
+           OR v.tax_rate IS NOT NULL
+           OR NULLIF(TRIM(v.hsn_code), '') IS NOT NULL
+      )::int AS variants_with_tax_metadata,
+      COUNT(v.id) FILTER (
+        WHERE v.last_synced_at >= NOW() - INTERVAL '24 hours'
+      )::int AS variants_with_fresh_inventory,
+      COUNT(v.id) FILTER (
+        WHERE v.availability_status <> 'unknown'
+      )::int AS variants_with_known_availability
+    FROM commerce_products p
+    LEFT JOIN commerce_product_variants v
+      ON v.tenant_id = p.tenant_id
+     AND v.merchant_id = p.merchant_id
+     AND v.product_id = p.id
+     AND v.archived_at IS NULL
+    WHERE p.tenant_id = ${tenantId}
+      AND p.merchant_id = ${merchantId}
+      AND p.archived_at IS NULL
+  `;
+  return rows[0] ?? {};
 }
 
 function isValidIsoDate(v: unknown): v is string {
@@ -796,8 +836,12 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
           'Sandbox onboarding is only available for sandbox merchants',
           { retryable: false });
       }
+      const catalogSummary = await readSandboxOnboardingCatalogSummary(sql, request.commerceTenantId, request.params.merchantId);
       return reply.status(200).send({
-        data: toSandboxOnboardingResponse(merchant),
+        data: toSandboxOnboardingResponse(
+          merchant,
+          computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary),
+        ),
       });
     },
   );
@@ -907,10 +951,26 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
                      provider_account_refs
         `;
         let merchant = rows[0]!;
-        const readiness = computeSandboxOnboardingReadiness(merchant);
+        const catalogSummary = await readSandboxOnboardingCatalogSummary(tx as unknown as Sql, tenantId, merchantId);
+        let readiness = computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary);
         const currentState = isSandboxOnboardingState(merchant.sandbox_onboarding_state)
           ? merchant.sandbox_onboarding_state
           : 'draft_created';
+        if (currentState === 'submitted_for_review' && !readiness.ready) {
+          throw new CommerceHttpError(
+            409,
+            'invalid_sandbox_onboarding_update',
+            'submitted_for_review sandbox onboarding cannot be updated into failing readiness',
+            {
+              details: {
+                sandbox_onboarding_state: currentState,
+                readiness_status: readiness.status,
+                category_readiness_status: readiness.category_readiness.status,
+              },
+              retryable: false,
+            },
+          );
+        }
         const nextState = deriveSandboxOnboardingState(currentState, readiness);
         if (nextState !== currentState) {
           const stateRows = await tx<SandboxOnboardingMerchant[]>`
@@ -932,6 +992,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
                        provider_account_refs
           `;
           merchant = stateRows[0]!;
+          readiness = computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary);
         }
         const audit = await appendCommerceAudit(tx as unknown as Sql, {
           tenantId,
@@ -943,18 +1004,20 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
           metadata: {
             changed_fields: changedFields,
             sandbox_onboarding_state: merchant.sandbox_onboarding_state,
-            readiness_ready: computeSandboxOnboardingReadiness(merchant).ready,
+            readiness_ready: readiness.ready,
+            category_readiness_status: readiness.category_readiness.status,
+            category_readiness_score_percent: readiness.category_readiness.score_percent,
             production_approval_status: 'not_approved',
             rollout_status: 'rollout_not_requested',
           },
         });
-        return { merchant, auditEventId: audit.id };
+        return { merchant, readiness, auditEventId: audit.id };
       });
       if (!result) {
         throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
       }
       return reply.status(200).send({
-        data: toSandboxOnboardingResponse(result.merchant),
+        data: toSandboxOnboardingResponse(result.merchant, result.readiness),
         audit_event_id: result.auditEventId,
       });
     },
@@ -1020,7 +1083,8 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         const currentState = isSandboxOnboardingState(before.sandbox_onboarding_state)
           ? before.sandbox_onboarding_state
           : 'draft_created';
-        const readiness = computeSandboxOnboardingReadiness(before);
+        const catalogSummary = await readSandboxOnboardingCatalogSummary(tx as unknown as Sql, tenantId, merchantId);
+        const readiness = computeSandboxOnboardingReadiness(before, process.env, catalogSummary);
         const transitionError = validateSandboxOnboardingTransition(currentState, targetState, readiness);
         if (transitionError) {
           throw new CommerceHttpError(409, 'invalid_sandbox_onboarding_transition', transitionError, {
@@ -1058,17 +1122,23 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
             from_state: currentState,
             to_state: targetState,
             reason_present: reason !== null,
+            category_readiness_status: readiness.category_readiness.status,
+            category_readiness_score_percent: readiness.category_readiness.score_percent,
             production_approval_status: 'not_approved',
             rollout_status: 'rollout_not_requested',
           },
         });
-        return { merchant, auditEventId: audit.id };
+        return {
+          merchant,
+          readiness: computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary),
+          auditEventId: audit.id,
+        };
       });
       if (!result) {
         throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
       }
       return reply.status(200).send({
-        data: toSandboxOnboardingResponse(result.merchant),
+        data: toSandboxOnboardingResponse(result.merchant, result.readiness),
         audit_event_id: result.auditEventId,
       });
     },

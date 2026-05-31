@@ -212,6 +212,63 @@ components:
           nullable: true
           description: Public-safe reason summary required for blocked or not_approved transitions.
 
+    SandboxReadinessStatus:
+      type: string
+      enum: [pass, fail, blocked]
+
+    CategoryReadinessItem:
+      type: object
+      properties:
+        key:
+          type: string
+          enum:
+            - category_preset_recognized
+            - public_display_name_present
+            - country_currency_present
+            - public_safe_description_present
+            - support_contact_present
+            - product_data_readiness
+            - warranty_summary
+            - return_policy_summary
+            - tax_gst_metadata
+            - inventory_freshness
+            - private_artifacts_not_stored
+            - no_production_allowlist_config_values
+            - no_live_provider_path
+            - no_checkout_payment_enablement
+        label: { type: string }
+        description: { type: string }
+        severity: { type: string, enum: [required, recommended, blocked] }
+        status: { type: string, enum: [pass, fail, blocked, not_applicable] }
+        remediation: { type: string }
+
+    CategoryReadiness:
+      type: object
+      description: >-
+        C6A category-specific sandbox checklist. Passing this checklist means
+        only that the sandbox profile can be reviewed; it is not merchant
+        approval, production readiness, public discovery, checkout/payment
+        readiness, live payment readiness, or live Plural readiness.
+      properties:
+        preset_key: { type: string, nullable: true }
+        label: { type: string }
+        status: { $ref: "#/components/schemas/SandboxReadinessStatus" }
+        required_passed: { type: boolean }
+        score_percent: { type: integer, minimum: 0, maximum: 100 }
+        score:
+          type: object
+          properties:
+            passed: { type: integer, minimum: 0 }
+            total: { type: integer, minimum: 0 }
+            percentage: { type: integer, minimum: 0, maximum: 100 }
+            required_passed: { type: integer, minimum: 0 }
+            required_total: { type: integer, minimum: 0 }
+            blocked: { type: integer, minimum: 0 }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CategoryReadinessItem" }
+        summary: { type: string }
+
     SandboxOnboarding:
       type: object
       properties:
@@ -236,9 +293,12 @@ components:
           type: object
           properties:
             ready: { type: boolean }
+            status: { $ref: "#/components/schemas/SandboxReadinessStatus" }
+            score_percent: { type: integer, minimum: 0, maximum: 100 }
             live_mode_status: { type: string, enum: [not_live] }
             production_approval_status: { type: string, enum: [not_approved] }
             rollout_status: { type: string, enum: [rollout_not_requested] }
+            category_readiness: { $ref: "#/components/schemas/CategoryReadiness" }
             checks:
               type: array
               items:
@@ -1414,8 +1474,9 @@ paths:
       x-implemented: true
       x-milestone: C5Z
       description: >-
-        Returns public-safe sandbox onboarding fields, readiness checks, and
-        fail-closed production statuses. The response never includes provider
+        Returns public-safe sandbox onboarding fields, baseline readiness checks,
+        C6A category readiness scoring, and fail-closed production statuses.
+        The response never includes provider
         account references, credentials, secrets, production allowlist values,
         checkout/payment material, or live-provider paths.
       responses:
@@ -1477,9 +1538,9 @@ paths:
       description: >-
         Moves a sandbox onboarding workspace through the review-oriented state
         machine. Transitions to sandbox_ready or submitted_for_review require
-        readiness checks to pass. No transition approves production, enables
-        public discovery, enables checkout/payment creation, or enables live
-        payments/live Plural.
+        baseline and category required readiness checks to pass. No transition
+        approves production, enables public discovery, enables checkout/payment
+        creation, or enables live payments/live Plural.
       requestBody:
         required: true
         content:

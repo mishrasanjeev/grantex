@@ -64,8 +64,21 @@ The state machine is:
 Readiness checks require a merchant profile, category preset, public-safe
 description, no private artifacts in public fields, no production allowlist or
 live-mode config values, no provider account references, and no checkout/payment
-enablement. Passing readiness means "sandbox profile can be reviewed"; it is not
-production approval.
+enablement.
+
+C6A extends this with a category readiness checklist and score. For
+`electronics_appliances`, required checks cover a recognized category preset,
+public display name, country/currency, public-safe description, and test-safe
+support contact. Recommended checks score sandbox product/variant presence,
+warranty summary, return-policy summary, India tax/GST metadata where
+applicable, and inventory freshness without requiring a catalog connector or
+exact inventory quantities in this slice. Blocked checks continue to fail closed
+for private artifacts, production discovery or allowlist config, live provider
+paths, and checkout/payment enablement.
+
+Passing category readiness means only "sandbox profile can be reviewed"; it is
+not merchant approval, production readiness, public discovery approval,
+checkout/payment readiness, live payment readiness, or live Plural readiness.
 
 ## Catalog And Inventory
 
