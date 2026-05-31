@@ -74,6 +74,7 @@
             "group": "Agentic Commerce V1",
             "pages": [
               "guides/commerce-v1-overview",
+              "guides/commerce-v1-merchant-agentic-commerce-user-guide",
               "guides/commerce-v1-developer-guide",
               "guides/commerce-v1-merchant-operator-guide",
               "guides/commerce-v1-operations"
