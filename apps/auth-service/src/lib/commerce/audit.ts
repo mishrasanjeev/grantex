@@ -11,6 +11,8 @@ export type CommerceAuditEventType =
   | 'merchant.credentials.updated'
   | 'merchant.feature_flag.updated'
   | 'merchant.agentic_commerce_reenabled'
+  | 'merchant.sandbox_onboarding.updated'
+  | 'merchant.sandbox_onboarding.transitioned'
   | 'merchant.provider_credentials.validated'
   | 'merchant.webhook_source.created'
   | 'merchant.webhook_source.secret_rotated'

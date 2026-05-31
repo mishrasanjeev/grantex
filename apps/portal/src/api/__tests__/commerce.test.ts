@@ -15,6 +15,7 @@ import {
   disableMerchantAgenticCommerce,
   evaluateCommercePolicy,
   getCommerceMerchant,
+  getCommerceMerchantSandboxOnboarding,
   getCommerceOpsHealth,
   getCommerceWellKnownProfile,
   listCommerceAgents,
@@ -29,8 +30,10 @@ import {
   reconcileCommercePaymentIntent,
   rotateCommerceWebhookSourceSecret,
   revokeCommercePassport,
+  transitionCommerceMerchantSandboxOnboarding,
   updateCommerceAgent,
   updateCommerceMerchant,
+  updateCommerceMerchantSandboxOnboarding,
   updateCommerceProduct,
   updateCommerceWebhookSource,
   validateCommerceProviderCredential,
@@ -95,6 +98,39 @@ describe('commerce api', () => {
     const [url, opts] = mockFetch.mock.calls[2]!;
     expect(url).toBe('http://localhost:3000/v1/commerce/merchants/mch%2F1/disable-agentic-commerce');
     expect(JSON.parse(opts.body)).toEqual({ reason: 'dashboard_emergency_disable' });
+  });
+
+  it('calls sandbox onboarding APIs without checkout or provider credential material', async () => {
+    ok({ data: { merchant_id: 'mch/1', readiness: { ready: false } } });
+    await getCommerceMerchantSandboxOnboarding('mch/1');
+    expect(mockFetch.mock.calls[0]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/sandbox-onboarding',
+    );
+
+    ok({ data: { merchant_id: 'mch/1' }, audit_event_id: 'aud_1' });
+    await updateCommerceMerchantSandboxOnboarding('mch/1', {
+      display_name: 'Store',
+      public_discovery_description_draft: 'Sandbox catalog profile for test appliances.',
+      agentic_commerce_requested: true,
+    });
+    expect(mockFetch.mock.calls[1]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/sandbox-onboarding',
+    );
+    expect(mockFetch.mock.calls[1]![1].method).toBe('PUT');
+    expect(JSON.parse(mockFetch.mock.calls[1]![1].body)).toEqual({
+      display_name: 'Store',
+      public_discovery_description_draft: 'Sandbox catalog profile for test appliances.',
+      agentic_commerce_requested: true,
+    });
+    expect(mockFetch.mock.calls[1]![1].body).not.toContain('agentic_commerce_enabled');
+    expect(mockFetch.mock.calls[1]![1].body).not.toContain('provider_credentials');
+
+    ok({ data: { merchant_id: 'mch/1', sandbox_onboarding_state: 'submitted_for_review' }, audit_event_id: 'aud_2' });
+    await transitionCommerceMerchantSandboxOnboarding('mch/1', { targetState: 'submitted_for_review' });
+    expect(mockFetch.mock.calls[2]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/sandbox-onboarding/transition',
+    );
+    expect(JSON.parse(mockFetch.mock.calls[2]![1].body)).toEqual({ target_state: 'submitted_for_review' });
   });
 
   it('calls agent and product control-plane endpoints', async () => {
