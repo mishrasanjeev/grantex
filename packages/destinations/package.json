@@ -29,7 +29,7 @@
     "@google-cloud/bigquery": "^8.1.1",
     "@types/node": "^20.11.0",
     "kafkajs": "^2.2.4",
-    "typescript": "^5.3.3",
+    "typescript": "^6.0.3",
     "vitest": "^4.0.18"
   },
   "overrides": {
