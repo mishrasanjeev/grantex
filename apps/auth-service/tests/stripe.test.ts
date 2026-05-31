@@ -42,7 +42,7 @@ describe('getStripe', () => {
 
     expect(stripe).toBeDefined();
     expect(MockStripe).toHaveBeenCalledWith('sk_test_12345', {
-      apiVersion: '2026-02-25.clover',
+      apiVersion: '2026-05-27.dahlia',
     });
   });
 
