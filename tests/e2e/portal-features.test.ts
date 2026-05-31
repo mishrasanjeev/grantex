@@ -441,8 +441,31 @@ describe('Well-Known Endpoints', () => {
   });
 
   it('serves Prometheus metrics', async () => {
-    const res = await fetch(`${BASE_URL}/metrics`);
+    // /metrics is gated by Bearer-token auth in production
+    // (apps/auth-service/src/routes/metrics.ts:7-26 + config.ts:48-49).
+    // The CI workflow MUST forward METRICS_API_KEY (same value as the
+    // auth-service's env var) when E2E_BASE_URL points at a deployed
+    // environment. Local runs against http://localhost can leave it
+    // unset because METRICS_REQUIRE_AUTH defaults to false there.
+    const metricsKey = process.env['METRICS_API_KEY'];
+    const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(BASE_URL);
+    if (!metricsKey && !isLocal) {
+      throw new Error(
+        'METRICS_API_KEY env var is required for the /metrics e2e check against a non-local '
+          + 'BASE_URL. The production auth-service requires Bearer-token auth on /metrics; see '
+          + 'apps/auth-service/src/routes/metrics.ts. Add the secret to the workflow step that '
+          + 'runs portal-features.test.ts.',
+      );
+    }
+    const headers: Record<string, string> = {};
+    if (metricsKey) headers['Authorization'] = `Bearer ${metricsKey}`;
+    const res = await fetch(`${BASE_URL}/metrics`, { headers });
     expect(res.status).toBe(200);
+    const contentType = res.headers.get('content-type') ?? '';
+    expect(contentType).toMatch(/text\/plain/);
+    const body = await res.text();
+    // Prometheus exposition format: at least one HELP/TYPE comment or metric line.
+    expect(body).toMatch(/^# HELP |^# TYPE |^[a-zA-Z_][a-zA-Z0-9_]*(\{|\s)/m);
   });
 });
 

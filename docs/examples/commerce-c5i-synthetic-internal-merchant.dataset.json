@@ -1,0 +1,147 @@
+{
+  "dataset_version": "c5i-synth-v1",
+  "dataset_name": "commerce_c5i_synthetic_internal_smoke_merchant",
+  "purpose": "Synthetic internal smoke/dev merchant dataset only.",
+  "environment": "internal_smoke",
+  "data_classification": "synthetic_internal_smoke",
+  "synthetic_only": true,
+  "internal_only": true,
+  "resource_creation_allowed": false,
+  "production_approval": false,
+  "production_discovery_approval": false,
+  "production_config_value_allowed": false,
+  "commerce_public_discovery_allowlist_candidate": false,
+  "checkout_creation_allowed": false,
+  "payment_creation_allowed": false,
+  "checkout_payment_creation_allowed": false,
+  "live_payments_enabled": false,
+  "plural_live_enabled": false,
+  "agenticorg_public_discovery_approval": false,
+  "tenant": {
+    "id": "cten_synth_internal_smoke_0001",
+    "display_name": "Synthetic Internal Smoke Tenant",
+    "environment": "internal_smoke",
+    "status": "synthetic_internal_only"
+  },
+  "merchant": {
+    "id": "mch_synth_internal_smoke_0001",
+    "tenant_id": "cten_synth_internal_smoke_0001",
+    "display_name": "Synthetic Internal Smoke Merchant",
+    "public_name": "Synthetic Internal Smoke Merchant",
+    "category": "synthetic_test_goods",
+    "country_code": "ZZ",
+    "currency": "ZZZ",
+    "verification_status": "synthetic_internal_smoke_only",
+    "approval_status": "not_authorized_for_any_production_use",
+    "production_discovery_status": "not_authorized",
+    "certification_claim": "none",
+    "readiness_claim": "none",
+    "agentic_commerce_runtime_allowed": false,
+    "public_discovery_allowed": false
+  },
+  "agent": {
+    "id": "cag_synth_internal_smoke_sales_0001",
+    "tenant_id": "cten_synth_internal_smoke_0001",
+    "display_name": "Synthetic Internal Smoke Sales Agent",
+    "trust_status": "synthetic_internal_only",
+    "agenticorg_public_discovery_enabled": false
+  },
+  "provider": {
+    "provider_key": "mock",
+    "environment": "synthetic_mock",
+    "credential_material_included": false,
+    "provider_credentials_included": false,
+    "live_payments_enabled": false,
+    "plural_live_enabled": false,
+    "capabilities": [
+      "catalog.read.synthetic",
+      "inventory.read.synthetic",
+      "merchant.profile.read.synthetic"
+    ]
+  },
+  "public_discovery": {
+    "commerce_public_discovery_enabled": false,
+    "commerce_public_discovery_allowlist_candidate": false,
+    "agenticorg_public_discovery_enabled": false,
+    "checkout_payment_creation_enabled_by_discovery_gate": false,
+    "live_payments_enabled": false,
+    "live_plural_enabled": false,
+    "certification_claim": "none",
+    "readiness_claim": "none"
+  },
+  "smoke_flow_boundaries": {
+    "allowed_cases": [
+      "merchant_profile_read_synthetic",
+      "catalog_search_read_synthetic",
+      "catalog_get_item_read_synthetic",
+      "inventory_read_synthetic"
+    ],
+    "blocked_cases": [
+      "production_discovery",
+      "commerce_public_discovery_allowlist",
+      "agenticorg_public_discovery",
+      "checkout_create",
+      "payment_intent_create",
+      "live_payment",
+      "live_plural",
+      "provider_credential_use"
+    ]
+  },
+  "catalog": {
+    "currency": "ZZZ",
+    "source_system": "synthetic_internal_smoke_dataset",
+    "last_synced_at": "2026-05-26T00:00:00Z",
+    "products": [
+      {
+        "id": "cprd_synth_internal_smoke_widget_0001",
+        "title": "Synthetic Internal Smoke Countertop Widget",
+        "brand": "Synthetic Internal Smoke Brand",
+        "category": "synthetic_test_goods",
+        "price_minor_units": 101,
+        "currency": "ZZZ",
+        "availability_status": "synthetic_in_stock",
+        "source_system": "synthetic_internal_smoke_dataset",
+        "variants": [
+          {
+            "id": "cvar_synth_internal_smoke_widget_0001_a",
+            "sku": "SYNTH-SMOKE-WIDGET-0001-A",
+            "title": "Synthetic Internal Smoke Widget Variant A",
+            "price_minor_units": 101,
+            "availability_status": "synthetic_in_stock"
+          }
+        ]
+      },
+      {
+        "id": "cprd_synth_internal_smoke_fixture_0002",
+        "title": "Synthetic Internal Smoke Fixture",
+        "brand": "Synthetic Internal Smoke Brand",
+        "category": "synthetic_test_goods",
+        "price_minor_units": 202,
+        "currency": "ZZZ",
+        "availability_status": "synthetic_limited",
+        "source_system": "synthetic_internal_smoke_dataset",
+        "variants": [
+          {
+            "id": "cvar_synth_internal_smoke_fixture_0002_a",
+            "sku": "SYNTH-SMOKE-FIXTURE-0002-A",
+            "title": "Synthetic Internal Smoke Fixture Variant A",
+            "price_minor_units": 202,
+            "availability_status": "synthetic_limited"
+          }
+        ]
+      }
+    ]
+  },
+  "prohibited_uses": [
+    "production_discovery",
+    "production_merchant_approval",
+    "commerce_public_discovery_allowlist_value",
+    "production_config_value",
+    "checkout_creation",
+    "payment_creation",
+    "live_payments",
+    "live_plural",
+    "agenticorg_public_discovery",
+    "provider_credentials"
+  ]
+}
