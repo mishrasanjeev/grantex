@@ -31,5 +31,7 @@ jobs:
             BSD-2-Clause,
             BSD-3-Clause,
             BlueOak-1.0.0,
-            0BSD
+            0BSD,
+            MPL-2.0,
+            LicenseRef-scancode-google-patent-license-golang
           comment-summary-in-pr: always
