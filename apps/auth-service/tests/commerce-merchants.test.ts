@@ -323,6 +323,34 @@ describe('sandbox onboarding foundation', () => {
     expect(body.audit_event_id).toBe('caud_ONBOARDING');
   });
 
+  it('rejects submitted_for_review profile updates that would fail required readiness', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce([onboardingRow({
+      sandbox_onboarding_state: 'submitted_for_review',
+      support_email: null,
+      support_url: null,
+    })]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding',
+      headers: authHeader(),
+      payload: {
+        support_email: null,
+        support_url: null,
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: { code: string; details: { category_readiness_status: string } } }>().error)
+      .toMatchObject({
+        code: 'invalid_sandbox_onboarding_update',
+        details: { category_readiness_status: 'fail' },
+      });
+  });
+
   it('reports recommended electronics catalog remediation without blocking required sandbox review fields', async () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([onboardingRow()]);

@@ -956,6 +956,21 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         const currentState = isSandboxOnboardingState(merchant.sandbox_onboarding_state)
           ? merchant.sandbox_onboarding_state
           : 'draft_created';
+        if (currentState === 'submitted_for_review' && !readiness.ready) {
+          throw new CommerceHttpError(
+            409,
+            'invalid_sandbox_onboarding_update',
+            'submitted_for_review sandbox onboarding cannot be updated into failing readiness',
+            {
+              details: {
+                sandbox_onboarding_state: currentState,
+                readiness_status: readiness.status,
+                category_readiness_status: readiness.category_readiness.status,
+              },
+              retryable: false,
+            },
+          );
+        }
         const nextState = deriveSandboxOnboardingState(currentState, readiness);
         if (nextState !== currentState) {
           const stateRows = await tx<SandboxOnboardingMerchant[]>`
