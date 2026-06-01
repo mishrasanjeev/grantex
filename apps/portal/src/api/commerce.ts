@@ -289,6 +289,25 @@ export interface CommerceAgentFacingPreview {
   generated_at: string;
 }
 
+export interface CommerceReadOnlyDiscoveryReview {
+  status: 'not_requested' | 'blocked' | 'eligible' | 'requested' | 'withdrawn' | 'rejected';
+  eligible: boolean;
+  sandbox_only: true;
+  request_is_approval: false;
+  live_mode_status: 'not_live';
+  production_approval_status: 'not_approved';
+  rollout_status: 'rollout_not_requested';
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  live_plural_enabled: false;
+  production_allowlist_written: false;
+  requested_at: string | null;
+  status_updated_at: string | null;
+  blockers: string[];
+  remediation: string[];
+}
+
 export interface CommerceSandboxOnboarding {
   merchant_id: string;
   tenant_id: string;
@@ -317,6 +336,7 @@ export interface CommerceSandboxOnboarding {
     rollout_status: 'rollout_not_requested';
   };
   agent_facing_preview: CommerceAgentFacingPreview;
+  read_only_discovery_review: CommerceReadOnlyDiscoveryReview;
 }
 
 export interface CommerceAgent {
@@ -665,6 +685,15 @@ export function transitionCommerceMerchantSandboxOnboarding(
       target_state: input.targetState,
       ...(input.reason ? { reason: input.reason } : {}),
     },
+  );
+}
+
+export function requestCommerceMerchantReadOnlyDiscoveryReview(
+  merchantId: string,
+): Promise<{ data: CommerceSandboxOnboarding; audit_event_id: string }> {
+  return api.post<{ data: CommerceSandboxOnboarding; audit_event_id: string }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/sandbox-onboarding/read-only-discovery-review-request`,
+    {},
   );
 }
 

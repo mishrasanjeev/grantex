@@ -446,6 +446,46 @@ components:
               - production_allowlist
         generated_at: { type: string, format: date-time }
 
+    SandboxReadOnlyDiscoveryReview:
+      type: object
+      additionalProperties: false
+      description: >-
+        C6D computed sandbox-only request status for read-only discovery review.
+        Requesting review is not approval, launch, public discovery,
+        checkout/payment creation, live payment, live Plural, provider
+        credential access, or production allowlisting.
+      properties:
+        status:
+          type: string
+          enum: [not_requested, blocked, eligible, requested, withdrawn, rejected]
+        eligible: { type: boolean }
+        sandbox_only: { type: boolean, const: true }
+        request_is_approval: { type: boolean, const: false }
+        live_mode_status: { type: string, enum: [not_live] }
+        production_approval_status: { type: string, enum: [not_approved] }
+        rollout_status: { type: string, enum: [rollout_not_requested] }
+        public_discovery_enabled: { type: boolean, const: false }
+        checkout_payment_enabled: { type: boolean, const: false }
+        live_provider_enabled: { type: boolean, const: false }
+        live_plural_enabled: { type: boolean, const: false }
+        production_allowlist_written: { type: boolean, const: false }
+        requested_at: { type: string, format: date-time, nullable: true }
+        status_updated_at: { type: string, format: date-time, nullable: true }
+        blockers:
+          type: array
+          items: { type: string }
+        remediation:
+          type: array
+          items: { type: string }
+
+    SandboxReadOnlyDiscoveryReviewRequest:
+      type: object
+      additionalProperties: false
+      maxProperties: 0
+      description: >-
+        Empty request body. The endpoint accepts no merchant, production,
+        allowlist, provider, payment, checkout, credential, or live-mode fields.
+
     SandboxOnboarding:
       type: object
       properties:
@@ -487,6 +527,7 @@ components:
                   status: { type: string, enum: [pass, blocked] }
                   detail: { type: string }
         agent_facing_preview: { $ref: "#/components/schemas/SandboxAgentFacingPreview" }
+        read_only_discovery_review: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryReview" }
 
     Agent:
       type: object
@@ -1656,7 +1697,8 @@ paths:
         Returns public-safe sandbox onboarding fields, baseline readiness checks,
         C6A category readiness scoring, C6B catalog readiness preview from
         existing sandbox product/variant rows, a C6C tenant-scoped
-        agent-facing preview payload, and fail-closed production statuses. The
+        agent-facing preview payload, a C6D read-only discovery review request
+        status, and fail-closed production statuses. The
         response never includes provider
         account references, credentials, secrets, production allowlist values,
         checkout/payment material, or live-provider paths.
@@ -1685,7 +1727,8 @@ paths:
         agentic commerce requested flag. It cannot set environment, production
         approval, public discovery, allowlist, provider credential, checkout,
         payment, live payment, or live Plural fields. The response includes the
-        recomputed sandbox-only agent-facing preview payload.
+        recomputed sandbox-only agent-facing preview payload and read-only
+        discovery review eligibility.
       requestBody:
         required: true
         content:
@@ -1745,6 +1788,44 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Invalid transition or live merchant blocked }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/sandbox-onboarding/read-only-discovery-review-request:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    post:
+      tags: [Merchants]
+      summary: Request sandbox read-only discovery review
+      operationId: requestMerchantReadOnlyDiscoveryReview
+      x-implemented: true
+      x-milestone: C6D
+      description: >-
+        Requests human review of the tenant-scoped sandbox read-only discovery
+        preview only after C5Z, C6A, C6B, and C6C prerequisites pass. This
+        request is not approval and does not enable public discovery, production
+        Commerce V1, checkout/payment creation, live payments, live Plural,
+        provider credentials, or production allowlists. Blocked attempts write
+        public-safe audit evidence with blocker summaries only.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryReviewRequest" }
+      responses:
+        "200":
+          description: Read-only discovery review requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxOnboarding" }
+                  audit_event_id: { type: string }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator or owning merchant caller required; CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant or sandbox prerequisite blockers prevent request }
         "503": { $ref: "#/components/responses/CommerceDisabled" }
 
   /v1/commerce/merchants/{merchant_id}/disable-agentic-commerce:
