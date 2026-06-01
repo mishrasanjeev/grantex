@@ -138,6 +138,32 @@ function previewSampleRows(overrides: Record<string, unknown> = {}) {
   ];
 }
 
+function reviewRequestAudit(overrides: Record<string, unknown> = {}) {
+  return [{
+    id: 'caud_REVIEW_REQUEST',
+    event_type: 'merchant.sandbox_onboarding.read_only_discovery_review.requested',
+    occurred_at: '2026-01-01T00:05:00Z',
+    user_principal_id: 'dev_TEST',
+    metadata: { request_status: 'requested' },
+    ...overrides,
+  }];
+}
+
+function reviewDecisionAudit(overrides: Record<string, unknown> = {}) {
+  return [{
+    id: 'caud_REVIEW_DECISION',
+    event_type: 'merchant.sandbox_onboarding.read_only_discovery_review.changes_requested',
+    occurred_at: '2026-01-01T00:10:00Z',
+    user_principal_id: 'dev_TEST',
+    metadata: {
+      operator_decision: 'changes_requested',
+      decision_reason: 'Improve catalog summaries.',
+      remediation_items: ['Add more product grounding.'],
+    },
+    ...overrides,
+  }];
+}
+
 describe('POST /v1/commerce/merchants', () => {
   it('creates a merchant and returns 201 with audit_event_id', async () => {
     seedCommerceContext();
@@ -990,6 +1016,314 @@ describe('sandbox onboarding foundation', () => {
 
     expect(res.statusCode).toBe(404);
     expect(res.json<{ error: { code: string } }>().error.code).toBe('merchant_not_found');
+  });
+
+  it('lists pending operator read-only discovery review requests with readiness evidence', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/read-only-discovery-review-requests',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      items: Array<{
+        merchant_id: string;
+        review_request_status: string;
+        requested_at: string | null;
+        request_actor: string | null;
+        production_approval_status: string;
+        public_discovery_enabled: boolean;
+        checkout_payment_enabled: boolean;
+        live_provider_enabled: boolean;
+        live_plural_enabled: boolean;
+      }>;
+    }>();
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      merchant_id: 'mch_SANDBOX',
+      review_request_status: 'requested',
+      requested_at: '2026-01-01T00:05:00.000Z',
+      request_actor: 'dev_TEST',
+      production_approval_status: 'not_approved',
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+    });
+  });
+
+  it('reads one operator review request without exposing production controls', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/read-only-discovery-review',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      data: {
+        review_request_status: string;
+        readiness_summary: { overall_status: string; catalog_status: string };
+        agent_facing_preview_status: string;
+        operator_decision_is_approval: boolean;
+        rollout_proposal_ready_is_launch: boolean;
+      };
+    }>();
+    expect(body.data.review_request_status).toBe('requested');
+    expect(body.data.readiness_summary).toMatchObject({ overall_status: 'pass', catalog_status: 'pass' });
+    expect(body.data.agent_facing_preview_status).toBe('ready');
+    expect(body.data.operator_decision_is_approval).toBe(false);
+    expect(body.data.rollout_proposal_ready_is_launch).toBe(false);
+  });
+
+  it('records changes_requested with remediation and audit evidence', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([onboardingRow({
+      sandbox_onboarding_state: 'blocked',
+      sandbox_onboarding_blocker: 'Improve catalog summaries.',
+    })]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_CHANGES_REQUESTED', occurred_at: '2026-01-01T00:10:00Z' }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/read-only-discovery-review/decision',
+      headers: authHeader(),
+      payload: {
+        decision: 'changes_requested',
+        reason: 'Improve catalog summaries.',
+        remediation_items: ['Add more product grounding.'],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      data: {
+        review_request_status: string;
+        operator_decision: string;
+        decision_reason: string;
+        remediation_items: string[];
+        public_discovery_enabled: boolean;
+        checkout_payment_enabled: boolean;
+        live_provider_enabled: boolean;
+        live_plural_enabled: boolean;
+      };
+      audit_event_id: string;
+    }>();
+    expect(body.audit_event_id).toBe('caud_CHANGES_REQUESTED');
+    expect(body.data).toMatchObject({
+      review_request_status: 'changes_requested',
+      operator_decision: 'changes_requested',
+      decision_reason: 'Improve catalog summaries.',
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+    });
+    expect(body.data.remediation_items).toEqual(['Add more product grounding.']);
+    expect(JSON.stringify(sqlMock.mock.calls)).not.toContain('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST');
+  });
+
+  it('records rejected without enabling production controls', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([onboardingRow({
+      sandbox_onboarding_state: 'not_approved',
+      sandbox_onboarding_blocker: 'Public-safe fields need more work.',
+    })]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_REJECTED', occurred_at: '2026-01-01T00:10:00Z' }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/read-only-discovery-review/decision',
+      headers: authHeader(),
+      payload: {
+        decision: 'rejected',
+        reason: 'Public-safe fields need more work.',
+        remediation_items: [],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: { review_request_status: string; operator_decision: string; production_approval_status: string } }>();
+    expect(body.data.review_request_status).toBe('rejected');
+    expect(body.data.operator_decision).toBe('rejected');
+    expect(body.data.production_approval_status).toBe('not_approved');
+  });
+
+  it('records rollout_proposal_ready without enabling discovery, checkout, or live provider controls', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_ROLLOUT_PROPOSAL', occurred_at: '2026-01-01T00:10:00Z' }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/read-only-discovery-review/decision',
+      headers: authHeader(),
+      payload: {
+        decision: 'rollout_proposal_ready',
+        reason: 'Evidence supports later planning gate.',
+        remediation_items: [],
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      data: {
+        review_request_status: string;
+        operator_decision: string;
+        operator_decision_is_approval: boolean;
+        rollout_proposal_ready_is_launch: boolean;
+        public_discovery_enabled: boolean;
+        checkout_payment_enabled: boolean;
+        live_provider_enabled: boolean;
+        live_plural_enabled: boolean;
+        production_allowlist_written: boolean;
+      };
+    }>();
+    expect(body.data).toMatchObject({
+      review_request_status: 'rollout_proposal_ready',
+      operator_decision: 'rollout_proposal_ready',
+      operator_decision_is_approval: false,
+      rollout_proposal_ready_is_launch: false,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+      production_allowlist_written: false,
+    });
+    const allArgs = JSON.stringify(sqlMock.mock.calls);
+    expect(allArgs).not.toContain('agentic_commerce_enabled = true');
+  });
+
+  it('blocks rollout_proposal_ready when prerequisites are stale', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({
+      sandbox_onboarding_state: 'submitted_for_review',
+      public_discovery_description_draft: null,
+    })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/read-only-discovery-review/decision',
+      headers: authHeader(),
+      payload: {
+        decision: 'rollout_proposal_ready',
+        reason: 'Evidence supports later planning gate.',
+        remediation_items: [],
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    const body = res.json<{ error: { code: string; details: { public_discovery_enabled: boolean; blockers: string[] } } }>();
+    expect(body.error.code).toBe('read_only_discovery_review_prerequisites_blocked');
+    expect(body.error.details.public_discovery_enabled).toBe(false);
+    expect(body.error.details.blockers).toContain('preview_public_discovery_description_unsafe_or_missing');
+  });
+
+  it('rejects unsafe private operator decision text', async () => {
+    seedCommerceContext();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/read-only-discovery-review/decision',
+      headers: authHeader(),
+      payload: {
+        decision: 'changes_requested',
+        reason: 'secret token should not be stored',
+        remediation_items: ['Add more product grounding.'],
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const fields = res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields;
+    expect(fields.reason).toContain('public-safe text');
+  });
+
+  it('blocks operator decisions for live merchants and missing requests', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ environment: 'live', sandbox_onboarding_state: 'submitted_for_review' })]);
+
+    const liveRes = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_LIVE/sandbox-onboarding/read-only-discovery-review/decision',
+      headers: authHeader(),
+      payload: {
+        decision: 'rejected',
+        reason: 'Public-safe fields need more work.',
+        remediation_items: [],
+      },
+    });
+
+    expect(liveRes.statusCode).toBe(409);
+    expect(liveRes.json<{ error: { code: string } }>().error.code).toBe('sandbox_onboarding_live_merchant_blocked');
+
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'sandbox_ready' })]);
+    const missingRes = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/read-only-discovery-review/decision',
+      headers: authHeader(),
+      payload: {
+        decision: 'rejected',
+        reason: 'Public-safe fields need more work.',
+        remediation_items: [],
+      },
+    });
+    expect(missingRes.statusCode).toBe(409);
+    expect(missingRes.json<{ error: { code: string } }>().error.code).toBe('read_only_discovery_review_not_requested');
+  });
+
+  it('denies CommerceAgent callers on operator review decision endpoint', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      id: 'cag_TEST',
+      tenant_id: TEST_COMMERCE_TENANT_ID,
+      trust_status: 'trusted',
+      public_key_jwk: null,
+      api_key_hash: 'hash',
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/read-only-discovery-review/decision',
+      headers: { authorization: 'Bearer grtx_agent_C6EXXXXXXXXXXXXXXXXXXXXXXXX' },
+      payload: {
+        decision: 'rejected',
+        reason: 'Public-safe fields need more work.',
+        remediation_items: [],
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('operator_required');
   });
 
   it('blocks submit transition when readiness checks fail', async () => {

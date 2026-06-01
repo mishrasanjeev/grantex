@@ -308,6 +308,46 @@ export interface CommerceReadOnlyDiscoveryReview {
   remediation: string[];
 }
 
+export type CommerceReadOnlyDiscoveryOperatorDecision =
+  | 'changes_requested'
+  | 'rejected'
+  | 'rollout_proposal_ready';
+
+export interface CommerceReadOnlyDiscoveryOperatorReview {
+  merchant_id: string;
+  tenant_id: string;
+  merchant_reference: string;
+  display_name: string | null;
+  sandbox_onboarding_state: SandboxOnboardingState;
+  review_request_status:
+    | CommerceReadOnlyDiscoveryReview['status']
+    | CommerceReadOnlyDiscoveryOperatorDecision;
+  operator_decision: CommerceReadOnlyDiscoveryOperatorDecision | null;
+  decision_reason: string | null;
+  remediation_items: string[];
+  requested_at: string | null;
+  request_actor: string | null;
+  decision_recorded_at: string | null;
+  decision_actor: string | null;
+  updated_at: string | null;
+  readiness_summary: CommerceAgentFacingPreview['readiness_summary'];
+  agent_facing_preview_status: CommerceAgentFacingPreview['preview_status'];
+  blockers: string[];
+  sandbox_only: true;
+  request_is_approval: false;
+  operator_decision_is_approval: false;
+  rollout_proposal_ready_is_launch: false;
+  live_mode_status: 'not_live';
+  production_approval_status: 'not_approved';
+  rollout_status: 'rollout_not_requested';
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  live_plural_enabled: false;
+  production_allowlist_written: false;
+  audit_event_id: string | null;
+}
+
 export interface CommerceSandboxOnboarding {
   merchant_id: string;
   tenant_id: string;
@@ -694,6 +734,40 @@ export function requestCommerceMerchantReadOnlyDiscoveryReview(
   return api.post<{ data: CommerceSandboxOnboarding; audit_event_id: string }>(
     `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/sandbox-onboarding/read-only-discovery-review-request`,
     {},
+  );
+}
+
+export function listCommerceReadOnlyDiscoveryReviewRequests(params: {
+  limit?: number;
+} = {}): Promise<{ items: CommerceReadOnlyDiscoveryOperatorReview[]; next_cursor: string | null }> {
+  return api.get<{ items: CommerceReadOnlyDiscoveryOperatorReview[]; next_cursor: string | null }>(
+    `/v1/commerce/read-only-discovery-review-requests${qs({ limit: params.limit })}`,
+  );
+}
+
+export function getCommerceMerchantReadOnlyDiscoveryReview(
+  merchantId: string,
+): Promise<{ data: CommerceReadOnlyDiscoveryOperatorReview }> {
+  return api.get<{ data: CommerceReadOnlyDiscoveryOperatorReview }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/sandbox-onboarding/read-only-discovery-review`,
+  );
+}
+
+export function recordCommerceReadOnlyDiscoveryReviewDecision(
+  merchantId: string,
+  input: {
+    decision: CommerceReadOnlyDiscoveryOperatorDecision;
+    reason: string;
+    remediationItems?: string[];
+  },
+): Promise<{ data: CommerceReadOnlyDiscoveryOperatorReview; audit_event_id: string }> {
+  return api.post<{ data: CommerceReadOnlyDiscoveryOperatorReview; audit_event_id: string }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/sandbox-onboarding/read-only-discovery-review/decision`,
+    {
+      decision: input.decision,
+      reason: input.reason,
+      remediation_items: input.remediationItems ?? [],
+    },
   );
 }
 

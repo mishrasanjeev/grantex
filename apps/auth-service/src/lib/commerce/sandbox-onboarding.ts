@@ -274,6 +274,18 @@ export type ReadOnlyDiscoveryReviewStatus =
   | 'withdrawn'
   | 'rejected';
 
+export const READ_ONLY_DISCOVERY_OPERATOR_DECISIONS = [
+  'changes_requested',
+  'rejected',
+  'rollout_proposal_ready',
+] as const;
+
+export type ReadOnlyDiscoveryOperatorDecision = typeof READ_ONLY_DISCOVERY_OPERATOR_DECISIONS[number];
+
+export type ReadOnlyDiscoveryOperatorReviewStatus =
+  | ReadOnlyDiscoveryReviewStatus
+  | ReadOnlyDiscoveryOperatorDecision;
+
 export type SandboxReadOnlyDiscoveryReviewPayload = {
   status: ReadOnlyDiscoveryReviewStatus;
   eligible: boolean;
@@ -290,6 +302,55 @@ export type SandboxReadOnlyDiscoveryReviewPayload = {
   status_updated_at: string | null;
   blockers: string[];
   remediation: string[];
+} & Record<LiveProviderPreviewFlagKey, false>;
+
+export interface SandboxReadOnlyDiscoveryReviewAuditSnapshot {
+  audit_event_id: string | null;
+  event_type: string | null;
+  occurred_at: string | null;
+  actor: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export type SandboxReadOnlyDiscoveryOperatorReviewPayload = {
+  merchant_id: string;
+  tenant_id: string;
+  merchant_reference: string;
+  display_name: string | null;
+  sandbox_onboarding_state: SandboxOnboardingState;
+  review_request_status: ReadOnlyDiscoveryOperatorReviewStatus;
+  operator_decision: ReadOnlyDiscoveryOperatorDecision | null;
+  decision_reason: string | null;
+  remediation_items: string[];
+  requested_at: string | null;
+  request_actor: string | null;
+  decision_recorded_at: string | null;
+  decision_actor: string | null;
+  updated_at: string | null;
+  readiness_summary: {
+    overall_status: SandboxReadinessStatus;
+    overall_score_percent: number;
+    category_status: SandboxReadinessStatus;
+    category_score_percent: number;
+    category_summary: string;
+    catalog_status: SandboxReadinessStatus;
+    catalog_score_percent: number;
+    catalog_summary: string;
+  };
+  agent_facing_preview_status: SandboxAgentFacingPreviewPayload['preview_status'];
+  blockers: string[];
+  sandbox_only: true;
+  request_is_approval: false;
+  operator_decision_is_approval: false;
+  rollout_proposal_ready_is_launch: false;
+  live_mode_status: 'not_live';
+  production_approval_status: 'not_approved';
+  rollout_status: 'rollout_not_requested';
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  production_allowlist_written: false;
+  audit_event_id: string | null;
 } & Record<LiveProviderPreviewFlagKey, false>;
 
 export interface SandboxOnboardingResponse {
@@ -1279,6 +1340,96 @@ export function computeSandboxReadOnlyDiscoveryReview(
     status_updated_at: statusUpdatedAt,
     blockers: visibleBlockers,
     remediation: visibleBlockers.map(reviewRemediationForBlocker),
+  };
+}
+
+function decisionFromAuditEvent(eventType: string | null): ReadOnlyDiscoveryOperatorDecision | null {
+  if (eventType === 'merchant.sandbox_onboarding.read_only_discovery_review.changes_requested') {
+    return 'changes_requested';
+  }
+  if (eventType === 'merchant.sandbox_onboarding.read_only_discovery_review.rejected') {
+    return 'rejected';
+  }
+  if (eventType === 'merchant.sandbox_onboarding.read_only_discovery_review.rollout_proposal_ready') {
+    return 'rollout_proposal_ready';
+  }
+  return null;
+}
+
+function metadataString(metadata: Record<string, unknown>, key: string): string | null {
+  const value = metadata[key];
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function metadataStringArray(metadata: Record<string, unknown>, key: string): string[] {
+  const value = metadata[key];
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+export function toSandboxReadOnlyDiscoveryOperatorReviewResponse(
+  merchant: SandboxOnboardingMerchant,
+  readiness = computeSandboxOnboardingReadiness(merchant),
+  sampleProducts: SandboxAgentPreviewProductInput[] = [],
+  latestRequestAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null = null,
+  latestDecisionAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null = null,
+  now = new Date(),
+): SandboxReadOnlyDiscoveryOperatorReviewPayload {
+  const onboarding = toSandboxOnboardingResponse(merchant, readiness, sampleProducts, now);
+  const requestReview = onboarding.read_only_discovery_review;
+  const decision = decisionFromAuditEvent(latestDecisionAudit?.event_type ?? null);
+  const decisionMetadata = latestDecisionAudit?.metadata ?? {};
+  const state = onboarding.sandbox_onboarding_state;
+  const reviewRequestStatus: ReadOnlyDiscoveryOperatorReviewStatus = decision
+    ?? (requestReview.status === 'eligible' ? 'not_requested' : requestReview.status);
+  const decisionReason = metadataString(decisionMetadata, 'decision_reason')
+    ?? metadataString(decisionMetadata, 'reason');
+  const remediationItems = metadataStringArray(decisionMetadata, 'remediation_items');
+  const decisionBlockers = metadataStringArray(decisionMetadata, 'blockers');
+  const blockers = decisionBlockers.length > 0 ? decisionBlockers : requestReview.blockers;
+  const requestedAt = latestRequestAudit?.occurred_at ?? requestReview.requested_at;
+  const decisionRecordedAt = latestDecisionAudit?.occurred_at ?? null;
+
+  return {
+    merchant_id: onboarding.merchant_id,
+    tenant_id: onboarding.tenant_id,
+    merchant_reference: onboarding.merchant_id,
+    display_name: onboarding.display_name,
+    sandbox_onboarding_state: state,
+    review_request_status: reviewRequestStatus,
+    operator_decision: decision,
+    decision_reason: decisionReason,
+    remediation_items: remediationItems.length > 0 ? remediationItems : requestReview.remediation,
+    requested_at: requestedAt,
+    request_actor: latestRequestAudit?.actor ?? null,
+    decision_recorded_at: decisionRecordedAt,
+    decision_actor: latestDecisionAudit?.actor ?? null,
+    updated_at: decisionRecordedAt ?? requestReview.status_updated_at,
+    readiness_summary: {
+      overall_status: readiness.status,
+      overall_score_percent: readiness.score_percent,
+      category_status: readiness.category_readiness.status,
+      category_score_percent: readiness.category_readiness.score_percent,
+      category_summary: readiness.category_readiness.summary,
+      catalog_status: readiness.catalog_readiness.status,
+      catalog_score_percent: readiness.catalog_readiness.score_percent,
+      catalog_summary: readiness.catalog_readiness.summary,
+    },
+    agent_facing_preview_status: onboarding.agent_facing_preview.preview_status,
+    blockers,
+    sandbox_only: true,
+    request_is_approval: false,
+    operator_decision_is_approval: false,
+    rollout_proposal_ready_is_launch: false,
+    live_mode_status: 'not_live',
+    production_approval_status: 'not_approved',
+    rollout_status: 'rollout_not_requested',
+    public_discovery_enabled: false,
+    checkout_payment_enabled: false,
+    live_provider_enabled: false,
+    [LIVE_PROVIDER_PREVIEW_FLAG]: false,
+    production_allowlist_written: false,
+    audit_event_id: latestDecisionAudit?.audit_event_id ?? null,
   };
 }
 
