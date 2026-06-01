@@ -324,6 +324,74 @@ const sandboxOnboarding = {
       },
     ],
   },
+  agent_facing_preview: {
+    preview_status: 'ready' as const,
+    preview_blockers: [],
+    sandbox_only: true as const,
+    live_mode_status: 'not_live' as const,
+    production_approval_status: 'not_approved' as const,
+    rollout_status: 'rollout_not_requested' as const,
+    public_discovery_enabled: false as const,
+    checkout_payment_enabled: false as const,
+    live_provider_enabled: false as const,
+    live_plural_enabled: false as const,
+    merchant: {
+      merchant_reference: 'mch_1',
+      display_name: 'Grantex Store',
+      category_preset: 'electronics_appliances' as const,
+      country_code: 'IN',
+      default_currency: 'INR',
+      public_discovery_description_draft: 'Sandbox catalog profile for test appliances.',
+      support_email: 'ops@example.test',
+      support_url: 'https://support.example.test/help',
+    },
+    readiness_summary: {
+      overall_status: 'pass' as const,
+      overall_score_percent: 100,
+      category_status: 'pass' as const,
+      category_score_percent: 100,
+      category_summary: 'Required sandbox category fields pass.',
+      catalog_status: 'pass' as const,
+      catalog_score_percent: 100,
+      catalog_summary: 'Required catalog fields pass for sandbox read-only discovery review.',
+    },
+    sample_products: [
+      {
+        sample_reference: 'catalog_sample_1',
+        title: 'Sandbox induction cooktop',
+        description: 'Public-safe appliance preview item.',
+        image_url: 'https://images.example.test/cooktop.jpg',
+        category_preset: 'electronics_appliances' as const,
+        variants: [
+          {
+            sku: 'SKU-COOKTOP-1',
+            variant_title: 'Black finish',
+            price_amount: 129900,
+            currency: 'INR',
+            availability_status: 'in_stock' as const,
+            warranty_summary: 'One year limited warranty.',
+            return_policy_summary: 'Returns accepted within seven days.',
+          },
+        ],
+      },
+    ],
+    allowed_preview_capabilities: [
+      'read_only_profile_preview',
+      'read_only_catalog_preview',
+      'readiness_review_preview',
+    ] as const,
+    blocked_capabilities: [
+      'public_discovery',
+      'checkout_payment_creation',
+      'live_payment',
+      'live_plural',
+      'provider_credentials',
+      'order_fulfillment',
+      'refunds_returns_execution',
+      'production_allowlist',
+    ] as const,
+    generated_at: '2026-01-01T00:00:00Z',
+  },
 };
 
 const credential = {
@@ -719,6 +787,14 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('Bulk API dry-run: available')).toBeInTheDocument();
     expect(screen.getByText('Async import job: deferred')).toBeInTheDocument();
     expect(screen.getByText('Connector import: deferred')).toBeInTheDocument();
+    expect(screen.getByText('Agent-facing preview')).toBeInTheDocument();
+    expect(screen.getByText(/Sandbox-only read-only view/)).toBeInTheDocument();
+    expect(screen.getByText('public_discovery_enabled')).toBeInTheDocument();
+    expect(screen.getByText('checkout_payment_enabled')).toBeInTheDocument();
+    expect(screen.getByText('read only profile preview')).toBeInTheDocument();
+    expect(screen.getByText('public discovery')).toBeInTheDocument();
+    expect(screen.getByText('Sandbox induction cooktop')).toBeInTheDocument();
+    expect(screen.getByText('Preview JSON')).toBeInTheDocument();
     expect(screen.getByText('Merchant profile present')).toBeInTheDocument();
     expect(screen.getAllByText('No checkout/payment enablement').length).toBeGreaterThan(0);
     expect(screen.getByText('Trusted agent')).toBeInTheDocument();

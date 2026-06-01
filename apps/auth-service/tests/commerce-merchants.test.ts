@@ -103,6 +103,41 @@ function catalogEmptySummary(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function previewSampleRows(overrides: Record<string, unknown> = {}) {
+  return [
+    {
+      product_row_id: 'cprd_SAMPLE_1',
+      title: 'Countertop induction cooktop',
+      description: 'Sandbox appliance catalog item for agent preview.',
+      image_url: 'https://images.example.test/cooktop.jpg',
+      category_preset: 'electronics_appliances',
+      sku: 'SKU-COOKTOP-1',
+      variant_title: 'Black finish',
+      price_amount: 129900,
+      currency: 'INR',
+      availability_status: 'in_stock',
+      warranty_summary: 'One year limited warranty.',
+      return_policy_summary: 'Returns accepted within seven days.',
+      ...overrides,
+    },
+    {
+      product_row_id: 'cprd_SAMPLE_1',
+      title: 'Countertop induction cooktop',
+      description: 'Sandbox appliance catalog item for agent preview.',
+      image_url: 'https://images.example.test/cooktop.jpg',
+      category_preset: 'electronics_appliances',
+      sku: 'SKU-COOKTOP-2',
+      variant_title: 'Steel finish',
+      price_amount: 139900,
+      currency: 'INR',
+      availability_status: 'pre_order',
+      warranty_summary: 'One year limited warranty.',
+      return_policy_summary: 'Returns accepted within seven days.',
+      ...overrides,
+    },
+  ];
+}
+
 describe('POST /v1/commerce/merchants', () => {
   it('creates a merchant and returns 201 with audit_event_id', async () => {
     seedCommerceContext();
@@ -266,6 +301,7 @@ describe('sandbox onboarding foundation', () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([onboardingRow()]);
     sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
 
     const res = await app.inject({
       method: 'GET',
@@ -287,6 +323,19 @@ describe('sandbox onboarding foundation', () => {
           category_readiness: { status: string; score_percent: number; required_passed: boolean };
           catalog_readiness: { status: string; score_percent: number; required_passed: boolean; product_count: number; variant_count: number };
         };
+        agent_facing_preview: {
+          preview_status: string;
+          preview_blockers: string[];
+          sandbox_only: boolean;
+          public_discovery_enabled: boolean;
+          checkout_payment_enabled: boolean;
+          live_provider_enabled: boolean;
+          live_plural_enabled: boolean;
+          merchant: { merchant_reference: string; display_name: string; public_discovery_description_draft: string };
+          sample_products: Array<{ sample_reference: string; title: string; variants: Array<{ sku: string }> }>;
+          allowed_preview_capabilities: string[];
+          blocked_capabilities: string[];
+        };
       };
     }>();
     expect(body.data.sandbox_onboarding_state).toBe('sandbox_ready');
@@ -307,6 +356,123 @@ describe('sandbox onboarding foundation', () => {
     expect(body.data.readiness.production_approval_status).toBe('not_approved');
     expect(body.data.readiness.rollout_status).toBe('rollout_not_requested');
     expect(body.data.provider_account_refs).toBeUndefined();
+    expect(body.data.agent_facing_preview).toMatchObject({
+      preview_status: 'ready',
+      preview_blockers: [],
+      sandbox_only: true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+      merchant: {
+        merchant_reference: 'mch_SANDBOX',
+        display_name: 'Acme Sandbox',
+        public_discovery_description_draft: 'Sandbox catalog profile for test appliances.',
+      },
+    });
+    expect(body.data.agent_facing_preview.allowed_preview_capabilities).toEqual([
+      'read_only_profile_preview',
+      'read_only_catalog_preview',
+      'readiness_review_preview',
+    ]);
+    expect(body.data.agent_facing_preview.blocked_capabilities).toContain('public_discovery');
+    expect(body.data.agent_facing_preview.blocked_capabilities).toContain('checkout_payment_creation');
+    expect(body.data.agent_facing_preview.sample_products).toHaveLength(1);
+    expect(body.data.agent_facing_preview.sample_products[0]!.variants).toHaveLength(2);
+    const previewJson = JSON.stringify(body.data.agent_facing_preview);
+    expect(previewJson).not.toContain('provider_account_refs');
+    expect(previewJson).not.toContain('COMMERCE_PUBLIC_DISCOVERY');
+    expect(previewJson).not.toContain('agentic_commerce_enabled');
+  });
+
+  it('blocks the agent-facing preview when existing public description text is unsafe', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({
+      public_discovery_description_draft: 'Production ready live payment checkout is approved.',
+    })]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const preview = res.json<{
+      data: {
+        agent_facing_preview: {
+          preview_status: string;
+          preview_blockers: string[];
+          public_discovery_enabled: boolean;
+          checkout_payment_enabled: boolean;
+          merchant: { public_discovery_description_draft: string | null };
+        };
+      };
+    }>().data.agent_facing_preview;
+    expect(preview.preview_status).toBe('blocked');
+    expect(preview.preview_blockers).toContain('public_discovery_description_unsafe_or_missing');
+    expect(preview.merchant.public_discovery_description_draft).toBeNull();
+    expect(preview.public_discovery_enabled).toBe(false);
+    expect(preview.checkout_payment_enabled).toBe(false);
+  });
+
+  it('caps agent-facing preview product samples and keeps sample text public-safe', async () => {
+    seedCommerceContext();
+    const productRows = [1, 2, 3, 4].map((i) => ({
+      product_row_id: `cprd_SAMPLE_${i}`,
+      title: `Sandbox appliance ${i}`,
+      description: `Public-safe appliance preview item ${i}.`,
+      image_url: `https://images.example.test/appliance-${i}.jpg`,
+      category_preset: 'electronics_appliances',
+      sku: `SKU-APPLIANCE-${i}`,
+      variant_title: `Variant ${i}`,
+      price_amount: 100000 + i,
+      currency: 'INR',
+      availability_status: 'in_stock',
+      warranty_summary: 'One year limited warranty.',
+      return_policy_summary: 'Returns accepted within seven days.',
+    }));
+    sqlMock.mockResolvedValueOnce([onboardingRow()]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary({
+      product_count: 4,
+      variant_count: 4,
+      products_with_image: 4,
+      products_with_public_safe_title: 4,
+      products_with_public_safe_description: 4,
+      products_with_category_mapping: 4,
+      variants_with_sku: 4,
+      variants_with_price_currency: 4,
+      variants_with_warranty_summary: 4,
+      variants_with_return_policy_summary: 4,
+      variants_with_tax_metadata: 4,
+      variants_with_fresh_inventory: 4,
+      variants_with_known_availability: 4,
+    })]);
+    sqlMock.mockResolvedValueOnce(productRows);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const preview = res.json<{
+      data: {
+        agent_facing_preview: {
+          sample_products: Array<{ sample_reference: string; title: string; variants: Array<{ sku: string }> }>;
+        };
+      };
+    }>().data.agent_facing_preview;
+    expect(preview.sample_products).toHaveLength(3);
+    expect(preview.sample_products.map((product) => product.sample_reference)).toEqual([
+      'catalog_sample_1',
+      'catalog_sample_2',
+      'catalog_sample_3',
+    ]);
+    expect(JSON.stringify(preview.sample_products)).not.toMatch(/secret|token|provider|checkout|payment|production|live|allowlist/i);
   });
 
   it('returns 404 for sandbox onboarding when tenant-scoped lookup is empty', async () => {
@@ -337,6 +503,7 @@ describe('sandbox onboarding foundation', () => {
     sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
     sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'sandbox_ready' })]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_ONBOARDING', occurred_at: new Date().toISOString() }]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
 
     const res = await app.inject({
       method: 'PUT',
@@ -405,6 +572,7 @@ describe('sandbox onboarding foundation', () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([onboardingRow()]);
     sqlMock.mockResolvedValueOnce([catalogMissingSummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
 
     const res = await app.inject({
       method: 'GET',
@@ -439,6 +607,7 @@ describe('sandbox onboarding foundation', () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([onboardingRow()]);
     sqlMock.mockResolvedValueOnce([catalogEmptySummary()]);
+    sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'GET',
@@ -483,6 +652,7 @@ describe('sandbox onboarding foundation', () => {
       variants_with_sku: 1,
       variants_with_price_currency: 1,
     })]);
+    sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'GET',
@@ -523,6 +693,7 @@ describe('sandbox onboarding foundation', () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([onboardingRow()]);
     sqlMock.mockResolvedValueOnce([catalogReadySummary({ products_with_unsafe_text: 1 })]);
+    sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'GET',
@@ -543,6 +714,7 @@ describe('sandbox onboarding foundation', () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([onboardingRow({ category_preset: null })]);
     sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'GET',
@@ -569,6 +741,7 @@ describe('sandbox onboarding foundation', () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([onboardingRow({ category_preset: 'fashion_lifestyle' })]);
     sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'GET',
@@ -613,6 +786,7 @@ describe('sandbox onboarding foundation', () => {
     sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
     sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_TRANSITION', occurred_at: new Date().toISOString() }]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
 
     const res = await app.inject({
       method: 'POST',
