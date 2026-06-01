@@ -8,7 +8,7 @@ import {
   listCommerceProducts,
   listCommerceProviderCredentials,
   listCommerceWebhookSources,
-  transitionCommerceMerchantSandboxOnboarding,
+  requestCommerceMerchantReadOnlyDiscoveryReview,
   updateCommerceMerchantSandboxOnboarding,
   type CommerceAgent,
   type CommerceSandboxOnboarding,
@@ -165,17 +165,15 @@ export function CommerceOnboarding() {
     }
   }
 
-  async function submitForReview() {
+  async function requestReadOnlyDiscoveryReview() {
     if (!merchant) return;
     setSubmitting(true);
     try {
-      const res = await transitionCommerceMerchantSandboxOnboarding(merchant.merchant_id, {
-        targetState: 'submitted_for_review',
-      });
+      const res = await requestCommerceMerchantReadOnlyDiscoveryReview(merchant.merchant_id);
       setMerchant(res.data);
-      show('Sandbox onboarding submitted for review', 'success');
+      show('Read-only discovery review requested', 'success');
     } catch {
-      show('Sandbox onboarding is not ready for review', 'error');
+      show('Read-only discovery review request is blocked', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -214,6 +212,30 @@ export function CommerceOnboarding() {
     { label: 'Playground/MCP profile', done: Boolean(profile?.supported_tools?.length) },
   ]), [activePolicyCount, agents, mockCredentialCount, productCount, profile, webhookSourceCount]);
   const agentPreviewJson = merchant ? JSON.stringify(merchant.agent_facing_preview, null, 2) : '';
+  const readOnlyReview = merchant?.read_only_discovery_review ?? {
+    status: 'blocked' as const,
+    eligible: false,
+    sandbox_only: true as const,
+    request_is_approval: false as const,
+    live_mode_status: 'not_live' as const,
+    production_approval_status: 'not_approved' as const,
+    rollout_status: 'rollout_not_requested' as const,
+    public_discovery_enabled: false as const,
+    checkout_payment_enabled: false as const,
+    live_provider_enabled: false as const,
+    live_plural_enabled: false as const,
+    production_allowlist_written: false as const,
+    requested_at: null,
+    status_updated_at: null,
+    blockers: [],
+    remediation: [],
+  };
+  const reviewRequestDisabled = !readOnlyReview.eligible || readOnlyReview.status === 'requested' || submitting;
+  const reviewRequestTitle = readOnlyReview.blockers.length
+    ? readOnlyReview.blockers.map(capabilityLabel).join(', ')
+    : readOnlyReview.status === 'requested'
+      ? 'Read-only discovery review request is pending.'
+      : 'Request read-only discovery review.';
 
   return (
     <div>
@@ -321,10 +343,11 @@ export function CommerceOnboarding() {
               <Button onClick={saveMerchant} disabled={saving}>{saving ? 'Saving' : 'Save sandbox profile'}</Button>
               <Button
                 variant="secondary"
-                onClick={submitForReview}
-                disabled={submitting || !merchant.readiness.ready}
+                onClick={requestReadOnlyDiscoveryReview}
+                disabled={reviewRequestDisabled}
+                title={reviewRequestTitle}
               >
-                {submitting ? 'Submitting' : 'Submit for review'}
+                {submitting ? 'Requesting' : 'Request read-only review'}
               </Button>
               <Button variant="secondary" disabled title="Publish/unpublish requires a reviewed backend API.">
                 Publish unavailable
@@ -333,6 +356,82 @@ export function CommerceOnboarding() {
             <p className="mt-3 text-xs text-gx-muted">
               Publish/unpublish controls require a separate reviewed backend API and remain blocked.
             </p>
+          </Card>
+
+          <Card className="xl:col-span-2">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gx-text">Read-only discovery review</h2>
+                <p className="mt-1 text-xs text-gx-muted">
+                  Sandbox-only request status for human review; it is not approval, launch, public discovery, checkout, live provider, or live Plural.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={readOnlyReview.status === 'requested' ? 'warning' : readOnlyReview.eligible ? 'success' : 'danger'}>
+                  {readOnlyReview.status}
+                </Badge>
+                <Badge variant="warning">sandbox_only</Badge>
+                <Badge variant="danger">{readOnlyReview.live_mode_status}</Badge>
+                <Badge variant="danger">{readOnlyReview.production_approval_status}</Badge>
+                <Badge variant="danger">{readOnlyReview.rollout_status}</Badge>
+              </div>
+            </div>
+            <div className="grid gap-2 md:grid-cols-3">
+              {[
+                { label: 'request_is_approval', value: readOnlyReview.request_is_approval },
+                { label: 'public_discovery_enabled', value: readOnlyReview.public_discovery_enabled },
+                { label: 'checkout_payment_enabled', value: readOnlyReview.checkout_payment_enabled },
+                { label: 'live_provider_enabled', value: readOnlyReview.live_provider_enabled },
+                { label: 'live_plural_enabled', value: readOnlyReview.live_plural_enabled },
+                { label: 'production_allowlist_written', value: readOnlyReview.production_allowlist_written },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-md border border-gx-border p-3">
+                  <div className="text-xs text-gx-muted">{label}</div>
+                  <Badge variant={value ? 'danger' : 'success'}>{value ? 'true' : 'false'}</Badge>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+              <div>
+                <div className="text-xs text-gx-muted">Eligibility</div>
+                <Badge variant={readOnlyReview.eligible ? 'success' : 'danger'}>
+                  {readOnlyReview.eligible ? 'eligible' : 'blocked'}
+                </Badge>
+              </div>
+              <div>
+                <div className="text-xs text-gx-muted">Requested</div>
+                <DateText value={readOnlyReview.requested_at} />
+              </div>
+              <div>
+                <div className="text-xs text-gx-muted">Status updated</div>
+                <DateText value={readOnlyReview.status_updated_at} />
+              </div>
+            </div>
+            {readOnlyReview.blockers.length > 0 ? (
+              <div className="mt-4 rounded-md border border-gx-danger/40 bg-gx-danger/5 p-3">
+                <div className="text-sm font-medium text-gx-text">Review blockers</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {readOnlyReview.blockers.map((blocker) => (
+                    <Badge key={blocker} variant="danger">{capabilityLabel(blocker)}</Badge>
+                  ))}
+                </div>
+                <div className="mt-3 grid gap-2 text-xs text-gx-warning">
+                  {readOnlyReview.remediation.map((item) => (
+                    <div key={item}>{item}</div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="mt-4">
+              <Button
+                variant="secondary"
+                onClick={requestReadOnlyDiscoveryReview}
+                disabled={reviewRequestDisabled}
+                title={reviewRequestTitle}
+              >
+                {submitting ? 'Requesting' : readOnlyReview.status === 'requested' ? 'Review requested' : 'Request read-only discovery review'}
+              </Button>
+            </div>
           </Card>
 
           <Card>
