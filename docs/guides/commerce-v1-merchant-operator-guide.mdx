@@ -104,6 +104,18 @@ labels. It excludes private legal details, contracts, private contacts,
 approval evidence, pricing terms, customer data, raw payloads, credentials,
 tokens, provider secrets, production config values, and production allowlists.
 
+C6D adds a read-only discovery review request workflow for sandbox merchants.
+The onboarding response now includes `read_only_discovery_review`, which shows
+whether the tenant-scoped sandbox merchant is eligible, requested, blocked,
+withdrawn, or rejected for review. A merchant or operator may request review
+only after the sandbox profile, category checklist, catalog checklist, and
+agent-facing preview all pass. The request writes audit evidence with public
+blocker summaries, but it is not approval and it does not publish public
+discovery, change production configuration, set allowlists, create checkout or
+payment paths, enable provider credentials, enable live payments, or enable
+live Plural. Blocked requests return remediation so the merchant can fix the
+sandbox profile or catalog before trying again.
+
 Passing category or catalog readiness means only "sandbox profile can be
 reviewed"; it is not merchant approval, production readiness, public discovery
 approval, checkout/payment readiness, live payment readiness, or live Plural

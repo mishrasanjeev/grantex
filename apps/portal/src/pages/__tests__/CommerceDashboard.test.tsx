@@ -23,6 +23,7 @@ const mockUpdateCommerceMerchant = vi.fn();
 const mockGetCommerceMerchantSandboxOnboarding = vi.fn();
 const mockUpdateCommerceMerchantSandboxOnboarding = vi.fn();
 const mockTransitionCommerceMerchantSandboxOnboarding = vi.fn();
+const mockRequestCommerceMerchantReadOnlyDiscoveryReview = vi.fn();
 const mockDisableMerchantAgenticCommerce = vi.fn();
 const mockEnableMerchantAgenticCommerce = vi.fn();
 const mockListCommerceAgents = vi.fn();
@@ -55,6 +56,7 @@ vi.mock('../../api/commerce', () => ({
   getCommerceMerchantSandboxOnboarding: (...a: unknown[]) => mockGetCommerceMerchantSandboxOnboarding(...a),
   updateCommerceMerchantSandboxOnboarding: (...a: unknown[]) => mockUpdateCommerceMerchantSandboxOnboarding(...a),
   transitionCommerceMerchantSandboxOnboarding: (...a: unknown[]) => mockTransitionCommerceMerchantSandboxOnboarding(...a),
+  requestCommerceMerchantReadOnlyDiscoveryReview: (...a: unknown[]) => mockRequestCommerceMerchantReadOnlyDiscoveryReview(...a),
   disableMerchantAgenticCommerce: (...a: unknown[]) => mockDisableMerchantAgenticCommerce(...a),
   enableMerchantAgenticCommerce: (...a: unknown[]) => mockEnableMerchantAgenticCommerce(...a),
   listCommerceAgents: (...a: unknown[]) => mockListCommerceAgents(...a),
@@ -391,6 +393,24 @@ const sandboxOnboarding = {
       'production_allowlist',
     ] as const,
     generated_at: '2026-01-01T00:00:00Z',
+  },
+  read_only_discovery_review: {
+    status: 'eligible' as const,
+    eligible: true,
+    sandbox_only: true as const,
+    request_is_approval: false as const,
+    live_mode_status: 'not_live' as const,
+    production_approval_status: 'not_approved' as const,
+    rollout_status: 'rollout_not_requested' as const,
+    public_discovery_enabled: false as const,
+    checkout_payment_enabled: false as const,
+    live_provider_enabled: false as const,
+    live_plural_enabled: false as const,
+    production_allowlist_written: false as const,
+    requested_at: null,
+    status_updated_at: '2026-01-01T00:00:00Z',
+    blockers: [],
+    remediation: [],
   },
 };
 
@@ -749,8 +769,16 @@ describe('CommerceOnboarding', () => {
       data: { ...sandboxOnboarding, display_name: 'Grantex Store Updated' },
       audit_event_id: 'aud_merchant',
     });
-    mockTransitionCommerceMerchantSandboxOnboarding.mockResolvedValue({
-      data: { ...sandboxOnboarding, sandbox_onboarding_state: 'submitted_for_review' },
+    mockRequestCommerceMerchantReadOnlyDiscoveryReview.mockResolvedValue({
+      data: {
+        ...sandboxOnboarding,
+        sandbox_onboarding_state: 'submitted_for_review',
+        read_only_discovery_review: {
+          ...sandboxOnboarding.read_only_discovery_review,
+          status: 'requested' as const,
+          requested_at: '2026-01-01T00:05:00Z',
+        },
+      },
       audit_event_id: 'aud_review',
     });
     mockListCommerceAgents.mockResolvedValue({ items: [agent], next_cursor: null });
@@ -789,12 +817,17 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('Connector import: deferred')).toBeInTheDocument();
     expect(screen.getByText('Agent-facing preview')).toBeInTheDocument();
     expect(screen.getByText(/Sandbox-only read-only view/)).toBeInTheDocument();
-    expect(screen.getByText('public_discovery_enabled')).toBeInTheDocument();
-    expect(screen.getByText('checkout_payment_enabled')).toBeInTheDocument();
+    expect(screen.getAllByText('public_discovery_enabled').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('checkout_payment_enabled').length).toBeGreaterThan(0);
     expect(screen.getByText('read only profile preview')).toBeInTheDocument();
     expect(screen.getByText('public discovery')).toBeInTheDocument();
     expect(screen.getByText('Sandbox induction cooktop')).toBeInTheDocument();
     expect(screen.getByText('Preview JSON')).toBeInTheDocument();
+    expect(screen.getByText('Read-only discovery review')).toBeInTheDocument();
+    expect(screen.getByText(/it is not approval, launch, public discovery, checkout/i)).toBeInTheDocument();
+    expect(screen.getByText('request_is_approval')).toBeInTheDocument();
+    expect(screen.getByText('production_allowlist_written')).toBeInTheDocument();
+    expect(screen.getByText('Eligibility')).toBeInTheDocument();
     expect(screen.getByText('Merchant profile present')).toBeInTheDocument();
     expect(screen.getAllByText('No checkout/payment enablement').length).toBeGreaterThan(0);
     expect(screen.getByText('Trusted agent')).toBeInTheDocument();
@@ -810,10 +843,8 @@ describe('CommerceOnboarding', () => {
       agentic_commerce_requested: true,
     })));
 
-    await user.click(screen.getByRole('button', { name: 'Submit for review' }));
-    await waitFor(() => expect(mockTransitionCommerceMerchantSandboxOnboarding).toHaveBeenCalledWith('mch_1', {
-      targetState: 'submitted_for_review',
-    }));
+    await user.click(screen.getByRole('button', { name: 'Request read-only discovery review' }));
+    await waitFor(() => expect(mockRequestCommerceMerchantReadOnlyDiscoveryReview).toHaveBeenCalledWith('mch_1'));
 
     await user.click(screen.getByRole('button', { name: 'Evaluate policy' }));
     await waitFor(() => expect(mockEvaluateCommercePolicy).toHaveBeenCalledWith(expect.objectContaining({

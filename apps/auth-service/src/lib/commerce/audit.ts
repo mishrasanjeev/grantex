@@ -13,6 +13,8 @@ export type CommerceAuditEventType =
   | 'merchant.agentic_commerce_reenabled'
   | 'merchant.sandbox_onboarding.updated'
   | 'merchant.sandbox_onboarding.transitioned'
+  | 'merchant.sandbox_onboarding.read_only_discovery_review.requested'
+  | 'merchant.sandbox_onboarding.read_only_discovery_review.blocked'
   | 'merchant.provider_credentials.validated'
   | 'merchant.webhook_source.created'
   | 'merchant.webhook_source.secret_rotated'

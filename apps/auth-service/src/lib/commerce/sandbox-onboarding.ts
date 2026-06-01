@@ -266,6 +266,32 @@ export type SandboxAgentFacingPreviewPayload = {
   generated_at: string;
 } & Record<LiveProviderPreviewFlagKey, false>;
 
+export type ReadOnlyDiscoveryReviewStatus =
+  | 'not_requested'
+  | 'blocked'
+  | 'eligible'
+  | 'requested'
+  | 'withdrawn'
+  | 'rejected';
+
+export type SandboxReadOnlyDiscoveryReviewPayload = {
+  status: ReadOnlyDiscoveryReviewStatus;
+  eligible: boolean;
+  sandbox_only: true;
+  request_is_approval: false;
+  live_mode_status: 'not_live';
+  production_approval_status: 'not_approved';
+  rollout_status: 'rollout_not_requested';
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  production_allowlist_written: false;
+  requested_at: string | null;
+  status_updated_at: string | null;
+  blockers: string[];
+  remediation: string[];
+} & Record<LiveProviderPreviewFlagKey, false>;
+
 export interface SandboxOnboardingResponse {
   merchant_id: string;
   tenant_id: string;
@@ -284,6 +310,7 @@ export interface SandboxOnboardingResponse {
   sandbox_onboarding_updated_at: string | null;
   readiness: SandboxOnboardingReadiness;
   agent_facing_preview: SandboxAgentFacingPreviewPayload;
+  read_only_discovery_review: SandboxReadOnlyDiscoveryReviewPayload;
 }
 
 const SAFE_SUPPORT_HOST_SUFFIXES = ['.example', '.test', '.invalid', '.localhost'];
@@ -1133,6 +1160,128 @@ export function computeSandboxAgentFacingPreview(
   };
 }
 
+function sandboxUpdatedAtIso(merchant: SandboxOnboardingMerchant): string | null {
+  return merchant.sandbox_onboarding_updated_at
+    ? new Date(merchant.sandbox_onboarding_updated_at).toISOString()
+    : null;
+}
+
+function addUnique(list: string[], value: string): void {
+  if (!list.includes(value)) list.push(value);
+}
+
+function reviewRemediationForBlocker(blocker: string): string {
+  if (blocker === 'merchant_not_sandbox') {
+    return 'Use a sandbox merchant before requesting read-only discovery review.';
+  }
+  if (blocker === 'sandbox_onboarding_state_blocked') {
+    return 'Resolve the sandbox onboarding blocker before requesting read-only discovery review.';
+  }
+  if (blocker === 'sandbox_onboarding_state_rejected') {
+    return 'Resolve the prior review rejection with an operator before requesting again.';
+  }
+  if (blocker === 'sandbox_onboarding_state_not_requestable') {
+    return 'Save the sandbox profile until the onboarding state becomes sandbox_ready before requesting review.';
+  }
+  if (blocker === 'sandbox_readiness_not_passed') {
+    return 'Complete all required sandbox profile, category, catalog, and non-enabling checks.';
+  }
+  if (blocker === 'agent_facing_preview_blocked') {
+    return 'Resolve the agent-facing preview blockers so only public-safe read-only fields remain.';
+  }
+  if (blocker.startsWith('readiness_check_')) {
+    return 'Resolve the named sandbox readiness gate before requesting review.';
+  }
+  if (blocker.startsWith('category_')) {
+    return 'Resolve the named category readiness item before requesting review.';
+  }
+  if (blocker.startsWith('catalog_')) {
+    return 'Resolve the named catalog readiness item before requesting review.';
+  }
+  if (blocker.startsWith('preview_')) {
+    return 'Resolve the named agent-facing preview blocker before requesting review.';
+  }
+  return 'Resolve this blocker before requesting read-only discovery review.';
+}
+
+export function computeSandboxReadOnlyDiscoveryReview(
+  merchant: SandboxOnboardingMerchant,
+  readiness: SandboxOnboardingReadiness,
+  agentFacingPreview: SandboxAgentFacingPreviewPayload,
+): SandboxReadOnlyDiscoveryReviewPayload {
+  const state = isSandboxOnboardingState(merchant.sandbox_onboarding_state)
+    ? merchant.sandbox_onboarding_state
+    : 'draft_created';
+  const blockers: string[] = [];
+  const requestableState = state === 'sandbox_ready'
+    || state === 'rollout_not_requested'
+    || state === 'submitted_for_review';
+
+  if (merchant.environment !== 'sandbox') addUnique(blockers, 'merchant_not_sandbox');
+  if (state === 'blocked') addUnique(blockers, 'sandbox_onboarding_state_blocked');
+  if (state === 'not_approved') addUnique(blockers, 'sandbox_onboarding_state_rejected');
+  if (!requestableState && state !== 'blocked' && state !== 'not_approved') {
+    addUnique(blockers, 'sandbox_onboarding_state_not_requestable');
+  }
+  if (!readiness.ready) addUnique(blockers, 'sandbox_readiness_not_passed');
+  if (agentFacingPreview.preview_status !== 'ready') addUnique(blockers, 'agent_facing_preview_blocked');
+
+  for (const checkItem of readiness.checks) {
+    if (checkItem.status !== 'pass') addUnique(blockers, `readiness_check_${checkItem.key}`);
+  }
+  for (const item of readiness.category_readiness.items) {
+    if ((item.severity === 'required' || item.severity === 'blocked')
+      && item.status !== 'pass'
+      && item.status !== 'not_applicable') {
+      addUnique(blockers, `category_${item.key}`);
+    }
+  }
+  for (const item of readiness.catalog_readiness.items) {
+    if ((item.severity === 'required' || item.severity === 'blocked')
+      && item.status !== 'pass'
+      && item.status !== 'not_applicable') {
+      addUnique(blockers, `catalog_${item.key}`);
+    }
+  }
+  for (const blocker of agentFacingPreview.preview_blockers) {
+    addUnique(blockers, `preview_${blocker}`);
+  }
+
+  const eligible = blockers.length === 0 && state !== 'not_approved' && state !== 'blocked';
+  const status: ReadOnlyDiscoveryReviewStatus = state === 'submitted_for_review' && eligible
+    ? 'requested'
+    : state === 'not_approved'
+      ? 'rejected'
+      : state === 'rollout_not_requested'
+        ? 'withdrawn'
+        : eligible
+          ? 'eligible'
+          : blockers.length > 0
+            ? 'blocked'
+            : 'not_requested';
+  const visibleBlockers = eligible ? [] : blockers;
+  const statusUpdatedAt = sandboxUpdatedAtIso(merchant);
+
+  return {
+    status,
+    eligible,
+    sandbox_only: true,
+    request_is_approval: false,
+    live_mode_status: 'not_live',
+    production_approval_status: 'not_approved',
+    rollout_status: 'rollout_not_requested',
+    public_discovery_enabled: false,
+    checkout_payment_enabled: false,
+    live_provider_enabled: false,
+    [LIVE_PROVIDER_PREVIEW_FLAG]: false,
+    production_allowlist_written: false,
+    requested_at: state === 'submitted_for_review' ? statusUpdatedAt : null,
+    status_updated_at: statusUpdatedAt,
+    blockers: visibleBlockers,
+    remediation: visibleBlockers.map(reviewRemediationForBlocker),
+  };
+}
+
 export function toSandboxOnboardingResponse(
   merchant: SandboxOnboardingMerchant,
   readiness = computeSandboxOnboardingReadiness(merchant),
@@ -1142,6 +1291,8 @@ export function toSandboxOnboardingResponse(
   const state = isSandboxOnboardingState(merchant.sandbox_onboarding_state)
     ? merchant.sandbox_onboarding_state
     : 'draft_created';
+  const agentFacingPreview = computeSandboxAgentFacingPreview(merchant, readiness, sampleProducts, now);
+  const sandboxOnboardingUpdatedAt = sandboxUpdatedAtIso(merchant);
   return {
     merchant_id: merchant.id,
     tenant_id: merchant.tenant_id,
@@ -1157,10 +1308,13 @@ export function toSandboxOnboardingResponse(
     agentic_commerce_enabled: merchant.agentic_commerce_enabled === true,
     sandbox_onboarding_state: state,
     sandbox_onboarding_blocker: merchant.sandbox_onboarding_blocker ?? null,
-    sandbox_onboarding_updated_at: merchant.sandbox_onboarding_updated_at
-      ? new Date(merchant.sandbox_onboarding_updated_at).toISOString()
-      : null,
+    sandbox_onboarding_updated_at: sandboxOnboardingUpdatedAt,
     readiness,
-    agent_facing_preview: computeSandboxAgentFacingPreview(merchant, readiness, sampleProducts, now),
+    agent_facing_preview: agentFacingPreview,
+    read_only_discovery_review: computeSandboxReadOnlyDiscoveryReview(
+      merchant,
+      readiness,
+      agentFacingPreview,
+    ),
   };
 }

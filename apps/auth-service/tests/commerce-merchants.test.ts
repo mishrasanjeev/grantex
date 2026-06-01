@@ -336,6 +336,17 @@ describe('sandbox onboarding foundation', () => {
           allowed_preview_capabilities: string[];
           blocked_capabilities: string[];
         };
+        read_only_discovery_review: {
+          status: string;
+          eligible: boolean;
+          request_is_approval: boolean;
+          public_discovery_enabled: boolean;
+          checkout_payment_enabled: boolean;
+          live_provider_enabled: boolean;
+          live_plural_enabled: boolean;
+          production_allowlist_written: boolean;
+          blockers: string[];
+        };
       };
     }>();
     expect(body.data.sandbox_onboarding_state).toBe('sandbox_ready');
@@ -379,6 +390,17 @@ describe('sandbox onboarding foundation', () => {
     expect(body.data.agent_facing_preview.blocked_capabilities).toContain('checkout_payment_creation');
     expect(body.data.agent_facing_preview.sample_products).toHaveLength(1);
     expect(body.data.agent_facing_preview.sample_products[0]!.variants).toHaveLength(2);
+    expect(body.data.read_only_discovery_review).toMatchObject({
+      status: 'eligible',
+      eligible: true,
+      request_is_approval: false,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+      production_allowlist_written: false,
+      blockers: [],
+    });
     const previewJson = JSON.stringify(body.data.agent_facing_preview);
     expect(previewJson).not.toContain('provider_account_refs');
     expect(previewJson).not.toContain('COMMERCE_PUBLIC_DISCOVERY');
@@ -800,6 +822,174 @@ describe('sandbox onboarding foundation', () => {
     expect(body.data.sandbox_onboarding_state).toBe('submitted_for_review');
     expect(body.data.readiness.production_approval_status).toBe('not_approved');
     expect(body.audit_event_id).toBe('caud_TRANSITION');
+  });
+
+  it('requests read-only discovery review without enabling production controls', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'sandbox_ready' })]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_READONLY_REVIEW', occurred_at: new Date().toISOString() }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/read-only-discovery-review-request',
+      headers: authHeader(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      data: {
+        sandbox_onboarding_state: string;
+        read_only_discovery_review: {
+          status: string;
+          eligible: boolean;
+          requested_at: string | null;
+          request_is_approval: boolean;
+          public_discovery_enabled: boolean;
+          checkout_payment_enabled: boolean;
+          live_provider_enabled: boolean;
+          live_plural_enabled: boolean;
+          production_allowlist_written: boolean;
+        };
+        agent_facing_preview: {
+          preview_status: string;
+          public_discovery_enabled: boolean;
+          checkout_payment_enabled: boolean;
+          live_provider_enabled: boolean;
+          live_plural_enabled: boolean;
+        };
+      };
+      audit_event_id: string;
+    }>();
+    expect(body.data.sandbox_onboarding_state).toBe('submitted_for_review');
+    expect(body.data.read_only_discovery_review).toMatchObject({
+      status: 'requested',
+      eligible: true,
+      request_is_approval: false,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+      production_allowlist_written: false,
+    });
+    expect(body.data.read_only_discovery_review.requested_at).not.toBeNull();
+    expect(body.data.agent_facing_preview).toMatchObject({
+      preview_status: 'ready',
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+    });
+    expect(body.audit_event_id).toBe('caud_READONLY_REVIEW');
+    const allArgs = JSON.stringify(sqlMock.mock.calls);
+    expect(allArgs).not.toContain('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST');
+    expect(allArgs).not.toContain('agentic_commerce_enabled = true');
+  });
+
+  it('blocks read-only discovery review request when prerequisites are missing and writes audit evidence', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({
+      public_discovery_description_draft: null,
+      sandbox_onboarding_state: 'sandbox_ready',
+    })]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_READONLY_BLOCKED', occurred_at: new Date().toISOString() }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/read-only-discovery-review-request',
+      headers: authHeader(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(409);
+    const error = res.json<{
+      error: {
+        code: string;
+        details: {
+          audit_event_id: string;
+          read_only_discovery_review: {
+            status: string;
+            eligible: boolean;
+            blockers: string[];
+            remediation: string[];
+          };
+        };
+      };
+    }>().error;
+    expect(error.code).toBe('read_only_discovery_review_blocked');
+    expect(error.details.audit_event_id).toBe('caud_READONLY_BLOCKED');
+    expect(error.details.read_only_discovery_review.status).toBe('blocked');
+    expect(error.details.read_only_discovery_review.eligible).toBe(false);
+    expect(error.details.read_only_discovery_review.blockers).toContain('preview_public_discovery_description_unsafe_or_missing');
+    expect(error.details.read_only_discovery_review.remediation.length).toBeGreaterThan(0);
+    const allTplStrings = sqlMock.mock.calls.flatMap((c) => {
+      const tpl = c[0] as unknown;
+      return Array.isArray(tpl) ? tpl.filter((s): s is string => typeof s === 'string') : [];
+    });
+    expect(allTplStrings.some((s) => s.includes('UPDATE commerce_merchants'))).toBe(false);
+  });
+
+  it('rejects private or production-candidate fields on read-only discovery review request', async () => {
+    seedCommerceContext();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/read-only-discovery-review-request',
+      headers: authHeader(),
+      payload: {
+        production_allowlist_candidate: 'mch_SYNTHETIC',
+        provider_credentials: 'secret',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const fields = res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields;
+    expect(fields.unsupported_fields).toContain('production_allowlist_candidate');
+    expect(fields.unsupported_fields).toContain('provider_credentials');
+  });
+
+  it('blocks read-only discovery review request for live merchants', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ environment: 'live' })]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_READONLY_LIVE_BLOCKED', occurred_at: new Date().toISOString() }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_LIVE/sandbox-onboarding/read-only-discovery-review-request',
+      headers: authHeader(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(409);
+    const error = res.json<{
+      error: {
+        code: string;
+        details: { audit_event_id: string; read_only_discovery_review: { blockers: string[] } };
+      };
+    }>().error;
+    expect(error.code).toBe('read_only_discovery_review_blocked');
+    expect(error.details.audit_event_id).toBe('caud_READONLY_LIVE_BLOCKED');
+    expect(error.details.read_only_discovery_review.blockers).toContain('merchant_not_sandbox');
+  });
+
+  it('returns 404 for cross-tenant read-only discovery review request lookup misses', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_OTHER_TENANT/sandbox-onboarding/read-only-discovery-review-request',
+      headers: authHeader(),
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('merchant_not_found');
   });
 
   it('blocks submit transition when readiness checks fail', async () => {
