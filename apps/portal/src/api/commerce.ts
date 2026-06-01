@@ -220,6 +220,75 @@ export interface CommerceCatalogReadiness {
   };
 }
 
+export interface CommerceAgentFacingPreviewProductVariant {
+  sku: string;
+  variant_title: string | null;
+  price_amount: number | string;
+  currency: string;
+  availability_status: 'in_stock' | 'out_of_stock' | 'pre_order' | 'back_order' | 'unknown';
+  warranty_summary: string | null;
+  return_policy_summary: string | null;
+}
+
+export interface CommerceAgentFacingPreviewProduct {
+  sample_reference: string;
+  title: string;
+  description: string;
+  image_url: string | null;
+  category_preset: 'electronics_appliances';
+  variants: CommerceAgentFacingPreviewProductVariant[];
+}
+
+export interface CommerceAgentFacingPreview {
+  preview_status: 'ready' | 'blocked';
+  preview_blockers: string[];
+  sandbox_only: true;
+  live_mode_status: 'not_live';
+  production_approval_status: 'not_approved';
+  rollout_status: 'rollout_not_requested';
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  live_plural_enabled: false;
+  merchant: {
+    merchant_reference: string;
+    display_name: string | null;
+    category_preset: 'electronics_appliances' | null;
+    country_code: string | null;
+    default_currency: string | null;
+    public_discovery_description_draft: string | null;
+    support_email: string | null;
+    support_url: string | null;
+  };
+  readiness_summary: {
+    overall_status: 'pass' | 'fail' | 'blocked';
+    overall_score_percent: number;
+    category_status: 'pass' | 'fail' | 'blocked';
+    category_score_percent: number;
+    category_summary: string;
+    catalog_status: 'pass' | 'fail' | 'blocked';
+    catalog_score_percent: number;
+    catalog_summary: string;
+  };
+  sample_products: CommerceAgentFacingPreviewProduct[];
+  allowed_preview_capabilities: [
+    'read_only_profile_preview',
+    'read_only_catalog_preview',
+    'readiness_review_preview',
+  ];
+  blocked_capabilities: [
+    'public_discovery',
+    'checkout_payment_creation',
+    'live_payment',
+    'live_plural',
+    'provider_credentials',
+    'order_fulfillment',
+    'refunds_returns_execution',
+    'production_allowlist',
+  ];
+  generated_at: string;
+}
+
 export interface CommerceSandboxOnboarding {
   merchant_id: string;
   tenant_id: string;
@@ -247,6 +316,7 @@ export interface CommerceSandboxOnboarding {
     production_approval_status: 'not_approved';
     rollout_status: 'rollout_not_requested';
   };
+  agent_facing_preview: CommerceAgentFacingPreview;
 }
 
 export interface CommerceAgent {

@@ -19,6 +19,7 @@ import { useToast } from '../../store/toast';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { CopyButton } from '../../components/ui/CopyButton';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Input } from '../../components/ui/Input';
 import { Table } from '../../components/ui/Table';
@@ -72,6 +73,10 @@ function countLabel(count?: number, total?: number): string | null {
   if (count !== undefined && total !== undefined) return `${count}/${total}`;
   if (count !== undefined) return String(count);
   return `0/${total}`;
+}
+
+function capabilityLabel(value: string): string {
+  return value.replace(/_/g, ' ');
 }
 
 export function CommerceOnboarding() {
@@ -208,6 +213,7 @@ export function CommerceOnboarding() {
     { label: 'Webhook source', done: webhookSourceCount > 0 },
     { label: 'Playground/MCP profile', done: Boolean(profile?.supported_tools?.length) },
   ]), [activePolicyCount, agents, mockCredentialCount, productCount, profile, webhookSourceCount]);
+  const agentPreviewJson = merchant ? JSON.stringify(merchant.agent_facing_preview, null, 2) : '';
 
   return (
     <div>
@@ -470,6 +476,161 @@ export function CommerceOnboarding() {
                 <div className="truncate text-xs text-gx-muted">{profile?.supported_tools?.join(', ') || 'none'}</div>
               </div>
             </div>
+          </Card>
+
+          <Card className="xl:col-span-2">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gx-text">Agent-facing preview</h2>
+                <p className="mt-1 text-xs text-gx-muted">
+                  Sandbox-only read-only view of public-safe profile and catalog fields for later readiness review.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={merchant.agent_facing_preview.preview_status === 'ready' ? 'success' : 'danger'}>
+                  {merchant.agent_facing_preview.preview_status}
+                </Badge>
+                <Badge variant="warning">sandbox_only</Badge>
+                <Badge variant="danger">{merchant.agent_facing_preview.live_mode_status}</Badge>
+                <Badge variant="danger">{merchant.agent_facing_preview.production_approval_status}</Badge>
+                <Badge variant="danger">{merchant.agent_facing_preview.rollout_status}</Badge>
+              </div>
+            </div>
+            <div className="grid gap-2 md:grid-cols-4">
+              {[
+                { label: 'public_discovery_enabled', value: merchant.agent_facing_preview.public_discovery_enabled },
+                { label: 'checkout_payment_enabled', value: merchant.agent_facing_preview.checkout_payment_enabled },
+                { label: 'live_provider_enabled', value: merchant.agent_facing_preview.live_provider_enabled },
+                { label: 'live_plural_enabled', value: merchant.agent_facing_preview.live_plural_enabled },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-md border border-gx-border p-3">
+                  <div className="text-xs text-gx-muted">{label}</div>
+                  <Badge variant={value ? 'danger' : 'success'}>{value ? 'true' : 'false'}</Badge>
+                </div>
+              ))}
+            </div>
+            {merchant.agent_facing_preview.preview_blockers.length > 0 ? (
+              <div className="mt-4 rounded-md border border-gx-danger/40 bg-gx-danger/5 p-3">
+                <div className="text-sm font-medium text-gx-text">Preview blockers</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {merchant.agent_facing_preview.preview_blockers.map((blocker) => (
+                    <Badge key={blocker} variant="danger">{capabilityLabel(blocker)}</Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-xs text-gx-muted">Merchant preview</div>
+                <div className="mt-2 grid gap-2 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gx-muted">Reference</span>
+                    <IdText value={merchant.agent_facing_preview.merchant.merchant_reference} />
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gx-muted">Display name</span>
+                    <span className="text-right text-gx-text">{merchant.agent_facing_preview.merchant.display_name ?? 'blocked'}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gx-muted">Category</span>
+                    <span className="text-right text-gx-text">{merchant.agent_facing_preview.merchant.category_preset ?? 'blocked'}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gx-muted">Country/currency</span>
+                    <span className="text-right text-gx-text">
+                      {merchant.agent_facing_preview.merchant.country_code ?? 'blocked'} / {merchant.agent_facing_preview.merchant.default_currency ?? 'blocked'}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-3 text-xs text-gx-muted">Description draft</div>
+                <div className="mt-1 text-sm text-gx-text">
+                  {merchant.agent_facing_preview.merchant.public_discovery_description_draft ?? 'blocked'}
+                </div>
+              </div>
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-xs text-gx-muted">Readiness summary</div>
+                <div className="mt-2 grid gap-2 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-gx-muted">Overall</span>
+                    <Badge variant={readinessVariant(merchant.agent_facing_preview.readiness_summary.overall_status)}>
+                      {merchant.agent_facing_preview.readiness_summary.overall_score_percent}%
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-gx-muted">Category</span>
+                    <Badge variant={readinessVariant(merchant.agent_facing_preview.readiness_summary.category_status)}>
+                      {merchant.agent_facing_preview.readiness_summary.category_score_percent}%
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-gx-muted">Catalog</span>
+                    <Badge variant={readinessVariant(merchant.agent_facing_preview.readiness_summary.catalog_status)}>
+                      {merchant.agent_facing_preview.readiness_summary.catalog_score_percent}%
+                    </Badge>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2 text-xs text-gx-muted">
+                  <div>{merchant.agent_facing_preview.readiness_summary.category_summary}</div>
+                  <div>{merchant.agent_facing_preview.readiness_summary.catalog_summary}</div>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div>
+                <div className="text-sm font-semibold text-gx-text">Allowed preview capabilities</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {merchant.agent_facing_preview.allowed_preview_capabilities.map((capability) => (
+                    <Badge key={capability} variant="success">{capabilityLabel(capability)}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-gx-text">Blocked capabilities</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {merchant.agent_facing_preview.blocked_capabilities.map((capability) => (
+                    <Badge key={capability} variant="danger">{capabilityLabel(capability)}</Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="mb-2 text-sm font-semibold text-gx-text">Sample products</div>
+              {merchant.agent_facing_preview.sample_products.length === 0 ? (
+                <div className="rounded-md border border-gx-border p-3 text-sm text-gx-muted">
+                  No public-safe sample products are available for preview.
+                </div>
+              ) : (
+                <div className="grid gap-2 md:grid-cols-3">
+                  {merchant.agent_facing_preview.sample_products.map((product) => (
+                    <div key={product.sample_reference} className="rounded-md border border-gx-border p-3">
+                      <div className="text-sm font-medium text-gx-text">{product.title}</div>
+                      <div className="mt-1 line-clamp-3 text-xs text-gx-muted">{product.description}</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Badge variant="default">{product.category_preset}</Badge>
+                        <Badge variant="default">{product.variants.length} variants</Badge>
+                      </div>
+                      <div className="mt-2 grid gap-1 text-xs text-gx-muted">
+                        {product.variants.map((variant) => (
+                          <div key={variant.sku} className="flex justify-between gap-2">
+                            <span>{variant.sku}</span>
+                            <span>{variant.price_amount} {variant.currency}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <details className="mt-4 rounded-md border border-gx-border p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-gx-text">Preview JSON</summary>
+              <div className="mt-3 flex justify-end">
+                <CopyButton text={agentPreviewJson} />
+              </div>
+              <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-gx-bg p-3 text-xs text-gx-text">
+                {agentPreviewJson}
+              </pre>
+            </details>
           </Card>
 
           <Card className="xl:col-span-2 p-0">

@@ -28,7 +28,9 @@ info:
     enablement, live payments, or live Plural. C6A adds category readiness
     scoring, and C6B adds catalog readiness preview from existing sandbox
     catalog data without connectors, checkout, payments, or public discovery
-    enablement.
+    enablement. C6C adds a tenant-scoped, public-safe agent-facing preview
+    payload for sandbox review only; it does not publish discovery, approve
+    merchants, enable checkout/payment creation, or enable live provider paths.
 servers:
   - url: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
     description: Production (Cloud Run)
@@ -342,6 +344,108 @@ components:
             async_import_job_supported: { type: boolean, const: false }
             external_connector_supported: { type: boolean, const: false }
 
+    SandboxAgentPreviewProductVariant:
+      type: object
+      additionalProperties: false
+      properties:
+        sku: { type: string }
+        variant_title: { type: string, nullable: true }
+        price_amount:
+          oneOf:
+            - { type: number, minimum: 0 }
+            - { type: string, pattern: "^[0-9]+$" }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        availability_status:
+          type: string
+          enum: [in_stock, out_of_stock, pre_order, back_order, unknown]
+        warranty_summary: { type: string, nullable: true }
+        return_policy_summary: { type: string, nullable: true }
+
+    SandboxAgentPreviewProduct:
+      type: object
+      additionalProperties: false
+      properties:
+        sample_reference: { type: string }
+        title: { type: string }
+        description: { type: string }
+        image_url: { type: string, nullable: true }
+        category_preset: { type: string, enum: [electronics_appliances] }
+        variants:
+          type: array
+          maxItems: 2
+          items: { $ref: "#/components/schemas/SandboxAgentPreviewProductVariant" }
+
+    SandboxAgentFacingPreview:
+      type: object
+      additionalProperties: false
+      description: >-
+        C6C tenant-scoped sandbox preview of the public-safe fields an AI buyer
+        agent could later see only after a separate reviewed discovery launch.
+        It is read-only, sandbox-only, not an approval, and does not enable
+        public discovery, checkout/payment creation, live payments, live
+        Plural, provider credentials, order fulfillment, refunds, or production
+        allowlisting.
+      properties:
+        preview_status: { type: string, enum: [ready, blocked] }
+        preview_blockers:
+          type: array
+          items: { type: string }
+        sandbox_only: { type: boolean, const: true }
+        live_mode_status: { type: string, enum: [not_live] }
+        production_approval_status: { type: string, enum: [not_approved] }
+        rollout_status: { type: string, enum: [rollout_not_requested] }
+        public_discovery_enabled: { type: boolean, const: false }
+        checkout_payment_enabled: { type: boolean, const: false }
+        live_provider_enabled: { type: boolean, const: false }
+        live_plural_enabled: { type: boolean, const: false }
+        merchant:
+          type: object
+          additionalProperties: false
+          properties:
+            merchant_reference: { type: string }
+            display_name: { type: string, nullable: true }
+            category_preset: { type: string, enum: [electronics_appliances], nullable: true }
+            country_code: { type: string, pattern: "^[A-Z]{2}$", nullable: true }
+            default_currency: { type: string, pattern: "^[A-Z]{3}$", nullable: true }
+            public_discovery_description_draft: { type: string, nullable: true }
+            support_email: { type: string, nullable: true }
+            support_url: { type: string, nullable: true }
+        readiness_summary:
+          type: object
+          additionalProperties: false
+          properties:
+            overall_status: { $ref: "#/components/schemas/SandboxReadinessStatus" }
+            overall_score_percent: { type: integer, minimum: 0, maximum: 100 }
+            category_status: { $ref: "#/components/schemas/SandboxReadinessStatus" }
+            category_score_percent: { type: integer, minimum: 0, maximum: 100 }
+            category_summary: { type: string }
+            catalog_status: { $ref: "#/components/schemas/SandboxReadinessStatus" }
+            catalog_score_percent: { type: integer, minimum: 0, maximum: 100 }
+            catalog_summary: { type: string }
+        sample_products:
+          type: array
+          maxItems: 3
+          items: { $ref: "#/components/schemas/SandboxAgentPreviewProduct" }
+        allowed_preview_capabilities:
+          type: array
+          items:
+            type: string
+            enum: [read_only_profile_preview, read_only_catalog_preview, readiness_review_preview]
+        blocked_capabilities:
+          type: array
+          items:
+            type: string
+            enum:
+              - public_discovery
+              - checkout_payment_creation
+              - live_payment
+              - live_plural
+              - provider_credentials
+              - order_fulfillment
+              - refunds_returns_execution
+              - production_allowlist
+        generated_at: { type: string, format: date-time }
+
     SandboxOnboarding:
       type: object
       properties:
@@ -382,6 +486,7 @@ components:
                   label: { type: string }
                   status: { type: string, enum: [pass, blocked] }
                   detail: { type: string }
+        agent_facing_preview: { $ref: "#/components/schemas/SandboxAgentFacingPreview" }
 
     Agent:
       type: object
@@ -1550,8 +1655,9 @@ paths:
       description: >-
         Returns public-safe sandbox onboarding fields, baseline readiness checks,
         C6A category readiness scoring, C6B catalog readiness preview from
-        existing sandbox product/variant rows, and fail-closed production
-        statuses. The response never includes provider
+        existing sandbox product/variant rows, a C6C tenant-scoped
+        agent-facing preview payload, and fail-closed production statuses. The
+        response never includes provider
         account references, credentials, secrets, production allowlist values,
         checkout/payment material, or live-provider paths.
       responses:
@@ -1578,7 +1684,8 @@ paths:
         Updates only non-secret, public-safe sandbox profile fields and the
         agentic commerce requested flag. It cannot set environment, production
         approval, public discovery, allowlist, provider credential, checkout,
-        payment, live payment, or live Plural fields.
+        payment, live payment, or live Plural fields. The response includes the
+        recomputed sandbox-only agent-facing preview payload.
       requestBody:
         required: true
         content:
@@ -1615,7 +1722,9 @@ paths:
         machine. Transitions to sandbox_ready or submitted_for_review require
         baseline, category, and required catalog readiness checks to pass. No
         transition approves production, enables public discovery, enables
-        checkout/payment creation, or enables live payments/live Plural.
+        checkout/payment creation, or enables live payments/live Plural. The
+        response includes the recomputed sandbox-only agent-facing preview
+        payload.
       requestBody:
         required: true
         content:

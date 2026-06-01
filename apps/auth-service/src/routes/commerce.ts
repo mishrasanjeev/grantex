@@ -30,6 +30,7 @@ import {
   isSandboxOnboardingState,
   toSandboxOnboardingResponse,
   validateSandboxOnboardingTransition,
+  type SandboxAgentPreviewProductInput,
   type SandboxOnboardingCatalogSummary,
   type SandboxOnboardingMerchant,
   type SandboxOnboardingState,
@@ -409,6 +410,103 @@ async function readSandboxOnboardingCatalogSummary(
       AND p.archived_at IS NULL
   `;
   return rows[0] ?? {};
+}
+
+interface SandboxPreviewSampleRow {
+  product_row_id: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  category_preset: string;
+  sku: string | null;
+  variant_title: string | null;
+  price_amount: number | string | null;
+  currency: string | null;
+  availability_status: string | null;
+  warranty_summary: string | null;
+  return_policy_summary: string | null;
+}
+
+function groupSandboxPreviewSampleRows(rows: SandboxPreviewSampleRow[]): SandboxAgentPreviewProductInput[] {
+  const grouped = new Map<string, SandboxAgentPreviewProductInput>();
+  for (const row of rows) {
+    let product = grouped.get(row.product_row_id);
+    if (!product) {
+      product = {
+        title: row.title,
+        description: row.description,
+        image_url: row.image_url,
+        category_preset: row.category_preset,
+        variants: [],
+      };
+      grouped.set(row.product_row_id, product);
+    }
+    product.variants?.push({
+      sku: row.sku,
+      variant_title: row.variant_title,
+      price_amount: row.price_amount,
+      currency: row.currency,
+      availability_status: row.availability_status,
+      warranty_summary: row.warranty_summary,
+      return_policy_summary: row.return_policy_summary,
+    });
+  }
+  return [...grouped.values()].slice(0, 3);
+}
+
+async function readSandboxOnboardingPreviewSamples(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+): Promise<SandboxAgentPreviewProductInput[]> {
+  const rows = await sql<SandboxPreviewSampleRow[]>`
+    WITH preview_products AS (
+      SELECT p.id AS product_row_id, p.title, p.description, p.image_url,
+             p.category_preset, p.updated_at
+        FROM commerce_products p
+       WHERE p.tenant_id = ${tenantId}
+         AND p.merchant_id = ${merchantId}
+         AND p.archived_at IS NULL
+         AND p.category_preset = 'electronics_appliances'
+         AND NULLIF(TRIM(p.title), '') IS NOT NULL
+         AND LENGTH(TRIM(p.title)) <= 1000
+         AND p.title !~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+         AND NULLIF(TRIM(p.description), '') IS NOT NULL
+         AND LENGTH(TRIM(p.description)) <= 1000
+         AND p.description !~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+         AND COALESCE(p.image_url, '') !~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+       ORDER BY p.updated_at DESC, p.id DESC
+       LIMIT 3
+    )
+    SELECT p.product_row_id, p.title, p.description, p.image_url,
+           p.category_preset, v.sku, v.variant_title, v.price_amount,
+           v.currency, v.availability_status, v.warranty_summary,
+           v.return_policy_summary
+      FROM preview_products p
+      JOIN LATERAL (
+        SELECT v.sku, v.variant_title, v.price_amount, v.currency,
+               v.availability_status, v.warranty_summary, v.return_policy_summary,
+               v.created_at
+          FROM commerce_product_variants v
+         WHERE v.tenant_id = ${tenantId}
+           AND v.merchant_id = ${merchantId}
+           AND v.product_id = p.product_row_id
+           AND v.archived_at IS NULL
+           AND NULLIF(TRIM(v.sku), '') IS NOT NULL
+           AND LENGTH(TRIM(v.sku)) <= 1000
+           AND v.sku !~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           AND v.price_amount >= 0
+           AND v.currency ~ '^[A-Z]{3}$'
+           AND v.availability_status IN ('in_stock','out_of_stock','pre_order','back_order','unknown')
+           AND COALESCE(v.variant_title, '') !~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           AND COALESCE(v.warranty_summary, '') !~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+           AND COALESCE(v.return_policy_summary, '') !~* ${CATALOG_PUBLIC_UNSAFE_PATTERN}
+         ORDER BY v.created_at ASC, v.id ASC
+         LIMIT 2
+      ) v ON TRUE
+     ORDER BY p.updated_at DESC, p.product_row_id DESC, v.created_at ASC
+  `;
+  return groupSandboxPreviewSampleRows(rows);
 }
 
 function isValidIsoDate(v: unknown): v is string {
@@ -877,10 +975,13 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
           { retryable: false });
       }
       const catalogSummary = await readSandboxOnboardingCatalogSummary(sql, request.commerceTenantId, request.params.merchantId);
+      const sampleProducts = await readSandboxOnboardingPreviewSamples(sql, request.commerceTenantId, request.params.merchantId);
+      const readiness = computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary);
       return reply.status(200).send({
         data: toSandboxOnboardingResponse(
           merchant,
-          computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary),
+          readiness,
+          sampleProducts,
         ),
       });
     },
@@ -1051,13 +1152,14 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
             rollout_status: 'rollout_not_requested',
           },
         });
-        return { merchant, readiness, auditEventId: audit.id };
+        const sampleProducts = await readSandboxOnboardingPreviewSamples(tx as unknown as Sql, tenantId, merchantId);
+        return { merchant, readiness, sampleProducts, auditEventId: audit.id };
       });
       if (!result) {
         throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
       }
       return reply.status(200).send({
-        data: toSandboxOnboardingResponse(result.merchant, result.readiness),
+        data: toSandboxOnboardingResponse(result.merchant, result.readiness, result.sampleProducts),
         audit_event_id: result.auditEventId,
       });
     },
@@ -1168,9 +1270,12 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
             rollout_status: 'rollout_not_requested',
           },
         });
+        const nextReadiness = computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary);
+        const sampleProducts = await readSandboxOnboardingPreviewSamples(tx as unknown as Sql, tenantId, merchantId);
         return {
           merchant,
-          readiness: computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary),
+          readiness: nextReadiness,
+          sampleProducts,
           auditEventId: audit.id,
         };
       });
@@ -1178,7 +1283,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
       }
       return reply.status(200).send({
-        data: toSandboxOnboardingResponse(result.merchant, result.readiness),
+        data: toSandboxOnboardingResponse(result.merchant, result.readiness, result.sampleProducts),
         audit_event_id: result.auditEventId,
       });
     },
