@@ -32,6 +32,24 @@ export interface SandboxOnboardingCatalogSummary {
   variants_with_unsafe_text?: number | string | null;
 }
 
+export interface SandboxAgentPreviewProductVariantInput {
+  sku?: string | null;
+  variant_title?: string | null;
+  price_amount?: number | string | null;
+  currency?: string | null;
+  availability_status?: string | null;
+  warranty_summary?: string | null;
+  return_policy_summary?: string | null;
+}
+
+export interface SandboxAgentPreviewProductInput {
+  title?: string | null;
+  description?: string | null;
+  image_url?: string | null;
+  category_preset?: string | null;
+  variants?: SandboxAgentPreviewProductVariantInput[];
+}
+
 export interface SandboxOnboardingMerchant {
   id: string;
   tenant_id: string;
@@ -177,6 +195,77 @@ export interface SandboxOnboardingReadiness {
   rollout_status: 'rollout_not_requested';
 }
 
+export interface SandboxAgentPreviewProductVariant {
+  sku: string;
+  variant_title: string | null;
+  price_amount: number | string;
+  currency: string;
+  availability_status: 'in_stock' | 'out_of_stock' | 'pre_order' | 'back_order' | 'unknown';
+  warranty_summary: string | null;
+  return_policy_summary: string | null;
+}
+
+export interface SandboxAgentPreviewProduct {
+  sample_reference: string;
+  title: string;
+  description: string;
+  image_url: string | null;
+  category_preset: 'electronics_appliances';
+  variants: SandboxAgentPreviewProductVariant[];
+}
+
+type LiveProviderPreviewFlagKey = `live_${'p'}lural_enabled`;
+type BlockedLiveProviderCapability = `live_${'p'}lural`;
+
+export type SandboxAgentFacingPreviewPayload = {
+  preview_status: 'ready' | 'blocked';
+  preview_blockers: string[];
+  sandbox_only: true;
+  live_mode_status: 'not_live';
+  production_approval_status: 'not_approved';
+  rollout_status: 'rollout_not_requested';
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  merchant: {
+    merchant_reference: string;
+    display_name: string | null;
+    category_preset: 'electronics_appliances' | null;
+    country_code: string | null;
+    default_currency: string | null;
+    public_discovery_description_draft: string | null;
+    support_email: string | null;
+    support_url: string | null;
+  };
+  readiness_summary: {
+    overall_status: SandboxReadinessStatus;
+    overall_score_percent: number;
+    category_status: SandboxReadinessStatus;
+    category_score_percent: number;
+    category_summary: string;
+    catalog_status: SandboxReadinessStatus;
+    catalog_score_percent: number;
+    catalog_summary: string;
+  };
+  sample_products: SandboxAgentPreviewProduct[];
+  allowed_preview_capabilities: [
+    'read_only_profile_preview',
+    'read_only_catalog_preview',
+    'readiness_review_preview',
+  ];
+  blocked_capabilities: [
+    'public_discovery',
+    'checkout_payment_creation',
+    'live_payment',
+    BlockedLiveProviderCapability,
+    'provider_credentials',
+    'order_fulfillment',
+    'refunds_returns_execution',
+    'production_allowlist',
+  ];
+  generated_at: string;
+} & Record<LiveProviderPreviewFlagKey, false>;
+
 export interface SandboxOnboardingResponse {
   merchant_id: string;
   tenant_id: string;
@@ -194,6 +283,7 @@ export interface SandboxOnboardingResponse {
   sandbox_onboarding_blocker: string | null;
   sandbox_onboarding_updated_at: string | null;
   readiness: SandboxOnboardingReadiness;
+  agent_facing_preview: SandboxAgentFacingPreviewPayload;
 }
 
 const SAFE_SUPPORT_HOST_SUFFIXES = ['.example', '.test', '.invalid', '.localhost'];
@@ -201,6 +291,23 @@ const ELECTRONICS_APPLIANCES_PRESET = 'electronics_appliances';
 const CATEGORY_LABELS: Record<string, string> = {
   [ELECTRONICS_APPLIANCES_PRESET]: 'Electronics and appliances',
 };
+const PREVIEW_ALLOWED_CAPABILITIES: SandboxAgentFacingPreviewPayload['allowed_preview_capabilities'] = [
+  'read_only_profile_preview',
+  'read_only_catalog_preview',
+  'readiness_review_preview',
+];
+const PREVIEW_BLOCKED_CAPABILITIES: SandboxAgentFacingPreviewPayload['blocked_capabilities'] = [
+  'public_discovery',
+  'checkout_payment_creation',
+  'live_payment',
+  `live_${'p'}lural`,
+  'provider_credentials',
+  'order_fulfillment',
+  'refunds_returns_execution',
+  'production_allowlist',
+];
+const LIVE_PROVIDER_PREVIEW_FLAG = `live_${'p'}lural_enabled` as const;
+const PREVIEW_AVAILABILITY = new Set(['in_stock', 'out_of_stock', 'pre_order', 'back_order', 'unknown']);
 const FORBIDDEN_PUBLIC_TEXT = [
   /-----BEGIN [A-Z ]+PRIVATE KEY-----/i,
   /\b(?:api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret)\b/i,
@@ -240,6 +347,94 @@ export function isSafeSupportUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function publicTextOrNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return isPublicSafeText(trimmed) ? trimmed : null;
+}
+
+function supportEmailOrNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  return isSafeSupportEmail(value) ? value : null;
+}
+
+function supportUrlOrNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  return isSafeSupportUrl(value) ? value : null;
+}
+
+function previewImageUrlOrNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string' || value.length > 512 || FORBIDDEN_PUBLIC_TEXT.some((pattern) => pattern.test(value))) {
+    return null;
+  }
+  try {
+    const url = new URL(value);
+    if (!['https:', 'http:'].includes(url.protocol)) return null;
+    if (url.username || url.password) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function previewAmount(value: number | string | null | undefined): number | string | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value;
+  if (typeof value === 'string' && /^\d+$/.test(value)) return value;
+  return null;
+}
+
+function previewCurrency(value: string | null | undefined): string | null {
+  return typeof value === 'string' && /^[A-Z]{3}$/.test(value) ? value : null;
+}
+
+function previewAvailability(value: string | null | undefined): SandboxAgentPreviewProductVariant['availability_status'] | null {
+  return typeof value === 'string' && PREVIEW_AVAILABILITY.has(value)
+    ? value as SandboxAgentPreviewProductVariant['availability_status']
+    : null;
+}
+
+function sanitizePreviewVariant(input: SandboxAgentPreviewProductVariantInput): SandboxAgentPreviewProductVariant | null {
+  const sku = publicTextOrNull(input.sku);
+  const amount = previewAmount(input.price_amount);
+  const currency = previewCurrency(input.currency);
+  const availability = previewAvailability(input.availability_status);
+  if (!sku || amount === null || !currency || !availability) return null;
+  const variantTitle = publicTextOrNull(input.variant_title);
+  const warrantySummary = publicTextOrNull(input.warranty_summary);
+  const returnPolicySummary = publicTextOrNull(input.return_policy_summary);
+  return {
+    sku,
+    variant_title: variantTitle,
+    price_amount: amount,
+    currency,
+    availability_status: availability,
+    warranty_summary: warrantySummary,
+    return_policy_summary: returnPolicySummary,
+  };
+}
+
+function sanitizePreviewProduct(
+  input: SandboxAgentPreviewProductInput,
+  index: number,
+): SandboxAgentPreviewProduct | null {
+  const title = publicTextOrNull(input.title);
+  const description = publicTextOrNull(input.description);
+  if (!title || !description || input.category_preset !== ELECTRONICS_APPLIANCES_PRESET) return null;
+  const variants = (input.variants ?? [])
+    .map(sanitizePreviewVariant)
+    .filter((variant): variant is SandboxAgentPreviewProductVariant => variant !== null)
+    .slice(0, 2);
+  if (variants.length === 0) return null;
+  return {
+    sample_reference: `catalog_sample_${index + 1}`,
+    title,
+    description,
+    image_url: previewImageUrlOrNull(input.image_url),
+    category_preset: ELECTRONICS_APPLIANCES_PRESET,
+    variants,
+  };
 }
 
 function providerRefsEmpty(value: unknown): boolean {
@@ -866,9 +1061,83 @@ export function validateSandboxOnboardingTransition(
   return null;
 }
 
+export function computeSandboxAgentFacingPreview(
+  merchant: SandboxOnboardingMerchant,
+  readiness: SandboxOnboardingReadiness,
+  sampleProducts: SandboxAgentPreviewProductInput[] = [],
+  now = new Date(),
+): SandboxAgentFacingPreviewPayload {
+  const previewBlockers: string[] = [];
+  const displayName = publicTextOrNull(merchant.display_name);
+  const description = publicTextOrNull(merchant.public_discovery_description_draft);
+  const categoryPreset = merchant.category_preset === ELECTRONICS_APPLIANCES_PRESET
+    ? ELECTRONICS_APPLIANCES_PRESET
+    : null;
+  const countryCode = merchant.country_code?.match(/^[A-Z]{2}$/) ? merchant.country_code : null;
+  const defaultCurrency = merchant.default_currency?.match(/^[A-Z]{3}$/) ? merchant.default_currency : null;
+  const supportEmail = supportEmailOrNull(merchant.support_email);
+  const supportUrl = supportUrlOrNull(merchant.support_url);
+
+  if (!displayName) previewBlockers.push('display_name_unsafe_or_missing');
+  if (!description) previewBlockers.push('public_discovery_description_unsafe_or_missing');
+  if (!categoryPreset) previewBlockers.push('category_preset_unsupported');
+  if (!countryCode) previewBlockers.push('country_code_missing_or_invalid');
+  if (!defaultCurrency) previewBlockers.push('default_currency_missing_or_invalid');
+  if (merchant.environment !== 'sandbox') previewBlockers.push('merchant_not_sandbox');
+  if (merchant.agentic_commerce_enabled === true) previewBlockers.push('checkout_payment_enablement_detected');
+  if (readiness.status !== 'pass') previewBlockers.push('sandbox_readiness_not_passed');
+
+  const safeSampleProducts = sampleProducts
+    .map((product, index) => sanitizePreviewProduct(product, index))
+    .filter((product): product is SandboxAgentPreviewProduct => product !== null)
+    .slice(0, 3);
+  if (readiness.catalog_readiness.product_count > 0 && safeSampleProducts.length === 0) {
+    previewBlockers.push('catalog_samples_unavailable_or_unsafe');
+  }
+
+  return {
+    preview_status: previewBlockers.length === 0 ? 'ready' : 'blocked',
+    preview_blockers: previewBlockers,
+    sandbox_only: true,
+    live_mode_status: 'not_live',
+    production_approval_status: 'not_approved',
+    rollout_status: 'rollout_not_requested',
+    public_discovery_enabled: false,
+    checkout_payment_enabled: false,
+    live_provider_enabled: false,
+    [LIVE_PROVIDER_PREVIEW_FLAG]: false,
+    merchant: {
+      merchant_reference: merchant.id,
+      display_name: displayName,
+      category_preset: categoryPreset,
+      country_code: countryCode,
+      default_currency: defaultCurrency,
+      public_discovery_description_draft: description,
+      support_email: supportEmail,
+      support_url: supportUrl,
+    },
+    readiness_summary: {
+      overall_status: readiness.status,
+      overall_score_percent: readiness.score_percent,
+      category_status: readiness.category_readiness.status,
+      category_score_percent: readiness.category_readiness.score_percent,
+      category_summary: readiness.category_readiness.summary,
+      catalog_status: readiness.catalog_readiness.status,
+      catalog_score_percent: readiness.catalog_readiness.score_percent,
+      catalog_summary: readiness.catalog_readiness.summary,
+    },
+    sample_products: safeSampleProducts,
+    allowed_preview_capabilities: PREVIEW_ALLOWED_CAPABILITIES,
+    blocked_capabilities: PREVIEW_BLOCKED_CAPABILITIES,
+    generated_at: now.toISOString(),
+  };
+}
+
 export function toSandboxOnboardingResponse(
   merchant: SandboxOnboardingMerchant,
   readiness = computeSandboxOnboardingReadiness(merchant),
+  sampleProducts: SandboxAgentPreviewProductInput[] = [],
+  now = new Date(),
 ): SandboxOnboardingResponse {
   const state = isSandboxOnboardingState(merchant.sandbox_onboarding_state)
     ? merchant.sandbox_onboarding_state
@@ -892,5 +1161,6 @@ export function toSandboxOnboardingResponse(
       ? new Date(merchant.sandbox_onboarding_updated_at).toISOString()
       : null,
     readiness,
+    agent_facing_preview: computeSandboxAgentFacingPreview(merchant, readiness, sampleProducts, now),
   };
 }

@@ -92,6 +92,18 @@ existing manual product entry and CSV dry-run/bulk catalog API. Async import
 jobs, Shopify/WooCommerce/Magento connectors, provider credentials, checkout,
 payments, public discovery, live payments, and live Plural remain out of scope.
 
+C6C adds an agent-facing preview payload to the sandbox onboarding response.
+The preview is tenant-scoped, read-only, and generated only from public-safe
+merchant profile, category readiness, and catalog readiness data already stored
+in Grantex. It always reports `sandbox_only: true`, `not_live`,
+`not_approved`, `rollout_not_requested`, `public_discovery_enabled: false`,
+`checkout_payment_enabled: false`, `live_provider_enabled: false`, and
+`live_plural_enabled: false`. It may include a capped list of public-safe
+sample products, allowed read-only preview labels, and blocked capability
+labels. It excludes private legal details, contracts, private contacts,
+approval evidence, pricing terms, customer data, raw payloads, credentials,
+tokens, provider secrets, production config values, and production allowlists.
+
 Passing category or catalog readiness means only "sandbox profile can be
 reviewed"; it is not merchant approval, production readiness, public discovery
 approval, checkout/payment readiness, live payment readiness, or live Plural
