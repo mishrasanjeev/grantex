@@ -149,21 +149,6 @@ function reviewRequestAudit(overrides: Record<string, unknown> = {}) {
   }];
 }
 
-function reviewDecisionAudit(overrides: Record<string, unknown> = {}) {
-  return [{
-    id: 'caud_REVIEW_DECISION',
-    event_type: 'merchant.sandbox_onboarding.read_only_discovery_review.changes_requested',
-    occurred_at: '2026-01-01T00:10:00Z',
-    user_principal_id: 'dev_TEST',
-    metadata: {
-      operator_decision: 'changes_requested',
-      decision_reason: 'Improve catalog summaries.',
-      remediation_items: ['Add more product grounding.'],
-    },
-    ...overrides,
-  }];
-}
-
 describe('POST /v1/commerce/merchants', () => {
   it('creates a merchant and returns 201 with audit_event_id', async () => {
     seedCommerceContext();
@@ -1021,9 +1006,9 @@ describe('sandbox onboarding foundation', () => {
   it('lists pending operator read-only discovery review requests with readiness evidence', async () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
     sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
     sqlMock.mockResolvedValueOnce(previewSampleRows());
-    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
@@ -1060,6 +1045,21 @@ describe('sandbox onboarding foundation', () => {
     });
   });
 
+  it('omits submitted operator review rows without C6D request audit evidence', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/read-only-discovery-review-requests',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ items: unknown[] }>().items).toEqual([]);
+  });
+
   it('reads one operator review request without exposing production controls', async () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
@@ -1089,6 +1089,22 @@ describe('sandbox onboarding foundation', () => {
     expect(body.data.agent_facing_preview_status).toBe('ready');
     expect(body.data.operator_decision_is_approval).toBe(false);
     expect(body.data.rollout_proposal_ready_is_launch).toBe(false);
+  });
+
+  it('returns 404 when an operator review read lacks C6D request audit evidence', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/sandbox-onboarding/read-only-discovery-review',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('read_only_discovery_review_not_found');
   });
 
   it('records changes_requested with remediation and audit evidence', async () => {

@@ -1638,14 +1638,15 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
 
       const items = [];
       for (const merchant of rows) {
-        const catalogSummary = await readSandboxOnboardingCatalogSummary(sql, tenantId, merchant.id);
-        const sampleProducts = await readSandboxOnboardingPreviewSamples(sql, tenantId, merchant.id);
         const latestRequestAudit = await readLatestReadOnlyDiscoveryReviewAudit(
           sql,
           tenantId,
           merchant.id,
           READ_ONLY_DISCOVERY_REVIEW_REQUEST_EVENTS,
         );
+        if (!latestRequestAudit) continue;
+        const catalogSummary = await readSandboxOnboardingCatalogSummary(sql, tenantId, merchant.id);
+        const sampleProducts = await readSandboxOnboardingPreviewSamples(sql, tenantId, merchant.id);
         const latestDecisionAudit = await readLatestReadOnlyDiscoveryReviewAudit(
           sql,
           tenantId,
@@ -1701,10 +1702,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         merchantId,
         READ_ONLY_DISCOVERY_REVIEW_DECISION_EVENTS,
       );
-      const currentState = isSandboxOnboardingState(merchant.sandbox_onboarding_state)
-        ? merchant.sandbox_onboarding_state
-        : 'draft_created';
-      if (!latestRequestAudit && currentState !== 'submitted_for_review') {
+      if (!latestRequestAudit) {
         throw new CommerceHttpError(404, 'read_only_discovery_review_not_found',
           'Read-only discovery review request not found for this merchant');
       }
