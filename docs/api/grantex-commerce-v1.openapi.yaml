@@ -486,6 +486,99 @@ components:
         Empty request body. The endpoint accepts no merchant, production,
         allowlist, provider, payment, checkout, credential, or live-mode fields.
 
+    SandboxReadOnlyDiscoveryOperatorDecision:
+      type: string
+      enum: [changes_requested, rejected, rollout_proposal_ready]
+      description: >-
+        C6E operator review outcome. None of these values is production
+        approval, launch approval, public discovery enablement, checkout/payment
+        enablement, live provider enablement, or live Plural enablement.
+
+    SandboxReadOnlyDiscoveryOperatorReview:
+      type: object
+      additionalProperties: false
+      description: >-
+        Operator-facing, sandbox-only, read-only discovery review evidence and
+        decision state. The payload is computed from tenant-scoped merchant,
+        readiness, preview, and audit records. It never writes production
+        configuration or allowlists and always reports non-enabling controls as
+        false/not-live/not-approved.
+      properties:
+        merchant_id: { type: string }
+        tenant_id: { type: string }
+        merchant_reference: { type: string }
+        display_name: { type: string, nullable: true }
+        sandbox_onboarding_state: { $ref: "#/components/schemas/SandboxOnboardingState" }
+        review_request_status:
+          type: string
+          enum:
+            - not_requested
+            - blocked
+            - eligible
+            - requested
+            - withdrawn
+            - rejected
+            - changes_requested
+            - rollout_proposal_ready
+        operator_decision:
+          nullable: true
+          oneOf:
+            - { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryOperatorDecision" }
+            - { type: "null" }
+        decision_reason: { type: string, nullable: true }
+        remediation_items:
+          type: array
+          items: { type: string }
+        requested_at: { type: string, format: date-time, nullable: true }
+        request_actor: { type: string, nullable: true }
+        decision_recorded_at: { type: string, format: date-time, nullable: true }
+        decision_actor: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+        readiness_summary:
+          type: object
+          properties:
+            overall_status: { $ref: "#/components/schemas/SandboxReadinessStatus" }
+            overall_score_percent: { type: integer, minimum: 0, maximum: 100 }
+            category_status: { $ref: "#/components/schemas/SandboxReadinessStatus" }
+            category_score_percent: { type: integer, minimum: 0, maximum: 100 }
+            category_summary: { type: string }
+            catalog_status: { $ref: "#/components/schemas/SandboxReadinessStatus" }
+            catalog_score_percent: { type: integer, minimum: 0, maximum: 100 }
+            catalog_summary: { type: string }
+        agent_facing_preview_status: { type: string, enum: [ready, blocked] }
+        blockers:
+          type: array
+          items: { type: string }
+        sandbox_only: { type: boolean, const: true }
+        request_is_approval: { type: boolean, const: false }
+        operator_decision_is_approval: { type: boolean, const: false }
+        rollout_proposal_ready_is_launch: { type: boolean, const: false }
+        live_mode_status: { type: string, enum: [not_live] }
+        production_approval_status: { type: string, enum: [not_approved] }
+        rollout_status: { type: string, enum: [rollout_not_requested] }
+        public_discovery_enabled: { type: boolean, const: false }
+        checkout_payment_enabled: { type: boolean, const: false }
+        live_provider_enabled: { type: boolean, const: false }
+        live_plural_enabled: { type: boolean, const: false }
+        production_allowlist_written: { type: boolean, const: false }
+        audit_event_id: { type: string, nullable: true }
+
+    SandboxReadOnlyDiscoveryOperatorDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [decision, reason]
+      properties:
+        decision: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryOperatorDecision" }
+        reason:
+          type: string
+          description: Public-safe operator note; secrets, private artifacts, provider/payment/live claims, production claims, and raw payloads are rejected.
+        remediation_items:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+          description: Public-safe remediation items. Required by runtime for changes_requested decisions.
+
     SandboxOnboarding:
       type: object
       properties:
@@ -1828,6 +1921,110 @@ paths:
         "409": { description: Live merchant or sandbox prerequisite blockers prevent request }
         "503": { $ref: "#/components/responses/CommerceDisabled" }
 
+  /v1/commerce/read-only-discovery-review-requests:
+    get:
+      tags: [Merchants]
+      summary: List sandbox read-only discovery review requests
+      operationId: listReadOnlyDiscoveryReviewRequests
+      x-implemented: true
+      x-milestone: C6E
+      description: >-
+        Operator-only list of tenant-scoped sandbox merchants with pending
+        read-only discovery review requests. The response includes readiness
+        evidence, request timestamps, latest operator decision evidence when
+        present, and fixed non-enabling controls. CommerceAgent callers are
+        denied and no production configuration, allowlists, discovery, checkout,
+        payment, live provider, or live Plural setting is changed.
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+      responses:
+        "200":
+          description: Review requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryOperatorReview" }
+                  next_cursor: { type: string, nullable: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator caller required; merchant and CommerceAgent callers are denied }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/sandbox-onboarding/read-only-discovery-review:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    get:
+      tags: [Merchants]
+      summary: Inspect one sandbox read-only discovery review request
+      operationId: getMerchantReadOnlyDiscoveryReview
+      x-implemented: true
+      x-milestone: C6E
+      description: >-
+        Operator-only inspection endpoint for a tenant-scoped sandbox review
+        request. It returns C5Z/C6A/C6B/C6C/C6D readiness evidence, latest
+        audit-backed operator decision evidence, blockers, remediation, and
+        fixed non-enabling controls. It does not approve, launch, publish public
+        discovery, enable checkout/payment creation, enable live provider paths,
+        enable live Plural, or write allowlists.
+      responses:
+        "200":
+          description: Review request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryOperatorReview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator caller required; merchant and CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/sandbox-onboarding/read-only-discovery-review/decision:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    post:
+      tags: [Merchants]
+      summary: Record sandbox read-only discovery operator decision
+      operationId: recordMerchantReadOnlyDiscoveryReviewDecision
+      x-implemented: true
+      x-milestone: C6E
+      description: >-
+        Records an operator decision for a pending sandbox read-only discovery
+        review request. Allowed decisions are changes_requested, rejected, and
+        rollout_proposal_ready. rollout_proposal_ready means only eligible for a
+        later separate rollout proposal; it is not production approval, launch,
+        public discovery, checkout/payment creation, live payment, live Plural,
+        provider credential access, or allowlist writing. Decision notes and
+        remediation are validated as public-safe text, and every successful
+        decision writes audit evidence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryOperatorDecisionRequest" }
+      responses:
+        "200":
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryOperatorReview" }
+                  audit_event_id: { type: string }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator caller required; merchant and CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant, missing request, or stale blockers prevent decision }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
   /v1/commerce/merchants/{merchant_id}/disable-agentic-commerce:
     parameters:
       - { in: path, name: merchant_id, required: true, schema: { type: string } }
@@ -3044,7 +3241,7 @@ paths:
           description: >-
             Verified. Body: `{ data: { challenge_id, status: 'verified' } }`.
         "401":
-          description: `principal_session_required`.
+          description: "`principal_session_required`."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3072,7 +3269,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: `validation_failed` — code missing or non-numeric.
+          description: "`validation_failed` - code missing or non-numeric."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3236,12 +3433,12 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: `consent_already_decided`.
+          description: "`consent_already_decided`."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "410":
-          description: `consent_expired`.
+          description: "`consent_expired`."
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

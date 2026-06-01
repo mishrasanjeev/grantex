@@ -121,6 +121,24 @@ reviewed"; it is not merchant approval, production readiness, public discovery
 approval, checkout/payment readiness, live payment readiness, or live Plural
 readiness.
 
+C6E adds the operator review workflow for requests that are already pending.
+Operators can list pending read-only discovery review requests, inspect the
+readiness evidence, and record one of three audit-only outcomes:
+
+- `changes_requested`: the merchant needs public-safe remediation before a later
+  review request can proceed.
+- `rejected`: the request is closed without approval.
+- `rollout_proposal_ready`: the request is eligible for a later separate rollout
+  proposal review.
+
+`rollout_proposal_ready` is not approval and is not launch. It does not enable
+public discovery, write production config, set an allowlist, enable
+checkout/payment creation, enable live provider paths, or enable live Plural.
+Decision notes and remediation must be public-safe. Do not paste secrets,
+private merchant artifacts, provider credentials, raw payloads, tokens, DB/Redis
+URLs, private keys, production config values, concrete allowlist values, or
+customer data into review reasons.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent

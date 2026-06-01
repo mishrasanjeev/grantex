@@ -24,6 +24,8 @@ const mockGetCommerceMerchantSandboxOnboarding = vi.fn();
 const mockUpdateCommerceMerchantSandboxOnboarding = vi.fn();
 const mockTransitionCommerceMerchantSandboxOnboarding = vi.fn();
 const mockRequestCommerceMerchantReadOnlyDiscoveryReview = vi.fn();
+const mockGetCommerceMerchantReadOnlyDiscoveryReview = vi.fn();
+const mockRecordCommerceReadOnlyDiscoveryReviewDecision = vi.fn();
 const mockDisableMerchantAgenticCommerce = vi.fn();
 const mockEnableMerchantAgenticCommerce = vi.fn();
 const mockListCommerceAgents = vi.fn();
@@ -57,6 +59,8 @@ vi.mock('../../api/commerce', () => ({
   updateCommerceMerchantSandboxOnboarding: (...a: unknown[]) => mockUpdateCommerceMerchantSandboxOnboarding(...a),
   transitionCommerceMerchantSandboxOnboarding: (...a: unknown[]) => mockTransitionCommerceMerchantSandboxOnboarding(...a),
   requestCommerceMerchantReadOnlyDiscoveryReview: (...a: unknown[]) => mockRequestCommerceMerchantReadOnlyDiscoveryReview(...a),
+  getCommerceMerchantReadOnlyDiscoveryReview: (...a: unknown[]) => mockGetCommerceMerchantReadOnlyDiscoveryReview(...a),
+  recordCommerceReadOnlyDiscoveryReviewDecision: (...a: unknown[]) => mockRecordCommerceReadOnlyDiscoveryReviewDecision(...a),
   disableMerchantAgenticCommerce: (...a: unknown[]) => mockDisableMerchantAgenticCommerce(...a),
   enableMerchantAgenticCommerce: (...a: unknown[]) => mockEnableMerchantAgenticCommerce(...a),
   listCommerceAgents: (...a: unknown[]) => mockListCommerceAgents(...a),
@@ -414,6 +418,39 @@ const sandboxOnboarding = {
   },
 };
 
+const operatorReview = {
+  merchant_id: 'mch_1',
+  tenant_id: 'cten_1',
+  merchant_reference: 'mch_1',
+  display_name: 'Grantex Store',
+  sandbox_onboarding_state: 'submitted_for_review' as const,
+  review_request_status: 'requested' as const,
+  operator_decision: null,
+  decision_reason: null,
+  remediation_items: [],
+  requested_at: '2026-01-01T00:05:00Z',
+  request_actor: 'dev_TEST',
+  decision_recorded_at: null,
+  decision_actor: null,
+  updated_at: '2026-01-01T00:05:00Z',
+  readiness_summary: sandboxOnboarding.agent_facing_preview.readiness_summary,
+  agent_facing_preview_status: 'ready' as const,
+  blockers: [],
+  sandbox_only: true as const,
+  request_is_approval: false as const,
+  operator_decision_is_approval: false as const,
+  rollout_proposal_ready_is_launch: false as const,
+  live_mode_status: 'not_live' as const,
+  production_approval_status: 'not_approved' as const,
+  rollout_status: 'rollout_not_requested' as const,
+  public_discovery_enabled: false as const,
+  checkout_payment_enabled: false as const,
+  live_provider_enabled: false as const,
+  live_plural_enabled: false as const,
+  production_allowlist_written: false as const,
+  audit_event_id: null,
+};
+
 const credential = {
   id: 'cpcred_1',
   tenant_id: 'cten_1',
@@ -769,6 +806,7 @@ describe('CommerceOnboarding', () => {
       data: { ...sandboxOnboarding, display_name: 'Grantex Store Updated' },
       audit_event_id: 'aud_merchant',
     });
+    mockGetCommerceMerchantReadOnlyDiscoveryReview.mockResolvedValue({ data: operatorReview });
     mockRequestCommerceMerchantReadOnlyDiscoveryReview.mockResolvedValue({
       data: {
         ...sandboxOnboarding,
@@ -780,6 +818,18 @@ describe('CommerceOnboarding', () => {
         },
       },
       audit_event_id: 'aud_review',
+    });
+    mockRecordCommerceReadOnlyDiscoveryReviewDecision.mockResolvedValue({
+      data: {
+        ...operatorReview,
+        review_request_status: 'changes_requested' as const,
+        operator_decision: 'changes_requested' as const,
+        decision_reason: 'Improve catalog summaries.',
+        remediation_items: ['Add more product grounding.'],
+        decision_recorded_at: '2026-01-01T00:10:00Z',
+        audit_event_id: 'aud_decision',
+      },
+      audit_event_id: 'aud_decision',
     });
     mockListCommerceAgents.mockResolvedValue({ items: [agent], next_cursor: null });
     mockListCommercePolicies.mockResolvedValue({ items: [{ id: 'cpol_1', status: 'active' }], next_cursor: null });
@@ -826,8 +876,14 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('Read-only discovery review')).toBeInTheDocument();
     expect(screen.getByText(/it is not approval, launch, public discovery, checkout/i)).toBeInTheDocument();
     expect(screen.getByText('request_is_approval')).toBeInTheDocument();
-    expect(screen.getByText('production_allowlist_written')).toBeInTheDocument();
+    expect(screen.getAllByText('production_allowlist_written').length).toBeGreaterThan(0);
     expect(screen.getByText('Eligibility')).toBeInTheDocument();
+    expect(screen.getByText('Operator read-only discovery review')).toBeInTheDocument();
+    expect(screen.getByText(/rollout_proposal_ready is a later planning gate/i)).toBeInTheDocument();
+    expect(screen.getByText('operator_decision_is_approval')).toBeInTheDocument();
+    expect(screen.getByText('rollout_proposal_ready_is_launch')).toBeInTheDocument();
+    expect(screen.getByText('Readiness evidence')).toBeInTheDocument();
+    expect(screen.getByText('Agent-facing preview status')).toBeInTheDocument();
     expect(screen.getByText('Merchant profile present')).toBeInTheDocument();
     expect(screen.getAllByText('No checkout/payment enablement').length).toBeGreaterThan(0);
     expect(screen.getByText('Trusted agent')).toBeInTheDocument();
@@ -845,6 +901,15 @@ describe('CommerceOnboarding', () => {
 
     await user.click(screen.getByRole('button', { name: 'Request read-only discovery review' }));
     await waitFor(() => expect(mockRequestCommerceMerchantReadOnlyDiscoveryReview).toHaveBeenCalledWith('mch_1'));
+
+    await user.type(screen.getByLabelText('Reason'), 'Improve catalog summaries.');
+    await user.type(screen.getByLabelText('Remediation items'), 'Add more product grounding.');
+    await user.click(screen.getByRole('button', { name: 'Record operator decision' }));
+    await waitFor(() => expect(mockRecordCommerceReadOnlyDiscoveryReviewDecision).toHaveBeenCalledWith('mch_1', {
+      decision: 'changes_requested',
+      reason: 'Improve catalog summaries.',
+      remediationItems: ['Add more product grounding.'],
+    }));
 
     await user.click(screen.getByRole('button', { name: 'Evaluate policy' }));
     await waitFor(() => expect(mockEvaluateCommercePolicy).toHaveBeenCalledWith(expect.objectContaining({

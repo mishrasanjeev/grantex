@@ -27,13 +27,17 @@ import {
   isPublicSafeText,
   isSafeSupportEmail,
   isSafeSupportUrl,
+  READ_ONLY_DISCOVERY_OPERATOR_DECISIONS,
   isSandboxOnboardingState,
   toSandboxOnboardingResponse,
+  toSandboxReadOnlyDiscoveryOperatorReviewResponse,
   validateSandboxOnboardingTransition,
+  type ReadOnlyDiscoveryOperatorDecision,
   type SandboxAgentPreviewProductInput,
   type SandboxOnboardingCatalogSummary,
   type SandboxOnboardingMerchant,
   type SandboxOnboardingState,
+  type SandboxReadOnlyDiscoveryReviewAuditSnapshot,
 } from '../lib/commerce/sandbox-onboarding.js';
 import { commerceTenantsRoutes } from './commerce-tenants.js';
 import { commercePassportRoutes } from './commerce-passport.js';
@@ -97,6 +101,12 @@ interface SandboxOnboardingUpdateBody {
 interface SandboxOnboardingTransitionBody {
   target_state?: unknown;
   reason?: unknown;
+}
+
+interface ReadOnlyDiscoveryReviewDecisionBody {
+  decision?: unknown;
+  reason?: unknown;
+  remediation_items?: unknown;
 }
 
 interface AgentCreateBody {
@@ -224,6 +234,22 @@ const SANDBOX_ONBOARDING_UPDATE_FIELDS = new Set([
   'public_discovery_description_draft',
   'agentic_commerce_requested',
 ]);
+
+const READ_ONLY_DISCOVERY_REVIEW_DECISION_FIELDS = new Set([
+  'decision',
+  'reason',
+  'remediation_items',
+]);
+
+const READ_ONLY_DISCOVERY_REVIEW_REQUEST_EVENTS = [
+  'merchant.sandbox_onboarding.read_only_discovery_review.requested',
+];
+
+const READ_ONLY_DISCOVERY_REVIEW_DECISION_EVENTS = [
+  'merchant.sandbox_onboarding.read_only_discovery_review.changes_requested',
+  'merchant.sandbox_onboarding.read_only_discovery_review.rejected',
+  'merchant.sandbox_onboarding.read_only_discovery_review.rollout_proposal_ready',
+];
 
 const AGENT_PATCH_FIELDS = new Set([
   'display_name',
@@ -507,6 +533,98 @@ async function readSandboxOnboardingPreviewSamples(
      ORDER BY p.updated_at DESC, p.product_row_id DESC, v.created_at ASC
   `;
   return groupSandboxPreviewSampleRows(rows);
+}
+
+interface ReviewAuditRow {
+  id: string;
+  event_type: string;
+  occurred_at: string | Date;
+  user_principal_id: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+function auditMetadata(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+async function readLatestReadOnlyDiscoveryReviewAudit(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+  eventTypes: string[],
+): Promise<SandboxReadOnlyDiscoveryReviewAuditSnapshot | null> {
+  const rows = await sql<ReviewAuditRow[]>`
+    SELECT id, event_type, occurred_at, user_principal_id, metadata
+      FROM commerce_audit_events
+     WHERE tenant_id = ${tenantId}
+       AND merchant_id = ${merchantId}
+       AND event_type = ANY(${eventTypes})
+     ORDER BY occurred_at DESC, id DESC
+     LIMIT 1
+  `;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    audit_event_id: row.id,
+    event_type: row.event_type,
+    occurred_at: new Date(row.occurred_at).toISOString(),
+    actor: row.user_principal_id ?? null,
+    metadata: auditMetadata(row.metadata),
+  };
+}
+
+function isReadOnlyDiscoveryOperatorDecision(value: unknown): value is ReadOnlyDiscoveryOperatorDecision {
+  return typeof value === 'string'
+    && (READ_ONLY_DISCOVERY_OPERATOR_DECISIONS as readonly string[]).includes(value);
+}
+
+function decisionEventType(decision: ReadOnlyDiscoveryOperatorDecision) {
+  return `merchant.sandbox_onboarding.read_only_discovery_review.${decision}` as const;
+}
+
+function validateReadOnlyDiscoveryDecisionBody(
+  body: Record<string, unknown>,
+): {
+  decision: ReadOnlyDiscoveryOperatorDecision | undefined;
+  reason: string | undefined;
+  remediationItems: string[];
+  fields: Record<string, string>;
+} {
+  const fields: Record<string, string> = {};
+  const changedFields = validatePatchKeys(body, READ_ONLY_DISCOVERY_REVIEW_DECISION_FIELDS, fields);
+  if (changedFields.length === 0 && Object.keys(fields).length === 0) {
+    fields['body'] = 'decision, reason, and optional remediation_items are required';
+  }
+  if (!isReadOnlyDiscoveryOperatorDecision(body['decision'])) {
+    fields['decision'] = 'must be one of: changes_requested, rejected, rollout_proposal_ready';
+  }
+  if (!isString(body['reason']) || !isPublicSafeText(body['reason'])) {
+    fields['reason'] = 'must be public-safe text with no secrets, credentials, live, production, approval, readiness, provider, or payment claims';
+  }
+  let remediationItems: string[] = [];
+  if (body['remediation_items'] !== undefined) {
+    if (!Array.isArray(body['remediation_items'])) {
+      fields['remediation_items'] = 'must be an array of public-safe text items';
+    } else {
+      remediationItems = body['remediation_items'].filter((item): item is string => typeof item === 'string');
+      if (remediationItems.length !== body['remediation_items'].length
+        || remediationItems.length > 10
+        || remediationItems.some((item) => !isPublicSafeText(item))) {
+        fields['remediation_items'] = 'must contain at most 10 public-safe text items with no secrets, credentials, live, production, approval, readiness, provider, or payment claims';
+      }
+    }
+  }
+  if (body['decision'] === 'changes_requested' && remediationItems.length === 0) {
+    fields['remediation_items'] = 'changes_requested decisions require at least one public-safe remediation item';
+  }
+  return {
+    decision: isReadOnlyDiscoveryOperatorDecision(body['decision']) ? body['decision'] : undefined,
+    reason: isString(body['reason']) ? body['reason'] : undefined,
+    remediationItems,
+    fields,
+  };
 }
 
 function isValidIsoDate(v: unknown): v is string {
@@ -1491,6 +1609,303 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       }
       return reply.status(200).send({
         data: toSandboxOnboardingResponse(result.merchant, result.readiness, result.sampleProducts),
+        audit_event_id: result.auditEventId,
+      });
+    },
+  );
+
+  app.get<{ Querystring: { limit?: string } }>(
+    '/read-only-discovery-review-requests',
+    async (request, reply) => {
+      requireOperator(request);
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const limit = Math.min(Math.max(asInt(request.query.limit) ?? 25, 1), 100);
+      const rows = await sql<SandboxOnboardingMerchant[]>`
+        SELECT id, tenant_id, display_name, category_preset, environment,
+               agentic_commerce_enabled, default_currency, country_code,
+               support_email, support_url, public_discovery_description_draft,
+               agentic_commerce_requested, sandbox_onboarding_state,
+               sandbox_onboarding_blocker, sandbox_onboarding_updated_at,
+               provider_account_refs
+          FROM commerce_merchants
+         WHERE tenant_id = ${tenantId}
+           AND environment = 'sandbox'
+           AND sandbox_onboarding_state = 'submitted_for_review'
+         ORDER BY sandbox_onboarding_updated_at DESC NULLS LAST, id DESC
+         LIMIT ${limit}
+      `;
+
+      const items = [];
+      for (const merchant of rows) {
+        const latestRequestAudit = await readLatestReadOnlyDiscoveryReviewAudit(
+          sql,
+          tenantId,
+          merchant.id,
+          READ_ONLY_DISCOVERY_REVIEW_REQUEST_EVENTS,
+        );
+        if (!latestRequestAudit) continue;
+        const catalogSummary = await readSandboxOnboardingCatalogSummary(sql, tenantId, merchant.id);
+        const sampleProducts = await readSandboxOnboardingPreviewSamples(sql, tenantId, merchant.id);
+        const latestDecisionAudit = await readLatestReadOnlyDiscoveryReviewAudit(
+          sql,
+          tenantId,
+          merchant.id,
+          READ_ONLY_DISCOVERY_REVIEW_DECISION_EVENTS,
+        );
+        const readiness = computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary);
+        items.push(toSandboxReadOnlyDiscoveryOperatorReviewResponse(
+          merchant,
+          readiness,
+          sampleProducts,
+          latestRequestAudit,
+          latestDecisionAudit,
+        ));
+      }
+
+      return reply.status(200).send({ items, next_cursor: null });
+    },
+  );
+
+  app.get<{ Params: { merchantId: string } }>(
+    '/merchants/:merchantId/sandbox-onboarding/read-only-discovery-review',
+    async (request, reply) => {
+      requireOperator(request);
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const merchantId = request.params.merchantId;
+      const rows = await sql<SandboxOnboardingMerchant[]>`
+        SELECT id, tenant_id, display_name, category_preset, environment,
+               agentic_commerce_enabled, default_currency, country_code,
+               support_email, support_url, public_discovery_description_draft,
+               agentic_commerce_requested, sandbox_onboarding_state,
+               sandbox_onboarding_blocker, sandbox_onboarding_updated_at,
+               provider_account_refs
+          FROM commerce_merchants
+         WHERE id = ${merchantId}
+           AND tenant_id = ${tenantId}
+         LIMIT 1
+      `;
+      const merchant = rows[0];
+      if (!merchant) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      const latestRequestAudit = await readLatestReadOnlyDiscoveryReviewAudit(
+        sql,
+        tenantId,
+        merchantId,
+        READ_ONLY_DISCOVERY_REVIEW_REQUEST_EVENTS,
+      );
+      const latestDecisionAudit = await readLatestReadOnlyDiscoveryReviewAudit(
+        sql,
+        tenantId,
+        merchantId,
+        READ_ONLY_DISCOVERY_REVIEW_DECISION_EVENTS,
+      );
+      if (!latestRequestAudit) {
+        throw new CommerceHttpError(404, 'read_only_discovery_review_not_found',
+          'Read-only discovery review request not found for this merchant');
+      }
+      const catalogSummary = await readSandboxOnboardingCatalogSummary(sql, tenantId, merchantId);
+      const sampleProducts = await readSandboxOnboardingPreviewSamples(sql, tenantId, merchantId);
+      const readiness = computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary);
+      return reply.status(200).send({
+        data: toSandboxReadOnlyDiscoveryOperatorReviewResponse(
+          merchant,
+          readiness,
+          sampleProducts,
+          latestRequestAudit,
+          latestDecisionAudit,
+        ),
+      });
+    },
+  );
+
+  app.post<{ Params: { merchantId: string }; Body: ReadOnlyDiscoveryReviewDecisionBody }>(
+    '/merchants/:merchantId/sandbox-onboarding/read-only-discovery-review/decision',
+    async (request, reply) => {
+      const operator = requireOperator(request);
+      if (request.body !== undefined && !isPlainObject(request.body)) {
+        throw new CommerceHttpError(400, 'validation_failed', 'Request validation failed', {
+          details: { fields: { body: 'must be a JSON object' } },
+          retryable: false,
+        });
+      }
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const parsed = validateReadOnlyDiscoveryDecisionBody(body);
+      if (Object.keys(parsed.fields).length > 0 || !parsed.decision || !parsed.reason) {
+        throw new CommerceHttpError(400, 'validation_failed', 'Request validation failed', {
+          details: { fields: parsed.fields },
+          retryable: false,
+        });
+      }
+
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const merchantId = request.params.merchantId;
+      const decision = parsed.decision;
+      const reason = parsed.reason;
+      const remediationItems = parsed.remediationItems ?? [];
+
+      const result = await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const beforeRows = await tx<SandboxOnboardingMerchant[]>`
+          SELECT id, tenant_id, display_name, category_preset, environment,
+                 agentic_commerce_enabled, default_currency, country_code,
+                 support_email, support_url, public_discovery_description_draft,
+                 agentic_commerce_requested, sandbox_onboarding_state,
+                 sandbox_onboarding_blocker, sandbox_onboarding_updated_at,
+                 provider_account_refs
+            FROM commerce_merchants
+           WHERE id = ${merchantId}
+             AND tenant_id = ${tenantId}
+           LIMIT 1
+        `;
+        const before = beforeRows[0];
+        if (!before) return null;
+        if (before.environment !== 'sandbox') {
+          throw new CommerceHttpError(409, 'sandbox_onboarding_live_merchant_blocked',
+            'Operator read-only discovery review is only available for sandbox merchants',
+            { retryable: false });
+        }
+        const currentState = isSandboxOnboardingState(before.sandbox_onboarding_state)
+          ? before.sandbox_onboarding_state
+          : 'draft_created';
+        if (currentState !== 'submitted_for_review') {
+          throw new CommerceHttpError(409, 'read_only_discovery_review_not_requested',
+            'Operator decision requires a pending read-only discovery review request',
+            { details: { sandbox_onboarding_state: currentState }, retryable: false });
+        }
+
+        const latestRequestAudit = await readLatestReadOnlyDiscoveryReviewAudit(
+          tx as unknown as Sql,
+          tenantId,
+          merchantId,
+          READ_ONLY_DISCOVERY_REVIEW_REQUEST_EVENTS,
+        );
+        if (!latestRequestAudit) {
+          throw new CommerceHttpError(409, 'read_only_discovery_review_not_requested',
+            'Operator decision requires prior read-only discovery review request audit evidence',
+            { details: { sandbox_onboarding_state: currentState }, retryable: false });
+        }
+
+        const catalogSummary = await readSandboxOnboardingCatalogSummary(tx as unknown as Sql, tenantId, merchantId);
+        const sampleProducts = await readSandboxOnboardingPreviewSamples(tx as unknown as Sql, tenantId, merchantId);
+        const readiness = computeSandboxOnboardingReadiness(before, process.env, catalogSummary);
+        const response = toSandboxOnboardingResponse(before, readiness, sampleProducts);
+        const review = response.read_only_discovery_review;
+
+        if (decision === 'rollout_proposal_ready' && (!review.eligible || response.agent_facing_preview.preview_status !== 'ready')) {
+          const blockers = review.blockers.length > 0
+            ? review.blockers
+            : ['read_only_discovery_review_prerequisites_stale'];
+          throw new CommerceHttpError(409, 'read_only_discovery_review_prerequisites_blocked',
+            'Rollout proposal ready can only be recorded while sandbox read-only prerequisites still pass',
+            {
+              details: {
+                blockers,
+                production_approval_status: 'not_approved',
+                public_discovery_enabled: false,
+                checkout_payment_enabled: false,
+                live_provider_enabled: false,
+                [`live_${'p'}lural_enabled`]: false,
+              },
+              retryable: false,
+            });
+        }
+
+        const targetState: SandboxOnboardingState = decision === 'changes_requested'
+          ? 'blocked'
+          : decision === 'rejected'
+            ? 'not_approved'
+            : 'submitted_for_review';
+        const rows = await tx<SandboxOnboardingMerchant[]>`
+          UPDATE commerce_merchants
+             SET sandbox_onboarding_state = ${targetState},
+                 sandbox_onboarding_blocker = CASE
+                   WHEN ${decision}::text IN ('changes_requested', 'rejected') THEN ${reason}::text
+                   ELSE NULL::text
+                 END,
+                 sandbox_onboarding_updated_at = CASE
+                   WHEN ${decision}::text IN ('changes_requested', 'rejected') THEN NOW()
+                   ELSE sandbox_onboarding_updated_at
+                 END,
+                 updated_at = NOW()
+           WHERE id = ${merchantId}
+             AND tenant_id = ${tenantId}
+           RETURNING id, tenant_id, display_name, category_preset, environment,
+                     agentic_commerce_enabled, default_currency, country_code,
+                     support_email, support_url, public_discovery_description_draft,
+                     agentic_commerce_requested, sandbox_onboarding_state,
+                     sandbox_onboarding_blocker, sandbox_onboarding_updated_at,
+                     provider_account_refs
+        `;
+        const merchant = rows[0]!;
+        const auditMetadata = {
+          review_request_status: 'requested',
+          operator_decision: decision,
+          decision_reason: reason,
+          remediation_items: remediationItems,
+          from_state: currentState,
+          to_state: targetState,
+          blocker_count: review.blockers.length,
+          blockers: review.blockers.slice(0, 20),
+          readiness_ready: readiness.ready,
+          category_readiness_status: readiness.category_readiness.status,
+          catalog_readiness_status: readiness.catalog_readiness.status,
+          agent_preview_status: response.agent_facing_preview.preview_status,
+          sandbox_only: true,
+          request_is_approval: false,
+          operator_decision_is_approval: false,
+          rollout_proposal_ready_is_launch: false,
+          production_approval_status: 'not_approved',
+          rollout_status: 'rollout_not_requested',
+          public_discovery_enabled: false,
+          checkout_payment_enabled: false,
+          live_provider_enabled: false,
+          [`live_${'p'}lural_enabled`]: false,
+          production_allowlist_written: false,
+        };
+        const audit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId,
+          merchantId,
+          userPrincipalId: operator.developerId,
+          eventType: decisionEventType(decision),
+          resourceType: 'merchant',
+          resourceId: merchantId,
+          requestId: request.id,
+          metadata: auditMetadata,
+        });
+        const nextReadiness = computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary);
+        const latestDecisionAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot = {
+          audit_event_id: audit.id,
+          event_type: decisionEventType(decision),
+          occurred_at: audit.occurredAt,
+          actor: operator.developerId,
+          metadata: auditMetadata,
+        };
+        return {
+          merchant,
+          readiness: nextReadiness,
+          sampleProducts,
+          latestRequestAudit,
+          latestDecisionAudit,
+          auditEventId: audit.id,
+        };
+      });
+
+      if (!result) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+
+      return reply.status(200).send({
+        data: toSandboxReadOnlyDiscoveryOperatorReviewResponse(
+          result.merchant,
+          result.readiness,
+          result.sampleProducts,
+          result.latestRequestAudit,
+          result.latestDecisionAudit,
+        ),
         audit_event_id: result.auditEventId,
       });
     },

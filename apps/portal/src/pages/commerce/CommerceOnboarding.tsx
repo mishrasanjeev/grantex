@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   evaluateCommercePolicy,
+  getCommerceMerchantReadOnlyDiscoveryReview,
   getCommerceMerchantSandboxOnboarding,
   getCommerceWellKnownProfile,
   listCommerceAgents,
@@ -8,9 +9,12 @@ import {
   listCommerceProducts,
   listCommerceProviderCredentials,
   listCommerceWebhookSources,
+  recordCommerceReadOnlyDiscoveryReviewDecision,
   requestCommerceMerchantReadOnlyDiscoveryReview,
   updateCommerceMerchantSandboxOnboarding,
   type CommerceAgent,
+  type CommerceReadOnlyDiscoveryOperatorDecision,
+  type CommerceReadOnlyDiscoveryOperatorReview,
   type CommerceSandboxOnboarding,
   type CommercePolicyDecision,
   type CommerceWellKnownProfile,
@@ -82,6 +86,7 @@ function capabilityLabel(value: string): string {
 export function CommerceOnboarding() {
   const [merchantId, setMerchantId] = useState('');
   const [merchant, setMerchant] = useState<CommerceSandboxOnboarding | null>(null);
+  const [operatorReview, setOperatorReview] = useState<CommerceReadOnlyDiscoveryOperatorReview | null>(null);
   const [merchantForm, setMerchantForm] = useState<MerchantPatchForm>(defaultPatch);
   const [agents, setAgents] = useState<CommerceAgent[]>([]);
   const [activePolicyCount, setActivePolicyCount] = useState(0);
@@ -92,6 +97,16 @@ export function CommerceOnboarding() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [decisionSubmitting, setDecisionSubmitting] = useState(false);
+  const [decisionForm, setDecisionForm] = useState<{
+    decision: CommerceReadOnlyDiscoveryOperatorDecision;
+    reason: string;
+    remediation_items: string;
+  }>({
+    decision: 'changes_requested',
+    reason: '',
+    remediation_items: '',
+  });
   const [policyDecision, setPolicyDecision] = useState<CommercePolicyDecision | null>(null);
   const [simulating, setSimulating] = useState(false);
   const [policyForm, setPolicyForm] = useState({
@@ -112,8 +127,9 @@ export function CommerceOnboarding() {
     }
     setLoading(true);
     try {
-      const [merchantRes, agentRes, policyRes, productRes, credentialRes, sourceRes, profileRes] = await Promise.all([
+      const [merchantRes, reviewRes, agentRes, policyRes, productRes, credentialRes, sourceRes, profileRes] = await Promise.all([
         getCommerceMerchantSandboxOnboarding(id),
+        getCommerceMerchantReadOnlyDiscoveryReview(id).catch(() => null),
         listCommerceAgents({ merchantId: id, limit: 25 }),
         listCommercePolicies({ merchantId: id, status: 'active', limit: 10 }),
         listCommerceProducts({ merchantId: id, status: 'active', limit: 10 }),
@@ -122,6 +138,7 @@ export function CommerceOnboarding() {
         getCommerceWellKnownProfile(id),
       ]);
       setMerchant(merchantRes.data);
+      setOperatorReview(reviewRes?.data ?? null);
       setMerchantForm({
         display_name: merchantRes.data.display_name ?? '',
         category_preset: merchantRes.data.category_preset ?? 'electronics_appliances',
@@ -171,11 +188,54 @@ export function CommerceOnboarding() {
     try {
       const res = await requestCommerceMerchantReadOnlyDiscoveryReview(merchant.merchant_id);
       setMerchant(res.data);
+      const reviewRes = await getCommerceMerchantReadOnlyDiscoveryReview(merchant.merchant_id).catch(() => null);
+      setOperatorReview(reviewRes?.data ?? null);
       show('Read-only discovery review requested', 'success');
     } catch {
       show('Read-only discovery review request is blocked', 'error');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function recordOperatorDecision() {
+    if (!merchant || !operatorReview) return;
+    setDecisionSubmitting(true);
+    try {
+      const remediationItems = decisionForm.remediation_items
+        .split('\n')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const res = await recordCommerceReadOnlyDiscoveryReviewDecision(merchant.merchant_id, {
+        decision: decisionForm.decision,
+        reason: decisionForm.reason,
+        remediationItems,
+      });
+      setOperatorReview(res.data);
+      setMerchant((prev) => prev
+        ? {
+          ...prev,
+          sandbox_onboarding_state: res.data.sandbox_onboarding_state,
+          sandbox_onboarding_blocker: res.data.decision_reason,
+          read_only_discovery_review: {
+            ...prev.read_only_discovery_review,
+            status: res.data.review_request_status === 'changes_requested'
+              ? 'blocked'
+              : res.data.review_request_status === 'rollout_proposal_ready'
+                ? 'requested'
+                : res.data.review_request_status === 'rejected'
+                  ? 'rejected'
+                  : prev.read_only_discovery_review.status,
+            blockers: res.data.blockers,
+            remediation: res.data.remediation_items,
+          },
+        }
+        : prev);
+      show('Operator review decision recorded', 'success');
+    } catch {
+      show('Operator review decision is blocked', 'error');
+    } finally {
+      setDecisionSubmitting(false);
     }
   }
 
@@ -236,6 +296,17 @@ export function CommerceOnboarding() {
     : readOnlyReview.status === 'requested'
       ? 'Read-only discovery review request is pending.'
       : 'Request read-only discovery review.';
+  const operatorDecisionDisabled = !operatorReview
+    || operatorReview.review_request_status !== 'requested'
+    || decisionSubmitting
+    || !decisionForm.reason.trim()
+    || (decisionForm.decision === 'changes_requested' && !decisionForm.remediation_items.trim())
+    || (decisionForm.decision === 'rollout_proposal_ready' && operatorReview.blockers.length > 0);
+  const operatorDecisionTitle = operatorReview?.blockers.length
+    ? operatorReview.blockers.map(capabilityLabel).join(', ')
+    : operatorReview?.review_request_status === 'requested'
+      ? 'Record a non-production operator review decision.'
+      : 'A pending read-only discovery review request is required.';
 
   return (
     <div>
@@ -430,6 +501,147 @@ export function CommerceOnboarding() {
                 title={reviewRequestTitle}
               >
                 {submitting ? 'Requesting' : readOnlyReview.status === 'requested' ? 'Review requested' : 'Request read-only discovery review'}
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="xl:col-span-2">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gx-text">Operator read-only discovery review</h2>
+                <p className="mt-1 text-xs text-gx-muted">
+                  Operator decisions are audit evidence only; rollout_proposal_ready is a later planning gate, not launch, not production approval, and not public discovery.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={operatorReview?.review_request_status === 'requested' ? 'warning' : operatorReview?.operator_decision ? 'success' : 'danger'}>
+                  {operatorReview?.review_request_status ?? 'not_requested'}
+                </Badge>
+                <Badge variant="warning">sandbox_only</Badge>
+                <Badge variant="danger">{operatorReview?.production_approval_status ?? 'not_approved'}</Badge>
+                <Badge variant="danger">{operatorReview?.live_mode_status ?? 'not_live'}</Badge>
+              </div>
+            </div>
+            <div className="grid gap-2 md:grid-cols-3">
+              {[
+                { label: 'operator_decision_is_approval', value: operatorReview?.operator_decision_is_approval ?? false },
+                { label: 'rollout_proposal_ready_is_launch', value: operatorReview?.rollout_proposal_ready_is_launch ?? false },
+                { label: 'public_discovery_enabled', value: operatorReview?.public_discovery_enabled ?? false },
+                { label: 'checkout_payment_enabled', value: operatorReview?.checkout_payment_enabled ?? false },
+                { label: 'live_provider_enabled', value: operatorReview?.live_provider_enabled ?? false },
+                { label: 'live_plural_enabled', value: operatorReview?.live_plural_enabled ?? false },
+                { label: 'production_allowlist_written', value: operatorReview?.production_allowlist_written ?? false },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-md border border-gx-border p-3">
+                  <div className="text-xs text-gx-muted">{label}</div>
+                  <Badge variant={value ? 'danger' : 'success'}>{value ? 'true' : 'false'}</Badge>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">
+              <div>
+                <div className="text-xs text-gx-muted">Requested</div>
+                <DateText value={operatorReview?.requested_at ?? null} />
+              </div>
+              <div>
+                <div className="text-xs text-gx-muted">Request actor</div>
+                <div className="text-gx-text">{operatorReview?.request_actor ?? 'unavailable'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gx-muted">Decision</div>
+                <div className="text-gx-text">{operatorReview?.operator_decision ?? 'none'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gx-muted">Decision recorded</div>
+                <DateText value={operatorReview?.decision_recorded_at ?? null} />
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-xs text-gx-muted">Readiness evidence</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Badge variant={readinessVariant(operatorReview?.readiness_summary.overall_status ?? merchant.readiness.status)}>
+                    {operatorReview?.readiness_summary.overall_score_percent ?? merchant.readiness.score_percent}%
+                  </Badge>
+                  <Badge variant={readinessVariant(operatorReview?.readiness_summary.category_status ?? merchant.readiness.category_readiness.status)}>
+                    category {operatorReview?.readiness_summary.category_score_percent ?? merchant.readiness.category_readiness.score_percent}%
+                  </Badge>
+                  <Badge variant={readinessVariant(operatorReview?.readiness_summary.catalog_status ?? merchant.readiness.catalog_readiness.status)}>
+                    catalog {operatorReview?.readiness_summary.catalog_score_percent ?? merchant.readiness.catalog_readiness.score_percent}%
+                  </Badge>
+                </div>
+              </div>
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-xs text-gx-muted">Agent-facing preview status</div>
+                <Badge variant={readinessVariant(operatorReview?.agent_facing_preview_status ?? merchant.agent_facing_preview.preview_status)}>
+                  {operatorReview?.agent_facing_preview_status ?? merchant.agent_facing_preview.preview_status}
+                </Badge>
+              </div>
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-xs text-gx-muted">Audit event</div>
+                <div className="text-gx-text">{operatorReview?.audit_event_id ?? 'pending'}</div>
+              </div>
+            </div>
+            {operatorReview?.blockers.length ? (
+              <div className="mt-4 rounded-md border border-gx-danger/40 bg-gx-danger/5 p-3">
+                <div className="text-sm font-medium text-gx-text">Operator review blockers</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {operatorReview.blockers.map((blocker) => (
+                    <Badge key={blocker} variant="danger">{capabilityLabel(blocker)}</Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {operatorReview?.remediation_items.length ? (
+              <div className="mt-4 rounded-md border border-gx-border p-3">
+                <div className="text-sm font-medium text-gx-text">Remediation</div>
+                <div className="mt-2 grid gap-2 text-xs text-gx-warning">
+                  {operatorReview.remediation_items.map((item) => (
+                    <div key={item}>{item}</div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="mt-4 grid gap-3 md:grid-cols-[220px_minmax(0,1fr)]">
+              <label className="text-sm font-medium text-gx-text">
+                Decision
+                <select
+                  className="mt-1.5 w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+                  value={decisionForm.decision}
+                  onChange={(e) => setDecisionForm({ ...decisionForm, decision: e.target.value as CommerceReadOnlyDiscoveryOperatorDecision })}
+                >
+                  <option value="changes_requested">changes_requested</option>
+                  <option value="rejected">rejected</option>
+                  <option value="rollout_proposal_ready">rollout_proposal_ready</option>
+                </select>
+              </label>
+              <Input
+                id="operator-review-reason"
+                label="Reason"
+                value={decisionForm.reason}
+                onChange={(e) => setDecisionForm({ ...decisionForm, reason: e.target.value })}
+              />
+            </div>
+            <div className="mt-3">
+              <label htmlFor="operator-review-remediation" className="mb-1.5 block text-sm font-medium text-gx-text">
+                Remediation items
+              </label>
+              <textarea
+                id="operator-review-remediation"
+                value={decisionForm.remediation_items}
+                onChange={(e) => setDecisionForm({ ...decisionForm, remediation_items: e.target.value })}
+                rows={3}
+                className="w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+              />
+            </div>
+            <div className="mt-4">
+              <Button
+                variant="secondary"
+                onClick={recordOperatorDecision}
+                disabled={operatorDecisionDisabled}
+                title={operatorDecisionTitle}
+              >
+                {decisionSubmitting ? 'Recording' : 'Record operator decision'}
               </Button>
             </div>
           </Card>
