@@ -430,6 +430,79 @@ export interface CommerceReadOnlyDiscoveryRolloutProposal {
   audit_event_id: string | null;
 }
 
+export type CommerceAgenticOrgBuyerDiscoveryIntegrationStatus =
+  | 'not_ready'
+  | 'blocked'
+  | 'sandbox_handoff_ready'
+  | 'sandbox_handoff_requested'
+  | 'sandbox_handoff_withdrawn';
+
+export interface CommerceAgenticOrgBuyerDiscoveryPreview {
+  merchant_id: string;
+  tenant_id: string;
+  merchant_reference: string;
+  display_name: string | null;
+  integration_status: CommerceAgenticOrgBuyerDiscoveryIntegrationStatus;
+  handoff_requested_at: string | null;
+  handoff_request_actor: string | null;
+  handoff_withdrawn_at: string | null;
+  handoff_withdraw_actor: string | null;
+  audit_event_id: string | null;
+  generated_at: string;
+  merchant: CommerceAgentFacingPreview['merchant'];
+  readiness_summary: CommerceAgentFacingPreview['readiness_summary'];
+  agent_facing_preview_summary: {
+    preview_status: CommerceAgentFacingPreview['preview_status'];
+    preview_blockers: string[];
+    sample_product_count: number;
+    allowed_preview_capabilities: CommerceAgentFacingPreview['allowed_preview_capabilities'];
+    blocked_capabilities: CommerceAgentFacingPreview['blocked_capabilities'];
+  };
+  rollout_proposal_summary: {
+    proposal_status: CommerceReadOnlyDiscoveryRolloutProposalStatus;
+    dry_run_result: CommerceReadOnlyDiscoveryRolloutProposal['dry_run_result'];
+    dry_run_checked_at: string | null;
+    operator_decision: CommerceReadOnlyDiscoveryOperatorDecision | null;
+    proposal_audit_event_id: string | null;
+  };
+  evidence_checklist: Array<{
+    key: string;
+    label: string;
+    status: 'pass' | 'blocked';
+  }>;
+  sample_products: CommerceAgentFacingPreviewProduct[];
+  allowed_buyer_agent_capabilities: [
+    'read_only_profile_discovery_preview',
+    'read_only_catalog_discovery_preview',
+    'buyer_agent_readiness_context',
+  ];
+  blocked_buyer_agent_capabilities: [
+    'public_discovery',
+    'checkout_payment_creation',
+    'live_payment',
+    'live_plural',
+    'provider_credentials',
+    'order_fulfillment',
+    'refunds_returns_execution',
+    'production_allowlist',
+    'direct_merchant_system_access',
+  ];
+  blockers: string[];
+  remediation_items: string[];
+  sandbox_only: true;
+  handoff_request_is_approval: false;
+  buyer_agent_discovery_is_public: false;
+  agenticorg_public_discovery_enabled: false;
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  live_plural_enabled: false;
+  production_allowlist_written: false;
+  live_mode_status: 'not_live';
+  production_approval_status: 'not_approved';
+  rollout_status: 'rollout_not_requested';
+}
+
 export interface CommerceSandboxOnboarding {
   merchant_id: string;
   tenant_id: string;
@@ -887,6 +960,34 @@ export function withdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal(
 ): Promise<{ data: CommerceReadOnlyDiscoveryRolloutProposal; audit_event_id: string }> {
   return api.post<{ data: CommerceReadOnlyDiscoveryRolloutProposal; audit_event_id: string }>(
     `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/read-only-discovery-rollout-proposal/withdraw`,
+    input.reason ? { reason: input.reason } : {},
+  );
+}
+
+export function getCommerceMerchantAgenticOrgBuyerDiscoveryPreview(
+  merchantId: string,
+): Promise<{ data: CommerceAgenticOrgBuyerDiscoveryPreview }> {
+  return api.get<{ data: CommerceAgenticOrgBuyerDiscoveryPreview }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/agenticorg-buyer-discovery-preview`,
+  );
+}
+
+export function requestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff(
+  merchantId: string,
+  input: { handoffNote?: string } = {},
+): Promise<{ data: CommerceAgenticOrgBuyerDiscoveryPreview; audit_event_id: string }> {
+  return api.post<{ data: CommerceAgenticOrgBuyerDiscoveryPreview; audit_event_id: string }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/agenticorg-buyer-discovery-handoff-request`,
+    input.handoffNote ? { handoff_note: input.handoffNote } : {},
+  );
+}
+
+export function withdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff(
+  merchantId: string,
+  input: { reason?: string } = {},
+): Promise<{ data: CommerceAgenticOrgBuyerDiscoveryPreview; audit_event_id: string }> {
+  return api.post<{ data: CommerceAgenticOrgBuyerDiscoveryPreview; audit_event_id: string }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/agenticorg-buyer-discovery-handoff-withdraw`,
     input.reason ? { reason: input.reason } : {},
   );
 }

@@ -30,6 +30,9 @@ const mockGetCommerceMerchantReadOnlyDiscoveryRolloutProposal = vi.fn();
 const mockCreateCommerceMerchantReadOnlyDiscoveryRolloutProposal = vi.fn();
 const mockDryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal = vi.fn();
 const mockWithdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal = vi.fn();
+const mockGetCommerceMerchantAgenticOrgBuyerDiscoveryPreview = vi.fn();
+const mockRequestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff = vi.fn();
+const mockWithdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff = vi.fn();
 const mockDisableMerchantAgenticCommerce = vi.fn();
 const mockEnableMerchantAgenticCommerce = vi.fn();
 const mockListCommerceAgents = vi.fn();
@@ -69,6 +72,9 @@ vi.mock('../../api/commerce', () => ({
   createCommerceMerchantReadOnlyDiscoveryRolloutProposal: (...a: unknown[]) => mockCreateCommerceMerchantReadOnlyDiscoveryRolloutProposal(...a),
   dryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal: (...a: unknown[]) => mockDryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal(...a),
   withdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal: (...a: unknown[]) => mockWithdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal(...a),
+  getCommerceMerchantAgenticOrgBuyerDiscoveryPreview: (...a: unknown[]) => mockGetCommerceMerchantAgenticOrgBuyerDiscoveryPreview(...a),
+  requestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff: (...a: unknown[]) => mockRequestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff(...a),
+  withdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff: (...a: unknown[]) => mockWithdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff(...a),
   disableMerchantAgenticCommerce: (...a: unknown[]) => mockDisableMerchantAgenticCommerce(...a),
   enableMerchantAgenticCommerce: (...a: unknown[]) => mockEnableMerchantAgenticCommerce(...a),
   listCommerceAgents: (...a: unknown[]) => mockListCommerceAgents(...a),
@@ -585,6 +591,72 @@ const rolloutProposalPassed = {
   audit_event_id: 'aud_dry_run',
 };
 
+const agenticOrgPreview = {
+  merchant_id: 'mch_1',
+  tenant_id: 'cten_1',
+  merchant_reference: 'mch_1',
+  display_name: 'Grantex Store',
+  integration_status: 'sandbox_handoff_ready' as const,
+  handoff_requested_at: null,
+  handoff_request_actor: null,
+  handoff_withdrawn_at: null,
+  handoff_withdraw_actor: null,
+  audit_event_id: null,
+  generated_at: '2026-01-01T00:21:00Z',
+  merchant: sandboxOnboarding.agent_facing_preview.merchant,
+  readiness_summary: sandboxOnboarding.agent_facing_preview.readiness_summary,
+  agent_facing_preview_summary: {
+    preview_status: 'ready' as const,
+    preview_blockers: [],
+    sample_product_count: 1,
+    allowed_preview_capabilities: sandboxOnboarding.agent_facing_preview.allowed_preview_capabilities,
+    blocked_capabilities: sandboxOnboarding.agent_facing_preview.blocked_capabilities,
+  },
+  rollout_proposal_summary: {
+    proposal_status: 'dry_run_passed' as const,
+    dry_run_result: 'passed' as const,
+    dry_run_checked_at: '2026-01-01T00:20:00Z',
+    operator_decision: 'rollout_proposal_ready' as const,
+    proposal_audit_event_id: 'aud_dry_run',
+  },
+  evidence_checklist: [
+    { key: 'rollout_proposal_dry_run_passed', label: 'Rollout proposal dry-run passed', status: 'pass' as const },
+    { key: 'agenticorg_public_discovery_disabled', label: 'AgenticOrg public discovery disabled', status: 'pass' as const },
+    { key: 'buyer_agent_handoff_is_sandbox_only', label: 'Buyer-agent handoff is sandbox-only', status: 'pass' as const },
+  ],
+  sample_products: sandboxOnboarding.agent_facing_preview.sample_products,
+  allowed_buyer_agent_capabilities: [
+    'read_only_profile_discovery_preview',
+    'read_only_catalog_discovery_preview',
+    'buyer_agent_readiness_context',
+  ] as const,
+  blocked_buyer_agent_capabilities: [
+    'public_discovery',
+    'checkout_payment_creation',
+    'live_payment',
+    'live_plural',
+    'provider_credentials',
+    'order_fulfillment',
+    'refunds_returns_execution',
+    'production_allowlist',
+    'direct_merchant_system_access',
+  ] as const,
+  blockers: [],
+  remediation_items: [],
+  sandbox_only: true as const,
+  handoff_request_is_approval: false as const,
+  buyer_agent_discovery_is_public: false as const,
+  agenticorg_public_discovery_enabled: false as const,
+  public_discovery_enabled: false as const,
+  checkout_payment_enabled: false as const,
+  live_provider_enabled: false as const,
+  live_plural_enabled: false as const,
+  production_allowlist_written: false as const,
+  live_mode_status: 'not_live' as const,
+  production_approval_status: 'not_approved' as const,
+  rollout_status: 'rollout_not_requested' as const,
+};
+
 const credential = {
   id: 'cpcred_1',
   tenant_id: 'cten_1',
@@ -978,6 +1050,25 @@ describe('CommerceOnboarding', () => {
       data: { ...rolloutProposalDraft, proposal_status: 'withdrawn' as const, withdrawn_at: '2026-01-01T00:25:00Z' },
       audit_event_id: 'aud_withdraw',
     });
+    mockGetCommerceMerchantAgenticOrgBuyerDiscoveryPreview.mockResolvedValue({ data: agenticOrgPreview });
+    mockRequestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff.mockResolvedValue({
+      data: {
+        ...agenticOrgPreview,
+        integration_status: 'sandbox_handoff_requested' as const,
+        handoff_requested_at: '2026-01-01T00:25:00Z',
+        audit_event_id: 'aud_agenticorg_handoff',
+      },
+      audit_event_id: 'aud_agenticorg_handoff',
+    });
+    mockWithdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff.mockResolvedValue({
+      data: {
+        ...agenticOrgPreview,
+        integration_status: 'sandbox_handoff_withdrawn' as const,
+        handoff_withdrawn_at: '2026-01-01T00:30:00Z',
+        audit_event_id: 'aud_agenticorg_withdraw',
+      },
+      audit_event_id: 'aud_agenticorg_withdraw',
+    });
     mockListCommerceAgents.mockResolvedValue({ items: [agent], next_cursor: null });
     mockListCommercePolicies.mockResolvedValue({ items: [{ id: 'cpol_1', status: 'active' }], next_cursor: null });
     mockListCommerceProducts.mockResolvedValue({ items: [product], next_cursor: null });
@@ -1017,7 +1108,7 @@ describe('CommerceOnboarding', () => {
     expect(screen.getAllByText('public_discovery_enabled').length).toBeGreaterThan(0);
     expect(screen.getAllByText('checkout_payment_enabled').length).toBeGreaterThan(0);
     expect(screen.getByText('read only profile preview')).toBeInTheDocument();
-    expect(screen.getByText('public discovery')).toBeInTheDocument();
+    expect(screen.getAllByText('public discovery').length).toBeGreaterThan(0);
     expect(screen.getByText('Sandbox induction cooktop')).toBeInTheDocument();
     expect(screen.getByText('Preview JSON')).toBeInTheDocument();
     expect(screen.getByText('Read-only discovery review')).toBeInTheDocument();
@@ -1035,7 +1126,14 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText(/Proposal evidence is non-enabling/i)).toBeInTheDocument();
     expect(screen.getByText('proposal_is_approval')).toBeInTheDocument();
     expect(screen.getByText('dry_run_is_launch')).toBeInTheDocument();
-    expect(screen.getByText('Evidence checklist')).toBeInTheDocument();
+    expect(screen.getAllByText('Evidence checklist').length).toBeGreaterThan(0);
+    expect(screen.getByText('AgenticOrg buyer-agent discovery')).toBeInTheDocument();
+    expect(screen.getByText(/Sandbox handoff evidence only/i)).toBeInTheDocument();
+    expect(screen.getByText('agenticorg_public_discovery_enabled')).toBeInTheDocument();
+    expect(screen.getByText('buyer_agent_discovery_is_public')).toBeInTheDocument();
+    expect(screen.getByText('read only profile discovery preview')).toBeInTheDocument();
+    expect(screen.getByText('direct merchant system access')).toBeInTheDocument();
+    expect(screen.getByText('Handoff JSON')).toBeInTheDocument();
     expect(screen.getByText('Merchant profile present')).toBeInTheDocument();
     expect(screen.getAllByText('No checkout/payment enablement').length).toBeGreaterThan(0);
     expect(screen.getByText('Trusted agent')).toBeInTheDocument();
@@ -1100,6 +1198,19 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('dry_run_passed')).toBeInTheDocument();
     expect(screen.getByText('aud_dry_run')).toBeInTheDocument();
     expect(screen.queryByText(/public discovery enabled/i)).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Handoff note'), 'Sandbox buyer-agent handoff evidence.');
+    await user.click(screen.getByRole('button', { name: 'Request AgenticOrg handoff' }));
+    await waitFor(() => expect(mockRequestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff).toHaveBeenCalledWith('mch_1', {
+      handoffNote: 'Sandbox buyer-agent handoff evidence.',
+    }));
+    expect(screen.getByText('sandbox_handoff_requested')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Withdraw handoff' }));
+    await waitFor(() => expect(mockWithdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff).toHaveBeenCalledWith('mch_1', {
+      reason: 'Sandbox buyer-agent handoff evidence.',
+    }));
+    expect(screen.getByText('sandbox_handoff_withdrawn')).toBeInTheDocument();
   });
 });
 

@@ -160,6 +160,26 @@ DB/Redis URLs, private keys, production config values, concrete allowlist
 values, customer data, checkout/payment claims, live-provider claims, or launch
 claims into proposal evidence.
 
+C6G adds a sandbox-only AgenticOrg buyer-agent discovery preview and handoff
+request workflow. It packages the public-safe C6C agent-facing preview together
+with C6D review request evidence, C6E operator decision evidence, and C6F
+dry-run evidence so AgenticOrg can test a buyer-agent discovery handoff against
+Grantex-owned data.
+
+The handoff request is not customer-facing public discovery. It does not enable
+AgenticOrg public discovery, production Commerce V1, checkout/payment creation,
+live payments, live Plural, provider credentials, production config, or
+allowlists. Trusted CommerceAgent callers can read the C6G payload only after
+an operator records the sandbox handoff request and current blockers remain
+absent. Operators can withdraw the handoff request by writing new audit
+evidence.
+
+C6G notes and withdrawal reasons must be public-safe. Do not paste secrets,
+private merchant artifacts, provider credentials, raw payloads, tokens, JWTs,
+DB/Redis URLs, private keys, production config values, concrete allowlist
+values, customer data, checkout/payment claims, live-provider claims, public
+discovery claims, or launch claims into C6G evidence.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent

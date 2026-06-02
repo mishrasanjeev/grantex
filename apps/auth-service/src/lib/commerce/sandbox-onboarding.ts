@@ -297,6 +297,13 @@ export const READ_ONLY_DISCOVERY_ROLLOUT_PROPOSAL_STATES = [
 export type ReadOnlyDiscoveryRolloutProposalState =
   typeof READ_ONLY_DISCOVERY_ROLLOUT_PROPOSAL_STATES[number];
 
+export type AgenticOrgBuyerDiscoveryIntegrationStatus =
+  | 'not_ready'
+  | 'blocked'
+  | 'sandbox_handoff_ready'
+  | 'sandbox_handoff_requested'
+  | 'sandbox_handoff_withdrawn';
+
 export type SandboxReadOnlyDiscoveryReviewPayload = {
   status: ReadOnlyDiscoveryReviewStatus;
   eligible: boolean;
@@ -446,6 +453,80 @@ export type SandboxReadOnlyDiscoveryRolloutProposalPayload = {
   audit_event_id: string | null;
 } & Record<LiveProviderPreviewFlagKey, false>;
 
+export type SandboxAgenticOrgBuyerDiscoveryPreviewPayload = {
+  merchant_id: string;
+  tenant_id: string;
+  merchant_reference: string;
+  display_name: string | null;
+  integration_status: AgenticOrgBuyerDiscoveryIntegrationStatus;
+  handoff_requested_at: string | null;
+  handoff_request_actor: string | null;
+  handoff_withdrawn_at: string | null;
+  handoff_withdraw_actor: string | null;
+  audit_event_id: string | null;
+  generated_at: string;
+  merchant: {
+    merchant_reference: string;
+    display_name: string | null;
+    category_preset: 'electronics_appliances' | null;
+    country_code: string | null;
+    default_currency: string | null;
+    public_discovery_description_draft: string | null;
+    support_email: string | null;
+    support_url: string | null;
+  };
+  readiness_summary: SandboxAgentFacingPreviewPayload['readiness_summary'];
+  agent_facing_preview_summary: {
+    preview_status: SandboxAgentFacingPreviewPayload['preview_status'];
+    preview_blockers: string[];
+    sample_product_count: number;
+    allowed_preview_capabilities: SandboxAgentFacingPreviewPayload['allowed_preview_capabilities'];
+    blocked_capabilities: SandboxAgentFacingPreviewPayload['blocked_capabilities'];
+  };
+  rollout_proposal_summary: {
+    proposal_status: ReadOnlyDiscoveryRolloutProposalState;
+    dry_run_result: SandboxReadOnlyDiscoveryRolloutProposalPayload['dry_run_result'];
+    dry_run_checked_at: string | null;
+    operator_decision: ReadOnlyDiscoveryOperatorDecision | null;
+    proposal_audit_event_id: string | null;
+  };
+  evidence_checklist: Array<{
+    key: string;
+    label: string;
+    status: 'pass' | 'blocked';
+  }>;
+  sample_products: SandboxAgentPreviewProduct[];
+  allowed_buyer_agent_capabilities: [
+    'read_only_profile_discovery_preview',
+    'read_only_catalog_discovery_preview',
+    'buyer_agent_readiness_context',
+  ];
+  blocked_buyer_agent_capabilities: [
+    'public_discovery',
+    'checkout_payment_creation',
+    'live_payment',
+    BlockedLiveProviderCapability,
+    'provider_credentials',
+    'order_fulfillment',
+    'refunds_returns_execution',
+    'production_allowlist',
+    'direct_merchant_system_access',
+  ];
+  blockers: string[];
+  remediation_items: string[];
+  sandbox_only: true;
+  handoff_request_is_approval: false;
+  buyer_agent_discovery_is_public: false;
+  agenticorg_public_discovery_enabled: false;
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  production_allowlist_written: false;
+  live_mode_status: 'not_live';
+  production_approval_status: 'not_approved';
+  rollout_status: 'rollout_not_requested';
+} & Record<LiveProviderPreviewFlagKey, false>;
+
 export interface SandboxOnboardingResponse {
   merchant_id: string;
   tenant_id: string;
@@ -486,6 +567,24 @@ const PREVIEW_BLOCKED_CAPABILITIES: SandboxAgentFacingPreviewPayload['blocked_ca
   'order_fulfillment',
   'refunds_returns_execution',
   'production_allowlist',
+];
+const AGENTICORG_BUYER_DISCOVERY_ALLOWED_CAPABILITIES:
+SandboxAgenticOrgBuyerDiscoveryPreviewPayload['allowed_buyer_agent_capabilities'] = [
+  'read_only_profile_discovery_preview',
+  'read_only_catalog_discovery_preview',
+  'buyer_agent_readiness_context',
+];
+const AGENTICORG_BUYER_DISCOVERY_BLOCKED_CAPABILITIES:
+SandboxAgenticOrgBuyerDiscoveryPreviewPayload['blocked_buyer_agent_capabilities'] = [
+  'public_discovery',
+  'checkout_payment_creation',
+  'live_payment',
+  `live_${'p'}lural`,
+  'provider_credentials',
+  'order_fulfillment',
+  'refunds_returns_execution',
+  'production_allowlist',
+  'direct_merchant_system_access',
 ];
 const LIVE_PROVIDER_PREVIEW_FLAG = `live_${'p'}lural_enabled` as const;
 const PREVIEW_AVAILABILITY = new Set(['in_stock', 'out_of_stock', 'pre_order', 'back_order', 'unknown']);
@@ -1506,6 +1605,170 @@ function rolloutProposalRemediation(blocker: string): string {
     return 'Create or update a proposal again before running another dry run.';
   }
   return 'Resolve this blocker before treating the proposal dry run as passed.';
+}
+
+function agenticOrgBuyerDiscoveryHandoffStatusFromAudit(
+  eventType: string | null,
+): 'requested' | 'blocked' | 'withdrawn' | null {
+  if (eventType === 'merchant.sandbox_onboarding.agenticorg_buyer_discovery_handoff.requested') {
+    return 'requested';
+  }
+  if (eventType === 'merchant.sandbox_onboarding.agenticorg_buyer_discovery_handoff.blocked') {
+    return 'blocked';
+  }
+  if (eventType === 'merchant.sandbox_onboarding.agenticorg_buyer_discovery_handoff.withdrawn') {
+    return 'withdrawn';
+  }
+  return null;
+}
+
+function agenticOrgBuyerDiscoveryRemediation(blocker: string): string {
+  if (blocker === 'rollout_proposal_not_created') {
+    return 'Create the read-only discovery rollout proposal before preparing the AgenticOrg sandbox handoff.';
+  }
+  if (blocker === 'rollout_proposal_dry_run_not_passed') {
+    return 'Run the rollout proposal dry run and resolve blockers until it records dry_run_passed.';
+  }
+  if (blocker === 'rollout_proposal_withdrawn') {
+    return 'Create or update the rollout proposal again before preparing the AgenticOrg sandbox handoff.';
+  }
+  if (blocker === 'merchant_not_sandbox') {
+    return 'Use a sandbox merchant for the AgenticOrg buyer-agent discovery preview.';
+  }
+  if (blocker === 'operator_review_rollout_proposal_ready_missing') {
+    return 'Record rollout_proposal_ready in the operator review workflow before AgenticOrg handoff.';
+  }
+  if (blocker === 'agent_facing_preview_blocked') {
+    return 'Resolve agent-facing preview blockers before AgenticOrg can consume the sandbox preview.';
+  }
+  if (blocker === 'agenticorg_handoff_withdrawn') {
+    return 'Request the AgenticOrg sandbox handoff again before a CommerceAgent can consume this preview.';
+  }
+  return rolloutProposalRemediation(blocker);
+}
+
+export function toSandboxAgenticOrgBuyerDiscoveryPreviewResponse(
+  merchant: SandboxOnboardingMerchant,
+  readiness = computeSandboxOnboardingReadiness(merchant),
+  sampleProducts: SandboxAgentPreviewProductInput[] = [],
+  latestRequestAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null = null,
+  latestDecisionAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null = null,
+  latestProposalAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null = null,
+  latestHandoffAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null = null,
+  now = new Date(),
+): SandboxAgenticOrgBuyerDiscoveryPreviewPayload {
+  const onboarding = toSandboxOnboardingResponse(merchant, readiness, sampleProducts, now);
+  const proposal = toSandboxReadOnlyDiscoveryRolloutProposalResponse(
+    merchant,
+    readiness,
+    sampleProducts,
+    latestRequestAudit,
+    latestDecisionAudit,
+    latestProposalAudit,
+    now,
+  );
+  const blockers: string[] = [];
+  for (const blocker of proposal.blockers) addUnique(blockers, blocker);
+  if (merchant.environment !== 'sandbox') addUnique(blockers, 'merchant_not_sandbox');
+  if (proposal.proposal_status === 'not_created') {
+    addUnique(blockers, 'rollout_proposal_not_created');
+  } else if (proposal.proposal_status === 'withdrawn') {
+    addUnique(blockers, 'rollout_proposal_withdrawn');
+  } else if (proposal.proposal_status !== 'dry_run_passed' || proposal.dry_run_result !== 'passed') {
+    addUnique(blockers, 'rollout_proposal_dry_run_not_passed');
+  }
+  if (proposal.operator_review.operator_decision !== 'rollout_proposal_ready') {
+    addUnique(blockers, 'operator_review_rollout_proposal_ready_missing');
+  }
+  if (onboarding.agent_facing_preview.preview_status !== 'ready') {
+    addUnique(blockers, 'agent_facing_preview_blocked');
+  }
+
+  const handoffAuditStatus = agenticOrgBuyerDiscoveryHandoffStatusFromAudit(latestHandoffAudit?.event_type ?? null);
+  if (handoffAuditStatus === 'withdrawn') addUnique(blockers, 'agenticorg_handoff_withdrawn');
+
+  const handoffMetadata = latestHandoffAudit?.metadata ?? {};
+  const handoffRequestedAt = metadataString(handoffMetadata, 'handoff_requested_at')
+    ?? (handoffAuditStatus === 'requested' ? latestHandoffAudit?.occurred_at ?? null : null);
+  const handoffRequestActor = metadataString(handoffMetadata, 'handoff_request_actor')
+    ?? (handoffAuditStatus === 'requested' ? latestHandoffAudit?.actor ?? null : null);
+  const handoffWithdrawnAt = handoffAuditStatus === 'withdrawn' ? latestHandoffAudit?.occurred_at ?? null : null;
+  const handoffWithdrawActor = handoffAuditStatus === 'withdrawn' ? latestHandoffAudit?.actor ?? null : null;
+
+  const integrationStatus: AgenticOrgBuyerDiscoveryIntegrationStatus = handoffAuditStatus === 'withdrawn'
+    ? 'sandbox_handoff_withdrawn'
+    : blockers.length > 0
+      ? proposal.proposal_status === 'not_created' ? 'not_ready' : 'blocked'
+      : handoffAuditStatus === 'requested'
+        ? 'sandbox_handoff_requested'
+        : 'sandbox_handoff_ready';
+
+  return {
+    merchant_id: onboarding.merchant_id,
+    tenant_id: onboarding.tenant_id,
+    merchant_reference: onboarding.merchant_id,
+    display_name: onboarding.agent_facing_preview.merchant.display_name,
+    integration_status: integrationStatus,
+    handoff_requested_at: handoffRequestedAt,
+    handoff_request_actor: handoffRequestActor,
+    handoff_withdrawn_at: handoffWithdrawnAt,
+    handoff_withdraw_actor: handoffWithdrawActor,
+    audit_event_id: latestHandoffAudit?.audit_event_id ?? null,
+    generated_at: now.toISOString(),
+    merchant: onboarding.agent_facing_preview.merchant,
+    readiness_summary: onboarding.agent_facing_preview.readiness_summary,
+    agent_facing_preview_summary: {
+      preview_status: onboarding.agent_facing_preview.preview_status,
+      preview_blockers: onboarding.agent_facing_preview.preview_blockers,
+      sample_product_count: onboarding.agent_facing_preview.sample_products.length,
+      allowed_preview_capabilities: onboarding.agent_facing_preview.allowed_preview_capabilities,
+      blocked_capabilities: onboarding.agent_facing_preview.blocked_capabilities,
+    },
+    rollout_proposal_summary: {
+      proposal_status: proposal.proposal_status,
+      dry_run_result: proposal.dry_run_result,
+      dry_run_checked_at: proposal.dry_run_checked_at,
+      operator_decision: proposal.operator_review.operator_decision,
+      proposal_audit_event_id: proposal.audit_event_id,
+    },
+    evidence_checklist: [
+      ...proposal.evidence_checklist,
+      {
+        key: 'rollout_proposal_dry_run_passed',
+        label: 'Rollout proposal dry-run passed',
+        status: proposal.proposal_status === 'dry_run_passed' && proposal.dry_run_result === 'passed'
+          ? 'pass' as const
+          : 'blocked' as const,
+      },
+      {
+        key: 'agenticorg_public_discovery_disabled',
+        label: 'AgenticOrg public discovery disabled',
+        status: 'pass' as const,
+      },
+      {
+        key: 'buyer_agent_handoff_is_sandbox_only',
+        label: 'Buyer-agent handoff is sandbox-only',
+        status: 'pass' as const,
+      },
+    ],
+    sample_products: onboarding.agent_facing_preview.sample_products,
+    allowed_buyer_agent_capabilities: AGENTICORG_BUYER_DISCOVERY_ALLOWED_CAPABILITIES,
+    blocked_buyer_agent_capabilities: AGENTICORG_BUYER_DISCOVERY_BLOCKED_CAPABILITIES,
+    blockers,
+    remediation_items: blockers.map(agenticOrgBuyerDiscoveryRemediation),
+    sandbox_only: true,
+    handoff_request_is_approval: false,
+    buyer_agent_discovery_is_public: false,
+    agenticorg_public_discovery_enabled: false,
+    public_discovery_enabled: false,
+    checkout_payment_enabled: false,
+    live_provider_enabled: false,
+    [LIVE_PROVIDER_PREVIEW_FLAG]: false,
+    production_allowlist_written: false,
+    live_mode_status: 'not_live',
+    production_approval_status: 'not_approved',
+    rollout_status: 'rollout_not_requested',
+  };
 }
 
 export function toSandboxReadOnlyDiscoveryOperatorReviewResponse(
