@@ -348,6 +348,88 @@ export interface CommerceReadOnlyDiscoveryOperatorReview {
   audit_event_id: string | null;
 }
 
+export type CommerceReadOnlyDiscoveryRolloutProposalStatus =
+  | 'not_created'
+  | 'draft_created'
+  | 'dry_run_passed'
+  | 'dry_run_blocked'
+  | 'withdrawn';
+
+export interface CommerceReadOnlyDiscoveryRolloutProposal {
+  merchant_id: string;
+  tenant_id: string;
+  merchant_reference: string;
+  display_name: string | null;
+  proposal_status: CommerceReadOnlyDiscoveryRolloutProposalStatus;
+  proposal_note: string | null;
+  dry_run_result: 'not_run' | 'passed' | 'blocked';
+  created_at: string | null;
+  updated_at: string | null;
+  dry_run_checked_at: string | null;
+  withdrawn_at: string | null;
+  operator_review: {
+    operator_decision: CommerceReadOnlyDiscoveryOperatorDecision | null;
+    decision_reason: string | null;
+    decision_recorded_at: string | null;
+    decision_actor: string | null;
+  };
+  evidence: {
+    merchant_sandbox_profile_summary: CommerceAgentFacingPreview['merchant'];
+    category_readiness_summary: {
+      status: CommerceAgentFacingPreview['readiness_summary']['category_status'];
+      score_percent: number;
+      summary: string;
+    };
+    catalog_readiness_summary: {
+      status: CommerceAgentFacingPreview['readiness_summary']['catalog_status'];
+      score_percent: number;
+      product_count: number;
+      variant_count: number;
+      summary: string;
+    };
+    agent_facing_preview_summary: {
+      preview_status: CommerceAgentFacingPreview['preview_status'];
+      preview_blockers: string[];
+      sample_product_count: number;
+      allowed_preview_capabilities: CommerceAgentFacingPreview['allowed_preview_capabilities'];
+      blocked_capabilities: CommerceAgentFacingPreview['blocked_capabilities'];
+    };
+    blocker_remediation_status: {
+      blockers: string[];
+      remediation_items: string[];
+    };
+    non_enabling_controls: {
+      sandbox_only: true;
+      production_approval_status: 'not_approved';
+      rollout_status: 'rollout_not_requested';
+      public_discovery_enabled: false;
+      checkout_payment_enabled: false;
+      live_provider_enabled: false;
+      live_plural_enabled: false;
+      production_allowlist_written: false;
+    };
+  };
+  evidence_checklist: Array<{
+    key: string;
+    label: string;
+    status: 'pass' | 'blocked';
+  }>;
+  blockers: string[];
+  remediation_items: string[];
+  sandbox_only: true;
+  proposal_is_approval: false;
+  dry_run_is_launch: false;
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  live_plural_enabled: false;
+  production_allowlist_written: false;
+  live_mode_status: 'not_live';
+  production_approval_status: 'not_approved';
+  rollout_status: 'rollout_not_requested';
+  audit_event_id: string | null;
+}
+
 export interface CommerceSandboxOnboarding {
   merchant_id: string;
   tenant_id: string;
@@ -768,6 +850,44 @@ export function recordCommerceReadOnlyDiscoveryReviewDecision(
       reason: input.reason,
       remediation_items: input.remediationItems ?? [],
     },
+  );
+}
+
+export function getCommerceMerchantReadOnlyDiscoveryRolloutProposal(
+  merchantId: string,
+): Promise<{ data: CommerceReadOnlyDiscoveryRolloutProposal }> {
+  return api.get<{ data: CommerceReadOnlyDiscoveryRolloutProposal }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/read-only-discovery-rollout-proposal`,
+  );
+}
+
+export function createCommerceMerchantReadOnlyDiscoveryRolloutProposal(
+  merchantId: string,
+  input: { proposalNote?: string } = {},
+): Promise<{ data: CommerceReadOnlyDiscoveryRolloutProposal; audit_event_id: string }> {
+  return api.post<{ data: CommerceReadOnlyDiscoveryRolloutProposal; audit_event_id: string }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/read-only-discovery-rollout-proposal`,
+    input.proposalNote ? { proposal_note: input.proposalNote } : {},
+  );
+}
+
+export function dryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal(
+  merchantId: string,
+  input: { proposalNote?: string } = {},
+): Promise<{ data: CommerceReadOnlyDiscoveryRolloutProposal; audit_event_id: string }> {
+  return api.post<{ data: CommerceReadOnlyDiscoveryRolloutProposal; audit_event_id: string }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/read-only-discovery-rollout-proposal/dry-run`,
+    input.proposalNote ? { proposal_note: input.proposalNote } : {},
+  );
+}
+
+export function withdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal(
+  merchantId: string,
+  input: { reason?: string } = {},
+): Promise<{ data: CommerceReadOnlyDiscoveryRolloutProposal; audit_event_id: string }> {
+  return api.post<{ data: CommerceReadOnlyDiscoveryRolloutProposal; audit_event_id: string }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/read-only-discovery-rollout-proposal/withdraw`,
+    input.reason ? { reason: input.reason } : {},
   );
 }
 

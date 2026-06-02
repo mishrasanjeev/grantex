@@ -149,6 +149,39 @@ function reviewRequestAudit(overrides: Record<string, unknown> = {}) {
   }];
 }
 
+function rolloutProposalReadyAudit(overrides: Record<string, unknown> = {}) {
+  return [{
+    id: 'caud_ROLLOUT_READY',
+    event_type: 'merchant.sandbox_onboarding.read_only_discovery_review.rollout_proposal_ready',
+    occurred_at: '2026-01-01T00:10:00Z',
+    user_principal_id: 'dev_OPERATOR',
+    metadata: {
+      operator_decision: 'rollout_proposal_ready',
+      decision_reason: 'Evidence supports later planning gate.',
+      remediation_items: [],
+      blockers: [],
+    },
+    ...overrides,
+  }];
+}
+
+function rolloutProposalAudit(overrides: Record<string, unknown> = {}) {
+  return [{
+    id: 'caud_PROPOSAL',
+    event_type: 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.created',
+    occurred_at: '2026-01-01T00:15:00Z',
+    user_principal_id: 'dev_OPERATOR',
+    metadata: {
+      proposal_status: 'draft_created',
+      proposal_note: 'Sandbox evidence package.',
+      dry_run_result: 'not_run',
+      blockers: [],
+      remediation_items: [],
+    },
+    ...overrides,
+  }];
+}
+
 describe('POST /v1/commerce/merchants', () => {
   it('creates a merchant and returns 201 with audit_event_id', async () => {
     seedCommerceContext();
@@ -1336,6 +1369,237 @@ describe('sandbox onboarding foundation', () => {
         reason: 'Public-safe fields need more work.',
         remediation_items: [],
       },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('operator_required');
+  });
+
+  it('creates a rollout proposal after rollout_proposal_ready without enabling production controls', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalReadyAudit());
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_PROPOSAL_CREATED', occurred_at: '2026-01-01T00:15:00Z' }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/read-only-discovery-rollout-proposal',
+      headers: authHeader(),
+      payload: { proposal_note: 'Sandbox evidence package.' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      data: {
+        proposal_status: string;
+        dry_run_result: string;
+        operator_review: { operator_decision: string };
+        evidence_checklist: Array<{ key: string; status: string }>;
+        public_discovery_enabled: boolean;
+        checkout_payment_enabled: boolean;
+        live_provider_enabled: boolean;
+        live_plural_enabled: boolean;
+        production_allowlist_written: boolean;
+      };
+      audit_event_id: string;
+    }>();
+    expect(body.audit_event_id).toBe('caud_PROPOSAL_CREATED');
+    expect(body.data).toMatchObject({
+      proposal_status: 'draft_created',
+      dry_run_result: 'not_run',
+      operator_review: { operator_decision: 'rollout_proposal_ready' },
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+      production_allowlist_written: false,
+    });
+    expect(body.data.evidence_checklist.every((item) => item.status === 'pass')).toBe(true);
+    const allArgs = JSON.stringify(sqlMock.mock.calls);
+    expect(allArgs).not.toContain('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST');
+    expect(allArgs).not.toContain('agentic_commerce_enabled = true');
+  });
+
+  it('blocks rollout proposal creation without C6E rollout_proposal_ready evidence', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/read-only-discovery-rollout-proposal',
+      headers: authHeader(),
+      payload: { proposal_note: 'Sandbox evidence package.' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: { code: string; details: { public_discovery_enabled: boolean } } }>().error)
+      .toMatchObject({
+        code: 'read_only_discovery_rollout_proposal_not_ready',
+        details: { public_discovery_enabled: false },
+      });
+  });
+
+  it('blocks rollout proposal creation without C6D request audit evidence', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce(rolloutProposalReadyAudit());
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/read-only-discovery-rollout-proposal',
+      headers: authHeader(),
+      payload: { proposal_note: 'Sandbox evidence package.' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: { code: string; details: { blockers: string[]; public_discovery_enabled: boolean } } }>().error)
+      .toMatchObject({
+        code: 'read_only_discovery_rollout_proposal_blocked',
+        details: {
+          blockers: ['read_only_discovery_review_request_evidence_missing'],
+          public_discovery_enabled: false,
+        },
+      });
+  });
+
+  it('returns 404 for missing rollout proposal merchants and blocks live merchants', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([]);
+    const missingRes = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_OTHER_TENANT/read-only-discovery-rollout-proposal',
+      headers: authHeader(),
+    });
+    expect(missingRes.statusCode).toBe(404);
+
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ environment: 'live', sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalReadyAudit());
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    const liveRes = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_LIVE/read-only-discovery-rollout-proposal',
+      headers: authHeader(),
+    });
+    expect(liveRes.statusCode).toBe(409);
+    expect(liveRes.json<{ error: { code: string } }>().error.code)
+      .toBe('read_only_discovery_rollout_proposal_live_merchant_blocked');
+  });
+
+  it('records rollout proposal dry-run pass and blocked audit evidence', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalReadyAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_DRY_RUN_PASS', occurred_at: '2026-01-01T00:20:00Z' }]);
+
+    const passRes = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/read-only-discovery-rollout-proposal/dry-run',
+      headers: authHeader(),
+      payload: { proposal_note: 'Sandbox evidence package.' },
+    });
+
+    expect(passRes.statusCode).toBe(200);
+    expect(passRes.json<{ data: { proposal_status: string; dry_run_result: string; public_discovery_enabled: boolean } }>().data)
+      .toMatchObject({
+        proposal_status: 'dry_run_passed',
+        dry_run_result: 'passed',
+        public_discovery_enabled: false,
+      });
+
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({
+      sandbox_onboarding_state: 'submitted_for_review',
+      public_discovery_description_draft: null,
+    })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalReadyAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_DRY_RUN_BLOCKED', occurred_at: '2026-01-01T00:21:00Z' }]);
+
+    const blockedRes = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/read-only-discovery-rollout-proposal/dry-run',
+      headers: authHeader(),
+      payload: { proposal_note: 'Sandbox evidence package.' },
+    });
+
+    expect(blockedRes.statusCode).toBe(200);
+    const blocked = blockedRes.json<{ data: { proposal_status: string; dry_run_result: string; blockers: string[]; checkout_payment_enabled: boolean } }>().data;
+    expect(blocked.proposal_status).toBe('dry_run_blocked');
+    expect(blocked.dry_run_result).toBe('blocked');
+    expect(blocked.blockers).toContain('sandbox_readiness_not_passed');
+    expect(blocked.checkout_payment_enabled).toBe(false);
+  });
+
+  it('withdraws rollout proposals and rejects unsafe proposal notes', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalReadyAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_PROPOSAL_WITHDRAWN', occurred_at: '2026-01-01T00:25:00Z' }]);
+
+    const withdrawRes = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/read-only-discovery-rollout-proposal/withdraw',
+      headers: authHeader(),
+      payload: { reason: 'Pause this proposal.' },
+    });
+    expect(withdrawRes.statusCode).toBe(200);
+    expect(withdrawRes.json<{ data: { proposal_status: string; public_discovery_enabled: boolean } }>().data)
+      .toMatchObject({ proposal_status: 'withdrawn', public_discovery_enabled: false });
+
+    seedCommerceContext();
+    const unsafeRes = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/read-only-discovery-rollout-proposal',
+      headers: authHeader(),
+      payload: { proposal_note: 'secret token should not be stored' },
+    });
+    expect(unsafeRes.statusCode).toBe(400);
+    expect(unsafeRes.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields.proposal_note)
+      .toContain('public-safe text');
+  });
+
+  it('denies CommerceAgent callers on rollout proposal endpoints', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      id: 'cag_TEST',
+      tenant_id: TEST_COMMERCE_TENANT_ID,
+      trust_status: 'trusted',
+      public_key_jwk: null,
+      api_key_hash: 'hash',
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/read-only-discovery-rollout-proposal',
+      headers: { authorization: 'Bearer grtx_agent_C6FXXXXXXXXXXXXXXXXXXXXXXX' },
+      payload: { proposal_note: 'Sandbox evidence package.' },
     });
 
     expect(res.statusCode).toBe(403);
