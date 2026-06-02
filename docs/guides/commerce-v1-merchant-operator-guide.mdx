@@ -139,6 +139,27 @@ private merchant artifacts, provider credentials, raw payloads, tokens, DB/Redis
 URLs, private keys, production config values, concrete allowlist values, or
 customer data into review reasons.
 
+C6F adds a rollout proposal and dry-run evidence workflow for operators. This
+workflow is available only after an operator decision of
+`rollout_proposal_ready`. The proposal records a public-safe package of sandbox
+profile evidence, category readiness, catalog readiness, agent-facing preview
+status, operator review decision, blockers, remediation, and the fixed
+non-enabling controls. The dry run checks the current sandbox evidence again and
+records either `dry_run_passed` or `dry_run_blocked`.
+
+A rollout proposal is not "go live." A passed dry run is not approval,
+certification, launch, production readiness, public discovery enablement,
+checkout/payment enablement, live provider enablement, live Plural enablement,
+production config writing, or allowlist writing. Merchants still need a later
+separate human-approved production rollout before any customer-facing public
+discovery or production commerce behavior can be considered.
+
+Proposal notes and withdrawal reasons must be public-safe. Do not paste private
+merchant details, contracts, provider credentials, raw payloads, tokens, JWTs,
+DB/Redis URLs, private keys, production config values, concrete allowlist
+values, customer data, checkout/payment claims, live-provider claims, or launch
+claims into proposal evidence.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent

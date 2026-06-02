@@ -26,6 +26,10 @@ const mockTransitionCommerceMerchantSandboxOnboarding = vi.fn();
 const mockRequestCommerceMerchantReadOnlyDiscoveryReview = vi.fn();
 const mockGetCommerceMerchantReadOnlyDiscoveryReview = vi.fn();
 const mockRecordCommerceReadOnlyDiscoveryReviewDecision = vi.fn();
+const mockGetCommerceMerchantReadOnlyDiscoveryRolloutProposal = vi.fn();
+const mockCreateCommerceMerchantReadOnlyDiscoveryRolloutProposal = vi.fn();
+const mockDryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal = vi.fn();
+const mockWithdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal = vi.fn();
 const mockDisableMerchantAgenticCommerce = vi.fn();
 const mockEnableMerchantAgenticCommerce = vi.fn();
 const mockListCommerceAgents = vi.fn();
@@ -61,6 +65,10 @@ vi.mock('../../api/commerce', () => ({
   requestCommerceMerchantReadOnlyDiscoveryReview: (...a: unknown[]) => mockRequestCommerceMerchantReadOnlyDiscoveryReview(...a),
   getCommerceMerchantReadOnlyDiscoveryReview: (...a: unknown[]) => mockGetCommerceMerchantReadOnlyDiscoveryReview(...a),
   recordCommerceReadOnlyDiscoveryReviewDecision: (...a: unknown[]) => mockRecordCommerceReadOnlyDiscoveryReviewDecision(...a),
+  getCommerceMerchantReadOnlyDiscoveryRolloutProposal: (...a: unknown[]) => mockGetCommerceMerchantReadOnlyDiscoveryRolloutProposal(...a),
+  createCommerceMerchantReadOnlyDiscoveryRolloutProposal: (...a: unknown[]) => mockCreateCommerceMerchantReadOnlyDiscoveryRolloutProposal(...a),
+  dryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal: (...a: unknown[]) => mockDryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal(...a),
+  withdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal: (...a: unknown[]) => mockWithdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal(...a),
   disableMerchantAgenticCommerce: (...a: unknown[]) => mockDisableMerchantAgenticCommerce(...a),
   enableMerchantAgenticCommerce: (...a: unknown[]) => mockEnableMerchantAgenticCommerce(...a),
   listCommerceAgents: (...a: unknown[]) => mockListCommerceAgents(...a),
@@ -451,6 +459,132 @@ const operatorReview = {
   audit_event_id: null,
 };
 
+const rolloutReadyOperatorReview = {
+  ...operatorReview,
+  review_request_status: 'rollout_proposal_ready' as const,
+  operator_decision: 'rollout_proposal_ready' as const,
+  decision_reason: 'Evidence supports later planning gate.',
+  decision_recorded_at: '2026-01-01T00:10:00Z',
+  decision_actor: 'dev_OPERATOR',
+  audit_event_id: 'aud_rollout_ready',
+};
+
+const rolloutProposal = {
+  merchant_id: 'mch_1',
+  tenant_id: 'cten_1',
+  merchant_reference: 'mch_1',
+  display_name: 'Grantex Store',
+  proposal_status: 'not_created' as const,
+  proposal_note: null,
+  dry_run_result: 'not_run' as const,
+  created_at: null,
+  updated_at: null,
+  dry_run_checked_at: null,
+  withdrawn_at: null,
+  operator_review: {
+    operator_decision: null,
+    decision_reason: null,
+    decision_recorded_at: null,
+    decision_actor: null,
+  },
+  evidence: {
+    merchant_sandbox_profile_summary: sandboxOnboarding.agent_facing_preview.merchant,
+    category_readiness_summary: {
+      status: 'pass' as const,
+      score_percent: 100,
+      summary: 'Required sandbox category fields pass.',
+    },
+    catalog_readiness_summary: {
+      status: 'pass' as const,
+      score_percent: 100,
+      product_count: 1,
+      variant_count: 2,
+      summary: 'Required catalog fields pass for sandbox read-only discovery review.',
+    },
+    agent_facing_preview_summary: {
+      preview_status: 'ready' as const,
+      preview_blockers: [],
+      sample_product_count: 1,
+      allowed_preview_capabilities: sandboxOnboarding.agent_facing_preview.allowed_preview_capabilities,
+      blocked_capabilities: sandboxOnboarding.agent_facing_preview.blocked_capabilities,
+    },
+    blocker_remediation_status: {
+      blockers: ['operator_review_rollout_proposal_ready_missing'],
+      remediation_items: ['Record rollout_proposal_ready before creating a proposal.'],
+    },
+    non_enabling_controls: {
+      sandbox_only: true as const,
+      production_approval_status: 'not_approved' as const,
+      rollout_status: 'rollout_not_requested' as const,
+      public_discovery_enabled: false as const,
+      checkout_payment_enabled: false as const,
+      live_provider_enabled: false as const,
+      live_plural_enabled: false as const,
+      production_allowlist_written: false as const,
+    },
+  },
+  evidence_checklist: [
+    { key: 'operator_review_rollout_proposal_ready', label: 'Operator review marked rollout_proposal_ready', status: 'blocked' as const },
+    { key: 'non_enabling_controls_locked', label: 'Non-enabling controls locked', status: 'pass' as const },
+  ],
+  blockers: ['operator_review_rollout_proposal_ready_missing'],
+  remediation_items: ['Record rollout_proposal_ready before creating a proposal.'],
+  sandbox_only: true as const,
+  proposal_is_approval: false as const,
+  dry_run_is_launch: false as const,
+  public_discovery_enabled: false as const,
+  checkout_payment_enabled: false as const,
+  live_provider_enabled: false as const,
+  live_plural_enabled: false as const,
+  production_allowlist_written: false as const,
+  live_mode_status: 'not_live' as const,
+  production_approval_status: 'not_approved' as const,
+  rollout_status: 'rollout_not_requested' as const,
+  audit_event_id: null,
+};
+
+const rolloutProposalReady = {
+  ...rolloutProposal,
+  operator_review: {
+    operator_decision: 'rollout_proposal_ready' as const,
+    decision_reason: 'Evidence supports later planning gate.',
+    decision_recorded_at: '2026-01-01T00:10:00Z',
+    decision_actor: 'dev_OPERATOR',
+  },
+  evidence: {
+    ...rolloutProposal.evidence,
+    blocker_remediation_status: { blockers: [], remediation_items: [] },
+  },
+  evidence_checklist: [
+    { key: 'sandbox_profile_ready', label: 'Sandbox profile readiness', status: 'pass' as const },
+    { key: 'category_readiness_passed', label: 'Category readiness passed', status: 'pass' as const },
+    { key: 'catalog_readiness_passed', label: 'Catalog readiness passed', status: 'pass' as const },
+    { key: 'agent_facing_preview_ready', label: 'Agent-facing preview ready', status: 'pass' as const },
+    { key: 'operator_review_rollout_proposal_ready', label: 'Operator review marked rollout_proposal_ready', status: 'pass' as const },
+    { key: 'non_enabling_controls_locked', label: 'Non-enabling controls locked', status: 'pass' as const },
+  ],
+  blockers: [],
+  remediation_items: [],
+};
+
+const rolloutProposalDraft = {
+  ...rolloutProposalReady,
+  proposal_status: 'draft_created' as const,
+  proposal_note: 'Sandbox evidence package.',
+  created_at: '2026-01-01T00:15:00Z',
+  updated_at: '2026-01-01T00:15:00Z',
+  audit_event_id: 'aud_proposal',
+};
+
+const rolloutProposalPassed = {
+  ...rolloutProposalDraft,
+  proposal_status: 'dry_run_passed' as const,
+  dry_run_result: 'passed' as const,
+  dry_run_checked_at: '2026-01-01T00:20:00Z',
+  updated_at: '2026-01-01T00:20:00Z',
+  audit_event_id: 'aud_dry_run',
+};
+
 const credential = {
   id: 'cpcred_1',
   tenant_id: 'cten_1',
@@ -807,6 +941,7 @@ describe('CommerceOnboarding', () => {
       audit_event_id: 'aud_merchant',
     });
     mockGetCommerceMerchantReadOnlyDiscoveryReview.mockResolvedValue({ data: operatorReview });
+    mockGetCommerceMerchantReadOnlyDiscoveryRolloutProposal.mockResolvedValue({ data: rolloutProposal });
     mockRequestCommerceMerchantReadOnlyDiscoveryReview.mockResolvedValue({
       data: {
         ...sandboxOnboarding,
@@ -830,6 +965,18 @@ describe('CommerceOnboarding', () => {
         audit_event_id: 'aud_decision',
       },
       audit_event_id: 'aud_decision',
+    });
+    mockCreateCommerceMerchantReadOnlyDiscoveryRolloutProposal.mockResolvedValue({
+      data: rolloutProposalDraft,
+      audit_event_id: 'aud_proposal',
+    });
+    mockDryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal.mockResolvedValue({
+      data: rolloutProposalPassed,
+      audit_event_id: 'aud_dry_run',
+    });
+    mockWithdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal.mockResolvedValue({
+      data: { ...rolloutProposalDraft, proposal_status: 'withdrawn' as const, withdrawn_at: '2026-01-01T00:25:00Z' },
+      audit_event_id: 'aud_withdraw',
     });
     mockListCommerceAgents.mockResolvedValue({ items: [agent], next_cursor: null });
     mockListCommercePolicies.mockResolvedValue({ items: [{ id: 'cpol_1', status: 'active' }], next_cursor: null });
@@ -857,7 +1004,7 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('Category preset recognized')).toBeInTheDocument();
     expect(screen.getByText('Electronics and appliances')).toBeInTheDocument();
     expect(screen.getByText('Warranty summary')).toBeInTheDocument();
-    expect(screen.getByText('Catalog readiness')).toBeInTheDocument();
+    expect(screen.getAllByText('Catalog readiness').length).toBeGreaterThan(0);
     expect(screen.getByText('1 products / 2 variants')).toBeInTheDocument();
     expect(screen.getByText('Catalog products present')).toBeInTheDocument();
     expect(screen.getByText('Variant price and currency present')).toBeInTheDocument();
@@ -865,7 +1012,7 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('Bulk API dry-run: available')).toBeInTheDocument();
     expect(screen.getByText('Async import job: deferred')).toBeInTheDocument();
     expect(screen.getByText('Connector import: deferred')).toBeInTheDocument();
-    expect(screen.getByText('Agent-facing preview')).toBeInTheDocument();
+    expect(screen.getAllByText('Agent-facing preview').length).toBeGreaterThan(0);
     expect(screen.getByText(/Sandbox-only read-only view/)).toBeInTheDocument();
     expect(screen.getAllByText('public_discovery_enabled').length).toBeGreaterThan(0);
     expect(screen.getAllByText('checkout_payment_enabled').length).toBeGreaterThan(0);
@@ -884,6 +1031,11 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('rollout_proposal_ready_is_launch')).toBeInTheDocument();
     expect(screen.getByText('Readiness evidence')).toBeInTheDocument();
     expect(screen.getByText('Agent-facing preview status')).toBeInTheDocument();
+    expect(screen.getByText('Rollout proposal')).toBeInTheDocument();
+    expect(screen.getByText(/Proposal evidence is non-enabling/i)).toBeInTheDocument();
+    expect(screen.getByText('proposal_is_approval')).toBeInTheDocument();
+    expect(screen.getByText('dry_run_is_launch')).toBeInTheDocument();
+    expect(screen.getByText('Evidence checklist')).toBeInTheDocument();
     expect(screen.getByText('Merchant profile present')).toBeInTheDocument();
     expect(screen.getAllByText('No checkout/payment enablement').length).toBeGreaterThan(0);
     expect(screen.getByText('Trusted agent')).toBeInTheDocument();
@@ -919,6 +1071,35 @@ describe('CommerceOnboarding', () => {
     })));
     expect(screen.getByText('policy_allow')).toBeInTheDocument();
     expect(screen.queryByText(/passport_jwt/i)).not.toBeInTheDocument();
+  });
+
+  it('creates and dry-runs rollout proposal evidence from the operator flow', async () => {
+    mockGetCommerceMerchantReadOnlyDiscoveryReview.mockResolvedValueOnce({ data: rolloutReadyOperatorReview });
+    mockGetCommerceMerchantReadOnlyDiscoveryRolloutProposal.mockResolvedValueOnce({ data: rolloutProposalReady });
+    const user = userEvent.setup();
+    r(<CommerceOnboarding />);
+
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
+    await waitFor(() => expect(screen.getByText('Rollout proposal')).toBeInTheDocument());
+    expect(screen.getByText('not_created')).toBeInTheDocument();
+    expect(screen.getAllByText('public_discovery_enabled').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('checkout_payment_enabled').length).toBeGreaterThan(0);
+
+    await user.type(screen.getByLabelText('Proposal note'), 'Sandbox evidence package.');
+    await user.click(screen.getByRole('button', { name: 'Create proposal' }));
+    await waitFor(() => expect(mockCreateCommerceMerchantReadOnlyDiscoveryRolloutProposal).toHaveBeenCalledWith('mch_1', {
+      proposalNote: 'Sandbox evidence package.',
+    }));
+    expect(screen.getByText('draft_created')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Run dry run' }));
+    await waitFor(() => expect(mockDryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal).toHaveBeenCalledWith('mch_1', {
+      proposalNote: 'Sandbox evidence package.',
+    }));
+    expect(screen.getByText('dry_run_passed')).toBeInTheDocument();
+    expect(screen.getByText('aud_dry_run')).toBeInTheDocument();
+    expect(screen.queryByText(/public discovery enabled/i)).not.toBeInTheDocument();
   });
 });
 

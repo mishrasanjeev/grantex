@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import {
+  createCommerceMerchantReadOnlyDiscoveryRolloutProposal,
+  dryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   evaluateCommercePolicy,
   getCommerceMerchantReadOnlyDiscoveryReview,
+  getCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   getCommerceMerchantSandboxOnboarding,
   getCommerceWellKnownProfile,
   listCommerceAgents,
@@ -12,9 +15,11 @@ import {
   recordCommerceReadOnlyDiscoveryReviewDecision,
   requestCommerceMerchantReadOnlyDiscoveryReview,
   updateCommerceMerchantSandboxOnboarding,
+  withdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   type CommerceAgent,
   type CommerceReadOnlyDiscoveryOperatorDecision,
   type CommerceReadOnlyDiscoveryOperatorReview,
+  type CommerceReadOnlyDiscoveryRolloutProposal,
   type CommerceSandboxOnboarding,
   type CommercePolicyDecision,
   type CommerceWellKnownProfile,
@@ -87,6 +92,7 @@ export function CommerceOnboarding() {
   const [merchantId, setMerchantId] = useState('');
   const [merchant, setMerchant] = useState<CommerceSandboxOnboarding | null>(null);
   const [operatorReview, setOperatorReview] = useState<CommerceReadOnlyDiscoveryOperatorReview | null>(null);
+  const [rolloutProposal, setRolloutProposal] = useState<CommerceReadOnlyDiscoveryRolloutProposal | null>(null);
   const [merchantForm, setMerchantForm] = useState<MerchantPatchForm>(defaultPatch);
   const [agents, setAgents] = useState<CommerceAgent[]>([]);
   const [activePolicyCount, setActivePolicyCount] = useState(0);
@@ -98,6 +104,8 @@ export function CommerceOnboarding() {
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [decisionSubmitting, setDecisionSubmitting] = useState(false);
+  const [proposalSubmitting, setProposalSubmitting] = useState(false);
+  const [proposalNote, setProposalNote] = useState('');
   const [decisionForm, setDecisionForm] = useState<{
     decision: CommerceReadOnlyDiscoveryOperatorDecision;
     reason: string;
@@ -127,9 +135,10 @@ export function CommerceOnboarding() {
     }
     setLoading(true);
     try {
-      const [merchantRes, reviewRes, agentRes, policyRes, productRes, credentialRes, sourceRes, profileRes] = await Promise.all([
+      const [merchantRes, reviewRes, proposalRes, agentRes, policyRes, productRes, credentialRes, sourceRes, profileRes] = await Promise.all([
         getCommerceMerchantSandboxOnboarding(id),
         getCommerceMerchantReadOnlyDiscoveryReview(id).catch(() => null),
+        getCommerceMerchantReadOnlyDiscoveryRolloutProposal(id).catch(() => null),
         listCommerceAgents({ merchantId: id, limit: 25 }),
         listCommercePolicies({ merchantId: id, status: 'active', limit: 10 }),
         listCommerceProducts({ merchantId: id, status: 'active', limit: 10 }),
@@ -139,6 +148,8 @@ export function CommerceOnboarding() {
       ]);
       setMerchant(merchantRes.data);
       setOperatorReview(reviewRes?.data ?? null);
+      setRolloutProposal(proposalRes?.data ?? null);
+      setProposalNote(proposalRes?.data.proposal_note ?? '');
       setMerchantForm({
         display_name: merchantRes.data.display_name ?? '',
         category_preset: merchantRes.data.category_preset ?? 'electronics_appliances',
@@ -212,6 +223,9 @@ export function CommerceOnboarding() {
         remediationItems,
       });
       setOperatorReview(res.data);
+      const proposalRes = await getCommerceMerchantReadOnlyDiscoveryRolloutProposal(merchant.merchant_id).catch(() => null);
+      setRolloutProposal(proposalRes?.data ?? null);
+      setProposalNote(proposalRes?.data.proposal_note ?? '');
       setMerchant((prev) => prev
         ? {
           ...prev,
@@ -236,6 +250,57 @@ export function CommerceOnboarding() {
       show('Operator review decision is blocked', 'error');
     } finally {
       setDecisionSubmitting(false);
+    }
+  }
+
+  async function createRolloutProposal() {
+    if (!merchant) return;
+    setProposalSubmitting(true);
+    try {
+      const res = await createCommerceMerchantReadOnlyDiscoveryRolloutProposal(merchant.merchant_id, {
+        proposalNote: proposalNote.trim() || undefined,
+      });
+      setRolloutProposal(res.data);
+      setProposalNote(res.data.proposal_note ?? '');
+      show('Rollout proposal evidence saved', 'success');
+    } catch {
+      show('Rollout proposal is blocked', 'error');
+    } finally {
+      setProposalSubmitting(false);
+    }
+  }
+
+  async function runRolloutProposalDryRun() {
+    if (!merchant) return;
+    setProposalSubmitting(true);
+    try {
+      const res = await dryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal(merchant.merchant_id, {
+        proposalNote: proposalNote.trim() || undefined,
+      });
+      setRolloutProposal(res.data);
+      setProposalNote(res.data.proposal_note ?? '');
+      show(res.data.dry_run_result === 'passed' ? 'Rollout proposal dry run passed' : 'Rollout proposal dry run blocked', 'success');
+    } catch {
+      show('Rollout proposal dry run is blocked', 'error');
+    } finally {
+      setProposalSubmitting(false);
+    }
+  }
+
+  async function withdrawRolloutProposal() {
+    if (!merchant) return;
+    setProposalSubmitting(true);
+    try {
+      const res = await withdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal(merchant.merchant_id, {
+        reason: proposalNote.trim() || undefined,
+      });
+      setRolloutProposal(res.data);
+      setProposalNote(res.data.proposal_note ?? '');
+      show('Rollout proposal withdrawn', 'success');
+    } catch {
+      show('Rollout proposal withdrawal is blocked', 'error');
+    } finally {
+      setProposalSubmitting(false);
     }
   }
 
@@ -307,6 +372,19 @@ export function CommerceOnboarding() {
     : operatorReview?.review_request_status === 'requested'
       ? 'Record a non-production operator review decision.'
       : 'A pending read-only discovery review request is required.';
+  const proposalStatus = rolloutProposal?.proposal_status ?? 'not_created';
+  const proposalBlocked = Boolean(rolloutProposal?.blockers.length);
+  const proposalCreateDisabled = proposalSubmitting
+    || operatorReview?.operator_decision !== 'rollout_proposal_ready'
+    || proposalBlocked;
+  const proposalDryRunDisabled = proposalSubmitting
+    || !rolloutProposal
+    || proposalStatus === 'not_created'
+    || proposalStatus === 'withdrawn';
+  const proposalWithdrawDisabled = proposalSubmitting
+    || !rolloutProposal
+    || proposalStatus === 'not_created'
+    || proposalStatus === 'withdrawn';
 
   return (
     <div>
@@ -642,6 +720,151 @@ export function CommerceOnboarding() {
                 title={operatorDecisionTitle}
               >
                 {decisionSubmitting ? 'Recording' : 'Record operator decision'}
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="xl:col-span-2">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gx-text">Rollout proposal</h2>
+                <p className="mt-1 text-xs text-gx-muted">
+                  Proposal evidence is non-enabling; dry_run_passed is not launch, production approval, public discovery, checkout, live provider, or live Plural.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={proposalStatus === 'dry_run_passed' ? 'success' : proposalStatus === 'dry_run_blocked' ? 'danger' : 'warning'}>
+                  {proposalStatus}
+                </Badge>
+                <Badge variant={rolloutProposal?.dry_run_result === 'passed' ? 'success' : rolloutProposal?.dry_run_result === 'blocked' ? 'danger' : 'warning'}>
+                  {rolloutProposal?.dry_run_result ?? 'not_run'}
+                </Badge>
+                <Badge variant="danger">{rolloutProposal?.production_approval_status ?? 'not_approved'}</Badge>
+                <Badge variant="danger">{rolloutProposal?.live_mode_status ?? 'not_live'}</Badge>
+              </div>
+            </div>
+            <div className="grid gap-2 md:grid-cols-3">
+              {[
+                { label: 'proposal_is_approval', value: rolloutProposal?.proposal_is_approval ?? false },
+                { label: 'dry_run_is_launch', value: rolloutProposal?.dry_run_is_launch ?? false },
+                { label: 'public_discovery_enabled', value: rolloutProposal?.public_discovery_enabled ?? false },
+                { label: 'checkout_payment_enabled', value: rolloutProposal?.checkout_payment_enabled ?? false },
+                { label: 'live_provider_enabled', value: rolloutProposal?.live_provider_enabled ?? false },
+                { label: 'live_plural_enabled', value: rolloutProposal?.live_plural_enabled ?? false },
+                { label: 'production_allowlist_written', value: rolloutProposal?.production_allowlist_written ?? false },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-md border border-gx-border p-3">
+                  <div className="text-xs text-gx-muted">{label}</div>
+                  <Badge variant={value ? 'danger' : 'success'}>{value ? 'true' : 'false'}</Badge>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">
+              <div>
+                <div className="text-xs text-gx-muted">Created</div>
+                <DateText value={rolloutProposal?.created_at ?? null} />
+              </div>
+              <div>
+                <div className="text-xs text-gx-muted">Dry run checked</div>
+                <DateText value={rolloutProposal?.dry_run_checked_at ?? null} />
+              </div>
+              <div>
+                <div className="text-xs text-gx-muted">Operator decision</div>
+                <div className="text-gx-text">{rolloutProposal?.operator_review.operator_decision ?? operatorReview?.operator_decision ?? 'none'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gx-muted">Audit event</div>
+                <div className="text-gx-text">{rolloutProposal?.audit_event_id ?? 'pending'}</div>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-xs text-gx-muted">Category readiness</div>
+                <Badge variant={readinessVariant(rolloutProposal?.evidence.category_readiness_summary.status ?? merchant.readiness.category_readiness.status)}>
+                  {rolloutProposal?.evidence.category_readiness_summary.score_percent ?? merchant.readiness.category_readiness.score_percent}%
+                </Badge>
+              </div>
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-xs text-gx-muted">Catalog readiness</div>
+                <Badge variant={readinessVariant(rolloutProposal?.evidence.catalog_readiness_summary.status ?? merchant.readiness.catalog_readiness.status)}>
+                  {rolloutProposal?.evidence.catalog_readiness_summary.score_percent ?? merchant.readiness.catalog_readiness.score_percent}%
+                </Badge>
+              </div>
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-xs text-gx-muted">Agent-facing preview</div>
+                <Badge variant={readinessVariant(rolloutProposal?.evidence.agent_facing_preview_summary.preview_status ?? merchant.agent_facing_preview.preview_status)}>
+                  {rolloutProposal?.evidence.agent_facing_preview_summary.preview_status ?? merchant.agent_facing_preview.preview_status}
+                </Badge>
+              </div>
+            </div>
+            <div className="mt-4 rounded-md border border-gx-border p-3">
+              <div className="text-sm font-medium text-gx-text">Evidence checklist</div>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                {(rolloutProposal?.evidence_checklist ?? [
+                  { key: 'operator_review_rollout_proposal_ready', label: 'Operator review marked rollout_proposal_ready', status: operatorReview?.operator_decision === 'rollout_proposal_ready' ? 'pass' as const : 'blocked' as const },
+                  { key: 'non_enabling_controls_locked', label: 'Non-enabling controls locked', status: 'pass' as const },
+                ]).map((item) => (
+                  <div key={item.key} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-gx-muted">{item.label}</span>
+                    <Badge variant={item.status === 'pass' ? 'success' : 'danger'}>{item.status}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {rolloutProposal?.blockers.length ? (
+              <div className="mt-4 rounded-md border border-gx-danger/40 bg-gx-danger/5 p-3">
+                <div className="text-sm font-medium text-gx-text">Proposal blockers</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {rolloutProposal.blockers.map((blocker) => (
+                    <Badge key={blocker} variant="danger">{capabilityLabel(blocker)}</Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {rolloutProposal?.remediation_items.length ? (
+              <div className="mt-4 rounded-md border border-gx-border p-3">
+                <div className="text-sm font-medium text-gx-text">Proposal remediation</div>
+                <div className="mt-2 grid gap-2 text-xs text-gx-warning">
+                  {rolloutProposal.remediation_items.map((item) => (
+                    <div key={item}>{item}</div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="mt-4">
+              <label htmlFor="rollout-proposal-note" className="mb-1.5 block text-sm font-medium text-gx-text">
+                Proposal note
+              </label>
+              <textarea
+                id="rollout-proposal-note"
+                value={proposalNote}
+                onChange={(e) => setProposalNote(e.target.value)}
+                rows={3}
+                className="w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                onClick={createRolloutProposal}
+                disabled={proposalCreateDisabled}
+                title={proposalBlocked ? rolloutProposal?.blockers.map(capabilityLabel).join(', ') : 'Create or update non-enabling proposal evidence.'}
+              >
+                {proposalSubmitting ? 'Saving' : proposalStatus === 'not_created' ? 'Create proposal' : 'Update proposal'}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={runRolloutProposalDryRun}
+                disabled={proposalDryRunDisabled}
+              >
+                {proposalSubmitting ? 'Running' : 'Run dry run'}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={withdrawRolloutProposal}
+                disabled={proposalWithdrawDisabled}
+              >
+                Withdraw proposal
               </Button>
             </div>
           </Card>

@@ -286,6 +286,17 @@ export type ReadOnlyDiscoveryOperatorReviewStatus =
   | ReadOnlyDiscoveryReviewStatus
   | ReadOnlyDiscoveryOperatorDecision;
 
+export const READ_ONLY_DISCOVERY_ROLLOUT_PROPOSAL_STATES = [
+  'not_created',
+  'draft_created',
+  'dry_run_passed',
+  'dry_run_blocked',
+  'withdrawn',
+] as const;
+
+export type ReadOnlyDiscoveryRolloutProposalState =
+  typeof READ_ONLY_DISCOVERY_ROLLOUT_PROPOSAL_STATES[number];
+
 export type SandboxReadOnlyDiscoveryReviewPayload = {
   status: ReadOnlyDiscoveryReviewStatus;
   eligible: boolean;
@@ -350,6 +361,88 @@ export type SandboxReadOnlyDiscoveryOperatorReviewPayload = {
   checkout_payment_enabled: false;
   live_provider_enabled: false;
   production_allowlist_written: false;
+  audit_event_id: string | null;
+} & Record<LiveProviderPreviewFlagKey, false>;
+
+export type SandboxReadOnlyDiscoveryRolloutProposalPayload = {
+  merchant_id: string;
+  tenant_id: string;
+  merchant_reference: string;
+  display_name: string | null;
+  proposal_status: ReadOnlyDiscoveryRolloutProposalState;
+  proposal_note: string | null;
+  dry_run_result: 'not_run' | 'passed' | 'blocked';
+  created_at: string | null;
+  updated_at: string | null;
+  dry_run_checked_at: string | null;
+  withdrawn_at: string | null;
+  operator_review: {
+    operator_decision: ReadOnlyDiscoveryOperatorDecision | null;
+    decision_reason: string | null;
+    decision_recorded_at: string | null;
+    decision_actor: string | null;
+  };
+  evidence: {
+    merchant_sandbox_profile_summary: {
+      merchant_reference: string;
+      display_name: string | null;
+      category_preset: 'electronics_appliances' | null;
+      country_code: string | null;
+      default_currency: string | null;
+      public_discovery_description_draft: string | null;
+      support_email: string | null;
+      support_url: string | null;
+    };
+    category_readiness_summary: {
+      status: SandboxReadinessStatus;
+      score_percent: number;
+      summary: string;
+    };
+    catalog_readiness_summary: {
+      status: SandboxReadinessStatus;
+      score_percent: number;
+      product_count: number;
+      variant_count: number;
+      summary: string;
+    };
+    agent_facing_preview_summary: {
+      preview_status: SandboxAgentFacingPreviewPayload['preview_status'];
+      preview_blockers: string[];
+      sample_product_count: number;
+      allowed_preview_capabilities: SandboxAgentFacingPreviewPayload['allowed_preview_capabilities'];
+      blocked_capabilities: SandboxAgentFacingPreviewPayload['blocked_capabilities'];
+    };
+    blocker_remediation_status: {
+      blockers: string[];
+      remediation_items: string[];
+    };
+    non_enabling_controls: {
+      sandbox_only: true;
+      production_approval_status: 'not_approved';
+      rollout_status: 'rollout_not_requested';
+      public_discovery_enabled: false;
+      checkout_payment_enabled: false;
+      live_provider_enabled: false;
+      production_allowlist_written: false;
+    } & Record<LiveProviderPreviewFlagKey, false>;
+  };
+  evidence_checklist: Array<{
+    key: string;
+    label: string;
+    status: 'pass' | 'blocked';
+  }>;
+  blockers: string[];
+  remediation_items: string[];
+  sandbox_only: true;
+  proposal_is_approval: false;
+  dry_run_is_launch: false;
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  production_allowlist_written: false;
+  live_mode_status: 'not_live';
+  production_approval_status: 'not_approved';
+  rollout_status: 'rollout_not_requested';
   audit_event_id: string | null;
 } & Record<LiveProviderPreviewFlagKey, false>;
 
@@ -1367,6 +1460,54 @@ function metadataStringArray(metadata: Record<string, unknown>, key: string): st
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
 }
 
+function proposalStatusFromAuditEvent(eventType: string | null): ReadOnlyDiscoveryRolloutProposalState {
+  if (eventType === 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.withdrawn') {
+    return 'withdrawn';
+  }
+  if (eventType === 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.dry_run_passed') {
+    return 'dry_run_passed';
+  }
+  if (eventType === 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.dry_run_blocked') {
+    return 'dry_run_blocked';
+  }
+  if (eventType === 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.created'
+    || eventType === 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.updated') {
+    return 'draft_created';
+  }
+  return 'not_created';
+}
+
+function proposalDryRunResult(status: ReadOnlyDiscoveryRolloutProposalState): 'not_run' | 'passed' | 'blocked' {
+  if (status === 'dry_run_passed') return 'passed';
+  if (status === 'dry_run_blocked') return 'blocked';
+  return 'not_run';
+}
+
+function rolloutProposalRemediation(blocker: string): string {
+  if (blocker === 'read_only_discovery_review_request_evidence_missing') {
+    return 'Request read-only discovery review before creating a rollout proposal.';
+  }
+  if (blocker === 'operator_review_rollout_proposal_ready_missing') {
+    return 'Record rollout_proposal_ready in the operator review workflow before creating a rollout proposal.';
+  }
+  if (blocker === 'merchant_not_sandbox') {
+    return 'Use a sandbox merchant for read-only discovery rollout proposal evidence.';
+  }
+  if (blocker === 'sandbox_readiness_not_passed') {
+    return 'Restore sandbox onboarding, category, and catalog readiness before dry-run evidence can pass.';
+  }
+  if (blocker === 'agent_facing_preview_blocked') {
+    return 'Resolve agent-facing preview blockers before dry-run evidence can pass.';
+  }
+  if (blocker === 'operator_review_has_blockers') {
+    return 'Resolve operator review blockers before proceeding with the rollout proposal.';
+  }
+  if (blocker === 'proposal_withdrawn') {
+    return 'Create or update a proposal again before running another dry run.';
+  }
+  return 'Resolve this blocker before treating the proposal dry run as passed.';
+}
+
 export function toSandboxReadOnlyDiscoveryOperatorReviewResponse(
   merchant: SandboxOnboardingMerchant,
   readiness = computeSandboxOnboardingReadiness(merchant),
@@ -1430,6 +1571,178 @@ export function toSandboxReadOnlyDiscoveryOperatorReviewResponse(
     [LIVE_PROVIDER_PREVIEW_FLAG]: false,
     production_allowlist_written: false,
     audit_event_id: latestDecisionAudit?.audit_event_id ?? null,
+  };
+}
+
+export function toSandboxReadOnlyDiscoveryRolloutProposalResponse(
+  merchant: SandboxOnboardingMerchant,
+  readiness = computeSandboxOnboardingReadiness(merchant),
+  sampleProducts: SandboxAgentPreviewProductInput[] = [],
+  latestRequestAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null = null,
+  latestDecisionAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null = null,
+  latestProposalAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null = null,
+  now = new Date(),
+): SandboxReadOnlyDiscoveryRolloutProposalPayload {
+  const onboarding = toSandboxOnboardingResponse(merchant, readiness, sampleProducts, now);
+  const operatorReview = toSandboxReadOnlyDiscoveryOperatorReviewResponse(
+    merchant,
+    readiness,
+    sampleProducts,
+    latestRequestAudit,
+    latestDecisionAudit,
+    now,
+  );
+  const proposalMetadata = latestProposalAudit?.metadata ?? {};
+  const proposalStatus = proposalStatusFromAuditEvent(latestProposalAudit?.event_type ?? null);
+  const computedBlockers: string[] = [];
+  if (merchant.environment !== 'sandbox') addUnique(computedBlockers, 'merchant_not_sandbox');
+  if (!latestRequestAudit) {
+    addUnique(computedBlockers, 'read_only_discovery_review_request_evidence_missing');
+  }
+  if (operatorReview.operator_decision !== 'rollout_proposal_ready') {
+    addUnique(computedBlockers, 'operator_review_rollout_proposal_ready_missing');
+  }
+  if (!readiness.ready) addUnique(computedBlockers, 'sandbox_readiness_not_passed');
+  if (onboarding.agent_facing_preview.preview_status !== 'ready') {
+    addUnique(computedBlockers, 'agent_facing_preview_blocked');
+  }
+  if (operatorReview.blockers.length > 0) addUnique(computedBlockers, 'operator_review_has_blockers');
+  if (proposalStatus === 'withdrawn') addUnique(computedBlockers, 'proposal_withdrawn');
+
+  const auditedBlockers = metadataStringArray(proposalMetadata, 'blockers');
+  const blockers = proposalStatus === 'dry_run_blocked' && auditedBlockers.length > 0
+    ? auditedBlockers
+    : computedBlockers;
+  const remediationItems = metadataStringArray(proposalMetadata, 'remediation_items');
+  const proposalNote = metadataString(proposalMetadata, 'proposal_note');
+  const createdAt = metadataString(proposalMetadata, 'proposal_created_at')
+    ?? (latestProposalAudit?.event_type === 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.created'
+      ? latestProposalAudit.occurred_at
+      : null);
+  const dryRunCheckedAt = proposalStatus === 'dry_run_passed' || proposalStatus === 'dry_run_blocked'
+    ? latestProposalAudit?.occurred_at ?? null
+    : null;
+  const withdrawnAt = proposalStatus === 'withdrawn' ? latestProposalAudit?.occurred_at ?? null : null;
+  const checklist = [
+    {
+      key: 'sandbox_profile_ready',
+      label: 'Sandbox profile readiness',
+      status: readiness.ready ? 'pass' as const : 'blocked' as const,
+    },
+    {
+      key: 'category_readiness_passed',
+      label: 'Category readiness passed',
+      status: readiness.category_readiness.status === 'pass' ? 'pass' as const : 'blocked' as const,
+    },
+    {
+      key: 'catalog_readiness_passed',
+      label: 'Catalog readiness passed',
+      status: readiness.catalog_readiness.status === 'pass' ? 'pass' as const : 'blocked' as const,
+    },
+    {
+      key: 'agent_facing_preview_ready',
+      label: 'Agent-facing preview ready',
+      status: onboarding.agent_facing_preview.preview_status === 'ready' ? 'pass' as const : 'blocked' as const,
+    },
+    {
+      key: 'read_only_discovery_review_requested',
+      label: 'Read-only discovery review request evidence',
+      status: latestRequestAudit ? 'pass' as const : 'blocked' as const,
+    },
+    {
+      key: 'operator_review_rollout_proposal_ready',
+      label: 'Operator review marked rollout_proposal_ready',
+      status: operatorReview.operator_decision === 'rollout_proposal_ready' ? 'pass' as const : 'blocked' as const,
+    },
+    {
+      key: 'non_enabling_controls_locked',
+      label: 'Non-enabling controls locked',
+      status: 'pass' as const,
+    },
+  ];
+
+  return {
+    merchant_id: onboarding.merchant_id,
+    tenant_id: onboarding.tenant_id,
+    merchant_reference: onboarding.merchant_id,
+    display_name: onboarding.agent_facing_preview.merchant.display_name,
+    proposal_status: proposalStatus,
+    proposal_note: proposalNote,
+    dry_run_result: proposalDryRunResult(proposalStatus),
+    created_at: createdAt,
+    updated_at: latestProposalAudit?.occurred_at ?? null,
+    dry_run_checked_at: dryRunCheckedAt,
+    withdrawn_at: withdrawnAt,
+    operator_review: {
+      operator_decision: operatorReview.operator_decision,
+      decision_reason: operatorReview.decision_reason,
+      decision_recorded_at: operatorReview.decision_recorded_at,
+      decision_actor: operatorReview.decision_actor,
+    },
+    evidence: {
+      merchant_sandbox_profile_summary: {
+        merchant_reference: onboarding.agent_facing_preview.merchant.merchant_reference,
+        display_name: onboarding.agent_facing_preview.merchant.display_name,
+        category_preset: onboarding.agent_facing_preview.merchant.category_preset,
+        country_code: onboarding.agent_facing_preview.merchant.country_code,
+        default_currency: onboarding.agent_facing_preview.merchant.default_currency,
+        public_discovery_description_draft: onboarding.agent_facing_preview.merchant.public_discovery_description_draft,
+        support_email: onboarding.agent_facing_preview.merchant.support_email,
+        support_url: onboarding.agent_facing_preview.merchant.support_url,
+      },
+      category_readiness_summary: {
+        status: readiness.category_readiness.status,
+        score_percent: readiness.category_readiness.score_percent,
+        summary: readiness.category_readiness.summary,
+      },
+      catalog_readiness_summary: {
+        status: readiness.catalog_readiness.status,
+        score_percent: readiness.catalog_readiness.score_percent,
+        product_count: readiness.catalog_readiness.product_count,
+        variant_count: readiness.catalog_readiness.variant_count,
+        summary: readiness.catalog_readiness.summary,
+      },
+      agent_facing_preview_summary: {
+        preview_status: onboarding.agent_facing_preview.preview_status,
+        preview_blockers: onboarding.agent_facing_preview.preview_blockers,
+        sample_product_count: onboarding.agent_facing_preview.sample_products.length,
+        allowed_preview_capabilities: onboarding.agent_facing_preview.allowed_preview_capabilities,
+        blocked_capabilities: onboarding.agent_facing_preview.blocked_capabilities,
+      },
+      blocker_remediation_status: {
+        blockers,
+        remediation_items: remediationItems.length > 0
+          ? remediationItems
+          : blockers.map(rolloutProposalRemediation),
+      },
+      non_enabling_controls: {
+        sandbox_only: true,
+        production_approval_status: 'not_approved',
+        rollout_status: 'rollout_not_requested',
+        public_discovery_enabled: false,
+        checkout_payment_enabled: false,
+        live_provider_enabled: false,
+        [LIVE_PROVIDER_PREVIEW_FLAG]: false,
+        production_allowlist_written: false,
+      },
+    },
+    evidence_checklist: checklist,
+    blockers,
+    remediation_items: remediationItems.length > 0
+      ? remediationItems
+      : blockers.map(rolloutProposalRemediation),
+    sandbox_only: true,
+    proposal_is_approval: false,
+    dry_run_is_launch: false,
+    public_discovery_enabled: false,
+    checkout_payment_enabled: false,
+    live_provider_enabled: false,
+    [LIVE_PROVIDER_PREVIEW_FLAG]: false,
+    production_allowlist_written: false,
+    live_mode_status: 'not_live',
+    production_approval_status: 'not_approved',
+    rollout_status: 'rollout_not_requested',
+    audit_event_id: latestProposalAudit?.audit_event_id ?? null,
   };
 }
 

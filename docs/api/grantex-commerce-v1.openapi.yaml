@@ -31,6 +31,12 @@ info:
     enablement. C6C adds a tenant-scoped, public-safe agent-facing preview
     payload for sandbox review only; it does not publish discovery, approve
     merchants, enable checkout/payment creation, or enable live provider paths.
+    C6D adds a sandbox read-only discovery review request workflow, C6E adds
+    operator review decisions, and C6F adds an audit-backed rollout proposal and
+    dry-run evidence package. These C6 workflows remain proposal-only and
+    non-enabling; they do not approve merchants, publish discovery, create
+    checkout/payment paths, enable live providers, enable live Plural, write
+    production config, or set allowlists.
 servers:
   - url: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
     description: Production (Cloud Run)
@@ -578,6 +584,174 @@ components:
           items:
             type: string
           description: Public-safe remediation items. Required by runtime for changes_requested decisions.
+
+    SandboxReadOnlyDiscoveryRolloutProposalStatus:
+      type: string
+      enum: [not_created, draft_created, dry_run_passed, dry_run_blocked, withdrawn]
+      description: >-
+        C6F proposal-only state. None of these values is production approval,
+        launch approval, certification, live readiness, public discovery
+        enablement, checkout/payment enablement, provider enablement, or
+        allowlist writing.
+
+    SandboxReadOnlyDiscoveryRolloutProposalRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        proposal_note:
+          type: string
+          description: Public-safe proposal note; secrets, private merchant details, provider credentials, raw payloads, tokens, JWTs, DB/Redis URLs, production config values, concrete allowlists, and live/payment/discovery claims are rejected.
+
+    SandboxReadOnlyDiscoveryRolloutProposalWithdrawRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          description: Public-safe withdrawal reason; private artifacts, secrets, raw payloads, credentials, production config values, and live/payment/discovery claims are rejected.
+
+    SandboxReadOnlyDiscoveryRolloutProposal:
+      type: object
+      additionalProperties: false
+      description: >-
+        C6F tenant-scoped, operator-only rollout proposal and dry-run evidence
+        package for sandbox merchants that have a C6E rollout_proposal_ready
+        operator decision. The proposal is not approval, launch, certification,
+        production readiness, public discovery enablement, checkout/payment
+        enablement, live provider enablement, live Plural enablement, or
+        allowlist/config writing.
+      properties:
+        merchant_id: { type: string }
+        tenant_id: { type: string }
+        merchant_reference: { type: string }
+        display_name: { type: string, nullable: true }
+        proposal_status: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryRolloutProposalStatus" }
+        proposal_note: { type: string, nullable: true }
+        dry_run_result: { type: string, enum: [not_run, passed, blocked] }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+        dry_run_checked_at: { type: string, format: date-time, nullable: true }
+        withdrawn_at: { type: string, format: date-time, nullable: true }
+        operator_review:
+          type: object
+          additionalProperties: false
+          properties:
+            operator_decision:
+              nullable: true
+              oneOf:
+                - { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryOperatorDecision" }
+                - { type: "null" }
+            decision_reason: { type: string, nullable: true }
+            decision_recorded_at: { type: string, format: date-time, nullable: true }
+            decision_actor: { type: string, nullable: true }
+        evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            merchant_sandbox_profile_summary:
+              type: object
+              additionalProperties: false
+              properties:
+                merchant_reference: { type: string }
+                display_name: { type: string, nullable: true }
+                category_preset: { type: string, enum: [electronics_appliances], nullable: true }
+                country_code: { type: string, pattern: "^[A-Z]{2}$", nullable: true }
+                default_currency: { type: string, pattern: "^[A-Z]{3}$", nullable: true }
+                public_discovery_description_draft: { type: string, nullable: true }
+                support_email: { type: string, nullable: true }
+                support_url: { type: string, nullable: true }
+            category_readiness_summary:
+              type: object
+              additionalProperties: false
+              properties:
+                status: { $ref: "#/components/schemas/SandboxReadinessStatus" }
+                score_percent: { type: integer, minimum: 0, maximum: 100 }
+                summary: { type: string }
+            catalog_readiness_summary:
+              type: object
+              additionalProperties: false
+              properties:
+                status: { $ref: "#/components/schemas/SandboxReadinessStatus" }
+                score_percent: { type: integer, minimum: 0, maximum: 100 }
+                product_count: { type: integer, minimum: 0 }
+                variant_count: { type: integer, minimum: 0 }
+                summary: { type: string }
+            agent_facing_preview_summary:
+              type: object
+              additionalProperties: false
+              properties:
+                preview_status: { type: string, enum: [ready, blocked] }
+                preview_blockers:
+                  type: array
+                  items: { type: string }
+                sample_product_count: { type: integer, minimum: 0 }
+                allowed_preview_capabilities:
+                  type: array
+                  items:
+                    type: string
+                    enum: [read_only_profile_preview, read_only_catalog_preview, readiness_review_preview]
+                blocked_capabilities:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - public_discovery
+                      - checkout_payment_creation
+                      - live_payment
+                      - live_plural
+                      - provider_credentials
+                      - order_fulfillment
+                      - refunds_returns_execution
+                      - production_allowlist
+            blocker_remediation_status:
+              type: object
+              additionalProperties: false
+              properties:
+                blockers:
+                  type: array
+                  items: { type: string }
+                remediation_items:
+                  type: array
+                  items: { type: string }
+            non_enabling_controls:
+              type: object
+              additionalProperties: false
+              properties:
+                sandbox_only: { type: boolean, const: true }
+                production_approval_status: { type: string, enum: [not_approved] }
+                rollout_status: { type: string, enum: [rollout_not_requested] }
+                public_discovery_enabled: { type: boolean, const: false }
+                checkout_payment_enabled: { type: boolean, const: false }
+                live_provider_enabled: { type: boolean, const: false }
+                live_plural_enabled: { type: boolean, const: false }
+                production_allowlist_written: { type: boolean, const: false }
+        evidence_checklist:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              key: { type: string }
+              label: { type: string }
+              status: { type: string, enum: [pass, blocked] }
+        blockers:
+          type: array
+          items: { type: string }
+        remediation_items:
+          type: array
+          items: { type: string }
+        sandbox_only: { type: boolean, const: true }
+        proposal_is_approval: { type: boolean, const: false }
+        dry_run_is_launch: { type: boolean, const: false }
+        public_discovery_enabled: { type: boolean, const: false }
+        checkout_payment_enabled: { type: boolean, const: false }
+        live_provider_enabled: { type: boolean, const: false }
+        live_plural_enabled: { type: boolean, const: false }
+        production_allowlist_written: { type: boolean, const: false }
+        live_mode_status: { type: string, enum: [not_live] }
+        production_approval_status: { type: string, enum: [not_approved] }
+        rollout_status: { type: string, enum: [rollout_not_requested] }
+        audit_event_id: { type: string, nullable: true }
 
     SandboxOnboarding:
       type: object
@@ -2023,6 +2197,145 @@ paths:
         "403": { description: Operator caller required; merchant and CommerceAgent callers are denied }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Live merchant, missing request, or stale blockers prevent decision }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/read-only-discovery-rollout-proposal:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    get:
+      tags: [Merchants]
+      summary: Inspect read-only discovery rollout proposal evidence
+      operationId: getMerchantReadOnlyDiscoveryRolloutProposal
+      x-implemented: true
+      x-milestone: C6F
+      description: >-
+        Operator-only inspection endpoint for the proposal-only C6F evidence
+        package. It returns proposal status, dry-run status, C5Z/C6A/C6B/C6C/C6D/C6E
+        readiness evidence, blockers, remediation, audit reference, and fixed
+        non-enabling controls. It does not approve, launch, publish public
+        discovery, enable checkout/payment creation, enable live provider paths,
+        enable live Plural, write production config, or set allowlists.
+      responses:
+        "200":
+          description: Rollout proposal evidence
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryRolloutProposal" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator caller required; merchant and CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant is blocked from sandbox rollout proposal workflow }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+    post:
+      tags: [Merchants]
+      summary: Create or update read-only discovery rollout proposal
+      operationId: createMerchantReadOnlyDiscoveryRolloutProposal
+      x-implemented: true
+      x-milestone: C6F
+      description: >-
+        Creates or updates an audit-backed, proposal-only dry-run evidence
+        package after the C6E operator decision is rollout_proposal_ready and
+        current sandbox prerequisites still pass. Proposal creation is not
+        production approval, launch approval, certification, public discovery
+        enablement, checkout/payment enablement, live provider enablement, live
+        Plural enablement, production config writing, or allowlist writing.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryRolloutProposalRequest" }
+      responses:
+        "200":
+          description: Rollout proposal created or updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryRolloutProposal" }
+                  audit_event_id: { type: string }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator caller required; merchant and CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant, missing rollout_proposal_ready decision, or stale blockers prevent proposal creation }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/read-only-discovery-rollout-proposal/dry-run:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    post:
+      tags: [Merchants]
+      summary: Run read-only discovery rollout proposal dry-run evidence
+      operationId: dryRunMerchantReadOnlyDiscoveryRolloutProposal
+      x-implemented: true
+      x-milestone: C6F
+      description: >-
+        Records a proposal dry-run evidence result for an existing proposal.
+        The dry run passes only when current sandbox prerequisites still pass;
+        otherwise it records dry_run_blocked with public-safe blockers and
+        remediation. It is not launch, production approval, public discovery,
+        checkout/payment creation, live provider enablement, live Plural
+        enablement, production config writing, or allowlist writing.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryRolloutProposalRequest" }
+      responses:
+        "200":
+          description: Dry-run evidence recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryRolloutProposal" }
+                  audit_event_id: { type: string }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator caller required; merchant and CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant, missing proposal, or withdrawn proposal prevents dry-run evidence }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/read-only-discovery-rollout-proposal/withdraw:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    post:
+      tags: [Merchants]
+      summary: Withdraw read-only discovery rollout proposal
+      operationId: withdrawMerchantReadOnlyDiscoveryRolloutProposal
+      x-implemented: true
+      x-milestone: C6F
+      description: >-
+        Withdraws an existing proposal by writing public-safe audit evidence.
+        Withdrawal does not approve, launch, publish public discovery, enable
+        checkout/payment creation, enable live provider paths, enable live
+        Plural, write production configuration, or set allowlists.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryRolloutProposalWithdrawRequest" }
+      responses:
+        "200":
+          description: Rollout proposal withdrawn
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryRolloutProposal" }
+                  audit_event_id: { type: string }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator caller required; merchant and CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant or missing proposal prevents withdrawal }
         "503": { $ref: "#/components/responses/CommerceDisabled" }
 
   /v1/commerce/merchants/{merchant_id}/disable-agentic-commerce:

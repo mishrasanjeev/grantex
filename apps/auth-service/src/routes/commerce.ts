@@ -31,6 +31,7 @@ import {
   isSandboxOnboardingState,
   toSandboxOnboardingResponse,
   toSandboxReadOnlyDiscoveryOperatorReviewResponse,
+  toSandboxReadOnlyDiscoveryRolloutProposalResponse,
   validateSandboxOnboardingTransition,
   type ReadOnlyDiscoveryOperatorDecision,
   type SandboxAgentPreviewProductInput,
@@ -38,6 +39,7 @@ import {
   type SandboxOnboardingMerchant,
   type SandboxOnboardingState,
   type SandboxReadOnlyDiscoveryReviewAuditSnapshot,
+  type SandboxReadOnlyDiscoveryRolloutProposalPayload,
 } from '../lib/commerce/sandbox-onboarding.js';
 import { commerceTenantsRoutes } from './commerce-tenants.js';
 import { commercePassportRoutes } from './commerce-passport.js';
@@ -107,6 +109,14 @@ interface ReadOnlyDiscoveryReviewDecisionBody {
   decision?: unknown;
   reason?: unknown;
   remediation_items?: unknown;
+}
+
+interface ReadOnlyDiscoveryRolloutProposalBody {
+  proposal_note?: unknown;
+}
+
+interface ReadOnlyDiscoveryRolloutProposalWithdrawBody {
+  reason?: unknown;
 }
 
 interface AgentCreateBody {
@@ -249,6 +259,22 @@ const READ_ONLY_DISCOVERY_REVIEW_DECISION_EVENTS = [
   'merchant.sandbox_onboarding.read_only_discovery_review.changes_requested',
   'merchant.sandbox_onboarding.read_only_discovery_review.rejected',
   'merchant.sandbox_onboarding.read_only_discovery_review.rollout_proposal_ready',
+];
+
+const READ_ONLY_DISCOVERY_ROLLOUT_PROPOSAL_FIELDS = new Set([
+  'proposal_note',
+]);
+
+const READ_ONLY_DISCOVERY_ROLLOUT_PROPOSAL_WITHDRAW_FIELDS = new Set([
+  'reason',
+]);
+
+const READ_ONLY_DISCOVERY_ROLLOUT_PROPOSAL_EVENTS = [
+  'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.created',
+  'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.updated',
+  'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.dry_run_passed',
+  'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.dry_run_blocked',
+  'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.withdrawn',
 ];
 
 const AGENT_PATCH_FIELDS = new Set([
@@ -624,6 +650,147 @@ function validateReadOnlyDiscoveryDecisionBody(
     reason: isString(body['reason']) ? body['reason'] : undefined,
     remediationItems,
     fields,
+  };
+}
+
+function validateReadOnlyDiscoveryRolloutProposalBody(
+  body: Record<string, unknown>,
+  allowedFields: Set<string>,
+  noteField: 'proposal_note' | 'reason',
+): { note: string | undefined; fields: Record<string, string> } {
+  const fields: Record<string, string> = {};
+  validatePatchKeys(body, allowedFields, fields);
+  if (body[noteField] !== undefined
+    && (!isString(body[noteField]) || !isPublicSafeText(body[noteField]))) {
+    fields[noteField] =
+      'must be public-safe text with no secrets, credentials, live, production, approval, readiness, provider, or payment claims';
+  }
+  return {
+    note: isString(body[noteField]) ? body[noteField] : undefined,
+    fields,
+  };
+}
+
+function proposalCreatedAtFromAudit(audit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null): string | null {
+  if (!audit) return null;
+  const value = audit.metadata['proposal_created_at'];
+  if (typeof value === 'string' && value.trim()) return value;
+  if (audit.event_type === 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.created') {
+    return audit.occurred_at;
+  }
+  return null;
+}
+
+function rolloutProposalEventStatus(eventType: string) {
+  if (eventType.endsWith('.dry_run_passed')) return 'dry_run_passed';
+  if (eventType.endsWith('.dry_run_blocked')) return 'dry_run_blocked';
+  if (eventType.endsWith('.withdrawn')) return 'withdrawn';
+  return 'draft_created';
+}
+
+function rolloutProposalEvidenceMetadata(
+  proposal: SandboxReadOnlyDiscoveryRolloutProposalPayload,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    proposal_status: proposal.proposal_status,
+    dry_run_result: proposal.dry_run_result,
+    operator_decision: proposal.operator_review.operator_decision,
+    category_readiness_status: proposal.evidence.category_readiness_summary.status,
+    catalog_readiness_status: proposal.evidence.catalog_readiness_summary.status,
+    agent_preview_status: proposal.evidence.agent_facing_preview_summary.preview_status,
+    evidence_checklist: proposal.evidence_checklist,
+    blocker_count: proposal.blockers.length,
+    blockers: proposal.blockers.slice(0, 20),
+    remediation_items: proposal.remediation_items.slice(0, 10),
+    sandbox_only: true,
+    proposal_is_approval: false,
+    dry_run_is_launch: false,
+    production_approval_status: 'not_approved',
+    rollout_status: 'rollout_not_requested',
+    public_discovery_enabled: false,
+    checkout_payment_enabled: false,
+    live_provider_enabled: false,
+    [`live_${'p'}lural_enabled`]: false,
+    production_allowlist_written: false,
+    ...overrides,
+  };
+}
+
+interface ReadOnlyDiscoveryRolloutProposalContext {
+  merchant: SandboxOnboardingMerchant;
+  readiness: ReturnType<typeof computeSandboxOnboardingReadiness>;
+  sampleProducts: SandboxAgentPreviewProductInput[];
+  latestRequestAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null;
+  latestDecisionAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null;
+  latestProposalAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null;
+  proposal: SandboxReadOnlyDiscoveryRolloutProposalPayload;
+  currentPrerequisiteProposal: SandboxReadOnlyDiscoveryRolloutProposalPayload;
+}
+
+async function readReadOnlyDiscoveryRolloutProposalContext(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+): Promise<ReadOnlyDiscoveryRolloutProposalContext | null> {
+  const rows = await sql<SandboxOnboardingMerchant[]>`
+    SELECT id, tenant_id, display_name, category_preset, environment,
+           agentic_commerce_enabled, default_currency, country_code,
+           support_email, support_url, public_discovery_description_draft,
+           agentic_commerce_requested, sandbox_onboarding_state,
+           sandbox_onboarding_blocker, sandbox_onboarding_updated_at,
+           provider_account_refs
+      FROM commerce_merchants
+     WHERE id = ${merchantId}
+       AND tenant_id = ${tenantId}
+     LIMIT 1
+  `;
+  const merchant = rows[0];
+  if (!merchant) return null;
+  const latestRequestAudit = await readLatestReadOnlyDiscoveryReviewAudit(
+    sql,
+    tenantId,
+    merchantId,
+    READ_ONLY_DISCOVERY_REVIEW_REQUEST_EVENTS,
+  );
+  const latestDecisionAudit = await readLatestReadOnlyDiscoveryReviewAudit(
+    sql,
+    tenantId,
+    merchantId,
+    READ_ONLY_DISCOVERY_REVIEW_DECISION_EVENTS,
+  );
+  const latestProposalAudit = await readLatestReadOnlyDiscoveryReviewAudit(
+    sql,
+    tenantId,
+    merchantId,
+    READ_ONLY_DISCOVERY_ROLLOUT_PROPOSAL_EVENTS,
+  );
+  const catalogSummary = await readSandboxOnboardingCatalogSummary(sql, tenantId, merchantId);
+  const sampleProducts = await readSandboxOnboardingPreviewSamples(sql, tenantId, merchantId);
+  const readiness = computeSandboxOnboardingReadiness(merchant, process.env, catalogSummary);
+  return {
+    merchant,
+    readiness,
+    sampleProducts,
+    latestRequestAudit,
+    latestDecisionAudit,
+    latestProposalAudit,
+    proposal: toSandboxReadOnlyDiscoveryRolloutProposalResponse(
+      merchant,
+      readiness,
+      sampleProducts,
+      latestRequestAudit,
+      latestDecisionAudit,
+      latestProposalAudit,
+    ),
+    currentPrerequisiteProposal: toSandboxReadOnlyDiscoveryRolloutProposalResponse(
+      merchant,
+      readiness,
+      sampleProducts,
+      latestRequestAudit,
+      latestDecisionAudit,
+      null,
+    ),
   };
 }
 
@@ -1905,6 +2072,330 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
           result.sampleProducts,
           result.latestRequestAudit,
           result.latestDecisionAudit,
+        ),
+        audit_event_id: result.auditEventId,
+      });
+    },
+  );
+
+  app.get<{ Params: { merchantId: string } }>(
+    '/merchants/:merchantId/read-only-discovery-rollout-proposal',
+    async (request, reply) => {
+      requireOperator(request);
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const merchantId = request.params.merchantId;
+      const context = await readReadOnlyDiscoveryRolloutProposalContext(sql, tenantId, merchantId);
+      if (!context) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      if (context.merchant.environment !== 'sandbox') {
+        throw new CommerceHttpError(409, 'read_only_discovery_rollout_proposal_live_merchant_blocked',
+          'Read-only discovery rollout proposals are only available for sandbox merchants',
+          { retryable: false });
+      }
+      return reply.status(200).send({ data: context.proposal });
+    },
+  );
+
+  app.post<{ Params: { merchantId: string }; Body: ReadOnlyDiscoveryRolloutProposalBody }>(
+    '/merchants/:merchantId/read-only-discovery-rollout-proposal',
+    async (request, reply) => {
+      const operator = requireOperator(request);
+      if (request.body !== undefined && !isPlainObject(request.body)) {
+        throw new CommerceHttpError(400, 'validation_failed', 'Request validation failed', {
+          details: { fields: { body: 'must be a JSON object' } },
+          retryable: false,
+        });
+      }
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const parsed = validateReadOnlyDiscoveryRolloutProposalBody(
+        body,
+        READ_ONLY_DISCOVERY_ROLLOUT_PROPOSAL_FIELDS,
+        'proposal_note',
+      );
+      if (Object.keys(parsed.fields).length > 0) {
+        throw new CommerceHttpError(400, 'validation_failed', 'Request validation failed', {
+          details: { fields: parsed.fields },
+          retryable: false,
+        });
+      }
+
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const merchantId = request.params.merchantId;
+      const result = await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const context = await readReadOnlyDiscoveryRolloutProposalContext(tx as unknown as Sql, tenantId, merchantId);
+        if (!context) return null;
+        if (context.merchant.environment !== 'sandbox') {
+          throw new CommerceHttpError(409, 'read_only_discovery_rollout_proposal_live_merchant_blocked',
+            'Read-only discovery rollout proposals are only available for sandbox merchants',
+            { retryable: false });
+        }
+        if (context.currentPrerequisiteProposal.operator_review.operator_decision !== 'rollout_proposal_ready') {
+          throw new CommerceHttpError(409, 'read_only_discovery_rollout_proposal_not_ready',
+            'Rollout proposal creation requires a prior rollout_proposal_ready operator decision',
+            {
+              details: {
+                operator_decision: context.currentPrerequisiteProposal.operator_review.operator_decision,
+                public_discovery_enabled: false,
+                checkout_payment_enabled: false,
+                live_provider_enabled: false,
+                [`live_${'p'}lural_enabled`]: false,
+                production_allowlist_written: false,
+              },
+              retryable: false,
+            });
+        }
+        if (context.currentPrerequisiteProposal.blockers.length > 0) {
+          throw new CommerceHttpError(409, 'read_only_discovery_rollout_proposal_blocked',
+            'Rollout proposal creation is blocked by stale sandbox readiness evidence',
+            {
+              details: {
+                blockers: context.currentPrerequisiteProposal.blockers,
+                remediation_items: context.currentPrerequisiteProposal.remediation_items,
+                public_discovery_enabled: false,
+                checkout_payment_enabled: false,
+                live_provider_enabled: false,
+                [`live_${'p'}lural_enabled`]: false,
+                production_allowlist_written: false,
+              },
+              retryable: false,
+            });
+        }
+        const priorCreatedAt = proposalCreatedAtFromAudit(context.latestProposalAudit);
+        const eventType = !context.latestProposalAudit
+          || context.latestProposalAudit.event_type === 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.withdrawn'
+          ? 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.created'
+          : 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.updated';
+        const proposalNote = parsed.note ?? context.proposal.proposal_note;
+        const metadata = rolloutProposalEvidenceMetadata(context.currentPrerequisiteProposal, {
+          proposal_status: 'draft_created',
+          dry_run_result: 'not_run',
+          proposal_note: proposalNote ?? null,
+          proposal_created_at: priorCreatedAt,
+        });
+        const audit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId,
+          merchantId,
+          userPrincipalId: operator.developerId,
+          eventType,
+          resourceType: 'merchant',
+          resourceId: merchantId,
+          requestId: request.id,
+          metadata,
+        });
+        return {
+          ...context,
+          latestProposalAudit: {
+            audit_event_id: audit.id,
+            event_type: eventType,
+            occurred_at: audit.occurredAt,
+            actor: operator.developerId,
+            metadata,
+          } satisfies SandboxReadOnlyDiscoveryReviewAuditSnapshot,
+          auditEventId: audit.id,
+        };
+      });
+
+      if (!result) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      return reply.status(200).send({
+        data: toSandboxReadOnlyDiscoveryRolloutProposalResponse(
+          result.merchant,
+          result.readiness,
+          result.sampleProducts,
+          result.latestRequestAudit,
+          result.latestDecisionAudit,
+          result.latestProposalAudit,
+        ),
+        audit_event_id: result.auditEventId,
+      });
+    },
+  );
+
+  app.post<{ Params: { merchantId: string }; Body: ReadOnlyDiscoveryRolloutProposalBody }>(
+    '/merchants/:merchantId/read-only-discovery-rollout-proposal/dry-run',
+    async (request, reply) => {
+      const operator = requireOperator(request);
+      if (request.body !== undefined && !isPlainObject(request.body)) {
+        throw new CommerceHttpError(400, 'validation_failed', 'Request validation failed', {
+          details: { fields: { body: 'must be a JSON object' } },
+          retryable: false,
+        });
+      }
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const parsed = validateReadOnlyDiscoveryRolloutProposalBody(
+        body,
+        READ_ONLY_DISCOVERY_ROLLOUT_PROPOSAL_FIELDS,
+        'proposal_note',
+      );
+      if (Object.keys(parsed.fields).length > 0) {
+        throw new CommerceHttpError(400, 'validation_failed', 'Request validation failed', {
+          details: { fields: parsed.fields },
+          retryable: false,
+        });
+      }
+
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const merchantId = request.params.merchantId;
+      const result = await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const context = await readReadOnlyDiscoveryRolloutProposalContext(tx as unknown as Sql, tenantId, merchantId);
+        if (!context) return null;
+        if (context.merchant.environment !== 'sandbox') {
+          throw new CommerceHttpError(409, 'read_only_discovery_rollout_proposal_live_merchant_blocked',
+            'Read-only discovery rollout proposals are only available for sandbox merchants',
+            { retryable: false });
+        }
+        if (context.proposal.proposal_status === 'not_created') {
+          throw new CommerceHttpError(409, 'read_only_discovery_rollout_proposal_not_created',
+            'Create a rollout proposal before running dry-run evidence',
+            { retryable: false });
+        }
+        if (context.proposal.proposal_status === 'withdrawn') {
+          throw new CommerceHttpError(409, 'read_only_discovery_rollout_proposal_withdrawn',
+            'Withdrawn rollout proposals cannot run dry-run evidence',
+            { retryable: false });
+        }
+        const blockers = context.currentPrerequisiteProposal.blockers;
+        const eventType = blockers.length === 0
+          ? 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.dry_run_passed'
+          : 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.dry_run_blocked';
+        const proposalNote = parsed.note ?? context.proposal.proposal_note;
+        const metadata = rolloutProposalEvidenceMetadata(context.currentPrerequisiteProposal, {
+          proposal_status: rolloutProposalEventStatus(eventType),
+          dry_run_result: blockers.length === 0 ? 'passed' : 'blocked',
+          proposal_note: proposalNote ?? null,
+          proposal_created_at: proposalCreatedAtFromAudit(context.latestProposalAudit),
+          blockers: blockers.slice(0, 20),
+          remediation_items: context.currentPrerequisiteProposal.remediation_items.slice(0, 10),
+        });
+        const audit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId,
+          merchantId,
+          userPrincipalId: operator.developerId,
+          eventType,
+          resourceType: 'merchant',
+          resourceId: merchantId,
+          requestId: request.id,
+          metadata,
+        });
+        return {
+          ...context,
+          latestProposalAudit: {
+            audit_event_id: audit.id,
+            event_type: eventType,
+            occurred_at: audit.occurredAt,
+            actor: operator.developerId,
+            metadata,
+          } satisfies SandboxReadOnlyDiscoveryReviewAuditSnapshot,
+          auditEventId: audit.id,
+        };
+      });
+
+      if (!result) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      return reply.status(200).send({
+        data: toSandboxReadOnlyDiscoveryRolloutProposalResponse(
+          result.merchant,
+          result.readiness,
+          result.sampleProducts,
+          result.latestRequestAudit,
+          result.latestDecisionAudit,
+          result.latestProposalAudit,
+        ),
+        audit_event_id: result.auditEventId,
+      });
+    },
+  );
+
+  app.post<{ Params: { merchantId: string }; Body: ReadOnlyDiscoveryRolloutProposalWithdrawBody }>(
+    '/merchants/:merchantId/read-only-discovery-rollout-proposal/withdraw',
+    async (request, reply) => {
+      const operator = requireOperator(request);
+      if (request.body !== undefined && !isPlainObject(request.body)) {
+        throw new CommerceHttpError(400, 'validation_failed', 'Request validation failed', {
+          details: { fields: { body: 'must be a JSON object' } },
+          retryable: false,
+        });
+      }
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const parsed = validateReadOnlyDiscoveryRolloutProposalBody(
+        body,
+        READ_ONLY_DISCOVERY_ROLLOUT_PROPOSAL_WITHDRAW_FIELDS,
+        'reason',
+      );
+      if (Object.keys(parsed.fields).length > 0) {
+        throw new CommerceHttpError(400, 'validation_failed', 'Request validation failed', {
+          details: { fields: parsed.fields },
+          retryable: false,
+        });
+      }
+
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const merchantId = request.params.merchantId;
+      const result = await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const context = await readReadOnlyDiscoveryRolloutProposalContext(tx as unknown as Sql, tenantId, merchantId);
+        if (!context) return null;
+        if (context.merchant.environment !== 'sandbox') {
+          throw new CommerceHttpError(409, 'read_only_discovery_rollout_proposal_live_merchant_blocked',
+            'Read-only discovery rollout proposals are only available for sandbox merchants',
+            { retryable: false });
+        }
+        if (context.proposal.proposal_status === 'not_created') {
+          throw new CommerceHttpError(409, 'read_only_discovery_rollout_proposal_not_created',
+            'Create a rollout proposal before withdrawing it',
+            { retryable: false });
+        }
+        const eventType = 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.withdrawn';
+        const metadata = rolloutProposalEvidenceMetadata(context.currentPrerequisiteProposal, {
+          proposal_status: 'withdrawn',
+          dry_run_result: context.proposal.dry_run_result,
+          proposal_note: context.proposal.proposal_note,
+          withdrawal_reason: parsed.note ?? null,
+          proposal_created_at: proposalCreatedAtFromAudit(context.latestProposalAudit),
+        });
+        const audit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId,
+          merchantId,
+          userPrincipalId: operator.developerId,
+          eventType,
+          resourceType: 'merchant',
+          resourceId: merchantId,
+          requestId: request.id,
+          metadata,
+        });
+        return {
+          ...context,
+          latestProposalAudit: {
+            audit_event_id: audit.id,
+            event_type: eventType,
+            occurred_at: audit.occurredAt,
+            actor: operator.developerId,
+            metadata,
+          } satisfies SandboxReadOnlyDiscoveryReviewAuditSnapshot,
+          auditEventId: audit.id,
+        };
+      });
+
+      if (!result) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      return reply.status(200).send({
+        data: toSandboxReadOnlyDiscoveryRolloutProposalResponse(
+          result.merchant,
+          result.readiness,
+          result.sampleProducts,
+          result.latestRequestAudit,
+          result.latestDecisionAudit,
+          result.latestProposalAudit,
         ),
         audit_event_id: result.auditEventId,
       });
