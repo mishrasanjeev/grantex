@@ -182,6 +182,43 @@ function rolloutProposalAudit(overrides: Record<string, unknown> = {}) {
   }];
 }
 
+function rolloutProposalDryRunPassedAudit(overrides: Record<string, unknown> = {}) {
+  return rolloutProposalAudit({
+    id: 'caud_PROPOSAL_DRY_RUN_PASS',
+    event_type: 'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.dry_run_passed',
+    occurred_at: '2026-01-01T00:20:00Z',
+    metadata: {
+      proposal_status: 'dry_run_passed',
+      proposal_note: 'Sandbox evidence package.',
+      dry_run_result: 'passed',
+      blockers: [],
+      remediation_items: [],
+    },
+    ...overrides,
+  });
+}
+
+function agenticOrgHandoffRequestedAudit(overrides: Record<string, unknown> = {}) {
+  return [{
+    id: 'caud_AGENTICORG_HANDOFF',
+    event_type: 'merchant.sandbox_onboarding.agenticorg_buyer_discovery_handoff.requested',
+    occurred_at: '2026-01-01T00:25:00Z',
+    user_principal_id: 'dev_OPERATOR',
+    metadata: {
+      handoff_status: 'sandbox_handoff_requested',
+      integration_status: 'sandbox_handoff_ready',
+      blockers: [],
+      remediation_items: [],
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+      production_allowlist_written: false,
+    },
+    ...overrides,
+  }];
+}
+
 describe('POST /v1/commerce/merchants', () => {
   it('creates a merchant and returns 201 with audit_event_id', async () => {
     seedCommerceContext();
@@ -1604,6 +1641,248 @@ describe('sandbox onboarding foundation', () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.json<{ error: { code: string } }>().error.code).toBe('operator_required');
+  });
+
+  it('returns an operator AgenticOrg buyer discovery preview from C6F dry-run evidence without enabling production controls', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalReadyAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalDryRunPassedAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/agenticorg-buyer-discovery-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      data: {
+        integration_status: string;
+        sample_products: unknown[];
+        allowed_buyer_agent_capabilities: string[];
+        blocked_buyer_agent_capabilities: string[];
+        agenticorg_public_discovery_enabled: boolean;
+        public_discovery_enabled: boolean;
+        checkout_payment_enabled: boolean;
+        live_provider_enabled: boolean;
+        live_plural_enabled: boolean;
+        production_allowlist_written: boolean;
+      };
+    }>();
+    expect(body.data).toMatchObject({
+      integration_status: 'sandbox_handoff_ready',
+      agenticorg_public_discovery_enabled: false,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+      production_allowlist_written: false,
+    });
+    expect(body.data.sample_products).toHaveLength(1);
+    expect(body.data.allowed_buyer_agent_capabilities).toEqual([
+      'read_only_profile_discovery_preview',
+      'read_only_catalog_discovery_preview',
+      'buyer_agent_readiness_context',
+    ]);
+    expect(body.data.blocked_buyer_agent_capabilities).toContain('direct_merchant_system_access');
+    const previewJson = JSON.stringify(body.data);
+    expect(previewJson).not.toContain('legal_name');
+    expect(previewJson).not.toContain('provider_account_refs');
+    expect(previewJson).not.toContain('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST');
+  });
+
+  it('records AgenticOrg buyer discovery handoff request audit after C6F dry run passes', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalReadyAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalDryRunPassedAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_AGENTICORG_HANDOFF_CREATED', occurred_at: '2026-01-01T00:25:00Z' }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/agenticorg-buyer-discovery-handoff-request',
+      headers: authHeader(),
+      payload: { handoff_note: 'Sandbox buyer-agent handoff evidence.' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      data: {
+        integration_status: string;
+        handoff_requested_at: string | null;
+        audit_event_id: string;
+        agenticorg_public_discovery_enabled: boolean;
+        checkout_payment_enabled: boolean;
+      };
+      audit_event_id: string;
+    }>();
+    expect(body.audit_event_id).toBe('caud_AGENTICORG_HANDOFF_CREATED');
+    expect(body.data.integration_status).toBe('sandbox_handoff_requested');
+    expect(body.data.handoff_requested_at).toBe('2026-01-01T00:25:00.000Z');
+    expect(body.data.audit_event_id).toBe('caud_AGENTICORG_HANDOFF_CREATED');
+    expect(body.data.agenticorg_public_discovery_enabled).toBe(false);
+    expect(body.data.checkout_payment_enabled).toBe(false);
+
+    const auditPayload = JSON.stringify(sqlMock.mock.calls);
+    expect(auditPayload).toContain('agenticorg_buyer_discovery_handoff.requested');
+    expect(auditPayload).not.toContain('agentic_commerce_enabled = true');
+  });
+
+  it('blocks AgenticOrg handoff when C6F dry-run evidence has not passed and writes blocked audit evidence', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalReadyAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_AGENTICORG_HANDOFF_BLOCKED', occurred_at: '2026-01-01T00:26:00Z' }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/agenticorg-buyer-discovery-handoff-request',
+      headers: authHeader(),
+      payload: { handoff_note: 'Sandbox buyer-agent handoff evidence.' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    const error = res.json<{
+      error: {
+        code: string;
+        details: {
+          audit_event_id: string;
+          agenticorg_buyer_discovery_preview: {
+            integration_status: string;
+            blockers: string[];
+            public_discovery_enabled: boolean;
+          };
+        };
+      };
+    }>().error;
+    expect(error.code).toBe('agenticorg_buyer_discovery_handoff_blocked');
+    expect(error.details.audit_event_id).toBe('caud_AGENTICORG_HANDOFF_BLOCKED');
+    expect(error.details.agenticorg_buyer_discovery_preview.integration_status).toBe('blocked');
+    expect(error.details.agenticorg_buyer_discovery_preview.blockers).toContain('rollout_proposal_dry_run_not_passed');
+    expect(error.details.agenticorg_buyer_discovery_preview.public_discovery_enabled).toBe(false);
+  });
+
+  it('allows CommerceAgent preview reads only after operator AgenticOrg handoff request', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      id: 'cag_TEST',
+      tenant_id: TEST_COMMERCE_TENANT_ID,
+      trust_status: 'trusted',
+      public_key_jwk: null,
+      api_key_hash: 'hash',
+    }]);
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalReadyAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalDryRunPassedAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce([]);
+
+    const blockedRes = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/agenticorg-buyer-discovery-preview',
+      headers: { authorization: 'Bearer grtx_agent_C6GXXXXXXXXXXXXXXXXXXXXXXX' },
+    });
+
+    expect(blockedRes.statusCode).toBe(409);
+    expect(blockedRes.json<{ error: { code: string; details: { public_discovery_enabled: boolean } } }>().error)
+      .toMatchObject({
+        code: 'agenticorg_buyer_discovery_handoff_not_available',
+        details: { public_discovery_enabled: false },
+      });
+
+    sqlMock.mockResolvedValueOnce([{
+      id: 'cag_TEST',
+      tenant_id: TEST_COMMERCE_TENANT_ID,
+      trust_status: 'trusted',
+      public_key_jwk: null,
+      api_key_hash: 'hash',
+    }]);
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalReadyAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalDryRunPassedAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce(agenticOrgHandoffRequestedAudit());
+
+    const okRes = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/agenticorg-buyer-discovery-preview',
+      headers: { authorization: 'Bearer grtx_agent_C6GXXXXXXXXXXXXXXXXXXXXXXX' },
+    });
+
+    expect(okRes.statusCode).toBe(200);
+    const ok = okRes.json<{ data: { integration_status: string; sample_products: unknown[]; checkout_payment_enabled: boolean } }>().data;
+    expect(ok.integration_status).toBe('sandbox_handoff_requested');
+    expect(ok.sample_products).toHaveLength(1);
+    expect(ok.checkout_payment_enabled).toBe(false);
+  });
+
+  it('denies CommerceAgent handoff writes, rejects unsafe handoff notes, and withdraws requested handoff', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      id: 'cag_TEST',
+      tenant_id: TEST_COMMERCE_TENANT_ID,
+      trust_status: 'trusted',
+      public_key_jwk: null,
+      api_key_hash: 'hash',
+    }]);
+    const agentWriteRes = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/agenticorg-buyer-discovery-handoff-request',
+      headers: { authorization: 'Bearer grtx_agent_C6GXXXXXXXXXXXXXXXXXXXXXXX' },
+      payload: { handoff_note: 'Sandbox buyer-agent handoff evidence.' },
+    });
+    expect(agentWriteRes.statusCode).toBe(403);
+    expect(agentWriteRes.json<{ error: { code: string } }>().error.code).toBe('operator_required');
+
+    seedCommerceContext();
+    const unsafeRes = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/agenticorg-buyer-discovery-handoff-request',
+      headers: authHeader(),
+      payload: { handoff_note: 'production ready live payment provider token' },
+    });
+    expect(unsafeRes.statusCode).toBe(400);
+    expect(unsafeRes.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields.handoff_note)
+      .toContain('public-safe text');
+
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(reviewRequestAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalReadyAudit());
+    sqlMock.mockResolvedValueOnce(rolloutProposalDryRunPassedAudit());
+    sqlMock.mockResolvedValueOnce([catalogReadySummary()]);
+    sqlMock.mockResolvedValueOnce(previewSampleRows());
+    sqlMock.mockResolvedValueOnce(agenticOrgHandoffRequestedAudit());
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_AGENTICORG_HANDOFF_WITHDRAWN', occurred_at: '2026-01-01T00:30:00Z' }]);
+
+    const withdrawRes = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/merchants/mch_SANDBOX/agenticorg-buyer-discovery-handoff-withdraw',
+      headers: authHeader(),
+      payload: { reason: 'Pause sandbox handoff.' },
+    });
+    expect(withdrawRes.statusCode).toBe(200);
+    expect(withdrawRes.json<{ data: { integration_status: string; public_discovery_enabled: boolean } }>().data)
+      .toMatchObject({
+        integration_status: 'sandbox_handoff_withdrawn',
+        public_discovery_enabled: false,
+      });
   });
 
   it('blocks submit transition when readiness checks fail', async () => {

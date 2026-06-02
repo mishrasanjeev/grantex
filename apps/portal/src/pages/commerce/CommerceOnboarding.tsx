@@ -3,6 +3,7 @@ import {
   createCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   dryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   evaluateCommercePolicy,
+  getCommerceMerchantAgenticOrgBuyerDiscoveryPreview,
   getCommerceMerchantReadOnlyDiscoveryReview,
   getCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   getCommerceMerchantSandboxOnboarding,
@@ -13,10 +14,13 @@ import {
   listCommerceProviderCredentials,
   listCommerceWebhookSources,
   recordCommerceReadOnlyDiscoveryReviewDecision,
+  requestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff,
   requestCommerceMerchantReadOnlyDiscoveryReview,
   updateCommerceMerchantSandboxOnboarding,
+  withdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff,
   withdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   type CommerceAgent,
+  type CommerceAgenticOrgBuyerDiscoveryPreview,
   type CommerceReadOnlyDiscoveryOperatorDecision,
   type CommerceReadOnlyDiscoveryOperatorReview,
   type CommerceReadOnlyDiscoveryRolloutProposal,
@@ -93,6 +97,7 @@ export function CommerceOnboarding() {
   const [merchant, setMerchant] = useState<CommerceSandboxOnboarding | null>(null);
   const [operatorReview, setOperatorReview] = useState<CommerceReadOnlyDiscoveryOperatorReview | null>(null);
   const [rolloutProposal, setRolloutProposal] = useState<CommerceReadOnlyDiscoveryRolloutProposal | null>(null);
+  const [agenticOrgPreview, setAgenticOrgPreview] = useState<CommerceAgenticOrgBuyerDiscoveryPreview | null>(null);
   const [merchantForm, setMerchantForm] = useState<MerchantPatchForm>(defaultPatch);
   const [agents, setAgents] = useState<CommerceAgent[]>([]);
   const [activePolicyCount, setActivePolicyCount] = useState(0);
@@ -106,6 +111,8 @@ export function CommerceOnboarding() {
   const [decisionSubmitting, setDecisionSubmitting] = useState(false);
   const [proposalSubmitting, setProposalSubmitting] = useState(false);
   const [proposalNote, setProposalNote] = useState('');
+  const [agenticOrgSubmitting, setAgenticOrgSubmitting] = useState(false);
+  const [agenticOrgNote, setAgenticOrgNote] = useState('');
   const [decisionForm, setDecisionForm] = useState<{
     decision: CommerceReadOnlyDiscoveryOperatorDecision;
     reason: string;
@@ -135,10 +142,11 @@ export function CommerceOnboarding() {
     }
     setLoading(true);
     try {
-      const [merchantRes, reviewRes, proposalRes, agentRes, policyRes, productRes, credentialRes, sourceRes, profileRes] = await Promise.all([
+      const [merchantRes, reviewRes, proposalRes, agenticOrgRes, agentRes, policyRes, productRes, credentialRes, sourceRes, profileRes] = await Promise.all([
         getCommerceMerchantSandboxOnboarding(id),
         getCommerceMerchantReadOnlyDiscoveryReview(id).catch(() => null),
         getCommerceMerchantReadOnlyDiscoveryRolloutProposal(id).catch(() => null),
+        getCommerceMerchantAgenticOrgBuyerDiscoveryPreview(id).catch(() => null),
         listCommerceAgents({ merchantId: id, limit: 25 }),
         listCommercePolicies({ merchantId: id, status: 'active', limit: 10 }),
         listCommerceProducts({ merchantId: id, status: 'active', limit: 10 }),
@@ -149,7 +157,9 @@ export function CommerceOnboarding() {
       setMerchant(merchantRes.data);
       setOperatorReview(reviewRes?.data ?? null);
       setRolloutProposal(proposalRes?.data ?? null);
+      setAgenticOrgPreview(agenticOrgRes?.data ?? null);
       setProposalNote(proposalRes?.data.proposal_note ?? '');
+      setAgenticOrgNote('');
       setMerchantForm({
         display_name: merchantRes.data.display_name ?? '',
         category_preset: merchantRes.data.category_preset ?? 'electronics_appliances',
@@ -262,6 +272,8 @@ export function CommerceOnboarding() {
       });
       setRolloutProposal(res.data);
       setProposalNote(res.data.proposal_note ?? '');
+      const agenticOrgRes = await getCommerceMerchantAgenticOrgBuyerDiscoveryPreview(merchant.merchant_id).catch(() => null);
+      setAgenticOrgPreview(agenticOrgRes?.data ?? null);
       show('Rollout proposal evidence saved', 'success');
     } catch {
       show('Rollout proposal is blocked', 'error');
@@ -279,6 +291,8 @@ export function CommerceOnboarding() {
       });
       setRolloutProposal(res.data);
       setProposalNote(res.data.proposal_note ?? '');
+      const agenticOrgRes = await getCommerceMerchantAgenticOrgBuyerDiscoveryPreview(merchant.merchant_id).catch(() => null);
+      setAgenticOrgPreview(agenticOrgRes?.data ?? null);
       show(res.data.dry_run_result === 'passed' ? 'Rollout proposal dry run passed' : 'Rollout proposal dry run blocked', 'success');
     } catch {
       show('Rollout proposal dry run is blocked', 'error');
@@ -296,11 +310,45 @@ export function CommerceOnboarding() {
       });
       setRolloutProposal(res.data);
       setProposalNote(res.data.proposal_note ?? '');
+      const agenticOrgRes = await getCommerceMerchantAgenticOrgBuyerDiscoveryPreview(merchant.merchant_id).catch(() => null);
+      setAgenticOrgPreview(agenticOrgRes?.data ?? null);
       show('Rollout proposal withdrawn', 'success');
     } catch {
       show('Rollout proposal withdrawal is blocked', 'error');
     } finally {
       setProposalSubmitting(false);
+    }
+  }
+
+  async function requestAgenticOrgHandoff() {
+    if (!merchant) return;
+    setAgenticOrgSubmitting(true);
+    try {
+      const res = await requestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff(merchant.merchant_id, {
+        handoffNote: agenticOrgNote.trim() || undefined,
+      });
+      setAgenticOrgPreview(res.data);
+      show('AgenticOrg sandbox handoff requested', 'success');
+    } catch {
+      show('AgenticOrg sandbox handoff is blocked', 'error');
+    } finally {
+      setAgenticOrgSubmitting(false);
+    }
+  }
+
+  async function withdrawAgenticOrgHandoff() {
+    if (!merchant) return;
+    setAgenticOrgSubmitting(true);
+    try {
+      const res = await withdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff(merchant.merchant_id, {
+        reason: agenticOrgNote.trim() || undefined,
+      });
+      setAgenticOrgPreview(res.data);
+      show('AgenticOrg sandbox handoff withdrawn', 'success');
+    } catch {
+      show('AgenticOrg sandbox handoff withdrawal is blocked', 'error');
+    } finally {
+      setAgenticOrgSubmitting(false);
     }
   }
 
@@ -385,6 +433,15 @@ export function CommerceOnboarding() {
     || !rolloutProposal
     || proposalStatus === 'not_created'
     || proposalStatus === 'withdrawn';
+  const agenticOrgStatus = agenticOrgPreview?.integration_status ?? 'not_ready';
+  const agenticOrgHardBlockers = agenticOrgPreview?.blockers.filter((blocker) => blocker !== 'agenticorg_handoff_withdrawn') ?? [];
+  const agenticOrgRequestDisabled = agenticOrgSubmitting
+    || !agenticOrgPreview
+    || !['sandbox_handoff_ready', 'sandbox_handoff_withdrawn'].includes(agenticOrgStatus)
+    || agenticOrgHardBlockers.length > 0;
+  const agenticOrgWithdrawDisabled = agenticOrgSubmitting
+    || agenticOrgStatus !== 'sandbox_handoff_requested';
+  const agenticOrgJson = agenticOrgPreview ? JSON.stringify(agenticOrgPreview, null, 2) : '';
 
   return (
     <div>
@@ -866,6 +923,175 @@ export function CommerceOnboarding() {
               >
                 Withdraw proposal
               </Button>
+            </div>
+          </Card>
+
+          <Card className="xl:col-span-2">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gx-text">AgenticOrg buyer-agent discovery</h2>
+                <p className="mt-1 text-xs text-gx-muted">
+                  Sandbox handoff evidence only; this is not public discovery, not launch, not production approval, and not checkout or payment enablement.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={agenticOrgStatus === 'sandbox_handoff_requested' ? 'success' : agenticOrgStatus === 'blocked' ? 'danger' : 'warning'}>
+                  {agenticOrgStatus}
+                </Badge>
+                <Badge variant="danger">{agenticOrgPreview?.production_approval_status ?? 'not_approved'}</Badge>
+                <Badge variant="danger">{agenticOrgPreview?.live_mode_status ?? 'not_live'}</Badge>
+              </div>
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-4">
+              {[
+                { label: 'handoff_request_is_approval', value: agenticOrgPreview?.handoff_request_is_approval ?? false },
+                { label: 'buyer_agent_discovery_is_public', value: agenticOrgPreview?.buyer_agent_discovery_is_public ?? false },
+                { label: 'agenticorg_public_discovery_enabled', value: agenticOrgPreview?.agenticorg_public_discovery_enabled ?? false },
+                { label: 'public_discovery_enabled', value: agenticOrgPreview?.public_discovery_enabled ?? false },
+                { label: 'checkout_payment_enabled', value: agenticOrgPreview?.checkout_payment_enabled ?? false },
+                { label: 'live_provider_enabled', value: agenticOrgPreview?.live_provider_enabled ?? false },
+                { label: 'live_plural_enabled', value: agenticOrgPreview?.live_plural_enabled ?? false },
+                { label: 'production_allowlist_written', value: agenticOrgPreview?.production_allowlist_written ?? false },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-md border border-gx-border p-3">
+                  <div className="text-xs text-gx-muted">{label}</div>
+                  <Badge variant={value ? 'danger' : 'success'}>{value ? 'true' : 'false'}</Badge>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">
+              <div>
+                <div className="text-xs text-gx-muted">Handoff requested</div>
+                <DateText value={agenticOrgPreview?.handoff_requested_at ?? null} />
+              </div>
+              <div>
+                <div className="text-xs text-gx-muted">Handoff withdrawn</div>
+                <DateText value={agenticOrgPreview?.handoff_withdrawn_at ?? null} />
+              </div>
+              <div>
+                <div className="text-xs text-gx-muted">C6F dry run</div>
+                <div className="text-gx-text">{agenticOrgPreview?.rollout_proposal_summary.dry_run_result ?? 'not_run'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gx-muted">Audit event</div>
+                <div className="text-gx-text">{agenticOrgPreview?.audit_event_id ?? 'pending'}</div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-xs text-gx-muted">Readiness</div>
+                <Badge variant={readinessVariant(agenticOrgPreview?.readiness_summary.overall_status ?? merchant.readiness.status)}>
+                  {agenticOrgPreview?.readiness_summary.overall_score_percent ?? merchant.readiness.score_percent}%
+                </Badge>
+              </div>
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-xs text-gx-muted">Agent-facing preview</div>
+                <Badge variant={readinessVariant(agenticOrgPreview?.agent_facing_preview_summary.preview_status ?? merchant.agent_facing_preview.preview_status)}>
+                  {agenticOrgPreview?.agent_facing_preview_summary.preview_status ?? merchant.agent_facing_preview.preview_status}
+                </Badge>
+              </div>
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-xs text-gx-muted">Sample products</div>
+                <Badge variant={(agenticOrgPreview?.sample_products.length ?? 0) > 0 ? 'success' : 'warning'}>
+                  {agenticOrgPreview?.sample_products.length ?? 0}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-md border border-gx-border p-3">
+              <div className="text-sm font-medium text-gx-text">Evidence checklist</div>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                {(agenticOrgPreview?.evidence_checklist ?? [
+                  { key: 'rollout_proposal_dry_run_passed', label: 'Rollout proposal dry-run passed', status: rolloutProposal?.proposal_status === 'dry_run_passed' ? 'pass' as const : 'blocked' as const },
+                  { key: 'buyer_agent_handoff_is_sandbox_only', label: 'Buyer-agent handoff is sandbox-only', status: 'pass' as const },
+                ]).map((item) => (
+                  <div key={item.key} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-gx-muted">{item.label}</span>
+                    <Badge variant={item.status === 'pass' ? 'success' : 'danger'}>{item.status}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {agenticOrgPreview?.blockers.length ? (
+              <div className="mt-4 rounded-md border border-gx-danger/40 bg-gx-danger/5 p-3">
+                <div className="text-sm font-medium text-gx-text">AgenticOrg handoff blockers</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {agenticOrgPreview.blockers.map((blocker) => (
+                    <Badge key={blocker} variant="danger">{capabilityLabel(blocker)}</Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {agenticOrgPreview?.remediation_items.length ? (
+              <div className="mt-4 rounded-md border border-gx-border p-3">
+                <div className="text-sm font-medium text-gx-text">AgenticOrg remediation</div>
+                <div className="mt-2 grid gap-2 text-xs text-gx-warning">
+                  {agenticOrgPreview.remediation_items.map((item) => (
+                    <div key={item}>{item}</div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-sm font-medium text-gx-text">Allowed buyer-agent labels</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(agenticOrgPreview?.allowed_buyer_agent_capabilities ?? []).map((capability) => (
+                    <Badge key={capability} variant="success">{capabilityLabel(capability)}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-sm font-medium text-gx-text">Blocked buyer-agent labels</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(agenticOrgPreview?.blocked_buyer_agent_capabilities ?? []).map((capability) => (
+                    <Badge key={capability} variant="danger">{capabilityLabel(capability)}</Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label htmlFor="agenticorg-handoff-note" className="mb-1.5 block text-sm font-medium text-gx-text">
+                Handoff note
+              </label>
+              <textarea
+                id="agenticorg-handoff-note"
+                value={agenticOrgNote}
+                onChange={(e) => setAgenticOrgNote(e.target.value)}
+                rows={3}
+                className="w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+              />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                onClick={requestAgenticOrgHandoff}
+                disabled={agenticOrgRequestDisabled}
+                title={agenticOrgHardBlockers.length ? agenticOrgHardBlockers.map(capabilityLabel).join(', ') : 'Request sandbox-only AgenticOrg handoff.'}
+              >
+                {agenticOrgSubmitting ? 'Requesting' : 'Request AgenticOrg handoff'}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={withdrawAgenticOrgHandoff}
+                disabled={agenticOrgWithdrawDisabled}
+              >
+                Withdraw handoff
+              </Button>
+              {agenticOrgJson ? (
+                <div className="flex items-center gap-2 text-xs text-gx-muted">
+                  <span>Handoff JSON</span>
+                  <CopyButton text={agenticOrgJson} />
+                </div>
+              ) : null}
             </div>
           </Card>
 

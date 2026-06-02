@@ -32,8 +32,9 @@ info:
     payload for sandbox review only; it does not publish discovery, approve
     merchants, enable checkout/payment creation, or enable live provider paths.
     C6D adds a sandbox read-only discovery review request workflow, C6E adds
-    operator review decisions, and C6F adds an audit-backed rollout proposal and
-    dry-run evidence package. These C6 workflows remain proposal-only and
+    operator review decisions, C6F adds an audit-backed rollout proposal and
+    dry-run evidence package, and C6G adds a sandbox-only AgenticOrg buyer-agent
+    discovery preview and handoff request workflow. These C6 workflows remain proposal-only and
     non-enabling; they do not approve merchants, publish discovery, create
     checkout/payment paths, enable live providers, enable live Plural, write
     production config, or set allowlists.
@@ -752,6 +753,143 @@ components:
         production_approval_status: { type: string, enum: [not_approved] }
         rollout_status: { type: string, enum: [rollout_not_requested] }
         audit_event_id: { type: string, nullable: true }
+
+    SandboxAgenticOrgBuyerDiscoveryHandoffRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        handoff_note:
+          type: string
+          description: Public-safe operator note; secrets, private merchant details, provider credentials, raw payloads, tokens, JWTs, DB/Redis URLs, production config values, concrete allowlists, and live/payment/discovery claims are rejected.
+
+    SandboxAgenticOrgBuyerDiscoveryHandoffWithdrawRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          description: Public-safe withdrawal reason; private artifacts, secrets, raw payloads, credentials, production config values, and live/payment/discovery claims are rejected.
+
+    SandboxAgenticOrgBuyerDiscoveryPreview:
+      type: object
+      additionalProperties: false
+      description: >-
+        C6G sandbox-only AgenticOrg buyer-agent discovery preview and handoff
+        evidence package. It is derived from C6C agent-facing preview, C6D
+        review request, C6E operator decision, and C6F rollout proposal dry-run
+        evidence. It does not enable public discovery, AgenticOrg public
+        discovery, production Commerce V1, checkout/payment creation, live
+        payments, live Plural, provider credentials, production config, or
+        allowlists.
+      properties:
+        merchant_id: { type: string }
+        tenant_id: { type: string }
+        merchant_reference: { type: string }
+        display_name: { type: string, nullable: true }
+        integration_status:
+          type: string
+          enum: [not_ready, blocked, sandbox_handoff_ready, sandbox_handoff_requested, sandbox_handoff_withdrawn]
+        handoff_requested_at: { type: string, format: date-time, nullable: true }
+        handoff_request_actor: { type: string, nullable: true }
+        handoff_withdrawn_at: { type: string, format: date-time, nullable: true }
+        handoff_withdraw_actor: { type: string, nullable: true }
+        audit_event_id: { type: string, nullable: true }
+        generated_at: { type: string, format: date-time }
+        merchant:
+          type: object
+          additionalProperties: false
+          properties:
+            merchant_reference: { type: string }
+            display_name: { type: string, nullable: true }
+            category_preset: { type: string, enum: [electronics_appliances], nullable: true }
+            country_code: { type: string, pattern: "^[A-Z]{2}$", nullable: true }
+            default_currency: { type: string, pattern: "^[A-Z]{3}$", nullable: true }
+            public_discovery_description_draft: { type: string, nullable: true }
+            support_email: { type: string, nullable: true }
+            support_url: { type: string, nullable: true }
+        readiness_summary:
+          type: object
+          additionalProperties: true
+        agent_facing_preview_summary:
+          type: object
+          additionalProperties: false
+          properties:
+            preview_status: { type: string, enum: [ready, blocked] }
+            preview_blockers:
+              type: array
+              items: { type: string }
+            sample_product_count: { type: integer, minimum: 0 }
+            allowed_preview_capabilities:
+              type: array
+              items:
+                type: string
+                enum: [read_only_profile_preview, read_only_catalog_preview, readiness_review_preview]
+            blocked_capabilities:
+              type: array
+              items: { type: string }
+        rollout_proposal_summary:
+          type: object
+          additionalProperties: false
+          properties:
+            proposal_status: { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryRolloutProposalStatus" }
+            dry_run_result: { type: string, enum: [not_run, passed, blocked] }
+            dry_run_checked_at: { type: string, format: date-time, nullable: true }
+            operator_decision:
+              nullable: true
+              oneOf:
+                - { $ref: "#/components/schemas/SandboxReadOnlyDiscoveryOperatorDecision" }
+                - { type: "null" }
+            proposal_audit_event_id: { type: string, nullable: true }
+        evidence_checklist:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              key: { type: string }
+              label: { type: string }
+              status: { type: string, enum: [pass, blocked] }
+        sample_products:
+          type: array
+          maxItems: 3
+          items: { $ref: "#/components/schemas/SandboxAgentPreviewProduct" }
+        allowed_buyer_agent_capabilities:
+          type: array
+          items:
+            type: string
+            enum: [read_only_profile_discovery_preview, read_only_catalog_discovery_preview, buyer_agent_readiness_context]
+        blocked_buyer_agent_capabilities:
+          type: array
+          items:
+            type: string
+            enum:
+              - public_discovery
+              - checkout_payment_creation
+              - live_payment
+              - live_plural
+              - provider_credentials
+              - order_fulfillment
+              - refunds_returns_execution
+              - production_allowlist
+              - direct_merchant_system_access
+        blockers:
+          type: array
+          items: { type: string }
+        remediation_items:
+          type: array
+          items: { type: string }
+        sandbox_only: { type: boolean, const: true }
+        handoff_request_is_approval: { type: boolean, const: false }
+        buyer_agent_discovery_is_public: { type: boolean, const: false }
+        agenticorg_public_discovery_enabled: { type: boolean, const: false }
+        public_discovery_enabled: { type: boolean, const: false }
+        checkout_payment_enabled: { type: boolean, const: false }
+        live_provider_enabled: { type: boolean, const: false }
+        live_plural_enabled: { type: boolean, const: false }
+        production_allowlist_written: { type: boolean, const: false }
+        live_mode_status: { type: string, enum: [not_live] }
+        production_approval_status: { type: string, enum: [not_approved] }
+        rollout_status: { type: string, enum: [rollout_not_requested] }
 
     SandboxOnboarding:
       type: object
@@ -2336,6 +2474,116 @@ paths:
         "403": { description: Operator caller required; merchant and CommerceAgent callers are denied }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Live merchant or missing proposal prevents withdrawal }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/agenticorg-buyer-discovery-preview:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    get:
+      tags: [Merchants]
+      summary: Inspect AgenticOrg buyer-agent discovery sandbox preview
+      operationId: getMerchantAgenticOrgBuyerDiscoveryPreview
+      x-implemented: true
+      x-milestone: C6G
+      description: >-
+        Returns a tenant-scoped, sandbox-only AgenticOrg buyer-agent discovery
+        preview package derived from C6C/C6D/C6E/C6F public-safe evidence.
+        Operators and owning merchants can inspect readiness and blockers.
+        Trusted CommerceAgent callers can read the package only after an
+        operator records the sandbox handoff request and current blockers are
+        absent. This route does not publish public discovery, enable
+        AgenticOrg public discovery, enable production Commerce V1, create
+        checkout/payment paths, enable live payments, enable live Plural, expose
+        provider credentials, write production config, or set allowlists.
+      responses:
+        "200":
+          description: AgenticOrg sandbox buyer-agent discovery preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxAgenticOrgBuyerDiscoveryPreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator, owning merchant, or eligible trusted CommerceAgent caller required }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant or missing sandbox handoff blocks CommerceAgent preview access }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/agenticorg-buyer-discovery-handoff-request:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    post:
+      tags: [Merchants]
+      summary: Request AgenticOrg buyer-agent sandbox discovery handoff
+      operationId: requestMerchantAgenticOrgBuyerDiscoveryHandoff
+      x-implemented: true
+      x-milestone: C6G
+      description: >-
+        Operator-only endpoint that writes audit evidence for a sandbox-only
+        AgenticOrg buyer-agent discovery handoff after C6F dry-run evidence has
+        passed and current C6C/C6D/C6E/C6F prerequisites remain clean. The
+        request is not approval, launch, public discovery, AgenticOrg public
+        discovery, checkout/payment enablement, live provider enablement, live
+        Plural enablement, production config writing, or allowlist writing.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SandboxAgenticOrgBuyerDiscoveryHandoffRequest" }
+      responses:
+        "200":
+          description: AgenticOrg sandbox handoff requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxAgenticOrgBuyerDiscoveryPreview" }
+                  audit_event_id: { type: string }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator caller required; merchant and CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant or missing/stale C6F dry-run evidence blocks handoff }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/agenticorg-buyer-discovery-handoff-withdraw:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    post:
+      tags: [Merchants]
+      summary: Withdraw AgenticOrg buyer-agent sandbox discovery handoff
+      operationId: withdrawMerchantAgenticOrgBuyerDiscoveryHandoff
+      x-implemented: true
+      x-milestone: C6G
+      description: >-
+        Operator-only endpoint that writes public-safe withdrawal audit
+        evidence for a prior AgenticOrg sandbox handoff request. Withdrawal
+        does not approve, launch, publish public discovery, enable AgenticOrg
+        public discovery, enable checkout/payment creation, enable live
+        provider paths, enable live Plural, write production configuration, or
+        set allowlists.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SandboxAgenticOrgBuyerDiscoveryHandoffWithdrawRequest" }
+      responses:
+        "200":
+          description: AgenticOrg sandbox handoff withdrawn
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SandboxAgenticOrgBuyerDiscoveryPreview" }
+                  audit_event_id: { type: string }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator caller required; merchant and CommerceAgent callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant or missing handoff request prevents withdrawal }
         "503": { $ref: "#/components/responses/CommerceDisabled" }
 
   /v1/commerce/merchants/{merchant_id}/disable-agentic-commerce:

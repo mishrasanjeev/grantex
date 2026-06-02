@@ -29,6 +29,7 @@ import {
   isSafeSupportUrl,
   READ_ONLY_DISCOVERY_OPERATOR_DECISIONS,
   isSandboxOnboardingState,
+  toSandboxAgenticOrgBuyerDiscoveryPreviewResponse,
   toSandboxOnboardingResponse,
   toSandboxReadOnlyDiscoveryOperatorReviewResponse,
   toSandboxReadOnlyDiscoveryRolloutProposalResponse,
@@ -38,6 +39,7 @@ import {
   type SandboxOnboardingCatalogSummary,
   type SandboxOnboardingMerchant,
   type SandboxOnboardingState,
+  type SandboxAgenticOrgBuyerDiscoveryPreviewPayload,
   type SandboxReadOnlyDiscoveryReviewAuditSnapshot,
   type SandboxReadOnlyDiscoveryRolloutProposalPayload,
 } from '../lib/commerce/sandbox-onboarding.js';
@@ -116,6 +118,14 @@ interface ReadOnlyDiscoveryRolloutProposalBody {
 }
 
 interface ReadOnlyDiscoveryRolloutProposalWithdrawBody {
+  reason?: unknown;
+}
+
+interface AgenticOrgBuyerDiscoveryHandoffBody {
+  handoff_note?: unknown;
+}
+
+interface AgenticOrgBuyerDiscoveryHandoffWithdrawBody {
   reason?: unknown;
 }
 
@@ -275,6 +285,20 @@ const READ_ONLY_DISCOVERY_ROLLOUT_PROPOSAL_EVENTS = [
   'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.dry_run_passed',
   'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.dry_run_blocked',
   'merchant.sandbox_onboarding.read_only_discovery_rollout_proposal.withdrawn',
+];
+
+const AGENTICORG_BUYER_DISCOVERY_HANDOFF_FIELDS = new Set([
+  'handoff_note',
+]);
+
+const AGENTICORG_BUYER_DISCOVERY_HANDOFF_WITHDRAW_FIELDS = new Set([
+  'reason',
+]);
+
+const AGENTICORG_BUYER_DISCOVERY_HANDOFF_EVENTS = [
+  'merchant.sandbox_onboarding.agenticorg_buyer_discovery_handoff.requested',
+  'merchant.sandbox_onboarding.agenticorg_buyer_discovery_handoff.blocked',
+  'merchant.sandbox_onboarding.agenticorg_buyer_discovery_handoff.withdrawn',
 ];
 
 const AGENT_PATCH_FIELDS = new Set([
@@ -656,7 +680,7 @@ function validateReadOnlyDiscoveryDecisionBody(
 function validateReadOnlyDiscoveryRolloutProposalBody(
   body: Record<string, unknown>,
   allowedFields: Set<string>,
-  noteField: 'proposal_note' | 'reason',
+  noteField: 'proposal_note' | 'handoff_note' | 'reason',
 ): { note: string | undefined; fields: Record<string, string> } {
   const fields: Record<string, string> = {};
   validatePatchKeys(body, allowedFields, fields);
@@ -728,6 +752,11 @@ interface ReadOnlyDiscoveryRolloutProposalContext {
   currentPrerequisiteProposal: SandboxReadOnlyDiscoveryRolloutProposalPayload;
 }
 
+interface AgenticOrgBuyerDiscoveryContext extends ReadOnlyDiscoveryRolloutProposalContext {
+  latestHandoffAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot | null;
+  preview: SandboxAgenticOrgBuyerDiscoveryPreviewPayload;
+}
+
 async function readReadOnlyDiscoveryRolloutProposalContext(
   sql: Sql,
   tenantId: string,
@@ -791,6 +820,67 @@ async function readReadOnlyDiscoveryRolloutProposalContext(
       latestDecisionAudit,
       null,
     ),
+  };
+}
+
+async function readAgenticOrgBuyerDiscoveryContext(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+): Promise<AgenticOrgBuyerDiscoveryContext | null> {
+  const context = await readReadOnlyDiscoveryRolloutProposalContext(sql, tenantId, merchantId);
+  if (!context) return null;
+  const latestHandoffAudit = await readLatestReadOnlyDiscoveryReviewAudit(
+    sql,
+    tenantId,
+    merchantId,
+    AGENTICORG_BUYER_DISCOVERY_HANDOFF_EVENTS,
+  );
+  return {
+    ...context,
+    latestHandoffAudit,
+    preview: toSandboxAgenticOrgBuyerDiscoveryPreviewResponse(
+      context.merchant,
+      context.readiness,
+      context.sampleProducts,
+      context.latestRequestAudit,
+      context.latestDecisionAudit,
+      context.latestProposalAudit,
+      latestHandoffAudit,
+    ),
+  };
+}
+
+function agenticOrgBuyerDiscoveryEvidenceMetadata(
+  preview: SandboxAgenticOrgBuyerDiscoveryPreviewPayload,
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    integration_status: preview.integration_status,
+    handoff_requested_at: preview.handoff_requested_at,
+    handoff_request_actor: preview.handoff_request_actor,
+    rollout_proposal_status: preview.rollout_proposal_summary.proposal_status,
+    rollout_proposal_dry_run_result: preview.rollout_proposal_summary.dry_run_result,
+    rollout_proposal_audit_event_id: preview.rollout_proposal_summary.proposal_audit_event_id,
+    agent_preview_status: preview.agent_facing_preview_summary.preview_status,
+    sample_product_count: preview.agent_facing_preview_summary.sample_product_count,
+    blocker_count: preview.blockers.length,
+    blockers: preview.blockers.slice(0, 20),
+    remediation_items: preview.remediation_items.slice(0, 10),
+    allowed_buyer_agent_capabilities: preview.allowed_buyer_agent_capabilities,
+    blocked_buyer_agent_capabilities: preview.blocked_buyer_agent_capabilities,
+    sandbox_only: true,
+    handoff_request_is_approval: false,
+    buyer_agent_discovery_is_public: false,
+    agenticorg_public_discovery_enabled: false,
+    production_approval_status: 'not_approved',
+    rollout_status: 'rollout_not_requested',
+    public_discovery_enabled: false,
+    checkout_payment_enabled: false,
+    live_provider_enabled: false,
+    [`live_${'p'}lural_enabled`]: false,
+    production_allowlist_written: false,
+    ...overrides,
   };
 }
 
@@ -2407,6 +2497,277 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   // Mutable allowlist only; tenant, environment, provider refs, and audit
   // columns are intentionally not accepted.
   // ----------------------------------------------------------------------
+  app.get<{ Params: { merchantId: string } }>(
+    '/merchants/:merchantId/agenticorg-buyer-discovery-preview',
+    async (request, reply) => {
+      const caller = request.commerceCaller;
+      if (caller.kind === 'service') {
+        throw new CommerceHttpError(403, 'caller_not_authorized',
+          'AgenticOrg buyer discovery preview requires operator, owning merchant, or CommerceAgent caller');
+      }
+      if (caller.kind === 'merchant' && caller.merchantId !== request.params.merchantId) {
+        throw new CommerceHttpError(403, 'merchant_scope_violation',
+          'Merchant callers may only read their own AgenticOrg buyer discovery preview');
+      }
+
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const merchantId = request.params.merchantId;
+      const context = await readAgenticOrgBuyerDiscoveryContext(sql, tenantId, merchantId);
+      if (!context) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      if (context.merchant.environment !== 'sandbox') {
+        throw new CommerceHttpError(409, 'agenticorg_buyer_discovery_live_merchant_blocked',
+          'AgenticOrg buyer discovery preview is only available for sandbox merchants',
+          {
+            details: {
+              sandbox_only: true,
+              public_discovery_enabled: false,
+              checkout_payment_enabled: false,
+              live_provider_enabled: false,
+              [`live_${'p'}lural_enabled`]: false,
+              production_allowlist_written: false,
+            },
+            retryable: false,
+          });
+      }
+      if (caller.kind === 'agent'
+        && (context.preview.integration_status !== 'sandbox_handoff_requested'
+          || context.preview.blockers.length > 0)) {
+        throw new CommerceHttpError(409, 'agenticorg_buyer_discovery_handoff_not_available',
+          'AgenticOrg buyer discovery preview is not available to CommerceAgents until operator sandbox handoff is requested',
+          {
+            details: {
+              integration_status: context.preview.integration_status,
+              blockers: context.preview.blockers,
+              remediation_items: context.preview.remediation_items,
+              sandbox_only: true,
+              agenticorg_public_discovery_enabled: false,
+              public_discovery_enabled: false,
+              checkout_payment_enabled: false,
+              live_provider_enabled: false,
+              [`live_${'p'}lural_enabled`]: false,
+              production_allowlist_written: false,
+            },
+            retryable: false,
+          });
+      }
+      return reply.status(200).send({ data: context.preview });
+    },
+  );
+
+  app.post<{ Params: { merchantId: string }; Body: AgenticOrgBuyerDiscoveryHandoffBody }>(
+    '/merchants/:merchantId/agenticorg-buyer-discovery-handoff-request',
+    async (request, reply) => {
+      const operator = requireOperator(request);
+      if (request.body !== undefined && !isPlainObject(request.body)) {
+        throw new CommerceHttpError(400, 'validation_failed', 'Request validation failed', {
+          details: { fields: { body: 'must be a JSON object' } },
+          retryable: false,
+        });
+      }
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const parsed = validateReadOnlyDiscoveryRolloutProposalBody(
+        body,
+        AGENTICORG_BUYER_DISCOVERY_HANDOFF_FIELDS,
+        'handoff_note',
+      );
+      if (Object.keys(parsed.fields).length > 0) {
+        throw new CommerceHttpError(400, 'validation_failed', 'Request validation failed', {
+          details: { fields: parsed.fields },
+          retryable: false,
+        });
+      }
+
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const merchantId = request.params.merchantId;
+      const result = await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const context = await readAgenticOrgBuyerDiscoveryContext(tx as unknown as Sql, tenantId, merchantId);
+        if (!context) return null;
+        const candidatePreview = toSandboxAgenticOrgBuyerDiscoveryPreviewResponse(
+          context.merchant,
+          context.readiness,
+          context.sampleProducts,
+          context.latestRequestAudit,
+          context.latestDecisionAudit,
+          context.latestProposalAudit,
+          null,
+        );
+        if (context.merchant.environment !== 'sandbox' || candidatePreview.blockers.length > 0) {
+          const eventType = 'merchant.sandbox_onboarding.agenticorg_buyer_discovery_handoff.blocked';
+          const audit = await appendCommerceAudit(tx as unknown as Sql, {
+            tenantId,
+            merchantId,
+            userPrincipalId: operator.developerId,
+            eventType,
+            resourceType: 'merchant',
+            resourceId: merchantId,
+            requestId: request.id,
+            metadata: agenticOrgBuyerDiscoveryEvidenceMetadata(candidatePreview, {
+              handoff_status: 'blocked',
+              handoff_note: parsed.note ?? null,
+            }),
+          });
+          return {
+            blocked: true as const,
+            preview: candidatePreview,
+            auditEventId: audit.id,
+          };
+        }
+
+        const eventType = 'merchant.sandbox_onboarding.agenticorg_buyer_discovery_handoff.requested';
+        const metadata = agenticOrgBuyerDiscoveryEvidenceMetadata(candidatePreview, {
+          handoff_status: 'sandbox_handoff_requested',
+          handoff_note: parsed.note ?? null,
+        });
+        const audit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId,
+          merchantId,
+          userPrincipalId: operator.developerId,
+          eventType,
+          resourceType: 'merchant',
+          resourceId: merchantId,
+          requestId: request.id,
+          metadata,
+        });
+        const latestHandoffAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot = {
+          audit_event_id: audit.id,
+          event_type: eventType,
+          occurred_at: audit.occurredAt,
+          actor: operator.developerId,
+          metadata,
+        };
+        return {
+          blocked: false as const,
+          preview: toSandboxAgenticOrgBuyerDiscoveryPreviewResponse(
+            context.merchant,
+            context.readiness,
+            context.sampleProducts,
+            context.latestRequestAudit,
+            context.latestDecisionAudit,
+            context.latestProposalAudit,
+            latestHandoffAudit,
+          ),
+          auditEventId: audit.id,
+        };
+      });
+
+      if (!result) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      if (result.blocked) {
+        throw new CommerceHttpError(409, 'agenticorg_buyer_discovery_handoff_blocked',
+          'AgenticOrg buyer discovery handoff request is blocked by sandbox evidence prerequisites',
+          {
+            details: {
+              audit_event_id: result.auditEventId,
+              agenticorg_buyer_discovery_preview: result.preview,
+            },
+            retryable: false,
+          });
+      }
+      return reply.status(200).send({ data: result.preview, audit_event_id: result.auditEventId });
+    },
+  );
+
+  app.post<{ Params: { merchantId: string }; Body: AgenticOrgBuyerDiscoveryHandoffWithdrawBody }>(
+    '/merchants/:merchantId/agenticorg-buyer-discovery-handoff-withdraw',
+    async (request, reply) => {
+      const operator = requireOperator(request);
+      if (request.body !== undefined && !isPlainObject(request.body)) {
+        throw new CommerceHttpError(400, 'validation_failed', 'Request validation failed', {
+          details: { fields: { body: 'must be a JSON object' } },
+          retryable: false,
+        });
+      }
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const parsed = validateReadOnlyDiscoveryRolloutProposalBody(
+        body,
+        AGENTICORG_BUYER_DISCOVERY_HANDOFF_WITHDRAW_FIELDS,
+        'reason',
+      );
+      if (Object.keys(parsed.fields).length > 0) {
+        throw new CommerceHttpError(400, 'validation_failed', 'Request validation failed', {
+          details: { fields: parsed.fields },
+          retryable: false,
+        });
+      }
+
+      const sql = getSql();
+      const tenantId = request.commerceTenantId;
+      const merchantId = request.params.merchantId;
+      const result = await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const context = await readAgenticOrgBuyerDiscoveryContext(tx as unknown as Sql, tenantId, merchantId);
+        if (!context) return null;
+        if (context.merchant.environment !== 'sandbox') {
+          throw new CommerceHttpError(409, 'agenticorg_buyer_discovery_live_merchant_blocked',
+            'AgenticOrg buyer discovery handoff is only available for sandbox merchants',
+            { retryable: false });
+        }
+        if (context.preview.integration_status !== 'sandbox_handoff_requested') {
+          throw new CommerceHttpError(409, 'agenticorg_buyer_discovery_handoff_not_requested',
+            'Withdraw requires a prior AgenticOrg buyer discovery handoff request',
+            {
+              details: {
+                integration_status: context.preview.integration_status,
+                public_discovery_enabled: false,
+                checkout_payment_enabled: false,
+                live_provider_enabled: false,
+                [`live_${'p'}lural_enabled`]: false,
+                production_allowlist_written: false,
+              },
+              retryable: false,
+            });
+        }
+        const eventType = 'merchant.sandbox_onboarding.agenticorg_buyer_discovery_handoff.withdrawn';
+        const metadata = agenticOrgBuyerDiscoveryEvidenceMetadata(context.preview, {
+          handoff_status: 'sandbox_handoff_withdrawn',
+          withdrawal_reason: parsed.note ?? null,
+          handoff_requested_at: context.preview.handoff_requested_at,
+          handoff_request_actor: context.preview.handoff_request_actor,
+        });
+        const audit = await appendCommerceAudit(tx as unknown as Sql, {
+          tenantId,
+          merchantId,
+          userPrincipalId: operator.developerId,
+          eventType,
+          resourceType: 'merchant',
+          resourceId: merchantId,
+          requestId: request.id,
+          metadata,
+        });
+        const latestHandoffAudit: SandboxReadOnlyDiscoveryReviewAuditSnapshot = {
+          audit_event_id: audit.id,
+          event_type: eventType,
+          occurred_at: audit.occurredAt,
+          actor: operator.developerId,
+          metadata,
+        };
+        return {
+          preview: toSandboxAgenticOrgBuyerDiscoveryPreviewResponse(
+            context.merchant,
+            context.readiness,
+            context.sampleProducts,
+            context.latestRequestAudit,
+            context.latestDecisionAudit,
+            context.latestProposalAudit,
+            latestHandoffAudit,
+          ),
+          auditEventId: audit.id,
+        };
+      });
+
+      if (!result) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      return reply.status(200).send({ data: result.preview, audit_event_id: result.auditEventId });
+    },
+  );
+
   app.patch<{ Params: { merchantId: string }; Body: MerchantPatchBody }>(
     '/merchants/:merchantId',
     async (request, reply) => {
