@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptsDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(scriptsDir, '..');
-const fixtureDir = join(
+const defaultFixtureDir = join(
   repoRoot,
   'docs',
   'internal',
@@ -13,7 +13,9 @@ const fixtureDir = join(
   'fixtures',
   'c6oa-preview-conformance',
 );
-const manifestPath = join(fixtureDir, 'manifest.json');
+const defaultReportDir = join(repoRoot, 'docs', 'internal', 'commerce-v1', 'reports');
+const defaultJsonReportPath = join(defaultReportDir, 'open-protocol-preview-conformance.report.json');
+const defaultMarkdownReportPath = join(defaultReportDir, 'open-protocol-preview-conformance.report.md');
 const c6oaDocPath = join(
   repoRoot,
   'docs',
@@ -28,15 +30,18 @@ const c6obDocPath = join(
   'commerce-v1',
   'commerce-v1-c6ob-preview-validator-regression-scans.md',
 );
-const readmePath = join(fixtureDir, 'README.md');
+const previewInternalOnlyStatement =
+  'Internal preview conformance report only. This is not public protocol publication, not a certification artifact, and does not enable public discovery, production checkout or payment creation, live payments, provider calls, or merchant private API calls.';
 
-const expectedSurfaces = new Set([
+const expectedSurfaceNames = [
   'schemaorg_jsonld_preview',
   'ucp_style_capability_profile_preview',
   'acp_style_checkout_shape_preview',
   'ap2_style_evidence_preview',
   'connector_registry_metadata_preview',
-]);
+];
+
+const expectedSurfaces = new Set(expectedSurfaceNames);
 
 const expectedScenarios = new Set(['preview_available', 'blocked_refusal']);
 
@@ -140,8 +145,8 @@ function asArray(value, label) {
   return value;
 }
 
-function fixtureFileNames() {
-  return readdirSync(fixtureDir)
+function fixtureFileNames(currentFixtureDir) {
+  return readdirSync(currentFixtureDir)
     .filter((name) => name.endsWith('.json') && name !== 'manifest.json')
     .sort();
 }
@@ -351,8 +356,8 @@ function validateManifest(manifest, names) {
   }
 }
 
-function validateFixture(fileName) {
-  const fixture = parseJsonFile(join(fixtureDir, fileName));
+function validateFixture(fileName, currentFixtureDir) {
+  const fixture = parseJsonFile(join(currentFixtureDir, fileName));
   assert.equal(fixture.fixture_kind, 'agentic_commerce_c6oa_preview_conformance_fixture');
   assert.equal(fixture.fixture_version, 'c6oa-preview-1');
   assert.ok(expectedSurfaces.has(fixture.surface), `${fileName} surface must be expected`);
@@ -376,34 +381,444 @@ function validateFixture(fileName) {
 
 function validateTextScans(paths) {
   let scansChecked = 0;
+  const failures = [];
   for (const path of paths) {
     const text = readFileSync(path, 'utf8');
     for (const scan of forbiddenStringScans) {
       scansChecked += 1;
-      assert.equal(
-        scan.pattern.test(text),
-        false,
-        `${relative(repoRoot, path)} matched ${scan.name}`,
-      );
+      if (scan.pattern.test(text)) {
+        failures.push({
+          path: formatPath(path),
+          scan: scan.name,
+        });
+      }
     }
   }
-  return scansChecked;
+  return { failures, scansChecked };
 }
 
-const manifest = parseJsonFile(manifestPath);
-const fixtureNames = fixtureFileNames();
-validateManifest(manifest, fixtureNames);
-const fixtures = fixtureNames.map(validateFixture);
-const scanTargets = [c6oaDocPath, c6obDocPath, readmePath, ...fixtureNames.map((name) => join(fixtureDir, name))];
-const scansChecked = validateTextScans(scanTargets);
+function formatPath(path) {
+  const relativePath = relative(repoRoot, path).replace(/\\/g, '/');
+  if (relativePath && !relativePath.startsWith('..')) return relativePath;
+  return path.replace(/\\/g, '/');
+}
 
-const summary = {
-  status: 'passed',
-  fixtures_checked: fixtures.length,
-  surfaces_checked: expectedSurfaces.size,
-  scans_checked: scansChecked,
-  manifest: relative(repoRoot, manifestPath).replace(/\\/g, '/'),
-};
+function requireOptionValue(args, index, option) {
+  const value = args[index + 1];
+  assert.ok(value && !value.startsWith('--'), `${option} requires a path value`);
+  return value;
+}
 
-console.log('commerce C6Oa preview conformance validation passed');
-console.log(JSON.stringify(summary, null, 2));
+function parseArgs(args) {
+  const options = {
+    fixtureDir: defaultFixtureDir,
+    generatedAt: new Date().toISOString(),
+    jsonReportPath: defaultJsonReportPath,
+    markdownReportPath: defaultMarkdownReportPath,
+    writeReport: false,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    switch (arg) {
+      case '--write-report':
+        options.writeReport = true;
+        break;
+      case '--json-report':
+        options.jsonReportPath = resolve(repoRoot, requireOptionValue(args, index, arg));
+        index += 1;
+        break;
+      case '--markdown-report':
+        options.markdownReportPath = resolve(repoRoot, requireOptionValue(args, index, arg));
+        index += 1;
+        break;
+      case '--fixture-dir':
+        options.fixtureDir = resolve(repoRoot, requireOptionValue(args, index, arg));
+        index += 1;
+        break;
+      case '--generated-at':
+        options.generatedAt = requireOptionValue(args, index, arg);
+        index += 1;
+        break;
+      case '--help':
+        console.log([
+          'Usage: node scripts/commerce-c6oa-preview-conformance-validate.mjs [options]',
+          '',
+          'Options:',
+          '  --write-report                 Write JSON and Markdown conformance reports.',
+          '  --json-report <path>           JSON report path. Default: docs/internal/commerce-v1/reports/open-protocol-preview-conformance.report.json',
+          '  --markdown-report <path>       Markdown report path. Default: docs/internal/commerce-v1/reports/open-protocol-preview-conformance.report.md',
+          '  --fixture-dir <path>           Fixture corpus directory. Default: docs/internal/commerce-v1/fixtures/c6oa-preview-conformance',
+          '  --generated-at <iso-string>    Override report timestamp for deterministic local checks.',
+        ].join('\n'));
+        process.exit(0);
+        break;
+      default:
+        assert.fail(`Unknown option ${arg}`);
+    }
+  }
+
+  return options;
+}
+
+function messageForError(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function fixtureResult(fileName, fixture, status, failure) {
+  const result = {
+    path: fileName,
+    surface: isRecord(fixture) && typeof fixture.surface === 'string' ? fixture.surface : 'unknown',
+    scenario: isRecord(fixture) && typeof fixture.scenario === 'string' ? fixture.scenario : 'unknown',
+    status,
+    expected_blockers: isRecord(fixture) && Array.isArray(fixture.expected_blockers)
+      ? fixture.expected_blockers
+      : [],
+    blocker_evidence_count: isRecord(fixture?.payload)
+      ? collectStringArrayValues(fixture.payload, 'blockers').size
+      : 0,
+  };
+  if (failure) result.failure = failure;
+  return result;
+}
+
+function buildSurfaceResults(fixtureResults) {
+  return expectedSurfaceNames.map((surface) => {
+    const results = fixtureResults.filter((fixture) => fixture.surface === surface);
+    const scenariosPresent = [...new Set(results.map((fixture) => fixture.scenario))].sort();
+    const missingScenarios = [...expectedScenarios]
+      .filter((scenario) => !scenariosPresent.includes(scenario))
+      .sort();
+    const failedFixtures = results
+      .filter((fixture) => fixture.status !== 'passed')
+      .map((fixture) => fixture.path);
+
+    return {
+      surface,
+      status: missingScenarios.length === 0 && failedFixtures.length === 0 ? 'passed' : 'failed',
+      fixture_count: results.length,
+      scenarios_present: scenariosPresent,
+      missing_scenarios: missingScenarios,
+      failed_fixtures: failedFixtures,
+    };
+  });
+}
+
+function buildBlockerSummary(fixtureResults) {
+  const blockedFixtures = fixtureResults.filter((fixture) => fixture.scenario === 'blocked_refusal');
+  const bySurface = expectedSurfaceNames.map((surface) => {
+    const surfaceFixtures = blockedFixtures.filter((fixture) => fixture.surface === surface);
+    const blockers = [...new Set(surfaceFixtures.flatMap((fixture) => fixture.expected_blockers))].sort();
+    return {
+      surface,
+      blocked_fixture_count: surfaceFixtures.length,
+      expected_blocker_count: blockers.length,
+      expected_blockers: blockers,
+    };
+  });
+
+  return {
+    blocked_fixture_count: blockedFixtures.length,
+    expected_blocker_count: blockedFixtures.reduce(
+      (count, fixture) => count + fixture.expected_blockers.length,
+      0,
+    ),
+    by_surface: bySurface,
+  };
+}
+
+function buildNonEnablingControlSummary(manifest) {
+  const globalControls = isRecord(manifest?.global_controls) ? manifest.global_controls : {};
+  const enabledGuardedControls = Object.entries(globalControls)
+    .filter(([, value]) => value === true)
+    .map(([key]) => key)
+    .sort();
+
+  return {
+    status: enabledGuardedControls.length === 0 && isRecord(manifest) ? 'passed' : 'failed',
+    all_guarded_controls_disabled: enabledGuardedControls.length === 0,
+    enabled_guarded_controls: enabledGuardedControls,
+    posture: {
+      synthetic: manifest?.synthetic === true,
+      sandbox_only: manifest?.sandbox_only === true,
+      preview_only: manifest?.preview_only === true,
+      non_live: manifest?.non_live === true,
+      non_enabling: manifest?.non_enabling === true,
+      non_publication: manifest?.non_publication === true,
+      non_certifying: manifest?.non_certifying === true,
+      publication_status: manifest?.publication_status ?? 'unknown',
+      certification_claim_count: Array.isArray(manifest?.certification_claims)
+        ? manifest.certification_claims.length
+        : 'unknown',
+    },
+    controls: globalControls,
+  };
+}
+
+function buildSafetyPostureSummary(manifest) {
+  return {
+    statement: previewInternalOnlyStatement,
+    preview_internal_only: true,
+    sandbox_only: manifest?.sandbox_only === true,
+    non_live: manifest?.non_live === true,
+    non_enabling: manifest?.non_enabling === true,
+    non_publication: manifest?.non_publication === true,
+    non_certifying: manifest?.non_certifying === true,
+    public_discovery_enabled: false,
+    production_checkout_payment_creation_enabled: false,
+    live_payment_enabled: false,
+    provider_calls_enabled: false,
+    merchant_private_api_calls_enabled: false,
+  };
+}
+
+function buildReport({
+  failures,
+  fixtureResults,
+  generatedAt,
+  manifest,
+  manifestPath,
+  scanFailures,
+  scansChecked,
+}) {
+  const status = failures.length === 0 ? 'passed' : 'failed';
+  const surfaceResults = buildSurfaceResults(fixtureResults);
+
+  return {
+    report_kind: 'agentic_commerce_open_protocol_preview_conformance_report',
+    report_version: 'c6oc-preview-1',
+    status,
+    generated_at: generatedAt,
+    source_manifest_path: formatPath(manifestPath),
+    fixture_corpus_version: manifest?.manifest_version ?? 'unknown',
+    fixture_count: fixtureResults.length,
+    surface_count: expectedSurfaceNames.length,
+    scan_count: scansChecked,
+    per_surface_results: surfaceResults,
+    per_fixture_results: fixtureResults,
+    blocker_summary: buildBlockerSummary(fixtureResults),
+    forbidden_claim_scan_summary: {
+      status: scanFailures.length === 0 ? 'passed' : 'failed',
+      scans_checked: scansChecked,
+      scan_names: forbiddenStringScans.map((scan) => scan.name),
+      failures: scanFailures,
+    },
+    non_enabling_control_summary: buildNonEnablingControlSummary(manifest),
+    safety_posture_summary: buildSafetyPostureSummary(manifest),
+    failures,
+  };
+}
+
+function markdownList(items) {
+  if (items.length === 0) return '- None';
+  return items.map((item) => `- ${item}`).join('\n');
+}
+
+function renderMarkdownReport(report) {
+  const surfaceRows = report.per_surface_results
+    .map((surface) => (
+      `| ${surface.surface} | ${surface.status} | ${surface.fixture_count} | ${surface.scenarios_present.join(', ')} | ${surface.missing_scenarios.join(', ') || 'none'} |`
+    ))
+    .join('\n');
+  const fixtureRows = report.per_fixture_results
+    .map((fixture) => (
+      `| ${fixture.path} | ${fixture.surface} | ${fixture.scenario} | ${fixture.status} | ${fixture.expected_blockers.length} | ${fixture.blocker_evidence_count} |`
+    ))
+    .join('\n');
+  const blockerRows = report.blocker_summary.by_surface
+    .map((surface) => (
+      `| ${surface.surface} | ${surface.blocked_fixture_count} | ${surface.expected_blocker_count} | ${surface.expected_blockers.join(', ') || 'none'} |`
+    ))
+    .join('\n');
+  const controlRows = Object.entries(report.non_enabling_control_summary.controls)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `| ${key} | ${String(value)} |`)
+    .join('\n');
+
+  return `${[
+    '# Open Protocol Preview Conformance Report',
+    '',
+    report.safety_posture_summary.statement,
+    '',
+    '## Summary',
+    '',
+    `- Status: ${report.status}`,
+    `- Generated at: ${report.generated_at}`,
+    `- Source manifest: ${report.source_manifest_path}`,
+    `- Fixture corpus version: ${report.fixture_corpus_version}`,
+    `- Fixture count: ${report.fixture_count}`,
+    `- Surface count: ${report.surface_count}`,
+    `- Scan count: ${report.scan_count}`,
+    '',
+    '## Safety Posture',
+    '',
+    `- Preview/internal only: ${report.safety_posture_summary.preview_internal_only}`,
+    `- Sandbox only: ${report.safety_posture_summary.sandbox_only}`,
+    `- Non-live: ${report.safety_posture_summary.non_live}`,
+    `- Non-enabling: ${report.safety_posture_summary.non_enabling}`,
+    `- Non-publication: ${report.safety_posture_summary.non_publication}`,
+    `- Non-certifying: ${report.safety_posture_summary.non_certifying}`,
+    `- Public discovery enabled: ${report.safety_posture_summary.public_discovery_enabled}`,
+    `- Production checkout/payment creation enabled: ${report.safety_posture_summary.production_checkout_payment_creation_enabled}`,
+    `- Live payment enabled: ${report.safety_posture_summary.live_payment_enabled}`,
+    `- Provider calls enabled: ${report.safety_posture_summary.provider_calls_enabled}`,
+    `- Merchant private API calls enabled: ${report.safety_posture_summary.merchant_private_api_calls_enabled}`,
+    '',
+    '## Surface Results',
+    '',
+    '| Surface | Status | Fixtures | Scenarios present | Missing scenarios |',
+    '|---|---:|---:|---|---|',
+    surfaceRows,
+    '',
+    '## Fixture Results',
+    '',
+    '| Fixture | Surface | Scenario | Status | Expected blockers | Blocker evidence count |',
+    '|---|---|---|---:|---:|---:|',
+    fixtureRows,
+    '',
+    '## Blocker Summary',
+    '',
+    `- Blocked fixture count: ${report.blocker_summary.blocked_fixture_count}`,
+    `- Expected blocker count: ${report.blocker_summary.expected_blocker_count}`,
+    '',
+    '| Surface | Blocked fixtures | Expected blockers | Blockers |',
+    '|---|---:|---:|---|',
+    blockerRows,
+    '',
+    '## Forbidden-Claim Scan Summary',
+    '',
+    `- Status: ${report.forbidden_claim_scan_summary.status}`,
+    `- Scans checked: ${report.forbidden_claim_scan_summary.scans_checked}`,
+    `- Scan names: ${report.forbidden_claim_scan_summary.scan_names.join(', ')}`,
+    '',
+    '## Non-Enabling Controls',
+    '',
+    `- Status: ${report.non_enabling_control_summary.status}`,
+    `- All guarded controls disabled: ${report.non_enabling_control_summary.all_guarded_controls_disabled}`,
+    '',
+    '| Control | Value |',
+    '|---|---:|',
+    controlRows,
+    '',
+    '## Failures',
+    '',
+    markdownList(report.failures.map((failure) => `${failure.scope}: ${failure.message}`)),
+  ].join('\n')}\n`;
+}
+
+function writeReports(report, options) {
+  if (!options.writeReport) return;
+  mkdirSync(dirname(options.jsonReportPath), { recursive: true });
+  mkdirSync(dirname(options.markdownReportPath), { recursive: true });
+  writeFileSync(options.jsonReportPath, `${JSON.stringify(report, null, 2)}\n`);
+  writeFileSync(options.markdownReportPath, renderMarkdownReport(report));
+}
+
+function runValidation(options) {
+  const currentFixtureDir = options.fixtureDir;
+  const currentManifestPath = join(currentFixtureDir, 'manifest.json');
+  const currentReadmePath = join(currentFixtureDir, 'README.md');
+  const failures = [];
+  const fixtureResults = [];
+  let manifest = null;
+  let fixtureNames = [];
+  let scansChecked = 0;
+  let scanFailures = [];
+
+  try {
+    manifest = parseJsonFile(currentManifestPath);
+  } catch (error) {
+    failures.push({ scope: 'manifest_parse', message: messageForError(error) });
+  }
+
+  try {
+    fixtureNames = fixtureFileNames(currentFixtureDir);
+  } catch (error) {
+    failures.push({ scope: 'fixture_listing', message: messageForError(error) });
+  }
+
+  if (manifest) {
+    try {
+      validateManifest(manifest, fixtureNames);
+    } catch (error) {
+      failures.push({ scope: 'manifest_validation', message: messageForError(error) });
+    }
+  }
+
+  for (const fileName of fixtureNames) {
+    let fixture = null;
+    let failure = null;
+    try {
+      fixture = validateFixture(fileName, currentFixtureDir);
+    } catch (error) {
+      failure = messageForError(error);
+      failures.push({ scope: `fixture:${fileName}`, message: failure });
+      try {
+        fixture = parseJsonFile(join(currentFixtureDir, fileName));
+      } catch {
+        fixture = null;
+      }
+    }
+    fixtureResults.push(fixtureResult(fileName, fixture, failure ? 'failed' : 'passed', failure));
+  }
+
+  try {
+    const scanTargets = [
+      c6oaDocPath,
+      c6obDocPath,
+      currentReadmePath,
+      ...fixtureNames.map((name) => join(currentFixtureDir, name)),
+    ];
+    const scanResult = validateTextScans(scanTargets);
+    scansChecked = scanResult.scansChecked;
+    scanFailures = scanResult.failures;
+    for (const failure of scanFailures) {
+      failures.push({
+        scope: `forbidden_scan:${failure.path}`,
+        message: `matched ${failure.scan}`,
+      });
+    }
+  } catch (error) {
+    failures.push({ scope: 'forbidden_scans', message: messageForError(error) });
+  }
+
+  const report = buildReport({
+    failures,
+    fixtureResults,
+    generatedAt: options.generatedAt,
+    manifest,
+    manifestPath: currentManifestPath,
+    scanFailures,
+    scansChecked,
+  });
+
+  const summary = {
+    status: report.status,
+    fixtures_checked: fixtureResults.length,
+    surfaces_checked: expectedSurfaces.size,
+    scans_checked: scansChecked,
+    manifest: formatPath(currentManifestPath),
+  };
+
+  if (options.writeReport) {
+    summary.reports = {
+      json: formatPath(options.jsonReportPath),
+      markdown: formatPath(options.markdownReportPath),
+    };
+  }
+
+  return { report, summary };
+}
+
+const options = parseArgs(process.argv.slice(2));
+const { report, summary } = runValidation(options);
+writeReports(report, options);
+
+if (report.status === 'passed') {
+  console.log('commerce C6Oa preview conformance validation passed');
+  console.log(JSON.stringify(summary, null, 2));
+} else {
+  console.error('commerce C6Oa preview conformance validation failed');
+  console.error(JSON.stringify(summary, null, 2));
+  process.exitCode = 1;
+}
