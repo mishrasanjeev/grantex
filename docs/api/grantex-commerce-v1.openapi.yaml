@@ -891,6 +891,133 @@ components:
         production_approval_status: { type: string, enum: [not_approved] }
         rollout_status: { type: string, enum: [rollout_not_requested] }
 
+    SchemaOrgJsonLdPreview:
+      type: object
+      additionalProperties: false
+      description: >-
+        C6J schema.org JSON-LD preview generated from Grantex canonical
+        merchant/catalog/readiness state. It is preview-only and does not
+        publish schema.org data, enable public discovery, enable production
+        Commerce V1, create checkout/payment paths, enable live payments,
+        enable live Plural, expose provider credentials, write production
+        configuration, set allowlists, or claim schema.org certification.
+      properties:
+        status: { type: string, enum: [preview_only, blocked] }
+        message: { type: string }
+        preview_only: { type: boolean, const: true }
+        publication_status: { type: string, enum: [not_published] }
+        schemaorg_publication_enabled: { type: boolean, const: false }
+        public_discovery_enabled: { type: boolean, const: false }
+        checkout_payment_enabled: { type: boolean, const: false }
+        live_provider_enabled: { type: boolean, const: false }
+        live_plural_enabled: { type: boolean, const: false }
+        production_allowlist_written: { type: boolean, const: false }
+        live_mode_status: { type: string, enum: [not_live] }
+        production_approval_status: { type: string, enum: [not_approved] }
+        certification_claims:
+          type: array
+          maxItems: 0
+          items: { type: string }
+        generated_at: { type: string, format: date-time }
+        jsonld:
+          type: object
+          additionalProperties: false
+          properties:
+            "@context": { type: string, enum: ["https://schema.org"] }
+            "@graph":
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                properties:
+                  "@type": { type: string, enum: [Product] }
+                  name: { type: string }
+                  description: { type: string }
+                  image: { type: string, format: uri }
+                  category: { type: string }
+                  brand:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      "@type": { type: string, enum: [Brand] }
+                      name: { type: string }
+                  offers:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      properties:
+                        "@type": { type: string, enum: [Offer] }
+                        price: { type: string }
+                        priceCurrency: { type: string, pattern: "^[A-Z]{3}$" }
+                        availability:
+                          type: string
+                          enum:
+                            - https://schema.org/InStock
+                            - https://schema.org/OutOfStock
+                            - https://schema.org/PreOrder
+                            - https://schema.org/BackOrder
+                        hasMerchantReturnPolicy:
+                          type: object
+                          additionalProperties: false
+                          properties:
+                            "@type": { type: string, enum: [MerchantReturnPolicy] }
+                            description: { type: string }
+                            applicableCountry: { type: string, pattern: "^[A-Z]{2}$" }
+        included_types:
+          type: array
+          items:
+            type: string
+            enum: [Product, Offer, MerchantReturnPolicy, OfferShippingDetails]
+        omitted_types:
+          type: array
+          items:
+            type: string
+            enum: [Product, Offer, MerchantReturnPolicy, OfferShippingDetails]
+        allowed_capabilities:
+          type: array
+          items:
+            type: string
+            enum: [schemaorg_jsonld_preview_read]
+        blocked_capabilities:
+          type: array
+          items:
+            type: string
+            enum:
+              - schemaorg_publication
+              - public_discovery
+              - checkout_payment_creation
+              - live_payment
+              - live_plural
+              - provider_credentials
+              - production_allowlist
+        blockers:
+          type: array
+          items: { type: string }
+        remediation_items:
+          type: array
+          items: { type: string }
+        source_reference:
+          type: object
+          additionalProperties: false
+          properties:
+            system: { type: string, enum: [grantex] }
+            canonical_state: { type: string, enum: [merchant_catalog_readiness] }
+            endpoint_template: { type: string }
+            tenant_scoped: { type: boolean, const: true }
+        evidence_summary:
+          type: object
+          additionalProperties: false
+          properties:
+            product_count: { type: integer, minimum: 0 }
+            offer_count: { type: integer, minimum: 0 }
+            return_policy_count: { type: integer, minimum: 0 }
+            shipping_details_count: { type: integer, minimum: 0 }
+            omitted_unsafe_field_count: { type: integer, minimum: 0 }
+            readiness_state: { type: string }
+            read_only: { type: boolean, const: true }
+            public_safe: { type: boolean, const: true }
+
     SandboxOnboarding:
       type: object
       properties:
@@ -2474,6 +2601,41 @@ paths:
         "403": { description: Operator caller required; merchant and CommerceAgent callers are denied }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Live merchant or missing proposal prevents withdrawal }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/schemaorg-jsonld-preview:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    get:
+      tags: [Merchants]
+      summary: Inspect schema.org JSON-LD preview
+      operationId: getMerchantSchemaOrgJsonLdPreview
+      x-implemented: true
+      x-milestone: C6J
+      description: >-
+        Returns a tenant-scoped, sandbox-only, preview-only schema.org JSON-LD
+        adapter output generated from Grantex canonical merchant/catalog/readiness
+        evidence. Operators and owning merchants can inspect the safe Product,
+        Offer, MerchantReturnPolicy, and OfferShippingDetails shape where
+        evidence exists. The route omits private merchant data, exact internal
+        IDs, secrets, provider metadata, raw payloads, allowlists, and production
+        configuration. It does not publish schema.org data, enable public
+        discovery, enable production Commerce V1, create checkout/payment paths,
+        enable live payments, enable live Plural, call providers, write
+        production config, set allowlists, or claim schema.org certification.
+      responses:
+        "200":
+          description: Schema.org JSON-LD preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/SchemaOrgJsonLdPreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator or owning merchant caller required; CommerceAgent and service callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant blocks schema.org JSON-LD preview }
         "503": { $ref: "#/components/responses/CommerceDisabled" }
 
   /v1/commerce/merchants/{merchant_id}/agenticorg-buyer-discovery-preview:

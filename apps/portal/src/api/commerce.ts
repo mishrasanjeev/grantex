@@ -503,6 +503,75 @@ export interface CommerceAgenticOrgBuyerDiscoveryPreview {
   rollout_status: 'rollout_not_requested';
 }
 
+export interface CommerceSchemaOrgJsonLdPreview {
+  status: 'preview_only' | 'blocked';
+  message: string;
+  preview_only: true;
+  publication_status: 'not_published';
+  schemaorg_publication_enabled: false;
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  live_plural_enabled: false;
+  production_allowlist_written: false;
+  live_mode_status: 'not_live';
+  production_approval_status: 'not_approved';
+  certification_claims: [];
+  generated_at: string;
+  jsonld: {
+    '@context': 'https://schema.org';
+    '@graph': Array<{
+      '@type': 'Product';
+      name: string;
+      description?: string;
+      image?: string;
+      category?: string;
+      brand?: { '@type': 'Brand'; name: string };
+      offers?: Array<{
+        '@type': 'Offer';
+        price: string;
+        priceCurrency: string;
+        availability?: string;
+        hasMerchantReturnPolicy?: {
+          '@type': 'MerchantReturnPolicy';
+          description: string;
+          applicableCountry?: string;
+        };
+      }>;
+    }>;
+  };
+  included_types: Array<'Product' | 'Offer' | 'MerchantReturnPolicy' | 'OfferShippingDetails'>;
+  omitted_types: Array<'Product' | 'Offer' | 'MerchantReturnPolicy' | 'OfferShippingDetails'>;
+  allowed_capabilities: ['schemaorg_jsonld_preview_read'];
+  blocked_capabilities: Array<
+    | 'schemaorg_publication'
+    | 'public_discovery'
+    | 'checkout_payment_creation'
+    | 'live_payment'
+    | 'live_plural'
+    | 'provider_credentials'
+    | 'production_allowlist'
+  >;
+  blockers: string[];
+  remediation_items: string[];
+  source_reference: {
+    system: 'grantex';
+    canonical_state: 'merchant_catalog_readiness';
+    endpoint_template: '/v1/commerce/merchants/{merchant_id}/schemaorg-jsonld-preview';
+    tenant_scoped: true;
+  };
+  evidence_summary: {
+    product_count: number;
+    offer_count: number;
+    return_policy_count: number;
+    shipping_details_count: number;
+    omitted_unsafe_field_count: number;
+    readiness_state: string;
+    read_only: true;
+    public_safe: true;
+  };
+}
+
 export interface CommerceSandboxOnboarding {
   merchant_id: string;
   tenant_id: string;
@@ -969,6 +1038,14 @@ export function getCommerceMerchantAgenticOrgBuyerDiscoveryPreview(
 ): Promise<{ data: CommerceAgenticOrgBuyerDiscoveryPreview }> {
   return api.get<{ data: CommerceAgenticOrgBuyerDiscoveryPreview }>(
     `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/agenticorg-buyer-discovery-preview`,
+  );
+}
+
+export function getCommerceMerchantSchemaOrgJsonLdPreview(
+  merchantId: string,
+): Promise<{ data: CommerceSchemaOrgJsonLdPreview }> {
+  return api.get<{ data: CommerceSchemaOrgJsonLdPreview }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/schemaorg-jsonld-preview`,
   );
 }
 

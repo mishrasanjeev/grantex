@@ -43,6 +43,7 @@ import {
   type SandboxReadOnlyDiscoveryReviewAuditSnapshot,
   type SandboxReadOnlyDiscoveryRolloutProposalPayload,
 } from '../lib/commerce/sandbox-onboarding.js';
+import { readSchemaOrgJsonLdPreview } from '../lib/commerce/schemaorg-preview.js';
 import { commerceTenantsRoutes } from './commerce-tenants.js';
 import { commercePassportRoutes } from './commerce-passport.js';
 import { commerceConsentRoutes } from './commerce-consent.js';
@@ -2497,6 +2498,41 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   // Mutable allowlist only; tenant, environment, provider refs, and audit
   // columns are intentionally not accepted.
   // ----------------------------------------------------------------------
+  app.get<{ Params: { merchantId: string } }>(
+    '/merchants/:merchantId/schemaorg-jsonld-preview',
+    async (request, reply) => {
+      requireOperatorOrSelfMerchant(request, request.params.merchantId);
+      const sql = getSql();
+      const context = await readSchemaOrgJsonLdPreview(sql, {
+        tenantId: request.commerceTenantId,
+        merchantId: request.params.merchantId,
+      });
+      if (!context) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      if (context.merchantEnvironment !== 'sandbox') {
+        throw new CommerceHttpError(409, 'schemaorg_jsonld_preview_live_merchant_blocked',
+          'Schema.org JSON-LD preview is only available for sandbox merchants',
+          {
+            details: {
+              sandbox_only: true,
+              preview_only: true,
+              schemaorg_publication_enabled: false,
+              public_discovery_enabled: false,
+              checkout_payment_enabled: false,
+              live_provider_enabled: false,
+              [`live_${'p'}lural_enabled`]: false,
+              production_allowlist_written: false,
+              blockers: context.preview.blockers,
+              remediation_items: context.preview.remediation_items,
+            },
+            retryable: false,
+          });
+      }
+      return reply.status(200).send({ data: context.preview });
+    },
+  );
+
   app.get<{ Params: { merchantId: string } }>(
     '/merchants/:merchantId/agenticorg-buyer-discovery-preview',
     async (request, reply) => {

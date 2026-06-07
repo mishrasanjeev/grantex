@@ -62,6 +62,16 @@ describe('Grantex Commerce V1 OpenAPI 3.1 contract', () => {
     expect(content).toMatch(/x-milestone:\s*M2/);
   });
 
+  it('declares the C6J schema.org JSON-LD preview as implemented and preview-only', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/schemaorg-jsonld-preview');
+    expect(content).toMatch(/operationId:\s*getMerchantSchemaOrgJsonLdPreview/);
+    expect(content).toMatch(/x-milestone:\s*C6J/);
+    expect(content).toMatch(/SchemaOrgJsonLdPreview:/);
+    expect(content).toMatch(/schemaorg_publication_enabled:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/certification_claims:[\s\S]*maxItems:\s*0/);
+  });
+
   it('M2 passport endpoints flipped to x-implemented: true', () => {
     const content = readFileSync(yamlPath, 'utf8');
     // Each of the five passport routes must now carry x-implemented: true

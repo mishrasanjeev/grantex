@@ -138,6 +138,25 @@ function previewSampleRows(overrides: Record<string, unknown> = {}) {
   ];
 }
 
+function schemaOrgProductRows(overrides: Record<string, unknown> = {}) {
+  return [
+    {
+      product_row_id: 'cprd_SCHEMA_PRODUCT_1',
+      title: 'Countertop induction cooktop',
+      brand: 'Acme Home',
+      description: 'Sandbox appliance catalog item for agent preview.',
+      image_url: 'https://images.example.test/cooktop.jpg',
+      category_preset: 'electronics_appliances',
+      variant_row_id: 'cvar_SCHEMA_VARIANT_1',
+      price_amount: 129900,
+      currency: 'INR',
+      availability_status: 'in_stock',
+      return_policy_summary: 'Returns accepted within seven days.',
+      ...overrides,
+    },
+  ];
+}
+
 function reviewRequestAudit(overrides: Record<string, unknown> = {}) {
   return [{
     id: 'caud_REVIEW_REQUEST',
@@ -1883,6 +1902,218 @@ describe('sandbox onboarding foundation', () => {
         integration_status: 'sandbox_handoff_withdrawn',
         public_discovery_enabled: false,
       });
+  });
+
+  it('returns a public-safe schema.org JSON-LD preview without enabling publication or payments', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(schemaOrgProductRows());
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/schemaorg-jsonld-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      data: {
+        status: string;
+        preview_only: boolean;
+        publication_status: string;
+        schemaorg_publication_enabled: boolean;
+        public_discovery_enabled: boolean;
+        checkout_payment_enabled: boolean;
+        live_provider_enabled: boolean;
+        live_plural_enabled: boolean;
+        production_allowlist_written: boolean;
+        certification_claims: string[];
+        included_types: string[];
+        omitted_types: string[];
+        jsonld: {
+          '@context': string;
+          '@graph': Array<{
+            '@type': string;
+            name: string;
+            brand?: { '@type': string; name: string };
+            offers?: Array<{
+              '@type': string;
+              price: string;
+              priceCurrency: string;
+              availability?: string;
+              hasMerchantReturnPolicy?: { '@type': string; description: string; applicableCountry?: string };
+            }>;
+          }>;
+        };
+      };
+    }>();
+
+    expect(body.data).toMatchObject({
+      status: 'preview_only',
+      preview_only: true,
+      publication_status: 'not_published',
+      schemaorg_publication_enabled: false,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+      production_allowlist_written: false,
+      certification_claims: [],
+    });
+    expect(body.data.included_types).toEqual(['Product', 'Offer', 'MerchantReturnPolicy']);
+    expect(body.data.omitted_types).toContain('OfferShippingDetails');
+    expect(body.data.jsonld['@context']).toBe('https://schema.org');
+    expect(body.data.jsonld['@graph']).toHaveLength(1);
+    expect(body.data.jsonld['@graph'][0]).toMatchObject({
+      '@type': 'Product',
+      name: 'Countertop induction cooktop',
+      brand: { '@type': 'Brand', name: 'Acme Home' },
+    });
+    expect(body.data.jsonld['@graph'][0]?.offers?.[0]).toMatchObject({
+      '@type': 'Offer',
+      price: '1299.00',
+      priceCurrency: 'INR',
+      availability: 'https://schema.org/InStock',
+      hasMerchantReturnPolicy: {
+        '@type': 'MerchantReturnPolicy',
+        description: 'Returns accepted within seven days.',
+        applicableCountry: 'IN',
+      },
+    });
+    const responseJson = JSON.stringify(body.data);
+    expect(responseJson).not.toContain('cten_TESTTENANT');
+    expect(responseJson).not.toContain('mch_SANDBOX');
+    expect(responseJson).not.toContain('cprd_SCHEMA_PRODUCT_1');
+    expect(responseJson).not.toContain('cvar_SCHEMA_VARIANT_1');
+    expect(responseJson).not.toContain('provider_account_refs');
+    expect(responseJson).not.toContain('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST');
+  });
+
+  it('redacts unsafe schema.org preview fields and records the omission without leaking private values', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(schemaOrgProductRows({
+      brand: 'production provider token brand',
+      description: 'secret token should not be public',
+      image_url: 'https://user:pass@images.example.test/cooktop.jpg',
+      return_policy_summary: 'approved live payment return policy',
+    }));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/schemaorg-jsonld-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const data = res.json<{
+      data: {
+        blockers: string[];
+        evidence_summary: { omitted_unsafe_field_count: number; return_policy_count: number };
+        jsonld: { '@graph': Array<{ brand?: unknown; description?: string; image?: string; offers?: Array<{ hasMerchantReturnPolicy?: unknown }> }> };
+      };
+    }>().data;
+    expect(data.blockers).toContain('schemaorg_unsafe_fields_omitted');
+    expect(data.evidence_summary.omitted_unsafe_field_count).toBeGreaterThanOrEqual(4);
+    expect(data.evidence_summary.return_policy_count).toBe(0);
+    expect(data.jsonld['@graph'][0]?.brand).toBeUndefined();
+    expect(data.jsonld['@graph'][0]?.description).toBeUndefined();
+    expect(data.jsonld['@graph'][0]?.image).toBeUndefined();
+    expect(data.jsonld['@graph'][0]?.offers?.[0]?.hasMerchantReturnPolicy).toBeUndefined();
+    const responseJson = JSON.stringify(data);
+    expect(responseJson).not.toContain('secret token');
+    expect(responseJson).not.toContain('production provider token');
+    expect(responseJson).not.toContain('approved live payment');
+    expect(responseJson).not.toContain('user:pass');
+  });
+
+  it('returns a blocked schema.org preview when catalog evidence is missing', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/schemaorg-jsonld-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const data = res.json<{
+      data: {
+        status: string;
+        blockers: string[];
+        jsonld: { '@graph': unknown[] };
+        public_discovery_enabled: boolean;
+        checkout_payment_enabled: boolean;
+      };
+    }>().data;
+    expect(data.status).toBe('blocked');
+    expect(data.blockers).toContain('schemaorg_product_evidence_missing');
+    expect(data.blockers).toContain('schemaorg_offer_evidence_missing');
+    expect(data.jsonld['@graph']).toEqual([]);
+    expect(data.public_discovery_enabled).toBe(false);
+    expect(data.checkout_payment_enabled).toBe(false);
+  });
+
+  it('blocks schema.org JSON-LD preview for live merchants without enabling public discovery', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ environment: 'live' })]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_LIVE/schemaorg-jsonld-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    const error = res.json<{
+      error: {
+        code: string;
+        details: {
+          preview_only: boolean;
+          schemaorg_publication_enabled: boolean;
+          public_discovery_enabled: boolean;
+          checkout_payment_enabled: boolean;
+          live_provider_enabled: boolean;
+          live_plural_enabled: boolean;
+          production_allowlist_written: boolean;
+          blockers: string[];
+        };
+      };
+    }>().error;
+    expect(error).toMatchObject({
+      code: 'schemaorg_jsonld_preview_live_merchant_blocked',
+      details: {
+        preview_only: true,
+        schemaorg_publication_enabled: false,
+        public_discovery_enabled: false,
+        checkout_payment_enabled: false,
+        live_provider_enabled: false,
+        live_plural_enabled: false,
+        production_allowlist_written: false,
+      },
+    });
+    expect(error.details.blockers).toContain('merchant_not_sandbox');
+  });
+
+  it('denies CommerceAgent callers on schema.org JSON-LD preview', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      id: 'cag_TEST',
+      tenant_id: TEST_COMMERCE_TENANT_ID,
+      trust_status: 'trusted',
+      public_key_jwk: null,
+      api_key_hash: 'hash',
+    }]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/schemaorg-jsonld-preview',
+      headers: { authorization: 'Bearer grtx_agent_C6JXXXXXXXXXXXXXXXXXXXXXXX' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('caller_not_authorized');
   });
 
   it('blocks submit transition when readiness checks fail', async () => {

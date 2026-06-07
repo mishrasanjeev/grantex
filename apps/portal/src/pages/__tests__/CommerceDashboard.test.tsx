@@ -31,6 +31,7 @@ const mockCreateCommerceMerchantReadOnlyDiscoveryRolloutProposal = vi.fn();
 const mockDryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal = vi.fn();
 const mockWithdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal = vi.fn();
 const mockGetCommerceMerchantAgenticOrgBuyerDiscoveryPreview = vi.fn();
+const mockGetCommerceMerchantSchemaOrgJsonLdPreview = vi.fn();
 const mockRequestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff = vi.fn();
 const mockWithdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff = vi.fn();
 const mockDisableMerchantAgenticCommerce = vi.fn();
@@ -73,6 +74,7 @@ vi.mock('../../api/commerce', () => ({
   dryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal: (...a: unknown[]) => mockDryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal(...a),
   withdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal: (...a: unknown[]) => mockWithdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal(...a),
   getCommerceMerchantAgenticOrgBuyerDiscoveryPreview: (...a: unknown[]) => mockGetCommerceMerchantAgenticOrgBuyerDiscoveryPreview(...a),
+  getCommerceMerchantSchemaOrgJsonLdPreview: (...a: unknown[]) => mockGetCommerceMerchantSchemaOrgJsonLdPreview(...a),
   requestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff: (...a: unknown[]) => mockRequestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff(...a),
   withdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff: (...a: unknown[]) => mockWithdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff(...a),
   disableMerchantAgenticCommerce: (...a: unknown[]) => mockDisableMerchantAgenticCommerce(...a),
@@ -657,6 +659,74 @@ const agenticOrgPreview = {
   rollout_status: 'rollout_not_requested' as const,
 };
 
+const schemaOrgPreview = {
+  status: 'preview_only' as const,
+  message: 'Schema.org JSON-LD preview was generated from public-safe Grantex catalog evidence.',
+  preview_only: true as const,
+  publication_status: 'not_published' as const,
+  schemaorg_publication_enabled: false as const,
+  public_discovery_enabled: false as const,
+  checkout_payment_enabled: false as const,
+  live_provider_enabled: false as const,
+  live_plural_enabled: false as const,
+  production_allowlist_written: false as const,
+  live_mode_status: 'not_live' as const,
+  production_approval_status: 'not_approved' as const,
+  certification_claims: [] as const,
+  generated_at: '2026-01-01T00:22:00Z',
+  jsonld: {
+    '@context': 'https://schema.org' as const,
+    '@graph': [{
+      '@type': 'Product' as const,
+      name: 'Sandbox induction cooktop',
+      description: 'Sandbox appliance catalog item.',
+      category: 'electronics_appliances',
+      brand: { '@type': 'Brand' as const, name: 'Acme Home' },
+      offers: [{
+        '@type': 'Offer' as const,
+        price: '1299.00',
+        priceCurrency: 'INR',
+        availability: 'https://schema.org/InStock',
+        hasMerchantReturnPolicy: {
+          '@type': 'MerchantReturnPolicy' as const,
+          description: 'Returns accepted within seven days.',
+          applicableCountry: 'IN',
+        },
+      }],
+    }],
+  },
+  included_types: ['Product', 'Offer', 'MerchantReturnPolicy'] as const,
+  omitted_types: ['OfferShippingDetails'] as const,
+  allowed_capabilities: ['schemaorg_jsonld_preview_read'] as const,
+  blocked_capabilities: [
+    'schemaorg_publication',
+    'public_discovery',
+    'checkout_payment_creation',
+    'live_payment',
+    'live_plural',
+    'provider_credentials',
+    'production_allowlist',
+  ] as const,
+  blockers: ['schemaorg_shipping_details_evidence_missing'],
+  remediation_items: ['Add public-safe shipping evidence before including OfferShippingDetails objects.'],
+  source_reference: {
+    system: 'grantex' as const,
+    canonical_state: 'merchant_catalog_readiness' as const,
+    endpoint_template: '/v1/commerce/merchants/{merchant_id}/schemaorg-jsonld-preview' as const,
+    tenant_scoped: true as const,
+  },
+  evidence_summary: {
+    product_count: 1,
+    offer_count: 1,
+    return_policy_count: 1,
+    shipping_details_count: 0,
+    omitted_unsafe_field_count: 0,
+    readiness_state: 'submitted_for_review',
+    read_only: true as const,
+    public_safe: true as const,
+  },
+};
+
 const credential = {
   id: 'cpcred_1',
   tenant_id: 'cten_1',
@@ -1051,6 +1121,7 @@ describe('CommerceOnboarding', () => {
       audit_event_id: 'aud_withdraw',
     });
     mockGetCommerceMerchantAgenticOrgBuyerDiscoveryPreview.mockResolvedValue({ data: agenticOrgPreview });
+    mockGetCommerceMerchantSchemaOrgJsonLdPreview.mockResolvedValue({ data: schemaOrgPreview });
     mockRequestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff.mockResolvedValue({
       data: {
         ...agenticOrgPreview,
@@ -1092,6 +1163,7 @@ describe('CommerceOnboarding', () => {
     await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
     await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
     await waitFor(() => expect(screen.getByText('Readiness checklist')).toBeInTheDocument());
+    expect(mockGetCommerceMerchantSchemaOrgJsonLdPreview).toHaveBeenCalledWith('mch_1');
     expect(screen.getByText('Category preset recognized')).toBeInTheDocument();
     expect(screen.getByText('Electronics and appliances')).toBeInTheDocument();
     expect(screen.getByText('Warranty summary')).toBeInTheDocument();
@@ -1134,6 +1206,15 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('read only profile discovery preview')).toBeInTheDocument();
     expect(screen.getByText('direct merchant system access')).toBeInTheDocument();
     expect(screen.getByText('Handoff JSON')).toBeInTheDocument();
+    expect(screen.getByText('Schema.org JSON-LD preview')).toBeInTheDocument();
+    expect(screen.getByText(/Preview-only schema.org shape/i)).toBeInTheDocument();
+    expect(screen.getByText('schemaorg_publication_enabled')).toBeInTheDocument();
+    expect(screen.getByText('Schema.org blockers')).toBeInTheDocument();
+    expect(screen.getByText('schemaorg shipping details evidence missing')).toBeInTheDocument();
+    expect(screen.getByText('Omitted schema.org types')).toBeInTheDocument();
+    expect(screen.getByText('OfferShippingDetails')).toBeInTheDocument();
+    expect(screen.getByText('JSON-LD preview')).toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/schema\.org/)).toBeInTheDocument();
     expect(screen.getByText('Merchant profile present')).toBeInTheDocument();
     expect(screen.getAllByText('No checkout/payment enablement').length).toBeGreaterThan(0);
     expect(screen.getByText('Trusted agent')).toBeInTheDocument();
