@@ -1,0 +1,100 @@
+{
+  "manifest_kind": "agentic_commerce_c6oa_preview_conformance_fixture_manifest",
+  "manifest_version": "c6oa-preview-1",
+  "created_at": "2026-06-07T00:00:00.000Z",
+  "base": {
+    "grantex_main": "80def0d6a6ccd61a5418d8a0628ffc533b08def0",
+    "agenticorg_c6i_merge": "d02657be67c4be256cd1f0b3d52d46e20c5de891"
+  },
+  "status": "internal_conformance_fixture_corpus",
+  "synthetic": true,
+  "sandbox_only": true,
+  "preview_only": true,
+  "non_live": true,
+  "non_enabling": true,
+  "non_publication": true,
+  "non_certifying": true,
+  "publication_status": "not_published",
+  "certification_claims": [],
+  "global_controls": {
+    "public_protocol_publication_approved": false,
+    "schemaorg_publication_enabled": false,
+    "commerce_public_discovery_enabled": false,
+    "agenticorg_public_discovery_enabled": false,
+    "production_commerce_v1_enabled": false,
+    "production_checkout_payment_creation_enabled": false,
+    "public_checkout_enabled": false,
+    "checkout_link_creation_enabled": false,
+    "live_payment_enabled": false,
+    "live_provider_enabled": false,
+    "provider_call_enabled": false,
+    "merchant_private_api_calls_from_agenticorg_enabled": false,
+    "provider_credentials_included": false,
+    "secrets_included": false,
+    "production_allowlists_written": false
+  },
+  "fixtures": [
+    {
+      "surface": "schemaorg_jsonld_preview",
+      "scenario": "preview_available",
+      "path": "schemaorg-jsonld-preview.available.json"
+    },
+    {
+      "surface": "schemaorg_jsonld_preview",
+      "scenario": "blocked_refusal",
+      "path": "schemaorg-jsonld-preview.blocked.json"
+    },
+    {
+      "surface": "ucp_style_capability_profile_preview",
+      "scenario": "preview_available",
+      "path": "ucp-capability-profile-preview.available.json"
+    },
+    {
+      "surface": "ucp_style_capability_profile_preview",
+      "scenario": "blocked_refusal",
+      "path": "ucp-capability-profile-preview.blocked.json"
+    },
+    {
+      "surface": "acp_style_checkout_shape_preview",
+      "scenario": "preview_available",
+      "path": "acp-checkout-shape-preview.available.json"
+    },
+    {
+      "surface": "acp_style_checkout_shape_preview",
+      "scenario": "blocked_refusal",
+      "path": "acp-checkout-shape-preview.blocked.json"
+    },
+    {
+      "surface": "ap2_style_evidence_preview",
+      "scenario": "preview_available",
+      "path": "ap2-evidence-preview.available.json"
+    },
+    {
+      "surface": "ap2_style_evidence_preview",
+      "scenario": "blocked_refusal",
+      "path": "ap2-evidence-preview.blocked.json"
+    },
+    {
+      "surface": "connector_registry_metadata_preview",
+      "scenario": "preview_available",
+      "path": "connector-registry-preview.available.json"
+    },
+    {
+      "surface": "connector_registry_metadata_preview",
+      "scenario": "blocked_refusal",
+      "path": "connector-registry-preview.blocked.json"
+    }
+  ],
+  "stop_conditions": [
+    "public_discovery_flag_assignment",
+    "production_allowlist_assignment",
+    "production_commerce_v1_enablement",
+    "checkout_payment_enablement",
+    "live_payment_enablement",
+    "provider_call_enablement",
+    "merchant_private_api_call_from_agenticorg",
+    "secret_or_credential_material_added",
+    "certification_claim_added",
+    "sandbox_or_synthetic_data_treated_as_production_approval"
+  ]
+}

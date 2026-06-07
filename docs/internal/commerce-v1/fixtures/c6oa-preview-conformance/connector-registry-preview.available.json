@@ -1,0 +1,183 @@
+{
+  "fixture_kind": "agentic_commerce_c6oa_preview_conformance_fixture",
+  "fixture_version": "c6oa-preview-1",
+  "surface": "connector_registry_metadata_preview",
+  "scenario": "preview_available",
+  "synthetic": true,
+  "data_classification": "synthetic_preview_only",
+  "sandbox_only": true,
+  "preview_only": true,
+  "non_live": true,
+  "non_enabling": true,
+  "non_publication": true,
+  "non_certifying": true,
+  "publication_status": "not_published",
+  "certification_claims": [],
+  "generated_at": "2026-06-07T00:00:00.000Z",
+  "source_reference": {
+    "system": "grantex",
+    "merged_base": "80def0d6a6ccd61a5418d8a0628ffc533b08def0",
+    "canonical_state": "synthetic_connector_registry_fixture",
+    "tenant_scoped": true
+  },
+  "controls": {
+    "connector_registry_metadata_only": true,
+    "public_discovery_enabled": false,
+    "production_commerce_v1_enabled": false,
+    "checkout_payment_creation_enabled": false,
+    "checkout_link_creation_enabled": false,
+    "live_payment_enabled": false,
+    "live_provider_enabled": false,
+    "provider_call_enabled": false,
+    "provider_credentials_exposed": false,
+    "merchant_private_api_call_enabled": false,
+    "agenticorg_direct_execution_allowed": false,
+    "outbound_sync_enabled": false,
+    "production_allowlist_written": false
+  },
+  "expected_blockers": [
+    "agenticorg_direct_execution_not_allowed",
+    "provider_call_not_enabled_by_registry",
+    "credentials_not_stored_by_registry"
+  ],
+  "payload": {
+    "status": "preview_only",
+    "preview_only": true,
+    "sandbox_only": true,
+    "certification_claims": [],
+    "items": [
+      {
+        "connector_reference": "fixture-manual-catalog",
+        "connector_key": "manual_catalog",
+        "connector_type": "manual",
+        "display_name": "Manual Catalog Fixture",
+        "status": "active",
+        "runtime_mode": "manual_catalog_api",
+        "runtime_implemented": true,
+        "source_domains": [
+          "catalog",
+          "price",
+          "inventory"
+        ],
+        "source_priority": 10,
+        "sync_status": "manual",
+        "health_state": "healthy",
+        "last_sync_at": "2026-06-07T00:00:00.000Z",
+        "last_successful_sync_at": "2026-06-07T00:00:00.000Z",
+        "stale_after_seconds": 86400,
+        "stale": false,
+        "conflict": false,
+        "blockers": [
+          "agenticorg_direct_execution_not_allowed",
+          "provider_call_not_enabled_by_registry",
+          "credentials_not_stored_by_registry"
+        ],
+        "controls": {
+          "metadata_only_registry": true,
+          "credentials_stored_by_registry": false,
+          "outbound_sync_enabled_by_registry": false,
+          "agenticorg_direct_execution_allowed": false,
+          "provider_call_enabled_by_registry": false,
+          "checkout_payment_enabled_by_registry": false,
+          "live_payment_enabled_by_registry": false,
+          "public_discovery_enabled_by_registry": false,
+          "production_config_written_by_registry": false
+        }
+      },
+      {
+        "connector_reference": "fixture-shopify-declared",
+        "connector_key": "shopify_declared",
+        "connector_type": "shopify",
+        "display_name": "Shopify Declared Fixture",
+        "status": "draft",
+        "runtime_mode": "metadata_only",
+        "runtime_implemented": false,
+        "source_domains": [
+          "catalog"
+        ],
+        "source_priority": 50,
+        "sync_status": "not_started",
+        "health_state": "unknown",
+        "stale_after_seconds": 86400,
+        "stale": false,
+        "conflict": false,
+        "blockers": [
+          "external_connector_runtime_not_implemented",
+          "agenticorg_direct_execution_not_allowed",
+          "provider_call_not_enabled_by_registry",
+          "credentials_not_stored_by_registry"
+        ],
+        "controls": {
+          "metadata_only_registry": true,
+          "credentials_stored_by_registry": false,
+          "outbound_sync_enabled_by_registry": false,
+          "agenticorg_direct_execution_allowed": false,
+          "provider_call_enabled_by_registry": false,
+          "checkout_payment_enabled_by_registry": false,
+          "live_payment_enabled_by_registry": false,
+          "public_discovery_enabled_by_registry": false,
+          "production_config_written_by_registry": false
+        }
+      }
+    ],
+    "source_precedence": [
+      {
+        "domain": "catalog",
+        "primary_connector_key": "manual_catalog",
+        "status": "declared",
+        "connectors": [
+          {
+            "connector_key": "manual_catalog",
+            "connector_type": "manual",
+            "source_priority": 10,
+            "sync_status": "manual",
+            "health_state": "healthy",
+            "stale": false,
+            "conflict": false,
+            "blockers": [
+              "agenticorg_direct_execution_not_allowed",
+              "provider_call_not_enabled_by_registry",
+              "credentials_not_stored_by_registry"
+            ]
+          },
+          {
+            "connector_key": "shopify_declared",
+            "connector_type": "shopify",
+            "source_priority": 50,
+            "sync_status": "not_started",
+            "health_state": "unknown",
+            "stale": false,
+            "conflict": false,
+            "blockers": [
+              "external_connector_runtime_not_implemented",
+              "agenticorg_direct_execution_not_allowed",
+              "provider_call_not_enabled_by_registry",
+              "credentials_not_stored_by_registry"
+            ]
+          }
+        ],
+        "blockers": []
+      },
+      {
+        "domain": "fulfillment",
+        "primary_connector_key": null,
+        "status": "blocked",
+        "connectors": [],
+        "blockers": [
+          "source_of_truth_not_declared"
+        ]
+      }
+    ],
+    "controls": {
+      "metadata_only_registry": true,
+      "credentials_stored_by_registry": false,
+      "outbound_sync_enabled_by_registry": false,
+      "agenticorg_direct_execution_allowed": false,
+      "provider_call_enabled_by_registry": false,
+      "checkout_payment_enabled_by_registry": false,
+      "live_payment_enabled_by_registry": false,
+      "public_discovery_enabled_by_registry": false,
+      "production_config_written_by_registry": false
+    }
+  }
+}
