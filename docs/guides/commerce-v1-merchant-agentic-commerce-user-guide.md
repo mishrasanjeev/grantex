@@ -226,6 +226,33 @@ presence flags, but it does not expose tenant IDs, exact merchant IDs, passport
 JTIs, consent IDs, audit IDs, provider references, raw cart details, raw
 payloads, secrets, or private configuration.
 
+### Existing-System Connectors
+
+Many merchants already run commerce through store platforms and back-office
+systems. C6N adds a safe connector registry so a merchant can declare which
+systems are the source of truth for catalog, price, inventory, order,
+fulfillment, refund, settlement, and support data.
+
+Supported registry types are manual maintenance, CSV, custom API, Shopify,
+WooCommerce, Magento, ERP, billing, OMS, WMS, logistics, CRM/support, and
+payment provider. The first safe runtime paths remain the existing Grantex
+manual, CSV, and API catalog paths. Other systems can be declared as metadata
+with blockers until a separately approved connector exists.
+
+The registry records sync status, health state, last sync timestamp, stale
+threshold, and conflict blockers. If data is stale, conflicting, missing, or
+unsupported, Grantex shows the blocker instead of letting an agent promise
+stock, price, delivery, fulfillment, refund, settlement, or support facts.
+
+The connector registry does not store real credentials, does not call merchant
+systems, does not call payment providers, does not enable checkout/payment
+creation, does not enable live payments or live Plural, does not enable public
+discovery, and does not approve production Commerce V1.
+
+AgenticOrg never calls Shopify, WooCommerce, Magento, ERP, OMS, WMS, logistics,
+CRM/support, payment providers, or merchant private APIs directly. Buyer agents
+must use Grantex-grounded responses and Grantex-owned blockers.
+
 ### Read-Only Discovery
 
 Read-only discovery allows approved agent clients to learn that a merchant

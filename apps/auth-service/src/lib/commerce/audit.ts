@@ -32,6 +32,8 @@ export type CommerceAuditEventType =
   | 'webhook_source.created'
   | 'webhook_source.updated'
   | 'webhook_source.secret_rotated'
+  | 'merchant.connector.created'
+  | 'merchant.connector.updated'
   | 'commerce_agent.created'
   | 'agent.updated'
   | 'commerce_agent.trust_status.updated'
