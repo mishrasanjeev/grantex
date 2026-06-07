@@ -105,6 +105,7 @@ describe('C6N merchant existing-system connector registry', () => {
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([connectorRow()]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_CONNECTOR_CREATED', occurred_at: NOW }]);
+    sqlMock.mockResolvedValueOnce([connectorRow()]);
 
     const res = await app.inject({
       method: 'POST',
@@ -148,10 +149,77 @@ describe('C6N merchant existing-system connector registry', () => {
     });
     expect(body.data.blockers).toContain('agenticorg_direct_execution_not_allowed');
     expect(body.data.blockers).toContain('credentials_not_stored_by_registry');
+    const price = body.source_precedence.find((entry) => entry.domain === 'price');
+    expect(price?.primary_connector_key).toBe('manual_catalog');
     expect(body.audit_event_id).toBe('caud_CONNECTOR_CREATED');
     expect(flattenedSqlCalls()).toContain('merchant.connector.created');
     expect(sqlText()).toMatch(/INSERT INTO commerce_connectors/i);
     expect(sqlText()).not.toMatch(/encrypted_secret|access_token|client_secret|raw_payload/i);
+  });
+
+  it('returns merchant-wide source precedence after connector creation', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([{ id: MERCHANT }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([connectorRow({
+      connector_key: 'shopify_declared',
+      connector_type: 'shopify',
+      display_name: 'Shopify Declared',
+      runtime_mode: 'metadata_only',
+      source_domains: ['price'],
+      source_priority: 20,
+      health_state: 'conflict',
+      sync_status: 'blocked',
+      last_successful_sync_at: null,
+    })]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_CONNECTOR_CREATED', occurred_at: NOW }]);
+    sqlMock.mockResolvedValueOnce([
+      connectorRow({
+        connector_key: 'manual_price',
+        display_name: 'Manual Price',
+        source_domains: ['price'],
+        source_priority: 10,
+      }),
+      connectorRow({
+        connector_key: 'shopify_declared',
+        connector_type: 'shopify',
+        display_name: 'Shopify Declared',
+        runtime_mode: 'metadata_only',
+        source_domains: ['price'],
+        source_priority: 20,
+        health_state: 'conflict',
+        sync_status: 'blocked',
+        last_successful_sync_at: null,
+      }),
+    ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/connectors',
+      headers: authHeader(),
+      payload: {
+        merchant_id: MERCHANT,
+        connector_key: 'shopify_declared',
+        connector_type: 'shopify',
+        display_name: 'Shopify Declared',
+        source_domains: ['price'],
+        source_priority: 20,
+        health_state: 'conflict',
+        sync_status: 'blocked',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{
+      source_precedence: Array<{
+        domain: string;
+        primary_connector_key: string | null;
+        connectors: Array<Record<string, unknown>>;
+      }>;
+    }>();
+    const price = body.source_precedence.find((entry) => entry.domain === 'price');
+    expect(price?.primary_connector_key).toBe('manual_price');
+    expect(price?.connectors.map((entry) => entry.connector_key)).toEqual(['manual_price', 'shopify_declared']);
   });
 
   it('lists source precedence and marks stale/conflict blockers explicitly', async () => {
@@ -258,6 +326,33 @@ describe('C6N merchant existing-system connector registry', () => {
     expect(sqlText()).not.toMatch(/INSERT INTO commerce_connectors/i);
   });
 
+  it('rejects missing webhook source references before writing connector rows', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([{ id: MERCHANT }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/connectors',
+      headers: authHeader(),
+      payload: {
+        merchant_id: MERCHANT,
+        connector_key: 'csv_seed',
+        connector_type: 'csv',
+        display_name: 'CSV Seed',
+        source_domains: ['catalog'],
+        webhook_source_key: 'missing_source',
+      },
+    });
+
+    expect(res.statusCode).toBe(422);
+    const fields = res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields;
+    expect(fields.webhook_source_key).toContain('must reference an existing webhook source');
+    expect(sqlText()).toMatch(/FROM commerce_webhook_sources/i);
+    expect(sqlText()).not.toMatch(/INSERT INTO commerce_connectors/i);
+  });
+
   it('enforces tenant and caller boundaries and denies CommerceAgent direct connector management', async () => {
     seedAgentCaller();
     const agentRes = await app.inject({
@@ -314,6 +409,17 @@ describe('C6N merchant existing-system connector registry', () => {
       conflict_blockers: ['catalog_source_conflict'],
     })]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_CONNECTOR_UPDATED', occurred_at: NOW }]);
+    sqlMock.mockResolvedValueOnce([connectorRow({
+      connector_key: 'custom_api_declared',
+      connector_type: 'custom_api',
+      display_name: 'Custom API Declared',
+      runtime_mode: 'custom_api_declared',
+      source_domains: ['catalog', 'price'],
+      sync_status: 'sync_failed',
+      health_state: 'conflict',
+      last_successful_sync_at: OLD,
+      conflict_blockers: ['catalog_source_conflict'],
+    })]);
 
     const res = await app.inject({
       method: 'PATCH',

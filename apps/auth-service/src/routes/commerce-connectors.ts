@@ -299,6 +299,48 @@ async function assertMerchantInTenant(sql: Sql, tenantId: string, merchantId: st
   }
 }
 
+async function assertWebhookSourceInMerchant(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+  webhookSourceKey: string | null,
+): Promise<void> {
+  if (!webhookSourceKey) return;
+  const rows = await sql<Array<{ source_key: string }>>`
+    SELECT source_key
+      FROM commerce_webhook_sources
+     WHERE tenant_id = ${tenantId}
+       AND merchant_id = ${merchantId}
+       AND source_key = ${webhookSourceKey}
+     LIMIT 1
+  `;
+  if (!rows[0]) {
+    throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+      details: {
+        fields: {
+          webhook_source_key: 'must reference an existing webhook source for this tenant and merchant',
+        },
+      },
+      retryable: false,
+    });
+  }
+}
+
+async function readMerchantConnectorRows(sql: Sql, tenantId: string, merchantId: string): Promise<ConnectorRow[]> {
+  return sql<ConnectorRow[]>`
+    SELECT id, tenant_id, merchant_id, connector_key, connector_type,
+           display_name, status, runtime_mode, source_domains,
+           source_priority, sync_status, health_state, last_sync_at,
+           last_successful_sync_at, stale_after_seconds, conflict_blockers,
+           webhook_source_key, agenticorg_direct_execution_enabled,
+           provider_call_enabled, stores_credentials, created_at, updated_at
+      FROM commerce_connectors
+     WHERE tenant_id = ${tenantId}
+       AND merchant_id = ${merchantId}
+     ORDER BY source_priority ASC, connector_key ASC
+  `;
+}
+
 function isRuntimeImplemented(type: ConnectorType): boolean {
   return type === 'manual' || type === 'csv';
 }
@@ -518,6 +560,7 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
       throw new CommerceHttpError(409, 'connector_exists',
         'Connector already exists for this merchant and connector_key');
     }
+    await assertWebhookSourceInMerchant(sql, tenantId, merchantId, body.webhookSourceKey);
     const result = await sql.begin(async (_tx) => {
       const tx = _tx as unknown as TxSql;
       const rows = await tx<ConnectorRow[]>`
@@ -561,11 +604,12 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
           metadata_only_registry: true,
         },
       });
-      return { row, auditEventId: audit.id };
+      const connectorRows = await readMerchantConnectorRows(tx as unknown as Sql, tenantId, merchantId);
+      return { row, connectorRows, auditEventId: audit.id };
     });
     return reply.status(201).send({
       data: toConnector(result.row),
-      source_precedence: sourcePrecedence([result.row]),
+      source_precedence: sourcePrecedence(result.connectorRows),
       audit_event_id: result.auditEventId,
     });
   });
@@ -696,6 +740,7 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
 
     const tenantId = request.commerceTenantId;
     const sql = getSql();
+    await assertWebhookSourceInMerchant(sql, tenantId, merchantId, webhookSourceKey);
     const result = await sql.begin(async (_tx) => {
       const tx = _tx as unknown as TxSql;
       const rows = await tx<ConnectorRow[]>`
@@ -738,7 +783,8 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
           metadata_only_registry: true,
         },
       });
-      return { row, auditEventId: audit.id };
+      const connectorRows = await readMerchantConnectorRows(tx as unknown as Sql, tenantId, merchantId);
+      return { row, connectorRows, auditEventId: audit.id };
     });
     if (!result) {
       throw new CommerceHttpError(404, 'connector_not_found',
@@ -746,7 +792,7 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
     }
     return reply.status(200).send({
       data: toConnector(result.row),
-      source_precedence: sourcePrecedence([result.row]),
+      source_precedence: sourcePrecedence(result.connectorRows),
       audit_event_id: result.auditEventId,
     });
   });
