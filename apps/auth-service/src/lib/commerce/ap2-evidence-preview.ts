@@ -290,11 +290,6 @@ const REQUIRED_CHECKOUT_SCOPES = [
   'commerce:payment.status.read',
 ] as const;
 
-function countValue(value: number | string | null | undefined): number {
-  const n = typeof value === 'number' ? value : Number.parseInt(String(value ?? '0'), 10);
-  return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
 function amountValue(value: number | string | null | undefined): number | null {
   if (value === null || value === undefined) return null;
   const n = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
