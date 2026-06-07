@@ -91,31 +91,50 @@ AgenticOrg must not:
 
 ## 4. Current Implementation Snapshot
 
+Status as of 2026-06-07:
+
+- Grantex seller-control-plane work is implemented through the sandbox
+  read-only discovery handoff path: C5Z, C6A, C6B, C6C, C6D, C6E, C6F, and
+  C6G are merged on Grantex main.
+- AgenticOrg read-only buyer discovery consumer foundation is merged through
+  C6H. C6I buyer-session orchestration is merged on AgenticOrg main.
+- Grantex protocol-adapter and connector foundations C6J, C6K, C6L, C6M, and
+  C6N are merged on Grantex main.
+- The open-protocol packaging draft is an internal docs-only PR refreshed on
+  the merged C6I-C6N base. It is not public protocol publication, not
+  certification, and not production approval.
+- Public discovery, production Commerce V1, checkout/payment enablement, live
+  payments, live Plural, production allowlists, certification claims, provider
+  calls, and AgenticOrg direct merchant-system calls remain blocked.
+
 ### 4.1 Grantex Foundation
 
 | Capability | Current state | Gap |
 | --- | --- | --- |
-| Merchant/tenant control plane | Operator-led tenant and merchant foundations exist. | Full self-serve runtime onboarding is incomplete. |
-| Category presets | Preset/policy planning exists. | Merchant-facing preset checklist and required-field scoring need implementation hardening. |
-| Catalog and variants | Product/variant APIs, search/detail, bulk dry-run/upsert, patch/archive, CSV/JSON-oriented portal support exist. | Large async imports, connector sync, conflict handling, and rollback need hardening. |
+| Merchant/tenant control plane | Seller sandbox onboarding, category readiness, catalog readiness, public-safe agent preview, review request, operator decision, rollout proposal dry run, and AgenticOrg sandbox handoff are implemented through C6G. | Full self-serve production onboarding, KYB/KYC, live approval, and public discovery rollout remain blocked. |
+| Category presets | `electronics_appliances` readiness checklist and scoring exist for the sandbox path. | Multi-category presets and policy/eval defaults remain future work. |
+| Catalog and variants | Product/variant APIs, search/detail, bulk dry-run/upsert, patch/archive, CSV/JSON-oriented portal support, catalog readiness preview, and public-safe sample preview exist. | Large async imports, connector sync, conflict handling, rollback, richer price/offer models, and quantity inventory remain pending. |
 | Inventory | Variant availability and freshness exist. | Quantity, location, confidence, reservations, stock holds, and delivery feasibility are missing. |
-| Consent and Commerce Passport | Consent request/exchange/verify/revoke/challenge foundation exists. | Production challenge delivery and AP2-style signed mandate evidence are pending. |
-| Cart/payment intent | Cart draft and provider-neutral payment intent foundation exists. | Cart update/cancel/expire, fulfillment selection, and broad live checkout readiness are pending. |
+| Consent and Commerce Passport | Consent request/exchange/verify/revoke/challenge foundation exists. C6M AP2-style deterministic unsigned evidence preview is merged. | Production challenge delivery, signed mandate evidence, independent AP2 conformance, and live payment approval are pending. |
+| Cart/payment intent | Cart draft and provider-neutral payment intent foundation exists. C6L ACP-style cart/checkout shape preview is merged. | Cart update/cancel/expire, fulfillment selection, ACP conformance, and broad live checkout readiness are pending. |
 | Provider/webhooks | Provider credential and webhook intake/replay/reconciliation foundations exist. | Live Plural/provider approval, signature evidence, outage handling, and rollback proof remain gated. |
 | Merchant webhooks | Signed merchant webhook source and catalog update intake exist. | Inventory-only, price-only, order, fulfillment, support, return, and refund webhooks are pending. |
-| MCP/native surface | Read and checkout-oriented tools exist behind Grantex. | Public discovery remains fail-closed; standards conformance is not complete. |
-| Docs and CI | Commerce docs and docs-only workflow guard exist. | Keep consolidated PRD, overview, guides, and nav current as slices land. |
+| Existing-system connectors | C6N metadata-only connector registry, source precedence, sync health, stale/conflict blockers, and no-credential/no-execution guardrails are merged. | Real Shopify/WooCommerce/Magento/ERP/OMS/WMS/logistics/support/payment sync adapters remain pending. |
+| Standards adapters | C6J schema.org JSON-LD preview, C6K UCP-style capability profile preview, C6L ACP-style checkout shape preview, and C6M AP2-style evidence preview are merged. | Public publication, certification, conformance suites, live capability negotiation, and public discovery remain blocked. |
+| MCP/native surface | Read and checkout-oriented tools exist behind Grantex; C6G adds sandbox AgenticOrg buyer discovery handoff. | Public discovery remains fail-closed; public standards conformance is not complete. |
+| Docs and CI | Commerce docs, docs-only workflow guard, and internal open-protocol packaging draft exist. | Keep consolidated PRD, overview, guides, manifests, and nav current as stacked PRs merge. |
 
 ### 4.2 AgenticOrg Foundation
 
 | Capability | Current state | Gap |
 | --- | --- | --- |
-| Grantex-only connector aliases | Merchant profile, catalog search/detail, inventory, cart, consent, payment intent, checkout, and payment status aliases exist. | Order, fulfillment, support, return, refund, settlement, and payout aliases wait on Grantex APIs. |
-| Sales agent guardrails | Missing consent/passport, amount-cap breach, disabled merchant/agent, policy denial, and non-mock provider protections exist. | Guardrails must expand as Grantex adds more lifecycle capabilities. |
-| Demo/evals | Demo, golden evals, hosted smoke, and no-direct-provider regression foundations exist. | Channel-specific smoke and buyer UX evals are pending. |
+| Grantex-only connector aliases | Merchant profile, catalog search/detail, inventory, cart, consent, payment intent, checkout, payment status, and read-only buyer discovery preview aliases exist. | Order, fulfillment, support, return, refund, settlement, and payout aliases wait on Grantex APIs. |
+| Buyer discovery workflow | C6H read-only consumer foundation is merged. C6I channel-neutral buyer-session orchestration is merged. | Live channel adapters and write-capable buyer flows remain blocked. |
+| Sales agent guardrails | Missing consent/passport, amount-cap breach, disabled merchant/agent, policy denial, no-direct-provider, and read-only buyer discovery refusal protections exist or are merged in C6I. | Guardrails must expand as Grantex adds order, fulfillment, support, return, refund, settlement, and payout capabilities. |
+| Demo/evals | Demo, golden evals, hosted smoke, no-direct-provider regressions, and focused buyer discovery tests exist. | Channel-specific smoke and live buyer UX evals are pending. |
 | Public discovery | Fail-closed behind AgenticOrg public discovery flag. | Real merchant public discovery requires Grantex approval and AgenticOrg gating. |
 | Docs-only CI guard | Docs-only changes skip build/push/deploy-adjacent jobs. | Keep guard current, especially for workflow changes. |
-| Buyer channel launch | Planned in PRD. | ChatGPT, Claude, Gemini, WhatsApp, Telegram, web/mobile, and future adapters are not launch-ready yet. |
+| Buyer channel launch | Channel-neutral response model is merged in C6I. | ChatGPT, Claude, Gemini, WhatsApp, Telegram, web/mobile, and future live adapters are not launch-ready yet. |
 
 ## 5. End-To-End Architecture
 
@@ -360,8 +379,8 @@ in V1 form; others are future gaps.
 | --- | --- | --- | --- |
 | CommerceTenant | Grantex | Tenant boundary. | Foundation exists. |
 | CommerceMerchant | Grantex | Seller identity and policy anchor. | Foundation exists. |
-| CommerceCategoryPreset | Grantex | Category-required fields and defaults. | Foundation exists/planned hardening. |
-| CommerceConnectorSource | Grantex | Existing-system connection and health. | Gap. |
+| CommerceCategoryPreset | Grantex | Category-required fields and defaults. | `electronics_appliances` readiness foundation exists. |
+| CommerceConnectorSource | Grantex | Existing-system connection and health. | C6N metadata-only registry merged; no credentials or outbound sync. |
 | CommerceImportJob | Grantex | Async import, dry-run, errors, rollback. | Gap. |
 | CommerceProduct | Grantex | Product truth. | Foundation exists. |
 | CommerceProductVariant | Grantex | SKU/variant/price/inventory anchor. | Foundation exists. |
@@ -378,7 +397,7 @@ in V1 form; others are future gaps.
 | CommerceRefundRequest | Grantex | Refund request and approval. | Gap. |
 | CommerceSettlement/Payout | Grantex | Seller payment reporting. | Gap. |
 | CommerceAuditEvent | Grantex | Append-only evidence. | Foundation exists. |
-| CommerceAgentSession | AgenticOrg/Grantex boundary | Buyer-agent session attribution and channel state. | Foundation/planning. |
+| CommerceAgentSession | AgenticOrg/Grantex boundary | Buyer-agent session attribution and channel state. | C6I channel-neutral session orchestration merged; live channels pending. |
 | ChannelAdapterConfig | AgenticOrg | Platform launch and capability limits. | Gap. |
 
 ## 14. Product Requirements By Surface
@@ -405,7 +424,7 @@ in V1 form; others are future gaps.
 | --- | --- | --- | --- | --- |
 | Self-serve merchant signup | Merchants need to join without engineering tickets. | Grantex | Sandbox workspace, roles, category, checklist. | Operator-only onboarding does not scale. |
 | Merchant verification | Real merchant identity must be trusted. | Grantex + reviewers | Private evidence refs and review workflow. | No live approval. |
-| Existing-system connectors | Merchants will not duplicate data manually. | Grantex | CSV/manual plus one priority connector. | Stale or manual-only launch. |
+| Existing-system connectors | Merchants will not duplicate data manually. | Grantex | C6N metadata-only connector registry merged; real sync adapters next. | Stale or manual-only launch. |
 | Large catalog imports | Real sellers have many SKUs. | Grantex | Async import, dry-run, row errors, rollback. | Timeouts and silent data loss. |
 | Source-of-truth precedence | Systems can disagree. | Grantex | Conflict rules and sync timestamps. | Wrong price/stock/order facts. |
 | Inventory depth | Agents must not promise stock incorrectly. | Grantex | Quantity/location/freshness/reservation model. | Unsafe checkout promises. |
@@ -419,9 +438,9 @@ in V1 form; others are future gaps.
 | Live provider readiness | Payments need approval. | Grantex | Sandbox validation, live credential approval, webhook signatures. | Live provider risk. |
 | Commerce Passport production delivery | Real consent needs delivery. | Grantex | Email/SMS/passkey challenge, revocation, signed evidence. | Weak authorization. |
 | Policy simulator | Merchants need confidence. | Grantex | Preview policy by product/category/channel/amount. | Accidental capability exposure. |
-| Standards adapters | Major platforms need standard surfaces. | Grantex publishes; AgenticOrg consumes | UCP/ACP/MCP/schema.org/AP2 fixtures. | Fragmented protocol state. |
-| Buyer channel launch | Buyers need easy entry. | AgenticOrg + Grantex approval | Web/mobile, MCP, WhatsApp/Telegram, Gemini adapters. | Agentic commerce hard to use. |
-| Buyer UX | Buyers need understandable flow. | AgenticOrg | Grounded compare, cart, consent, checkout status, refusal copy. | Confusing or unsafe agent behavior. |
+| Standards adapters | Major platforms need standard surfaces. | Grantex publishes; AgenticOrg consumes | C6J-C6M previews merged; conformance and publication next. | Fragmented protocol state. |
+| Buyer channel launch | Buyers need easy entry. | AgenticOrg + Grantex approval | C6I channel-neutral response merged; live channel adapters next. | Agentic commerce hard to use. |
+| Buyer UX | Buyers need understandable flow. | AgenticOrg | C6I read-only buyer session merged; cart/consent/checkout UX remains future. | Confusing or unsafe agent behavior. |
 | Merchant demo UX | Sellers need education. | AgenticOrg | Demo walkthroughs and blocked-path examples. | Misunderstanding production readiness. |
 | Evals/regressions | Guardrails must remain true. | AgenticOrg | No invention, no direct-provider, stale/refusal tests. | Regression risk. |
 | Ops/support dashboards | Teams need recovery. | Both | Policy denial, stale sync, stuck payment, webhook replay, support handoff. | Incidents are hard to resolve. |
@@ -433,21 +452,31 @@ in V1 form; others are future gaps.
 
 | Phase | Goal | Deliverables | Guardrail |
 | --- | --- | --- | --- |
-| 1. Consolidated PRD and docs alignment | One source of truth. | This PRD, docs nav, overview links, AgenticOrg pointers. | Docs-only. |
-| 2. Seller sandbox onboarding | Merchant can prepare without engineers. | Workspace, profile, category, owner roles, checklist. | No live enablement. |
-| 3. Catalog connector MVP | Merchant data enters Grantex. | CSV/manual plus one priority storefront connector; dry-run. | No automatic live publish. |
-| 4. Public-safe preview | Merchant sees what agents can see. | Catalog/profile preview, schema.org draft, readiness score. | Fail-closed until approved. |
-| 5. Buyer web/mobile channel | First controllable buyer launch. | AgenticOrg hosted session or widget. | Read-only first. |
-| 6. ChatGPT/Claude MCP | Major AI chat surfaces. | Remote MCP app/connector, auth, scopes, smoke. | Respect platform write limits. |
-| 7. WhatsApp/Telegram | Messaging channels. | Bot/webhook adapters, identity, consent link, opt-out. | Secrets outside Git. |
-| 8. Gemini channel | Gemini-powered buyer sessions. | Function-calling wrapper or approved native route. | Label native support accurately. |
+| 1. Consolidated PRD and docs alignment | One source of truth. | This PRD, docs nav, overview links, AgenticOrg pointers. Status: merged. | Docs-only. |
+| 2. Seller sandbox onboarding | Merchant can prepare without engineers. | Workspace, profile, category, owner roles, checklist. Status: merged through C6G handoff. | No live enablement. |
+| 3. Catalog connector MVP | Merchant data enters Grantex. | CSV/manual readiness and C6N connector registry foundation merged; real sync adapters pending. | No automatic live publish. |
+| 4. Public-safe preview | Merchant sees what agents can see. | Catalog/profile preview, schema.org draft, readiness score, and protocol previews merged through C6J-C6M. | Fail-closed until approved. |
+| 5. Buyer web/mobile channel | First controllable buyer launch. | C6H and C6I merged for channel-neutral read-only session; hosted widget/app pending. | Read-only first. |
+| 6. ChatGPT/Claude MCP | Major AI chat surfaces. | Channel-neutral response model merged; remote MCP/app connector pending. | Respect platform write limits. |
+| 7. WhatsApp/Telegram | Messaging channels. | Channel-neutral response model merged; bot/webhook adapters pending. | Secrets outside Git. |
+| 8. Gemini channel | Gemini-powered buyer sessions. | Channel-neutral response model merged; function-calling wrapper pending. | Label native support accurately. |
 | 9. Inventory freshness and cart | Safe product selection. | Freshness TTL, stale refusal, exact-ID cart draft. | No checkout promise if stale. |
 | 10. Sandbox consent/checkout | Full rehearsal. | Consent, Passport, mock/provider-neutral checkout. | No live provider. |
 | 11. Order/fulfillment backbone | Operational paid flow. | Order, shipment, pickup/delivery, cancellation. | Required before broad checkout. |
 | 12. Return/refund request | Safe post-purchase support. | Request, eligibility, manual approval, audit. | No automatic refund execution. |
 | 13. Settlement/payout reporting | Seller finance visibility. | Reconciliation and payout read model. | No raw provider payloads. |
-| 14. Standards hardening | Platform interoperability. | UCP/ACP/MCP/schema.org/AP2 fixtures. | No certification claims without evidence. |
+| 14. Standards hardening | Platform interoperability. | C6J-C6M preview adapters are merged and the open-protocol packaging draft is refreshed on merged C6I-C6N commits; public conformance pending. | No certification claims without evidence. |
 | 15. Controlled pilot | Minimal real launch. | One merchant, category, channel, provider, geography, rollback owner. | Separate explicit approval. |
+
+Current sequencing decision:
+
+1. C6I-C6N are merged in dependency order across AgenticOrg and Grantex.
+2. The open-protocol packaging draft is refreshed on the actual merged commits
+   and remains internal, preview-only, non-publication, and non-certifying.
+3. The next runtime chain is C6O: public-safe conformance fixtures, the first
+   real connector sync adapter foundation, order/fulfillment backbone planning,
+   and controlled pilot readiness without enabling public discovery or live
+   checkout.
 
 ## 17. Release Acceptance Criteria
 
@@ -534,6 +563,8 @@ This PRD has been reviewed against the requested coverage:
 - documentation/navigation/workflow coverage covered;
 - next implementation sequencing covered.
 
-Remaining decision for the team: choose the first implementation slice from the
-fast-track roadmap. The recommended first slice is seller sandbox onboarding,
-followed by catalog connector MVP and read-only buyer discovery.
+Remaining decision for the team: use the merged C6I-C6N base and internal
+open-protocol packaging draft to plan C6O. The next implementation chain should
+focus on conformance fixtures, one real connector sync adapter foundation,
+order/fulfillment backbone planning, and controlled pilot readiness without
+enabling public discovery or live checkout.
