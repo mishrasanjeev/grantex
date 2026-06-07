@@ -51,6 +51,7 @@ The fixture tests reject:
 
 C6Oa validation should include:
 
+- `node scripts/commerce-c6oa-preview-conformance-validate.mjs`
 - `npm --prefix apps/auth-service test -- commerce-no-plural-leak.test.ts commerce-openapi.test.ts commerce-c6oa-preview-fixtures.test.ts`
 - `npm --prefix apps/auth-service run typecheck`
 - `git diff --check`
