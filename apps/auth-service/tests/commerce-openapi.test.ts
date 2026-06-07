@@ -72,6 +72,17 @@ describe('Grantex Commerce V1 OpenAPI 3.1 contract', () => {
     expect(content).toMatch(/certification_claims:[\s\S]*maxItems:\s*0/);
   });
 
+  it('declares the C6K UCP-style capability profile preview with Grantex-owned namespace only', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/ucp-capability-profile-preview');
+    expect(content).toMatch(/operationId:\s*getMerchantUcpCapabilityProfilePreview/);
+    expect(content).toMatch(/x-milestone:\s*C6K/);
+    expect(content).toMatch(/UcpCapabilityProfilePreview:/);
+    expect(content).toMatch(/namespace:\s*\{\s*type:\s*string,\s*enum:\s*\[dev\.grantex\.commerce\.discovery\.preview\]\s*\}/);
+    expect(content).toMatch(/ucp_certification_claim:\s*\{\s*type:\s*string,\s*enum:\s*\[none\]\s*\}/);
+    expect(content).not.toContain('dev.ucp.* capabilities as certified');
+  });
+
   it('M2 passport endpoints flipped to x-implemented: true', () => {
     const content = readFileSync(yamlPath, 'utf8');
     // Each of the five passport routes must now carry x-implemented: true

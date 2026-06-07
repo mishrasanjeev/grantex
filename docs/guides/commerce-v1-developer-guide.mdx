@@ -59,6 +59,30 @@ error. Missing or unsafe catalog evidence is omitted and reported through
 missing seller, product, price, inventory, shipping, refund, launch, payment, or
 certification facts.
 
+### UCP-Style Capability Profile Preview
+
+Operators and owning merchants can inspect the C6K UCP-style capability profile
+preview through:
+
+`GET /v1/commerce/merchants/{merchant_id}/ucp-capability-profile-preview`
+
+The endpoint is tenant-scoped and sandbox-only. It returns services,
+capabilities, transports, controls, blockers, and evidence summary fields from
+canonical Grantex merchant/catalog/readiness state. Every capability ID uses the
+Grantex-owned namespace:
+
+`dev.grantex.commerce.discovery.preview`
+
+The endpoint must not publish `dev.ucp.*`, must not claim UCP certification,
+and must not enable a public discovery route. Response controls explicitly keep
+public discovery, checkout/payment creation, live provider access, live Plural,
+production allowlist writes, UCP publication, and UCP certification disabled.
+
+Read-only discovery capabilities can be marked `preview_available` when Grantex
+has public-safe profile and catalog evidence. Checkout, payment, fulfillment,
+refund/return execution, provider credentials, and live paths remain `blocked`
+metadata only.
+
 ## Auth And Caller Model
 
 Commerce callers are modeled as agents operating for a tenant, merchant, and
