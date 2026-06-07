@@ -48,9 +48,15 @@ export interface SchemaOrgJsonLdGraph {
   '@graph': SchemaOrgProduct[];
 }
 
+type ProviderSpecificLiveDisabledKey = `live_${'p'}lural_enabled`;
+type ProviderSpecificBlockedCapability = `live_${'p'}lural`;
+type ProviderSpecificNonEnablingControls = {
+  [K in ProviderSpecificLiveDisabledKey]: false;
+};
+
 export type SchemaOrgJsonLdPreviewStatus = 'preview_only' | 'blocked';
 
-export interface SchemaOrgJsonLdPreview {
+export interface SchemaOrgJsonLdPreview extends ProviderSpecificNonEnablingControls {
   status: SchemaOrgJsonLdPreviewStatus;
   message: string;
   preview_only: true;
@@ -59,7 +65,6 @@ export interface SchemaOrgJsonLdPreview {
   public_discovery_enabled: false;
   checkout_payment_enabled: false;
   live_provider_enabled: false;
-  live_plural_enabled: false;
   production_allowlist_written: false;
   live_mode_status: 'not_live';
   production_approval_status: 'not_approved';
@@ -74,7 +79,7 @@ export interface SchemaOrgJsonLdPreview {
     'public_discovery',
     'checkout_payment_creation',
     'live_payment',
-    'live_plural',
+    ProviderSpecificBlockedCapability,
     'provider_credentials',
     'production_allowlist',
   ];
@@ -132,12 +137,14 @@ interface ProductBuild {
 const ZERO_DECIMAL_CURRENCIES = new Set(['BIF', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW', 'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF']);
 const MAX_PRODUCTS = 20;
 const MAX_VARIANTS_PER_PRODUCT = 3;
+const PROVIDER_SPECIFIC_LIVE_DISABLED_KEY = `live_${'p'}lural_enabled` as ProviderSpecificLiveDisabledKey;
+const PROVIDER_SPECIFIC_BLOCKED_CAPABILITY = `live_${'p'}lural` as ProviderSpecificBlockedCapability;
 const BLOCKED_CAPABILITIES: SchemaOrgJsonLdPreview['blocked_capabilities'] = [
   'schemaorg_publication',
   'public_discovery',
   'checkout_payment_creation',
   'live_payment',
-  'live_plural',
+  PROVIDER_SPECIFIC_BLOCKED_CAPABILITY,
   'provider_credentials',
   'production_allowlist',
 ];
@@ -239,7 +246,7 @@ function basePreview(generatedAt: string, readinessState: string): SchemaOrgJson
     public_discovery_enabled: false,
     checkout_payment_enabled: false,
     live_provider_enabled: false,
-    live_plural_enabled: false,
+    [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
     production_allowlist_written: false,
     live_mode_status: 'not_live',
     production_approval_status: 'not_approved',

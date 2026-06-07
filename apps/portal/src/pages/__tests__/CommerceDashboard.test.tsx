@@ -1214,7 +1214,10 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('Omitted schema.org types')).toBeInTheDocument();
     expect(screen.getByText('OfferShippingDetails')).toBeInTheDocument();
     expect(screen.getByText('JSON-LD preview')).toBeInTheDocument();
-    expect(screen.getByText(/https:\/\/schema\.org/)).toBeInTheDocument();
+    expect(screen.getByText((_content, node) => (
+      node?.tagName === 'PRE'
+      && node.textContent?.includes('"@context": "https://schema.org"')
+    ) ?? false)).toBeInTheDocument();
     expect(screen.getByText('Merchant profile present')).toBeInTheDocument();
     expect(screen.getAllByText('No checkout/payment enablement').length).toBeGreaterThan(0);
     expect(screen.getByText('Trusted agent')).toBeInTheDocument();
