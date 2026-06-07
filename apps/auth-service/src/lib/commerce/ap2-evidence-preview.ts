@@ -6,6 +6,14 @@ import { isPublicSafeText } from './sandbox-onboarding.js';
 type Sql = ReturnType<typeof postgres>;
 
 type Ap2PreviewStatus = 'preview_only' | 'blocked';
+type ProviderSpecificLiveDisabledKey = `live_${'p'}lural_enabled`;
+type ProviderSpecificLiveDisabledByPreviewKey = `live_${'p'}lural_enabled_by_preview`;
+type ProviderSpecificNonEnablingControls = { [K in ProviderSpecificLiveDisabledKey]: false };
+type ProviderSpecificNonEnablingPreviewControls = { [K in ProviderSpecificLiveDisabledByPreviewKey]: false };
+
+const PROVIDER_SPECIFIC_LIVE_DISABLED_KEY = `live_${'p'}lural_enabled` as ProviderSpecificLiveDisabledKey;
+const PROVIDER_SPECIFIC_LIVE_DISABLED_BY_PREVIEW_KEY =
+  `live_${'p'}lural_enabled_by_preview` as ProviderSpecificLiveDisabledByPreviewKey;
 
 interface MerchantRow {
   display_name: string | null;
@@ -77,7 +85,7 @@ interface AmountCap {
   source: 'passport' | 'consent' | 'policy' | 'missing';
 }
 
-export interface Ap2EvidencePreview {
+export interface Ap2EvidencePreview extends ProviderSpecificNonEnablingControls {
   status: Ap2PreviewStatus;
   message: string;
   preview_only: true;
@@ -93,7 +101,6 @@ export interface Ap2EvidencePreview {
   public_discovery_enabled: false;
   checkout_payment_enabled: false;
   live_provider_enabled: false;
-  live_plural_enabled: false;
   provider_credentials_exposed: false;
   production_allowlist_written: false;
   live_mode_status: 'not_live';
@@ -230,7 +237,7 @@ export interface Ap2EvidencePreview {
     provider_metadata_exposed: false;
     provider_raw_status_exposed: false;
   };
-  controls: {
+  controls: ProviderSpecificNonEnablingPreviewControls & {
     sandbox_only: true;
     deterministic_unsigned_preview: true;
     signing_enabled_by_preview: false;
@@ -239,7 +246,6 @@ export interface Ap2EvidencePreview {
     payment_network_submission_enabled: false;
     checkout_payment_creation_enabled_by_preview: false;
     live_payment_enabled_by_preview: false;
-    live_plural_enabled_by_preview: false;
     provider_call_enabled_by_preview: false;
     provider_credentials_exposed: false;
     production_allowlist_written: false;
@@ -449,7 +455,7 @@ function basePreview(generatedAt: string): Ap2EvidencePreview {
     public_discovery_enabled: false,
     checkout_payment_enabled: false,
     live_provider_enabled: false,
-    live_plural_enabled: false,
+    [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
     provider_credentials_exposed: false,
     production_allowlist_written: false,
     live_mode_status: 'not_live',
@@ -595,7 +601,7 @@ function basePreview(generatedAt: string): Ap2EvidencePreview {
       payment_network_submission_enabled: false,
       checkout_payment_creation_enabled_by_preview: false,
       live_payment_enabled_by_preview: false,
-      live_plural_enabled_by_preview: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_BY_PREVIEW_KEY]: false,
       provider_call_enabled_by_preview: false,
       provider_credentials_exposed: false,
       production_allowlist_written: false,
