@@ -182,6 +182,28 @@ does not enable public discovery, production Commerce V1, checkout/payment
 creation, live payments, live Plural, provider credentials, production config,
 or allowlists.
 
+### ACP-Style Checkout Shape Preview
+
+The ACP-style checkout shape preview shows how Grantex cart, checkout, consent,
+passport, policy, and payment-intent evidence could map into future cart and
+checkout protocol objects. It is a review aid, not checkout publication.
+
+This preview is sandbox-only and non-enabling. It does not claim ACP
+certification, publish ACP capabilities, create payment intents, create checkout
+links, expose checkout URLs, call providers, expose provider metadata, enable
+live payments, enable live Plural, write production configuration, or set
+allowlists.
+
+The preview refuses to mark checkout mapping as available when required evidence
+is missing. Missing granted checkout consent, an unrevoked checkout Commerce
+Passport, an active policy, cart evidence, or payment-intent foundation evidence
+appears as a blocker with remediation rather than being guessed.
+
+Unsupported fields such as public checkout URLs, provider payment references,
+live provider execution, fulfillment execution, and refund/return execution
+remain explicit blockers. A merchant should treat this as protocol packaging
+evidence only, not approval to accept live checkout or payment traffic.
+
 ### Read-Only Discovery
 
 Read-only discovery allows approved agent clients to learn that a merchant
