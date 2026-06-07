@@ -108,6 +108,20 @@ describe('Grantex Commerce V1 OpenAPI 3.1 contract', () => {
     expect(content).toMatch(/payment_network_submission_enabled:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
   });
 
+  it('declares the C6N existing-system connector registry as metadata-only', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/connectors');
+    expect(content).toContain('/v1/commerce/connectors/{connector_key}');
+    expect(content).toMatch(/operationId:\s*createCommerceConnector/);
+    expect(content).toMatch(/operationId:\s*listCommerceConnectors/);
+    expect(content).toMatch(/operationId:\s*updateCommerceConnector/);
+    expect(content).toMatch(/x-milestone:\s*C6N/);
+    expect(content).toMatch(/metadata_only_registry:\s*\{\s*type:\s*boolean,\s*const:\s*true\s*\}/);
+    expect(content).toMatch(/credentials_stored_by_registry:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/agenticorg_direct_execution_allowed:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/provider_call_enabled_by_registry:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+  });
+
   it('M2 passport endpoints flipped to x-implemented: true', () => {
     const content = readFileSync(yamlPath, 'utf8');
     // Each of the five passport routes must now carry x-implemented: true

@@ -137,6 +137,38 @@ tenant IDs, exact merchant IDs, passport JTIs, consent record IDs, audit event
 IDs, provider references, raw line items, raw payloads, JWTs, idempotency keys,
 secrets, or private configuration.
 
+### Existing-System Connector Registry
+
+Operators and owning merchants can manage the C6N connector registry through:
+
+- `POST /v1/commerce/connectors`
+- `GET /v1/commerce/connectors`
+- `PATCH /v1/commerce/connectors/{connector_key}`
+
+The registry is a metadata-only foundation for existing merchant systems:
+manual maintenance, CSV, custom API, Shopify, WooCommerce, Magento, ERP,
+billing, OMS, WMS, logistics, CRM/support, and payment provider. It records
+connector type, display name, source-of-truth domains, source priority, sync
+status, health state, last sync timestamps, stale thresholds, webhook source
+references, and conflict blockers.
+
+The source precedence model covers `catalog`, `price`, `inventory`, `order`,
+`fulfillment`, `refund`, `settlement`, and `support`. List responses derive the
+primary connector per domain and include stale/conflict blockers instead of
+publishing stale facts as if they were current.
+
+This registry does not store credentials, raw payloads, provider metadata,
+private URLs, production config, or secrets. It does not call Shopify,
+WooCommerce, Magento, custom APIs, ERP, billing, OMS, WMS, logistics,
+CRM/support, payment providers, Plural, Stripe, or Pine. It also does not
+enable checkout/payment creation, fulfillment, refund execution, live payments,
+live Plural, public discovery, production Commerce V1, or protocol
+certification.
+
+AgenticOrg must never call merchant private systems directly. AgenticOrg reads
+only Grantex-grounded commerce APIs; Grantex owns connector metadata, source
+precedence, freshness, and blocker evidence.
+
 ## Auth And Caller Model
 
 Commerce callers are modeled as agents operating for a tenant, merchant, and

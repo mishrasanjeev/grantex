@@ -34,7 +34,8 @@ info:
     C6D adds a sandbox read-only discovery review request workflow, C6E adds
     operator review decisions, C6F adds an audit-backed rollout proposal and
     dry-run evidence package, and C6G adds a sandbox-only AgenticOrg buyer-agent
-    discovery preview and handoff request workflow. These C6 workflows remain proposal-only and
+    discovery preview and handoff request workflow. C6N adds a metadata-only
+    existing-system connector registry foundation. These C6 workflows remain proposal-only and
     non-enabling; they do not approve merchants, publish discovery, create
     checkout/payment paths, enable live providers, enable live Plural, write
     production config, or set allowlists.
@@ -57,6 +58,7 @@ tags:
   - name: Audit
   - name: Operations
   - name: Webhooks
+  - name: Connectors
   - name: Well-Known
 
 components:
@@ -2514,6 +2516,203 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/CommerceWebhookSource" }
+
+    CommerceConnectorType:
+      type: string
+      enum:
+        - manual
+        - csv
+        - custom_api
+        - shopify
+        - woocommerce
+        - magento
+        - erp
+        - billing
+        - oms
+        - wms
+        - logistics
+        - crm_support
+        - payment_provider
+
+    CommerceConnectorSourceDomain:
+      type: string
+      enum: [catalog, price, inventory, order, fulfillment, refund, settlement, support]
+
+    CommerceConnectorControls:
+      type: object
+      properties:
+        metadata_only_registry: { type: boolean, const: true }
+        credentials_stored_by_registry: { type: boolean, const: false }
+        outbound_sync_enabled_by_registry: { type: boolean, const: false }
+        agenticorg_direct_execution_allowed: { type: boolean, const: false }
+        provider_call_enabled_by_registry: { type: boolean, const: false }
+        checkout_payment_enabled_by_registry: { type: boolean, const: false }
+        live_payment_enabled_by_registry: { type: boolean, const: false }
+        live_plural_enabled_by_registry: { type: boolean, const: false }
+        public_discovery_enabled_by_registry: { type: boolean, const: false }
+        production_config_written_by_registry: { type: boolean, const: false }
+
+    CommerceConnector:
+      type: object
+      description: >-
+        Safe C6N existing-system connector metadata. The registry does not
+        store credentials, raw payloads, provider metadata, production config,
+        or secrets, and does not enable outbound sync, direct AgenticOrg
+        execution, checkout/payment creation, live payments, live Plural, or
+        public discovery.
+      properties:
+        id: { type: string, examples: [cconn_01J] }
+        tenant_id: { type: string }
+        merchant_id: { type: string }
+        connector_key:
+          type: string
+          pattern: "^[a-z0-9_-]{3,64}$"
+        connector_type: { $ref: "#/components/schemas/CommerceConnectorType" }
+        display_name: { type: string }
+        status: { type: string, enum: [draft, active, disabled] }
+        runtime_mode:
+          type: string
+          enum: [metadata_only, manual_catalog_api, csv_catalog_import, custom_api_declared]
+        runtime_implemented: { type: boolean }
+        source_domains:
+          type: array
+          items: { $ref: "#/components/schemas/CommerceConnectorSourceDomain" }
+        source_priority: { type: integer, minimum: 0 }
+        sync_status:
+          type: string
+          enum: [not_started, manual, scheduled, sync_succeeded, sync_failed, blocked]
+        health_state:
+          type: string
+          enum: [unknown, healthy, stale, conflict, blocked, disabled]
+        last_sync_at: { type: string, format: date-time, nullable: true }
+        last_successful_sync_at: { type: string, format: date-time, nullable: true }
+        stale_after_seconds: { type: integer, minimum: 0, maximum: 31536000 }
+        stale: { type: boolean }
+        conflict: { type: boolean }
+        blockers:
+          type: array
+          items: { type: string }
+        webhook_source_key:
+          type: string
+          nullable: true
+          pattern: "^[a-z0-9_-]{3,64}$"
+        controls: { $ref: "#/components/schemas/CommerceConnectorControls" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CommerceConnectorSourcePrecedenceEntry:
+      type: object
+      properties:
+        domain: { $ref: "#/components/schemas/CommerceConnectorSourceDomain" }
+        primary_connector_key: { type: string, nullable: true }
+        status: { type: string, enum: [declared, blocked] }
+        connectors:
+          type: array
+          items:
+            type: object
+            properties:
+              connector_key: { type: string }
+              connector_type: { $ref: "#/components/schemas/CommerceConnectorType" }
+              source_priority: { type: integer }
+              sync_status: { type: string }
+              health_state: { type: string }
+              stale: { type: boolean }
+              conflict: { type: boolean }
+              blockers:
+                type: array
+                items: { type: string }
+        blockers:
+          type: array
+          items: { type: string }
+
+    CreateCommerceConnectorRequest:
+      type: object
+      additionalProperties: false
+      required: [merchant_id, connector_key, connector_type, display_name]
+      properties:
+        merchant_id: { type: string }
+        connector_key:
+          type: string
+          pattern: "^[a-z0-9_-]{3,64}$"
+        connector_type: { $ref: "#/components/schemas/CommerceConnectorType" }
+        display_name: { type: string }
+        status: { type: string, enum: [draft, active, disabled], default: draft }
+        source_domains:
+          type: array
+          items: { $ref: "#/components/schemas/CommerceConnectorSourceDomain" }
+        source_priority: { type: integer, minimum: 0, default: 100 }
+        sync_status:
+          type: string
+          enum: [not_started, manual, scheduled, sync_succeeded, sync_failed, blocked]
+        health_state:
+          type: string
+          enum: [unknown, healthy, stale, conflict, blocked, disabled]
+        last_sync_at: { type: string, format: date-time }
+        last_successful_sync_at: { type: string, format: date-time }
+        stale_after_seconds: { type: integer, minimum: 0, maximum: 31536000, default: 86400 }
+        conflict_blockers:
+          type: array
+          items: { type: string }
+        webhook_source_key:
+          type: string
+          pattern: "^[a-z0-9_-]{3,64}$"
+      description: >-
+        Creates metadata only. Credential fields, API keys, tokens, passwords,
+        raw payloads, provider credentials, production config, and live
+        execution flags are rejected.
+
+    UpdateCommerceConnectorRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name: { type: string }
+        status: { type: string, enum: [draft, active, disabled] }
+        source_domains:
+          type: array
+          items: { $ref: "#/components/schemas/CommerceConnectorSourceDomain" }
+        source_priority: { type: integer, minimum: 0 }
+        sync_status:
+          type: string
+          enum: [not_started, manual, scheduled, sync_succeeded, sync_failed, blocked]
+        health_state:
+          type: string
+          enum: [unknown, healthy, stale, conflict, blocked, disabled]
+        last_sync_at: { type: string, format: date-time, nullable: true }
+        last_successful_sync_at: { type: string, format: date-time, nullable: true }
+        stale_after_seconds: { type: integer, minimum: 0, maximum: 31536000 }
+        conflict_blockers:
+          type: array
+          items: { type: string }
+        webhook_source_key:
+          type: string
+          nullable: true
+          pattern: "^[a-z0-9_-]{3,64}$"
+      description: >-
+        Mutable safe metadata only. merchant_id, connector_key,
+        connector_type, credential fields, API keys, tokens, raw payloads,
+        provider credentials, production config, and execution flags are
+        rejected.
+
+    CommerceConnectorResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/CommerceConnector" }
+        source_precedence:
+          type: array
+          items: { $ref: "#/components/schemas/CommerceConnectorSourcePrecedenceEntry" }
+        audit_event_id: { type: string }
+
+    ListCommerceConnectorsResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CommerceConnector" }
+        source_precedence:
+          type: array
+          items: { $ref: "#/components/schemas/CommerceConnectorSourcePrecedenceEntry" }
+        controls: { $ref: "#/components/schemas/CommerceConnectorControls" }
 
     UpdateWebhookSourceRequest:
       type: object
@@ -5264,6 +5463,108 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CreateWebhookSourceResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /v1/commerce/connectors:
+    post:
+      tags: [Connectors]
+      summary: Create an existing-system connector registry row
+      operationId: createCommerceConnector
+      x-implemented: true
+      x-milestone: C6N
+      description: >-
+        Operator or owning merchant endpoint. Creates safe connector metadata
+        for manual, CSV, custom API, Shopify, WooCommerce, Magento, ERP,
+        billing, OMS, WMS, logistics, CRM/support, or payment provider source
+        declarations. The endpoint is metadata-only: it does not store
+        credentials, call merchant systems, call providers, enable AgenticOrg
+        direct execution, enable checkout/payment creation, enable live
+        payments, enable live Plural, enable public discovery, or write
+        production configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCommerceConnectorRequest" }
+      responses:
+        "201":
+          description: Connector metadata created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Duplicate connector_key for this merchant }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+    get:
+      tags: [Connectors]
+      summary: List existing-system connector metadata and source precedence
+      operationId: listCommerceConnectors
+      x-implemented: true
+      x-milestone: C6N
+      description: >-
+        Lists metadata-only connector rows and derives source precedence for
+        catalog, price, inventory, order, fulfillment, refund, settlement, and
+        support domains. Stale, conflict, missing source-of-truth, unsupported
+        runtime, and non-enabling posture are returned as blockers rather than
+        silently publishing facts to agents.
+      parameters:
+        - in: query
+          name: merchant_id
+          schema: { type: string }
+          description: Required for operator callers; inferred for merchant callers.
+        - in: query
+          name: connector_type
+          schema: { $ref: "#/components/schemas/CommerceConnectorType" }
+        - in: query
+          name: status
+          schema: { type: string, enum: [draft, active, disabled] }
+      responses:
+        "200":
+          description: Connector metadata and source precedence
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ListCommerceConnectorsResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /v1/commerce/connectors/{connector_key}:
+    parameters:
+      - { in: path, name: connector_key, required: true, schema: { type: string } }
+    patch:
+      tags: [Connectors]
+      summary: Update existing-system connector metadata
+      operationId: updateCommerceConnector
+      x-implemented: true
+      x-milestone: C6N
+      description: >-
+        Updates safe metadata, source-of-truth declarations, sync status,
+        health state, stale timestamp evidence, and conflict blockers. The
+        endpoint rejects credential fields, raw payloads, provider metadata,
+        production config, connector type changes, execution flags, and
+        direct AgenticOrg execution paths.
+      parameters:
+        - in: query
+          name: merchant_id
+          schema: { type: string }
+          description: Required for operator callers; inferred for merchant callers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateCommerceConnectorRequest" }
+      responses:
+        "200":
+          description: Connector metadata updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorResponse" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: Agent caller or cross-merchant caller is denied }
         "404": { $ref: "#/components/responses/NotFound" }
