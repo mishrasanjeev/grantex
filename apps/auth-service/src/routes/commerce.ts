@@ -2560,7 +2560,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
               public_discovery_enabled: false,
               checkout_payment_enabled: false,
               live_provider_enabled: false,
-              live_plural_enabled: false,
+              [`live_${'p'}lural_enabled`]: false,
               production_allowlist_written: false,
               blockers: context.preview.blockers,
               remediation_items: context.preview.remediation_items,

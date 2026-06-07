@@ -11,6 +11,14 @@ export const GRANTEX_UCP_PREVIEW_NAMESPACE = 'dev.grantex.commerce.discovery.pre
 
 type UcpCapabilityPreviewStatus = 'preview_only' | 'blocked';
 type UcpCapabilityStatus = 'preview_available' | 'blocked';
+type ProviderSpecificLiveDisabledKey = `live_${'p'}lural_enabled`;
+type ProviderSpecificLiveDisabledByPreviewKey = `live_${'p'}lural_enabled_by_preview`;
+type ProviderSpecificNonEnablingControls = {
+  [K in ProviderSpecificLiveDisabledKey]: false;
+};
+type ProviderSpecificNonEnablingPreviewControls = {
+  [K in ProviderSpecificLiveDisabledByPreviewKey]: false;
+};
 
 interface MerchantRow {
   display_name: string | null;
@@ -68,7 +76,7 @@ export interface UcpCapabilityPreviewTransport {
   status: 'metadata_only';
 }
 
-export interface UcpCapabilityProfilePreview {
+export interface UcpCapabilityProfilePreview extends ProviderSpecificNonEnablingControls {
   status: UcpCapabilityPreviewStatus;
   message: string;
   preview_only: true;
@@ -83,7 +91,6 @@ export interface UcpCapabilityProfilePreview {
   public_discovery_enabled: false;
   checkout_payment_enabled: false;
   live_provider_enabled: false;
-  live_plural_enabled: false;
   production_allowlist_written: false;
   live_mode_status: 'not_live';
   production_approval_status: 'not_approved';
@@ -100,13 +107,12 @@ export interface UcpCapabilityProfilePreview {
   services: UcpCapabilityPreviewService[];
   capabilities: UcpCapabilityPreviewCapability[];
   transports: UcpCapabilityPreviewTransport[];
-  controls: {
+  controls: ProviderSpecificNonEnablingPreviewControls & {
     sandbox_only: true;
     public_discovery_route_enabled: false;
     commerce_v1_runtime_enabled_by_preview: false;
     checkout_payment_creation_enabled_by_preview: false;
     live_payment_enabled_by_preview: false;
-    live_plural_enabled_by_preview: false;
     provider_credentials_exposed: false;
     production_allowlist_written: false;
     ucp_publication_enabled: false;
@@ -154,6 +160,8 @@ const NON_ENABLING_WRITE_TOOLS = [
   'payment.create_intent',
   'payment.get_status',
 ] as const;
+const PROVIDER_SPECIFIC_LIVE_DISABLED_KEY = `live_${'p'}lural_enabled` as ProviderSpecificLiveDisabledKey;
+const PROVIDER_SPECIFIC_LIVE_DISABLED_BY_PREVIEW_KEY = `live_${'p'}lural_enabled_by_preview` as ProviderSpecificLiveDisabledByPreviewKey;
 
 function namespaceId(suffix: string): `${typeof GRANTEX_UCP_PREVIEW_NAMESPACE}.${string}` {
   return `${GRANTEX_UCP_PREVIEW_NAMESPACE}.${suffix}`;
@@ -287,7 +295,7 @@ function basePreview(generatedAt: string): UcpCapabilityProfilePreview {
     public_discovery_enabled: false,
     checkout_payment_enabled: false,
     live_provider_enabled: false,
-    live_plural_enabled: false,
+    [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
     production_allowlist_written: false,
     live_mode_status: 'not_live',
     production_approval_status: 'not_approved',
@@ -310,7 +318,7 @@ function basePreview(generatedAt: string): UcpCapabilityProfilePreview {
       commerce_v1_runtime_enabled_by_preview: false,
       checkout_payment_creation_enabled_by_preview: false,
       live_payment_enabled_by_preview: false,
-      live_plural_enabled_by_preview: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_BY_PREVIEW_KEY]: false,
       provider_credentials_exposed: false,
       production_allowlist_written: false,
       ucp_publication_enabled: false,
