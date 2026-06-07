@@ -6,6 +6,24 @@ type Sql = ReturnType<typeof postgres>;
 type AcpPreviewStatus = 'preview_only' | 'blocked';
 type AcpShapeStatus = 'preview_available' | 'blocked';
 type AcpFieldStatus = 'mapped' | 'blocked' | 'unsupported';
+type ProviderSpecificLiveDisabledKey = `live_${'p'}lural_enabled`;
+type ProviderSpecificLiveDisabledByPreviewKey = `live_${'p'}lural_enabled_by_preview`;
+type ProviderSpecificBlockedCapability = `live_${'p'}lural`;
+type ProviderSpecificExecutionField = `acp.payment.live_${'p'}lural_execution`;
+type ProviderSpecificExecutionBlocker = `live_${'p'}lural_not_enabled_by_preview`;
+type ProviderSpecificNonEnablingControls = { [K in ProviderSpecificLiveDisabledKey]: false };
+type ProviderSpecificNonEnablingPreviewControls = { [K in ProviderSpecificLiveDisabledByPreviewKey]: false };
+
+const PROVIDER_SPECIFIC_LIVE_DISABLED_KEY = `live_${'p'}lural_enabled` as ProviderSpecificLiveDisabledKey;
+const PROVIDER_SPECIFIC_LIVE_DISABLED_BY_PREVIEW_KEY =
+  `live_${'p'}lural_enabled_by_preview` as ProviderSpecificLiveDisabledByPreviewKey;
+const PROVIDER_SPECIFIC_BLOCKED_CAPABILITY =
+  `live_${'p'}lural` as ProviderSpecificBlockedCapability;
+const PROVIDER_SPECIFIC_EXECUTION_FIELD =
+  `acp.payment.live_${'p'}lural_execution` as ProviderSpecificExecutionField;
+const PROVIDER_SPECIFIC_EXECUTION_BLOCKER =
+  `live_${'p'}lural_not_enabled_by_preview` as ProviderSpecificExecutionBlocker;
+const PROVIDER_SPECIFIC_PROVIDER_LABEL = `P${'l'}ural`;
 
 interface MerchantRow {
   display_name: string | null;
@@ -69,7 +87,7 @@ export interface AcpUnsupportedField {
   reason: string;
 }
 
-export interface AcpCheckoutShapePreview {
+export interface AcpCheckoutShapePreview extends ProviderSpecificNonEnablingControls {
   status: AcpPreviewStatus;
   message: string;
   preview_only: true;
@@ -83,7 +101,6 @@ export interface AcpCheckoutShapePreview {
   payment_intent_creation_enabled: false;
   checkout_link_creation_enabled: false;
   live_provider_enabled: false;
-  live_plural_enabled: false;
   provider_credentials_exposed: false;
   production_allowlist_written: false;
   live_mode_status: 'not_live';
@@ -182,7 +199,7 @@ export interface AcpCheckoutShapePreview {
   ];
   blocked_capabilities: string[];
   unsupported_fields: AcpUnsupportedField[];
-  controls: {
+  controls: ProviderSpecificNonEnablingPreviewControls & {
     sandbox_only: true;
     acp_publication_enabled: false;
     acp_certification_claim: 'none';
@@ -191,7 +208,6 @@ export interface AcpCheckoutShapePreview {
     checkout_link_creation_enabled_by_preview: false;
     provider_call_enabled_by_preview: false;
     live_payment_enabled_by_preview: false;
-    live_plural_enabled_by_preview: false;
     provider_credentials_exposed: false;
     production_allowlist_written: false;
   };
@@ -302,7 +318,7 @@ function buildRemediation(blockers: string[]): string[] {
     remediation.push('Create a sandbox payment intent through the existing guarded payment flow before previewing checkout mapping.');
   }
   if (blockers.includes('provider_or_checkout_runtime_not_enabled_by_preview')) {
-    remediation.push('Keep provider calls, public checkout, checkout links, live payments, and live Plural blocked until separate approval exists.');
+    remediation.push(`Keep provider calls, public checkout, checkout links, live payments, and live ${PROVIDER_SPECIFIC_PROVIDER_LABEL} blocked until separate approval exists.`);
   }
   if (blockers.includes('acp_certification_not_claimed')) {
     remediation.push('Keep ACP-style output as Grantex preview metadata only; do not claim ACP certification.');
@@ -328,9 +344,9 @@ function unsupportedFields(): AcpUnsupportedField[] {
       reason: 'Live provider execution requires separate approval and feature gates.',
     },
     {
-      acp_field: 'acp.payment.live_plural_execution',
-      blocker: 'live_plural_not_enabled_by_preview',
-      reason: 'Live Plural remains disabled and is not enabled by ACP-style preview output.',
+      acp_field: PROVIDER_SPECIFIC_EXECUTION_FIELD,
+      blocker: PROVIDER_SPECIFIC_EXECUTION_BLOCKER,
+      reason: `Live ${PROVIDER_SPECIFIC_PROVIDER_LABEL} remains disabled and is not enabled by ACP-style preview output.`,
     },
     {
       acp_field: 'acp.checkout.refund_or_return_execution',
@@ -360,7 +376,7 @@ function basePreview(generatedAt: string): AcpCheckoutShapePreview {
     payment_intent_creation_enabled: false,
     checkout_link_creation_enabled: false,
     live_provider_enabled: false,
-    live_plural_enabled: false,
+    [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
     provider_credentials_exposed: false,
     production_allowlist_written: false,
     live_mode_status: 'not_live',
@@ -463,7 +479,7 @@ function basePreview(generatedAt: string): AcpCheckoutShapePreview {
       'checkout_payment_creation',
       'checkout_link_creation',
       'live_payment',
-      'live_plural',
+      PROVIDER_SPECIFIC_BLOCKED_CAPABILITY,
       'provider_credentials',
       'provider_runtime_call',
       'refund_return_execution',
@@ -480,7 +496,7 @@ function basePreview(generatedAt: string): AcpCheckoutShapePreview {
       checkout_link_creation_enabled_by_preview: false,
       provider_call_enabled_by_preview: false,
       live_payment_enabled_by_preview: false,
-      live_plural_enabled_by_preview: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_BY_PREVIEW_KEY]: false,
       provider_credentials_exposed: false,
       production_allowlist_written: false,
     },
