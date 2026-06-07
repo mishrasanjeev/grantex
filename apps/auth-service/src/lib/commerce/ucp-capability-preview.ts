@@ -39,6 +39,9 @@ interface CatalogSummaryRow {
   variants_with_price_currency: number | string | null;
   variants_with_known_availability: number | string | null;
   products_with_public_safe_title: number | string | null;
+  products_with_public_safe_description: number | string | null;
+  products_with_unsafe_text: number | string | null;
+  variants_with_unsafe_text: number | string | null;
 }
 
 export interface UcpCapabilityPreviewCapability {
@@ -361,14 +364,23 @@ function buildPreview(
   const pricedVariantCount = countValue(catalog?.variants_with_price_currency);
   const availableVariantCount = countValue(catalog?.variants_with_known_availability);
   const safeTitleCount = countValue(catalog?.products_with_public_safe_title);
+  const safeDescriptionCount = countValue(catalog?.products_with_public_safe_description);
+  const unsafeTextCount = countValue(catalog?.products_with_unsafe_text)
+    + countValue(catalog?.variants_with_unsafe_text);
   const defaultTools = asDefaultGrantexTools(merchant.default_capabilities);
   const displayName = publicTextOrNull(merchant.display_name);
   const categoryPreset = publicEnumOrNull(merchant.category_preset);
   const countryCode = publicCountryOrNull(merchant.country_code);
   const defaultCurrency = publicCurrencyOrNull(merchant.default_currency);
   const profileComplete = Boolean(displayName && categoryPreset && countryCode && defaultCurrency);
-  const catalogReady = productCount > 0 && variantCount > 0 && safeTitleCount > 0;
-  const offerReady = pricedVariantCount > 0 && availableVariantCount > 0;
+  const catalogReady = productCount > 0
+    && variantCount > 0
+    && safeTitleCount >= productCount
+    && safeDescriptionCount >= productCount
+    && unsafeTextCount === 0;
+  const offerReady = variantCount > 0
+    && pricedVariantCount >= variantCount
+    && availableVariantCount >= variantCount;
 
   preview.merchant_preview = {
     display_name: displayName,
@@ -530,9 +542,9 @@ export async function readUcpCapabilityProfilePreview(
              WHERE v.price_amount IS NOT NULL
                AND v.currency IS NOT NULL
                AND v.currency ~ '^[A-Z]{3}$'
-           )::int AS variants_with_price_currency,
-           COUNT(v.id) FILTER (
-             WHERE v.availability_status IN ('in_stock', 'out_of_stock', 'pre_order', 'back_order', 'unknown')
+          )::int AS variants_with_price_currency,
+          COUNT(v.id) FILTER (
+             WHERE v.availability_status <> 'unknown'
            )::int AS variants_with_known_availability,
            COUNT(DISTINCT p.id) FILTER (
              WHERE p.title IS NOT NULL
@@ -540,7 +552,28 @@ export async function readUcpCapabilityProfilePreview(
                AND NOT (
                  p.title ~* '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M'
                )
-           )::int AS products_with_public_safe_title
+           )::int AS products_with_public_safe_title,
+           COUNT(DISTINCT p.id) FILTER (
+             WHERE p.description IS NOT NULL
+               AND btrim(p.description) <> ''
+               AND NOT (
+                 p.description ~* '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M'
+               )
+           )::int AS products_with_public_safe_description,
+           COUNT(DISTINCT p.id) FILTER (
+             WHERE p.title ~* '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M'
+                OR COALESCE(p.brand, '') ~* '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M'
+                OR COALESCE(p.description, '') ~* '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M'
+                OR COALESCE(p.image_url, '') ~* '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M'
+           )::int AS products_with_unsafe_text,
+           COUNT(v.id) FILTER (
+             WHERE COALESCE(v.sku, '') ~* '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M'
+                OR COALESCE(v.parent_sku, '') ~* '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M'
+                OR COALESCE(v.model, '') ~* '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M'
+                OR COALESCE(v.variant_title, '') ~* '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M'
+                OR COALESCE(v.warranty_summary, '') ~* '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M'
+                OR COALESCE(v.return_policy_summary, '') ~* '-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres://|postgresql://|redis://|\\m(api[_-]?key|secret|token|jwt|bearer|password|credential|webhook[_-]?secret|checkout|payment|payments|paid|provider|production|live|allowlist|approved|certified|certification|ready)\\M'
+           )::int AS variants_with_unsafe_text
       FROM commerce_products p
       LEFT JOIN commerce_product_variants v
         ON v.product_id = p.id

@@ -164,6 +164,9 @@ function ucpCapabilityCatalogSummary(overrides: Record<string, unknown> = {}) {
     variants_with_price_currency: 2,
     variants_with_known_availability: 2,
     products_with_public_safe_title: 1,
+    products_with_public_safe_description: 1,
+    products_with_unsafe_text: 0,
+    variants_with_unsafe_text: 0,
     ...overrides,
   }];
 }
@@ -2255,6 +2258,78 @@ describe('sandbox onboarding foundation', () => {
       .toContain('catalog_capability_evidence_missing');
     expect(data.public_discovery_enabled).toBe(false);
     expect(data.checkout_payment_enabled).toBe(false);
+  });
+
+  it('blocks UCP-style catalog capabilities when any active product lacks public-safe evidence', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(ucpCapabilityCatalogSummary({
+      product_count: 2,
+      variant_count: 2,
+      variants_with_price_currency: 2,
+      variants_with_known_availability: 2,
+      products_with_public_safe_title: 1,
+      products_with_public_safe_description: 2,
+      products_with_unsafe_text: 1,
+    }));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/ucp-capability-profile-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const data = res.json<{
+      data: {
+        status: string;
+        blockers: string[];
+        capabilities: Array<{ id: string; status: string; blockers: string[] }>;
+        evidence_summary: { product_count: number; products_with_public_safe_title: number };
+      };
+    }>().data;
+    expect(data.status).toBe('blocked');
+    expect(data.blockers).toContain('catalog_capability_evidence_missing');
+    expect(data.capabilities.find((capability) => capability.id.endsWith('.catalog.search'))).toMatchObject({
+      status: 'blocked',
+      blockers: expect.arrayContaining(['catalog_capability_evidence_missing']),
+    });
+    expect(data.evidence_summary).toMatchObject({
+      product_count: 2,
+      products_with_public_safe_title: 1,
+    });
+  });
+
+  it('blocks UCP-style inventory capability when availability evidence is unknown', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(ucpCapabilityCatalogSummary({
+      variants_with_known_availability: 0,
+    }));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/ucp-capability-profile-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const data = res.json<{
+      data: {
+        blockers: string[];
+        capabilities: Array<{ id: string; status: string; blockers: string[] }>;
+        evidence_summary: { variants_with_known_availability: number };
+      };
+    }>().data;
+    expect(data.blockers).toContain('price_or_availability_evidence_missing');
+    expect(data.capabilities.find((capability) => capability.id.endsWith('.catalog.search'))?.status)
+      .toBe('preview_available');
+    expect(data.capabilities.find((capability) => capability.id.endsWith('.inventory.availability.read')))
+      .toMatchObject({
+        status: 'blocked',
+        blockers: expect.arrayContaining(['price_or_availability_evidence_missing']),
+      });
+    expect(data.evidence_summary.variants_with_known_availability).toBe(0);
   });
 
   it('blocks UCP-style capability preview for live merchants without enabling public discovery', async () => {
