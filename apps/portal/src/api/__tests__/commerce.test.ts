@@ -15,6 +15,7 @@ import {
   disableMerchantAgenticCommerce,
   evaluateCommercePolicy,
   getCommerceMerchant,
+  getCommerceMerchantSchemaOrgJsonLdPreview,
   getCommerceMerchantSandboxOnboarding,
   getCommerceOpsHealth,
   getCommerceWellKnownProfile,
@@ -131,6 +132,15 @@ describe('commerce api', () => {
       'http://localhost:3000/v1/commerce/merchants/mch%2F1/sandbox-onboarding/transition',
     );
     expect(JSON.parse(mockFetch.mock.calls[2]![1].body)).toEqual({ target_state: 'submitted_for_review' });
+  });
+
+  it('loads schema.org JSON-LD preview through the tenant-scoped merchant route', async () => {
+    ok({ data: { status: 'preview_only', preview_only: true, jsonld: { '@context': 'https://schema.org', '@graph': [] } } });
+    await getCommerceMerchantSchemaOrgJsonLdPreview('mch/1');
+    expect(mockFetch.mock.calls[0]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/schemaorg-jsonld-preview',
+    );
+    expect(mockFetch.mock.calls[0]![1].method).toBe('GET');
   });
 
   it('calls agent and product control-plane endpoints', async () => {

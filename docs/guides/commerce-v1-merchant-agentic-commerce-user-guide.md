@@ -141,6 +141,26 @@ A safe preview includes:
 The preview must be reviewed before launch. It should be treated as public
 metadata, even before it is published.
 
+### Schema.org JSON-LD Preview
+
+The schema.org JSON-LD preview shows how the same public-safe Grantex merchant
+and catalog evidence could be shaped as schema.org `Product`, `Offer`,
+`MerchantReturnPolicy`, and `OfferShippingDetails` objects for later review.
+
+The preview is not publication. It is not schema.org certification. It does not
+enable public discovery, checkout, payment creation, live payments, live Plural,
+provider access, production configuration, or allowlists.
+
+The preview includes fields only when Grantex has safe evidence for them. For
+example, a product name, description, image, brand, offer price, availability,
+or return policy can appear only after the corresponding public-safe catalog
+field exists. Missing shipping or return evidence appears as a blocker or
+omitted type rather than guessed text.
+
+Reviewers should reject the preview if it contains private merchant data,
+internal IDs, provider metadata, raw payloads, secrets, production claims,
+allowlist values, payment claims, launch claims, or certification claims.
+
 ### Read-Only Discovery
 
 Read-only discovery allows approved agent clients to learn that a merchant

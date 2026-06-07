@@ -7,6 +7,7 @@ import {
   getCommerceMerchantReadOnlyDiscoveryReview,
   getCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   getCommerceMerchantSandboxOnboarding,
+  getCommerceMerchantSchemaOrgJsonLdPreview,
   getCommerceWellKnownProfile,
   listCommerceAgents,
   listCommercePolicies,
@@ -24,6 +25,7 @@ import {
   type CommerceReadOnlyDiscoveryOperatorDecision,
   type CommerceReadOnlyDiscoveryOperatorReview,
   type CommerceReadOnlyDiscoveryRolloutProposal,
+  type CommerceSchemaOrgJsonLdPreview,
   type CommerceSandboxOnboarding,
   type CommercePolicyDecision,
   type CommerceWellKnownProfile,
@@ -98,6 +100,7 @@ export function CommerceOnboarding() {
   const [operatorReview, setOperatorReview] = useState<CommerceReadOnlyDiscoveryOperatorReview | null>(null);
   const [rolloutProposal, setRolloutProposal] = useState<CommerceReadOnlyDiscoveryRolloutProposal | null>(null);
   const [agenticOrgPreview, setAgenticOrgPreview] = useState<CommerceAgenticOrgBuyerDiscoveryPreview | null>(null);
+  const [schemaOrgPreview, setSchemaOrgPreview] = useState<CommerceSchemaOrgJsonLdPreview | null>(null);
   const [merchantForm, setMerchantForm] = useState<MerchantPatchForm>(defaultPatch);
   const [agents, setAgents] = useState<CommerceAgent[]>([]);
   const [activePolicyCount, setActivePolicyCount] = useState(0);
@@ -142,11 +145,12 @@ export function CommerceOnboarding() {
     }
     setLoading(true);
     try {
-      const [merchantRes, reviewRes, proposalRes, agenticOrgRes, agentRes, policyRes, productRes, credentialRes, sourceRes, profileRes] = await Promise.all([
+      const [merchantRes, reviewRes, proposalRes, agenticOrgRes, schemaOrgRes, agentRes, policyRes, productRes, credentialRes, sourceRes, profileRes] = await Promise.all([
         getCommerceMerchantSandboxOnboarding(id),
         getCommerceMerchantReadOnlyDiscoveryReview(id).catch(() => null),
         getCommerceMerchantReadOnlyDiscoveryRolloutProposal(id).catch(() => null),
         getCommerceMerchantAgenticOrgBuyerDiscoveryPreview(id).catch(() => null),
+        getCommerceMerchantSchemaOrgJsonLdPreview(id).catch(() => null),
         listCommerceAgents({ merchantId: id, limit: 25 }),
         listCommercePolicies({ merchantId: id, status: 'active', limit: 10 }),
         listCommerceProducts({ merchantId: id, status: 'active', limit: 10 }),
@@ -158,6 +162,7 @@ export function CommerceOnboarding() {
       setOperatorReview(reviewRes?.data ?? null);
       setRolloutProposal(proposalRes?.data ?? null);
       setAgenticOrgPreview(agenticOrgRes?.data ?? null);
+      setSchemaOrgPreview(schemaOrgRes?.data ?? null);
       setProposalNote(proposalRes?.data.proposal_note ?? '');
       setAgenticOrgNote('');
       setMerchantForm({
@@ -442,6 +447,7 @@ export function CommerceOnboarding() {
   const agenticOrgWithdrawDisabled = agenticOrgSubmitting
     || agenticOrgStatus !== 'sandbox_handoff_requested';
   const agenticOrgJson = agenticOrgPreview ? JSON.stringify(agenticOrgPreview, null, 2) : '';
+  const schemaOrgJson = schemaOrgPreview ? JSON.stringify(schemaOrgPreview.jsonld, null, 2) : '';
 
   return (
     <div>
@@ -1093,6 +1099,105 @@ export function CommerceOnboarding() {
                 </div>
               ) : null}
             </div>
+          </Card>
+
+          <Card className="xl:col-span-2">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gx-text">Schema.org JSON-LD preview</h2>
+                <p className="mt-1 text-xs text-gx-muted">
+                  Preview-only schema.org shape from Grantex evidence; not publication, certification, launch, checkout, payment, live provider, or allowlist enablement.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={schemaOrgPreview?.status === 'preview_only' ? 'success' : 'warning'}>
+                  {schemaOrgPreview?.status ?? 'unavailable'}
+                </Badge>
+                <Badge variant="danger">{schemaOrgPreview?.production_approval_status ?? 'not_approved'}</Badge>
+                <Badge variant="danger">{schemaOrgPreview?.live_mode_status ?? 'not_live'}</Badge>
+              </div>
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-4">
+              {[
+                { label: 'schemaorg_publication_enabled', value: schemaOrgPreview?.schemaorg_publication_enabled ?? false },
+                { label: 'public_discovery_enabled', value: schemaOrgPreview?.public_discovery_enabled ?? false },
+                { label: 'checkout_payment_enabled', value: schemaOrgPreview?.checkout_payment_enabled ?? false },
+                { label: 'live_provider_enabled', value: schemaOrgPreview?.live_provider_enabled ?? false },
+                { label: 'live_plural_enabled', value: schemaOrgPreview?.live_plural_enabled ?? false },
+                { label: 'production_allowlist_written', value: schemaOrgPreview?.production_allowlist_written ?? false },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-md border border-gx-border p-3">
+                  <div className="text-xs text-gx-muted">{label}</div>
+                  <Badge variant={value ? 'danger' : 'success'}>{value ? 'true' : 'false'}</Badge>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-4">
+              {[
+                { label: 'Products', value: schemaOrgPreview?.evidence_summary.product_count ?? 0 },
+                { label: 'Offers', value: schemaOrgPreview?.evidence_summary.offer_count ?? 0 },
+                { label: 'Return policies', value: schemaOrgPreview?.evidence_summary.return_policy_count ?? 0 },
+                { label: 'Shipping details', value: schemaOrgPreview?.evidence_summary.shipping_details_count ?? 0 },
+              ].map((item) => (
+                <div key={item.label} className="rounded-md border border-gx-border p-3">
+                  <div className="text-xs text-gx-muted">{item.label}</div>
+                  <div className="text-sm font-medium text-gx-text">{item.value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-sm font-medium text-gx-text">Included schema.org types</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(schemaOrgPreview?.included_types ?? []).map((type) => (
+                    <Badge key={type} variant="success">{type}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-md border border-gx-border p-3">
+                <div className="text-sm font-medium text-gx-text">Omitted schema.org types</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(schemaOrgPreview?.omitted_types ?? []).map((type) => (
+                    <Badge key={type} variant="warning">{type}</Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {schemaOrgPreview?.blockers.length ? (
+              <div className="mt-4 rounded-md border border-gx-danger/40 bg-gx-danger/5 p-3">
+                <div className="text-sm font-medium text-gx-text">Schema.org blockers</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {schemaOrgPreview.blockers.map((blocker) => (
+                    <Badge key={blocker} variant="danger">{capabilityLabel(blocker)}</Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {schemaOrgPreview?.remediation_items.length ? (
+              <div className="mt-4 rounded-md border border-gx-border p-3">
+                <div className="text-sm font-medium text-gx-text">Schema.org remediation</div>
+                <div className="mt-2 grid gap-2 text-xs text-gx-warning">
+                  {schemaOrgPreview.remediation_items.map((item) => (
+                    <div key={item}>{item}</div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <details className="mt-4 rounded-md border border-gx-border p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-gx-text">JSON-LD preview</summary>
+              <div className="mt-3 flex justify-end">
+                <CopyButton text={schemaOrgJson} />
+              </div>
+              <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-gx-bg p-3 text-xs text-gx-text">
+                {schemaOrgJson}
+              </pre>
+            </details>
           </Card>
 
           <Card>
