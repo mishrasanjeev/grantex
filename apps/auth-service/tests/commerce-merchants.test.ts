@@ -157,6 +157,17 @@ function schemaOrgProductRows(overrides: Record<string, unknown> = {}) {
   ];
 }
 
+function ucpCapabilityCatalogSummary(overrides: Record<string, unknown> = {}) {
+  return [{
+    product_count: 1,
+    variant_count: 2,
+    variants_with_price_currency: 2,
+    variants_with_known_availability: 2,
+    products_with_public_safe_title: 1,
+    ...overrides,
+  }];
+}
+
 function reviewRequestAudit(overrides: Record<string, unknown> = {}) {
   return [{
     id: 'caud_REVIEW_REQUEST',
@@ -2110,6 +2121,202 @@ describe('sandbox onboarding foundation', () => {
       method: 'GET',
       url: '/v1/commerce/merchants/mch_SANDBOX/schemaorg-jsonld-preview',
       headers: { authorization: 'Bearer grtx_agent_C6JXXXXXXXXXXXXXXXXXXXXXXX' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('caller_not_authorized');
+  });
+
+  it('returns a Grantex-owned UCP-style capability profile preview without publishing certified capabilities', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(ucpCapabilityCatalogSummary());
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/ucp-capability-profile-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      data: {
+        status: string;
+        namespace: string;
+        profile_style: string;
+        preview_only: boolean;
+        ucp_publication_enabled: boolean;
+        ucp_certification_claim: string;
+        certified_ucp_namespace_published: boolean;
+        external_ucp_namespace_used: boolean;
+        certified_capabilities_published: boolean;
+        public_discovery_enabled: boolean;
+        checkout_payment_enabled: boolean;
+        live_provider_enabled: boolean;
+        live_plural_enabled: boolean;
+        production_allowlist_written: boolean;
+        services: Array<{ id: string; namespace: string; capability_ids: string[] }>;
+        capabilities: Array<{ id: string; status: string; category: string; maps_to_grantex_tool: string | null; blockers: string[] }>;
+        transports: Array<{ id: string; endpoint_template: string; public_route_enabled: boolean; runtime_enabled_by_preview: boolean }>;
+        controls: { public_discovery_route_enabled: boolean; commerce_v1_runtime_enabled_by_preview: boolean; ucp_certification_claim: string };
+        evidence_summary: { product_count: number; variant_count: number; read_only_capability_count: number; blocked_capability_count: number };
+        certification_claims: string[];
+      };
+    }>();
+
+    expect(body.data).toMatchObject({
+      status: 'preview_only',
+      namespace: 'dev.grantex.commerce.discovery.preview',
+      profile_style: 'ucp_style_preview',
+      preview_only: true,
+      ucp_publication_enabled: false,
+      ucp_certification_claim: 'none',
+      certified_ucp_namespace_published: false,
+      external_ucp_namespace_used: false,
+      certified_capabilities_published: false,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+      production_allowlist_written: false,
+      certification_claims: [],
+    });
+    expect(body.data.services).toHaveLength(1);
+    expect(body.data.services[0]?.namespace).toBe('dev.grantex.commerce.discovery.preview');
+    expect(body.data.capabilities.some((capability) => capability.id.endsWith('.merchant_profile.read'))).toBe(true);
+    expect(body.data.capabilities.some((capability) => capability.id.endsWith('.catalog.search'))).toBe(true);
+    expect(body.data.capabilities.some((capability) => capability.id.endsWith('.inventory.availability.read'))).toBe(true);
+    expect(body.data.capabilities.find((capability) => capability.maps_to_grantex_tool === 'checkout.create')?.status)
+      .toBe('blocked');
+    expect(body.data.capabilities.find((capability) => capability.maps_to_grantex_tool === 'payment.create_intent')?.blockers)
+      .toContain('runtime_execution_not_enabled_by_preview');
+    expect(body.data.transports).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        endpoint_template: '/v1/commerce',
+        public_route_enabled: false,
+        runtime_enabled_by_preview: false,
+      }),
+      expect.objectContaining({
+        endpoint_template: '/mcp',
+        public_route_enabled: false,
+        runtime_enabled_by_preview: false,
+      }),
+    ]));
+    expect(body.data.controls).toMatchObject({
+      public_discovery_route_enabled: false,
+      commerce_v1_runtime_enabled_by_preview: false,
+      ucp_certification_claim: 'none',
+    });
+    expect(body.data.evidence_summary).toMatchObject({
+      product_count: 1,
+      variant_count: 2,
+      read_only_capability_count: 4,
+    });
+    expect(body.data.evidence_summary.blocked_capability_count).toBeGreaterThan(0);
+    const responseJson = JSON.stringify(body.data);
+    expect(responseJson).not.toContain('dev.ucp');
+    expect(responseJson).not.toContain('cten_TESTTENANT');
+    expect(responseJson).not.toContain('mch_SANDBOX');
+    expect(responseJson).not.toContain('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST');
+  });
+
+  it('returns blocked UCP-style capability preview when catalog evidence is missing', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(ucpCapabilityCatalogSummary({
+      product_count: 0,
+      variant_count: 0,
+      variants_with_price_currency: 0,
+      variants_with_known_availability: 0,
+      products_with_public_safe_title: 0,
+    }));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/ucp-capability-profile-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const data = res.json<{
+      data: {
+        status: string;
+        blockers: string[];
+        capabilities: Array<{ id: string; status: string; blockers: string[] }>;
+        public_discovery_enabled: boolean;
+        checkout_payment_enabled: boolean;
+      };
+    }>().data;
+    expect(data.status).toBe('blocked');
+    expect(data.blockers).toContain('catalog_capability_evidence_missing');
+    expect(data.blockers).toContain('price_or_availability_evidence_missing');
+    expect(data.capabilities.find((capability) => capability.id.endsWith('.catalog.search'))?.status).toBe('blocked');
+    expect(data.capabilities.find((capability) => capability.id.endsWith('.catalog.search'))?.blockers)
+      .toContain('catalog_capability_evidence_missing');
+    expect(data.public_discovery_enabled).toBe(false);
+    expect(data.checkout_payment_enabled).toBe(false);
+  });
+
+  it('blocks UCP-style capability preview for live merchants without enabling public discovery', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ environment: 'live' })]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_LIVE/ucp-capability-profile-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    const error = res.json<{
+      error: {
+        code: string;
+        details: {
+          preview_only: boolean;
+          ucp_publication_enabled: boolean;
+          ucp_certification_claim: string;
+          certified_ucp_namespace_published: boolean;
+          external_ucp_namespace_used: boolean;
+          public_discovery_enabled: boolean;
+          checkout_payment_enabled: boolean;
+          live_provider_enabled: boolean;
+          live_plural_enabled: boolean;
+          production_allowlist_written: boolean;
+          blockers: string[];
+        };
+      };
+    }>().error;
+    expect(error).toMatchObject({
+      code: 'ucp_capability_profile_preview_live_merchant_blocked',
+      details: {
+        preview_only: true,
+        ucp_publication_enabled: false,
+        ucp_certification_claim: 'none',
+        certified_ucp_namespace_published: false,
+        external_ucp_namespace_used: false,
+        public_discovery_enabled: false,
+        checkout_payment_enabled: false,
+        live_provider_enabled: false,
+        live_plural_enabled: false,
+        production_allowlist_written: false,
+      },
+    });
+    expect(error.details.blockers).toContain('merchant_not_sandbox');
+  });
+
+  it('denies CommerceAgent callers on UCP-style capability profile preview', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      id: 'cag_TEST',
+      tenant_id: TEST_COMMERCE_TENANT_ID,
+      trust_status: 'trusted',
+      public_key_jwk: null,
+      api_key_hash: 'hash',
+    }]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/ucp-capability-profile-preview',
+      headers: { authorization: 'Bearer grtx_agent_C6KXXXXXXXXXXXXXXXXXXXXXXX' },
     });
 
     expect(res.statusCode).toBe(403);

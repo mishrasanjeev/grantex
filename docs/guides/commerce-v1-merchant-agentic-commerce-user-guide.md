@@ -161,6 +161,27 @@ Reviewers should reject the preview if it contains private merchant data,
 internal IDs, provider metadata, raw payloads, secrets, production claims,
 allowlist values, payment claims, launch claims, or certification claims.
 
+### UCP-Style Capability Profile Preview
+
+The UCP-style capability profile preview shows how Grantex can describe a
+merchant's agent-commerce capabilities in a standard-looking capability shape
+without publishing or certifying those capabilities.
+
+This preview uses only the Grantex-owned namespace
+`dev.grantex.commerce.discovery.preview`. It does not publish `dev.ucp.*`
+capabilities, does not claim UCP certification, and does not make the merchant
+publicly discoverable.
+
+The preview can show read-only discovery capabilities such as merchant profile,
+catalog search, catalog item read, and availability read when evidence exists.
+It also shows blocked capabilities such as checkout, payment, fulfillment,
+refund/return execution, live provider access, and production allowlist writes.
+
+Merchants and reviewers should treat the preview as review metadata only. It
+does not enable public discovery, production Commerce V1, checkout/payment
+creation, live payments, live Plural, provider credentials, production config,
+or allowlists.
+
 ### Read-Only Discovery
 
 Read-only discovery allows approved agent clients to learn that a merchant

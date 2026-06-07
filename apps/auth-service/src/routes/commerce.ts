@@ -44,6 +44,7 @@ import {
   type SandboxReadOnlyDiscoveryRolloutProposalPayload,
 } from '../lib/commerce/sandbox-onboarding.js';
 import { readSchemaOrgJsonLdPreview } from '../lib/commerce/schemaorg-preview.js';
+import { readUcpCapabilityProfilePreview } from '../lib/commerce/ucp-capability-preview.js';
 import { commerceTenantsRoutes } from './commerce-tenants.js';
 import { commercePassportRoutes } from './commerce-passport.js';
 import { commerceConsentRoutes } from './commerce-consent.js';
@@ -2522,6 +2523,44 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
               checkout_payment_enabled: false,
               live_provider_enabled: false,
               [`live_${'p'}lural_enabled`]: false,
+              production_allowlist_written: false,
+              blockers: context.preview.blockers,
+              remediation_items: context.preview.remediation_items,
+            },
+            retryable: false,
+          });
+      }
+      return reply.status(200).send({ data: context.preview });
+    },
+  );
+
+  app.get<{ Params: { merchantId: string } }>(
+    '/merchants/:merchantId/ucp-capability-profile-preview',
+    async (request, reply) => {
+      requireOperatorOrSelfMerchant(request, request.params.merchantId);
+      const sql = getSql();
+      const context = await readUcpCapabilityProfilePreview(sql, {
+        tenantId: request.commerceTenantId,
+        merchantId: request.params.merchantId,
+      });
+      if (!context) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      if (context.merchantEnvironment !== 'sandbox') {
+        throw new CommerceHttpError(409, 'ucp_capability_profile_preview_live_merchant_blocked',
+          'UCP-style capability profile preview is only available for sandbox merchants',
+          {
+            details: {
+              sandbox_only: true,
+              preview_only: true,
+              ucp_publication_enabled: false,
+              ucp_certification_claim: 'none',
+              certified_ucp_namespace_published: false,
+              external_ucp_namespace_used: false,
+              public_discovery_enabled: false,
+              checkout_payment_enabled: false,
+              live_provider_enabled: false,
+              live_plural_enabled: false,
               production_allowlist_written: false,
               blockers: context.preview.blockers,
               remediation_items: context.preview.remediation_items,
