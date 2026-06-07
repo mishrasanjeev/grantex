@@ -113,6 +113,30 @@ intent evidence is missing. Unsupported fields such as public checkout URLs,
 provider payment references, provider metadata, live execution, fulfillment,
 and refunds/returns are represented as explicit blockers.
 
+### AP2-Style Evidence Preview
+
+Operators and owning merchants can inspect the C6M AP2-style evidence preview
+through:
+
+`GET /v1/commerce/merchants/{merchant_id}/ap2-evidence-preview`
+
+The endpoint is tenant-scoped, sandbox-only, deterministic, and unsigned. It
+reads canonical Grantex evidence from Commerce Passport, consent record, policy
+decision, cart snapshot hash, amount cap, merchant state, agent identity, audit
+reference, and existing idempotency evidence.
+
+The response is protocol packaging evidence only. It is not AP2 certification,
+is not AP2 publication, is not a signed production mandate, does not submit to
+a payment network, and does not enable checkout/payment creation, live payment,
+live Plural, public discovery, provider calls, provider credentials, production
+configuration, or production allowlists.
+
+Required evidence gaps return `status: blocked` with explicit blockers. The
+preview exposes hashes and presence flags where possible, but does not expose
+tenant IDs, exact merchant IDs, passport JTIs, consent record IDs, audit event
+IDs, provider references, raw line items, raw payloads, JWTs, idempotency keys,
+secrets, or private configuration.
+
 ## Auth And Caller Model
 
 Commerce callers are modeled as agents operating for a tenant, merchant, and

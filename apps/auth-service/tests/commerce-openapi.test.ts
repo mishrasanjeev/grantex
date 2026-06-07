@@ -95,6 +95,19 @@ describe('Grantex Commerce V1 OpenAPI 3.1 contract', () => {
     expect(content).toMatch(/provider_call_enabled_by_preview:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
   });
 
+  it('declares the C6M AP2-style evidence preview as unsigned and non-enabling', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/ap2-evidence-preview');
+    expect(content).toMatch(/operationId:\s*getMerchantAp2EvidencePreview/);
+    expect(content).toMatch(/x-milestone:\s*C6M/);
+    expect(content).toMatch(/Ap2EvidencePreview:/);
+    expect(content).toMatch(/profile_style:\s*\{\s*type:\s*string,\s*enum:\s*\[ap2_style_evidence_preview\]\s*\}/);
+    expect(content).toMatch(/ap2_certification_claim:\s*\{\s*type:\s*string,\s*enum:\s*\[none\]\s*\}/);
+    expect(content).toMatch(/signature_status:\s*\{\s*type:\s*string,\s*enum:\s*\[unsigned_preview\]\s*\}/);
+    expect(content).toMatch(/signed_production_mandate_created:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/payment_network_submission_enabled:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+  });
+
   it('M2 passport endpoints flipped to x-implemented: true', () => {
     const content = readFileSync(yamlPath, 'utf8');
     // Each of the five passport routes must now carry x-implemented: true
