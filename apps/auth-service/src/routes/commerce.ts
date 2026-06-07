@@ -45,6 +45,7 @@ import {
 } from '../lib/commerce/sandbox-onboarding.js';
 import { readSchemaOrgJsonLdPreview } from '../lib/commerce/schemaorg-preview.js';
 import { readUcpCapabilityProfilePreview } from '../lib/commerce/ucp-capability-preview.js';
+import { readAcpCheckoutShapePreview } from '../lib/commerce/acp-checkout-preview.js';
 import { commerceTenantsRoutes } from './commerce-tenants.js';
 import { commercePassportRoutes } from './commerce-passport.js';
 import { commerceConsentRoutes } from './commerce-consent.js';
@@ -2561,6 +2562,46 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
               checkout_payment_enabled: false,
               live_provider_enabled: false,
               [`live_${'p'}lural_enabled`]: false,
+              production_allowlist_written: false,
+              blockers: context.preview.blockers,
+              remediation_items: context.preview.remediation_items,
+            },
+            retryable: false,
+          });
+      }
+      return reply.status(200).send({ data: context.preview });
+    },
+  );
+
+  app.get<{ Params: { merchantId: string } }>(
+    '/merchants/:merchantId/acp-checkout-shape-preview',
+    async (request, reply) => {
+      requireOperatorOrSelfMerchant(request, request.params.merchantId);
+      const sql = getSql();
+      const context = await readAcpCheckoutShapePreview(sql, {
+        tenantId: request.commerceTenantId,
+        merchantId: request.params.merchantId,
+      });
+      if (!context) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      if (context.merchantEnvironment !== 'sandbox') {
+        throw new CommerceHttpError(409, 'acp_checkout_shape_preview_live_merchant_blocked',
+          'ACP-style checkout shape preview is only available for sandbox merchants',
+          {
+            details: {
+              sandbox_only: true,
+              preview_only: true,
+              acp_publication_enabled: false,
+              acp_certification_claim: 'none',
+              acp_certified_capabilities_published: false,
+              public_checkout_enabled: false,
+              checkout_payment_enabled: false,
+              payment_intent_creation_enabled: false,
+              checkout_link_creation_enabled: false,
+              live_provider_enabled: false,
+              [`live_${'p'}lural_enabled`]: false,
+              provider_credentials_exposed: false,
               production_allowlist_written: false,
               blockers: context.preview.blockers,
               remediation_items: context.preview.remediation_items,

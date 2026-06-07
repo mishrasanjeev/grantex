@@ -171,6 +171,71 @@ function ucpCapabilityCatalogSummary(overrides: Record<string, unknown> = {}) {
   }];
 }
 
+function acpCheckoutEvidenceSummary(overrides: Record<string, unknown> = {}) {
+  return [{
+    active_policy_count: 1,
+    granted_checkout_consent_count: 1,
+    active_checkout_passport_count: 1,
+    unrevoked_checkout_passport_count: 1,
+    sandbox_cart_count: 1,
+    sandbox_payment_intent_count: 1,
+    ...overrides,
+  }];
+}
+
+function acpCartPreviewRow(overrides: Record<string, unknown> = {}) {
+  return [{
+    status: 'draft',
+    currency: 'INR',
+    subtotal_amount: 129900,
+    tax_amount: 0,
+    total_amount: 129900,
+    line_items_snapshot: [
+      {
+        variant_id: 'cvar_ACP_PRIVATE',
+        sku: 'SKU-ACP-PRIVATE',
+        quantity: 1,
+        unit_amount: 129900,
+        line_total_amount: 129900,
+        currency: 'INR',
+      },
+    ],
+    line_items_snapshot_hash: 'hash_cart_snapshot',
+    passport_jti: null,
+    created_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  }];
+}
+
+function acpPaymentIntentPreviewRow(overrides: Record<string, unknown> = {}) {
+  return [{
+    status: 'authorized',
+    amount: 129900,
+    currency: 'INR',
+    provider_environment: 'sandbox',
+    checkout_url: 'https://mock-payments.grantex.local/checkout/private',
+    provider_payment_id: 'mock_pay_PRIVATE',
+    provider_order_id: 'mock_order_PRIVATE',
+    provider_metadata: { provider_private: 'do-not-leak' },
+    provider_raw_status: 'mock_authorized',
+    policy_version: 'v1',
+    decision_id: 'cpdec_PRIVATE',
+    passport_jti: 'cpsp_PRIVATE',
+    line_items_snapshot: [
+      {
+        variant_id: 'cvar_ACP_PRIVATE',
+        sku: 'SKU-ACP-PRIVATE',
+        quantity: 1,
+        unit_amount: 129900,
+        line_total_amount: 129900,
+        currency: 'INR',
+      },
+    ],
+    created_at: '2026-01-01T00:05:00Z',
+    ...overrides,
+  }];
+}
+
 function reviewRequestAudit(overrides: Record<string, unknown> = {}) {
   return [{
     id: 'caud_REVIEW_REQUEST',
@@ -2392,6 +2457,292 @@ describe('sandbox onboarding foundation', () => {
       method: 'GET',
       url: '/v1/commerce/merchants/mch_SANDBOX/ucp-capability-profile-preview',
       headers: { authorization: 'Bearer grtx_agent_C6KXXXXXXXXXXXXXXXXXXXXXXX' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('caller_not_authorized');
+  });
+
+  it('returns ACP-style cart and checkout shape preview without enabling payment creation', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(acpCheckoutEvidenceSummary());
+    sqlMock.mockResolvedValueOnce(acpCartPreviewRow());
+    sqlMock.mockResolvedValueOnce(acpPaymentIntentPreviewRow());
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/acp-checkout-shape-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      data: {
+        status: string;
+        profile_style: string;
+        preview_only: boolean;
+        acp_publication_enabled: boolean;
+        acp_certification_claim: string;
+        acp_certified_capabilities_published: boolean;
+        public_checkout_enabled: boolean;
+        checkout_payment_enabled: boolean;
+        payment_intent_creation_enabled: boolean;
+        checkout_link_creation_enabled: boolean;
+        live_provider_enabled: boolean;
+        live_plural_enabled: boolean;
+        provider_credentials_exposed: boolean;
+        production_allowlist_written: boolean;
+        certification_claims: string[];
+        cart_shape: {
+          status: string;
+          operations: { create_cart: { enabled_by_preview: boolean; requires_checkout_passport: boolean } };
+          field_mappings: Array<{ acp_field: string; status: string; blockers: string[] }>;
+          latest_cart_summary: { present: boolean; line_item_count: number; total_amount_minor_units: number; snapshot_hash_present: boolean; passport_bound: boolean };
+        };
+        checkout_shape: {
+          status: string;
+          operations: {
+            create_payment_intent: { enabled_by_preview: boolean; provider_call_enabled: boolean; requires_checkout_passport: boolean; requires_granted_consent: boolean; requires_active_policy: boolean };
+            create_checkout_link: { enabled_by_preview: boolean; provider_call_enabled: boolean };
+          };
+          field_mappings: Array<{ acp_field: string; status: string; blockers: string[] }>;
+          latest_payment_intent_summary: {
+            present: boolean;
+            amount_minor_units: number;
+            provider_environment: string;
+            checkout_url_exposed: boolean;
+            provider_payment_reference_exposed: boolean;
+            provider_metadata_exposed: boolean;
+            provider_raw_status_exposed: boolean;
+            passport_reference_exposed: boolean;
+          };
+        };
+        unsupported_fields: Array<{ acp_field: string; blocker: string }>;
+        controls: {
+          public_checkout_enabled: boolean;
+          payment_intent_creation_enabled_by_preview: boolean;
+          checkout_link_creation_enabled_by_preview: boolean;
+          provider_call_enabled_by_preview: boolean;
+          live_payment_enabled_by_preview: boolean;
+          live_plural_enabled_by_preview: boolean;
+          acp_certification_claim: string;
+        };
+        evidence_summary: { active_policy_count: number; granted_checkout_consent_count: number; active_checkout_passport_count: number; sandbox_cart_count: number; sandbox_payment_intent_count: number; payment_enabled: boolean; provider_called: boolean };
+        blocked_capabilities: string[];
+      };
+    }>();
+
+    expect(body.data).toMatchObject({
+      status: 'preview_only',
+      profile_style: 'acp_style_checkout_shape_preview',
+      preview_only: true,
+      acp_publication_enabled: false,
+      acp_certification_claim: 'none',
+      acp_certified_capabilities_published: false,
+      public_checkout_enabled: false,
+      checkout_payment_enabled: false,
+      payment_intent_creation_enabled: false,
+      checkout_link_creation_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+      provider_credentials_exposed: false,
+      production_allowlist_written: false,
+      certification_claims: [],
+    });
+    expect(body.data.cart_shape).toMatchObject({
+      status: 'preview_available',
+      latest_cart_summary: {
+        present: true,
+        line_item_count: 1,
+        total_amount_minor_units: 129900,
+        snapshot_hash_present: true,
+        passport_bound: false,
+      },
+    });
+    expect(body.data.cart_shape.operations.create_cart).toMatchObject({
+      enabled_by_preview: false,
+      requires_checkout_passport: false,
+    });
+    expect(body.data.checkout_shape.status).toBe('preview_available');
+    expect(body.data.checkout_shape.operations.create_payment_intent).toMatchObject({
+      enabled_by_preview: false,
+      provider_call_enabled: false,
+      requires_checkout_passport: true,
+      requires_granted_consent: true,
+      requires_active_policy: true,
+    });
+    expect(body.data.checkout_shape.operations.create_checkout_link).toMatchObject({
+      enabled_by_preview: false,
+      provider_call_enabled: false,
+    });
+    expect(body.data.checkout_shape.latest_payment_intent_summary).toMatchObject({
+      present: true,
+      amount_minor_units: 129900,
+      provider_environment: 'sandbox',
+      checkout_url_exposed: false,
+      provider_payment_reference_exposed: false,
+      provider_metadata_exposed: false,
+      provider_raw_status_exposed: false,
+      passport_reference_exposed: false,
+    });
+    expect(body.data.checkout_shape.field_mappings.find((mapping) => mapping.acp_field === 'acp.checkout.provider_checkout_url'))
+      .toMatchObject({ status: 'unsupported', blockers: ['public_checkout_not_enabled_by_preview'] });
+    expect(body.data.unsupported_fields.map((field) => field.blocker)).toEqual(expect.arrayContaining([
+      'public_checkout_not_enabled_by_preview',
+      'provider_references_not_exposed',
+      'live_provider_not_enabled_by_preview',
+      'live_plural_not_enabled_by_preview',
+    ]));
+    expect(body.data.controls).toMatchObject({
+      public_checkout_enabled: false,
+      payment_intent_creation_enabled_by_preview: false,
+      checkout_link_creation_enabled_by_preview: false,
+      provider_call_enabled_by_preview: false,
+      live_payment_enabled_by_preview: false,
+      live_plural_enabled_by_preview: false,
+      acp_certification_claim: 'none',
+    });
+    expect(body.data.evidence_summary).toMatchObject({
+      active_policy_count: 1,
+      granted_checkout_consent_count: 1,
+      active_checkout_passport_count: 1,
+      sandbox_cart_count: 1,
+      sandbox_payment_intent_count: 1,
+      payment_enabled: false,
+      provider_called: false,
+    });
+    expect(body.data.blocked_capabilities).toContain('checkout_payment_creation');
+    expect(body.data.blocked_capabilities).toContain('provider_runtime_call');
+    const responseJson = JSON.stringify(body.data);
+    expect(responseJson).not.toContain('mch_SANDBOX');
+    expect(responseJson).not.toContain('cten_TESTTENANT');
+    expect(responseJson).not.toContain('ccart_');
+    expect(responseJson).not.toContain('cpi_');
+    expect(responseJson).not.toContain('cpsp_PRIVATE');
+    expect(responseJson).not.toContain('mock_pay_PRIVATE');
+    expect(responseJson).not.toContain('mock_order_PRIVATE');
+    expect(responseJson).not.toContain('https://mock-payments');
+    expect(responseJson).not.toContain('provider_private');
+    expect(responseJson).not.toContain('COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST');
+  });
+
+  it('blocks ACP-style checkout shape preview when consent, passport, or policy evidence is missing', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ sandbox_onboarding_state: 'submitted_for_review' })]);
+    sqlMock.mockResolvedValueOnce(acpCheckoutEvidenceSummary({
+      active_policy_count: 0,
+      granted_checkout_consent_count: 0,
+      active_checkout_passport_count: 0,
+      unrevoked_checkout_passport_count: 0,
+    }));
+    sqlMock.mockResolvedValueOnce(acpCartPreviewRow());
+    sqlMock.mockResolvedValueOnce(acpPaymentIntentPreviewRow({ policy_version: null, decision_id: null }));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/acp-checkout-shape-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const data = res.json<{
+      data: {
+        status: string;
+        blockers: string[];
+        checkout_shape: { status: string; field_mappings: Array<{ acp_field: string; status: string; blockers: string[] }> };
+        checkout_payment_enabled: boolean;
+        payment_intent_creation_enabled: boolean;
+        checkout_link_creation_enabled: boolean;
+        evidence_summary: { active_policy_count: number; granted_checkout_consent_count: number; active_checkout_passport_count: number; payment_enabled: boolean };
+      };
+    }>().data;
+    expect(data.status).toBe('blocked');
+    expect(data.blockers).toContain('active_policy_evidence_missing');
+    expect(data.blockers).toContain('granted_checkout_consent_evidence_missing');
+    expect(data.blockers).toContain('checkout_passport_evidence_missing');
+    expect(data.checkout_shape.status).toBe('blocked');
+    expect(data.checkout_shape.field_mappings.find((mapping) => mapping.acp_field === 'acp.checkout.consent')?.blockers)
+      .toContain('granted_checkout_consent_evidence_missing');
+    expect(data.checkout_shape.field_mappings.find((mapping) => mapping.acp_field === 'acp.checkout.passport')?.blockers)
+      .toContain('checkout_passport_evidence_missing');
+    expect(data.checkout_shape.field_mappings.find((mapping) => mapping.acp_field === 'acp.checkout.policy_decision')?.blockers)
+      .toContain('active_policy_evidence_missing');
+    expect(data.checkout_payment_enabled).toBe(false);
+    expect(data.payment_intent_creation_enabled).toBe(false);
+    expect(data.checkout_link_creation_enabled).toBe(false);
+    expect(data.evidence_summary).toMatchObject({
+      active_policy_count: 0,
+      granted_checkout_consent_count: 0,
+      active_checkout_passport_count: 0,
+      payment_enabled: false,
+    });
+  });
+
+  it('blocks ACP-style checkout shape preview for live merchants without enabling checkout or payments', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([onboardingRow({ environment: 'live' })]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_LIVE/acp-checkout-shape-preview',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    const error = res.json<{
+      error: {
+        code: string;
+        details: {
+          preview_only: boolean;
+          acp_publication_enabled: boolean;
+          acp_certification_claim: string;
+          acp_certified_capabilities_published: boolean;
+          public_checkout_enabled: boolean;
+          checkout_payment_enabled: boolean;
+          payment_intent_creation_enabled: boolean;
+          checkout_link_creation_enabled: boolean;
+          live_provider_enabled: boolean;
+          live_plural_enabled: boolean;
+          provider_credentials_exposed: boolean;
+          production_allowlist_written: boolean;
+          blockers: string[];
+        };
+      };
+    }>().error;
+    expect(error).toMatchObject({
+      code: 'acp_checkout_shape_preview_live_merchant_blocked',
+      details: {
+        preview_only: true,
+        acp_publication_enabled: false,
+        acp_certification_claim: 'none',
+        acp_certified_capabilities_published: false,
+        public_checkout_enabled: false,
+        checkout_payment_enabled: false,
+        payment_intent_creation_enabled: false,
+        checkout_link_creation_enabled: false,
+        live_provider_enabled: false,
+        live_plural_enabled: false,
+        provider_credentials_exposed: false,
+        production_allowlist_written: false,
+      },
+    });
+    expect(error.details.blockers).toContain('merchant_not_sandbox');
+  });
+
+  it('denies CommerceAgent callers on ACP-style checkout shape preview', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      id: 'cag_TEST',
+      tenant_id: TEST_COMMERCE_TENANT_ID,
+      trust_status: 'trusted',
+      public_key_jwk: null,
+      api_key_hash: 'hash',
+    }]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_SANDBOX/acp-checkout-shape-preview',
+      headers: { authorization: 'Bearer grtx_agent_C6LXXXXXXXXXXXXXXXXXXXXXXX' },
     });
 
     expect(res.statusCode).toBe(403);

@@ -83,6 +83,36 @@ has public-safe profile and catalog evidence. Checkout, payment, fulfillment,
 refund/return execution, provider credentials, and live paths remain `blocked`
 metadata only.
 
+### ACP-Style Checkout Shape Preview
+
+Operators and owning merchants can inspect the C6L ACP-style checkout shape
+preview through:
+
+`GET /v1/commerce/merchants/{merchant_id}/acp-checkout-shape-preview`
+
+The endpoint is tenant-scoped and sandbox-only. It reads canonical Grantex cart,
+payment intent, consent, Commerce Passport, and active policy evidence, then
+returns ACP-style cart and checkout mapping objects as preview metadata. It does
+not call the payment provider and does not reuse the runtime checkout/payment
+creation handlers.
+
+The response includes explicit non-enabling controls:
+
+- `acp_publication_enabled: false`
+- `acp_certification_claim: none`
+- `public_checkout_enabled: false`
+- `payment_intent_creation_enabled: false`
+- `checkout_link_creation_enabled: false`
+- `provider_call_enabled_by_preview: false`
+- `live_payment_enabled_by_preview: false`
+- `live_plural_enabled_by_preview: false`
+
+Checkout mapping stays blocked when granted checkout consent, an unrevoked
+checkout Commerce Passport, an active policy, cart evidence, or sandbox payment
+intent evidence is missing. Unsupported fields such as public checkout URLs,
+provider payment references, provider metadata, live execution, fulfillment,
+and refunds/returns are represented as explicit blockers.
+
 ## Auth And Caller Model
 
 Commerce callers are modeled as agents operating for a tenant, merchant, and

@@ -83,6 +83,18 @@ describe('Grantex Commerce V1 OpenAPI 3.1 contract', () => {
     expect(content).not.toContain('dev.ucp.* capabilities as certified');
   });
 
+  it('declares the C6L ACP-style checkout shape preview as sandbox-only and non-enabling', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/acp-checkout-shape-preview');
+    expect(content).toMatch(/operationId:\s*getMerchantAcpCheckoutShapePreview/);
+    expect(content).toMatch(/x-milestone:\s*C6L/);
+    expect(content).toMatch(/AcpCheckoutShapePreview:/);
+    expect(content).toMatch(/profile_style:\s*\{\s*type:\s*string,\s*enum:\s*\[acp_style_checkout_shape_preview\]\s*\}/);
+    expect(content).toMatch(/acp_certification_claim:\s*\{\s*type:\s*string,\s*enum:\s*\[none\]\s*\}/);
+    expect(content).toMatch(/payment_intent_creation_enabled:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/provider_call_enabled_by_preview:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+  });
+
   it('M2 passport endpoints flipped to x-implemented: true', () => {
     const content = readFileSync(yamlPath, 'utf8');
     // Each of the five passport routes must now carry x-implemented: true
