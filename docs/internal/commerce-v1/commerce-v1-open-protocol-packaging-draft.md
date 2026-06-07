@@ -4,8 +4,8 @@ Status: internal packaging draft only.
 
 Created: 2026-06-07.
 
-This draft packages the accepted Agentic Commerce C6I-C6N product-chain heads
-for internal open-protocol review. It is not public protocol publication, not
+This draft packages the merged Agentic Commerce C6I-C6N product-chain PRs for
+internal open-protocol review. It is not public protocol publication, not
 schema.org publication, not UCP certification, not ACP certification, not AP2
 certification, not provider certification, not production approval, not public
 discovery approval, and not checkout or payment approval.
@@ -15,18 +15,25 @@ configuration, touch secrets, enable public discovery, enable production
 Commerce V1, enable checkout or payment creation, enable live payments, call
 providers, call merchant private APIs, or claim certification.
 
-## Accepted Base
+## Merged Base
 
-The packaging draft is based only on these accepted PR heads:
+The packaging draft is based only on these reviewed and merged PRs. Where a
+slice was rebased or fixed during review, the table records the final merged PR
+head and the merge commit now present on the owning repository's `main` branch.
 
-| Slice | Repo | PR | Head SHA | Packaging role |
-| --- | --- | --- | --- | --- |
-| C6I buyer session orchestration | AgenticOrg | https://github.com/mishrasanjeev/agentic-org/pull/718 | `787b56c621ee5cb8d4ce4321056844ae25280fa0` | Buyer-agent read-only session wrapper, intent classification, channel-neutral response, grounded refusal model. |
-| C6J schema.org preview adapter | Grantex | https://github.com/mishrasanjeev/grantex/pull/511 | `ac90162ca0aee9a1e955fb70f388f6634b0e5d68` | Public-safe schema.org JSON-LD preview from canonical merchant/catalog/readiness state. |
-| C6K UCP-style capability profile preview | Grantex | https://github.com/mishrasanjeev/grantex/pull/512 | `cba0df34049217441fef8d8c378f5c2884fa165a` | Grantex-owned UCP-style preview metadata under `dev.grantex.commerce.discovery.preview`. |
-| C6L ACP-style checkout shape preview | Grantex | https://github.com/mishrasanjeev/grantex/pull/513 | `ab54a389167b1a57cb0bb975a5aabc193e1ca67c` | Sandbox-only cart and checkout shape mappings with explicit blockers. |
-| C6M AP2-style evidence preview | Grantex | https://github.com/mishrasanjeev/grantex/pull/514 | `aad06a1da39133170bbcd3e45fd0f5334b0351c7` | Deterministic unsigned AP2-style evidence preview from canonical consent, passport, policy, cart, payment, agent, and audit state. |
-| C6N connector foundation | Grantex | https://github.com/mishrasanjeev/grantex/pull/515 | `200f1e375fd771a3928397e75fa6195cb6cafc10` | Existing-system connector registry foundation, metadata-only, non-executing, tenant-scoped. |
+| Slice | Repo | PR | Final PR head SHA | Merge commit SHA | Packaging role |
+| --- | --- | --- | --- | --- | --- |
+| C6I buyer session orchestration | AgenticOrg | https://github.com/mishrasanjeev/agentic-org/pull/718 | `787b56c621ee5cb8d4ce4321056844ae25280fa0` | `d02657be67c4be256cd1f0b3d52d46e20c5de891` | Buyer-agent read-only session wrapper, intent classification, channel-neutral response, grounded refusal model. |
+| C6J schema.org preview adapter | Grantex | https://github.com/mishrasanjeev/grantex/pull/511 | `ac90162ca0aee9a1e955fb70f388f6634b0e5d68` | `54eca8eb43a3b196f9a15958567aa44f24fc0521` | Public-safe schema.org JSON-LD preview from canonical merchant/catalog/readiness state. |
+| C6K UCP-style capability profile preview | Grantex | https://github.com/mishrasanjeev/grantex/pull/512 | `c8eedb2dff57763bfc87c76009f849084f0f2abd` | `9d2a69b72756f28093c222796c8de822ab5ce0c3` | Grantex-owned UCP-style preview metadata under `dev.grantex.commerce.discovery.preview`. |
+| C6L ACP-style checkout shape preview | Grantex | https://github.com/mishrasanjeev/grantex/pull/513 | `cd0da84f6e08c4dd4d3d4e16dfb739c97f6da5ff` | `f606fc0963ba3622c7ab46b33b12637fa8d45485` | Sandbox-only cart and checkout shape mappings with explicit blockers. |
+| C6M AP2-style evidence preview | Grantex | https://github.com/mishrasanjeev/grantex/pull/514 | `d3a2e521b1fa7bb81f3629c61d0c3bc4554ed364` | `38af5020fa7a5e4b24cdedc49194d0a2894677d0` | Deterministic unsigned AP2-style evidence preview from canonical consent, passport, policy, cart, payment, agent, and audit state. |
+| C6N connector foundation | Grantex | https://github.com/mishrasanjeev/grantex/pull/515 | `50efe65b6806d03e7ed3896b1da418580769b4f6` | `488505e19a4283d875c3a88a760e8b752c288403` | Existing-system connector registry foundation, metadata-only, non-executing, tenant-scoped. |
+
+Repository tips after the merged product-chain stack:
+
+- AgenticOrg main after C6I: `d02657be67c4be256cd1f0b3d52d46e20c5de891`
+- Grantex main after C6N: `488505e19a4283d875c3a88a760e8b752c288403`
 
 ## Packaged Preview Surface
 
@@ -265,9 +272,9 @@ claims remain blocked.
 ## Next Remediation Prompt
 
 ```text
-Task: Review the Agentic Commerce open-protocol packaging draft for public-readiness gaps only.
+Task: Plan Agentic Commerce C6O conformance fixtures and first real connector sync adapter foundation.
 
-Do not deploy, merge, run cloud commands, create cloud resources, change production config, touch secrets, enable public discovery, enable production Commerce V1, enable checkout/payment creation, enable live payments, call providers, or claim certification.
+Do not deploy, run cloud commands, create cloud resources, change production config, touch secrets, enable public discovery, enable production Commerce V1, enable checkout/payment creation, enable live payments, call providers, call merchant private APIs from AgenticOrg, or claim certification.
 
-Review docs/internal/commerce-v1/commerce-v1-open-protocol-packaging-draft.md and docs/internal/commerce-v1/open-protocol-packaging-manifest.preview.json against AgenticOrg PR #718 and Grantex PRs #511-#515. Produce a public-readiness blocker list and exact remediation prompts. Do not publish anything.
+Use the merged C6I-C6N base: AgenticOrg PR #718 and Grantex PRs #511-#515. Define C6O reviewable slices for preview conformance fixtures, schema/manifest validators, and the first safe real connector sync adapter plan. Keep all artifacts sandbox-only, preview-only, non-live, non-publication, and non-certifying. For connector sync, start with metadata, dry-run, stale/conflict blockers, tenant boundaries, credential redaction, and test doubles before any live merchant-system call.
 ```
