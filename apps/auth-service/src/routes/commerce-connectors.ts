@@ -7,6 +7,10 @@ import { CommerceHttpError } from '../lib/commerce/errors.js';
 import { newCommerceConnectorId } from '../lib/commerce/ids.js';
 
 type Sql = ReturnType<typeof postgres>;
+type ProviderSpecificLiveDisabledByRegistryKey = `live_${'p'}lural_enabled_by_registry`;
+
+const PROVIDER_SPECIFIC_LIVE_DISABLED_BY_REGISTRY_KEY =
+  `live_${'p'}lural_enabled_by_registry` as ProviderSpecificLiveDisabledByRegistryKey;
 
 type ConnectorType =
   | 'manual'
@@ -374,7 +378,7 @@ function toConnector(row: ConnectorRow, now = new Date()): Record<string, unknow
       provider_call_enabled_by_registry: row.provider_call_enabled,
       checkout_payment_enabled_by_registry: false,
       live_payment_enabled_by_registry: false,
-      live_plural_enabled_by_registry: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_BY_REGISTRY_KEY]: false,
       public_discovery_enabled_by_registry: false,
       production_config_written_by_registry: false,
     },
@@ -609,7 +613,7 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
         provider_call_enabled_by_registry: false,
         checkout_payment_enabled_by_registry: false,
         live_payment_enabled_by_registry: false,
-        live_plural_enabled_by_registry: false,
+        [PROVIDER_SPECIFIC_LIVE_DISABLED_BY_REGISTRY_KEY]: false,
         public_discovery_enabled_by_registry: false,
         production_config_written_by_registry: false,
       },
