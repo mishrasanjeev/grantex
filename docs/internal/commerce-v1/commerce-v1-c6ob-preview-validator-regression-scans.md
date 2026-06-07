@@ -32,6 +32,9 @@ The command validates:
 - fixture manifest kind, version, status, and global controls
 - checked-in fixture existence and exact manifest coverage
 - required surfaces and both preview-available and blocked/refusal scenarios
+- blocked/refusal fixture evidence by requiring every `expected_blockers` entry
+  to appear in recursive payload `blockers` arrays, plus a blocked/refusal
+  message
 - sandbox-only, preview-only, non-live, non-enabling, non-publication, and
   non-certifying posture
 - empty certification claim arrays and `none` certification-claim fields

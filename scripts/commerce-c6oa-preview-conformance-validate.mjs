@@ -232,6 +232,39 @@ function assertNoForbiddenValues(fixture, fileName) {
   });
 }
 
+function collectStringArrayValues(value, keyName) {
+  const values = new Set();
+  walk(value, (key, child) => {
+    if (key !== keyName || !Array.isArray(child)) return;
+    for (const item of child) {
+      if (typeof item === 'string' && item.length > 0) values.add(item);
+    }
+  });
+  return values;
+}
+
+function assertBlockedFixtureEvidence(fixture, fileName) {
+  if (fixture.scenario !== 'blocked_refusal') return;
+  const payload = fixture.payload;
+  assert.ok(isRecord(payload), `${fileName} blocked payload must be object`);
+  assert.equal(payload.status, 'blocked', `${fileName} blocked payload status`);
+  if ('message' in payload) {
+    assert.equal(typeof payload.message, 'string', `${fileName} blocked payload message must be text`);
+    assert.match(payload.message, /blocked|missing|not enabled/i, `${fileName} message must explain blocked posture`);
+  }
+
+  const expectedBlockers = asArray(fixture.expected_blockers, `${fileName}.expected_blockers`);
+  const payloadBlockers = collectStringArrayValues(payload, 'blockers');
+  assert.ok(payloadBlockers.size > 0, `${fileName} must include payload blocker evidence`);
+  for (const blocker of expectedBlockers) {
+    assert.equal(
+      payloadBlockers.has(blocker),
+      true,
+      `${fileName} expected blocker ${blocker} must appear in payload blocker evidence`,
+    );
+  }
+}
+
 function assertSurfaceFixture(fixture, fileName) {
   const payload = fixture.payload;
   assert.ok(isRecord(payload), `${fileName} payload must be an object`);
@@ -335,6 +368,7 @@ function validateFixture(fileName) {
     fixture.scenario === 'blocked_refusal' ? 'blocked' : 'preview_only',
     `${fileName} payload status must match scenario`,
   );
+  assertBlockedFixtureEvidence(fixture, fileName);
   assertSurfaceFixture(fixture, fileName);
   assertNoForbiddenValues(fixture, fileName);
   return fixture;
