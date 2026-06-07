@@ -1390,6 +1390,250 @@ components:
             payment_enabled: { type: boolean, const: false }
             provider_called: { type: boolean, const: false }
 
+    Ap2EvidencePreview:
+      type: object
+      additionalProperties: false
+      description: >-
+        C6M AP2-style evidence preview generated from Grantex Commerce
+        Passport, consent, policy decision, cart hash, amount cap, merchant
+        state, agent identity, audit reference, and idempotency evidence. It is
+        deterministic unsigned preview metadata only. It is not AP2
+        certification, not AP2 publication, not payment-network submission, and
+        not a signed production mandate. It does not enable public discovery,
+        production Commerce V1, checkout/payment creation, live payments, live
+        Plural, provider calls, provider credentials, production config, or
+        allowlists.
+      properties:
+        status: { type: string, enum: [preview_only, blocked] }
+        message: { type: string }
+        preview_only: { type: boolean, const: true }
+        profile_style: { type: string, enum: [ap2_style_evidence_preview] }
+        profile_version: { type: string, enum: [c6m-preview-1] }
+        ap2_certification_claim: { type: string, enum: [none] }
+        ap2_publication_enabled: { type: boolean, const: false }
+        ap2_signed_mandate_created: { type: boolean, const: false }
+        signed_production_mandate_created: { type: boolean, const: false }
+        signature_status: { type: string, enum: [unsigned_preview] }
+        signing_key_used: { type: boolean, const: false }
+        payment_network_submission_enabled: { type: boolean, const: false }
+        public_discovery_enabled: { type: boolean, const: false }
+        checkout_payment_enabled: { type: boolean, const: false }
+        live_provider_enabled: { type: boolean, const: false }
+        live_plural_enabled: { type: boolean, const: false }
+        provider_credentials_exposed: { type: boolean, const: false }
+        production_allowlist_written: { type: boolean, const: false }
+        live_mode_status: { type: string, enum: [not_live] }
+        production_approval_status: { type: string, enum: [not_approved] }
+        certification_claims:
+          type: array
+          maxItems: 0
+          items: { type: string }
+        generated_at: { type: string, format: date-time }
+        evidence_package:
+          type: object
+          additionalProperties: false
+          properties:
+            format: { type: string, enum: [ap2_style_unsigned_evidence_preview] }
+            deterministic: { type: boolean, const: true }
+            signed: { type: boolean, const: false }
+            hash_algorithm: { type: string, enum: [sha256] }
+            evidence_hash: { type: string, pattern: "^[a-f0-9]{64}$", nullable: true }
+            signing_key_reference: { type: "null" }
+            production_mandate_reference: { type: "null" }
+            includes:
+              type: array
+              items:
+                type: string
+                enum:
+                  - commerce_passport
+                  - consent_record
+                  - policy_decision
+                  - cart_hash
+                  - amount_cap
+                  - merchant_state
+                  - agent_identity
+                  - audit_reference
+                  - idempotency_replay
+        merchant_state:
+          type: object
+          additionalProperties: false
+          properties:
+            display_name: { type: string, nullable: true }
+            environment: { type: string, enum: [sandbox, live] }
+            country_code: { type: string, pattern: "^[A-Z]{2}$", nullable: true }
+            default_currency: { type: string, pattern: "^[A-Z]{3}$", nullable: true }
+            readiness_state: { type: string }
+            agentic_commerce_requested: { type: boolean }
+            agentic_commerce_enabled: { type: boolean }
+        commerce_passport_evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            present: { type: boolean }
+            passport_type: { type: string, nullable: true }
+            environment: { type: string, nullable: true }
+            scope_count: { type: integer, minimum: 0 }
+            required_checkout_scopes_present: { type: boolean }
+            max_amount_minor_units: { type: integer, nullable: true }
+            currency: { type: string, nullable: true }
+            policy_version_present: { type: boolean }
+            not_before_present: { type: boolean }
+            expires_at_present: { type: boolean }
+            not_expired: { type: boolean, nullable: true }
+            revoked: { type: boolean, nullable: true }
+            agent_auth_method: { type: string, nullable: true }
+            passport_jti_exposed: { type: boolean, const: false }
+            raw_passport_jwt_exposed: { type: boolean, const: false }
+        consent_evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            present: { type: boolean }
+            status: { type: string, nullable: true }
+            passport_type: { type: string, nullable: true }
+            requested_scope_count: { type: integer, minimum: 0 }
+            approved_scope_count: { type: integer, minimum: 0 }
+            approved_required_checkout_scopes_present: { type: boolean }
+            max_amount_minor_units: { type: integer, nullable: true }
+            currency: { type: string, nullable: true }
+            consent_text_version: { type: string, nullable: true }
+            presented_payload_hash_present: { type: boolean }
+            approved_at_present: { type: boolean }
+            agent_auth_method: { type: string, nullable: true }
+            consent_record_id_exposed: { type: boolean, const: false }
+            consent_request_id_exposed: { type: boolean, const: false }
+            user_principal_exposed: { type: boolean, const: false }
+        policy_evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            present: { type: boolean }
+            active_policy_present: { type: boolean }
+            policy_version_present: { type: boolean }
+            decision_reference_present: { type: boolean }
+            decision_reference_hash: { type: string, nullable: true }
+            amount_cap_minor_units: { type: integer, nullable: true }
+            amount_cap_currency: { type: string, nullable: true }
+            emergency_disabled: { type: boolean, nullable: true }
+            raw_policy_rules_exposed: { type: boolean, const: false }
+        cart_evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            present: { type: boolean }
+            status: { type: string, nullable: true }
+            line_item_count: { type: integer, minimum: 0 }
+            snapshot_hash: { type: string, nullable: true }
+            total_amount_minor_units: { type: integer, nullable: true }
+            currency: { type: string, nullable: true }
+            idempotency_key_hash_present: { type: boolean }
+            raw_line_items_exposed: { type: boolean, const: false }
+            cart_id_exposed: { type: boolean, const: false }
+        amount_evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            payment_amount_minor_units: { type: integer, nullable: true }
+            payment_currency: { type: string, nullable: true }
+            amount_cap_minor_units: { type: integer, nullable: true }
+            amount_cap_currency: { type: string, nullable: true }
+            amount_cap_source: { type: string, enum: [passport, consent, policy, missing] }
+            within_amount_cap: { type: boolean, nullable: true }
+        agent_identity_evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            present: { type: boolean }
+            agent_reference_hash: { type: string, nullable: true }
+            trust_status: { type: string, nullable: true }
+            disabled: { type: boolean, nullable: true }
+            auth_method: { type: string, nullable: true }
+            agent_id_exposed: { type: boolean, const: false }
+            agent_api_key_exposed: { type: boolean, const: false }
+        audit_evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            present: { type: boolean }
+            audit_reference_hash: { type: string, nullable: true }
+            event_type: { type: string, nullable: true }
+            occurred_at: { type: string, format: date-time, nullable: true }
+            policy_version_present: { type: boolean }
+            decision_reference_present: { type: boolean }
+            idempotency_key_hash_present: { type: boolean }
+            audit_event_id_exposed: { type: boolean, const: false }
+        replay_idempotency_evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            idempotency_supported: { type: boolean, const: true }
+            replay_record_source: { type: string, enum: [commerce_idempotency_records] }
+            cart_idempotency_key_hash_present: { type: boolean }
+            payment_intent_idempotency_key_hash_present: { type: boolean }
+            audit_idempotency_key_hash_present: { type: boolean }
+            raw_idempotency_key_exposed: { type: boolean, const: false }
+        payment_intent_evidence:
+          type: object
+          additionalProperties: false
+          properties:
+            present: { type: boolean }
+            status: { type: string, nullable: true }
+            provider_environment: { type: string, enum: [sandbox], nullable: true }
+            created_at_present: { type: boolean }
+            provider_reference_exposed: { type: boolean, const: false }
+            checkout_url_exposed: { type: boolean, const: false }
+            provider_metadata_exposed: { type: boolean, const: false }
+            provider_raw_status_exposed: { type: boolean, const: false }
+        controls:
+          type: object
+          additionalProperties: false
+          properties:
+            sandbox_only: { type: boolean, const: true }
+            deterministic_unsigned_preview: { type: boolean, const: true }
+            signing_enabled_by_preview: { type: boolean, const: false }
+            ap2_certification_claim: { type: string, enum: [none] }
+            ap2_publication_enabled: { type: boolean, const: false }
+            payment_network_submission_enabled: { type: boolean, const: false }
+            checkout_payment_creation_enabled_by_preview: { type: boolean, const: false }
+            live_payment_enabled_by_preview: { type: boolean, const: false }
+            live_plural_enabled_by_preview: { type: boolean, const: false }
+            provider_call_enabled_by_preview: { type: boolean, const: false }
+            provider_credentials_exposed: { type: boolean, const: false }
+            production_allowlist_written: { type: boolean, const: false }
+        blockers:
+          type: array
+          items: { type: string }
+        remediation_items:
+          type: array
+          items: { type: string }
+        source_reference:
+          type: object
+          additionalProperties: false
+          properties:
+            system: { type: string, enum: [grantex] }
+            canonical_state: { type: string, enum: [commerce_passport_consent_policy_cart_payment_audit_idempotency] }
+            endpoint_template: { type: string }
+            tenant_scoped: { type: boolean, const: true }
+        evidence_summary:
+          type: object
+          additionalProperties: false
+          properties:
+            complete_required_evidence: { type: boolean }
+            passport_present: { type: boolean }
+            consent_granted: { type: boolean }
+            active_policy_present: { type: boolean }
+            policy_decision_present: { type: boolean }
+            cart_hash_present: { type: boolean }
+            amount_cap_present: { type: boolean }
+            merchant_state_present: { type: boolean }
+            agent_identity_present: { type: boolean }
+            audit_reference_present: { type: boolean }
+            idempotency_evidence_present: { type: boolean }
+            sandbox_only: { type: boolean, const: true }
+            unsigned_preview: { type: boolean, const: true }
+            payment_enabled: { type: boolean, const: false }
+            provider_called: { type: boolean, const: false }
+
     SandboxOnboarding:
       type: object
       properties:
@@ -3079,6 +3323,40 @@ paths:
         "403": { description: Operator or owning merchant caller required; CommerceAgent and service callers are denied }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Live merchant blocks ACP-style checkout shape preview }
+        "503": { $ref: "#/components/responses/CommerceDisabled" }
+
+  /v1/commerce/merchants/{merchant_id}/ap2-evidence-preview:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    get:
+      tags: [Merchants]
+      summary: Inspect AP2-style unsigned evidence preview
+      operationId: getMerchantAp2EvidencePreview
+      x-implemented: true
+      x-milestone: C6M
+      description: >-
+        Returns a tenant-scoped, sandbox-only, preview-only AP2-style evidence
+        package generated from Grantex Commerce Passport, consent record, policy
+        decision, cart snapshot hash, amount cap, merchant state, agent identity,
+        audit reference, and idempotency evidence. The package is deterministic
+        and unsigned. It is not AP2 certification, not AP2 publication, not
+        payment-network submission, and not a signed production mandate. The
+        route does not enable public discovery, production Commerce V1,
+        checkout/payment creation, live payments, live Plural, provider calls,
+        provider credentials, production config, or allowlists.
+      responses:
+        "200":
+          description: AP2-style unsigned evidence preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Ap2EvidencePreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Operator or owning merchant caller required; CommerceAgent and service callers are denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live merchant blocks AP2-style evidence preview }
         "503": { $ref: "#/components/responses/CommerceDisabled" }
 
   /v1/commerce/merchants/{merchant_id}/agenticorg-buyer-discovery-preview:

@@ -204,6 +204,28 @@ live provider execution, fulfillment execution, and refund/return execution
 remain explicit blockers. A merchant should treat this as protocol packaging
 evidence only, not approval to accept live checkout or payment traffic.
 
+### AP2-Style Evidence Preview
+
+The AP2-style evidence preview shows whether Grantex has enough sandbox
+evidence to describe a future mandate-style package for review. It is based on
+Commerce Passport, consent, policy decision, cart hash, amount cap, merchant
+state, agent identity, audit reference, and idempotency evidence.
+
+This preview is deterministic and unsigned. It is not AP2 certification, does
+not publish AP2 capabilities, does not create or sign a production mandate,
+does not submit anything to a payment network, and does not approve live
+checkout or payment traffic.
+
+The preview remains non-enabling. It does not enable public discovery,
+production Commerce V1, checkout/payment creation, live payments, live Plural,
+provider calls, provider credentials, production configuration, or allowlists.
+
+If required evidence is missing, Grantex returns blockers and remediation
+instead of filling gaps with guesses. The preview may show safe hashes and
+presence flags, but it does not expose tenant IDs, exact merchant IDs, passport
+JTIs, consent IDs, audit IDs, provider references, raw cart details, raw
+payloads, secrets, or private configuration.
+
 ### Read-Only Discovery
 
 Read-only discovery allows approved agent clients to learn that a merchant
