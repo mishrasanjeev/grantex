@@ -180,6 +180,38 @@ DB/Redis URLs, private keys, production config values, concrete allowlist
 values, customer data, checkout/payment claims, live-provider claims, public
 discovery claims, or launch claims into C6G evidence.
 
+C6R adds a sandbox connector sync dry-run foundation for merchants and
+operators who want to preview how an existing catalog system would map into
+Grantex. The first supported dry-run inputs are local manual or CSV-style
+catalog rows, including the C6Q DummyJSON-style fake fixture used in tests. The
+dry-run normalizes rows into a capped product and variant preview, records
+counts, blockers, warnings, and redacted audit references, and stores only
+tenant-scoped dry-run metadata.
+
+C6R does not connect to Shopify, WooCommerce, Magento, custom APIs, ERP, OMS,
+WMS, logistics, CRM/support, payment providers, Plural, Stripe, Pine, or
+merchant private APIs. It does not accept credentials, provider metadata,
+private API URLs, raw payloads, production config values, concrete allowlists,
+checkout URLs, payment IDs, or customer data. It does not write live catalog
+changes, enable outbound sync, enable public discovery, enable AgenticOrg
+public discovery, enable checkout/payment creation, enable live payments, or
+approve production launch.
+
+Merchant and operator review should look at:
+
+- dry-run status and generated timestamp;
+- row, product, variant, would-create, would-update, blocked, and warning
+  counts;
+- capped normalized preview rows;
+- blocker and warning codes;
+- requested/completed/blocked audit event IDs;
+- fixed controls showing sandbox-only, not-live, not-approved, public discovery
+  off, checkout/payment off, live provider off, and no provider credentials.
+
+AgenticOrg never directly calls merchant private APIs. It continues to consume
+only Grantex-owned preview and buyer discovery surfaces after Grantex records
+the required sandbox evidence.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent

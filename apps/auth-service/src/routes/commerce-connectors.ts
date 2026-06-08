@@ -4,13 +4,23 @@ import { getSql, type TxSql } from '../db/client.js';
 import { appendCommerceAudit } from '../lib/commerce/audit.js';
 import type { CommerceCaller } from '../lib/commerce/caller.js';
 import { CommerceHttpError } from '../lib/commerce/errors.js';
-import { newCommerceConnectorId } from '../lib/commerce/ids.js';
+import { newCommerceConnectorDryRunId, newCommerceConnectorId } from '../lib/commerce/ids.js';
+import {
+  finalizeConnectorDryRun,
+  prepareConnectorDryRun,
+  type ConnectorDryRunBody,
+  type ConnectorDryRunResult,
+  type ConnectorDryRunType,
+} from '../lib/commerce/connector-dry-run.js';
 
 type Sql = ReturnType<typeof postgres>;
 type ProviderSpecificLiveDisabledByRegistryKey = `live_${'p'}lural_enabled_by_registry`;
+type ProviderSpecificLiveDisabledKey = `live_${'p'}lural_enabled`;
 
 const PROVIDER_SPECIFIC_LIVE_DISABLED_BY_REGISTRY_KEY =
   `live_${'p'}lural_enabled_by_registry` as ProviderSpecificLiveDisabledByRegistryKey;
+const PROVIDER_SPECIFIC_LIVE_DISABLED_KEY =
+  `live_${'p'}lural_enabled` as ProviderSpecificLiveDisabledKey;
 
 type ConnectorType =
   | 'manual'
@@ -87,6 +97,49 @@ interface ConnectorRow {
   stores_credentials: boolean;
   created_at: Date | string;
   updated_at: Date | string;
+}
+
+interface ConnectorDryRunParams {
+  merchantId: string;
+  dryRunId?: string;
+}
+
+interface MerchantDryRunRow {
+  id: string;
+  environment: string;
+  verification_status: string;
+  disabled_at: Date | string | null;
+}
+
+interface ConnectorDryRunRow {
+  id: string;
+  tenant_id: string;
+  merchant_id: string;
+  connector_type: ConnectorDryRunType;
+  source_label: string;
+  status: 'passed' | 'blocked';
+  sandbox_only: boolean;
+  not_live: boolean;
+  not_approved: boolean;
+  public_discovery_enabled: boolean;
+  checkout_payment_enabled: boolean;
+  live_provider_enabled: boolean;
+  provider_specific_live_enabled: boolean;
+  rows_received: number | string;
+  products_detected: number | string;
+  variants_detected: number | string;
+  would_create_count: number | string;
+  would_update_count: number | string;
+  would_archive_count: number | string;
+  blocked_count: number | string;
+  warning_count: number | string;
+  normalized_preview: unknown;
+  blockers: unknown;
+  warnings: unknown;
+  requested_audit_event_id: string;
+  result_audit_event_id: string;
+  generated_at: Date | string;
+  created_at: Date | string;
 }
 
 const CONNECTOR_KEY_RE = /^[a-z0-9_-]{3,64}$/;
@@ -457,6 +510,188 @@ function sourcePrecedence(rows: ConnectorRow[], now = new Date()): Array<Record<
   });
 }
 
+function toDryRunResult(row: ConnectorDryRunRow): Record<string, unknown> {
+  return {
+    dry_run_id: row.id,
+    tenant_id: row.tenant_id,
+    merchant_id: row.merchant_id,
+    connector_type: row.connector_type,
+    source_label: row.source_label,
+    status: row.status,
+    sandbox_only: row.sandbox_only,
+    not_live: row.not_live,
+    not_approved: row.not_approved,
+    public_discovery_enabled: row.public_discovery_enabled,
+    checkout_payment_enabled: row.checkout_payment_enabled,
+    live_provider_enabled: row.live_provider_enabled,
+    [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: row.provider_specific_live_enabled,
+    rows_received: numberValue(row.rows_received, 0),
+    products_detected: numberValue(row.products_detected, 0),
+    variants_detected: numberValue(row.variants_detected, 0),
+    would_create_count: numberValue(row.would_create_count, 0),
+    would_update_count: numberValue(row.would_update_count, 0),
+    would_archive_count: numberValue(row.would_archive_count, 0),
+    blocked_count: numberValue(row.blocked_count, 0),
+    warning_count: numberValue(row.warning_count, 0),
+    normalized_preview: Array.isArray(row.normalized_preview) ? row.normalized_preview : [],
+    blockers: Array.isArray(row.blockers) ? row.blockers : [],
+    warnings: Array.isArray(row.warnings) ? row.warnings : [],
+    requested_audit_event_id: row.requested_audit_event_id,
+    audit_event_id: row.result_audit_event_id,
+    generated_at: rowDateOrNull(row.generated_at),
+    created_at: rowDateOrNull(row.created_at),
+  };
+}
+
+async function readMerchantForDryRun(sql: Sql, tenantId: string, merchantId: string): Promise<MerchantDryRunRow | null> {
+  const rows = await sql<MerchantDryRunRow[]>`
+    SELECT id, environment, verification_status, disabled_at
+      FROM commerce_merchants
+     WHERE tenant_id = ${tenantId}
+       AND id = ${merchantId}
+     LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+async function existingDryRunProductIds(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+  productRefs: string[],
+): Promise<Set<string>> {
+  if (productRefs.length === 0) return new Set();
+  const rows = await sql<Array<{ product_id: string }>>`
+    SELECT product_id
+      FROM commerce_products
+     WHERE tenant_id = ${tenantId}
+       AND merchant_id = ${merchantId}
+       AND archived_at IS NULL
+       AND product_id = ANY(${productRefs}::text[])
+  `;
+  return new Set(rows.map((row) => row.product_id));
+}
+
+async function insertDryRunResult(
+  sql: Sql,
+  result: ConnectorDryRunResult,
+  requestedAuditEventId: string,
+  resultAuditEventId: string,
+): Promise<ConnectorDryRunRow> {
+  const rows = await sql<ConnectorDryRunRow[]>`
+    INSERT INTO commerce_connector_dry_runs (
+      id, tenant_id, merchant_id, connector_type, source_label, status,
+      sandbox_only, not_live, not_approved, public_discovery_enabled,
+      checkout_payment_enabled, live_provider_enabled,
+      provider_specific_live_enabled, rows_received, products_detected,
+      variants_detected, would_create_count, would_update_count,
+      would_archive_count, blocked_count, warning_count, normalized_preview,
+      blockers, warnings, requested_audit_event_id, result_audit_event_id,
+      generated_at
+    ) VALUES (
+      ${result.dry_run_id}, ${result.tenant_id}, ${result.merchant_id},
+      ${result.connector_type}, ${result.source_label}, ${result.status},
+      ${result.sandbox_only}, ${result.not_live}, ${result.not_approved},
+      ${result.public_discovery_enabled}, ${result.checkout_payment_enabled},
+      ${result.live_provider_enabled}, ${result.provider_specific_live_enabled},
+      ${result.rows_received}, ${result.products_detected},
+      ${result.variants_detected}, ${result.would_create_count},
+      ${result.would_update_count}, ${result.would_archive_count},
+      ${result.blocked_count}, ${result.warning_count},
+      ${JSON.stringify(result.normalized_preview)}::jsonb,
+      ${JSON.stringify(result.blockers)}::jsonb,
+      ${JSON.stringify(result.warnings)}::jsonb,
+      ${requestedAuditEventId}, ${resultAuditEventId}, ${result.generated_at}
+    )
+    RETURNING id, tenant_id, merchant_id, connector_type, source_label, status,
+              sandbox_only, not_live, not_approved, public_discovery_enabled,
+              checkout_payment_enabled, live_provider_enabled,
+              provider_specific_live_enabled, rows_received, products_detected,
+              variants_detected, would_create_count, would_update_count,
+              would_archive_count, blocked_count, warning_count,
+              normalized_preview, blockers, warnings, requested_audit_event_id,
+              result_audit_event_id, generated_at, created_at
+  `;
+  const row = rows[0];
+  if (!row) {
+    throw new CommerceHttpError(500, 'connector_dry_run_insert_failed',
+      'Connector dry-run metadata could not be stored', { retryable: true });
+  }
+  return row;
+}
+
+async function persistDryRunWithAudit(
+  tx: TxSql,
+  result: ConnectorDryRunResult,
+  requestId: string,
+): Promise<{ row: ConnectorDryRunRow; requestedAuditEventId: string; resultAuditEventId: string }> {
+  const baseMetadata = {
+    dry_run_id: result.dry_run_id,
+    connector_type: result.connector_type,
+    source_label: result.source_label,
+    result_status: result.status,
+    rows_received: result.rows_received,
+    products_detected: result.products_detected,
+    variants_detected: result.variants_detected,
+    would_create_count: result.would_create_count,
+    would_update_count: result.would_update_count,
+    blocked_count: result.blocked_count,
+    warning_count: result.warning_count,
+    sandbox_only: true,
+    not_live: true,
+    not_approved: true,
+    public_discovery_enabled: false,
+    checkout_payment_enabled: false,
+    live_provider_enabled: false,
+    [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
+    redaction: 'no credentials, raw files, private URLs, provider metadata, production config, allowlists, checkout URLs, payment IDs, or merchant private API payloads stored',
+  };
+  const requested = await appendCommerceAudit(tx as unknown as Sql, {
+    tenantId: result.tenant_id,
+    merchantId: result.merchant_id,
+    eventType: 'connector_dry_run_requested',
+    resourceType: 'commerce_connector_dry_run',
+    resourceId: result.dry_run_id,
+    requestId,
+    metadata: baseMetadata,
+  });
+  const resultAudit = await appendCommerceAudit(tx as unknown as Sql, {
+    tenantId: result.tenant_id,
+    merchantId: result.merchant_id,
+    eventType: result.status === 'passed' ? 'connector_dry_run_completed' : 'connector_dry_run_blocked',
+    resourceType: 'commerce_connector_dry_run',
+    resourceId: result.dry_run_id,
+    requestId,
+    metadata: {
+      ...baseMetadata,
+      blocker_codes: result.blockers.map((blocker) => blocker.code),
+      warning_codes: result.warnings.map((warning) => warning.code),
+    },
+  });
+  const row = await insertDryRunResult(tx as unknown as Sql, result, requested.id, resultAudit.id);
+  return { row, requestedAuditEventId: requested.id, resultAuditEventId: resultAudit.id };
+}
+
+function dryRunErrorDetails(result: ConnectorDryRunResult): Record<string, unknown> {
+  return {
+    dry_run_id: result.dry_run_id,
+    status: result.status,
+    blockers: result.blockers.map((blocker) => ({
+      code: blocker.code,
+      row_index: blocker.row_index ?? null,
+      field: blocker.field ?? null,
+      remediation: blocker.remediation,
+    })),
+    controls: {
+      sandbox_only: true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
+    },
+  };
+}
+
 function validateCreateBody(body: ConnectorBody): {
   merchantId: string;
   connectorKey: string;
@@ -612,6 +847,137 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
       source_precedence: sourcePrecedence(result.connectorRows),
       audit_event_id: result.auditEventId,
     });
+  });
+
+  app.post<{
+    Params: ConnectorDryRunParams;
+    Body: ConnectorDryRunBody;
+  }>('/merchants/:merchantId/connectors/dry-run', async (request, reply) => {
+    if (request.body !== undefined && !isPlainObject(request.body)) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { body: 'must be a JSON object' } },
+        retryable: false,
+      });
+    }
+    const merchantId = merchantIdForConnectorRequest(request, request.params.merchantId);
+    const tenantId = request.commerceTenantId;
+    const sql = getSql();
+    const merchant = await readMerchantForDryRun(sql, tenantId, merchantId);
+    if (!merchant) {
+      throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+    }
+
+    const generatedAt = new Date();
+    const prepared = prepareConnectorDryRun((request.body ?? {}) as ConnectorDryRunBody, generatedAt);
+    if (merchant.disabled_at !== null) {
+      prepared.blockers.push({
+        code: 'merchant_disabled',
+        message: 'Merchant is disabled and cannot run connector dry-run evidence.',
+        remediation: 'Re-enable the sandbox merchant through a separate reviewed operator action.',
+      });
+      prepared.blocked_count += 1;
+    }
+    if (merchant.environment !== 'sandbox') {
+      prepared.blockers.push({
+        code: 'live_merchant_mode_blocked',
+        message: 'Connector dry-runs are available only for sandbox merchants.',
+        remediation: 'Move this work to a sandbox merchant; live connector sync requires a later approval.',
+      });
+      prepared.blocked_count += 1;
+    }
+
+    const existingIds = await existingDryRunProductIds(
+      sql,
+      tenantId,
+      merchantId,
+      prepared.normalized_products.map((product) => product.source_product_ref),
+    );
+    const result = finalizeConnectorDryRun({
+      ...prepared,
+      dryRunId: newCommerceConnectorDryRunId(),
+      tenantId,
+      merchantId,
+      existingProductIds: existingIds,
+      generatedAt,
+    });
+    const persisted = await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      return persistDryRunWithAudit(tx, result, request.id);
+    });
+
+    const fatalBlockers = new Set([
+      'unsupported_request_field',
+      'unsupported_connector_type',
+      'unsafe_source_label',
+      'rows_missing',
+      'rows_limit_exceeded',
+      'invalid_stale_after_seconds',
+      'private_field_rejected',
+      'private_or_production_value_rejected',
+      'enablement_field_rejected',
+      'merchant_private_api_url_rejected',
+    ]);
+    const fatal = result.blockers.some((blocker) => fatalBlockers.has(blocker.code));
+    if (merchant.disabled_at !== null || merchant.environment !== 'sandbox') {
+      throw new CommerceHttpError(409, 'connector_dry_run_blocked',
+        'Connector dry-run is blocked for this merchant', {
+          auditEventId: persisted.resultAuditEventId,
+          details: dryRunErrorDetails(result),
+          retryable: false,
+        });
+    }
+    if (fatal) {
+      throw new CommerceHttpError(422, 'connector_dry_run_rejected',
+        'Connector dry-run request contains unsupported, private, credential, execution, or enablement fields', {
+          auditEventId: persisted.resultAuditEventId,
+          details: dryRunErrorDetails(result),
+          retryable: false,
+        });
+    }
+
+    return reply.status(result.status === 'passed' ? 201 : 200).send({
+      data: toDryRunResult(persisted.row),
+      audit_events: [
+        {
+          event_type: 'connector_dry_run_requested',
+          audit_event_id: persisted.requestedAuditEventId,
+        },
+        {
+          event_type: result.status === 'passed' ? 'connector_dry_run_completed' : 'connector_dry_run_blocked',
+          audit_event_id: persisted.resultAuditEventId,
+        },
+      ],
+    });
+  });
+
+  app.get<{
+    Params: Required<ConnectorDryRunParams>;
+  }>('/merchants/:merchantId/connectors/dry-runs/:dryRunId', async (request, reply) => {
+    const merchantId = merchantIdForConnectorRequest(request, request.params.merchantId);
+    const tenantId = request.commerceTenantId;
+    const sql = getSql();
+    await assertMerchantInTenant(sql, tenantId, merchantId);
+    const rows = await sql<ConnectorDryRunRow[]>`
+      SELECT id, tenant_id, merchant_id, connector_type, source_label, status,
+             sandbox_only, not_live, not_approved, public_discovery_enabled,
+             checkout_payment_enabled, live_provider_enabled,
+             provider_specific_live_enabled, rows_received, products_detected,
+             variants_detected, would_create_count, would_update_count,
+             would_archive_count, blocked_count, warning_count,
+             normalized_preview, blockers, warnings, requested_audit_event_id,
+             result_audit_event_id, generated_at, created_at
+        FROM commerce_connector_dry_runs
+       WHERE tenant_id = ${tenantId}
+         AND merchant_id = ${merchantId}
+         AND id = ${request.params.dryRunId}
+       LIMIT 1
+    `;
+    const row = rows[0];
+    if (!row) {
+      throw new CommerceHttpError(404, 'connector_dry_run_not_found',
+        'Connector dry-run evidence was not found in this tenant and merchant');
+    }
+    return reply.status(200).send({ data: toDryRunResult(row) });
   });
 
   app.get<{ Querystring: ConnectorListQuery }>('/connectors', async (request, reply) => {
