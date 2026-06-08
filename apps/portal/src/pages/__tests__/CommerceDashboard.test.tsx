@@ -832,6 +832,35 @@ const connectorReviewNeedsChanges = {
   decided_at: '2026-01-01T00:43:00Z',
 };
 
+const connectorDryRunCorrected = {
+  ...connectorDryRun,
+  dry_run_id: 'cdry_C6SF_CORRECTED',
+  requested_audit_event_id: 'caud_C6SF_CORRECTED_REQUESTED',
+  audit_event_id: 'caud_C6SF_CORRECTED_COMPLETED',
+  generated_at: '2026-01-01T00:50:00Z',
+  created_at: '2026-01-01T00:50:00Z',
+};
+
+const connectorReviewFollowup = {
+  ...connectorReview,
+  review_id: 'cdrev_C6SF_FOLLOWUP',
+  dry_run_id: 'cdry_C6SF_CORRECTED',
+  dry_run_generated_at: '2026-01-01T00:50:00Z',
+  requested_audit_event_id: 'caud_C6SF_FOLLOWUP_REQUESTED',
+  created_at: '2026-01-01T00:51:00Z',
+  updated_at: '2026-01-01T00:51:00Z',
+};
+
+const connectorReviewFollowupAccepted = {
+  ...connectorReviewFollowup,
+  status: 'accepted_for_sandbox_followup' as const,
+  decision: 'accepted_for_sandbox_followup' as const,
+  decision_note: 'Corrected sandbox follow-up only.',
+  decided_by_operator_id: 'dev_TEST',
+  audit_event_id: 'caud_C6SF_FOLLOWUP_DECISION',
+  decided_at: '2026-01-01T00:52:00Z',
+};
+
 const credential = {
   id: 'cpcred_1',
   tenant_id: 'cten_1',
@@ -1543,6 +1572,106 @@ describe('CommerceOnboarding', () => {
     expect(remediationEvidenceJsonPreview.textContent).not.toContain('Portal Sandbox Fixture Product');
     expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
     expect(screen.queryByText('outbound connector sync enabled')).not.toBeInTheDocument();
+  });
+
+  it('rehearses remediation loop from needs-changes to corrected sandbox follow-up', async () => {
+    mockRunCommerceConnectorDryRun
+      .mockResolvedValueOnce({
+        data: connectorDryRun,
+        audit_events: [
+          { event_type: 'connector_dry_run_requested', audit_event_id: 'caud_C6SB_REQUESTED' },
+          { event_type: 'connector_dry_run_completed', audit_event_id: 'caud_C6SB_COMPLETED' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        data: connectorDryRunCorrected,
+        audit_events: [
+          { event_type: 'connector_dry_run_requested', audit_event_id: 'caud_C6SF_CORRECTED_REQUESTED' },
+          { event_type: 'connector_dry_run_completed', audit_event_id: 'caud_C6SF_CORRECTED_COMPLETED' },
+        ],
+      });
+    mockRequestCommerceConnectorDryRunReview
+      .mockResolvedValueOnce({
+        data: connectorReview,
+        dry_run: connectorDryRun,
+        audit_event_id: 'caud_C6SB_REVIEW_REQUESTED',
+      })
+      .mockResolvedValueOnce({
+        data: connectorReviewFollowup,
+        dry_run: connectorDryRunCorrected,
+        audit_event_id: 'caud_C6SF_FOLLOWUP_REQUESTED',
+      });
+    mockRecordCommerceConnectorDryRunReviewDecision
+      .mockResolvedValueOnce({
+        data: connectorReviewNeedsChanges,
+        dry_run: connectorDryRun,
+        audit_event_id: 'caud_C6SB_NEEDS_CHANGES',
+      })
+      .mockResolvedValueOnce({
+        data: connectorReviewFollowupAccepted,
+        dry_run: connectorDryRunCorrected,
+        audit_event_id: 'caud_C6SF_FOLLOWUP_DECISION',
+      });
+    const user = userEvent.setup();
+    r(<CommerceOnboarding />);
+
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
+    await waitFor(() => expect(screen.getByText('Connector dry-run review')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Run connector dry-run' }));
+    await waitFor(() => expect(mockRunCommerceConnectorDryRun).toHaveBeenCalledTimes(1));
+    await user.type(screen.getByLabelText('Review request note'), 'Public-safe sandbox evidence.');
+    await user.click(screen.getByRole('button', { name: 'Request dry-run review' }));
+    await waitFor(() => expect(mockRequestCommerceConnectorDryRunReview).toHaveBeenCalledTimes(1));
+
+    await user.selectOptions(screen.getByLabelText('Review decision'), 'needs_changes');
+    fireEvent.change(screen.getByLabelText('Decision note'), { target: { value: 'Fix category mapping and rerun the local sandbox dry-run.' } });
+    await user.click(screen.getByRole('button', { name: 'Record dry-run review decision' }));
+    await waitFor(() => expect(mockRecordCommerceConnectorDryRunReviewDecision).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('Remediation loop rehearsal')).toBeInTheDocument();
+    expect(screen.getAllByText('issue_captured').length).toBeGreaterThan(0);
+    expect(screen.getByText('previous_review_status')).toBeInTheDocument();
+    expect(screen.getAllByText('needs_changes').length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: 'Reset sample' }));
+    await user.click(screen.getByRole('button', { name: 'Run connector dry-run' }));
+    await waitFor(() => expect(mockRunCommerceConnectorDryRun).toHaveBeenCalledTimes(2));
+    expect(screen.getAllByText('corrected_dry_run_ready').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('cdry_C6SF_CORRECTED').length).toBeGreaterThan(0);
+    expect(screen.getByText('operator_followup_status')).toBeInTheDocument();
+    expect(screen.getAllByText('not_requested').length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: 'Request dry-run review' }));
+    await waitFor(() => expect(mockRequestCommerceConnectorDryRunReview).toHaveBeenCalledTimes(2));
+    expect(screen.getAllByText('operator_followup_requested').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('pending_operator_review').length).toBeGreaterThan(0);
+
+    await user.selectOptions(screen.getByLabelText('Review decision'), 'accepted_for_sandbox_followup');
+    fireEvent.change(screen.getByLabelText('Decision note'), { target: { value: 'Corrected sandbox follow-up only.' } });
+    await user.click(screen.getByRole('button', { name: 'Record dry-run review decision' }));
+    await waitFor(() => expect(mockRecordCommerceConnectorDryRunReviewDecision).toHaveBeenCalledTimes(2));
+    expect(screen.getAllByText('followup_ready').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('accepted_for_sandbox_followup').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('caud_C6SF_FOLLOWUP_DECISION').length).toBeGreaterThan(0);
+
+    const loopEvidenceJsonPreview = screen.getByText((_content, node) => (
+      node?.tagName === 'PRE'
+      && node.textContent?.includes('"loop_status": "followup_ready"')
+    ) ?? false);
+    expect(loopEvidenceJsonPreview.textContent).toContain('"remediation_loop"');
+    expect(loopEvidenceJsonPreview.textContent).toContain('"previous_issue"');
+    expect(loopEvidenceJsonPreview.textContent).toContain('"corrected_dry_run"');
+    expect(loopEvidenceJsonPreview.textContent).toContain('"operator_followup"');
+    expect(loopEvidenceJsonPreview.textContent).toContain('"credential_entry_enabled": false');
+    expect(loopEvidenceJsonPreview.textContent).toContain('"outbound_sync_enabled": false');
+    expect(loopEvidenceJsonPreview.textContent).toContain('"public_discovery_enabled": false');
+    expect(loopEvidenceJsonPreview.textContent).toContain('"checkout_payment_enabled": false');
+    expect(loopEvidenceJsonPreview.textContent).toContain('"merchant_private_api_calls": false');
+    expect(loopEvidenceJsonPreview.textContent).not.toContain('rows_json');
+    expect(loopEvidenceJsonPreview.textContent).not.toContain('Portal Sandbox Fixture Product');
+    expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
+    expect(screen.queryByText('production connector setup enabled')).not.toBeInTheDocument();
   });
 
   it('validates, clears, and resets connector rows before dry-run submission', async () => {
