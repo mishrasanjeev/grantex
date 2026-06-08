@@ -37,6 +37,9 @@ const mockWithdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff = vi.fn();
 const mockRunCommerceConnectorDryRun = vi.fn();
 const mockRequestCommerceConnectorDryRunReview = vi.fn();
 const mockRecordCommerceConnectorDryRunReviewDecision = vi.fn();
+const mockCreateCommerceConnectorDryRunRemediation = vi.fn();
+const mockAttachCommerceConnectorRemediationCorrectedDryRun = vi.fn();
+const mockRequestCommerceConnectorRemediationFollowUpReview = vi.fn();
 const mockDisableMerchantAgenticCommerce = vi.fn();
 const mockEnableMerchantAgenticCommerce = vi.fn();
 const mockListCommerceAgents = vi.fn();
@@ -83,6 +86,9 @@ vi.mock('../../api/commerce', () => ({
   runCommerceConnectorDryRun: (...a: unknown[]) => mockRunCommerceConnectorDryRun(...a),
   requestCommerceConnectorDryRunReview: (...a: unknown[]) => mockRequestCommerceConnectorDryRunReview(...a),
   recordCommerceConnectorDryRunReviewDecision: (...a: unknown[]) => mockRecordCommerceConnectorDryRunReviewDecision(...a),
+  createCommerceConnectorDryRunRemediation: (...a: unknown[]) => mockCreateCommerceConnectorDryRunRemediation(...a),
+  attachCommerceConnectorRemediationCorrectedDryRun: (...a: unknown[]) => mockAttachCommerceConnectorRemediationCorrectedDryRun(...a),
+  requestCommerceConnectorRemediationFollowUpReview: (...a: unknown[]) => mockRequestCommerceConnectorRemediationFollowUpReview(...a),
   disableMerchantAgenticCommerce: (...a: unknown[]) => mockDisableMerchantAgenticCommerce(...a),
   enableMerchantAgenticCommerce: (...a: unknown[]) => mockEnableMerchantAgenticCommerce(...a),
   listCommerceAgents: (...a: unknown[]) => mockListCommerceAgents(...a),
@@ -832,6 +838,65 @@ const connectorReviewNeedsChanges = {
   decided_at: '2026-01-01T00:43:00Z',
 };
 
+const connectorRemediation = {
+  remediation_id: 'cdrem_C6SG',
+  tenant_id: 'cten_1',
+  merchant_id: 'mch_1',
+  original_dry_run_id: 'cdry_C6SB',
+  original_review_id: 'cdrev_C6SB',
+  original_decision: 'needs_changes' as const,
+  status: 'remediation_requested' as const,
+  public_safe_note: 'Fix category mapping and rerun the local sandbox dry-run.',
+  blocker_summary: [],
+  warning_summary: [],
+  corrected_dry_run_id: null,
+  followup_review_id: null,
+  requested_by: { kind: 'operator' as const, id: 'dev_TEST' },
+  audit_references: {
+    requested_audit_event_id: 'caud_C6SG_REMEDIATION_REQUESTED',
+    corrected_audit_event_id: null,
+    followup_audit_event_id: null,
+    closed_or_blocked_audit_event_id: null,
+  },
+  controls: {
+    sandbox_only: true as const,
+    not_live: true as const,
+    not_approved: true as const,
+    public_discovery_enabled: false as const,
+    checkout_payment_enabled: false as const,
+    live_provider_enabled: false as const,
+    live_plural_enabled: false as const,
+    production_allowlist_written: false as const,
+    remediation_is_production_approval: false as const,
+    remediation_enables_connector_execution: false as const,
+    followup_ready_is_launch_approval: false as const,
+  },
+  created_at: '2026-01-01T00:44:00Z',
+  updated_at: '2026-01-01T00:44:00Z',
+};
+
+const connectorRemediationCorrected = {
+  ...connectorRemediation,
+  status: 'corrected_dry_run_attached' as const,
+  corrected_dry_run_id: 'cdry_C6SF_CORRECTED',
+  audit_references: {
+    ...connectorRemediation.audit_references,
+    corrected_audit_event_id: 'caud_C6SG_CORRECTED_ATTACHED',
+  },
+  updated_at: '2026-01-01T00:50:30Z',
+};
+
+const connectorRemediationFollowup = {
+  ...connectorRemediationCorrected,
+  status: 'followup_review_requested' as const,
+  followup_review_id: 'cdrev_C6SF_FOLLOWUP',
+  audit_references: {
+    ...connectorRemediationCorrected.audit_references,
+    followup_audit_event_id: 'caud_C6SG_FOLLOWUP_REQUESTED',
+  },
+  updated_at: '2026-01-01T00:51:30Z',
+};
+
 const connectorDryRunCorrected = {
   ...connectorDryRun,
   dry_run_id: 'cdry_C6SF_CORRECTED',
@@ -1291,6 +1356,23 @@ describe('CommerceOnboarding', () => {
       dry_run: connectorDryRun,
       audit_event_id: 'caud_C6SB_DECISION',
     });
+    mockCreateCommerceConnectorDryRunRemediation.mockResolvedValue({
+      data: connectorRemediation,
+      original_dry_run: connectorDryRun,
+      original_review: connectorReviewNeedsChanges,
+      audit_event_id: 'caud_C6SG_REMEDIATION_REQUESTED',
+    });
+    mockAttachCommerceConnectorRemediationCorrectedDryRun.mockResolvedValue({
+      data: connectorRemediationCorrected,
+      corrected_dry_run: connectorDryRunCorrected,
+      audit_event_id: 'caud_C6SG_CORRECTED_ATTACHED',
+    });
+    mockRequestCommerceConnectorRemediationFollowUpReview.mockResolvedValue({
+      data: connectorRemediationFollowup,
+      corrected_dry_run: connectorDryRunCorrected,
+      followup_review: connectorReviewFollowup,
+      audit_event_id: 'caud_C6SG_FOLLOWUP_REQUESTED',
+    });
     mockListCommerceAgents.mockResolvedValue({ items: [agent], next_cursor: null });
     mockListCommercePolicies.mockResolvedValue({ items: [{ id: 'cpol_1', status: 'active' }], next_cursor: null });
     mockListCommerceProducts.mockResolvedValue({ items: [product], next_cursor: null });
@@ -1552,8 +1634,14 @@ describe('CommerceOnboarding', () => {
       decision: 'needs_changes',
       decisionNote: 'Fix category mapping and rerun the local sandbox dry-run.',
     }));
+    await waitFor(() => expect(mockCreateCommerceConnectorDryRunRemediation).toHaveBeenCalledWith('mch_1', 'cdry_C6SB', {
+      publicSafeNote: 'Fix category mapping and rerun the local sandbox dry-run.',
+    }));
 
     expect(screen.getByText('Operator requested changes')).toBeInTheDocument();
+    expect(screen.getByText('Grantex-persisted remediation evidence')).toBeInTheDocument();
+    expect(screen.getAllByText('cdrem_C6SG').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('remediation_requested').length).toBeGreaterThan(0);
     expect(screen.getAllByText('blocked').length).toBeGreaterThan(0);
     expect(screen.getAllByText((_content, node) => (
       node?.textContent?.includes('Owner: merchant') ?? false
@@ -1566,6 +1654,8 @@ describe('CommerceOnboarding', () => {
     expect(remediationEvidenceJsonPreview.textContent).toContain('"handoff_status": "blocked"');
     expect(remediationEvidenceJsonPreview.textContent).toContain('"requires_rerun": true');
     expect(remediationEvidenceJsonPreview.textContent).toContain('"operator_requested_changes"');
+    expect(remediationEvidenceJsonPreview.textContent).toContain('"backend_remediation"');
+    expect(remediationEvidenceJsonPreview.textContent).toContain('"remediation_id": "cdrem_C6SG"');
     expect(remediationEvidenceJsonPreview.textContent).toContain('"production_approval": false');
     expect(remediationEvidenceJsonPreview.textContent).toContain('"public_discovery_approval": false');
     expect(remediationEvidenceJsonPreview.textContent).not.toContain('rows_json');
@@ -1595,12 +1685,24 @@ describe('CommerceOnboarding', () => {
         data: connectorReview,
         dry_run: connectorDryRun,
         audit_event_id: 'caud_C6SB_REVIEW_REQUESTED',
-      })
-      .mockResolvedValueOnce({
-        data: connectorReviewFollowup,
-        dry_run: connectorDryRunCorrected,
-        audit_event_id: 'caud_C6SF_FOLLOWUP_REQUESTED',
       });
+    mockCreateCommerceConnectorDryRunRemediation.mockResolvedValueOnce({
+      data: connectorRemediation,
+      original_dry_run: connectorDryRun,
+      original_review: connectorReviewNeedsChanges,
+      audit_event_id: 'caud_C6SG_REMEDIATION_REQUESTED',
+    });
+    mockAttachCommerceConnectorRemediationCorrectedDryRun.mockResolvedValueOnce({
+      data: connectorRemediationCorrected,
+      corrected_dry_run: connectorDryRunCorrected,
+      audit_event_id: 'caud_C6SG_CORRECTED_ATTACHED',
+    });
+    mockRequestCommerceConnectorRemediationFollowUpReview.mockResolvedValueOnce({
+      data: connectorRemediationFollowup,
+      corrected_dry_run: connectorDryRunCorrected,
+      followup_review: connectorReviewFollowup,
+      audit_event_id: 'caud_C6SG_FOLLOWUP_REQUESTED',
+    });
     mockRecordCommerceConnectorDryRunReviewDecision
       .mockResolvedValueOnce({
         data: connectorReviewNeedsChanges,
@@ -1629,7 +1731,10 @@ describe('CommerceOnboarding', () => {
     fireEvent.change(screen.getByLabelText('Decision note'), { target: { value: 'Fix category mapping and rerun the local sandbox dry-run.' } });
     await user.click(screen.getByRole('button', { name: 'Record dry-run review decision' }));
     await waitFor(() => expect(mockRecordCommerceConnectorDryRunReviewDecision).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockCreateCommerceConnectorDryRunRemediation).toHaveBeenCalledTimes(1));
     expect(screen.getByText('Remediation loop rehearsal')).toBeInTheDocument();
+    expect(screen.getByText('Grantex-persisted remediation evidence')).toBeInTheDocument();
+    expect(screen.getAllByText('cdrem_C6SG').length).toBeGreaterThan(0);
     expect(screen.getAllByText('issue_captured').length).toBeGreaterThan(0);
     expect(screen.getByText('previous_review_status')).toBeInTheDocument();
     expect(screen.getAllByText('needs_changes').length).toBeGreaterThan(0);
@@ -1637,14 +1742,23 @@ describe('CommerceOnboarding', () => {
     await user.click(screen.getByRole('button', { name: 'Reset sample' }));
     await user.click(screen.getByRole('button', { name: 'Run connector dry-run' }));
     await waitFor(() => expect(mockRunCommerceConnectorDryRun).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockAttachCommerceConnectorRemediationCorrectedDryRun).toHaveBeenCalledWith('mch_1', 'cdrem_C6SG', {
+      correctedDryRunId: 'cdry_C6SF_CORRECTED',
+      publicSafeNote: 'Corrected sandbox dry-run attached from portal evidence flow.',
+    }));
     expect(screen.getAllByText('corrected_dry_run_ready').length).toBeGreaterThan(0);
     expect(screen.getAllByText('cdry_C6SF_CORRECTED').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('corrected_dry_run_attached').length).toBeGreaterThan(0);
     expect(screen.getByText('operator_followup_status')).toBeInTheDocument();
     expect(screen.getAllByText('not_requested').length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('button', { name: 'Request dry-run review' }));
-    await waitFor(() => expect(mockRequestCommerceConnectorDryRunReview).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockRequestCommerceConnectorDryRunReview).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockRequestCommerceConnectorRemediationFollowUpReview).toHaveBeenCalledWith('mch_1', 'cdrem_C6SG', {
+      requestNote: 'Public-safe sandbox evidence.',
+    }));
     expect(screen.getAllByText('operator_followup_requested').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('followup_review_requested').length).toBeGreaterThan(0);
     expect(screen.getAllByText('pending_operator_review').length).toBeGreaterThan(0);
 
     await user.selectOptions(screen.getByLabelText('Review decision'), 'accepted_for_sandbox_followup');
@@ -1660,6 +1774,9 @@ describe('CommerceOnboarding', () => {
       && node.textContent?.includes('"loop_status": "followup_ready"')
     ) ?? false);
     expect(loopEvidenceJsonPreview.textContent).toContain('"remediation_loop"');
+    expect(loopEvidenceJsonPreview.textContent).toContain('"backend_remediation"');
+    expect(loopEvidenceJsonPreview.textContent).toContain('"remediation_id": "cdrem_C6SG"');
+    expect(loopEvidenceJsonPreview.textContent).toContain('"followup_review_id": "cdrev_C6SF_FOLLOWUP"');
     expect(loopEvidenceJsonPreview.textContent).toContain('"previous_issue"');
     expect(loopEvidenceJsonPreview.textContent).toContain('"corrected_dry_run"');
     expect(loopEvidenceJsonPreview.textContent).toContain('"operator_followup"');

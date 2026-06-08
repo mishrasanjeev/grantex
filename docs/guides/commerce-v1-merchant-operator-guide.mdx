@@ -324,6 +324,28 @@ approval, connector execution approval, outbound sync approval, public
 discovery approval, checkout/payment approval, live provider approval, public
 protocol publication, or certification.
 
+C6Sg persists the connector dry-run remediation loop in Grantex so the evidence
+does not exist only in browser state. A merchant or operator can create a
+tenant-scoped remediation record from a `needs_changes` or `blocked` C6Sa
+review, attach a corrected passed C6R dry-run, and request a follow-up C6Sa
+review. Duplicate remediation requests, corrected dry-run attachments, and
+follow-up review requests return existing evidence instead of creating duplicate
+rows or audit events.
+
+The persisted C6Sg record stores only redacted summary evidence: original
+dry-run and review IDs, original decision, remediation status, capped
+blocker/warning summaries, corrected dry-run ID, follow-up review ID, public-safe
+notes, and audit references. It does not store raw rows, raw files, raw
+merchant-system payloads, credentials, tokens, provider metadata, private API
+URLs, checkout URLs, payment identifiers, production config values, concrete
+allowlists, customer data, or secret material.
+
+C6Sg `followup_ready` means only that the corrected sandbox dry-run has a
+follow-up review accepted for sandbox follow-up. It is not production approval,
+connector execution approval, outbound sync approval, public discovery approval,
+checkout/payment approval, live provider approval, public protocol publication,
+or certification.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent
