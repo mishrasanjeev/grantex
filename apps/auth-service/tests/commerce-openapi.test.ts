@@ -136,6 +136,21 @@ describe('Grantex Commerce V1 OpenAPI 3.1 contract', () => {
     expect(content).toMatch(/live_provider_enabled:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
   });
 
+  it('declares the C6Sa connector dry-run review APIs as sandbox evidence only', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}/review-request');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}/review');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}/review/decision');
+    expect(content).toMatch(/operationId:\s*requestCommerceConnectorDryRunReview/);
+    expect(content).toMatch(/operationId:\s*getCommerceConnectorDryRunReview/);
+    expect(content).toMatch(/operationId:\s*recordCommerceConnectorDryRunReviewDecision/);
+    expect(content).toMatch(/x-milestone:\s*C6Sa/);
+    expect(content).toMatch(/CommerceConnectorDryRunReview:/);
+    expect(content).toMatch(/review_is_production_approval:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/review_enables_connector_execution:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/production_allowlist_written:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+  });
+
   it('M2 passport endpoints flipped to x-implemented: true', () => {
     const content = readFileSync(yamlPath, 'utf8');
     // Each of the five passport routes must now carry x-implemented: true

@@ -212,6 +212,27 @@ AgenticOrg never directly calls merchant private APIs. It continues to consume
 only Grantex-owned preview and buyer discovery surfaces after Grantex records
 the required sandbox evidence.
 
+C6Sa adds an operator review foundation for C6R dry-run evidence. A merchant or
+operator can request review of a tenant-scoped connector dry-run. Operators can
+read the redacted evidence and record one of three sandbox-only outcomes:
+
+- `accepted_for_sandbox_followup`: follow-up sandbox work may continue.
+- `needs_changes`: the merchant must fix the local snapshot or mapping before
+  another review.
+- `blocked`: the review is closed because the evidence is unsafe or incomplete.
+
+The C6Sa decision is not merchant approval, production approval, connector
+execution approval, public discovery approval, checkout/payment approval, live
+provider approval, public protocol publication, or certification. It does not
+write catalog changes, call merchant systems, call providers, store credentials,
+enable outbound sync, set allowlists, or change production configuration.
+
+C6Sa review notes must be public-safe. Do not paste secrets, private merchant
+artifacts, provider credentials, raw payloads, tokens, DB/Redis URLs, private
+keys, production config values, concrete allowlist values, checkout URLs,
+payment identifiers, customer data, live-provider claims, launch claims, or
+certification claims into review evidence.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent

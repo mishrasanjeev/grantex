@@ -4,7 +4,11 @@ import { getSql, type TxSql } from '../db/client.js';
 import { appendCommerceAudit } from '../lib/commerce/audit.js';
 import type { CommerceCaller } from '../lib/commerce/caller.js';
 import { CommerceHttpError } from '../lib/commerce/errors.js';
-import { newCommerceConnectorDryRunId, newCommerceConnectorId } from '../lib/commerce/ids.js';
+import {
+  newCommerceConnectorDryRunId,
+  newCommerceConnectorDryRunReviewId,
+  newCommerceConnectorId,
+} from '../lib/commerce/ids.js';
 import {
   finalizeConnectorDryRun,
   prepareConnectorDryRun,
@@ -104,6 +108,20 @@ interface ConnectorDryRunParams {
   dryRunId?: string;
 }
 
+interface ConnectorDryRunReviewParams {
+  merchantId: string;
+  dryRunId: string;
+}
+
+interface ConnectorDryRunReviewDecisionBody {
+  decision?: unknown;
+  decision_note?: unknown;
+}
+
+interface ConnectorDryRunReviewRequestBody {
+  request_note?: unknown;
+}
+
 interface MerchantDryRunRow {
   id: string;
   environment: string;
@@ -141,6 +159,46 @@ interface ConnectorDryRunRow {
   generated_at: Date | string;
   created_at: Date | string;
 }
+
+interface ConnectorDryRunReviewRow {
+  id: string;
+  tenant_id: string;
+  merchant_id: string;
+  dry_run_id: string;
+  status: ConnectorDryRunReviewStatus;
+  decision: ConnectorDryRunReviewDecision | null;
+  decision_note: string | null;
+  requested_by_kind: 'operator' | 'merchant';
+  requested_by_id: string;
+  decided_by_operator_id: string | null;
+  dry_run_status: 'passed' | 'blocked';
+  dry_run_generated_at: Date | string;
+  evidence_summary: unknown;
+  requested_audit_event_id: string;
+  decision_audit_event_id: string | null;
+  sandbox_only: boolean;
+  not_live: boolean;
+  not_approved: boolean;
+  public_discovery_enabled: boolean;
+  checkout_payment_enabled: boolean;
+  live_provider_enabled: boolean;
+  provider_specific_live_enabled: boolean;
+  production_allowlist_written: boolean;
+  created_at: Date | string;
+  updated_at: Date | string;
+  decided_at: Date | string | null;
+}
+
+type ConnectorDryRunReviewStatus =
+  | 'pending_operator_review'
+  | 'accepted_for_sandbox_followup'
+  | 'needs_changes'
+  | 'blocked';
+
+type ConnectorDryRunReviewDecision =
+  | 'accepted_for_sandbox_followup'
+  | 'needs_changes'
+  | 'blocked';
 
 const CONNECTOR_KEY_RE = /^[a-z0-9_-]{3,64}$/;
 const CONNECTOR_TYPES: ConnectorType[] = [
@@ -200,10 +258,19 @@ const PATCH_FIELDS = new Set([
   'conflict_blockers',
   'webhook_source_key',
 ]);
+const REVIEW_REQUEST_FIELDS = new Set(['request_note']);
+const REVIEW_DECISION_FIELDS = new Set(['decision', 'decision_note']);
+const REVIEW_DECISIONS = new Set<ConnectorDryRunReviewDecision>([
+  'accepted_for_sandbox_followup',
+  'needs_changes',
+  'blocked',
+]);
 const SENSITIVE_FIELD_RE =
   /(^|_)(secret|token|api_key|apikey|password|credential|credentials|private_key|client_secret|access_token|refresh_token|raw_payload|authorization|bearer)(_|$)/i;
 const SENSITIVE_VALUE_RE =
   /-----BEGIN [A-Z ]+PRIVATE KEY-----|postgres:\/\/|postgresql:\/\/|redis:\/\/|sk_live_|pk_live_|whsec_|bearer\s+|api[_-]?key\s*=|secret\s*=|password\s*=|client_secret\s*=|access_token\s*=/i;
+const REVIEW_UNSAFE_VALUE_RE =
+  /\b(COMMERCE_PUBLIC_DISCOVERY_ENABLED|COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST|production_allowlist|prod_allowlist|checkout_url|payment_intent|provider_metadata|merchant_private_api)\b/i;
 
 function isString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
@@ -305,6 +372,24 @@ function rejectUnsupportedOrPrivateFields(
   }
 }
 
+function safeReviewNote(value: unknown, fieldName: string, fields: Record<string, string>): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (!isString(value)) {
+    fields[fieldName] = 'must be a public-safe string';
+    return null;
+  }
+  const note = value.trim();
+  if (note.length > 2000) {
+    fields[fieldName] = 'must be 2000 characters or fewer';
+    return null;
+  }
+  if (SENSITIVE_VALUE_RE.test(note) || REVIEW_UNSAFE_VALUE_RE.test(note)) {
+    fields[fieldName] = 'must not include secrets, provider metadata, private API values, production config, allowlists, checkout, or payment artifacts';
+    return null;
+  }
+  return note;
+}
+
 function validateConnectorKey(value: unknown, fields: Record<string, string>, fieldName = 'connector_key'): string | null {
   if (!isString(value)) {
     fields[fieldName] = 'required string';
@@ -337,6 +422,21 @@ function merchantIdForConnectorRequest(request: FastifyRequest, rawMerchantId: u
   }
   throw new CommerceHttpError(403, 'caller_not_authorized',
     'Connector registry management requires operator or owning merchant caller');
+}
+
+function connectorReviewActor(request: FastifyRequest): { kind: 'operator' | 'merchant'; id: string } {
+  const caller = request.commerceCaller as CommerceCaller;
+  if (caller.kind === 'operator') return { kind: 'operator', id: caller.developerId };
+  if (caller.kind === 'merchant') return { kind: 'merchant', id: caller.apiKeyId };
+  throw new CommerceHttpError(403, 'caller_not_authorized',
+    'Connector dry-run review requires operator or owning merchant caller');
+}
+
+function operatorCaller(request: FastifyRequest): Extract<CommerceCaller, { kind: 'operator' }> {
+  const caller = request.commerceCaller as CommerceCaller;
+  if (caller.kind === 'operator') return caller;
+  throw new CommerceHttpError(403, 'caller_not_authorized',
+    'Connector dry-run review decisions require an operator caller');
 }
 
 async function assertMerchantInTenant(sql: Sql, tenantId: string, merchantId: string): Promise<void> {
@@ -543,12 +643,126 @@ function toDryRunResult(row: ConnectorDryRunRow): Record<string, unknown> {
   };
 }
 
+function dryRunEvidenceSummary(row: ConnectorDryRunRow): Record<string, unknown> {
+  return {
+    dry_run_id: row.id,
+    dry_run_status: row.status,
+    connector_type: row.connector_type,
+    source_label: row.source_label,
+    rows_received: numberValue(row.rows_received, 0),
+    products_detected: numberValue(row.products_detected, 0),
+    variants_detected: numberValue(row.variants_detected, 0),
+    would_create_count: numberValue(row.would_create_count, 0),
+    would_update_count: numberValue(row.would_update_count, 0),
+    would_archive_count: numberValue(row.would_archive_count, 0),
+    blocked_count: numberValue(row.blocked_count, 0),
+    warning_count: numberValue(row.warning_count, 0),
+    generated_at: rowDateOrNull(row.generated_at),
+    redaction: 'review stores summary counts and audit references only; raw connector payloads and credentials are excluded',
+  };
+}
+
+function dryRunControlsAreSafe(row: ConnectorDryRunRow): boolean {
+  return row.sandbox_only === true
+    && row.not_live === true
+    && row.not_approved === true
+    && row.public_discovery_enabled === false
+    && row.checkout_payment_enabled === false
+    && row.live_provider_enabled === false
+    && row.provider_specific_live_enabled === false;
+}
+
+function toDryRunReview(row: ConnectorDryRunReviewRow): Record<string, unknown> {
+  return {
+    review_id: row.id,
+    tenant_id: row.tenant_id,
+    merchant_id: row.merchant_id,
+    dry_run_id: row.dry_run_id,
+    status: row.status,
+    decision: row.decision,
+    decision_note: row.decision_note,
+    requested_by: {
+      kind: row.requested_by_kind,
+      id: row.requested_by_id,
+    },
+    decided_by_operator_id: row.decided_by_operator_id,
+    dry_run_status: row.dry_run_status,
+    dry_run_generated_at: rowDateOrNull(row.dry_run_generated_at),
+    evidence_summary: isPlainObject(row.evidence_summary) ? row.evidence_summary : {},
+    requested_audit_event_id: row.requested_audit_event_id,
+    audit_event_id: row.decision_audit_event_id,
+    controls: {
+      sandbox_only: row.sandbox_only,
+      not_live: row.not_live,
+      not_approved: row.not_approved,
+      public_discovery_enabled: row.public_discovery_enabled,
+      checkout_payment_enabled: row.checkout_payment_enabled,
+      live_provider_enabled: row.live_provider_enabled,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: row.provider_specific_live_enabled,
+      production_allowlist_written: row.production_allowlist_written,
+      review_is_production_approval: false,
+      review_enables_connector_execution: false,
+    },
+    created_at: rowDateOrNull(row.created_at),
+    updated_at: rowDateOrNull(row.updated_at),
+    decided_at: rowDateOrNull(row.decided_at),
+  };
+}
+
 async function readMerchantForDryRun(sql: Sql, tenantId: string, merchantId: string): Promise<MerchantDryRunRow | null> {
   const rows = await sql<MerchantDryRunRow[]>`
     SELECT id, environment, verification_status, disabled_at
       FROM commerce_merchants
      WHERE tenant_id = ${tenantId}
        AND id = ${merchantId}
+     LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+async function readDryRunEvidence(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+  dryRunId: string,
+): Promise<ConnectorDryRunRow | null> {
+  const rows = await sql<ConnectorDryRunRow[]>`
+    SELECT id, tenant_id, merchant_id, connector_type, source_label, status,
+           sandbox_only, not_live, not_approved, public_discovery_enabled,
+           checkout_payment_enabled, live_provider_enabled,
+           provider_specific_live_enabled, rows_received, products_detected,
+           variants_detected, would_create_count, would_update_count,
+           would_archive_count, blocked_count, warning_count,
+           normalized_preview, blockers, warnings, requested_audit_event_id,
+           result_audit_event_id, generated_at, created_at
+      FROM commerce_connector_dry_runs
+     WHERE tenant_id = ${tenantId}
+       AND merchant_id = ${merchantId}
+       AND id = ${dryRunId}
+     LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+async function readDryRunReview(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+  dryRunId: string,
+): Promise<ConnectorDryRunReviewRow | null> {
+  const rows = await sql<ConnectorDryRunReviewRow[]>`
+    SELECT id, tenant_id, merchant_id, dry_run_id, status, decision,
+           decision_note, requested_by_kind, requested_by_id,
+           decided_by_operator_id, dry_run_status, dry_run_generated_at,
+           evidence_summary, requested_audit_event_id, decision_audit_event_id,
+           sandbox_only, not_live, not_approved, public_discovery_enabled,
+           checkout_payment_enabled, live_provider_enabled,
+           provider_specific_live_enabled, production_allowlist_written,
+           created_at, updated_at, decided_at
+      FROM commerce_connector_dry_run_reviews
+     WHERE tenant_id = ${tenantId}
+       AND merchant_id = ${merchantId}
+       AND dry_run_id = ${dryRunId}
      LIMIT 1
   `;
   return rows[0] ?? null;
@@ -670,6 +884,243 @@ async function persistDryRunWithAudit(
   });
   const row = await insertDryRunResult(tx as unknown as Sql, result, requested.id, resultAudit.id);
   return { row, requestedAuditEventId: requested.id, resultAuditEventId: resultAudit.id };
+}
+
+function validateReviewRequestBody(body: Record<string, unknown>): { requestNote: string | null } {
+  const fields: Record<string, string> = {};
+  rejectUnsupportedOrPrivateFields(body, REVIEW_REQUEST_FIELDS, fields);
+  const requestNote = safeReviewNote(body['request_note'], 'request_note', fields);
+  if (Object.keys(fields).length > 0) {
+    throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+      details: { fields },
+      retryable: false,
+    });
+  }
+  return { requestNote };
+}
+
+function validateReviewDecisionBody(body: Record<string, unknown>): {
+  decision: ConnectorDryRunReviewDecision;
+  decisionNote: string | null;
+} {
+  const fields: Record<string, string> = {};
+  rejectUnsupportedOrPrivateFields(body, REVIEW_DECISION_FIELDS, fields);
+  const rawDecision = body['decision'];
+  let decision: ConnectorDryRunReviewDecision = 'blocked';
+  if (REVIEW_DECISIONS.has(rawDecision as ConnectorDryRunReviewDecision)) {
+    decision = rawDecision as ConnectorDryRunReviewDecision;
+  } else {
+    fields['decision'] = 'must be accepted_for_sandbox_followup, needs_changes, or blocked';
+  }
+  const decisionNote = safeReviewNote(body['decision_note'], 'decision_note', fields);
+  if ((decision === 'needs_changes' || decision === 'blocked') && !decisionNote) {
+    fields['decision_note'] = 'required for needs_changes or blocked decisions';
+  }
+  if (Object.keys(fields).length > 0) {
+    throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+      details: { fields },
+      retryable: false,
+    });
+  }
+  return { decision, decisionNote };
+}
+
+function dryRunReviewBlockedDetails(
+  dryRun: ConnectorDryRunRow,
+  blockerCodes: string[],
+): Record<string, unknown> {
+  return {
+    dry_run_id: dryRun.id,
+    dry_run_status: dryRun.status,
+    blocker_codes: blockerCodes,
+    controls: {
+      sandbox_only: dryRun.sandbox_only === true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
+      production_allowlist_written: false,
+    },
+  };
+}
+
+async function appendDryRunReviewBlockedAudit(
+  sql: Sql,
+  input: {
+    tenantId: string;
+    merchantId: string;
+    dryRunId: string;
+    requestId: string;
+    blockerCodes: string[];
+  },
+): Promise<string> {
+  const audit = await appendCommerceAudit(sql, {
+    tenantId: input.tenantId,
+    merchantId: input.merchantId,
+    eventType: 'connector_dry_run_review_blocked',
+    resourceType: 'commerce_connector_dry_run_review',
+    resourceId: input.dryRunId,
+    requestId: input.requestId,
+    metadata: {
+      dry_run_id: input.dryRunId,
+      blocker_codes: input.blockerCodes,
+      sandbox_only: true,
+      not_live: true,
+      not_approved: true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
+      production_allowlist_written: false,
+      review_is_production_approval: false,
+      review_enables_connector_execution: false,
+    },
+  });
+  return audit.id;
+}
+
+async function insertDryRunReviewRequest(
+  tx: TxSql,
+  input: {
+    tenantId: string;
+    merchantId: string;
+    dryRun: ConnectorDryRunRow;
+    actor: { kind: 'operator' | 'merchant'; id: string };
+    requestNote: string | null;
+    requestId: string;
+  },
+): Promise<{ row: ConnectorDryRunReviewRow; auditEventId: string; created: boolean }> {
+  const existing = await readDryRunReview(
+    tx as unknown as Sql,
+    input.tenantId,
+    input.merchantId,
+    input.dryRun.id,
+  );
+  if (existing) {
+    return { row: existing, auditEventId: existing.requested_audit_event_id, created: false };
+  }
+  const evidenceSummary = {
+    ...dryRunEvidenceSummary(input.dryRun),
+    request_note_present: input.requestNote !== null,
+  };
+  const audit = await appendCommerceAudit(tx as unknown as Sql, {
+    tenantId: input.tenantId,
+    merchantId: input.merchantId,
+    eventType: 'connector_dry_run_review_requested',
+    resourceType: 'commerce_connector_dry_run_review',
+    resourceId: input.dryRun.id,
+    requestId: input.requestId,
+    metadata: {
+      ...evidenceSummary,
+      requested_by_kind: input.actor.kind,
+      sandbox_only: true,
+      not_live: true,
+      not_approved: true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
+      production_allowlist_written: false,
+      review_is_production_approval: false,
+    },
+  });
+  const rows = await tx<ConnectorDryRunReviewRow[]>`
+    INSERT INTO commerce_connector_dry_run_reviews (
+      id, tenant_id, merchant_id, dry_run_id, status, requested_by_kind,
+      requested_by_id, dry_run_status, dry_run_generated_at, evidence_summary,
+      requested_audit_event_id, sandbox_only, not_live, not_approved,
+      public_discovery_enabled, checkout_payment_enabled, live_provider_enabled,
+      provider_specific_live_enabled, production_allowlist_written
+    ) VALUES (
+      ${newCommerceConnectorDryRunReviewId()}, ${input.tenantId},
+      ${input.merchantId}, ${input.dryRun.id}, 'pending_operator_review',
+      ${input.actor.kind}, ${input.actor.id}, ${input.dryRun.status},
+      ${input.dryRun.generated_at}, ${JSON.stringify(evidenceSummary)}::jsonb,
+      ${audit.id}, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE
+    )
+    RETURNING id, tenant_id, merchant_id, dry_run_id, status, decision,
+              decision_note, requested_by_kind, requested_by_id,
+              decided_by_operator_id, dry_run_status, dry_run_generated_at,
+              evidence_summary, requested_audit_event_id, decision_audit_event_id,
+              sandbox_only, not_live, not_approved, public_discovery_enabled,
+              checkout_payment_enabled, live_provider_enabled,
+              provider_specific_live_enabled, production_allowlist_written,
+              created_at, updated_at, decided_at
+  `;
+  const row = rows[0];
+  if (!row) {
+    throw new CommerceHttpError(500, 'connector_dry_run_review_insert_failed',
+      'Connector dry-run review request could not be stored', { retryable: true });
+  }
+  return { row, auditEventId: audit.id, created: true };
+}
+
+async function recordDryRunReviewDecision(
+  tx: TxSql,
+  input: {
+    tenantId: string;
+    merchantId: string;
+    dryRun: ConnectorDryRunRow;
+    review: ConnectorDryRunReviewRow;
+    operatorId: string;
+    decision: ConnectorDryRunReviewDecision;
+    decisionNote: string | null;
+    requestId: string;
+  },
+): Promise<{ row: ConnectorDryRunReviewRow; auditEventId: string }> {
+  const audit = await appendCommerceAudit(tx as unknown as Sql, {
+    tenantId: input.tenantId,
+    merchantId: input.merchantId,
+    eventType: 'connector_dry_run_review_decision_recorded',
+    resourceType: 'commerce_connector_dry_run_review',
+    resourceId: input.review.id,
+    requestId: input.requestId,
+    metadata: {
+      review_id: input.review.id,
+      dry_run_id: input.dryRun.id,
+      dry_run_status: input.dryRun.status,
+      decision: input.decision,
+      decision_note_present: input.decisionNote !== null,
+      sandbox_only: true,
+      not_live: true,
+      not_approved: true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
+      production_allowlist_written: false,
+      review_is_production_approval: false,
+      review_enables_connector_execution: false,
+    },
+  });
+  const rows = await tx<ConnectorDryRunReviewRow[]>`
+    UPDATE commerce_connector_dry_run_reviews
+       SET status = ${input.decision},
+           decision = ${input.decision},
+           decision_note = ${input.decisionNote},
+           decided_by_operator_id = ${input.operatorId},
+           decision_audit_event_id = ${audit.id},
+           decided_at = NOW(),
+           updated_at = NOW()
+     WHERE tenant_id = ${input.tenantId}
+       AND merchant_id = ${input.merchantId}
+       AND dry_run_id = ${input.dryRun.id}
+       AND status = 'pending_operator_review'
+    RETURNING id, tenant_id, merchant_id, dry_run_id, status, decision,
+              decision_note, requested_by_kind, requested_by_id,
+              decided_by_operator_id, dry_run_status, dry_run_generated_at,
+              evidence_summary, requested_audit_event_id, decision_audit_event_id,
+              sandbox_only, not_live, not_approved, public_discovery_enabled,
+              checkout_payment_enabled, live_provider_enabled,
+              provider_specific_live_enabled, production_allowlist_written,
+              created_at, updated_at, decided_at
+  `;
+  const row = rows[0];
+  if (!row) {
+    throw new CommerceHttpError(409, 'connector_dry_run_review_not_pending',
+      'Connector dry-run review is not pending operator review', { retryable: false });
+  }
+  return { row, auditEventId: audit.id };
 }
 
 function dryRunErrorDetails(result: ConnectorDryRunResult): Record<string, unknown> {
@@ -957,27 +1408,162 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
     const tenantId = request.commerceTenantId;
     const sql = getSql();
     await assertMerchantInTenant(sql, tenantId, merchantId);
-    const rows = await sql<ConnectorDryRunRow[]>`
-      SELECT id, tenant_id, merchant_id, connector_type, source_label, status,
-             sandbox_only, not_live, not_approved, public_discovery_enabled,
-             checkout_payment_enabled, live_provider_enabled,
-             provider_specific_live_enabled, rows_received, products_detected,
-             variants_detected, would_create_count, would_update_count,
-             would_archive_count, blocked_count, warning_count,
-             normalized_preview, blockers, warnings, requested_audit_event_id,
-             result_audit_event_id, generated_at, created_at
-        FROM commerce_connector_dry_runs
-       WHERE tenant_id = ${tenantId}
-         AND merchant_id = ${merchantId}
-         AND id = ${request.params.dryRunId}
-       LIMIT 1
-    `;
-    const row = rows[0];
+    const row = await readDryRunEvidence(sql, tenantId, merchantId, request.params.dryRunId);
     if (!row) {
       throw new CommerceHttpError(404, 'connector_dry_run_not_found',
         'Connector dry-run evidence was not found in this tenant and merchant');
     }
     return reply.status(200).send({ data: toDryRunResult(row) });
+  });
+
+  app.post<{
+    Params: ConnectorDryRunReviewParams;
+    Body: ConnectorDryRunReviewRequestBody;
+  }>('/merchants/:merchantId/connectors/dry-runs/:dryRunId/review-request', async (request, reply) => {
+    if (!isPlainObject(request.body ?? {})) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { body: 'must be a JSON object' } },
+        retryable: false,
+      });
+    }
+    const merchantId = merchantIdForConnectorRequest(request, request.params.merchantId);
+    const actor = connectorReviewActor(request);
+    const tenantId = request.commerceTenantId;
+    const sql = getSql();
+    const { requestNote } = validateReviewRequestBody((request.body ?? {}) as Record<string, unknown>);
+    const merchant = await readMerchantForDryRun(sql, tenantId, merchantId);
+    if (!merchant) {
+      throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+    }
+    const dryRun = await readDryRunEvidence(sql, tenantId, merchantId, request.params.dryRunId);
+    if (!dryRun) {
+      throw new CommerceHttpError(404, 'connector_dry_run_not_found',
+        'Connector dry-run evidence was not found in this tenant and merchant');
+    }
+    const blockerCodes: string[] = [];
+    if (merchant.disabled_at !== null) blockerCodes.push('merchant_disabled');
+    if (merchant.environment !== 'sandbox') blockerCodes.push('live_merchant_mode_blocked');
+    if (!dryRunControlsAreSafe(dryRun)) blockerCodes.push('dry_run_controls_not_safe');
+    if (blockerCodes.length > 0) {
+      const auditEventId = await appendDryRunReviewBlockedAudit(sql, {
+        tenantId,
+        merchantId,
+        dryRunId: dryRun.id,
+        requestId: request.id,
+        blockerCodes,
+      });
+      throw new CommerceHttpError(409, 'connector_dry_run_review_blocked',
+        'Connector dry-run review request is blocked', {
+          auditEventId,
+          details: dryRunReviewBlockedDetails(dryRun, blockerCodes),
+          retryable: false,
+        });
+    }
+    const result = await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      return insertDryRunReviewRequest(tx, {
+        tenantId,
+        merchantId,
+        dryRun,
+        actor,
+        requestNote,
+        requestId: request.id,
+      });
+    });
+    return reply.status(result.created ? 201 : 200).send({
+      data: toDryRunReview(result.row),
+      dry_run: toDryRunResult(dryRun),
+      audit_event_id: result.row.requested_audit_event_id,
+    });
+  });
+
+  app.get<{
+    Params: ConnectorDryRunReviewParams;
+  }>('/merchants/:merchantId/connectors/dry-runs/:dryRunId/review', async (request, reply) => {
+    const merchantId = merchantIdForConnectorRequest(request, request.params.merchantId);
+    const tenantId = request.commerceTenantId;
+    const sql = getSql();
+    await assertMerchantInTenant(sql, tenantId, merchantId);
+    const dryRun = await readDryRunEvidence(sql, tenantId, merchantId, request.params.dryRunId);
+    if (!dryRun) {
+      throw new CommerceHttpError(404, 'connector_dry_run_not_found',
+        'Connector dry-run evidence was not found in this tenant and merchant');
+    }
+    const review = await readDryRunReview(sql, tenantId, merchantId, dryRun.id);
+    if (!review) {
+      throw new CommerceHttpError(404, 'connector_dry_run_review_not_found',
+        'Connector dry-run review was not found in this tenant and merchant');
+    }
+    return reply.status(200).send({
+      data: toDryRunReview(review),
+      dry_run: toDryRunResult(dryRun),
+    });
+  });
+
+  app.post<{
+    Params: ConnectorDryRunReviewParams;
+    Body: ConnectorDryRunReviewDecisionBody;
+  }>('/merchants/:merchantId/connectors/dry-runs/:dryRunId/review/decision', async (request, reply) => {
+    if (!isPlainObject(request.body ?? {})) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { body: 'must be a JSON object' } },
+        retryable: false,
+      });
+    }
+    const operator = operatorCaller(request);
+    const merchantId = merchantIdForConnectorRequest(request, request.params.merchantId);
+    const tenantId = request.commerceTenantId;
+    const { decision, decisionNote } = validateReviewDecisionBody((request.body ?? {}) as Record<string, unknown>);
+    const sql = getSql();
+    const dryRun = await readDryRunEvidence(sql, tenantId, merchantId, request.params.dryRunId);
+    if (!dryRun) {
+      throw new CommerceHttpError(404, 'connector_dry_run_not_found',
+        'Connector dry-run evidence was not found in this tenant and merchant');
+    }
+    const review = await readDryRunReview(sql, tenantId, merchantId, dryRun.id);
+    if (!review) {
+      throw new CommerceHttpError(404, 'connector_dry_run_review_not_found',
+        'Connector dry-run review was not found in this tenant and merchant');
+    }
+    const blockerCodes: string[] = [];
+    if (review.status !== 'pending_operator_review') blockerCodes.push('review_not_pending');
+    if (!dryRunControlsAreSafe(dryRun)) blockerCodes.push('dry_run_controls_not_safe');
+    if (decision === 'accepted_for_sandbox_followup' && dryRun.status !== 'passed') {
+      blockerCodes.push('blocked_dry_run_cannot_be_accepted');
+    }
+    if (blockerCodes.length > 0) {
+      const auditEventId = await appendDryRunReviewBlockedAudit(sql, {
+        tenantId,
+        merchantId,
+        dryRunId: dryRun.id,
+        requestId: request.id,
+        blockerCodes,
+      });
+      throw new CommerceHttpError(409, 'connector_dry_run_review_blocked',
+        'Connector dry-run review decision is blocked', {
+          auditEventId,
+          details: dryRunReviewBlockedDetails(dryRun, blockerCodes),
+          retryable: false,
+        });
+    }
+    const result = await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      return recordDryRunReviewDecision(tx, {
+        tenantId,
+        merchantId,
+        dryRun,
+        review,
+        operatorId: operator.developerId,
+        decision,
+        decisionNote,
+        requestId: request.id,
+      });
+    });
+    return reply.status(200).send({
+      data: toDryRunReview(result.row),
+      dry_run: toDryRunResult(dryRun),
+      audit_event_id: result.auditEventId,
+    });
   });
 
   app.get<{ Querystring: ConnectorListQuery }>('/connectors', async (request, reply) => {
