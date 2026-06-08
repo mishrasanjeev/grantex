@@ -115,6 +115,50 @@ No-go for public or production launch:
 - live payments, live Plural, or live providers
 - production allowlists
 
+## Real Merchant Launch Blockers
+
+Real merchant launch remains blocked until a separate approved runtime chain
+proves safe connector behavior with reviewed evidence. C6Og does not approve
+real merchant launch.
+
+Real merchant launch status: C6Og does not approve real merchant launch.
+
+Current real merchant launch blockers:
+
+- no approved real merchant source-system scope or source-of-truth map
+- no reviewed first real connector dry-run adapter plan
+- no approved credential intake, storage, rotation, and redaction process
+- no tenant-boundary evidence for real merchant connector configuration
+- no stale-source, conflict, and source-precedence evidence for catalog, price,
+  inventory, order, fulfillment, refund, settlement, and support data
+- no dry-run audit evidence showing connector metadata and sync planning without
+  outbound merchant private API execution
+- no approved rollback and disablement procedure for connector scheduling,
+  stale-state blockers, conflict blockers, or credential revocation
+- no production readiness approval for public discovery, production Commerce V1,
+  checkout/payment creation, live payments, live Plural, live providers, or
+  production allowlists
+
+## Next Recommended Runtime Chain
+
+The next recommended runtime chain is C6P first real connector sync adapter
+planning.
+
+Next runtime chain: C6P first real connector sync adapter planning.
+
+C6P should remain planning and safe-foundation work unless a later approved task
+explicitly expands scope. The expected C6P starting point is:
+
+- define the first connector sync adapter plan using metadata, dry-run behavior,
+  and test doubles only
+- keep AgenticOrg from directly executing merchant private API calls
+- keep Grantex connector work non-live until explicit approval exists
+- prove source precedence, stale/conflict blockers, tenant boundaries,
+  credential redaction, and audit evidence before any real sync execution
+- document stop conditions for public discovery, production Commerce V1,
+  checkout/payment creation, live payments, live Plural, provider calls,
+  merchant private API calls, and production allowlists
+
 ## Stop Conditions
 
 Stop and require a new approved work item if any C6Og follow-up:

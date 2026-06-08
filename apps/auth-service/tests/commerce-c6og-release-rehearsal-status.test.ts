@@ -38,6 +38,17 @@ const remainingBlockers = [
   'Production allowlists',
 ];
 
+const realMerchantLaunchBlockers = [
+  'no approved real merchant source-system scope or source-of-truth map',
+  'no reviewed first real connector dry-run adapter plan',
+  'no approved credential intake, storage, rotation, and redaction process',
+  'no tenant-boundary evidence for real merchant connector configuration',
+  'no stale-source, conflict, and source-precedence evidence',
+  'no dry-run audit evidence showing connector metadata',
+  'no approved rollback and disablement procedure',
+  'no production readiness approval',
+];
+
 function readAssessment() {
   return readFileSync(assessmentPath, 'utf8');
 }
@@ -95,6 +106,28 @@ describe('C6Og release rehearsal status and launch gap assessment', () => {
       expect(assessment).toContain(blocker);
     }
     expect(assessment).toContain('No-go for public or production launch');
+  });
+
+  it('documents real merchant launch blockers', () => {
+    const assessment = readAssessment();
+
+    expect(assessment).toContain('## Real Merchant Launch Blockers');
+    expect(assessment).toContain('C6Og does not approve real merchant launch');
+    for (const blocker of realMerchantLaunchBlockers) {
+      expect(assessment).toContain(blocker);
+    }
+  });
+
+  it('documents the next recommended runtime chain as C6P connector planning', () => {
+    const assessment = readAssessment();
+
+    expect(assessment).toContain('## Next Recommended Runtime Chain');
+    expect(assessment).toContain('C6P first real connector sync adapter planning');
+    expect(assessment).toContain('metadata, dry-run behavior');
+    expect(assessment).toContain('test doubles only');
+    expect(assessment).toContain('keep AgenticOrg from directly executing merchant private API calls');
+    expect(assessment).toContain('credential redaction');
+    expect(assessment).toContain('audit evidence');
   });
 
   it('keeps evidence retention internal preview only and non-enabling', () => {
