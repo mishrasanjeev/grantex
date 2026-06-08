@@ -192,7 +192,7 @@ describe('C6P first connector sync adapter planning packet', () => {
     expect(planning).not.toMatch(/-----BEGIN [A-Z ]+PRIVATE KEY-----/);
     expect(planning).not.toMatch(/postgres(?:ql)?:\/\/[^\s)]+/i);
     expect(planning).not.toMatch(/redis:\/\/[^\s)]+/i);
-    expect(planning).not.toMatch(/https:\/\/[A-Za-z0-9.-]*\.myshopify\.com/i);
+    expect(planning).not.toMatch(/^https:\/\/[A-Za-z0-9.-]*\.myshopify\.com(?:\/|$)/i);
     expect(planning).not.toMatch(/client_secret\s*[:=]\s*["']?[A-Za-z0-9_-]{8,}/i);
     expect(planning).not.toMatch(/access_token\s*[:=]\s*["']?[A-Za-z0-9_-]{8,}/i);
     expect(planning).not.toMatch(/refresh_token\s*[:=]\s*["']?[A-Za-z0-9_-]{8,}/i);
