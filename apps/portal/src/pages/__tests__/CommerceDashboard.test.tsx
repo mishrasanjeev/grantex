@@ -34,6 +34,9 @@ const mockGetCommerceMerchantAgenticOrgBuyerDiscoveryPreview = vi.fn();
 const mockGetCommerceMerchantSchemaOrgJsonLdPreview = vi.fn();
 const mockRequestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff = vi.fn();
 const mockWithdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff = vi.fn();
+const mockRunCommerceConnectorDryRun = vi.fn();
+const mockRequestCommerceConnectorDryRunReview = vi.fn();
+const mockRecordCommerceConnectorDryRunReviewDecision = vi.fn();
 const mockDisableMerchantAgenticCommerce = vi.fn();
 const mockEnableMerchantAgenticCommerce = vi.fn();
 const mockListCommerceAgents = vi.fn();
@@ -77,6 +80,9 @@ vi.mock('../../api/commerce', () => ({
   getCommerceMerchantSchemaOrgJsonLdPreview: (...a: unknown[]) => mockGetCommerceMerchantSchemaOrgJsonLdPreview(...a),
   requestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff: (...a: unknown[]) => mockRequestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff(...a),
   withdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff: (...a: unknown[]) => mockWithdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff(...a),
+  runCommerceConnectorDryRun: (...a: unknown[]) => mockRunCommerceConnectorDryRun(...a),
+  requestCommerceConnectorDryRunReview: (...a: unknown[]) => mockRequestCommerceConnectorDryRunReview(...a),
+  recordCommerceConnectorDryRunReviewDecision: (...a: unknown[]) => mockRecordCommerceConnectorDryRunReviewDecision(...a),
   disableMerchantAgenticCommerce: (...a: unknown[]) => mockDisableMerchantAgenticCommerce(...a),
   enableMerchantAgenticCommerce: (...a: unknown[]) => mockEnableMerchantAgenticCommerce(...a),
   listCommerceAgents: (...a: unknown[]) => mockListCommerceAgents(...a),
@@ -727,6 +733,95 @@ const schemaOrgPreview = {
   },
 };
 
+const connectorDryRun = {
+  dry_run_id: 'cdry_C6SB',
+  tenant_id: 'cten_1',
+  merchant_id: 'mch_1',
+  connector_type: 'csv' as const,
+  source_label: 'portal_manual_catalog_snapshot',
+  status: 'passed' as const,
+  sandbox_only: true as const,
+  not_live: true as const,
+  not_approved: true as const,
+  public_discovery_enabled: false as const,
+  checkout_payment_enabled: false as const,
+  live_provider_enabled: false as const,
+  live_plural_enabled: false as const,
+  rows_received: 1,
+  products_detected: 1,
+  variants_detected: 1,
+  would_create_count: 1,
+  would_update_count: 0,
+  would_archive_count: 0,
+  blocked_count: 0,
+  warning_count: 0,
+  normalized_preview: [{
+    source_product_ref: 'portal_fixture_001',
+    title: 'Portal Sandbox Fixture Product',
+    brand: 'Synthetic Fixture',
+    description: 'Public-safe local fixture row for connector dry-run rehearsal.',
+    image_url: null,
+    category_preset: 'electronics_appliances',
+    variants: [{
+      sku: 'PORTAL-FIXTURE-001',
+      variant_title: null,
+      price_amount: 1299,
+      currency: 'INR',
+      availability_status: 'in_stock' as const,
+      warranty_summary: 'Sandbox fixture warranty summary.',
+      return_policy_summary: 'Sandbox fixture return summary.',
+    }],
+  }],
+  blockers: [],
+  warnings: [],
+  requested_audit_event_id: 'caud_C6SB_REQUESTED',
+  audit_event_id: 'caud_C6SB_COMPLETED',
+  generated_at: '2026-01-01T00:40:00Z',
+  created_at: '2026-01-01T00:40:00Z',
+};
+
+const connectorReview = {
+  review_id: 'cdrev_C6SB',
+  tenant_id: 'cten_1',
+  merchant_id: 'mch_1',
+  dry_run_id: 'cdry_C6SB',
+  status: 'pending_operator_review' as const,
+  decision: null,
+  decision_note: null,
+  requested_by: { kind: 'operator' as const, id: 'dev_TEST' },
+  decided_by_operator_id: null,
+  dry_run_status: 'passed' as const,
+  dry_run_generated_at: '2026-01-01T00:40:00Z',
+  evidence_summary: { rows_received: 1, blocked_count: 0, warning_count: 0 },
+  requested_audit_event_id: 'caud_C6SB_REVIEW_REQUESTED',
+  audit_event_id: null,
+  controls: {
+    sandbox_only: true as const,
+    not_live: true as const,
+    not_approved: true as const,
+    public_discovery_enabled: false as const,
+    checkout_payment_enabled: false as const,
+    live_provider_enabled: false as const,
+    live_plural_enabled: false as const,
+    production_allowlist_written: false as const,
+    review_is_production_approval: false as const,
+    review_enables_connector_execution: false as const,
+  },
+  created_at: '2026-01-01T00:41:00Z',
+  updated_at: '2026-01-01T00:41:00Z',
+  decided_at: null,
+};
+
+const connectorReviewAccepted = {
+  ...connectorReview,
+  status: 'accepted_for_sandbox_followup' as const,
+  decision: 'accepted_for_sandbox_followup' as const,
+  decision_note: 'Sandbox follow-up only.',
+  decided_by_operator_id: 'dev_TEST',
+  audit_event_id: 'caud_C6SB_DECISION',
+  decided_at: '2026-01-01T00:42:00Z',
+};
+
 const credential = {
   id: 'cpcred_1',
   tenant_id: 'cten_1',
@@ -1140,6 +1235,23 @@ describe('CommerceOnboarding', () => {
       },
       audit_event_id: 'aud_agenticorg_withdraw',
     });
+    mockRunCommerceConnectorDryRun.mockResolvedValue({
+      data: connectorDryRun,
+      audit_events: [
+        { event_type: 'connector_dry_run_requested', audit_event_id: 'caud_C6SB_REQUESTED' },
+        { event_type: 'connector_dry_run_completed', audit_event_id: 'caud_C6SB_COMPLETED' },
+      ],
+    });
+    mockRequestCommerceConnectorDryRunReview.mockResolvedValue({
+      data: connectorReview,
+      dry_run: connectorDryRun,
+      audit_event_id: 'caud_C6SB_REVIEW_REQUESTED',
+    });
+    mockRecordCommerceConnectorDryRunReviewDecision.mockResolvedValue({
+      data: connectorReviewAccepted,
+      dry_run: connectorDryRun,
+      audit_event_id: 'caud_C6SB_DECISION',
+    });
     mockListCommerceAgents.mockResolvedValue({ items: [agent], next_cursor: null });
     mockListCommercePolicies.mockResolvedValue({ items: [{ id: 'cpol_1', status: 'active' }], next_cursor: null });
     mockListCommerceProducts.mockResolvedValue({ items: [product], next_cursor: null });
@@ -1253,6 +1365,68 @@ describe('CommerceOnboarding', () => {
     })));
     expect(screen.getByText('policy_allow')).toBeInTheDocument();
     expect(screen.queryByText(/passport_jwt/i)).not.toBeInTheDocument();
+  });
+
+  it('runs connector dry-run review evidence without credential entry or live execution controls', async () => {
+    const user = userEvent.setup();
+    r(<CommerceOnboarding />);
+
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
+    await waitFor(() => expect(screen.getByText('Connector dry-run review')).toBeInTheDocument());
+
+    expect(screen.getAllByText((_content, node) => (
+      node?.textContent?.includes('Credential-free sandbox evidence') ?? false
+    )).length).toBeGreaterThan(0);
+    expect(screen.getByText('No credential entry')).toBeInTheDocument();
+    expect(screen.getByText('Outbound sync off')).toBeInTheDocument();
+    expect(screen.getByText('credential_entry_enabled')).toBeInTheDocument();
+    expect(screen.getByText('outbound_sync_enabled')).toBeInTheDocument();
+    expect(screen.getByText('production_connector_setup')).toBeInTheDocument();
+    expect(screen.getByText('merchant_private_api_calls')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Run connector dry-run' }));
+    await waitFor(() => expect(mockRunCommerceConnectorDryRun).toHaveBeenCalledWith(expect.objectContaining({
+      merchantId: 'mch_1',
+      connectorType: 'csv',
+      sourceLabel: 'portal_manual_catalog_snapshot',
+      previewLimit: 5,
+    })));
+    const dryRunArgument = mockRunCommerceConnectorDryRun.mock.calls[0]![0];
+    const serializedDryRunArgument = JSON.stringify(dryRunArgument).toLowerCase();
+    for (const forbidden of [
+      'credential',
+      'secret',
+      'provider_metadata',
+      'public_discovery_enabled',
+      'checkout_payment_enabled',
+      'live_provider_enabled',
+      'live_plural_enabled',
+      'merchant_private_api',
+    ]) {
+      expect(serializedDryRunArgument).not.toContain(forbidden);
+    }
+    expect(screen.getByText('Portal Sandbox Fixture Product')).toBeInTheDocument();
+    expect(screen.getByText('would create')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Review request note'), 'Public-safe sandbox evidence.');
+    await user.click(screen.getByRole('button', { name: 'Request dry-run review' }));
+    await waitFor(() => expect(mockRequestCommerceConnectorDryRunReview).toHaveBeenCalledWith('mch_1', 'cdry_C6SB', {
+      requestNote: 'Public-safe sandbox evidence.',
+    }));
+    expect(screen.getByText('cdrev_C6SB')).toBeInTheDocument();
+    expect(screen.getByText('review_is_production_approval')).toBeInTheDocument();
+    expect(screen.getByText('review_enables_connector_execution')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Decision note'), 'Sandbox follow-up only.');
+    await user.click(screen.getByRole('button', { name: 'Record dry-run review decision' }));
+    await waitFor(() => expect(mockRecordCommerceConnectorDryRunReviewDecision).toHaveBeenCalledWith('mch_1', 'cdry_C6SB', {
+      decision: 'accepted_for_sandbox_followup',
+      decisionNote: 'Sandbox follow-up only.',
+    }));
+    expect(screen.getByText('caud_C6SB_DECISION')).toBeInTheDocument();
+    expect(screen.queryByText('production connector setup enabled')).not.toBeInTheDocument();
   });
 
   it('creates and dry-runs rollout proposal evidence from the operator flow', async () => {

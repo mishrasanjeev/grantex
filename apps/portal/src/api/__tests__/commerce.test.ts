@@ -15,6 +15,8 @@ import {
   disableMerchantAgenticCommerce,
   evaluateCommercePolicy,
   getCommerceMerchant,
+  getCommerceConnectorDryRun,
+  getCommerceConnectorDryRunReview,
   getCommerceMerchantSchemaOrgJsonLdPreview,
   getCommerceMerchantSandboxOnboarding,
   getCommerceOpsHealth,
@@ -29,8 +31,11 @@ import {
   listCommercePaymentIntents,
   listCommerceProviderCredentials,
   reconcileCommercePaymentIntent,
+  recordCommerceConnectorDryRunReviewDecision,
   rotateCommerceWebhookSourceSecret,
+  requestCommerceConnectorDryRunReview,
   revokeCommercePassport,
+  runCommerceConnectorDryRun,
   transitionCommerceMerchantSandboxOnboarding,
   updateCommerceAgent,
   updateCommerceMerchant,
@@ -175,6 +180,82 @@ describe('commerce api', () => {
     });
     expect(mockFetch.mock.calls[4]![0]).toBe('http://localhost:3000/v1/commerce/catalog/products/bulk');
     expect(JSON.parse(mockFetch.mock.calls[4]![1].body).dry_run).toBe(true);
+  });
+
+  it('calls connector dry-run and review APIs without credential or enablement fields', async () => {
+    ok({ data: { dry_run_id: 'cdry/1', status: 'passed' }, audit_events: [] }, 201);
+    await runCommerceConnectorDryRun({
+      merchantId: 'mch/1',
+      connectorType: 'csv',
+      sourceLabel: 'portal_manual_fixture',
+      previewLimit: 3,
+      rows: [{ product_id: 'p1', title: 'Fixture product', sku: 'SKU-1', price_amount: 1000, currency: 'INR' }],
+    });
+    expect(mockFetch.mock.calls[0]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/dry-run',
+    );
+    const dryRunBody = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    expect(dryRunBody).toEqual({
+      connector_type: 'csv',
+      source_label: 'portal_manual_fixture',
+      preview_limit: 3,
+      rows: [{ product_id: 'p1', title: 'Fixture product', sku: 'SKU-1', price_amount: 1000, currency: 'INR' }],
+    });
+    const serializedDryRunBody = JSON.stringify(dryRunBody).toLowerCase();
+    for (const forbidden of [
+      'credential',
+      'secret',
+      'provider_metadata',
+      'public_discovery_enabled',
+      'checkout_payment_enabled',
+      'live_provider_enabled',
+      'live_plural_enabled',
+    ]) {
+      expect(serializedDryRunBody).not.toContain(forbidden);
+    }
+
+    ok({ data: { dry_run_id: 'cdry/1' } });
+    await getCommerceConnectorDryRun('mch/1', 'cdry/1');
+    expect(mockFetch.mock.calls[1]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/dry-runs/cdry%2F1',
+    );
+
+    ok({ data: { review_id: 'cdrev/1' }, dry_run: { dry_run_id: 'cdry/1' }, audit_event_id: 'aud_1' });
+    await requestCommerceConnectorDryRunReview('mch/1', 'cdry/1', { requestNote: 'Public-safe sandbox evidence review.' });
+    expect(mockFetch.mock.calls[2]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/dry-runs/cdry%2F1/review-request',
+    );
+    expect(JSON.parse(mockFetch.mock.calls[2]![1].body)).toEqual({ request_note: 'Public-safe sandbox evidence review.' });
+
+    ok({ data: { review_id: 'cdrev/1' }, dry_run: { dry_run_id: 'cdry/1' }, audit_event_id: 'aud_1' });
+    await getCommerceConnectorDryRunReview('mch/1', 'cdry/1');
+    expect(mockFetch.mock.calls[3]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/dry-runs/cdry%2F1/review',
+    );
+
+    ok({ data: { review_id: 'cdrev/1', decision: 'accepted_for_sandbox_followup' }, dry_run: { dry_run_id: 'cdry/1' }, audit_event_id: 'aud_2' });
+    await recordCommerceConnectorDryRunReviewDecision('mch/1', 'cdry/1', {
+      decision: 'accepted_for_sandbox_followup',
+      decisionNote: 'Sandbox follow-up only.',
+    });
+    expect(mockFetch.mock.calls[4]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/dry-runs/cdry%2F1/review/decision',
+    );
+    const decisionBody = JSON.parse(mockFetch.mock.calls[4]![1].body);
+    expect(decisionBody).toEqual({
+      decision: 'accepted_for_sandbox_followup',
+      decision_note: 'Sandbox follow-up only.',
+    });
+    const serializedDecisionBody = JSON.stringify(decisionBody).toLowerCase();
+    for (const forbidden of [
+      'approval',
+      'public_discovery_enabled',
+      'checkout_payment_enabled',
+      'live_provider_enabled',
+      'live_plural_enabled',
+    ]) {
+      expect(serializedDecisionBody).not.toContain(forbidden);
+    }
   });
 
   it('calls webhook source and policy endpoints without secret-like list output assumptions', async () => {

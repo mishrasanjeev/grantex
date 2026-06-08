@@ -3,6 +3,7 @@ import {
   createCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   dryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   evaluateCommercePolicy,
+  recordCommerceConnectorDryRunReviewDecision,
   getCommerceMerchantAgenticOrgBuyerDiscoveryPreview,
   getCommerceMerchantReadOnlyDiscoveryReview,
   getCommerceMerchantReadOnlyDiscoveryRolloutProposal,
@@ -14,14 +15,20 @@ import {
   listCommerceProducts,
   listCommerceProviderCredentials,
   listCommerceWebhookSources,
+  requestCommerceConnectorDryRunReview,
   recordCommerceReadOnlyDiscoveryReviewDecision,
   requestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff,
   requestCommerceMerchantReadOnlyDiscoveryReview,
+  runCommerceConnectorDryRun,
   updateCommerceMerchantSandboxOnboarding,
   withdrawCommerceMerchantAgenticOrgBuyerDiscoveryHandoff,
   withdrawCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   type CommerceAgent,
   type CommerceAgenticOrgBuyerDiscoveryPreview,
+  type CommerceConnectorDryRunResult,
+  type CommerceConnectorDryRunReview,
+  type CommerceConnectorDryRunReviewDecision,
+  type CommerceConnectorDryRunType,
   type CommerceReadOnlyDiscoveryOperatorDecision,
   type CommerceReadOnlyDiscoveryOperatorReview,
   type CommerceReadOnlyDiscoveryRolloutProposal,
@@ -70,6 +77,22 @@ const actionScopes = [
   'commerce:payment.status.read',
 ];
 
+const connectorDryRunRowsFixture = JSON.stringify([
+  {
+    product_id: 'portal_fixture_001',
+    title: 'Portal Sandbox Fixture Product',
+    brand: 'Synthetic Fixture',
+    description: 'Public-safe local fixture row for connector dry-run rehearsal.',
+    category_preset: 'electronics_appliances',
+    sku: 'PORTAL-FIXTURE-001',
+    price_amount: 1299,
+    currency: 'INR',
+    availability_status: 'in_stock',
+    warranty_summary: 'Sandbox fixture warranty summary.',
+    return_policy_summary: 'Sandbox fixture return summary.',
+  },
+], null, 2);
+
 function readinessVariant(status: string): 'default' | 'success' | 'warning' | 'danger' {
   if (status === 'pass') return 'success';
   if (status === 'fail' || status === 'not_applicable' || status === 'recommended') return 'warning';
@@ -101,6 +124,8 @@ export function CommerceOnboarding() {
   const [rolloutProposal, setRolloutProposal] = useState<CommerceReadOnlyDiscoveryRolloutProposal | null>(null);
   const [agenticOrgPreview, setAgenticOrgPreview] = useState<CommerceAgenticOrgBuyerDiscoveryPreview | null>(null);
   const [schemaOrgPreview, setSchemaOrgPreview] = useState<CommerceSchemaOrgJsonLdPreview | null>(null);
+  const [connectorDryRun, setConnectorDryRun] = useState<CommerceConnectorDryRunResult | null>(null);
+  const [connectorReview, setConnectorReview] = useState<CommerceConnectorDryRunReview | null>(null);
   const [merchantForm, setMerchantForm] = useState<MerchantPatchForm>(defaultPatch);
   const [agents, setAgents] = useState<CommerceAgent[]>([]);
   const [activePolicyCount, setActivePolicyCount] = useState(0);
@@ -116,6 +141,24 @@ export function CommerceOnboarding() {
   const [proposalNote, setProposalNote] = useState('');
   const [agenticOrgSubmitting, setAgenticOrgSubmitting] = useState(false);
   const [agenticOrgNote, setAgenticOrgNote] = useState('');
+  const [connectorSubmitting, setConnectorSubmitting] = useState(false);
+  const [connectorReviewSubmitting, setConnectorReviewSubmitting] = useState(false);
+  const [connectorDecisionSubmitting, setConnectorDecisionSubmitting] = useState(false);
+  const [connectorForm, setConnectorForm] = useState<{
+    connector_type: CommerceConnectorDryRunType;
+    source_label: string;
+    rows_json: string;
+    request_note: string;
+    decision: CommerceConnectorDryRunReviewDecision;
+    decision_note: string;
+  }>({
+    connector_type: 'csv',
+    source_label: 'portal_manual_catalog_snapshot',
+    rows_json: connectorDryRunRowsFixture,
+    request_note: '',
+    decision: 'accepted_for_sandbox_followup',
+    decision_note: '',
+  });
   const [decisionForm, setDecisionForm] = useState<{
     decision: CommerceReadOnlyDiscoveryOperatorDecision;
     reason: string;
@@ -163,6 +206,8 @@ export function CommerceOnboarding() {
       setRolloutProposal(proposalRes?.data ?? null);
       setAgenticOrgPreview(agenticOrgRes?.data ?? null);
       setSchemaOrgPreview(schemaOrgRes?.data ?? null);
+      setConnectorDryRun(null);
+      setConnectorReview(null);
       setProposalNote(proposalRes?.data.proposal_note ?? '');
       setAgenticOrgNote('');
       setMerchantForm({
@@ -357,6 +402,82 @@ export function CommerceOnboarding() {
     }
   }
 
+  function parseConnectorRows(): Array<Record<string, unknown>> | null {
+    try {
+      const parsed = JSON.parse(connectorForm.rows_json) as unknown;
+      if (!Array.isArray(parsed) || parsed.some((row) => row === null || typeof row !== 'object' || Array.isArray(row))) {
+        show('Connector dry-run rows must be a JSON array of objects', 'error');
+        return null;
+      }
+      return parsed as Array<Record<string, unknown>>;
+    } catch {
+      show('Connector dry-run rows must be valid JSON', 'error');
+      return null;
+    }
+  }
+
+  async function runConnectorDryRun() {
+    if (!merchant) return;
+    const rows = parseConnectorRows();
+    if (!rows) return;
+    setConnectorSubmitting(true);
+    setConnectorReview(null);
+    try {
+      const res = await runCommerceConnectorDryRun({
+        merchantId: merchant.merchant_id,
+        connectorType: connectorForm.connector_type,
+        sourceLabel: connectorForm.source_label.trim(),
+        previewLimit: 5,
+        rows,
+      });
+      setConnectorDryRun(res.data);
+      show(res.data.status === 'passed' ? 'Connector dry-run passed' : 'Connector dry-run blocked', res.data.status === 'passed' ? 'success' : 'error');
+    } catch {
+      show('Connector dry-run request is blocked', 'error');
+    } finally {
+      setConnectorSubmitting(false);
+    }
+  }
+
+  async function requestConnectorReview() {
+    if (!merchant || !connectorDryRun) return;
+    setConnectorReviewSubmitting(true);
+    try {
+      const res = await requestCommerceConnectorDryRunReview(merchant.merchant_id, connectorDryRun.dry_run_id, {
+        requestNote: connectorForm.request_note.trim() || undefined,
+      });
+      setConnectorReview(res.data);
+      setConnectorDryRun(res.dry_run);
+      show('Connector dry-run review requested', 'success');
+    } catch {
+      show('Connector dry-run review request is blocked', 'error');
+    } finally {
+      setConnectorReviewSubmitting(false);
+    }
+  }
+
+  async function recordConnectorDecision() {
+    if (!merchant || !connectorDryRun || !connectorReview) return;
+    setConnectorDecisionSubmitting(true);
+    try {
+      const res = await recordCommerceConnectorDryRunReviewDecision(
+        merchant.merchant_id,
+        connectorDryRun.dry_run_id,
+        {
+          decision: connectorForm.decision,
+          decisionNote: connectorForm.decision_note.trim() || undefined,
+        },
+      );
+      setConnectorReview(res.data);
+      setConnectorDryRun(res.dry_run);
+      show('Connector dry-run review decision recorded', 'success');
+    } catch {
+      show('Connector dry-run review decision is blocked', 'error');
+    } finally {
+      setConnectorDecisionSubmitting(false);
+    }
+  }
+
   async function simulatePolicy() {
     if (!merchant) return;
     setSimulating(true);
@@ -448,6 +569,35 @@ export function CommerceOnboarding() {
     || agenticOrgStatus !== 'sandbox_handoff_requested';
   const agenticOrgJson = agenticOrgPreview ? JSON.stringify(agenticOrgPreview, null, 2) : '';
   const schemaOrgJson = schemaOrgPreview ? JSON.stringify(schemaOrgPreview.jsonld, null, 2) : '';
+  const connectorDryRunControls = connectorDryRun ? [
+    { label: 'sandbox_only', value: connectorDryRun.sandbox_only },
+    { label: 'not_live', value: connectorDryRun.not_live },
+    { label: 'not_approved', value: connectorDryRun.not_approved },
+    { label: 'public_discovery_enabled', value: connectorDryRun.public_discovery_enabled },
+    { label: 'checkout_payment_enabled', value: connectorDryRun.checkout_payment_enabled },
+    { label: 'live_provider_enabled', value: connectorDryRun.live_provider_enabled },
+    { label: 'live_plural_enabled', value: connectorDryRun.live_plural_enabled },
+  ] : [];
+  const connectorReviewControls = connectorReview ? [
+    { label: 'sandbox_only', value: connectorReview.controls.sandbox_only },
+    { label: 'not_live', value: connectorReview.controls.not_live },
+    { label: 'not_approved', value: connectorReview.controls.not_approved },
+    { label: 'review_is_production_approval', value: connectorReview.controls.review_is_production_approval },
+    { label: 'review_enables_connector_execution', value: connectorReview.controls.review_enables_connector_execution },
+    { label: 'public_discovery_enabled', value: connectorReview.controls.public_discovery_enabled },
+    { label: 'checkout_payment_enabled', value: connectorReview.controls.checkout_payment_enabled },
+    { label: 'live_provider_enabled', value: connectorReview.controls.live_provider_enabled },
+    { label: 'live_plural_enabled', value: connectorReview.controls.live_plural_enabled },
+    { label: 'production_allowlist_written', value: connectorReview.controls.production_allowlist_written },
+  ] : [];
+  const connectorReviewRequestDisabled = connectorReviewSubmitting
+    || !connectorDryRun
+    || connectorDryRun.status !== 'passed';
+  const connectorDecisionDisabled = connectorDecisionSubmitting
+    || !connectorReview
+    || connectorReview.status !== 'pending_operator_review'
+    || ((connectorForm.decision === 'needs_changes' || connectorForm.decision === 'blocked') && !connectorForm.decision_note.trim())
+    || (connectorForm.decision === 'accepted_for_sandbox_followup' && connectorReview?.dry_run_status !== 'passed');
 
   return (
     <div>
@@ -1198,6 +1348,263 @@ export function CommerceOnboarding() {
                 {schemaOrgJson}
               </pre>
             </details>
+          </Card>
+
+          <Card className="xl:col-span-2">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-gx-text">Connector dry-run review</h2>
+                <p className="mt-1 text-xs text-gx-muted">
+                  Credential-free sandbox evidence for manual/CSV connector mapping; this does not run outbound sync, production connector setup, public discovery, checkout, payment, live provider, or merchant-system execution.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={connectorDryRun?.status === 'passed' ? 'success' : connectorDryRun?.status === 'blocked' ? 'danger' : 'warning'}>
+                  {connectorDryRun?.status ?? 'not_run'}
+                </Badge>
+                <Badge variant="warning">sandbox_only</Badge>
+                <Badge variant="danger">not_live</Badge>
+                <Badge variant="danger">not_approved</Badge>
+                <Badge variant="success">No credential entry</Badge>
+                <Badge variant="success">Outbound sync off</Badge>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)]">
+              <label className="text-sm font-medium text-gx-text">
+                Connector type
+                <select
+                  className="mt-1.5 w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+                  value={connectorForm.connector_type}
+                  onChange={(e) => setConnectorForm({ ...connectorForm, connector_type: e.target.value as CommerceConnectorDryRunType })}
+                >
+                  <option value="csv">csv</option>
+                  <option value="manual">manual</option>
+                </select>
+              </label>
+              <Input
+                id="connector-source-label"
+                label="Source label"
+                value={connectorForm.source_label}
+                onChange={(e) => setConnectorForm({ ...connectorForm, source_label: e.target.value })}
+              />
+            </div>
+
+            <div className="mt-3">
+              <label htmlFor="connector-rows-json" className="mb-1.5 block text-sm font-medium text-gx-text">
+                Sandbox catalog rows JSON
+              </label>
+              <textarea
+                id="connector-rows-json"
+                value={connectorForm.rows_json}
+                onChange={(e) => setConnectorForm({ ...connectorForm, rows_json: e.target.value })}
+                rows={8}
+                className="w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 font-mono text-xs text-gx-text focus:border-gx-accent focus:outline-none"
+              />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                onClick={runConnectorDryRun}
+                disabled={connectorSubmitting || !connectorForm.source_label.trim() || !connectorForm.rows_json.trim()}
+              >
+                {connectorSubmitting ? 'Running' : 'Run connector dry-run'}
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={requestConnectorReview}
+                disabled={connectorReviewRequestDisabled}
+                title={connectorDryRun?.status === 'blocked' ? 'Blocked dry-runs cannot be accepted for sandbox follow-up.' : 'Request sandbox-only dry-run review.'}
+              >
+                {connectorReviewSubmitting ? 'Requesting' : connectorReview ? 'Review requested' : 'Request dry-run review'}
+              </Button>
+            </div>
+
+            <div className="mt-4 grid gap-2 md:grid-cols-4">
+              {[
+                { label: 'credential_entry_enabled', value: false },
+                { label: 'outbound_sync_enabled', value: false },
+                { label: 'production_connector_setup', value: false },
+                { label: 'merchant_private_api_calls', value: false },
+              ].map(({ label, value }) => (
+                <div key={label} className="rounded-md border border-gx-border p-3">
+                  <div className="text-xs text-gx-muted">{label}</div>
+                  <Badge variant={value ? 'danger' : 'success'}>{value ? 'true' : 'false'}</Badge>
+                </div>
+              ))}
+            </div>
+
+            {connectorDryRun ? (
+              <>
+                <div className="mt-4 grid gap-2 md:grid-cols-4">
+                  {[
+                    { label: 'rows received', value: connectorDryRun.rows_received },
+                    { label: 'products detected', value: connectorDryRun.products_detected },
+                    { label: 'variants detected', value: connectorDryRun.variants_detected },
+                    { label: 'blocked rows', value: connectorDryRun.blocked_count },
+                    { label: 'would create', value: connectorDryRun.would_create_count },
+                    { label: 'would update', value: connectorDryRun.would_update_count },
+                    { label: 'would archive', value: connectorDryRun.would_archive_count },
+                    { label: 'warnings', value: connectorDryRun.warning_count },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-md border border-gx-border p-3">
+                      <div className="text-xs text-gx-muted">{item.label}</div>
+                      <div className="text-sm font-medium text-gx-text">{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 grid gap-2 md:grid-cols-4">
+                  {connectorDryRunControls.map(({ label, value }) => (
+                    <div key={label} className="rounded-md border border-gx-border p-3">
+                      <div className="text-xs text-gx-muted">{label}</div>
+                      <Badge variant={value === true && !label.endsWith('_enabled') ? 'success' : value ? 'danger' : 'success'}>
+                        {value ? 'true' : 'false'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-md border border-gx-border p-3">
+                    <div className="text-sm font-medium text-gx-text">Normalized preview</div>
+                    {connectorDryRun.normalized_preview.length ? (
+                      <div className="mt-2 grid gap-2">
+                        {connectorDryRun.normalized_preview.map((item) => (
+                          <div key={item.source_product_ref} className="rounded-md border border-gx-border p-2">
+                            <div className="text-sm font-medium text-gx-text">{item.title}</div>
+                            <div className="mt-1 text-xs text-gx-muted">{item.category_preset}</div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {item.variants.map((variant) => (
+                                <Badge key={variant.sku} variant="default">
+                                  {variant.sku} {variant.price_amount} {variant.currency}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-gx-muted">No normalized preview rows available.</p>
+                    )}
+                  </div>
+                  <div className="rounded-md border border-gx-border p-3">
+                    <div className="text-sm font-medium text-gx-text">Blockers and warnings</div>
+                    <div className="mt-2 grid gap-2">
+                      {connectorDryRun.blockers.map((blocker) => (
+                        <div key={`${blocker.code}-${blocker.row_index ?? 'all'}`} className="text-xs text-gx-warning">
+                          {blocker.code}: {blocker.remediation}
+                        </div>
+                      ))}
+                      {connectorDryRun.warnings.map((warning) => (
+                        <div key={`${warning.code}-${warning.row_index ?? 'all'}`} className="text-xs text-gx-muted">
+                          {warning.code}: {warning.message}
+                        </div>
+                      ))}
+                      {!connectorDryRun.blockers.length && !connectorDryRun.warnings.length ? (
+                        <p className="text-sm text-gx-muted">No blockers or warnings in the latest dry-run.</p>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : null}
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div>
+                <label htmlFor="connector-review-note" className="mb-1.5 block text-sm font-medium text-gx-text">
+                  Review request note
+                </label>
+                <textarea
+                  id="connector-review-note"
+                  value={connectorForm.request_note}
+                  onChange={(e) => setConnectorForm({ ...connectorForm, request_note: e.target.value })}
+                  rows={3}
+                  className="w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="connector-decision-note" className="mb-1.5 block text-sm font-medium text-gx-text">
+                  Decision note
+                </label>
+                <textarea
+                  id="connector-decision-note"
+                  value={connectorForm.decision_note}
+                  onChange={(e) => setConnectorForm({ ...connectorForm, decision_note: e.target.value })}
+                  rows={3}
+                  className="w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-[260px_auto] md:items-end">
+              <label className="text-sm font-medium text-gx-text">
+                Review decision
+                <select
+                  className="mt-1.5 w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+                  value={connectorForm.decision}
+                  onChange={(e) => setConnectorForm({ ...connectorForm, decision: e.target.value as CommerceConnectorDryRunReviewDecision })}
+                >
+                  <option value="accepted_for_sandbox_followup">accepted_for_sandbox_followup</option>
+                  <option value="needs_changes">needs_changes</option>
+                  <option value="blocked">blocked</option>
+                </select>
+              </label>
+              <Button
+                variant="secondary"
+                onClick={recordConnectorDecision}
+                disabled={connectorDecisionDisabled}
+                title={connectorReview?.status === 'pending_operator_review' ? 'Record sandbox evidence review only.' : 'A pending connector dry-run review is required.'}
+              >
+                {connectorDecisionSubmitting ? 'Recording' : 'Record dry-run review decision'}
+              </Button>
+            </div>
+
+            {connectorReview ? (
+              <div className="mt-4 rounded-md border border-gx-border p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-medium text-gx-text">Review evidence</div>
+                    <div className="text-xs text-gx-muted">{connectorReview.review_id}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant={connectorReview.status === 'accepted_for_sandbox_followup' ? 'success' : connectorReview.status === 'pending_operator_review' ? 'warning' : 'danger'}>
+                      {connectorReview.status}
+                    </Badge>
+                    <Badge variant="warning">sandbox evidence only</Badge>
+                  </div>
+                </div>
+                <div className="grid gap-2 md:grid-cols-4">
+                  {connectorReviewControls.map(({ label, value }) => (
+                    <div key={label} className="rounded-md border border-gx-border p-3">
+                      <div className="text-xs text-gx-muted">{label}</div>
+                      <Badge variant={value === true && !label.endsWith('_enabled') && !label.includes('approval') && !label.includes('execution') ? 'success' : value ? 'danger' : 'success'}>
+                        {value ? 'true' : 'false'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 grid gap-3 text-sm md:grid-cols-4">
+                  <div>
+                    <div className="text-xs text-gx-muted">Requested by</div>
+                    <div className="text-gx-text">{connectorReview.requested_by.kind}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gx-muted">Dry-run status</div>
+                    <div className="text-gx-text">{connectorReview.dry_run_status}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gx-muted">Decision</div>
+                    <div className="text-gx-text">{connectorReview.decision ?? 'none'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gx-muted">Audit event</div>
+                    <div className="text-gx-text">{connectorReview.audit_event_id ?? connectorReview.requested_audit_event_id}</div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </Card>
 
           <Card>
