@@ -311,6 +311,19 @@ credentials, tokens, provider metadata, private API URLs, checkout URLs,
 payment identifiers, production config values, concrete allowlists, customer
 data, and secret material.
 
+C6Sf rehearses the remediation loop locally in the portal. After a
+`needs_changes` or `blocked` C6Sa connector review decision, the portal can
+show the previous issue summary, a corrected sandbox dry-run, the refreshed
+packet status, and the operator follow-up status. This is only a local
+review-aid for sandbox evidence; it does not persist follow-up approval or
+enable connector execution.
+
+C6Sf `followup_ready` means only that a corrected dry-run has an accepted
+sandbox follow-up decision in the local evidence packet. It is not production
+approval, connector execution approval, outbound sync approval, public
+discovery approval, checkout/payment approval, live provider approval, public
+protocol publication, or certification.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent
