@@ -126,6 +126,18 @@ interface ConnectorRowsValidation {
   warnings: string[];
 }
 
+type ConnectorEvidencePacketCheckStatus = 'pass' | 'pending' | 'blocked';
+type ConnectorEvidencePacketStatus = 'ready_for_sandbox_followup' | 'needs_operator_review' | 'blocked';
+
+interface ConnectorEvidencePacketCheck {
+  key: string;
+  label: string;
+  status: ConnectorEvidencePacketCheckStatus;
+  detail: string;
+}
+
+const connectorEvidencePacketSchemaVersion = 'grantex.commerce.connector_dry_run.evidence_packet.v1';
+
 const connectorRowsPrivateFieldFragments = [
   'credential',
   'secret',
@@ -273,17 +285,178 @@ function connectorReviewSafeControls(review: CommerceConnectorDryRunReview | nul
   };
 }
 
+function packetCheck(
+  key: string,
+  label: string,
+  status: ConnectorEvidencePacketCheckStatus,
+  detail: string,
+): ConnectorEvidencePacketCheck {
+  return { key, label, status, detail };
+}
+
+function packetStatusVariant(status: ConnectorEvidencePacketCheckStatus | ConnectorEvidencePacketStatus): 'default' | 'success' | 'warning' | 'danger' {
+  if (status === 'pass' || status === 'ready_for_sandbox_followup') return 'success';
+  if (status === 'blocked') return 'danger';
+  return 'warning';
+}
+
+function buildConnectorEvidencePacketReview(
+  dryRun: CommerceConnectorDryRunResult,
+  review: CommerceConnectorDryRunReview | null,
+) {
+  const dryRunControls = connectorDryRunSafeControls(dryRun);
+  const reviewControls = connectorReviewSafeControls(review);
+  const disabledControlChecks = [
+    packetCheck(
+      'public_discovery_disabled',
+      'Public discovery disabled',
+      dryRunControls.public_discovery_enabled === false && reviewControls.public_discovery_enabled === false ? 'pass' : 'blocked',
+      'Evidence packet must not enable Grantex or AgenticOrg public commerce discovery.',
+    ),
+    packetCheck(
+      'checkout_payment_disabled',
+      'Checkout/payment disabled',
+      dryRunControls.checkout_payment_enabled === false && reviewControls.checkout_payment_enabled === false ? 'pass' : 'blocked',
+      'Evidence packet must not enable checkout/payment creation.',
+    ),
+    packetCheck(
+      'live_provider_disabled',
+      'Live provider disabled',
+      dryRunControls.live_provider_enabled === false && reviewControls.live_provider_enabled === false ? 'pass' : 'blocked',
+      'Evidence packet must not enable live providers or live Plural.',
+    ),
+    packetCheck(
+      'production_allowlist_not_written',
+      'Production allowlist not written',
+      dryRunControls.production_allowlist_written === false && reviewControls.production_allowlist_written === false ? 'pass' : 'blocked',
+      'Evidence packet must not write production allowlists.',
+    ),
+    packetCheck(
+      'connector_execution_not_approved',
+      'Connector execution not approved',
+      dryRunControls.outbound_sync_enabled === false
+        && dryRunControls.production_connector_setup === false
+        && dryRunControls.merchant_private_api_calls === false
+        && reviewControls.review_enables_connector_execution === false
+        ? 'pass'
+        : 'blocked',
+      'Evidence packet remains review-only and does not approve outbound sync or merchant private API execution.',
+    ),
+  ];
+
+  const checklist: ConnectorEvidencePacketCheck[] = [
+    packetCheck(
+      'schema_version_declared',
+      'Schema version declared',
+      'pass',
+      `${connectorEvidencePacketSchemaVersion} is attached to the local evidence packet.`,
+    ),
+    packetCheck(
+      'dry_run_passed',
+      'Dry-run passed',
+      dryRun.status === 'passed' ? 'pass' : 'blocked',
+      dryRun.status === 'passed' ? 'C6R dry-run passed.' : 'C6R dry-run is blocked.',
+    ),
+    packetCheck(
+      'dry_run_blockers_clear',
+      'Dry-run blockers clear',
+      dryRun.blockers.length === 0 ? 'pass' : 'blocked',
+      dryRun.blockers.length === 0 ? 'No dry-run blockers are present.' : `${dryRun.blockers.length} blocker(s) require remediation.`,
+    ),
+    packetCheck(
+      'dry_run_warnings_reviewed',
+      'Dry-run warnings reviewed',
+      dryRun.warnings.length === 0 ? 'pass' : 'pending',
+      dryRun.warnings.length === 0 ? 'No dry-run warnings are present.' : `${dryRun.warnings.length} warning(s) need operator review before sandbox follow-up.`,
+    ),
+    packetCheck(
+      'operator_review_requested',
+      'Operator review requested',
+      review ? 'pass' : 'pending',
+      review ? 'C6Sa review evidence exists.' : 'Request C6Sa operator review before sandbox follow-up readiness.',
+    ),
+    packetCheck(
+      'operator_review_accepted',
+      'Operator review accepted',
+      review?.status === 'accepted_for_sandbox_followup'
+        ? 'pass'
+        : review?.status === 'needs_changes' || review?.status === 'blocked'
+          ? 'blocked'
+          : 'pending',
+      review?.status === 'accepted_for_sandbox_followup'
+        ? 'Operator accepted this packet for sandbox follow-up only.'
+        : review
+          ? `Current review status is ${review.status}.`
+          : 'No operator decision has been recorded.',
+    ),
+    packetCheck(
+      'review_not_production_approval',
+      'Review is not production approval',
+      reviewControls.review_is_production_approval === false ? 'pass' : 'blocked',
+      'C6Sa decision must remain sandbox evidence only.',
+    ),
+    ...disabledControlChecks,
+    packetCheck(
+      'redaction_summary_attached',
+      'Redaction summary attached',
+      'pass',
+      'Packet excludes raw rows, normalized product titles, credentials, provider metadata, private URLs, checkout/payment artifacts, production config, allowlists, and customer data.',
+    ),
+  ];
+
+  const blocked = checklist.filter((check) => check.status === 'blocked');
+  const pending = checklist.filter((check) => check.status === 'pending');
+  const packetStatus: ConnectorEvidencePacketStatus = blocked.length
+    ? 'blocked'
+    : pending.length
+      ? 'needs_operator_review'
+      : 'ready_for_sandbox_followup';
+
+  return {
+    schema_version: connectorEvidencePacketSchemaVersion,
+    packet_status: packetStatus,
+    summary: packetStatus === 'ready_for_sandbox_followup'
+      ? 'Ready for sandbox follow-up review work only; not production launch or connector execution.'
+      : packetStatus === 'blocked'
+        ? 'Blocked for sandbox follow-up until packet blockers are remediated.'
+        : 'Needs operator review before sandbox follow-up readiness.',
+    checklist,
+    blocker_summary: blocked.map((check) => `${check.label}: ${check.detail}`),
+    pending_summary: pending.map((check) => `${check.label}: ${check.detail}`),
+    redaction_summary: {
+      raw_rows_included: false,
+      normalized_product_titles_included: false,
+      credentials_included: false,
+      provider_metadata_included: false,
+      private_api_urls_included: false,
+      checkout_payment_artifacts_included: false,
+      production_config_values_included: false,
+      concrete_allowlists_included: false,
+      customer_data_included: false,
+    },
+    audit_references: {
+      dry_run_requested_audit_event_id: dryRun.requested_audit_event_id,
+      dry_run_completed_or_blocked_audit_event_id: dryRun.audit_event_id,
+      review_requested_audit_event_id: review?.requested_audit_event_id ?? null,
+      review_decision_audit_event_id: review?.audit_event_id ?? null,
+    },
+  };
+}
+
 function buildConnectorEvidenceExport(
   merchantId: string,
   dryRun: CommerceConnectorDryRunResult,
   review: CommerceConnectorDryRunReview | null,
 ) {
+  const packetReview = buildConnectorEvidencePacketReview(dryRun, review);
   return {
     evidence_type: 'connector_dry_run_review_handoff',
+    schema_version: connectorEvidencePacketSchemaVersion,
     export_scope: 'internal_sandbox_preview_only',
     generated_by: 'grantex_portal_client',
     generated_at: 'client_side_on_demand',
     merchant_id: merchantId,
+    packet_review: packetReview,
     posture: {
       sandbox_only: true,
       not_live: true,
@@ -362,16 +535,21 @@ function formatMarkdownList(values: string[]): string {
 function buildConnectorEvidenceMarkdown(evidence: ReturnType<typeof buildConnectorEvidenceExport>): string {
   const blockers = evidence.dry_run.blockers.map((blocker) => `${blocker.code}: ${blocker.remediation}`);
   const warnings = evidence.dry_run.warnings.map((warning) => `${warning.code}: ${warning.message}`);
+  const packetChecklist = evidence.packet_review.checklist.map((check) => `${check.status} - ${check.label}: ${check.detail}`);
+  const redactionSummary = Object.entries(evidence.packet_review.redaction_summary).map(([key, value]) => `${key}: ${value}`);
   return [
     '# Connector Dry-Run Evidence Handoff',
     '',
     'Internal sandbox preview only. This is not public protocol publication, production approval, connector execution approval, checkout/payment approval, live-provider approval, or certification.',
     '',
+    `- Schema version: ${evidence.schema_version}`,
     `- Merchant ID: ${evidence.merchant_id}`,
     `- Dry-run ID: ${evidence.dry_run.dry_run_id}`,
     `- Dry-run status: ${evidence.dry_run.status}`,
     `- Review ID: ${evidence.review?.review_id ?? 'not_requested'}`,
     `- Review status: ${evidence.review?.status ?? 'not_requested'}`,
+    `- Packet status: ${evidence.packet_review.packet_status}`,
+    `- Packet summary: ${evidence.packet_review.summary}`,
     `- Rows received: ${evidence.dry_run.counts.rows_received}`,
     `- Products detected: ${evidence.dry_run.counts.products_detected}`,
     `- Variants detected: ${evidence.dry_run.counts.variants_detected}`,
@@ -394,6 +572,18 @@ function buildConnectorEvidenceMarkdown(evidence: ReturnType<typeof buildConnect
     `- production_allowlist_written: ${evidence.posture.production_allowlist_written}`,
     `- certification_claimed: ${evidence.posture.certification_claimed}`,
     '',
+    '## Operator Packet Review Checklist',
+    '',
+    formatMarkdownList(packetChecklist),
+    '',
+    '## Packet Blockers',
+    '',
+    formatMarkdownList(evidence.packet_review.blocker_summary),
+    '',
+    '## Packet Pending Items',
+    '',
+    formatMarkdownList(evidence.packet_review.pending_summary),
+    '',
     '## Blockers',
     '',
     formatMarkdownList(blockers),
@@ -408,6 +598,10 @@ function buildConnectorEvidenceMarkdown(evidence: ReturnType<typeof buildConnect
     `- Dry-run completed/blocked audit: ${evidence.dry_run.audit_references.completed_or_blocked_audit_event_id}`,
     `- Review requested audit: ${evidence.review?.audit_references.requested_audit_event_id ?? 'not_requested'}`,
     `- Review decision audit: ${evidence.review?.audit_references.decision_audit_event_id ?? 'not_recorded'}`,
+    '',
+    '## Redaction Summary',
+    '',
+    formatMarkdownList(redactionSummary),
     '',
     '## Redaction',
     '',
@@ -1948,6 +2142,34 @@ export function CommerceOnboarding() {
                   </div>
                 </div>
 
+                <div className="rounded-md border border-gx-border p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-medium text-gx-text">Sandbox follow-up readiness</div>
+                      <div className="mt-1 text-xs text-gx-muted">{connectorEvidence.packet_review.summary}</div>
+                    </div>
+                    <Badge variant={packetStatusVariant(connectorEvidence.packet_review.packet_status)}>
+                      {connectorEvidence.packet_review.packet_status}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 text-xs text-gx-muted">Schema: {connectorEvidence.packet_review.schema_version}</div>
+                </div>
+
+                <div className="mt-3 rounded-md border border-gx-border p-3">
+                  <div className="text-sm font-medium text-gx-text">Evidence packet review checklist</div>
+                  <div className="mt-2 grid gap-2 md:grid-cols-2">
+                    {connectorEvidence.packet_review.checklist.map((check) => (
+                      <div key={check.key} className="rounded-md border border-gx-border p-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-xs font-medium text-gx-text">{check.label}</div>
+                          <Badge variant={packetStatusVariant(check.status)}>{check.status}</Badge>
+                        </div>
+                        <div className="mt-1 text-xs text-gx-muted">{check.detail}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid gap-2 md:grid-cols-4">
                   {[
                     { label: 'dry_run_id', value: connectorEvidence.dry_run.dry_run_id },
@@ -1971,6 +2193,18 @@ export function CommerceOnboarding() {
                       </Badge>
                     </div>
                   ))}
+                </div>
+
+                <div className="mt-3 rounded-md border border-gx-border p-3">
+                  <div className="text-sm font-medium text-gx-text">Redaction summary</div>
+                  <div className="mt-2 grid gap-2 md:grid-cols-3">
+                    {Object.entries(connectorEvidence.packet_review.redaction_summary).map(([label, value]) => (
+                      <div key={label} className="rounded-md border border-gx-border p-2">
+                        <div className="text-xs text-gx-muted">{label}</div>
+                        <Badge variant={value ? 'danger' : 'success'}>{String(value)}</Badge>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
