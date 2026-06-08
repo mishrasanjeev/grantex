@@ -3057,6 +3057,190 @@ components:
         created_at: { type: string, format: date-time, nullable: true }
         updated_at: { type: string, format: date-time, nullable: true }
 
+    CommerceConnectorDryRunRemediationQueueItem:
+      allOf:
+        - { $ref: "#/components/schemas/CommerceConnectorDryRunRemediation" }
+        - type: object
+          description: >-
+            C6Sh operator queue and merchant self-serve status projection for
+            persisted sandbox remediation evidence. It is read-only, redacted,
+            sandbox-only, non-live, non-public, non-enabling, and not
+            production approval or certification.
+          properties:
+            queue:
+              type: object
+              additionalProperties: false
+              properties:
+                operator_queue_status:
+                  type: string
+                  enum:
+                    - remediation_requested
+                    - waiting_for_corrected_dry_run
+                    - corrected_dry_run_attached
+                    - followup_review_requested
+                    - followup_ready
+                    - blocked_again
+                    - closed_no_action
+                merchant_visible_status:
+                  type: string
+                  enum:
+                    - remediation_requested
+                    - waiting_for_corrected_dry_run
+                    - corrected_dry_run_attached
+                    - followup_review_requested
+                    - followup_ready
+                    - blocked_again
+                    - closed_no_action
+                requires_corrected_dry_run: { type: boolean }
+                requires_operator_followup: { type: boolean }
+                timeline_available: { type: boolean, const: true }
+                evidence_redacted: { type: boolean, const: true }
+            summary:
+              type: object
+              additionalProperties: false
+              properties:
+                blocker_count: { type: integer, minimum: 0 }
+                warning_count: { type: integer, minimum: 0 }
+                corrected_dry_run_attached: { type: boolean }
+                followup_review_requested: { type: boolean }
+                last_audit_event_id: { type: string, nullable: true }
+
+    CommerceConnectorDryRunRemediationListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediationQueueItem" }
+        next_cursor: { type: string, nullable: true }
+        filters:
+          type: object
+          additionalProperties: true
+        controls:
+          type: object
+          additionalProperties: false
+          properties:
+            sandbox_only: { type: boolean, const: true }
+            not_live: { type: boolean, const: true }
+            not_approved: { type: boolean, const: true }
+            public_discovery_enabled: { type: boolean, const: false }
+            checkout_payment_enabled: { type: boolean, const: false }
+            live_provider_enabled: { type: boolean, const: false }
+            live_plural_enabled: { type: boolean, const: false }
+            credential_entry_enabled: { type: boolean, const: false }
+            outbound_sync_enabled: { type: boolean, const: false }
+            production_connector_setup_enabled: { type: boolean, const: false }
+            provider_call_enabled: { type: boolean, const: false }
+            merchant_private_api_calls_enabled: { type: boolean, const: false }
+            production_allowlist_written: { type: boolean, const: false }
+
+    CommerceConnectorDryRunRemediationTimelineEntry:
+      type: object
+      description: >-
+        Redacted timeline entry synthesized from C6Sg remediation state and
+        audit references. It excludes raw connector rows, credentials, provider
+        metadata, merchant private API payloads, production config, allowlists,
+        checkout/payment artifacts, and certification claims.
+      properties:
+        sequence: { type: integer, minimum: 1 }
+        key: { type: string }
+        label: { type: string }
+        status: { type: string, enum: [complete, pending, blocked] }
+        event_type: { type: string }
+        occurred_at: { type: string, format: date-time, nullable: true }
+        audit_event_id: { type: string, nullable: true }
+        actor:
+          type: object
+          additionalProperties: false
+          properties:
+            kind: { type: string, enum: [operator, merchant], nullable: true }
+            id: { type: string, nullable: true }
+        resource_references:
+          type: object
+          additionalProperties:
+            type: string
+            nullable: true
+        evidence_summary:
+          type: object
+          additionalProperties: true
+        redaction:
+          type: object
+          additionalProperties: false
+          properties:
+            raw_connector_rows_included: { type: boolean, const: false }
+            credentials_included: { type: boolean, const: false }
+            provider_metadata_included: { type: boolean, const: false }
+            merchant_private_api_payload_included: { type: boolean, const: false }
+            production_config_values_included: { type: boolean, const: false }
+
+    CommerceConnectorDryRunRemediationTimeline:
+      type: object
+      description: >-
+        C6Sh read-only remediation timeline for sandbox connector dry-run
+        evidence. It makes operator queue and merchant self-serve status
+        visible without adding credential entry, outbound sync, public
+        discovery, checkout/payment creation, live providers, provider calls,
+        merchant private API calls, production allowlists, publication, or
+        certification.
+      properties:
+        remediation: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediation" }
+        timeline:
+          type: array
+          items: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediationTimelineEntry" }
+        operator_queue:
+          type: object
+          additionalProperties: false
+          properties:
+            queue_status: { type: string }
+            visible_to_operator: { type: boolean, const: true }
+            evidence_redacted: { type: boolean, const: true }
+            requires_corrected_dry_run: { type: boolean }
+            requires_operator_followup: { type: boolean }
+        merchant_status:
+          type: object
+          additionalProperties: false
+          properties:
+            visible_to_merchant: { type: boolean, const: true }
+            status: { type: string }
+            corrected_dry_run_id: { type: string, nullable: true }
+            followup_review_id: { type: string, nullable: true }
+            next_step: { type: string }
+        redaction_summary:
+          type: object
+          additionalProperties: false
+          properties:
+            blocker_summary_count: { type: integer, minimum: 0 }
+            warning_summary_count: { type: integer, minimum: 0 }
+            raw_connector_rows_included: { type: boolean, const: false }
+            credentials_included: { type: boolean, const: false }
+            provider_metadata_included: { type: boolean, const: false }
+            merchant_private_api_payload_included: { type: boolean, const: false }
+            production_config_values_included: { type: boolean, const: false }
+        controls:
+          type: object
+          additionalProperties: false
+          properties:
+            sandbox_only: { type: boolean, const: true }
+            not_live: { type: boolean, const: true }
+            not_approved: { type: boolean, const: true }
+            public_discovery_enabled: { type: boolean, const: false }
+            checkout_payment_enabled: { type: boolean, const: false }
+            live_provider_enabled: { type: boolean, const: false }
+            live_plural_enabled: { type: boolean, const: false }
+            production_allowlist_written: { type: boolean, const: false }
+            credential_entry_enabled: { type: boolean, const: false }
+            outbound_sync_enabled: { type: boolean, const: false }
+            production_connector_setup_enabled: { type: boolean, const: false }
+            provider_call_enabled: { type: boolean, const: false }
+            merchant_private_api_calls_enabled: { type: boolean, const: false }
+            remediation_is_production_approval: { type: boolean, const: false }
+            remediation_enables_connector_execution: { type: boolean, const: false }
+            followup_ready_is_launch_approval: { type: boolean, const: false }
+
+    CommerceConnectorDryRunRemediationTimelineResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediationTimeline" }
+
     CommerceConnectorDryRunRemediationResponse:
       type: object
       properties:
@@ -6004,6 +6188,53 @@ paths:
         "409": { description: Review is not pending, dry-run evidence is unsafe, or blocked dry-run cannot be accepted }
         "422": { $ref: "#/components/responses/ValidationFailed" }
 
+  /v1/commerce/connectors/remediations:
+    get:
+      tags: [Connectors]
+      summary: List sandbox connector dry-run remediation queue
+      operationId: listCommerceConnectorDryRunRemediations
+      x-implemented: true
+      x-milestone: C6Sh
+      description: >-
+        Operator or owning merchant endpoint. Lists tenant-scoped persisted
+        remediation evidence created by C6Sg with C6Sh queue/status filters.
+        Operators may list tenant queue entries; merchant callers are scoped to
+        their own merchant. The response is read-only, redacted, sandbox-only,
+        non-live, not approved, non-public, non-enabling, and not certification
+        evidence. It does not add credential entry, outbound sync, production
+        connector setup, public discovery, checkout/payment creation, live
+        providers, provider calls, merchant private API calls, production
+        allowlists, public protocol publication, or certification.
+      parameters:
+        - { in: query, name: merchant_id, required: false, schema: { type: string } }
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum:
+              - remediation_requested
+              - waiting_for_corrected_dry_run
+              - corrected_dry_run_attached
+              - followup_review_requested
+              - followup_ready
+              - blocked_again
+              - closed_no_action
+        - { in: query, name: original_decision, required: false, schema: { type: string, enum: [needs_changes, blocked] } }
+        - { in: query, name: has_corrected_dry_run, required: false, schema: { type: boolean } }
+        - { in: query, name: has_followup_review, required: false, schema: { type: boolean } }
+        - { in: query, name: limit, required: false, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+      responses:
+        "200":
+          description: Redacted sandbox remediation queue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediationListResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
   /v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}/remediation:
     parameters:
       - { in: path, name: merchant_id, required: true, schema: { type: string } }
@@ -6066,6 +6297,33 @@ paths:
                 type: object
                 properties:
                   data: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/commerce/merchants/{merchant_id}/connectors/remediations/{remediation_id}/timeline:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+      - { in: path, name: remediation_id, required: true, schema: { type: string } }
+    get:
+      tags: [Connectors]
+      summary: Read redacted sandbox connector remediation timeline
+      operationId: getCommerceConnectorDryRunRemediationTimeline
+      x-implemented: true
+      x-milestone: C6Sh
+      description: >-
+        Reads a redacted C6Sh remediation timeline synthesized from persisted
+        C6Sg remediation state and audit references. The timeline is
+        operator-visible and merchant-visible sandbox follow-up status only. It
+        is not production approval, connector execution approval, public
+        discovery approval, checkout/payment approval, live provider approval,
+        public protocol publication, or certification.
+      responses:
+        "200":
+          description: Redacted sandbox remediation timeline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediationTimelineResponse" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: Agent caller or cross-merchant caller is denied }
         "404": { $ref: "#/components/responses/NotFound" }

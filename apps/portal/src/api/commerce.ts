@@ -381,6 +381,93 @@ export interface CommerceConnectorDryRunRemediation {
   updated_at: string | null;
 }
 
+export interface CommerceConnectorDryRunRemediationQueueItem extends CommerceConnectorDryRunRemediation {
+  queue: {
+    operator_queue_status: CommerceConnectorDryRunRemediationStatus;
+    merchant_visible_status: CommerceConnectorDryRunRemediationStatus;
+    requires_corrected_dry_run: boolean;
+    requires_operator_followup: boolean;
+    timeline_available: true;
+    evidence_redacted: true;
+  };
+  summary: {
+    blocker_count: number;
+    warning_count: number;
+    corrected_dry_run_attached: boolean;
+    followup_review_requested: boolean;
+    last_audit_event_id: string | null;
+  };
+}
+
+export interface CommerceConnectorDryRunRemediationTimelineEntry {
+  sequence: number;
+  key: string;
+  label: string;
+  status: 'complete' | 'pending' | 'blocked';
+  event_type: string;
+  occurred_at: string | null;
+  audit_event_id: string | null;
+  actor: {
+    kind: 'operator' | 'merchant' | null;
+    id: string | null;
+  };
+  resource_references: Record<string, string | null>;
+  evidence_summary: Record<string, unknown>;
+  redaction: {
+    raw_connector_rows_included: false;
+    credentials_included: false;
+    provider_metadata_included: false;
+    merchant_private_api_payload_included: false;
+    production_config_values_included: false;
+  };
+}
+
+export interface CommerceConnectorDryRunRemediationTimeline {
+  remediation: CommerceConnectorDryRunRemediation;
+  timeline: CommerceConnectorDryRunRemediationTimelineEntry[];
+  operator_queue: {
+    queue_status: CommerceConnectorDryRunRemediationStatus;
+    visible_to_operator: true;
+    evidence_redacted: true;
+    requires_corrected_dry_run: boolean;
+    requires_operator_followup: boolean;
+  };
+  merchant_status: {
+    visible_to_merchant: true;
+    status: CommerceConnectorDryRunRemediationStatus;
+    corrected_dry_run_id: string | null;
+    followup_review_id: string | null;
+    next_step: string;
+  };
+  redaction_summary: {
+    blocker_summary_count: number;
+    warning_summary_count: number;
+    raw_connector_rows_included: false;
+    credentials_included: false;
+    provider_metadata_included: false;
+    merchant_private_api_payload_included: false;
+    production_config_values_included: false;
+  };
+  controls: {
+    sandbox_only: true;
+    not_live: true;
+    not_approved: true;
+    public_discovery_enabled: false;
+    checkout_payment_enabled: false;
+    live_provider_enabled: false;
+    live_plural_enabled: false;
+    production_allowlist_written: false;
+    credential_entry_enabled: false;
+    outbound_sync_enabled: false;
+    production_connector_setup_enabled: false;
+    provider_call_enabled: false;
+    merchant_private_api_calls_enabled: false;
+    remediation_is_production_approval: false;
+    remediation_enables_connector_execution: false;
+    followup_ready_is_launch_approval: false;
+  };
+}
+
 export interface CommerceConnectorDryRunResponse {
   data: CommerceConnectorDryRunResult;
   audit_events: Array<{
@@ -1044,7 +1131,7 @@ export interface CommerceWellKnownProfile {
   capabilities: string[];
 }
 
-function qs(params: Record<string, string | number | null | undefined>): string {
+function qs(params: Record<string, string | number | boolean | null | undefined>): string {
   const q = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && String(value).length > 0) {
@@ -1472,6 +1559,43 @@ export function getCommerceConnectorDryRunRemediation(
 ): Promise<{ data: CommerceConnectorDryRunRemediation }> {
   return api.get<{ data: CommerceConnectorDryRunRemediation }>(
     `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/remediations/${encodeURIComponent(remediationId)}`,
+  );
+}
+
+export function listCommerceConnectorDryRunRemediations(params: {
+  merchantId?: string;
+  status?: CommerceConnectorDryRunRemediationStatus;
+  originalDecision?: 'needs_changes' | 'blocked';
+  hasCorrectedDryRun?: boolean;
+  hasFollowupReview?: boolean;
+  limit?: number;
+} = {}): Promise<{
+  items: CommerceConnectorDryRunRemediationQueueItem[];
+  next_cursor: string | null;
+  filters: Record<string, unknown>;
+  controls: Record<string, unknown>;
+}> {
+  return api.get<{
+    items: CommerceConnectorDryRunRemediationQueueItem[];
+    next_cursor: string | null;
+    filters: Record<string, unknown>;
+    controls: Record<string, unknown>;
+  }>(`/v1/commerce/connectors/remediations${qs({
+    merchant_id: params.merchantId,
+    status: params.status,
+    original_decision: params.originalDecision,
+    has_corrected_dry_run: params.hasCorrectedDryRun,
+    has_followup_review: params.hasFollowupReview,
+    limit: params.limit,
+  })}`);
+}
+
+export function getCommerceConnectorDryRunRemediationTimeline(
+  merchantId: string,
+  remediationId: string,
+): Promise<{ data: CommerceConnectorDryRunRemediationTimeline }> {
+  return api.get<{ data: CommerceConnectorDryRunRemediationTimeline }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/remediations/${encodeURIComponent(remediationId)}/timeline`,
   );
 }
 

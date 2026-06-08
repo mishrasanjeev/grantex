@@ -6,6 +6,7 @@ import {
   dryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   evaluateCommercePolicy,
   recordCommerceConnectorDryRunReviewDecision,
+  getCommerceConnectorDryRunRemediationTimeline,
   getCommerceMerchantAgenticOrgBuyerDiscoveryPreview,
   getCommerceMerchantReadOnlyDiscoveryReview,
   getCommerceMerchantReadOnlyDiscoveryRolloutProposal,
@@ -13,6 +14,7 @@ import {
   getCommerceMerchantSchemaOrgJsonLdPreview,
   getCommerceWellKnownProfile,
   listCommerceAgents,
+  listCommerceConnectorDryRunRemediations,
   listCommercePolicies,
   listCommerceProducts,
   listCommerceProviderCredentials,
@@ -30,6 +32,9 @@ import {
   type CommerceAgenticOrgBuyerDiscoveryPreview,
   type CommerceConnectorDryRunResult,
   type CommerceConnectorDryRunRemediation,
+  type CommerceConnectorDryRunRemediationQueueItem,
+  type CommerceConnectorDryRunRemediationStatus,
+  type CommerceConnectorDryRunRemediationTimeline,
   type CommerceConnectorDryRunReview,
   type CommerceConnectorDryRunReviewDecision,
   type CommerceConnectorDryRunType,
@@ -213,6 +218,16 @@ interface ConnectorRemediationLoopState {
 }
 
 const connectorEvidencePacketSchemaVersion = 'grantex.commerce.connector_dry_run.evidence_packet.v1';
+
+const connectorRemediationStatusOptions: CommerceConnectorDryRunRemediationStatus[] = [
+  'remediation_requested',
+  'waiting_for_corrected_dry_run',
+  'corrected_dry_run_attached',
+  'followup_review_requested',
+  'followup_ready',
+  'blocked_again',
+  'closed_no_action',
+];
 
 const connectorRowsPrivateFieldFragments = [
   'credential',
@@ -1148,6 +1163,9 @@ export function CommerceOnboarding() {
   const [connectorReview, setConnectorReview] = useState<CommerceConnectorDryRunReview | null>(null);
   const [connectorRemediationLoop, setConnectorRemediationLoop] = useState<ConnectorRemediationLoopState | null>(null);
   const [connectorBackendRemediation, setConnectorBackendRemediation] = useState<CommerceConnectorDryRunRemediation | null>(null);
+  const [connectorRemediationQueue, setConnectorRemediationQueue] = useState<CommerceConnectorDryRunRemediationQueueItem[]>([]);
+  const [connectorRemediationTimeline, setConnectorRemediationTimeline] = useState<CommerceConnectorDryRunRemediationTimeline | null>(null);
+  const [connectorQueueStatusFilter, setConnectorQueueStatusFilter] = useState<CommerceConnectorDryRunRemediationStatus | ''>('');
   const [merchantForm, setMerchantForm] = useState<MerchantPatchForm>(defaultPatch);
   const [agents, setAgents] = useState<CommerceAgent[]>([]);
   const [activePolicyCount, setActivePolicyCount] = useState(0);
@@ -1166,6 +1184,8 @@ export function CommerceOnboarding() {
   const [connectorSubmitting, setConnectorSubmitting] = useState(false);
   const [connectorReviewSubmitting, setConnectorReviewSubmitting] = useState(false);
   const [connectorDecisionSubmitting, setConnectorDecisionSubmitting] = useState(false);
+  const [connectorQueueLoading, setConnectorQueueLoading] = useState(false);
+  const [connectorTimelineLoading, setConnectorTimelineLoading] = useState(false);
   const [connectorForm, setConnectorForm] = useState<{
     connector_type: CommerceConnectorDryRunType;
     source_label: string;
@@ -1236,6 +1256,8 @@ export function CommerceOnboarding() {
       setConnectorReview(null);
       setConnectorRemediationLoop(null);
       setConnectorBackendRemediation(null);
+      setConnectorRemediationQueue([]);
+      setConnectorRemediationTimeline(null);
       setProposalNote(proposalRes?.data.proposal_note ?? '');
       setAgenticOrgNote('');
       setMerchantForm({
@@ -1455,6 +1477,8 @@ export function CommerceOnboarding() {
     setConnectorForm((prev) => ({ ...prev, rows_json: connectorDryRunRowsFixture }));
     setConnectorDryRun(null);
     setConnectorReview(null);
+    setConnectorRemediationQueue([]);
+    setConnectorRemediationTimeline(null);
     show('Sandbox sample rows restored', 'success');
   }
 
@@ -1464,6 +1488,8 @@ export function CommerceOnboarding() {
     setConnectorReview(null);
     setConnectorRemediationLoop(null);
     setConnectorBackendRemediation(null);
+    setConnectorRemediationQueue([]);
+    setConnectorRemediationTimeline(null);
     show('Sandbox connector rows cleared', 'success');
   }
 
@@ -1497,6 +1523,7 @@ export function CommerceOnboarding() {
           },
         );
         setConnectorBackendRemediation(remediationRes.data);
+        setConnectorRemediationTimeline(null);
       }
       setConnectorRemediationLoop((prev) => (
         prev && prev.loop_status !== 'followup_ready'
@@ -1526,6 +1553,7 @@ export function CommerceOnboarding() {
           { requestNote },
         );
         setConnectorBackendRemediation(res.data);
+        setConnectorRemediationTimeline(null);
         setConnectorReview(res.followup_review);
         setConnectorDryRun(res.corrected_dry_run);
         setConnectorRemediationLoop((prev) => (
@@ -1583,6 +1611,7 @@ export function CommerceOnboarding() {
           { publicSafeNote: res.data.decision_note ?? undefined },
         );
         setConnectorBackendRemediation(remediationRes.data);
+        setConnectorRemediationTimeline(null);
       } else if (connectorBackendRemediation?.followup_review_id === res.data.review_id) {
         setConnectorBackendRemediation((prev) => prev ? {
           ...prev,
@@ -1592,12 +1621,50 @@ export function CommerceOnboarding() {
             followup_audit_event_id: prev.audit_references.followup_audit_event_id ?? res.data.audit_event_id,
           },
         } : prev);
+        setConnectorRemediationTimeline(null);
       }
       show('Connector dry-run review decision recorded', 'success');
     } catch {
       show('Connector dry-run review decision is blocked', 'error');
     } finally {
       setConnectorDecisionSubmitting(false);
+    }
+  }
+
+  async function loadConnectorRemediationQueue() {
+    if (!merchant) return;
+    setConnectorQueueLoading(true);
+    try {
+      const res = await listCommerceConnectorDryRunRemediations({
+        merchantId: merchant.merchant_id,
+        status: connectorQueueStatusFilter || undefined,
+        limit: 10,
+      });
+      setConnectorRemediationQueue(res.items);
+      show('Connector remediation queue loaded', 'success');
+    } catch {
+      show('Connector remediation queue is unavailable', 'error');
+    } finally {
+      setConnectorQueueLoading(false);
+    }
+  }
+
+  async function loadConnectorRemediationTimeline(remediationId?: string) {
+    if (!merchant) return;
+    const id = remediationId ?? connectorBackendRemediation?.remediation_id;
+    if (!id) {
+      show('Select a remediation record before loading its timeline', 'error');
+      return;
+    }
+    setConnectorTimelineLoading(true);
+    try {
+      const res = await getCommerceConnectorDryRunRemediationTimeline(merchant.merchant_id, id);
+      setConnectorRemediationTimeline(res.data);
+      show('Connector remediation timeline loaded', 'success');
+    } catch {
+      show('Connector remediation timeline is unavailable', 'error');
+    } finally {
+      setConnectorTimelineLoading(false);
     }
   }
 
@@ -2572,6 +2639,8 @@ export function CommerceOnboarding() {
                   setConnectorReview(null);
                   setConnectorRemediationLoop(null);
                   setConnectorBackendRemediation(null);
+                  setConnectorRemediationQueue([]);
+                  setConnectorRemediationTimeline(null);
                 }}
                 rows={8}
                 className="w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 font-mono text-xs text-gx-text focus:border-gx-accent focus:outline-none"
@@ -2720,6 +2789,150 @@ export function CommerceOnboarding() {
                 </div>
               </>
             ) : null}
+
+            <div className="mt-4 rounded-md border border-gx-border p-3">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <div className="text-sm font-medium text-gx-text">Persisted remediation queue</div>
+                  <p className="mt-1 text-xs text-gx-muted">
+                    Tenant-scoped sandbox remediation status and redacted timeline visibility; this does not approve production launch, outbound sync, public discovery, checkout, payment, or live providers.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant="warning">sandbox_only</Badge>
+                  <Badge variant="success">credential-free</Badge>
+                  <Badge variant="success">read-only timeline</Badge>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[260px_auto_auto] md:items-end">
+                <label className="text-sm font-medium text-gx-text">
+                  Remediation status filter
+                  <select
+                    className="mt-1.5 w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+                    value={connectorQueueStatusFilter}
+                    onChange={(e) => setConnectorQueueStatusFilter(e.target.value as CommerceConnectorDryRunRemediationStatus | '')}
+                  >
+                    <option value="">all sandbox statuses</option>
+                    {connectorRemediationStatusOptions.map((status) => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                </label>
+                <Button
+                  variant="secondary"
+                  onClick={loadConnectorRemediationQueue}
+                  disabled={connectorQueueLoading}
+                >
+                  {connectorQueueLoading ? 'Loading queue' : 'Load remediation queue'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => loadConnectorRemediationTimeline()}
+                  disabled={connectorTimelineLoading || !connectorBackendRemediation}
+                  title={connectorBackendRemediation ? 'Load timeline for the persisted remediation evidence.' : 'Create or select persisted remediation evidence first.'}
+                >
+                  {connectorTimelineLoading ? 'Loading timeline' : 'Load current timeline'}
+                </Button>
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-4">
+                {[
+                  { label: 'public_discovery_enabled', value: false },
+                  { label: 'checkout_payment_enabled', value: false },
+                  { label: 'live_provider_enabled', value: false },
+                  { label: 'merchant_private_api_calls_enabled', value: false },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-md border border-gx-border p-2">
+                    <div className="text-xs text-gx-muted">{item.label}</div>
+                    <Badge variant={item.value ? 'danger' : 'success'}>{String(item.value)}</Badge>
+                  </div>
+                ))}
+              </div>
+              {connectorRemediationQueue.length ? (
+                <div className="mt-3 grid gap-2">
+                  {connectorRemediationQueue.map((item) => (
+                    <div key={item.remediation_id} className="rounded-md border border-gx-border p-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <div className="break-all text-sm font-medium text-gx-text">{item.remediation_id}</div>
+                          <div className="mt-1 text-xs text-gx-muted">
+                            Original dry-run {item.original_dry_run_id} | original decision {item.original_decision}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={backendRemediationStatusVariant(item.status)}>{item.status}</Badge>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => loadConnectorRemediationTimeline(item.remediation_id)}
+                            disabled={connectorTimelineLoading}
+                          >
+                            View timeline
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="mt-2 grid gap-2 md:grid-cols-4">
+                        {[
+                          { label: 'blockers', value: item.summary.blocker_count },
+                          { label: 'warnings', value: item.summary.warning_count },
+                          { label: 'corrected_attached', value: item.summary.corrected_dry_run_attached },
+                          { label: 'operator_followup_required', value: item.queue.requires_operator_followup },
+                        ].map((summary) => (
+                          <div key={summary.label} className="rounded-md border border-gx-border p-2">
+                            <div className="text-xs text-gx-muted">{summary.label}</div>
+                            <div className="text-sm font-medium text-gx-text">{String(summary.value)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-gx-muted">No persisted remediation queue entries loaded.</p>
+              )}
+
+              {connectorRemediationTimeline ? (
+                <div className="mt-3 rounded-md border border-gx-border p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-medium text-gx-text">Redacted remediation timeline</div>
+                      <div className="mt-1 text-xs text-gx-muted">
+                        Merchant-visible and operator-visible status from Grantex-persisted sandbox evidence only.
+                      </div>
+                    </div>
+                    <Badge variant={backendRemediationStatusVariant(connectorRemediationTimeline.merchant_status.status)}>
+                      {connectorRemediationTimeline.merchant_status.status}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 grid gap-2 md:grid-cols-4">
+                    {[
+                      { label: 'merchant_next_step', value: connectorRemediationTimeline.merchant_status.next_step },
+                      { label: 'queue_status', value: connectorRemediationTimeline.operator_queue.queue_status },
+                      { label: 'raw_rows_included', value: connectorRemediationTimeline.redaction_summary.raw_connector_rows_included },
+                      { label: 'followup_ready_is_launch_approval', value: connectorRemediationTimeline.controls.followup_ready_is_launch_approval },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-md border border-gx-border p-2">
+                        <div className="text-xs text-gx-muted">{item.label}</div>
+                        <div className="break-all text-sm font-medium text-gx-text">{String(item.value)}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 grid gap-2">
+                    {connectorRemediationTimeline.timeline.map((entry) => (
+                      <div key={`${entry.sequence}-${entry.key}`} className="rounded-md border border-gx-border p-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-xs font-medium text-gx-text">{entry.sequence}. {entry.label}</div>
+                          <Badge variant={entry.status === 'complete' ? 'success' : entry.status === 'blocked' ? 'danger' : 'warning'}>
+                            {entry.status}
+                          </Badge>
+                        </div>
+                        <div className="mt-1 text-xs text-gx-muted">{entry.event_type}</div>
+                        <div className="mt-1 break-all text-xs text-gx-muted">Audit: {entry.audit_event_id ?? 'not_recorded'}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
 
             {connectorEvidence ? (
               <div className="mt-4 rounded-md border border-gx-border p-3">

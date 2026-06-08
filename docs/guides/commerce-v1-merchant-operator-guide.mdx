@@ -346,6 +346,20 @@ connector execution approval, outbound sync approval, public discovery approval,
 checkout/payment approval, live provider approval, public protocol publication,
 or certification.
 
+C6Sh adds a tenant-scoped remediation queue and redacted evidence timeline for
+the persisted C6Sg loop. Operators can filter sandbox remediation records by
+merchant, status, original decision, corrected dry-run attachment, and follow-up
+review request. Merchants can see their own sandbox remediation status and the
+next safe step in the portal.
+
+The C6Sh timeline is redacted evidence visibility only. It shows remediation
+status, audit references, corrected dry-run and follow-up review links, and
+fixed non-enabling controls. It does not store or display raw connector rows,
+credentials, provider metadata, private API payloads, production config values,
+or concrete allowlists. It does not approve production launch, connector
+execution, outbound sync, public discovery, checkout/payment, live providers,
+public protocol publication, or certification.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent
