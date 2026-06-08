@@ -128,12 +128,24 @@ interface ConnectorRowsValidation {
 
 type ConnectorEvidencePacketCheckStatus = 'pass' | 'pending' | 'blocked';
 type ConnectorEvidencePacketStatus = 'ready_for_sandbox_followup' | 'needs_operator_review' | 'blocked';
+type ConnectorOperatorHandoffStatus = 'ready' | 'needs_operator_review' | 'blocked';
+type ConnectorRemediationWorkflowStatus = 'complete' | 'pending_operator_review' | 'blocked';
+type ConnectorRemediationStepStatus = 'complete' | 'pending' | 'blocked';
 
 interface ConnectorEvidencePacketCheck {
   key: string;
   label: string;
   status: ConnectorEvidencePacketCheckStatus;
   detail: string;
+}
+
+interface ConnectorRemediationStep {
+  key: string;
+  label: string;
+  status: ConnectorRemediationStepStatus;
+  owner: 'merchant' | 'operator' | 'grantex';
+  action: string;
+  evidence_source: string;
 }
 
 const connectorEvidencePacketSchemaVersion = 'grantex.commerce.connector_dry_run.evidence_packet.v1';
@@ -300,6 +312,18 @@ function packetStatusVariant(status: ConnectorEvidencePacketCheckStatus | Connec
   return 'warning';
 }
 
+function handoffStatusVariant(status: ConnectorOperatorHandoffStatus): 'default' | 'success' | 'warning' | 'danger' {
+  if (status === 'ready') return 'success';
+  if (status === 'blocked') return 'danger';
+  return 'warning';
+}
+
+function remediationStatusVariant(status: ConnectorRemediationWorkflowStatus | ConnectorRemediationStepStatus): 'default' | 'success' | 'warning' | 'danger' {
+  if (status === 'complete') return 'success';
+  if (status === 'blocked') return 'danger';
+  return 'warning';
+}
+
 function buildConnectorEvidencePacketReview(
   dryRun: CommerceConnectorDryRunResult,
   review: CommerceConnectorDryRunReview | null,
@@ -443,12 +467,192 @@ function buildConnectorEvidencePacketReview(
   };
 }
 
+function buildConnectorOperatorHandoff(
+  dryRun: CommerceConnectorDryRunResult,
+  review: CommerceConnectorDryRunReview | null,
+  packetReview: ReturnType<typeof buildConnectorEvidencePacketReview>,
+) {
+  const handoffStatus: ConnectorOperatorHandoffStatus = packetReview.packet_status === 'ready_for_sandbox_followup'
+    ? 'ready'
+    : packetReview.packet_status === 'blocked'
+      ? 'blocked'
+      : 'needs_operator_review';
+  return {
+    handoff_type: 'sandbox_connector_dry_run_followup',
+    handoff_status: handoffStatus,
+    summary: handoffStatus === 'ready'
+      ? 'Ready for operator sandbox follow-up only; this is not approval to execute connectors or launch commerce.'
+      : handoffStatus === 'blocked'
+        ? 'Blocked until the dry-run, review, or packet evidence issues below are remediated.'
+        : 'Needs C6Sa operator review before sandbox follow-up handoff.',
+    next_actor: handoffStatus === 'ready' ? 'operator' : 'merchant_or_operator',
+    packet_status: packetReview.packet_status,
+    dry_run_id: dryRun.dry_run_id,
+    review_id: review?.review_id ?? null,
+    allowed_next_steps: handoffStatus === 'ready'
+      ? [
+        'Review the redacted evidence packet with the merchant in a sandbox-only follow-up.',
+        'Plan another local dry-run using sanitized manual or CSV rows if more catalog evidence is needed.',
+      ]
+      : [],
+    blocked_next_steps: [
+      'production_merchant_approval',
+      'outbound_connector_sync',
+      'merchant_private_api_execution',
+      'public_discovery_enablement',
+      'checkout_payment_creation',
+      'live_payment_or_provider_enablement',
+      'production_allowlist_assignment',
+      'public_protocol_publication_or_certification',
+    ],
+    non_approval: {
+      production_approval: false,
+      connector_execution_approval: false,
+      public_discovery_approval: false,
+      checkout_payment_approval: false,
+      live_provider_approval: false,
+      public_protocol_publication: false,
+      certification: false,
+    },
+    audit_references: packetReview.audit_references,
+  };
+}
+
+function remediationStep(
+  key: string,
+  label: string,
+  status: ConnectorRemediationStepStatus,
+  owner: ConnectorRemediationStep['owner'],
+  action: string,
+  evidenceSource: string,
+): ConnectorRemediationStep {
+  return {
+    key,
+    label,
+    status,
+    owner,
+    action,
+    evidence_source: evidenceSource,
+  };
+}
+
+function buildConnectorRemediationWorkflow(
+  dryRun: CommerceConnectorDryRunResult,
+  review: CommerceConnectorDryRunReview | null,
+  packetReview: ReturnType<typeof buildConnectorEvidencePacketReview>,
+) {
+  const steps: ConnectorRemediationStep[] = [];
+
+  dryRun.blockers.forEach((blocker, index) => {
+    steps.push(remediationStep(
+      `dry_run_blocker_${index}_${blocker.code}`,
+      `Dry-run blocker: ${blocker.code}`,
+      'blocked',
+      'merchant',
+      blocker.remediation,
+      blocker.field ? `C6R dry-run blocker field ${blocker.field}` : 'C6R dry-run blocker summary',
+    ));
+  });
+
+  dryRun.warnings.forEach((warning, index) => {
+    steps.push(remediationStep(
+      `dry_run_warning_${index}_${warning.code}`,
+      `Dry-run warning: ${warning.code}`,
+      'pending',
+      'operator',
+      `Review warning before sandbox follow-up: ${warning.message}`,
+      warning.field ? `C6R dry-run warning field ${warning.field}` : 'C6R dry-run warning summary',
+    ));
+  });
+
+  packetReview.checklist
+    .filter((check) => check.status !== 'pass')
+    .forEach((check) => {
+      steps.push(remediationStep(
+        `packet_check_${check.key}`,
+        check.label,
+        check.status === 'blocked' ? 'blocked' : 'pending',
+        check.key.includes('operator_review') || check.key.includes('warning') ? 'operator' : 'merchant',
+        check.detail,
+        'C6Sd evidence packet checklist',
+      ));
+    });
+
+  if (!review) {
+    steps.push(remediationStep(
+      'request_operator_review',
+      'Request operator review',
+      'pending',
+      'operator',
+      'Request C6Sa operator review after a passing dry-run before sandbox follow-up handoff.',
+      'C6Sa review state',
+    ));
+  } else if (review.status === 'pending_operator_review') {
+    steps.push(remediationStep(
+      'record_operator_decision',
+      'Record operator decision',
+      'pending',
+      'operator',
+      'Record an accepted, needs-changes, or blocked sandbox evidence decision.',
+      'C6Sa review state',
+    ));
+  } else if (review.status === 'needs_changes') {
+    steps.push(remediationStep(
+      'operator_requested_changes',
+      'Operator requested changes',
+      'blocked',
+      'merchant',
+      review.decision_note || 'Address the operator requested changes and rerun the local sandbox dry-run.',
+      'C6Sa review decision',
+    ));
+  } else if (review.status === 'blocked') {
+    steps.push(remediationStep(
+      'operator_blocked_followup',
+      'Operator blocked sandbox follow-up',
+      'blocked',
+      'merchant',
+      review.decision_note || 'Resolve the operator blocker before requesting another sandbox evidence review.',
+      'C6Sa review decision',
+    ));
+  }
+
+  const blocked = steps.filter((step) => step.status === 'blocked');
+  const pending = steps.filter((step) => step.status === 'pending');
+  const workflowStatus: ConnectorRemediationWorkflowStatus = blocked.length
+    ? 'blocked'
+    : pending.length
+      ? 'pending_operator_review'
+      : 'complete';
+
+  return {
+    workflow_type: 'self_serve_connector_dry_run_remediation',
+    workflow_status: workflowStatus,
+    summary: workflowStatus === 'complete'
+      ? 'No self-serve remediation steps remain before sandbox follow-up handoff.'
+      : workflowStatus === 'blocked'
+        ? 'Resolve blocked dry-run, review, or packet evidence items before sandbox follow-up.'
+        : 'Complete pending operator review items before sandbox follow-up.',
+    requires_rerun: dryRun.blockers.length > 0 || review?.status === 'needs_changes' || review?.status === 'blocked',
+    step_count: steps.length,
+    blocked_count: blocked.length,
+    pending_count: pending.length,
+    steps,
+    evidence_sources: [
+      'C6R dry-run summary',
+      'C6Sa review summary',
+      'C6Sd evidence packet checklist',
+    ],
+  };
+}
+
 function buildConnectorEvidenceExport(
   merchantId: string,
   dryRun: CommerceConnectorDryRunResult,
   review: CommerceConnectorDryRunReview | null,
 ) {
   const packetReview = buildConnectorEvidencePacketReview(dryRun, review);
+  const operatorHandoff = buildConnectorOperatorHandoff(dryRun, review, packetReview);
+  const remediationWorkflow = buildConnectorRemediationWorkflow(dryRun, review, packetReview);
   return {
     evidence_type: 'connector_dry_run_review_handoff',
     schema_version: connectorEvidencePacketSchemaVersion,
@@ -457,6 +661,8 @@ function buildConnectorEvidenceExport(
     generated_at: 'client_side_on_demand',
     merchant_id: merchantId,
     packet_review: packetReview,
+    operator_handoff: operatorHandoff,
+    remediation_workflow: remediationWorkflow,
     posture: {
       sandbox_only: true,
       not_live: true,
@@ -536,6 +742,11 @@ function buildConnectorEvidenceMarkdown(evidence: ReturnType<typeof buildConnect
   const blockers = evidence.dry_run.blockers.map((blocker) => `${blocker.code}: ${blocker.remediation}`);
   const warnings = evidence.dry_run.warnings.map((warning) => `${warning.code}: ${warning.message}`);
   const packetChecklist = evidence.packet_review.checklist.map((check) => `${check.status} - ${check.label}: ${check.detail}`);
+  const allowedNextSteps = evidence.operator_handoff.allowed_next_steps;
+  const blockedNextSteps = evidence.operator_handoff.blocked_next_steps;
+  const remediationSteps = evidence.remediation_workflow.steps.map((step) => (
+    `${step.status} - ${step.label} (${step.owner}): ${step.action}`
+  ));
   const redactionSummary = Object.entries(evidence.packet_review.redaction_summary).map(([key, value]) => `${key}: ${value}`);
   return [
     '# Connector Dry-Run Evidence Handoff',
@@ -550,6 +761,8 @@ function buildConnectorEvidenceMarkdown(evidence: ReturnType<typeof buildConnect
     `- Review status: ${evidence.review?.status ?? 'not_requested'}`,
     `- Packet status: ${evidence.packet_review.packet_status}`,
     `- Packet summary: ${evidence.packet_review.summary}`,
+    `- Operator handoff status: ${evidence.operator_handoff.handoff_status}`,
+    `- Remediation workflow status: ${evidence.remediation_workflow.workflow_status}`,
     `- Rows received: ${evidence.dry_run.counts.rows_received}`,
     `- Products detected: ${evidence.dry_run.counts.products_detected}`,
     `- Variants detected: ${evidence.dry_run.counts.variants_detected}`,
@@ -583,6 +796,31 @@ function buildConnectorEvidenceMarkdown(evidence: ReturnType<typeof buildConnect
     '## Packet Pending Items',
     '',
     formatMarkdownList(evidence.packet_review.pending_summary),
+    '',
+    '## Operator Sandbox Handoff',
+    '',
+    `- Handoff type: ${evidence.operator_handoff.handoff_type}`,
+    `- Handoff status: ${evidence.operator_handoff.handoff_status}`,
+    `- Next actor: ${evidence.operator_handoff.next_actor}`,
+    `- Summary: ${evidence.operator_handoff.summary}`,
+    '',
+    '### Allowed Sandbox Follow-Up Steps',
+    '',
+    formatMarkdownList(allowedNextSteps),
+    '',
+    '### Blocked Next Steps',
+    '',
+    formatMarkdownList(blockedNextSteps),
+    '',
+    '## Self-Serve Remediation Workflow',
+    '',
+    `- Workflow status: ${evidence.remediation_workflow.workflow_status}`,
+    `- Summary: ${evidence.remediation_workflow.summary}`,
+    `- Requires rerun: ${evidence.remediation_workflow.requires_rerun}`,
+    `- Blocked count: ${evidence.remediation_workflow.blocked_count}`,
+    `- Pending count: ${evidence.remediation_workflow.pending_count}`,
+    '',
+    formatMarkdownList(remediationSteps),
     '',
     '## Blockers',
     '',
@@ -2156,6 +2394,52 @@ export function CommerceOnboarding() {
                 </div>
 
                 <div className="mt-3 rounded-md border border-gx-border p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-medium text-gx-text">Operator sandbox handoff</div>
+                      <div className="mt-1 text-xs text-gx-muted">{connectorEvidence.operator_handoff.summary}</div>
+                    </div>
+                    <Badge variant={handoffStatusVariant(connectorEvidence.operator_handoff.handoff_status)}>
+                      {connectorEvidence.operator_handoff.handoff_status}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 grid gap-2 md:grid-cols-3">
+                    <div className="rounded-md border border-gx-border p-2">
+                      <div className="text-xs text-gx-muted">next_actor</div>
+                      <div className="text-sm font-medium text-gx-text">{connectorEvidence.operator_handoff.next_actor}</div>
+                    </div>
+                    <div className="rounded-md border border-gx-border p-2">
+                      <div className="text-xs text-gx-muted">dry_run_id</div>
+                      <div className="break-all text-sm font-medium text-gx-text">{connectorEvidence.operator_handoff.dry_run_id}</div>
+                    </div>
+                    <div className="rounded-md border border-gx-border p-2">
+                      <div className="text-xs text-gx-muted">review_id</div>
+                      <div className="break-all text-sm font-medium text-gx-text">{connectorEvidence.operator_handoff.review_id ?? 'not_requested'}</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    <div>
+                      <div className="text-xs font-medium text-gx-muted">Allowed sandbox follow-up</div>
+                      <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-gx-muted">
+                        {connectorEvidence.operator_handoff.allowed_next_steps.length ? connectorEvidence.operator_handoff.allowed_next_steps.map((step) => (
+                          <li key={step}>{step}</li>
+                        )) : (
+                          <li>Complete remediation before any sandbox handoff.</li>
+                        )}
+                      </ul>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium text-gx-muted">Blocked next steps</div>
+                      <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-gx-muted">
+                        {connectorEvidence.operator_handoff.blocked_next_steps.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-md border border-gx-border p-3">
                   <div className="text-sm font-medium text-gx-text">Evidence packet review checklist</div>
                   <div className="mt-2 grid gap-2 md:grid-cols-2">
                     {connectorEvidence.packet_review.checklist.map((check) => (
@@ -2167,6 +2451,48 @@ export function CommerceOnboarding() {
                         <div className="mt-1 text-xs text-gx-muted">{check.detail}</div>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-md border border-gx-border p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-medium text-gx-text">Self-serve remediation workflow</div>
+                      <div className="mt-1 text-xs text-gx-muted">{connectorEvidence.remediation_workflow.summary}</div>
+                    </div>
+                    <Badge variant={remediationStatusVariant(connectorEvidence.remediation_workflow.workflow_status)}>
+                      {connectorEvidence.remediation_workflow.workflow_status}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 grid gap-2 md:grid-cols-3">
+                    <div className="rounded-md border border-gx-border p-2">
+                      <div className="text-xs text-gx-muted">blocked_count</div>
+                      <div className="text-sm font-medium text-gx-text">{connectorEvidence.remediation_workflow.blocked_count}</div>
+                    </div>
+                    <div className="rounded-md border border-gx-border p-2">
+                      <div className="text-xs text-gx-muted">pending_count</div>
+                      <div className="text-sm font-medium text-gx-text">{connectorEvidence.remediation_workflow.pending_count}</div>
+                    </div>
+                    <div className="rounded-md border border-gx-border p-2">
+                      <div className="text-xs text-gx-muted">requires_rerun</div>
+                      <Badge variant={connectorEvidence.remediation_workflow.requires_rerun ? 'warning' : 'success'}>
+                        {String(connectorEvidence.remediation_workflow.requires_rerun)}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-2">
+                    {connectorEvidence.remediation_workflow.steps.length ? connectorEvidence.remediation_workflow.steps.map((step) => (
+                      <div key={step.key} className="rounded-md border border-gx-border p-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-xs font-medium text-gx-text">{step.label}</div>
+                          <Badge variant={remediationStatusVariant(step.status)}>{step.status}</Badge>
+                        </div>
+                        <div className="mt-1 text-xs text-gx-muted">{step.action}</div>
+                        <div className="mt-1 text-xs text-gx-muted">Owner: {step.owner} | Source: {step.evidence_source}</div>
+                      </div>
+                    )) : (
+                      <p className="text-sm text-gx-muted">No remediation actions remain before sandbox follow-up.</p>
+                    )}
                   </div>
                 </div>
 
