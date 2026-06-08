@@ -253,6 +253,26 @@ approval, production approval, connector execution approval, public discovery
 approval, checkout/payment approval, live provider approval, public protocol
 publication, or certification.
 
+C6Sc hardens that portal flow for self-serve sandbox use. Merchants and
+operators can validate local manual/CSV rows before submission, see parsed row
+counts, reset the sample fixture, clear local rows, and read disabled-state
+reasons before requesting review or recording a decision. JSON parse errors are
+shown before any dry-run request is sent.
+
+C6Sc also adds a redacted evidence handoff for internal review. The handoff can
+be copied or downloaded locally as JSON or Markdown and includes only safe
+summary fields, fixed non-enabling controls, blockers, warnings, and audit
+references from the C6R dry-run and C6Sa review responses. It excludes raw
+rows, raw merchant-system payloads, credentials, tokens, provider metadata,
+private API URLs, checkout URLs, payment identifiers, production config values,
+concrete allowlists, customer data, and normalized product titles.
+
+C6Sc exports are local/internal evidence only. Do not commit timestamped or
+merchant-specific exports unless a later approved work item says so. A copied
+or downloaded handoff does not approve production launch, connector execution,
+public discovery, checkout/payment, live providers, public protocol
+publication, or certification.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent
