@@ -20,6 +20,7 @@ import {
   getCommerceConnectorDryRun,
   getCommerceConnectorDryRunReview,
   getCommerceConnectorDryRunRemediation,
+  getCommerceConnectorDryRunRemediationTimeline,
   getCommerceMerchantSchemaOrgJsonLdPreview,
   getCommerceMerchantSandboxOnboarding,
   getCommerceOpsHealth,
@@ -27,6 +28,7 @@ import {
   listCommerceAgents,
   listCommercePolicies,
   listCommerceProducts,
+  listCommerceConnectorDryRunRemediations,
   listCommerceWebhookSources,
   listCommerceProviderWebhookEvents,
   listCommerceAuditEvents,
@@ -277,15 +279,36 @@ describe('commerce api', () => {
       'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/remediations/cdrem%2F1',
     );
 
+    ok({ items: [{ remediation_id: 'cdrem/1' }], next_cursor: null, filters: {}, controls: {} });
+    await listCommerceConnectorDryRunRemediations({
+      merchantId: 'mch/1',
+      status: 'corrected_dry_run_attached',
+      originalDecision: 'needs_changes',
+      hasCorrectedDryRun: true,
+      hasFollowupReview: false,
+      limit: 10,
+    });
+    expect(mockFetch.mock.calls[7]![0]).toBe(
+      'http://localhost:3000/v1/commerce/connectors/remediations?merchant_id=mch%2F1&status=corrected_dry_run_attached&original_decision=needs_changes&has_corrected_dry_run=true&has_followup_review=false&limit=10',
+    );
+    expect(mockFetch.mock.calls[7]![1]?.body).toBeUndefined();
+
+    ok({ data: { timeline: [], controls: { sandbox_only: true } } });
+    await getCommerceConnectorDryRunRemediationTimeline('mch/1', 'cdrem/1');
+    expect(mockFetch.mock.calls[8]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/remediations/cdrem%2F1/timeline',
+    );
+    expect(mockFetch.mock.calls[8]![1]?.body).toBeUndefined();
+
     ok({ data: { remediation_id: 'cdrem/1' }, corrected_dry_run: { dry_run_id: 'cdry/2' }, audit_event_id: 'aud_4' });
     await attachCommerceConnectorRemediationCorrectedDryRun('mch/1', 'cdrem/1', {
       correctedDryRunId: 'cdry/2',
       publicSafeNote: 'Corrected sandbox evidence only.',
     });
-    expect(mockFetch.mock.calls[7]![0]).toBe(
+    expect(mockFetch.mock.calls[9]![0]).toBe(
       'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/remediations/cdrem%2F1/corrected-dry-run',
     );
-    const correctedBody = JSON.parse(mockFetch.mock.calls[7]![1].body);
+    const correctedBody = JSON.parse(mockFetch.mock.calls[9]![1].body);
     expect(correctedBody).toEqual({
       corrected_dry_run_id: 'cdry/2',
       public_safe_note: 'Corrected sandbox evidence only.',
@@ -295,10 +318,10 @@ describe('commerce api', () => {
     await requestCommerceConnectorRemediationFollowUpReview('mch/1', 'cdrem/1', {
       requestNote: 'Follow-up sandbox evidence review.',
     });
-    expect(mockFetch.mock.calls[8]![0]).toBe(
+    expect(mockFetch.mock.calls[10]![0]).toBe(
       'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/remediations/cdrem%2F1/follow-up-review',
     );
-    const followupBody = JSON.parse(mockFetch.mock.calls[8]![1].body);
+    const followupBody = JSON.parse(mockFetch.mock.calls[10]![1].body);
     expect(followupBody).toEqual({ request_note: 'Follow-up sandbox evidence review.' });
     for (const body of [remediationBody, correctedBody, followupBody]) {
       const serialized = JSON.stringify(body).toLowerCase();
