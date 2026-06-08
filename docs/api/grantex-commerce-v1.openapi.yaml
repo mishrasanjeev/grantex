@@ -2949,6 +2949,137 @@ components:
         dry_run: { $ref: "#/components/schemas/CommerceConnectorDryRunResult" }
         audit_event_id: { type: string, nullable: true }
 
+    CommerceConnectorDryRunRemediationRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        Optional public-safe note for creating C6Sg remediation evidence from a
+        needs_changes or blocked C6Sa connector dry-run review. This is
+        sandbox evidence only and does not approve launch, connector execution,
+        public discovery, checkout/payment, live providers, or certification.
+      properties:
+        public_safe_note:
+          type: string
+          nullable: true
+          maxLength: 2000
+
+    CommerceConnectorDryRunCorrectedRequest:
+      type: object
+      additionalProperties: false
+      required: [corrected_dry_run_id]
+      description: >-
+        Attaches a passed C6R corrected dry-run to an existing C6Sg
+        remediation. Blocked dry-runs, unsafe controls, credentials, provider
+        metadata, production config, allowlists, checkout/payment artifacts,
+        live-provider claims, and certification claims are rejected.
+      properties:
+        corrected_dry_run_id: { type: string }
+        public_safe_note:
+          type: string
+          nullable: true
+          maxLength: 2000
+
+    CommerceConnectorDryRunFollowUpReviewRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        Requests C6Sa follow-up review for the corrected dry-run linked to a
+        C6Sg remediation. The request is idempotent and sandbox-only.
+      properties:
+        request_note:
+          type: string
+          nullable: true
+          maxLength: 2000
+
+    CommerceConnectorDryRunRemediation:
+      type: object
+      description: >-
+        C6Sg tenant-scoped remediation metadata for connector dry-run evidence.
+        It links an original needs_changes/blocked review to a corrected
+        sandbox dry-run and optional follow-up review. It is sandbox-only,
+        non-live, not approved, non-public, non-enabling, and not
+        certification evidence.
+      properties:
+        remediation_id: { type: string }
+        tenant_id: { type: string }
+        merchant_id: { type: string }
+        original_dry_run_id: { type: string }
+        original_review_id: { type: string }
+        original_decision: { type: string, enum: [needs_changes, blocked] }
+        status:
+          type: string
+          enum:
+            - remediation_requested
+            - waiting_for_corrected_dry_run
+            - corrected_dry_run_attached
+            - followup_review_requested
+            - followup_ready
+            - blocked_again
+            - closed_no_action
+        public_safe_note: { type: string, nullable: true }
+        blocker_summary:
+          type: array
+          items: { type: object, additionalProperties: true }
+        warning_summary:
+          type: array
+          items: { type: object, additionalProperties: true }
+        corrected_dry_run_id: { type: string, nullable: true }
+        followup_review_id: { type: string, nullable: true }
+        requested_by:
+          type: object
+          additionalProperties: false
+          properties:
+            kind: { type: string, enum: [operator, merchant] }
+            id: { type: string }
+        audit_references:
+          type: object
+          additionalProperties: false
+          properties:
+            requested_audit_event_id: { type: string }
+            corrected_audit_event_id: { type: string, nullable: true }
+            followup_audit_event_id: { type: string, nullable: true }
+            closed_or_blocked_audit_event_id: { type: string, nullable: true }
+        controls:
+          type: object
+          additionalProperties: false
+          properties:
+            sandbox_only: { type: boolean, const: true }
+            not_live: { type: boolean, const: true }
+            not_approved: { type: boolean, const: true }
+            public_discovery_enabled: { type: boolean, const: false }
+            checkout_payment_enabled: { type: boolean, const: false }
+            live_provider_enabled: { type: boolean, const: false }
+            live_plural_enabled: { type: boolean, const: false }
+            production_allowlist_written: { type: boolean, const: false }
+            remediation_is_production_approval: { type: boolean, const: false }
+            remediation_enables_connector_execution: { type: boolean, const: false }
+            followup_ready_is_launch_approval: { type: boolean, const: false }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+
+    CommerceConnectorDryRunRemediationResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediation" }
+        original_dry_run: { $ref: "#/components/schemas/CommerceConnectorDryRunResult" }
+        original_review: { $ref: "#/components/schemas/CommerceConnectorDryRunReview" }
+        audit_event_id: { type: string, nullable: true }
+
+    CommerceConnectorDryRunCorrectedResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediation" }
+        corrected_dry_run: { $ref: "#/components/schemas/CommerceConnectorDryRunResult" }
+        audit_event_id: { type: string, nullable: true }
+
+    CommerceConnectorDryRunFollowUpReviewResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediation" }
+        corrected_dry_run: { $ref: "#/components/schemas/CommerceConnectorDryRunResult" }
+        followup_review: { $ref: "#/components/schemas/CommerceConnectorDryRunReview" }
+        audit_event_id: { type: string, nullable: true }
+
     UpdateWebhookSourceRequest:
       type: object
       additionalProperties: false
@@ -5871,6 +6002,143 @@ paths:
         "403": { description: Merchant, agent, or cross-merchant caller is denied }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { description: Review is not pending, dry-run evidence is unsafe, or blocked dry-run cannot be accepted }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}/remediation:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+      - { in: path, name: dry_run_id, required: true, schema: { type: string } }
+    post:
+      tags: [Connectors]
+      summary: Create sandbox connector dry-run remediation evidence
+      operationId: createCommerceConnectorDryRunRemediation
+      x-implemented: true
+      x-milestone: C6Sg
+      description: >-
+        Operator or owning merchant endpoint. Creates or returns idempotent
+        tenant-scoped remediation evidence for a C6Sa needs_changes or blocked
+        dry-run review. The evidence is sandbox-only and redacted. It does not
+        approve production launch, enable connector execution, enable public
+        discovery, enable checkout/payment creation, enable live payments,
+        enable live Plural, call providers, call merchant private APIs, write
+        production config, set allowlists, or claim certification.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediationRequest" }
+      responses:
+        "201":
+          description: Remediation evidence created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediationResponse" }
+        "200":
+          description: Existing remediation evidence returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediationResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Original review is not remediable, merchant is live/disabled, or evidence is unsafe }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /v1/commerce/merchants/{merchant_id}/connectors/remediations/{remediation_id}:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+      - { in: path, name: remediation_id, required: true, schema: { type: string } }
+    get:
+      tags: [Connectors]
+      summary: Read sandbox connector dry-run remediation evidence
+      operationId: getCommerceConnectorDryRunRemediation
+      x-implemented: true
+      x-milestone: C6Sg
+      description: >-
+        Reads tenant-scoped C6Sg remediation metadata. The response includes
+        only redacted summary evidence and fixed non-enabling controls.
+      responses:
+        "200":
+          description: Remediation evidence
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/commerce/merchants/{merchant_id}/connectors/remediations/{remediation_id}/corrected-dry-run:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+      - { in: path, name: remediation_id, required: true, schema: { type: string } }
+    post:
+      tags: [Connectors]
+      summary: Attach corrected sandbox dry-run to remediation
+      operationId: attachCommerceConnectorRemediationCorrectedDryRun
+      x-implemented: true
+      x-milestone: C6Sg
+      description: >-
+        Attaches a corrected C6R dry-run to a remediation record. The corrected
+        dry-run must belong to the same tenant and sandbox merchant, must pass,
+        and must retain all non-enabling controls. Duplicate attachment of the
+        same corrected dry-run is idempotent and does not write duplicate audit
+        evidence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommerceConnectorDryRunCorrectedRequest" }
+      responses:
+        "200":
+          description: Corrected dry-run attached or existing attachment returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunCorrectedResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Corrected dry-run is blocked, unsafe, live, or conflicting }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /v1/commerce/merchants/{merchant_id}/connectors/remediations/{remediation_id}/follow-up-review:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+      - { in: path, name: remediation_id, required: true, schema: { type: string } }
+    post:
+      tags: [Connectors]
+      summary: Request follow-up review for corrected sandbox dry-run
+      operationId: requestCommerceConnectorRemediationFollowUpReview
+      x-implemented: true
+      x-milestone: C6Sg
+      description: >-
+        Requests or returns idempotent C6Sa follow-up review for the corrected
+        dry-run attached to a C6Sg remediation. This is sandbox follow-up
+        evidence only; followup_ready is not launch, production approval,
+        public discovery approval, checkout/payment approval, live provider
+        approval, protocol publication, or certification.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommerceConnectorDryRunFollowUpReviewRequest" }
+      responses:
+        "201":
+          description: Follow-up review requested and remediation evidence linked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunFollowUpReviewResponse" }
+        "200":
+          description: Existing follow-up review returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunFollowUpReviewResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Corrected dry-run is missing, blocked, unsafe, live, or conflicting }
         "422": { $ref: "#/components/responses/ValidationFailed" }
 
   /v1/commerce/connectors:

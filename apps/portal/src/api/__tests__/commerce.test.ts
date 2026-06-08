@@ -10,13 +10,16 @@ function ok(data: unknown, status = 200) {
 }
 
 import {
+  attachCommerceConnectorRemediationCorrectedDryRun,
   bulkIngestCommerceProducts,
+  createCommerceConnectorDryRunRemediation,
   createCommerceWebhookSource,
   disableMerchantAgenticCommerce,
   evaluateCommercePolicy,
   getCommerceMerchant,
   getCommerceConnectorDryRun,
   getCommerceConnectorDryRunReview,
+  getCommerceConnectorDryRunRemediation,
   getCommerceMerchantSchemaOrgJsonLdPreview,
   getCommerceMerchantSandboxOnboarding,
   getCommerceOpsHealth,
@@ -34,6 +37,7 @@ import {
   recordCommerceConnectorDryRunReviewDecision,
   rotateCommerceWebhookSourceSecret,
   requestCommerceConnectorDryRunReview,
+  requestCommerceConnectorRemediationFollowUpReview,
   revokeCommercePassport,
   runCommerceConnectorDryRun,
   transitionCommerceMerchantSandboxOnboarding,
@@ -255,6 +259,61 @@ describe('commerce api', () => {
       'live_plural_enabled',
     ]) {
       expect(serializedDecisionBody).not.toContain(forbidden);
+    }
+
+    ok({ data: { remediation_id: 'cdrem/1' }, original_dry_run: { dry_run_id: 'cdry/1' }, original_review: { review_id: 'cdrev/1' }, audit_event_id: 'aud_3' }, 201);
+    await createCommerceConnectorDryRunRemediation('mch/1', 'cdry/1', {
+      publicSafeNote: 'Public-safe remediation note.',
+    });
+    expect(mockFetch.mock.calls[5]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/dry-runs/cdry%2F1/remediation',
+    );
+    const remediationBody = JSON.parse(mockFetch.mock.calls[5]![1].body);
+    expect(remediationBody).toEqual({ public_safe_note: 'Public-safe remediation note.' });
+
+    ok({ data: { remediation_id: 'cdrem/1' } });
+    await getCommerceConnectorDryRunRemediation('mch/1', 'cdrem/1');
+    expect(mockFetch.mock.calls[6]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/remediations/cdrem%2F1',
+    );
+
+    ok({ data: { remediation_id: 'cdrem/1' }, corrected_dry_run: { dry_run_id: 'cdry/2' }, audit_event_id: 'aud_4' });
+    await attachCommerceConnectorRemediationCorrectedDryRun('mch/1', 'cdrem/1', {
+      correctedDryRunId: 'cdry/2',
+      publicSafeNote: 'Corrected sandbox evidence only.',
+    });
+    expect(mockFetch.mock.calls[7]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/remediations/cdrem%2F1/corrected-dry-run',
+    );
+    const correctedBody = JSON.parse(mockFetch.mock.calls[7]![1].body);
+    expect(correctedBody).toEqual({
+      corrected_dry_run_id: 'cdry/2',
+      public_safe_note: 'Corrected sandbox evidence only.',
+    });
+
+    ok({ data: { remediation_id: 'cdrem/1' }, corrected_dry_run: { dry_run_id: 'cdry/2' }, followup_review: { review_id: 'cdrev/2' }, audit_event_id: 'aud_5' });
+    await requestCommerceConnectorRemediationFollowUpReview('mch/1', 'cdrem/1', {
+      requestNote: 'Follow-up sandbox evidence review.',
+    });
+    expect(mockFetch.mock.calls[8]![0]).toBe(
+      'http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/remediations/cdrem%2F1/follow-up-review',
+    );
+    const followupBody = JSON.parse(mockFetch.mock.calls[8]![1].body);
+    expect(followupBody).toEqual({ request_note: 'Follow-up sandbox evidence review.' });
+    for (const body of [remediationBody, correctedBody, followupBody]) {
+      const serialized = JSON.stringify(body).toLowerCase();
+      for (const forbidden of [
+        'credential',
+        'secret',
+        'provider_metadata',
+        'public_discovery_enabled',
+        'checkout_payment_enabled',
+        'live_provider_enabled',
+        'live_plural_enabled',
+        'production_allowlist',
+      ]) {
+        expect(serialized).not.toContain(forbidden);
+      }
     }
   });
 

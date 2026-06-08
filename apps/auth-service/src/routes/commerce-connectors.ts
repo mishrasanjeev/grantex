@@ -6,6 +6,7 @@ import type { CommerceCaller } from '../lib/commerce/caller.js';
 import { CommerceHttpError } from '../lib/commerce/errors.js';
 import {
   newCommerceConnectorDryRunId,
+  newCommerceConnectorDryRunRemediationId,
   newCommerceConnectorDryRunReviewId,
   newCommerceConnectorId,
 } from '../lib/commerce/ids.js';
@@ -113,12 +114,31 @@ interface ConnectorDryRunReviewParams {
   dryRunId: string;
 }
 
+interface ConnectorDryRunRemediationParams {
+  merchantId: string;
+  dryRunId?: string;
+  remediationId?: string;
+}
+
 interface ConnectorDryRunReviewDecisionBody {
   decision?: unknown;
   decision_note?: unknown;
 }
 
 interface ConnectorDryRunReviewRequestBody {
+  request_note?: unknown;
+}
+
+interface ConnectorDryRunRemediationRequestBody {
+  public_safe_note?: unknown;
+}
+
+interface ConnectorDryRunCorrectedBody {
+  corrected_dry_run_id?: unknown;
+  public_safe_note?: unknown;
+}
+
+interface ConnectorDryRunFollowupBody {
   request_note?: unknown;
 }
 
@@ -189,6 +209,37 @@ interface ConnectorDryRunReviewRow {
   decided_at: Date | string | null;
 }
 
+interface ConnectorDryRunRemediationRow {
+  id: string;
+  tenant_id: string;
+  merchant_id: string;
+  original_dry_run_id: string;
+  original_review_id: string;
+  original_decision: 'needs_changes' | 'blocked';
+  status: ConnectorDryRunRemediationStatus;
+  public_safe_note: string | null;
+  blocker_summary: unknown;
+  warning_summary: unknown;
+  corrected_dry_run_id: string | null;
+  followup_review_id: string | null;
+  requested_by_kind: 'operator' | 'merchant';
+  requested_by_id: string;
+  requested_audit_event_id: string;
+  corrected_audit_event_id: string | null;
+  followup_audit_event_id: string | null;
+  closed_or_blocked_audit_event_id: string | null;
+  sandbox_only: boolean;
+  not_live: boolean;
+  not_approved: boolean;
+  public_discovery_enabled: boolean;
+  checkout_payment_enabled: boolean;
+  live_provider_enabled: boolean;
+  provider_specific_live_enabled: boolean;
+  production_allowlist_written: boolean;
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
 type ConnectorDryRunReviewStatus =
   | 'pending_operator_review'
   | 'accepted_for_sandbox_followup'
@@ -199,6 +250,15 @@ type ConnectorDryRunReviewDecision =
   | 'accepted_for_sandbox_followup'
   | 'needs_changes'
   | 'blocked';
+
+type ConnectorDryRunRemediationStatus =
+  | 'remediation_requested'
+  | 'waiting_for_corrected_dry_run'
+  | 'corrected_dry_run_attached'
+  | 'followup_review_requested'
+  | 'followup_ready'
+  | 'blocked_again'
+  | 'closed_no_action';
 
 const CONNECTOR_KEY_RE = /^[a-z0-9_-]{3,64}$/;
 const CONNECTOR_TYPES: ConnectorType[] = [
@@ -260,6 +320,9 @@ const PATCH_FIELDS = new Set([
 ]);
 const REVIEW_REQUEST_FIELDS = new Set(['request_note']);
 const REVIEW_DECISION_FIELDS = new Set(['decision', 'decision_note']);
+const REMEDIATION_REQUEST_FIELDS = new Set(['public_safe_note']);
+const REMEDIATION_CORRECTED_FIELDS = new Set(['corrected_dry_run_id', 'public_safe_note']);
+const REMEDIATION_FOLLOWUP_FIELDS = new Set(['request_note']);
 const REVIEW_DECISIONS = new Set<ConnectorDryRunReviewDecision>([
   'accepted_for_sandbox_followup',
   'needs_changes',
@@ -709,6 +772,54 @@ function toDryRunReview(row: ConnectorDryRunReviewRow): Record<string, unknown> 
   };
 }
 
+function remediationStatusFromFollowup(review: ConnectorDryRunReviewRow): ConnectorDryRunRemediationStatus {
+  if (review.status === 'accepted_for_sandbox_followup') return 'followup_ready';
+  if (review.status === 'needs_changes' || review.status === 'blocked') return 'blocked_again';
+  return 'followup_review_requested';
+}
+
+function toDryRunRemediation(row: ConnectorDryRunRemediationRow): Record<string, unknown> {
+  return {
+    remediation_id: row.id,
+    tenant_id: row.tenant_id,
+    merchant_id: row.merchant_id,
+    original_dry_run_id: row.original_dry_run_id,
+    original_review_id: row.original_review_id,
+    original_decision: row.original_decision,
+    status: row.status,
+    public_safe_note: row.public_safe_note,
+    blocker_summary: Array.isArray(row.blocker_summary) ? row.blocker_summary : [],
+    warning_summary: Array.isArray(row.warning_summary) ? row.warning_summary : [],
+    corrected_dry_run_id: row.corrected_dry_run_id,
+    followup_review_id: row.followup_review_id,
+    requested_by: {
+      kind: row.requested_by_kind,
+      id: row.requested_by_id,
+    },
+    audit_references: {
+      requested_audit_event_id: row.requested_audit_event_id,
+      corrected_audit_event_id: row.corrected_audit_event_id,
+      followup_audit_event_id: row.followup_audit_event_id,
+      closed_or_blocked_audit_event_id: row.closed_or_blocked_audit_event_id,
+    },
+    controls: {
+      sandbox_only: row.sandbox_only,
+      not_live: row.not_live,
+      not_approved: row.not_approved,
+      public_discovery_enabled: row.public_discovery_enabled,
+      checkout_payment_enabled: row.checkout_payment_enabled,
+      live_provider_enabled: row.live_provider_enabled,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: row.provider_specific_live_enabled,
+      production_allowlist_written: row.production_allowlist_written,
+      remediation_is_production_approval: false,
+      remediation_enables_connector_execution: false,
+      followup_ready_is_launch_approval: false,
+    },
+    created_at: rowDateOrNull(row.created_at),
+    updated_at: rowDateOrNull(row.updated_at),
+  };
+}
+
 async function readMerchantForDryRun(sql: Sql, tenantId: string, merchantId: string): Promise<MerchantDryRunRow | null> {
   const rows = await sql<MerchantDryRunRow[]>`
     SELECT id, environment, verification_status, disabled_at
@@ -763,6 +874,84 @@ async function readDryRunReview(
      WHERE tenant_id = ${tenantId}
        AND merchant_id = ${merchantId}
        AND dry_run_id = ${dryRunId}
+     LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+async function readDryRunReviewById(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+  reviewId: string,
+): Promise<ConnectorDryRunReviewRow | null> {
+  const rows = await sql<ConnectorDryRunReviewRow[]>`
+    SELECT id, tenant_id, merchant_id, dry_run_id, status, decision,
+           decision_note, requested_by_kind, requested_by_id,
+           decided_by_operator_id, dry_run_status, dry_run_generated_at,
+           evidence_summary, requested_audit_event_id, decision_audit_event_id,
+           sandbox_only, not_live, not_approved, public_discovery_enabled,
+           checkout_payment_enabled, live_provider_enabled,
+           provider_specific_live_enabled, production_allowlist_written,
+           created_at, updated_at, decided_at
+      FROM commerce_connector_dry_run_reviews
+     WHERE tenant_id = ${tenantId}
+       AND merchant_id = ${merchantId}
+       AND id = ${reviewId}
+     LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+async function readDryRunRemediationById(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+  remediationId: string,
+): Promise<ConnectorDryRunRemediationRow | null> {
+  const rows = await sql<ConnectorDryRunRemediationRow[]>`
+    SELECT id, tenant_id, merchant_id, original_dry_run_id,
+           original_review_id, original_decision, status, public_safe_note,
+           blocker_summary, warning_summary, corrected_dry_run_id,
+           followup_review_id, requested_by_kind, requested_by_id,
+           requested_audit_event_id, corrected_audit_event_id,
+           followup_audit_event_id, closed_or_blocked_audit_event_id,
+           sandbox_only, not_live, not_approved, public_discovery_enabled,
+           checkout_payment_enabled, live_provider_enabled,
+           provider_specific_live_enabled, production_allowlist_written,
+           created_at, updated_at
+      FROM commerce_connector_dry_run_remediations
+     WHERE tenant_id = ${tenantId}
+       AND merchant_id = ${merchantId}
+       AND id = ${remediationId}
+     LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+async function readDryRunRemediationForOriginal(
+  sql: Sql,
+  tenantId: string,
+  merchantId: string,
+  dryRunId: string,
+  reviewId: string,
+): Promise<ConnectorDryRunRemediationRow | null> {
+  const rows = await sql<ConnectorDryRunRemediationRow[]>`
+    SELECT id, tenant_id, merchant_id, original_dry_run_id,
+           original_review_id, original_decision, status, public_safe_note,
+           blocker_summary, warning_summary, corrected_dry_run_id,
+           followup_review_id, requested_by_kind, requested_by_id,
+           requested_audit_event_id, corrected_audit_event_id,
+           followup_audit_event_id, closed_or_blocked_audit_event_id,
+           sandbox_only, not_live, not_approved, public_discovery_enabled,
+           checkout_payment_enabled, live_provider_enabled,
+           provider_specific_live_enabled, production_allowlist_written,
+           created_at, updated_at
+      FROM commerce_connector_dry_run_remediations
+     WHERE tenant_id = ${tenantId}
+       AND merchant_id = ${merchantId}
+       AND original_dry_run_id = ${dryRunId}
+       AND original_review_id = ${reviewId}
      LIMIT 1
   `;
   return rows[0] ?? null;
@@ -925,6 +1114,52 @@ function validateReviewDecisionBody(body: Record<string, unknown>): {
   return { decision, decisionNote };
 }
 
+function validateRemediationRequestBody(body: Record<string, unknown>): { publicSafeNote: string | null } {
+  const fields: Record<string, string> = {};
+  rejectUnsupportedOrPrivateFields(body, REMEDIATION_REQUEST_FIELDS, fields);
+  const publicSafeNote = safeReviewNote(body['public_safe_note'], 'public_safe_note', fields);
+  if (Object.keys(fields).length > 0) {
+    throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+      details: { fields },
+      retryable: false,
+    });
+  }
+  return { publicSafeNote };
+}
+
+function validateCorrectedDryRunBody(body: Record<string, unknown>): {
+  correctedDryRunId: string;
+  publicSafeNote: string | null;
+} {
+  const fields: Record<string, string> = {};
+  rejectUnsupportedOrPrivateFields(body, REMEDIATION_CORRECTED_FIELDS, fields);
+  const correctedDryRunId = isString(body['corrected_dry_run_id'])
+    ? body['corrected_dry_run_id'].trim()
+    : '';
+  if (!correctedDryRunId) fields['corrected_dry_run_id'] = 'required string';
+  const publicSafeNote = safeReviewNote(body['public_safe_note'], 'public_safe_note', fields);
+  if (Object.keys(fields).length > 0) {
+    throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+      details: { fields },
+      retryable: false,
+    });
+  }
+  return { correctedDryRunId, publicSafeNote };
+}
+
+function validateFollowupReviewBody(body: Record<string, unknown>): { requestNote: string | null } {
+  const fields: Record<string, string> = {};
+  rejectUnsupportedOrPrivateFields(body, REMEDIATION_FOLLOWUP_FIELDS, fields);
+  const requestNote = safeReviewNote(body['request_note'], 'request_note', fields);
+  if (Object.keys(fields).length > 0) {
+    throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+      details: { fields },
+      retryable: false,
+    });
+  }
+  return { requestNote };
+}
+
 function dryRunReviewBlockedDetails(
   dryRun: ConnectorDryRunRow,
   blockerCodes: string[],
@@ -974,6 +1209,65 @@ async function appendDryRunReviewBlockedAudit(
       production_allowlist_written: false,
       review_is_production_approval: false,
       review_enables_connector_execution: false,
+    },
+  });
+  return audit.id;
+}
+
+function remediationBlockedDetails(
+  remediation: ConnectorDryRunRemediationRow | null,
+  blockerCodes: string[],
+): Record<string, unknown> {
+  return {
+    remediation_id: remediation?.id ?? null,
+    original_dry_run_id: remediation?.original_dry_run_id ?? null,
+    original_review_id: remediation?.original_review_id ?? null,
+    blocker_codes: blockerCodes,
+    controls: {
+      sandbox_only: true,
+      not_live: true,
+      not_approved: true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
+      production_allowlist_written: false,
+      remediation_is_production_approval: false,
+      remediation_enables_connector_execution: false,
+    },
+  };
+}
+
+async function appendRemediationBlockedAudit(
+  sql: Sql,
+  input: {
+    tenantId: string;
+    merchantId: string;
+    remediationId: string | null;
+    requestId: string;
+    blockerCodes: string[];
+  },
+): Promise<string> {
+  const audit = await appendCommerceAudit(sql, {
+    tenantId: input.tenantId,
+    merchantId: input.merchantId,
+    eventType: 'connector_remediation_closed_or_blocked',
+    resourceType: 'commerce_connector_dry_run_remediation',
+    resourceId: input.remediationId,
+    requestId: input.requestId,
+    metadata: {
+      remediation_id: input.remediationId,
+      blocker_codes: input.blockerCodes,
+      sandbox_only: true,
+      not_live: true,
+      not_approved: true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
+      production_allowlist_written: false,
+      remediation_is_production_approval: false,
+      remediation_enables_connector_execution: false,
     },
   });
   return audit.id;
@@ -1055,6 +1349,238 @@ async function insertDryRunReviewRequest(
   return { row, auditEventId: audit.id, created: true };
 }
 
+async function insertDryRunRemediationRequest(
+  tx: TxSql,
+  input: {
+    tenantId: string;
+    merchantId: string;
+    dryRun: ConnectorDryRunRow;
+    review: ConnectorDryRunReviewRow;
+    actor: { kind: 'operator' | 'merchant'; id: string };
+    publicSafeNote: string | null;
+    requestId: string;
+  },
+): Promise<{ row: ConnectorDryRunRemediationRow; auditEventId: string; created: boolean }> {
+  const existing = await readDryRunRemediationForOriginal(
+    tx as unknown as Sql,
+    input.tenantId,
+    input.merchantId,
+    input.dryRun.id,
+    input.review.id,
+  );
+  if (existing) {
+    return { row: existing, auditEventId: existing.requested_audit_event_id, created: false };
+  }
+  const blockerSummary = Array.isArray(input.dryRun.blockers)
+    ? input.dryRun.blockers.slice(0, 20)
+    : [];
+  const warningSummary = Array.isArray(input.dryRun.warnings)
+    ? input.dryRun.warnings.slice(0, 20)
+    : [];
+  const audit = await appendCommerceAudit(tx as unknown as Sql, {
+    tenantId: input.tenantId,
+    merchantId: input.merchantId,
+    eventType: 'connector_remediation_requested',
+    resourceType: 'commerce_connector_dry_run_remediation',
+    resourceId: input.review.id,
+    requestId: input.requestId,
+    metadata: {
+      original_dry_run_id: input.dryRun.id,
+      original_review_id: input.review.id,
+      original_decision: input.review.status,
+      public_safe_note_present: input.publicSafeNote !== null,
+      blocker_count: numberValue(input.dryRun.blocked_count, 0),
+      warning_count: numberValue(input.dryRun.warning_count, 0),
+      requested_by_kind: input.actor.kind,
+      sandbox_only: true,
+      not_live: true,
+      not_approved: true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
+      production_allowlist_written: false,
+      remediation_is_production_approval: false,
+      remediation_enables_connector_execution: false,
+    },
+  });
+  const rows = await tx<ConnectorDryRunRemediationRow[]>`
+    INSERT INTO commerce_connector_dry_run_remediations (
+      id, tenant_id, merchant_id, original_dry_run_id, original_review_id,
+      original_decision, status, public_safe_note, blocker_summary,
+      warning_summary, requested_by_kind, requested_by_id,
+      requested_audit_event_id, sandbox_only, not_live, not_approved,
+      public_discovery_enabled, checkout_payment_enabled, live_provider_enabled,
+      provider_specific_live_enabled, production_allowlist_written
+    ) VALUES (
+      ${newCommerceConnectorDryRunRemediationId()}, ${input.tenantId},
+      ${input.merchantId}, ${input.dryRun.id}, ${input.review.id},
+      ${input.review.status}, 'remediation_requested', ${input.publicSafeNote},
+      ${JSON.stringify(blockerSummary)}::jsonb,
+      ${JSON.stringify(warningSummary)}::jsonb,
+      ${input.actor.kind}, ${input.actor.id}, ${audit.id},
+      TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE
+    )
+    RETURNING id, tenant_id, merchant_id, original_dry_run_id,
+              original_review_id, original_decision, status, public_safe_note,
+              blocker_summary, warning_summary, corrected_dry_run_id,
+              followup_review_id, requested_by_kind, requested_by_id,
+              requested_audit_event_id, corrected_audit_event_id,
+              followup_audit_event_id, closed_or_blocked_audit_event_id,
+              sandbox_only, not_live, not_approved, public_discovery_enabled,
+              checkout_payment_enabled, live_provider_enabled,
+              provider_specific_live_enabled, production_allowlist_written,
+              created_at, updated_at
+  `;
+  const row = rows[0];
+  if (!row) {
+    throw new CommerceHttpError(500, 'connector_remediation_insert_failed',
+      'Connector dry-run remediation request could not be stored', { retryable: true });
+  }
+  return { row, auditEventId: audit.id, created: true };
+}
+
+async function attachCorrectedDryRunToRemediation(
+  tx: TxSql,
+  input: {
+    tenantId: string;
+    merchantId: string;
+    remediation: ConnectorDryRunRemediationRow;
+    correctedDryRun: ConnectorDryRunRow;
+    publicSafeNote: string | null;
+    requestId: string;
+  },
+): Promise<{ row: ConnectorDryRunRemediationRow; auditEventId: string | null; created: boolean }> {
+  if (input.remediation.corrected_dry_run_id === input.correctedDryRun.id) {
+    return { row: input.remediation, auditEventId: input.remediation.corrected_audit_event_id, created: false };
+  }
+  const audit = await appendCommerceAudit(tx as unknown as Sql, {
+    tenantId: input.tenantId,
+    merchantId: input.merchantId,
+    eventType: 'connector_remediation_corrected_dry_run_attached',
+    resourceType: 'commerce_connector_dry_run_remediation',
+    resourceId: input.remediation.id,
+    requestId: input.requestId,
+    metadata: {
+      remediation_id: input.remediation.id,
+      original_dry_run_id: input.remediation.original_dry_run_id,
+      corrected_dry_run_id: input.correctedDryRun.id,
+      public_safe_note_present: input.publicSafeNote !== null,
+      corrected_dry_run_status: input.correctedDryRun.status,
+      blocked_count: numberValue(input.correctedDryRun.blocked_count, 0),
+      warning_count: numberValue(input.correctedDryRun.warning_count, 0),
+      sandbox_only: true,
+      not_live: true,
+      not_approved: true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
+      production_allowlist_written: false,
+      remediation_is_production_approval: false,
+      remediation_enables_connector_execution: false,
+    },
+  });
+  const rows = await tx<ConnectorDryRunRemediationRow[]>`
+    UPDATE commerce_connector_dry_run_remediations
+       SET corrected_dry_run_id = ${input.correctedDryRun.id},
+           corrected_audit_event_id = ${audit.id},
+           public_safe_note = COALESCE(${input.publicSafeNote}, public_safe_note),
+           status = 'corrected_dry_run_attached',
+           updated_at = NOW()
+     WHERE tenant_id = ${input.tenantId}
+       AND merchant_id = ${input.merchantId}
+       AND id = ${input.remediation.id}
+       AND (corrected_dry_run_id IS NULL OR corrected_dry_run_id = ${input.correctedDryRun.id})
+    RETURNING id, tenant_id, merchant_id, original_dry_run_id,
+              original_review_id, original_decision, status, public_safe_note,
+              blocker_summary, warning_summary, corrected_dry_run_id,
+              followup_review_id, requested_by_kind, requested_by_id,
+              requested_audit_event_id, corrected_audit_event_id,
+              followup_audit_event_id, closed_or_blocked_audit_event_id,
+              sandbox_only, not_live, not_approved, public_discovery_enabled,
+              checkout_payment_enabled, live_provider_enabled,
+              provider_specific_live_enabled, production_allowlist_written,
+              created_at, updated_at
+  `;
+  const row = rows[0];
+  if (!row) {
+    throw new CommerceHttpError(409, 'connector_remediation_corrected_dry_run_conflict',
+      'Connector remediation already references a different corrected dry-run', { retryable: false });
+  }
+  return { row, auditEventId: audit.id, created: true };
+}
+
+async function attachFollowupReviewToRemediation(
+  tx: TxSql,
+  input: {
+    tenantId: string;
+    merchantId: string;
+    remediation: ConnectorDryRunRemediationRow;
+    correctedDryRun: ConnectorDryRunRow;
+    followupReview: ConnectorDryRunReviewRow;
+    requestId: string;
+  },
+): Promise<{ row: ConnectorDryRunRemediationRow; auditEventId: string | null; created: boolean }> {
+  if (input.remediation.followup_review_id === input.followupReview.id) {
+    return { row: input.remediation, auditEventId: input.remediation.followup_audit_event_id, created: false };
+  }
+  const status = remediationStatusFromFollowup(input.followupReview);
+  const audit = await appendCommerceAudit(tx as unknown as Sql, {
+    tenantId: input.tenantId,
+    merchantId: input.merchantId,
+    eventType: 'connector_remediation_followup_review_requested',
+    resourceType: 'commerce_connector_dry_run_remediation',
+    resourceId: input.remediation.id,
+    requestId: input.requestId,
+    metadata: {
+      remediation_id: input.remediation.id,
+      corrected_dry_run_id: input.correctedDryRun.id,
+      followup_review_id: input.followupReview.id,
+      followup_review_status: input.followupReview.status,
+      remediation_status: status,
+      sandbox_only: true,
+      not_live: true,
+      not_approved: true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
+      production_allowlist_written: false,
+      remediation_is_production_approval: false,
+      remediation_enables_connector_execution: false,
+      followup_ready_is_launch_approval: false,
+    },
+  });
+  const rows = await tx<ConnectorDryRunRemediationRow[]>`
+    UPDATE commerce_connector_dry_run_remediations
+       SET followup_review_id = ${input.followupReview.id},
+           followup_audit_event_id = ${audit.id},
+           status = ${status},
+           updated_at = NOW()
+     WHERE tenant_id = ${input.tenantId}
+       AND merchant_id = ${input.merchantId}
+       AND id = ${input.remediation.id}
+       AND (followup_review_id IS NULL OR followup_review_id = ${input.followupReview.id})
+    RETURNING id, tenant_id, merchant_id, original_dry_run_id,
+              original_review_id, original_decision, status, public_safe_note,
+              blocker_summary, warning_summary, corrected_dry_run_id,
+              followup_review_id, requested_by_kind, requested_by_id,
+              requested_audit_event_id, corrected_audit_event_id,
+              followup_audit_event_id, closed_or_blocked_audit_event_id,
+              sandbox_only, not_live, not_approved, public_discovery_enabled,
+              checkout_payment_enabled, live_provider_enabled,
+              provider_specific_live_enabled, production_allowlist_written,
+              created_at, updated_at
+  `;
+  const row = rows[0];
+  if (!row) {
+    throw new CommerceHttpError(409, 'connector_remediation_followup_review_conflict',
+      'Connector remediation already references a different follow-up review', { retryable: false });
+  }
+  return { row, auditEventId: audit.id, created: true };
+}
+
 async function recordDryRunReviewDecision(
   tx: TxSql,
   input: {
@@ -1120,6 +1646,17 @@ async function recordDryRunReviewDecision(
     throw new CommerceHttpError(409, 'connector_dry_run_review_not_pending',
       'Connector dry-run review is not pending operator review', { retryable: false });
   }
+  const remediationStatus: ConnectorDryRunRemediationStatus = input.decision === 'accepted_for_sandbox_followup'
+    ? 'followup_ready'
+    : 'blocked_again';
+  await tx`
+    UPDATE commerce_connector_dry_run_remediations
+       SET status = ${remediationStatus},
+           updated_at = NOW()
+     WHERE tenant_id = ${input.tenantId}
+       AND merchant_id = ${input.merchantId}
+       AND followup_review_id = ${row.id}
+  `;
   return { row, auditEventId: audit.id };
 }
 
@@ -1563,6 +2100,265 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
       data: toDryRunReview(result.row),
       dry_run: toDryRunResult(dryRun),
       audit_event_id: result.auditEventId,
+    });
+  });
+
+  app.post<{
+    Params: Required<Pick<ConnectorDryRunRemediationParams, 'merchantId' | 'dryRunId'>>;
+    Body: ConnectorDryRunRemediationRequestBody;
+  }>('/merchants/:merchantId/connectors/dry-runs/:dryRunId/remediation', async (request, reply) => {
+    if (!isPlainObject(request.body ?? {})) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { body: 'must be a JSON object' } },
+        retryable: false,
+      });
+    }
+    const merchantId = merchantIdForConnectorRequest(request, request.params.merchantId);
+    const actor = connectorReviewActor(request);
+    const tenantId = request.commerceTenantId;
+    const { publicSafeNote } = validateRemediationRequestBody((request.body ?? {}) as Record<string, unknown>);
+    const sql = getSql();
+    const merchant = await readMerchantForDryRun(sql, tenantId, merchantId);
+    if (!merchant) {
+      throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+    }
+    const dryRun = await readDryRunEvidence(sql, tenantId, merchantId, request.params.dryRunId);
+    if (!dryRun) {
+      throw new CommerceHttpError(404, 'connector_dry_run_not_found',
+        'Connector dry-run evidence was not found in this tenant and merchant');
+    }
+    const review = await readDryRunReview(sql, tenantId, merchantId, dryRun.id);
+    if (!review) {
+      throw new CommerceHttpError(404, 'connector_dry_run_review_not_found',
+        'Connector dry-run review was not found in this tenant and merchant');
+    }
+    const blockerCodes: string[] = [];
+    if (merchant.disabled_at !== null) blockerCodes.push('merchant_disabled');
+    if (merchant.environment !== 'sandbox') blockerCodes.push('live_merchant_mode_blocked');
+    if (!dryRunControlsAreSafe(dryRun)) blockerCodes.push('dry_run_controls_not_safe');
+    if (review.status !== 'needs_changes' && review.status !== 'blocked') {
+      blockerCodes.push('original_review_not_remediable');
+    }
+    if (blockerCodes.length > 0) {
+      const auditEventId = await appendRemediationBlockedAudit(sql, {
+        tenantId,
+        merchantId,
+        remediationId: null,
+        requestId: request.id,
+        blockerCodes,
+      });
+      throw new CommerceHttpError(409, 'connector_remediation_blocked',
+        'Connector dry-run remediation request is blocked', {
+          auditEventId,
+          details: remediationBlockedDetails(null, blockerCodes),
+          retryable: false,
+        });
+    }
+    const result = await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      return insertDryRunRemediationRequest(tx, {
+        tenantId,
+        merchantId,
+        dryRun,
+        review,
+        actor,
+        publicSafeNote,
+        requestId: request.id,
+      });
+    });
+    return reply.status(result.created ? 201 : 200).send({
+      data: toDryRunRemediation(result.row),
+      original_dry_run: toDryRunResult(dryRun),
+      original_review: toDryRunReview(review),
+      audit_event_id: result.auditEventId,
+    });
+  });
+
+  app.get<{
+    Params: Required<Pick<ConnectorDryRunRemediationParams, 'merchantId' | 'remediationId'>>;
+  }>('/merchants/:merchantId/connectors/remediations/:remediationId', async (request, reply) => {
+    const merchantId = merchantIdForConnectorRequest(request, request.params.merchantId);
+    const tenantId = request.commerceTenantId;
+    const sql = getSql();
+    await assertMerchantInTenant(sql, tenantId, merchantId);
+    const remediation = await readDryRunRemediationById(sql, tenantId, merchantId, request.params.remediationId);
+    if (!remediation) {
+      throw new CommerceHttpError(404, 'connector_remediation_not_found',
+        'Connector dry-run remediation was not found in this tenant and merchant');
+    }
+    return reply.status(200).send({ data: toDryRunRemediation(remediation) });
+  });
+
+  app.post<{
+    Params: Required<Pick<ConnectorDryRunRemediationParams, 'merchantId' | 'remediationId'>>;
+    Body: ConnectorDryRunCorrectedBody;
+  }>('/merchants/:merchantId/connectors/remediations/:remediationId/corrected-dry-run', async (request, reply) => {
+    if (!isPlainObject(request.body ?? {})) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { body: 'must be a JSON object' } },
+        retryable: false,
+      });
+    }
+    const merchantId = merchantIdForConnectorRequest(request, request.params.merchantId);
+    const tenantId = request.commerceTenantId;
+    const { correctedDryRunId, publicSafeNote } = validateCorrectedDryRunBody((request.body ?? {}) as Record<string, unknown>);
+    const sql = getSql();
+    const merchant = await readMerchantForDryRun(sql, tenantId, merchantId);
+    if (!merchant) {
+      throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+    }
+    const remediation = await readDryRunRemediationById(sql, tenantId, merchantId, request.params.remediationId);
+    if (!remediation) {
+      throw new CommerceHttpError(404, 'connector_remediation_not_found',
+        'Connector dry-run remediation was not found in this tenant and merchant');
+    }
+    const correctedDryRun = await readDryRunEvidence(sql, tenantId, merchantId, correctedDryRunId);
+    if (!correctedDryRun) {
+      throw new CommerceHttpError(404, 'connector_dry_run_not_found',
+        'Corrected connector dry-run evidence was not found in this tenant and merchant');
+    }
+    const blockerCodes: string[] = [];
+    if (merchant.disabled_at !== null) blockerCodes.push('merchant_disabled');
+    if (merchant.environment !== 'sandbox') blockerCodes.push('live_merchant_mode_blocked');
+    if (correctedDryRun.id === remediation.original_dry_run_id) blockerCodes.push('corrected_dry_run_must_differ');
+    if (correctedDryRun.status !== 'passed') blockerCodes.push('corrected_dry_run_blocked');
+    if (numberValue(correctedDryRun.blocked_count, 0) > 0) blockerCodes.push('corrected_dry_run_has_blockers');
+    if (!dryRunControlsAreSafe(correctedDryRun)) blockerCodes.push('corrected_dry_run_controls_not_safe');
+    if (blockerCodes.length > 0) {
+      const auditEventId = await appendRemediationBlockedAudit(sql, {
+        tenantId,
+        merchantId,
+        remediationId: remediation.id,
+        requestId: request.id,
+        blockerCodes,
+      });
+      throw new CommerceHttpError(409, 'connector_remediation_blocked',
+        'Corrected connector dry-run attachment is blocked', {
+          auditEventId,
+          details: remediationBlockedDetails(remediation, blockerCodes),
+          retryable: false,
+        });
+    }
+    const result = await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      return attachCorrectedDryRunToRemediation(tx, {
+        tenantId,
+        merchantId,
+        remediation,
+        correctedDryRun,
+        publicSafeNote,
+        requestId: request.id,
+      });
+    });
+    return reply.status(200).send({
+      data: toDryRunRemediation(result.row),
+      corrected_dry_run: toDryRunResult(correctedDryRun),
+      audit_event_id: result.auditEventId,
+    });
+  });
+
+  app.post<{
+    Params: Required<Pick<ConnectorDryRunRemediationParams, 'merchantId' | 'remediationId'>>;
+    Body: ConnectorDryRunFollowupBody;
+  }>('/merchants/:merchantId/connectors/remediations/:remediationId/follow-up-review', async (request, reply) => {
+    if (!isPlainObject(request.body ?? {})) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { body: 'must be a JSON object' } },
+        retryable: false,
+      });
+    }
+    const merchantId = merchantIdForConnectorRequest(request, request.params.merchantId);
+    const actor = connectorReviewActor(request);
+    const tenantId = request.commerceTenantId;
+    const { requestNote } = validateFollowupReviewBody((request.body ?? {}) as Record<string, unknown>);
+    const sql = getSql();
+    const merchant = await readMerchantForDryRun(sql, tenantId, merchantId);
+    if (!merchant) {
+      throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+    }
+    const remediation = await readDryRunRemediationById(sql, tenantId, merchantId, request.params.remediationId);
+    if (!remediation) {
+      throw new CommerceHttpError(404, 'connector_remediation_not_found',
+        'Connector dry-run remediation was not found in this tenant and merchant');
+    }
+    if (!remediation.corrected_dry_run_id) {
+      const auditEventId = await appendRemediationBlockedAudit(sql, {
+        tenantId,
+        merchantId,
+        remediationId: remediation.id,
+        requestId: request.id,
+        blockerCodes: ['corrected_dry_run_missing'],
+      });
+      throw new CommerceHttpError(409, 'connector_remediation_blocked',
+        'Attach a corrected sandbox dry-run before requesting follow-up review', {
+          auditEventId,
+          details: remediationBlockedDetails(remediation, ['corrected_dry_run_missing']),
+          retryable: false,
+        });
+    }
+    const correctedDryRun = await readDryRunEvidence(sql, tenantId, merchantId, remediation.corrected_dry_run_id);
+    if (!correctedDryRun) {
+      throw new CommerceHttpError(404, 'connector_dry_run_not_found',
+        'Corrected connector dry-run evidence was not found in this tenant and merchant');
+    }
+    const blockerCodes: string[] = [];
+    if (merchant.disabled_at !== null) blockerCodes.push('merchant_disabled');
+    if (merchant.environment !== 'sandbox') blockerCodes.push('live_merchant_mode_blocked');
+    if (correctedDryRun.status !== 'passed') blockerCodes.push('corrected_dry_run_blocked');
+    if (!dryRunControlsAreSafe(correctedDryRun)) blockerCodes.push('corrected_dry_run_controls_not_safe');
+    if (blockerCodes.length > 0) {
+      const auditEventId = await appendRemediationBlockedAudit(sql, {
+        tenantId,
+        merchantId,
+        remediationId: remediation.id,
+        requestId: request.id,
+        blockerCodes,
+      });
+      throw new CommerceHttpError(409, 'connector_remediation_blocked',
+        'Connector remediation follow-up review request is blocked', {
+          auditEventId,
+          details: remediationBlockedDetails(remediation, blockerCodes),
+          retryable: false,
+        });
+    }
+    if (remediation.followup_review_id) {
+      const existingFollowup = await readDryRunReviewById(sql, tenantId, merchantId, remediation.followup_review_id);
+      if (!existingFollowup) {
+        throw new CommerceHttpError(404, 'connector_dry_run_review_not_found',
+          'Connector remediation follow-up review was not found in this tenant and merchant');
+      }
+      return reply.status(200).send({
+        data: toDryRunRemediation(remediation),
+        corrected_dry_run: toDryRunResult(correctedDryRun),
+        followup_review: toDryRunReview(existingFollowup),
+        audit_event_id: remediation.followup_audit_event_id,
+      });
+    }
+    const result = await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      const reviewRequest = await insertDryRunReviewRequest(tx, {
+        tenantId,
+        merchantId,
+        dryRun: correctedDryRun,
+        actor,
+        requestNote,
+        requestId: request.id,
+      });
+      const remediationResult = await attachFollowupReviewToRemediation(tx, {
+        tenantId,
+        merchantId,
+        remediation,
+        correctedDryRun,
+        followupReview: reviewRequest.row,
+        requestId: request.id,
+      });
+      return { reviewRequest, remediationResult };
+    });
+    return reply.status(result.remediationResult.created ? 201 : 200).send({
+      data: toDryRunRemediation(result.remediationResult.row),
+      corrected_dry_run: toDryRunResult(correctedDryRun),
+      followup_review: toDryRunReview(result.reviewRequest.row),
+      audit_event_id: result.remediationResult.auditEventId,
     });
   });
 

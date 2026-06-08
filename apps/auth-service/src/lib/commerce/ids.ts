@@ -17,6 +17,7 @@ export const newCommerceWebhookEventId = (): string => `cwh_${ulid()}`;
 export const newCommerceConnectorId = (): string => `cconn_${ulid()}`;
 export const newCommerceConnectorDryRunId = (): string => `cdry_${ulid()}`;
 export const newCommerceConnectorDryRunReviewId = (): string => `cdrev_${ulid()}`;
+export const newCommerceConnectorDryRunRemediationId = (): string => `cdrem_${ulid()}`;
 
 // M2 — passport / consent / merchant key / passport key id generators.
 export const newCommerceConsentRecordId = (): string => `crec_${ulid()}`;

@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
+  attachCommerceConnectorRemediationCorrectedDryRun,
+  createCommerceConnectorDryRunRemediation,
   createCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   dryRunCommerceMerchantReadOnlyDiscoveryRolloutProposal,
   evaluateCommercePolicy,
@@ -16,6 +18,7 @@ import {
   listCommerceProviderCredentials,
   listCommerceWebhookSources,
   requestCommerceConnectorDryRunReview,
+  requestCommerceConnectorRemediationFollowUpReview,
   recordCommerceReadOnlyDiscoveryReviewDecision,
   requestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff,
   requestCommerceMerchantReadOnlyDiscoveryReview,
@@ -26,6 +29,7 @@ import {
   type CommerceAgent,
   type CommerceAgenticOrgBuyerDiscoveryPreview,
   type CommerceConnectorDryRunResult,
+  type CommerceConnectorDryRunRemediation,
   type CommerceConnectorDryRunReview,
   type CommerceConnectorDryRunReviewDecision,
   type CommerceConnectorDryRunType,
@@ -388,6 +392,13 @@ function remediationLoopStatusVariant(status: ConnectorRemediationLoopStatus | C
   if (status === 'followup_ready' || status === 'accepted_for_sandbox_followup') return 'success';
   if (status === 'blocked_again' || status === 'blocked' || status === 'needs_changes') return 'danger';
   return 'warning';
+}
+
+function backendRemediationStatusVariant(status: CommerceConnectorDryRunRemediation['status']): 'default' | 'success' | 'warning' | 'danger' {
+  if (status === 'followup_ready') return 'success';
+  if (status === 'blocked_again' || status === 'closed_no_action') return 'danger';
+  if (status === 'remediation_requested' || status === 'waiting_for_corrected_dry_run') return 'warning';
+  return 'default';
 }
 
 function buildConnectorEvidencePacketReview(
@@ -831,6 +842,7 @@ function buildConnectorEvidenceExport(
   dryRun: CommerceConnectorDryRunResult,
   review: CommerceConnectorDryRunReview | null,
   remediationLoop: ConnectorRemediationLoopState | null = null,
+  backendRemediation: CommerceConnectorDryRunRemediation | null = null,
 ) {
   const packetReview = buildConnectorEvidencePacketReview(dryRun, review);
   const operatorHandoff = buildConnectorOperatorHandoff(dryRun, review, packetReview);
@@ -856,6 +868,37 @@ function buildConnectorEvidenceExport(
         checkout_payment_enabled: false,
         live_provider_enabled: false,
         live_plural_enabled: false,
+        merchant_private_api_calls: false,
+        production_allowlist_written: false,
+        certification_claimed: false,
+      },
+    } : null,
+    backend_remediation: backendRemediation ? {
+      remediation_id: backendRemediation.remediation_id,
+      status: backendRemediation.status,
+      original_dry_run_id: backendRemediation.original_dry_run_id,
+      original_review_id: backendRemediation.original_review_id,
+      original_decision: backendRemediation.original_decision,
+      corrected_dry_run_id: backendRemediation.corrected_dry_run_id,
+      followup_review_id: backendRemediation.followup_review_id,
+      blocker_summary_count: backendRemediation.blocker_summary.length,
+      warning_summary_count: backendRemediation.warning_summary.length,
+      public_safe_note_present: backendRemediation.public_safe_note !== null,
+      requested_by_kind: backendRemediation.requested_by.kind,
+      audit_references: backendRemediation.audit_references,
+      controls: backendRemediation.controls,
+      posture: {
+        tenant_scoped: true,
+        sandbox_only: true,
+        not_live: true,
+        not_approved: true,
+        public_discovery_enabled: false,
+        checkout_payment_enabled: false,
+        live_provider_enabled: false,
+        live_plural_enabled: false,
+        credential_entry_enabled: false,
+        outbound_sync_enabled: false,
+        production_connector_setup: false,
         merchant_private_api_calls: false,
         production_allowlist_written: false,
         certification_claimed: false,
@@ -960,6 +1003,19 @@ function buildConnectorEvidenceMarkdown(evidence: ReturnType<typeof buildConnect
     `Operator follow-up status: ${remediationLoop.operator_followup.followup_status}`,
     `Operator follow-up review: ${remediationLoop.operator_followup.review_id ?? 'not_requested'}`,
   ] : ['none'];
+  const backendRemediation = evidence.backend_remediation;
+  const backendRemediationLines = backendRemediation ? [
+    `Remediation ID: ${backendRemediation.remediation_id}`,
+    `Status: ${backendRemediation.status}`,
+    `Original dry-run: ${backendRemediation.original_dry_run_id}`,
+    `Original review: ${backendRemediation.original_review_id}`,
+    `Original decision: ${backendRemediation.original_decision}`,
+    `Corrected dry-run: ${backendRemediation.corrected_dry_run_id ?? 'not_attached'}`,
+    `Follow-up review: ${backendRemediation.followup_review_id ?? 'not_requested'}`,
+    `Requested audit: ${backendRemediation.audit_references.requested_audit_event_id}`,
+    `Corrected audit: ${backendRemediation.audit_references.corrected_audit_event_id ?? 'not_recorded'}`,
+    `Follow-up audit: ${backendRemediation.audit_references.followup_audit_event_id ?? 'not_recorded'}`,
+  ] : ['none'];
   const redactionSummary = Object.entries(evidence.packet_review.redaction_summary).map(([key, value]) => `${key}: ${value}`);
   return [
     '# Connector Dry-Run Evidence Handoff',
@@ -1039,6 +1095,10 @@ function buildConnectorEvidenceMarkdown(evidence: ReturnType<typeof buildConnect
     '',
     formatMarkdownList(remediationLoopLines),
     '',
+    '## Grantex-Persisted Remediation Evidence',
+    '',
+    formatMarkdownList(backendRemediationLines),
+    '',
     '## Blockers',
     '',
     formatMarkdownList(blockers),
@@ -1087,6 +1147,7 @@ export function CommerceOnboarding() {
   const [connectorDryRun, setConnectorDryRun] = useState<CommerceConnectorDryRunResult | null>(null);
   const [connectorReview, setConnectorReview] = useState<CommerceConnectorDryRunReview | null>(null);
   const [connectorRemediationLoop, setConnectorRemediationLoop] = useState<ConnectorRemediationLoopState | null>(null);
+  const [connectorBackendRemediation, setConnectorBackendRemediation] = useState<CommerceConnectorDryRunRemediation | null>(null);
   const [merchantForm, setMerchantForm] = useState<MerchantPatchForm>(defaultPatch);
   const [agents, setAgents] = useState<CommerceAgent[]>([]);
   const [activePolicyCount, setActivePolicyCount] = useState(0);
@@ -1174,6 +1235,7 @@ export function CommerceOnboarding() {
       setConnectorDryRun(null);
       setConnectorReview(null);
       setConnectorRemediationLoop(null);
+      setConnectorBackendRemediation(null);
       setProposalNote(proposalRes?.data.proposal_note ?? '');
       setAgenticOrgNote('');
       setMerchantForm({
@@ -1401,6 +1463,7 @@ export function CommerceOnboarding() {
     setConnectorDryRun(null);
     setConnectorReview(null);
     setConnectorRemediationLoop(null);
+    setConnectorBackendRemediation(null);
     show('Sandbox connector rows cleared', 'success');
   }
 
@@ -1419,6 +1482,22 @@ export function CommerceOnboarding() {
         rows,
       });
       setConnectorDryRun(res.data);
+      if (
+        connectorBackendRemediation
+        && res.data.status === 'passed'
+        && res.data.dry_run_id !== connectorBackendRemediation.original_dry_run_id
+        && connectorBackendRemediation.corrected_dry_run_id !== res.data.dry_run_id
+      ) {
+        const remediationRes = await attachCommerceConnectorRemediationCorrectedDryRun(
+          merchant.merchant_id,
+          connectorBackendRemediation.remediation_id,
+          {
+            correctedDryRunId: res.data.dry_run_id,
+            publicSafeNote: 'Corrected sandbox dry-run attached from portal evidence flow.',
+          },
+        );
+        setConnectorBackendRemediation(remediationRes.data);
+      }
       setConnectorRemediationLoop((prev) => (
         prev && prev.loop_status !== 'followup_ready'
           ? applyCorrectedConnectorDryRunToLoop(prev, res.data)
@@ -1436,16 +1515,36 @@ export function CommerceOnboarding() {
     if (!merchant || !connectorDryRun) return;
     setConnectorReviewSubmitting(true);
     try {
-      const res = await requestCommerceConnectorDryRunReview(merchant.merchant_id, connectorDryRun.dry_run_id, {
-        requestNote: connectorForm.request_note.trim() || undefined,
-      });
-      setConnectorReview(res.data);
-      setConnectorDryRun(res.dry_run);
-      setConnectorRemediationLoop((prev) => (
-        prev?.corrected_dry_run?.dry_run_id === res.dry_run.dry_run_id
-          ? applyConnectorFollowupReviewToLoop(prev, res.dry_run, res.data)
-          : prev
-      ));
+      const requestNote = connectorForm.request_note.trim() || undefined;
+      const followupRemediation = connectorBackendRemediation?.corrected_dry_run_id === connectorDryRun.dry_run_id
+        ? connectorBackendRemediation
+        : null;
+      if (followupRemediation) {
+        const res = await requestCommerceConnectorRemediationFollowUpReview(
+          merchant.merchant_id,
+          followupRemediation.remediation_id,
+          { requestNote },
+        );
+        setConnectorBackendRemediation(res.data);
+        setConnectorReview(res.followup_review);
+        setConnectorDryRun(res.corrected_dry_run);
+        setConnectorRemediationLoop((prev) => (
+          prev?.corrected_dry_run?.dry_run_id === res.corrected_dry_run.dry_run_id
+            ? applyConnectorFollowupReviewToLoop(prev, res.corrected_dry_run, res.followup_review)
+            : prev
+        ));
+      } else {
+        const res = await requestCommerceConnectorDryRunReview(merchant.merchant_id, connectorDryRun.dry_run_id, {
+          requestNote,
+        });
+        setConnectorReview(res.data);
+        setConnectorDryRun(res.dry_run);
+        setConnectorRemediationLoop((prev) => (
+          prev?.corrected_dry_run?.dry_run_id === res.dry_run.dry_run_id
+            ? applyConnectorFollowupReviewToLoop(prev, res.dry_run, res.data)
+            : prev
+        ));
+      }
       show('Connector dry-run review requested', 'success');
     } catch {
       show('Connector dry-run review request is blocked', 'error');
@@ -1477,6 +1576,23 @@ export function CommerceOnboarding() {
         }
         return prev;
       });
+      if (res.data.status === 'needs_changes' || res.data.status === 'blocked') {
+        const remediationRes = await createCommerceConnectorDryRunRemediation(
+          merchant.merchant_id,
+          res.dry_run.dry_run_id,
+          { publicSafeNote: res.data.decision_note ?? undefined },
+        );
+        setConnectorBackendRemediation(remediationRes.data);
+      } else if (connectorBackendRemediation?.followup_review_id === res.data.review_id) {
+        setConnectorBackendRemediation((prev) => prev ? {
+          ...prev,
+          status: res.data.status === 'accepted_for_sandbox_followup' ? 'followup_ready' : 'blocked_again',
+          audit_references: {
+            ...prev.audit_references,
+            followup_audit_event_id: prev.audit_references.followup_audit_event_id ?? res.data.audit_event_id,
+          },
+        } : prev);
+      }
       show('Connector dry-run review decision recorded', 'success');
     } catch {
       show('Connector dry-run review decision is blocked', 'error');
@@ -1647,7 +1763,7 @@ export function CommerceOnboarding() {
         ? 'Connector dry-run is being submitted.'
         : 'Dry-run is local snapshot validation only.';
   const connectorEvidence = merchant && connectorDryRun
-    ? buildConnectorEvidenceExport(merchant.merchant_id, connectorDryRun, connectorReview, connectorRemediationLoop)
+    ? buildConnectorEvidenceExport(merchant.merchant_id, connectorDryRun, connectorReview, connectorRemediationLoop, connectorBackendRemediation)
     : null;
   const connectorEvidenceJson = connectorEvidence ? JSON.stringify(connectorEvidence, null, 2) : '';
   const connectorEvidenceMarkdown = connectorEvidence ? buildConnectorEvidenceMarkdown(connectorEvidence) : '';
@@ -2454,6 +2570,8 @@ export function CommerceOnboarding() {
                   setConnectorForm({ ...connectorForm, rows_json: e.target.value });
                   setConnectorDryRun(null);
                   setConnectorReview(null);
+                  setConnectorRemediationLoop(null);
+                  setConnectorBackendRemediation(null);
                 }}
                 rows={8}
                 className="w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 font-mono text-xs text-gx-text focus:border-gx-accent focus:outline-none"
@@ -2783,6 +2901,58 @@ export function CommerceOnboarding() {
                             ?? 'not_recorded'}
                         </div>
                       </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {connectorEvidence.backend_remediation ? (
+                  <div className="mt-3 rounded-md border border-gx-border p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-medium text-gx-text">Grantex-persisted remediation evidence</div>
+                        <div className="mt-1 text-xs text-gx-muted">
+                          Tenant-scoped backend evidence for the sandbox remediation and follow-up loop; this is not production approval or connector execution approval.
+                        </div>
+                      </div>
+                      <Badge variant={backendRemediationStatusVariant(connectorEvidence.backend_remediation.status)}>
+                        {connectorEvidence.backend_remediation.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-4">
+                      {[
+                        { label: 'remediation_id', value: connectorEvidence.backend_remediation.remediation_id },
+                        { label: 'original_dry_run', value: connectorEvidence.backend_remediation.original_dry_run_id },
+                        { label: 'original_review', value: connectorEvidence.backend_remediation.original_review_id },
+                        { label: 'corrected_dry_run', value: connectorEvidence.backend_remediation.corrected_dry_run_id ?? 'not_attached' },
+                        { label: 'followup_review', value: connectorEvidence.backend_remediation.followup_review_id ?? 'not_requested' },
+                        { label: 'requested_audit', value: connectorEvidence.backend_remediation.audit_references.requested_audit_event_id },
+                        { label: 'corrected_audit', value: connectorEvidence.backend_remediation.audit_references.corrected_audit_event_id ?? 'not_recorded' },
+                        { label: 'followup_audit', value: connectorEvidence.backend_remediation.audit_references.followup_audit_event_id ?? 'not_recorded' },
+                      ].map((item) => (
+                        <div key={item.label} className="rounded-md border border-gx-border p-2">
+                          <div className="text-xs text-gx-muted">{item.label}</div>
+                          <div className="break-all text-sm font-medium text-gx-text">{item.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-4">
+                      {[
+                        { label: 'sandbox_only', value: connectorEvidence.backend_remediation.posture.sandbox_only },
+                        { label: 'not_live', value: connectorEvidence.backend_remediation.posture.not_live },
+                        { label: 'not_approved', value: connectorEvidence.backend_remediation.posture.not_approved },
+                        { label: 'public_discovery_enabled', value: connectorEvidence.backend_remediation.posture.public_discovery_enabled },
+                        { label: 'checkout_payment_enabled', value: connectorEvidence.backend_remediation.posture.checkout_payment_enabled },
+                        { label: 'live_provider_enabled', value: connectorEvidence.backend_remediation.posture.live_provider_enabled },
+                        { label: 'outbound_sync_enabled', value: connectorEvidence.backend_remediation.posture.outbound_sync_enabled },
+                        { label: 'merchant_private_api_calls', value: connectorEvidence.backend_remediation.posture.merchant_private_api_calls },
+                      ].map((item) => (
+                        <div key={item.label} className="rounded-md border border-gx-border p-2">
+                          <div className="text-xs text-gx-muted">{item.label}</div>
+                          <Badge variant={item.value === true && ['sandbox_only', 'not_live', 'not_approved'].includes(item.label) ? 'success' : item.value ? 'danger' : 'success'}>
+                            {String(item.value)}
+                          </Badge>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ) : null}
