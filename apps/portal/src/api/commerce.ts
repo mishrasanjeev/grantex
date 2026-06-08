@@ -220,6 +220,133 @@ export interface CommerceCatalogReadiness {
   };
 }
 
+export type CommerceConnectorDryRunType = 'manual' | 'csv';
+export type CommerceConnectorDryRunStatus = 'passed' | 'blocked';
+export type CommerceConnectorDryRunReviewStatus =
+  | 'pending_operator_review'
+  | 'accepted_for_sandbox_followup'
+  | 'needs_changes'
+  | 'blocked';
+export type CommerceConnectorDryRunReviewDecision =
+  | 'accepted_for_sandbox_followup'
+  | 'needs_changes'
+  | 'blocked';
+
+export interface CommerceConnectorDryRunPreviewVariant {
+  sku: string;
+  variant_title: string | null;
+  price_amount: number | string;
+  currency: string;
+  availability_status: 'in_stock' | 'out_of_stock' | 'pre_order' | 'back_order' | 'unknown';
+  warranty_summary: string | null;
+  return_policy_summary: string | null;
+}
+
+export interface CommerceConnectorDryRunPreviewProduct {
+  source_product_ref: string;
+  title: string;
+  brand: string | null;
+  description: string | null;
+  image_url: string | null;
+  category_preset: string;
+  variants: CommerceConnectorDryRunPreviewVariant[];
+}
+
+export interface CommerceConnectorDryRunBlocker {
+  code: string;
+  message: string;
+  row_index: number | null;
+  field: string | null;
+  remediation: string;
+}
+
+export interface CommerceConnectorDryRunWarning {
+  code: string;
+  message: string;
+  row_index: number | null;
+  field: string | null;
+}
+
+export interface CommerceConnectorDryRunResult {
+  dry_run_id: string;
+  tenant_id: string;
+  merchant_id: string;
+  connector_type: CommerceConnectorDryRunType;
+  source_label: string;
+  status: CommerceConnectorDryRunStatus;
+  sandbox_only: true;
+  not_live: true;
+  not_approved: true;
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  live_plural_enabled: false;
+  rows_received: number;
+  products_detected: number;
+  variants_detected: number;
+  would_create_count: number;
+  would_update_count: number;
+  would_archive_count: number;
+  blocked_count: number;
+  warning_count: number;
+  normalized_preview: CommerceConnectorDryRunPreviewProduct[];
+  blockers: CommerceConnectorDryRunBlocker[];
+  warnings: CommerceConnectorDryRunWarning[];
+  requested_audit_event_id: string;
+  audit_event_id: string;
+  generated_at: string;
+  created_at: string;
+}
+
+export interface CommerceConnectorDryRunReview {
+  review_id: string;
+  tenant_id: string;
+  merchant_id: string;
+  dry_run_id: string;
+  status: CommerceConnectorDryRunReviewStatus;
+  decision: CommerceConnectorDryRunReviewDecision | null;
+  decision_note: string | null;
+  requested_by: {
+    kind: 'operator' | 'merchant';
+    id: string;
+  };
+  decided_by_operator_id: string | null;
+  dry_run_status: CommerceConnectorDryRunStatus;
+  dry_run_generated_at: string | null;
+  evidence_summary: Record<string, unknown>;
+  requested_audit_event_id: string;
+  audit_event_id: string | null;
+  controls: {
+    sandbox_only: true;
+    not_live: true;
+    not_approved: true;
+    public_discovery_enabled: false;
+    checkout_payment_enabled: false;
+    live_provider_enabled: false;
+    live_plural_enabled: false;
+    production_allowlist_written: false;
+    review_is_production_approval: false;
+    review_enables_connector_execution: false;
+  };
+  created_at: string | null;
+  updated_at: string | null;
+  decided_at: string | null;
+}
+
+export interface CommerceConnectorDryRunResponse {
+  data: CommerceConnectorDryRunResult;
+  audit_events: Array<{
+    event_type: 'connector_dry_run_requested' | 'connector_dry_run_completed' | 'connector_dry_run_blocked';
+    audit_event_id: string;
+  }>;
+}
+
+export interface CommerceConnectorDryRunReviewResponse {
+  data: CommerceConnectorDryRunReview;
+  dry_run: CommerceConnectorDryRunResult;
+  audit_event_id: string | null;
+}
+
 export interface CommerceAgentFacingPreviewProductVariant {
   sku: string;
   variant_title: string | null;
@@ -1188,6 +1315,74 @@ export function bulkIngestCommerceProducts(input: {
     dry_run: input.dryRun ?? true,
     products: input.products,
   });
+}
+
+export function runCommerceConnectorDryRun(input: {
+  merchantId: string;
+  connectorType: CommerceConnectorDryRunType;
+  sourceLabel: string;
+  sourceSnapshotAt?: string;
+  previewLimit?: number;
+  rows: Array<Record<string, unknown>>;
+}): Promise<CommerceConnectorDryRunResponse> {
+  return api.post<CommerceConnectorDryRunResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(input.merchantId)}/connectors/dry-run`,
+    {
+      connector_type: input.connectorType,
+      source_label: input.sourceLabel,
+      ...(input.sourceSnapshotAt ? { source_snapshot_at: input.sourceSnapshotAt } : {}),
+      ...(input.previewLimit ? { preview_limit: input.previewLimit } : {}),
+      rows: input.rows,
+    },
+  );
+}
+
+export function getCommerceConnectorDryRun(
+  merchantId: string,
+  dryRunId: string,
+): Promise<{ data: CommerceConnectorDryRunResult }> {
+  return api.get<{ data: CommerceConnectorDryRunResult }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/dry-runs/${encodeURIComponent(dryRunId)}`,
+  );
+}
+
+export function requestCommerceConnectorDryRunReview(
+  merchantId: string,
+  dryRunId: string,
+  input: { requestNote?: string } = {},
+): Promise<CommerceConnectorDryRunReviewResponse> {
+  return api.post<CommerceConnectorDryRunReviewResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/dry-runs/${encodeURIComponent(dryRunId)}/review-request`,
+    {
+      ...(input.requestNote ? { request_note: input.requestNote } : {}),
+    },
+  );
+}
+
+export function getCommerceConnectorDryRunReview(
+  merchantId: string,
+  dryRunId: string,
+): Promise<CommerceConnectorDryRunReviewResponse> {
+  return api.get<CommerceConnectorDryRunReviewResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/dry-runs/${encodeURIComponent(dryRunId)}/review`,
+  );
+}
+
+export function recordCommerceConnectorDryRunReviewDecision(
+  merchantId: string,
+  dryRunId: string,
+  input: {
+    decision: CommerceConnectorDryRunReviewDecision;
+    decisionNote?: string;
+  },
+): Promise<CommerceConnectorDryRunReviewResponse> {
+  return api.post<CommerceConnectorDryRunReviewResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/dry-runs/${encodeURIComponent(dryRunId)}/review/decision`,
+    {
+      decision: input.decision,
+      ...(input.decisionNote ? { decision_note: input.decisionNote } : {}),
+    },
+  );
 }
 
 export function listCommerceWebhookSources(params: {

@@ -233,6 +233,26 @@ keys, production config values, concrete allowlist values, checkout URLs,
 payment identifiers, customer data, live-provider claims, launch claims, or
 certification claims into review evidence.
 
+C6Sb adds the credential-free portal foundation for C6R dry-runs and C6Sa
+review evidence. Merchants and operators can use the Commerce onboarding portal
+to paste or select local sandbox manual/CSV catalog rows, run the tenant-scoped
+dry-run, review counts and capped normalized preview rows, request operator
+review, and record a sandbox evidence decision.
+
+The C6Sb portal panel is not production connector setup. It does not include
+credential entry, outbound sync controls, private API URL execution, provider
+setup, live merchant-system execution, public discovery controls,
+checkout/payment controls, live payment controls, live Plural controls, or
+production allowlist controls. It displays fixed safety controls such as
+`credential_entry_enabled: false`, `outbound_sync_enabled: false`,
+`production_connector_setup: false`, and `merchant_private_api_calls: false`.
+
+Operators should treat C6Sb output as internal sandbox evidence only. A passing
+dry-run or `accepted_for_sandbox_followup` review decision is not merchant
+approval, production approval, connector execution approval, public discovery
+approval, checkout/payment approval, live provider approval, public protocol
+publication, or certification.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent
