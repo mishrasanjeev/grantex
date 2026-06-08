@@ -2858,6 +2858,97 @@ components:
                 enum: [connector_dry_run_requested, connector_dry_run_completed, connector_dry_run_blocked]
               audit_event_id: { type: string }
 
+    CommerceConnectorDryRunReviewRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        Optional public-safe note for requesting C6Sa operator review of C6R
+        dry-run evidence. Secrets, raw payloads, provider metadata, private API
+        URLs, production config values, allowlists, checkout/payment artifacts,
+        live-provider claims, and certification claims are rejected.
+      properties:
+        request_note:
+          type: string
+          nullable: true
+          maxLength: 2000
+
+    CommerceConnectorDryRunReviewDecisionRequest:
+      type: object
+      additionalProperties: false
+      required: [decision]
+      description: >-
+        Operator-only C6Sa review decision. The decision is sandbox evidence
+        review only; it is not production approval, public discovery approval,
+        connector execution approval, checkout/payment approval, provider
+        approval, or certification.
+      properties:
+        decision:
+          type: string
+          enum: [accepted_for_sandbox_followup, needs_changes, blocked]
+        decision_note:
+          type: string
+          nullable: true
+          maxLength: 2000
+
+    CommerceConnectorDryRunReview:
+      type: object
+      description: >-
+        C6Sa tenant-scoped review metadata for C6R dry-run evidence. The review
+        is sandbox-only, non-live, non-public, not approved, non-enabling, and
+        not certification evidence.
+      properties:
+        review_id: { type: string }
+        tenant_id: { type: string }
+        merchant_id: { type: string }
+        dry_run_id: { type: string }
+        status:
+          type: string
+          enum: [pending_operator_review, accepted_for_sandbox_followup, needs_changes, blocked]
+        decision:
+          type: string
+          enum: [accepted_for_sandbox_followup, needs_changes, blocked]
+          nullable: true
+        decision_note: { type: string, nullable: true }
+        requested_by:
+          type: object
+          additionalProperties: false
+          properties:
+            kind: { type: string, enum: [operator, merchant] }
+            id: { type: string }
+        decided_by_operator_id: { type: string, nullable: true }
+        dry_run_status: { type: string, enum: [passed, blocked] }
+        dry_run_generated_at: { type: string, format: date-time, nullable: true }
+        evidence_summary:
+          type: object
+          additionalProperties: true
+          description: Redacted summary counts and audit references only.
+        requested_audit_event_id: { type: string }
+        audit_event_id: { type: string, nullable: true }
+        controls:
+          type: object
+          additionalProperties: false
+          properties:
+            sandbox_only: { type: boolean, const: true }
+            not_live: { type: boolean, const: true }
+            not_approved: { type: boolean, const: true }
+            public_discovery_enabled: { type: boolean, const: false }
+            checkout_payment_enabled: { type: boolean, const: false }
+            live_provider_enabled: { type: boolean, const: false }
+            live_plural_enabled: { type: boolean, const: false }
+            production_allowlist_written: { type: boolean, const: false }
+            review_is_production_approval: { type: boolean, const: false }
+            review_enables_connector_execution: { type: boolean, const: false }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+        decided_at: { type: string, format: date-time, nullable: true }
+
+    CommerceConnectorDryRunReviewResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/CommerceConnectorDryRunReview" }
+        dry_run: { $ref: "#/components/schemas/CommerceConnectorDryRunResult" }
+        audit_event_id: { type: string, nullable: true }
+
     UpdateWebhookSourceRequest:
       type: object
       additionalProperties: false
@@ -5680,6 +5771,107 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: Agent caller or cross-merchant caller is denied }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}/review-request:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+      - { in: path, name: dry_run_id, required: true, schema: { type: string } }
+    post:
+      tags: [Connectors]
+      summary: Request sandbox connector dry-run review
+      operationId: requestCommerceConnectorDryRunReview
+      x-implemented: true
+      x-milestone: C6Sa
+      description: >-
+        Operator or owning merchant endpoint. Requests operator review of C6R
+        redacted connector dry-run evidence. The review is sandbox evidence
+        only and does not approve production launch, enable connector
+        execution, enable public discovery, enable checkout/payment creation,
+        enable live payments, enable live Plural, call providers, call merchant
+        private APIs, write production config, set allowlists, or claim
+        certification. CommerceAgent and AgenticOrg direct execution callers
+        are denied.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommerceConnectorDryRunReviewRequest" }
+      responses:
+        "201":
+          description: Review request created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunReviewResponse" }
+        "200":
+          description: Existing review request returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunReviewResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live, disabled, non-sandbox, or unsafe dry-run evidence blocks review }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}/review:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+      - { in: path, name: dry_run_id, required: true, schema: { type: string } }
+    get:
+      tags: [Connectors]
+      summary: Read sandbox connector dry-run review
+      operationId: getCommerceConnectorDryRunReview
+      x-implemented: true
+      x-milestone: C6Sa
+      description: >-
+        Operator or owning merchant endpoint. Reads tenant-scoped review
+        metadata for a C6R dry-run. The response includes redacted review
+        summary and dry-run evidence only; it excludes credentials, raw files,
+        private API payloads, provider metadata, production config, allowlists,
+        checkout URLs, and payment identifiers.
+      responses:
+        "200":
+          description: Review metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunReviewResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}/review/decision:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+      - { in: path, name: dry_run_id, required: true, schema: { type: string } }
+    post:
+      tags: [Connectors]
+      summary: Record sandbox connector dry-run review decision
+      operationId: recordCommerceConnectorDryRunReviewDecision
+      x-implemented: true
+      x-milestone: C6Sa
+      description: >-
+        Operator-only endpoint. Records one sandbox evidence decision for a
+        pending C6Sa review: accepted_for_sandbox_followup, needs_changes, or
+        blocked. A positive decision means only that follow-up sandbox work may
+        continue. It is not production approval, public discovery approval,
+        connector execution approval, checkout/payment approval, provider
+        approval, public protocol publication, or certification.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommerceConnectorDryRunReviewDecisionRequest" }
+      responses:
+        "200":
+          description: Review decision recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunReviewResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Merchant, agent, or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Review is not pending, dry-run evidence is unsafe, or blocked dry-run cannot be accepted }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
 
   /v1/commerce/connectors:
     post:
