@@ -117,6 +117,317 @@ function capabilityLabel(value: string): string {
   return value.replace(/_/g, ' ');
 }
 
+interface ConnectorRowsValidation {
+  rows: Array<Record<string, unknown>> | null;
+  rowCount: number;
+  productCount: number;
+  variantCount: number;
+  error: string | null;
+  warnings: string[];
+}
+
+const connectorRowsPrivateFieldFragments = [
+  'credential',
+  'secret',
+  'token',
+  'password',
+  'private_api',
+  'provider_metadata',
+  'raw_payload',
+  'checkout_url',
+  'payment_id',
+  'allowlist',
+  'production_config',
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function stringField(row: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  }
+  return null;
+}
+
+function validateConnectorRowsJson(rowsJson: string): ConnectorRowsValidation {
+  if (!rowsJson.trim()) {
+    return {
+      rows: null,
+      rowCount: 0,
+      productCount: 0,
+      variantCount: 0,
+      error: 'Paste at least one local sandbox row before running a dry-run.',
+      warnings: [],
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rowsJson);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown JSON parse error';
+    return {
+      rows: null,
+      rowCount: 0,
+      productCount: 0,
+      variantCount: 0,
+      error: `Rows JSON is invalid: ${message}`,
+      warnings: [],
+    };
+  }
+
+  if (!Array.isArray(parsed) || parsed.some((row) => !isRecord(row))) {
+    return {
+      rows: null,
+      rowCount: 0,
+      productCount: 0,
+      variantCount: 0,
+      error: 'Connector dry-run rows must be a JSON array of objects.',
+      warnings: [],
+    };
+  }
+
+  if (!parsed.length) {
+    return {
+      rows: null,
+      rowCount: 0,
+      productCount: 0,
+      variantCount: 0,
+      error: 'Connector dry-run rows cannot be empty.',
+      warnings: [],
+    };
+  }
+
+  const rows = parsed as Array<Record<string, unknown>>;
+  const productRefs = new Set<string>();
+  const variantRefs = new Set<string>();
+  let missingSku = 0;
+  let missingPrice = 0;
+  let missingCurrency = 0;
+  let missingCategory = 0;
+  let privateFieldRows = 0;
+
+  rows.forEach((row, index) => {
+    productRefs.add(stringField(row, ['product_id', 'source_product_ref', 'title']) ?? `row:${index}`);
+    variantRefs.add(stringField(row, ['sku', 'variant_sku', 'variant_id']) ?? `row:${index}`);
+    if (!stringField(row, ['sku', 'variant_sku', 'variant_id'])) missingSku += 1;
+    if (row.price_amount === undefined && row.price === undefined && row.amount === undefined) missingPrice += 1;
+    if (!stringField(row, ['currency'])) missingCurrency += 1;
+    if (!stringField(row, ['category_preset', 'category'])) missingCategory += 1;
+    if (Object.keys(row).some((key) => connectorRowsPrivateFieldFragments.some((fragment) => key.toLowerCase().includes(fragment)))) {
+      privateFieldRows += 1;
+    }
+  });
+
+  const warnings: string[] = [];
+  if (missingSku) warnings.push(`${missingSku} row(s) are missing a SKU or variant identity; the backend dry-run may block them.`);
+  if (missingPrice) warnings.push(`${missingPrice} row(s) are missing a price amount; the backend dry-run may block them.`);
+  if (missingCurrency) warnings.push(`${missingCurrency} row(s) are missing currency; the backend dry-run may block them.`);
+  if (missingCategory) warnings.push(`${missingCategory} row(s) are missing category mapping; the backend dry-run may block them.`);
+  if (privateFieldRows) warnings.push(`${privateFieldRows} row(s) include credential/private-looking field names; the backend dry-run should reject unsafe fields.`);
+
+  return {
+    rows,
+    rowCount: rows.length,
+    productCount: productRefs.size,
+    variantCount: variantRefs.size,
+    error: null,
+    warnings,
+  };
+}
+
+function connectorDryRunSafeControls(dryRun: CommerceConnectorDryRunResult) {
+  return {
+    sandbox_only: dryRun.sandbox_only,
+    not_live: dryRun.not_live,
+    not_approved: dryRun.not_approved,
+    public_discovery_enabled: dryRun.public_discovery_enabled,
+    checkout_payment_enabled: dryRun.checkout_payment_enabled,
+    live_provider_enabled: dryRun.live_provider_enabled,
+    live_plural_enabled: dryRun.live_plural_enabled,
+    credential_entry_enabled: false,
+    outbound_sync_enabled: false,
+    production_connector_setup: false,
+    merchant_private_api_calls: false,
+    production_allowlist_written: false,
+    certification_claimed: false,
+  };
+}
+
+function connectorReviewSafeControls(review: CommerceConnectorDryRunReview | null) {
+  return review?.controls ?? {
+    sandbox_only: true,
+    not_live: true,
+    not_approved: true,
+    public_discovery_enabled: false,
+    checkout_payment_enabled: false,
+    live_provider_enabled: false,
+    live_plural_enabled: false,
+    production_allowlist_written: false,
+    review_is_production_approval: false,
+    review_enables_connector_execution: false,
+  };
+}
+
+function buildConnectorEvidenceExport(
+  merchantId: string,
+  dryRun: CommerceConnectorDryRunResult,
+  review: CommerceConnectorDryRunReview | null,
+) {
+  return {
+    evidence_type: 'connector_dry_run_review_handoff',
+    export_scope: 'internal_sandbox_preview_only',
+    generated_by: 'grantex_portal_client',
+    generated_at: 'client_side_on_demand',
+    merchant_id: merchantId,
+    posture: {
+      sandbox_only: true,
+      not_live: true,
+      not_approved: true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      live_plural_enabled: false,
+      credential_entry_enabled: false,
+      outbound_sync_enabled: false,
+      production_connector_setup: false,
+      merchant_private_api_calls: false,
+      production_allowlist_written: false,
+      certification_claimed: false,
+    },
+    dry_run: {
+      dry_run_id: dryRun.dry_run_id,
+      connector_type: dryRun.connector_type,
+      source_label: dryRun.source_label,
+      status: dryRun.status,
+      generated_at: dryRun.generated_at,
+      counts: {
+        rows_received: dryRun.rows_received,
+        products_detected: dryRun.products_detected,
+        variants_detected: dryRun.variants_detected,
+        would_create_count: dryRun.would_create_count,
+        would_update_count: dryRun.would_update_count,
+        would_archive_count: dryRun.would_archive_count,
+        blocked_count: dryRun.blocked_count,
+        warning_count: dryRun.warning_count,
+        normalized_preview_count: dryRun.normalized_preview.length,
+      },
+      blockers: dryRun.blockers.map((blocker) => ({
+        code: blocker.code,
+        row_index: blocker.row_index,
+        field: blocker.field,
+        remediation: blocker.remediation,
+      })),
+      warnings: dryRun.warnings.map((warning) => ({
+        code: warning.code,
+        row_index: warning.row_index,
+        field: warning.field,
+        message: warning.message,
+      })),
+      audit_references: {
+        requested_audit_event_id: dryRun.requested_audit_event_id,
+        completed_or_blocked_audit_event_id: dryRun.audit_event_id,
+      },
+      controls: connectorDryRunSafeControls(dryRun),
+    },
+    review: review ? {
+      review_id: review.review_id,
+      status: review.status,
+      decision: review.decision,
+      dry_run_status: review.dry_run_status,
+      evidence_summary: review.evidence_summary,
+      requested_by_kind: review.requested_by.kind,
+      decided_at: review.decided_at,
+      audit_references: {
+        requested_audit_event_id: review.requested_audit_event_id,
+        decision_audit_event_id: review.audit_event_id,
+      },
+      controls: connectorReviewSafeControls(review),
+    } : null,
+    redaction_notes: [
+      'Raw local rows, raw merchant-system payloads, credentials, tokens, provider metadata, private API URLs, checkout URLs, payment identifiers, production config values, concrete allowlists, and customer data are excluded.',
+      'This handoff is internal sandbox evidence only and does not approve production launch, connector execution, public discovery, checkout/payment creation, live providers, live Plural, or certification.',
+    ],
+  };
+}
+
+function formatMarkdownList(values: string[]): string {
+  return values.length ? values.map((value) => `- ${value}`).join('\n') : '- none';
+}
+
+function buildConnectorEvidenceMarkdown(evidence: ReturnType<typeof buildConnectorEvidenceExport>): string {
+  const blockers = evidence.dry_run.blockers.map((blocker) => `${blocker.code}: ${blocker.remediation}`);
+  const warnings = evidence.dry_run.warnings.map((warning) => `${warning.code}: ${warning.message}`);
+  return [
+    '# Connector Dry-Run Evidence Handoff',
+    '',
+    'Internal sandbox preview only. This is not public protocol publication, production approval, connector execution approval, checkout/payment approval, live-provider approval, or certification.',
+    '',
+    `- Merchant ID: ${evidence.merchant_id}`,
+    `- Dry-run ID: ${evidence.dry_run.dry_run_id}`,
+    `- Dry-run status: ${evidence.dry_run.status}`,
+    `- Review ID: ${evidence.review?.review_id ?? 'not_requested'}`,
+    `- Review status: ${evidence.review?.status ?? 'not_requested'}`,
+    `- Rows received: ${evidence.dry_run.counts.rows_received}`,
+    `- Products detected: ${evidence.dry_run.counts.products_detected}`,
+    `- Variants detected: ${evidence.dry_run.counts.variants_detected}`,
+    `- Blocked rows: ${evidence.dry_run.counts.blocked_count}`,
+    `- Warning count: ${evidence.dry_run.counts.warning_count}`,
+    '',
+    '## Non-Enabling Controls',
+    '',
+    `- sandbox_only: ${evidence.posture.sandbox_only}`,
+    `- not_live: ${evidence.posture.not_live}`,
+    `- not_approved: ${evidence.posture.not_approved}`,
+    `- public_discovery_enabled: ${evidence.posture.public_discovery_enabled}`,
+    `- checkout_payment_enabled: ${evidence.posture.checkout_payment_enabled}`,
+    `- live_provider_enabled: ${evidence.posture.live_provider_enabled}`,
+    `- live_plural_enabled: ${evidence.posture.live_plural_enabled}`,
+    `- credential_entry_enabled: ${evidence.posture.credential_entry_enabled}`,
+    `- outbound_sync_enabled: ${evidence.posture.outbound_sync_enabled}`,
+    `- production_connector_setup: ${evidence.posture.production_connector_setup}`,
+    `- merchant_private_api_calls: ${evidence.posture.merchant_private_api_calls}`,
+    `- production_allowlist_written: ${evidence.posture.production_allowlist_written}`,
+    `- certification_claimed: ${evidence.posture.certification_claimed}`,
+    '',
+    '## Blockers',
+    '',
+    formatMarkdownList(blockers),
+    '',
+    '## Warnings',
+    '',
+    formatMarkdownList(warnings),
+    '',
+    '## Audit References',
+    '',
+    `- Dry-run requested audit: ${evidence.dry_run.audit_references.requested_audit_event_id}`,
+    `- Dry-run completed/blocked audit: ${evidence.dry_run.audit_references.completed_or_blocked_audit_event_id}`,
+    `- Review requested audit: ${evidence.review?.audit_references.requested_audit_event_id ?? 'not_requested'}`,
+    `- Review decision audit: ${evidence.review?.audit_references.decision_audit_event_id ?? 'not_recorded'}`,
+    '',
+    '## Redaction',
+    '',
+    formatMarkdownList(evidence.redaction_notes),
+    '',
+  ].join('\n');
+}
+
+function downloadTextFile(filename: string, text: string, type: string) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function CommerceOnboarding() {
   const [merchantId, setMerchantId] = useState('');
   const [merchant, setMerchant] = useState<CommerceSandboxOnboarding | null>(null);
@@ -179,6 +490,10 @@ export function CommerceOnboarding() {
     passport_jti: 'cpsp_preview',
   });
   const { show } = useToast();
+  const connectorRowsValidation = useMemo(
+    () => validateConnectorRowsJson(connectorForm.rows_json),
+    [connectorForm.rows_json],
+  );
 
   async function load() {
     const id = merchantId.trim();
@@ -403,17 +718,38 @@ export function CommerceOnboarding() {
   }
 
   function parseConnectorRows(): Array<Record<string, unknown>> | null {
-    try {
-      const parsed = JSON.parse(connectorForm.rows_json) as unknown;
-      if (!Array.isArray(parsed) || parsed.some((row) => row === null || typeof row !== 'object' || Array.isArray(row))) {
-        show('Connector dry-run rows must be a JSON array of objects', 'error');
-        return null;
-      }
-      return parsed as Array<Record<string, unknown>>;
-    } catch {
-      show('Connector dry-run rows must be valid JSON', 'error');
+    if (connectorRowsValidation.error || !connectorRowsValidation.rows) {
+      show(connectorRowsValidation.error ?? 'Connector dry-run rows are invalid', 'error');
       return null;
     }
+    return connectorRowsValidation.rows;
+  }
+
+  function validateConnectorRows() {
+    if (connectorRowsValidation.error) {
+      show(connectorRowsValidation.error, 'error');
+      return;
+    }
+    show(
+      connectorRowsValidation.warnings.length
+        ? 'Connector rows parsed with warnings; backend dry-run remains source of truth'
+        : 'Connector rows parsed for local sandbox dry-run',
+      connectorRowsValidation.warnings.length ? 'info' : 'success',
+    );
+  }
+
+  function resetConnectorRowsSample() {
+    setConnectorForm((prev) => ({ ...prev, rows_json: connectorDryRunRowsFixture }));
+    setConnectorDryRun(null);
+    setConnectorReview(null);
+    show('Sandbox sample rows restored', 'success');
+  }
+
+  function clearConnectorRows() {
+    setConnectorForm((prev) => ({ ...prev, rows_json: '' }));
+    setConnectorDryRun(null);
+    setConnectorReview(null);
+    show('Sandbox connector rows cleared', 'success');
   }
 
   async function runConnectorDryRun() {
@@ -476,6 +812,18 @@ export function CommerceOnboarding() {
     } finally {
       setConnectorDecisionSubmitting(false);
     }
+  }
+
+  function exportConnectorEvidenceJson() {
+    if (!connectorEvidenceJson) return;
+    downloadTextFile('connector-dry-run-evidence.json', connectorEvidenceJson, 'application/json');
+    show('Connector evidence JSON exported locally', 'success');
+  }
+
+  function exportConnectorEvidenceMarkdown() {
+    if (!connectorEvidenceMarkdown) return;
+    downloadTextFile('connector-dry-run-evidence.md', connectorEvidenceMarkdown, 'text/markdown');
+    show('Connector evidence Markdown exported locally', 'success');
   }
 
   async function simulatePolicy() {
@@ -593,11 +941,45 @@ export function CommerceOnboarding() {
   const connectorReviewRequestDisabled = connectorReviewSubmitting
     || !connectorDryRun
     || connectorDryRun.status !== 'passed';
+  const connectorReviewRequestDisabledReason = !connectorDryRun
+    ? 'Run a passing sandbox dry-run before requesting operator review.'
+    : connectorDryRun.status !== 'passed'
+      ? 'Blocked dry-runs need remediation before operator review.'
+      : connectorReviewSubmitting
+        ? 'Review request is being submitted.'
+        : 'Review request is available for sandbox evidence only.';
   const connectorDecisionDisabled = connectorDecisionSubmitting
     || !connectorReview
     || connectorReview.status !== 'pending_operator_review'
     || ((connectorForm.decision === 'needs_changes' || connectorForm.decision === 'blocked') && !connectorForm.decision_note.trim())
     || (connectorForm.decision === 'accepted_for_sandbox_followup' && connectorReview?.dry_run_status !== 'passed');
+  const connectorDecisionDisabledReason = !connectorReview
+    ? 'Request operator review before recording a decision.'
+    : connectorReview.status !== 'pending_operator_review'
+      ? 'Only pending reviews can receive a sandbox evidence decision.'
+      : (connectorForm.decision === 'needs_changes' || connectorForm.decision === 'blocked') && !connectorForm.decision_note.trim()
+        ? 'Needs-changes and blocked decisions require a public-safe note.'
+        : connectorForm.decision === 'accepted_for_sandbox_followup' && connectorReview.dry_run_status !== 'passed'
+          ? 'Accepted sandbox follow-up requires a passed dry-run.'
+          : connectorDecisionSubmitting
+            ? 'Decision is being recorded.'
+            : 'Decision is sandbox evidence only.';
+  const connectorRunDisabled = connectorSubmitting
+    || !connectorForm.source_label.trim()
+    || !connectorForm.rows_json.trim()
+    || Boolean(connectorRowsValidation.error);
+  const connectorRunDisabledReason = !connectorForm.source_label.trim()
+    ? 'Add a source label for the local sandbox snapshot.'
+    : connectorRowsValidation.error
+      ? connectorRowsValidation.error
+      : connectorSubmitting
+        ? 'Connector dry-run is being submitted.'
+        : 'Dry-run is local snapshot validation only.';
+  const connectorEvidence = merchant && connectorDryRun
+    ? buildConnectorEvidenceExport(merchant.merchant_id, connectorDryRun, connectorReview)
+    : null;
+  const connectorEvidenceJson = connectorEvidence ? JSON.stringify(connectorEvidence, null, 2) : '';
+  const connectorEvidenceMarkdown = connectorEvidence ? buildConnectorEvidenceMarkdown(connectorEvidence) : '';
 
   return (
     <div>
@@ -1397,17 +1779,52 @@ export function CommerceOnboarding() {
               <textarea
                 id="connector-rows-json"
                 value={connectorForm.rows_json}
-                onChange={(e) => setConnectorForm({ ...connectorForm, rows_json: e.target.value })}
+                onChange={(e) => {
+                  setConnectorForm({ ...connectorForm, rows_json: e.target.value });
+                  setConnectorDryRun(null);
+                  setConnectorReview(null);
+                }}
                 rows={8}
                 className="w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 font-mono text-xs text-gx-text focus:border-gx-accent focus:outline-none"
               />
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Badge variant={connectorRowsValidation.error ? 'danger' : connectorRowsValidation.warnings.length ? 'warning' : 'success'}>
+                  {connectorRowsValidation.error ? 'invalid_json' : 'rows_valid'}
+                </Badge>
+                <span className="text-xs text-gx-muted">Rows parsed: {connectorRowsValidation.rowCount}</span>
+                <span className="text-xs text-gx-muted">Products estimated: {connectorRowsValidation.productCount}</span>
+                <span className="text-xs text-gx-muted">Variants estimated: {connectorRowsValidation.variantCount}</span>
+              </div>
+              {connectorRowsValidation.error ? (
+                <p className="mt-2 text-xs text-gx-warning">{connectorRowsValidation.error}</p>
+              ) : null}
+              {connectorRowsValidation.warnings.length ? (
+                <div className="mt-2 rounded-md border border-gx-warning/40 bg-gx-warning/5 p-3">
+                  <div className="text-xs font-medium text-gx-text">Local validation warnings</div>
+                  <div className="mt-2 grid gap-1">
+                    {connectorRowsValidation.warnings.map((warning) => (
+                      <div key={warning} className="text-xs text-gx-warning">{warning}</div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={validateConnectorRows}>
+                Validate rows
+              </Button>
+              <Button variant="secondary" onClick={resetConnectorRowsSample}>
+                Reset sample
+              </Button>
+              <Button variant="secondary" onClick={clearConnectorRows}>
+                Clear rows
+              </Button>
               <Button
                 variant="secondary"
                 onClick={runConnectorDryRun}
-                disabled={connectorSubmitting || !connectorForm.source_label.trim() || !connectorForm.rows_json.trim()}
+                disabled={connectorRunDisabled}
+                title={connectorRunDisabledReason}
               >
                 {connectorSubmitting ? 'Running' : 'Run connector dry-run'}
               </Button>
@@ -1415,10 +1832,14 @@ export function CommerceOnboarding() {
                 variant="secondary"
                 onClick={requestConnectorReview}
                 disabled={connectorReviewRequestDisabled}
-                title={connectorDryRun?.status === 'blocked' ? 'Blocked dry-runs cannot be accepted for sandbox follow-up.' : 'Request sandbox-only dry-run review.'}
+                title={connectorReviewRequestDisabledReason}
               >
                 {connectorReviewSubmitting ? 'Requesting' : connectorReview ? 'Review requested' : 'Request dry-run review'}
               </Button>
+            </div>
+            <div className="mt-2 grid gap-1 text-xs text-gx-muted">
+              <div>Dry-run action: {connectorRunDisabledReason}</div>
+              <div>Review request action: {connectorReviewRequestDisabledReason}</div>
             </div>
 
             <div className="mt-4 grid gap-2 md:grid-cols-4">
@@ -1511,6 +1932,75 @@ export function CommerceOnboarding() {
               </>
             ) : null}
 
+            {connectorEvidence ? (
+              <div className="mt-4 rounded-md border border-gx-border p-3">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-medium text-gx-text">Redacted evidence handoff</div>
+                    <p className="mt-1 text-xs text-gx-muted">
+                      Client-side export built from C6R dry-run and C6Sa review summary fields only; raw rows and private connector artifacts are excluded.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="warning">internal sandbox only</Badge>
+                    <Badge variant="success">redacted summary</Badge>
+                    <Badge variant="success">non-enabling</Badge>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 md:grid-cols-4">
+                  {[
+                    { label: 'dry_run_id', value: connectorEvidence.dry_run.dry_run_id },
+                    { label: 'review_id', value: connectorEvidence.review?.review_id ?? 'not_requested' },
+                    { label: 'dry_run_audit', value: connectorEvidence.dry_run.audit_references.completed_or_blocked_audit_event_id },
+                    { label: 'review_audit', value: connectorEvidence.review?.audit_references.decision_audit_event_id ?? connectorEvidence.review?.audit_references.requested_audit_event_id ?? 'not_recorded' },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-md border border-gx-border p-3">
+                      <div className="text-xs text-gx-muted">{item.label}</div>
+                      <div className="break-all text-sm font-medium text-gx-text">{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 grid gap-2 md:grid-cols-4">
+                  {Object.entries(connectorEvidence.posture).map(([label, value]) => (
+                    <div key={label} className="rounded-md border border-gx-border p-3">
+                      <div className="text-xs text-gx-muted">{label}</div>
+                      <Badge variant={value === true && (label === 'sandbox_only' || label === 'not_live' || label === 'not_approved') ? 'success' : value ? 'danger' : 'success'}>
+                        {String(value)}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-gx-muted">Evidence JSON</span>
+                  <CopyButton text={connectorEvidenceJson} />
+                  <Button variant="secondary" size="sm" onClick={exportConnectorEvidenceJson}>
+                    Download JSON
+                  </Button>
+                  <span className="ml-0 text-xs font-medium text-gx-muted md:ml-3">Evidence Markdown</span>
+                  <CopyButton text={connectorEvidenceMarkdown} />
+                  <Button variant="secondary" size="sm" onClick={exportConnectorEvidenceMarkdown}>
+                    Download Markdown
+                  </Button>
+                </div>
+
+                <details className="mt-3 rounded-md border border-gx-border p-3">
+                  <summary className="cursor-pointer text-sm font-semibold text-gx-text">Evidence JSON preview</summary>
+                  <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-gx-bg p-3 text-xs text-gx-text">
+                    {connectorEvidenceJson}
+                  </pre>
+                </details>
+                <details className="mt-3 rounded-md border border-gx-border p-3">
+                  <summary className="cursor-pointer text-sm font-semibold text-gx-text">Evidence Markdown preview</summary>
+                  <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-gx-bg p-3 text-xs text-gx-text">
+                    {connectorEvidenceMarkdown}
+                  </pre>
+                </details>
+              </div>
+            ) : null}
+
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <div>
                 <label htmlFor="connector-review-note" className="mb-1.5 block text-sm font-medium text-gx-text">
@@ -1555,11 +2045,12 @@ export function CommerceOnboarding() {
                 variant="secondary"
                 onClick={recordConnectorDecision}
                 disabled={connectorDecisionDisabled}
-                title={connectorReview?.status === 'pending_operator_review' ? 'Record sandbox evidence review only.' : 'A pending connector dry-run review is required.'}
+                title={connectorDecisionDisabledReason}
               >
                 {connectorDecisionSubmitting ? 'Recording' : 'Record dry-run review decision'}
               </Button>
             </div>
+            <div className="mt-2 text-xs text-gx-muted">Decision action: {connectorDecisionDisabledReason}</div>
 
             {connectorReview ? (
               <div className="mt-4 rounded-md border border-gx-border p-3">

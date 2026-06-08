@@ -1369,6 +1369,11 @@ describe('CommerceOnboarding', () => {
 
   it('runs connector dry-run review evidence without credential entry or live execution controls', async () => {
     const user = userEvent.setup();
+    const createObjectURL = vi.fn(() => 'blob:c6sc-evidence');
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
     r(<CommerceOnboarding />);
 
     await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
@@ -1385,6 +1390,12 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('production_connector_setup')).toBeInTheDocument();
     expect(screen.getByText('merchant_private_api_calls')).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
+    expect(screen.getByText('Rows parsed: 1')).toBeInTheDocument();
+    expect(screen.getByText('Products estimated: 1')).toBeInTheDocument();
+    expect(screen.getByText('Variants estimated: 1')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Validate rows' }));
+    expect(mockShow).toHaveBeenCalledWith('Connector rows parsed for local sandbox dry-run', 'success');
 
     await user.click(screen.getByRole('button', { name: 'Run connector dry-run' }));
     await waitFor(() => expect(mockRunCommerceConnectorDryRun).toHaveBeenCalledWith(expect.objectContaining({
@@ -1409,13 +1420,31 @@ describe('CommerceOnboarding', () => {
     }
     expect(screen.getByText('Portal Sandbox Fixture Product')).toBeInTheDocument();
     expect(screen.getByText('would create')).toBeInTheDocument();
+    expect(screen.getByText('Redacted evidence handoff')).toBeInTheDocument();
+    expect(screen.getByText('internal sandbox only')).toBeInTheDocument();
+    expect(screen.getByText('redacted summary')).toBeInTheDocument();
+    expect(screen.getByText('Evidence JSON preview')).toBeInTheDocument();
+    const evidenceJsonPreview = screen.getByText((_content, node) => (
+      node?.tagName === 'PRE'
+      && node.textContent?.includes('"evidence_type": "connector_dry_run_review_handoff"')
+    ) ?? false);
+    expect(evidenceJsonPreview).toBeInTheDocument();
+    expect(evidenceJsonPreview.textContent).not.toContain('rows_json');
+    expect(evidenceJsonPreview.textContent).not.toContain('Portal Sandbox Fixture Product');
+    expect(evidenceJsonPreview.textContent).toContain('"public_discovery_enabled": false');
+    expect(evidenceJsonPreview.textContent).toContain('"checkout_payment_enabled": false');
+    expect(evidenceJsonPreview.textContent).toContain('"merchant_private_api_calls": false');
+
+    await user.click(screen.getByRole('button', { name: 'Download JSON' }));
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(anchorClick).toHaveBeenCalled();
 
     await user.type(screen.getByLabelText('Review request note'), 'Public-safe sandbox evidence.');
     await user.click(screen.getByRole('button', { name: 'Request dry-run review' }));
     await waitFor(() => expect(mockRequestCommerceConnectorDryRunReview).toHaveBeenCalledWith('mch_1', 'cdry_C6SB', {
       requestNote: 'Public-safe sandbox evidence.',
     }));
-    expect(screen.getByText('cdrev_C6SB')).toBeInTheDocument();
+    expect(screen.getAllByText('cdrev_C6SB').length).toBeGreaterThan(0);
     expect(screen.getByText('review_is_production_approval')).toBeInTheDocument();
     expect(screen.getByText('review_enables_connector_execution')).toBeInTheDocument();
 
@@ -1425,8 +1454,34 @@ describe('CommerceOnboarding', () => {
       decision: 'accepted_for_sandbox_followup',
       decisionNote: 'Sandbox follow-up only.',
     }));
-    expect(screen.getByText('caud_C6SB_DECISION')).toBeInTheDocument();
+    expect(screen.getAllByText('caud_C6SB_DECISION').length).toBeGreaterThan(0);
     expect(screen.queryByText('production connector setup enabled')).not.toBeInTheDocument();
+    anchorClick.mockRestore();
+  });
+
+  it('validates, clears, and resets connector rows before dry-run submission', async () => {
+    const user = userEvent.setup();
+    r(<CommerceOnboarding />);
+
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
+    await waitFor(() => expect(screen.getByText('Connector dry-run review')).toBeInTheDocument());
+
+    const rowsInput = screen.getByLabelText('Sandbox catalog rows JSON');
+    fireEvent.change(rowsInput, { target: { value: '{' } });
+    expect(screen.getByText('Rows parsed: 0')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Run connector dry-run' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Validate rows' }));
+    expect(mockShow).toHaveBeenCalledWith(expect.stringContaining('Rows JSON is invalid'), 'error');
+    expect(mockRunCommerceConnectorDryRun).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Clear rows' }));
+    expect(screen.getAllByText(/Paste at least one local sandbox row/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Run connector dry-run' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Reset sample' }));
+    expect(screen.getByText('Rows parsed: 1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Run connector dry-run' })).not.toBeDisabled();
   });
 
   it('creates and dry-runs rollout proposal evidence from the operator flow', async () => {
