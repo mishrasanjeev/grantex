@@ -989,7 +989,16 @@ async function insertDryRunReviewRequest(
     requestNote: string | null;
     requestId: string;
   },
-): Promise<{ row: ConnectorDryRunReviewRow; auditEventId: string }> {
+): Promise<{ row: ConnectorDryRunReviewRow; auditEventId: string; created: boolean }> {
+  const existing = await readDryRunReview(
+    tx as unknown as Sql,
+    input.tenantId,
+    input.merchantId,
+    input.dryRun.id,
+  );
+  if (existing) {
+    return { row: existing, auditEventId: existing.requested_audit_event_id, created: false };
+  }
   const evidenceSummary = {
     ...dryRunEvidenceSummary(input.dryRun),
     request_note_present: input.requestNote !== null,
@@ -1029,8 +1038,6 @@ async function insertDryRunReviewRequest(
       ${input.dryRun.generated_at}, ${JSON.stringify(evidenceSummary)}::jsonb,
       ${audit.id}, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE
     )
-    ON CONFLICT (tenant_id, dry_run_id) DO UPDATE
-      SET updated_at = commerce_connector_dry_run_reviews.updated_at
     RETURNING id, tenant_id, merchant_id, dry_run_id, status, decision,
               decision_note, requested_by_kind, requested_by_id,
               decided_by_operator_id, dry_run_status, dry_run_generated_at,
@@ -1045,7 +1052,7 @@ async function insertDryRunReviewRequest(
     throw new CommerceHttpError(500, 'connector_dry_run_review_insert_failed',
       'Connector dry-run review request could not be stored', { retryable: true });
   }
-  return { row, auditEventId: audit.id };
+  return { row, auditEventId: audit.id, created: true };
 }
 
 async function recordDryRunReviewDecision(
@@ -1463,7 +1470,7 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
         requestId: request.id,
       });
     });
-    return reply.status(result.row.created_at === result.row.updated_at ? 201 : 200).send({
+    return reply.status(result.created ? 201 : 200).send({
       data: toDryRunReview(result.row),
       dry_run: toDryRunResult(dryRun),
       audit_event_id: result.row.requested_audit_event_id,

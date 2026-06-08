@@ -58,6 +58,10 @@ The review table stores:
 - requested and decision audit event IDs;
 - fixed non-enabling controls.
 
+Review requests are idempotent per tenant and dry-run. A repeat request returns
+the existing review with HTTP 200 and the original requested audit event ID; it
+does not create another request audit event or another review row.
+
 It does not store raw connector rows, raw files, private merchant payloads,
 secrets, credentials, provider metadata, private API URLs, checkout/payment
 artifacts, production config values, concrete allowlists, or customer data.

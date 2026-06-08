@@ -148,6 +148,7 @@ describe('C6Sa connector dry-run review routes', () => {
     seedCommerceContext();
     sqlMock.mockResolvedValueOnce([merchantRow()]);
     sqlMock.mockResolvedValueOnce([dryRunDbRow()]);
+    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_C6SA_REQUESTED', occurred_at: NOW }]);
     sqlMock.mockResolvedValueOnce([reviewDbRow()]);
 
@@ -183,6 +184,44 @@ describe('C6Sa connector dry-run review routes', () => {
     expect(fullSqlCalls()).toContain('connector_dry_run_review_requested');
     expect(sqlText()).toContain('INSERT INTO commerce_connector_dry_run_reviews');
     expect(sqlText()).not.toMatch(/INSERT INTO commerce_products|commerce_product_variants|checkout_links|payment_intents/i);
+  });
+
+  it('returns an existing review request without writing an extra request audit event', async () => {
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([merchantRow()]);
+    sqlMock.mockResolvedValueOnce([dryRunDbRow()]);
+    sqlMock.mockResolvedValueOnce([reviewDbRow({
+      requested_audit_event_id: 'caud_C6SA_EXISTING_REQUEST',
+    })]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/commerce/merchants/${MERCHANT}/connectors/dry-runs/cdry_C6SA/review-request`,
+      headers: authHeader(),
+      payload: { request_note: 'Repeat sandbox review request.' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Record<string, unknown>; audit_event_id: string }>();
+    expect(body.data).toMatchObject({
+      review_id: 'cdrev_C6SA',
+      status: 'pending_operator_review',
+      requested_by: { kind: 'operator', id: 'dev_TEST' },
+      controls: {
+        sandbox_only: true,
+        not_live: true,
+        not_approved: true,
+        public_discovery_enabled: false,
+        checkout_payment_enabled: false,
+        live_provider_enabled: false,
+        live_plural_enabled: false,
+        production_allowlist_written: false,
+        review_is_production_approval: false,
+      },
+    });
+    expect(body.audit_event_id).toBe('caud_C6SA_EXISTING_REQUEST');
+    expect(fullSqlCalls()).not.toContain('connector_dry_run_review_requested');
+    expect(sqlText()).not.toContain('INSERT INTO commerce_connector_dry_run_reviews');
   });
 
   it('lets an owning merchant read an existing review without deciding it', async () => {
