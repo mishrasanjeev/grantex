@@ -291,6 +291,26 @@ contain raw rows, normalized product titles, credentials, tokens, provider
 metadata, private API URLs, checkout URLs, payment identifiers, production
 config values, concrete allowlists, customer data, or secret material.
 
+C6Se adds a local operator handoff and self-serve remediation workflow to the
+same redacted evidence packet. A `ready` handoff means an operator can continue
+an internal sandbox follow-up conversation with the merchant. It is not
+production approval, connector execution approval, outbound sync approval,
+public discovery approval, checkout/payment approval, live provider approval,
+public protocol publication, or certification.
+
+If a packet is pending or blocked, the remediation workflow points merchants
+and operators back to the relevant C6R dry-run blockers/warnings, C6Sd packet
+checks, and C6Sa review decisions. `needs_changes` and `blocked` decisions keep
+the handoff blocked and require local snapshot remediation plus another
+sandbox dry-run before follow-up can continue.
+
+C6Se exports are still local/internal evidence only. They include handoff and
+remediation summaries, non-enabling controls, and audit references, and they
+exclude raw rows, raw merchant-system payloads, normalized product titles,
+credentials, tokens, provider metadata, private API URLs, checkout URLs,
+payment identifiers, production config values, concrete allowlists, customer
+data, and secret material.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent

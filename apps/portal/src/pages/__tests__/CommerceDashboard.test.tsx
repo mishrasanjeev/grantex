@@ -822,6 +822,16 @@ const connectorReviewAccepted = {
   decided_at: '2026-01-01T00:42:00Z',
 };
 
+const connectorReviewNeedsChanges = {
+  ...connectorReview,
+  status: 'needs_changes' as const,
+  decision: 'needs_changes' as const,
+  decision_note: 'Fix category mapping and rerun the local sandbox dry-run.',
+  decided_by_operator_id: 'dev_TEST',
+  audit_event_id: 'caud_C6SB_NEEDS_CHANGES',
+  decided_at: '2026-01-01T00:43:00Z',
+};
+
 const credential = {
   id: 'cpcred_1',
   tenant_id: 'cten_1',
@@ -1424,9 +1434,13 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('internal sandbox only')).toBeInTheDocument();
     expect(screen.getByText('redacted summary')).toBeInTheDocument();
     expect(screen.getByText('Sandbox follow-up readiness')).toBeInTheDocument();
+    expect(screen.getByText('Operator sandbox handoff')).toBeInTheDocument();
+    expect(screen.getByText('Self-serve remediation workflow')).toBeInTheDocument();
     expect(screen.getByText('Evidence packet review checklist')).toBeInTheDocument();
     expect(screen.getAllByText('needs_operator_review').length).toBeGreaterThan(0);
-    expect(screen.getByText('Operator review requested')).toBeInTheDocument();
+    expect(screen.getAllByText('merchant_or_operator').length).toBeGreaterThan(0);
+    expect(screen.getByText('Request operator review')).toBeInTheDocument();
+    expect(screen.getAllByText('Operator review requested').length).toBeGreaterThan(0);
     expect(screen.getByText('Schema: grantex.commerce.connector_dry_run.evidence_packet.v1')).toBeInTheDocument();
     expect(screen.getByText('Evidence JSON preview')).toBeInTheDocument();
     const evidenceJsonPreview = screen.getByText((_content, node) => (
@@ -1436,6 +1450,10 @@ describe('CommerceOnboarding', () => {
     expect(evidenceJsonPreview).toBeInTheDocument();
     expect(evidenceJsonPreview.textContent).toContain('"schema_version": "grantex.commerce.connector_dry_run.evidence_packet.v1"');
     expect(evidenceJsonPreview.textContent).toContain('"packet_status": "needs_operator_review"');
+    expect(evidenceJsonPreview.textContent).toContain('"operator_handoff"');
+    expect(evidenceJsonPreview.textContent).toContain('"handoff_status": "needs_operator_review"');
+    expect(evidenceJsonPreview.textContent).toContain('"remediation_workflow"');
+    expect(evidenceJsonPreview.textContent).toContain('"workflow_status": "pending_operator_review"');
     expect(evidenceJsonPreview.textContent).toContain('"normalized_product_titles_included": false');
     expect(evidenceJsonPreview.textContent).not.toContain('rows_json');
     expect(evidenceJsonPreview.textContent).not.toContain('Portal Sandbox Fixture Product');
@@ -1469,9 +1487,62 @@ describe('CommerceOnboarding', () => {
       && node.textContent?.includes('"packet_status": "ready_for_sandbox_followup"')
     ) ?? false);
     expect(acceptedEvidenceJsonPreview.textContent).toContain('"review_decision_audit_event_id": "caud_C6SB_DECISION"');
+    expect(acceptedEvidenceJsonPreview.textContent).toContain('"handoff_status": "ready"');
+    expect(acceptedEvidenceJsonPreview.textContent).toContain('"workflow_status": "complete"');
+    expect(acceptedEvidenceJsonPreview.textContent).toContain('"blocked_next_steps"');
     expect(acceptedEvidenceJsonPreview.textContent).not.toContain('Portal Sandbox Fixture Product');
+    expect(screen.getByText('Review the redacted evidence packet with the merchant in a sandbox-only follow-up.')).toBeInTheDocument();
+    expect(screen.getByText('No remediation actions remain before sandbox follow-up.')).toBeInTheDocument();
     expect(screen.queryByText('production connector setup enabled')).not.toBeInTheDocument();
     anchorClick.mockRestore();
+  });
+
+  it('renders self-serve remediation for needs-changes connector dry-run decisions', async () => {
+    mockRecordCommerceConnectorDryRunReviewDecision.mockResolvedValueOnce({
+      data: connectorReviewNeedsChanges,
+      dry_run: connectorDryRun,
+      audit_event_id: 'caud_C6SB_NEEDS_CHANGES',
+    });
+    const user = userEvent.setup();
+    r(<CommerceOnboarding />);
+
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
+    await waitFor(() => expect(screen.getByText('Connector dry-run review')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Run connector dry-run' }));
+    await waitFor(() => expect(mockRunCommerceConnectorDryRun).toHaveBeenCalled());
+    await user.type(screen.getByLabelText('Review request note'), 'Public-safe sandbox evidence.');
+    await user.click(screen.getByRole('button', { name: 'Request dry-run review' }));
+    await waitFor(() => expect(mockRequestCommerceConnectorDryRunReview).toHaveBeenCalled());
+
+    await user.selectOptions(screen.getByLabelText('Review decision'), 'needs_changes');
+    await user.type(screen.getByLabelText('Decision note'), 'Fix category mapping and rerun the local sandbox dry-run.');
+    await user.click(screen.getByRole('button', { name: 'Record dry-run review decision' }));
+    await waitFor(() => expect(mockRecordCommerceConnectorDryRunReviewDecision).toHaveBeenCalledWith('mch_1', 'cdry_C6SB', {
+      decision: 'needs_changes',
+      decisionNote: 'Fix category mapping and rerun the local sandbox dry-run.',
+    }));
+
+    expect(screen.getByText('Operator requested changes')).toBeInTheDocument();
+    expect(screen.getAllByText('blocked').length).toBeGreaterThan(0);
+    expect(screen.getAllByText((_content, node) => (
+      node?.textContent?.includes('Owner: merchant') ?? false
+    )).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Fix category mapping and rerun the local sandbox dry-run.').length).toBeGreaterThan(0);
+    const remediationEvidenceJsonPreview = screen.getByText((_content, node) => (
+      node?.tagName === 'PRE'
+      && node.textContent?.includes('"workflow_status": "blocked"')
+    ) ?? false);
+    expect(remediationEvidenceJsonPreview.textContent).toContain('"handoff_status": "blocked"');
+    expect(remediationEvidenceJsonPreview.textContent).toContain('"requires_rerun": true');
+    expect(remediationEvidenceJsonPreview.textContent).toContain('"operator_requested_changes"');
+    expect(remediationEvidenceJsonPreview.textContent).toContain('"production_approval": false');
+    expect(remediationEvidenceJsonPreview.textContent).toContain('"public_discovery_approval": false');
+    expect(remediationEvidenceJsonPreview.textContent).not.toContain('rows_json');
+    expect(remediationEvidenceJsonPreview.textContent).not.toContain('Portal Sandbox Fixture Product');
+    expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
+    expect(screen.queryByText('outbound connector sync enabled')).not.toBeInTheDocument();
   });
 
   it('validates, clears, and resets connector rows before dry-run submission', async () => {
