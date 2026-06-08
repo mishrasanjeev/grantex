@@ -273,6 +273,24 @@ or downloaded handoff does not approve production launch, connector execution,
 public discovery, checkout/payment, live providers, public protocol
 publication, or certification.
 
+C6Sd adds a local evidence packet schema and operator packet review checklist
+to the C6Sc handoff. The packet includes a Grantex-owned schema version,
+checklist result, sandbox follow-up readiness summary, redaction summary, and
+audit references. The packet status can be `ready_for_sandbox_followup`,
+`needs_operator_review`, or `blocked`.
+
+`ready_for_sandbox_followup` means only that sandbox follow-up review work can
+continue after a passed dry-run, accepted C6Sa review, clear blockers, and fixed
+non-enabling controls. It is not production approval, connector execution
+approval, outbound sync approval, public discovery approval, checkout/payment
+approval, live provider approval, public protocol publication, or
+certification.
+
+C6Sd evidence packets remain local/internal review artifacts. They must not
+contain raw rows, normalized product titles, credentials, tokens, provider
+metadata, private API URLs, checkout URLs, payment identifiers, production
+config values, concrete allowlists, customer data, or secret material.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent

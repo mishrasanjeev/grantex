@@ -1423,12 +1423,20 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('Redacted evidence handoff')).toBeInTheDocument();
     expect(screen.getByText('internal sandbox only')).toBeInTheDocument();
     expect(screen.getByText('redacted summary')).toBeInTheDocument();
+    expect(screen.getByText('Sandbox follow-up readiness')).toBeInTheDocument();
+    expect(screen.getByText('Evidence packet review checklist')).toBeInTheDocument();
+    expect(screen.getAllByText('needs_operator_review').length).toBeGreaterThan(0);
+    expect(screen.getByText('Operator review requested')).toBeInTheDocument();
+    expect(screen.getByText('Schema: grantex.commerce.connector_dry_run.evidence_packet.v1')).toBeInTheDocument();
     expect(screen.getByText('Evidence JSON preview')).toBeInTheDocument();
     const evidenceJsonPreview = screen.getByText((_content, node) => (
       node?.tagName === 'PRE'
       && node.textContent?.includes('"evidence_type": "connector_dry_run_review_handoff"')
     ) ?? false);
     expect(evidenceJsonPreview).toBeInTheDocument();
+    expect(evidenceJsonPreview.textContent).toContain('"schema_version": "grantex.commerce.connector_dry_run.evidence_packet.v1"');
+    expect(evidenceJsonPreview.textContent).toContain('"packet_status": "needs_operator_review"');
+    expect(evidenceJsonPreview.textContent).toContain('"normalized_product_titles_included": false');
     expect(evidenceJsonPreview.textContent).not.toContain('rows_json');
     expect(evidenceJsonPreview.textContent).not.toContain('Portal Sandbox Fixture Product');
     expect(evidenceJsonPreview.textContent).toContain('"public_discovery_enabled": false');
@@ -1455,6 +1463,13 @@ describe('CommerceOnboarding', () => {
       decisionNote: 'Sandbox follow-up only.',
     }));
     expect(screen.getAllByText('caud_C6SB_DECISION').length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByText('ready_for_sandbox_followup').length).toBeGreaterThan(0));
+    const acceptedEvidenceJsonPreview = screen.getByText((_content, node) => (
+      node?.tagName === 'PRE'
+      && node.textContent?.includes('"packet_status": "ready_for_sandbox_followup"')
+    ) ?? false);
+    expect(acceptedEvidenceJsonPreview.textContent).toContain('"review_decision_audit_event_id": "caud_C6SB_DECISION"');
+    expect(acceptedEvidenceJsonPreview.textContent).not.toContain('Portal Sandbox Fixture Product');
     expect(screen.queryByText('production connector setup enabled')).not.toBeInTheDocument();
     anchorClick.mockRestore();
   });
