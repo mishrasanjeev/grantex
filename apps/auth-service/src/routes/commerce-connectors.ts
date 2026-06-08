@@ -985,9 +985,14 @@ function timelineEntry(input: {
   };
 }
 
-function toDryRunRemediationTimeline(row: ConnectorDryRunRemediationRow): Record<string, unknown> {
+function toDryRunRemediationTimeline(
+  row: ConnectorDryRunRemediationRow,
+  followupReview: ConnectorDryRunReviewRow | null = null,
+): Record<string, unknown> {
   const blockerSummary = safeArray(row.blocker_summary);
   const warningSummary = safeArray(row.warning_summary);
+  const followupDecisionAuditEventId = followupReview?.decision_audit_event_id ?? null;
+  const followupDecidedAt = followupReview?.decided_at ?? null;
   const entries: Array<Record<string, unknown>> = [
     timelineEntry({
       sequence: 1,
@@ -1075,8 +1080,10 @@ function toDryRunRemediationTimeline(row: ConnectorDryRunRemediationRow): Record
       eventType: row.status === 'closed_no_action'
         ? 'connector_remediation_closed_or_blocked'
         : 'connector_dry_run_review_decision_recorded',
-      occurredAt: row.updated_at,
-      auditEventId: row.closed_or_blocked_audit_event_id ?? row.followup_audit_event_id,
+      occurredAt: row.status === 'closed_no_action' ? row.updated_at : followupDecidedAt,
+      auditEventId: row.status === 'closed_no_action'
+        ? row.closed_or_blocked_audit_event_id
+        : followupDecisionAuditEventId,
       actorKind: null,
       actorId: null,
       resourceReferences: {
@@ -1088,6 +1095,7 @@ function toDryRunRemediationTimeline(row: ConnectorDryRunRemediationRow): Record
       },
       evidenceSummary: {
         remediation_status: row.status,
+        followup_review_decision: followupReview?.decision ?? null,
         followup_ready_is_launch_approval: false,
         production_approval_granted: false,
       },
@@ -2630,7 +2638,14 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
       throw new CommerceHttpError(404, 'connector_remediation_not_found',
         'Connector dry-run remediation was not found in this tenant and merchant');
     }
-    return reply.status(200).send({ data: toDryRunRemediationTimeline(remediation) });
+    const followupReview = remediation.followup_review_id
+      ? await readDryRunReviewById(sql, tenantId, merchantId, remediation.followup_review_id)
+      : null;
+    if (remediation.followup_review_id && !followupReview) {
+      throw new CommerceHttpError(404, 'connector_dry_run_review_not_found',
+        'Connector remediation follow-up review was not found in this tenant and merchant');
+    }
+    return reply.status(200).send({ data: toDryRunRemediationTimeline(remediation, followupReview) });
   });
 
   app.post<{

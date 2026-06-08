@@ -66,6 +66,38 @@ function remediationDbRow(overrides: Record<string, unknown> = {}): Record<strin
   };
 }
 
+function followupReviewDbRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'cdrev_C6SH_FOLLOWUP',
+    tenant_id: TEST_COMMERCE_TENANT_ID,
+    merchant_id: MERCHANT,
+    dry_run_id: 'cdry_C6SH_CORRECTED',
+    status: 'accepted_for_sandbox_followup',
+    decision: 'accepted_for_sandbox_followup',
+    decision_note: 'Sandbox follow-up evidence is ready for operator review.',
+    requested_by_kind: 'operator',
+    requested_by_id: 'dev_TEST',
+    decided_by_operator_id: 'dev_TEST_OPERATOR',
+    dry_run_status: 'passed',
+    dry_run_generated_at: '2026-06-08T00:03:00.000Z',
+    evidence_summary: { blocked_count: 0, warning_count: 0 },
+    requested_audit_event_id: 'caud_C6SH_FOLLOWUP_REVIEW_REQUESTED',
+    decision_audit_event_id: 'caud_C6SH_FOLLOWUP_DECISION',
+    sandbox_only: true,
+    not_live: true,
+    not_approved: true,
+    public_discovery_enabled: false,
+    checkout_payment_enabled: false,
+    live_provider_enabled: false,
+    provider_specific_live_enabled: false,
+    production_allowlist_written: false,
+    created_at: '2026-06-08T00:04:00.000Z',
+    updated_at: '2026-06-08T00:07:00.000Z',
+    decided_at: '2026-06-08T00:07:00.000Z',
+    ...overrides,
+  };
+}
+
 function seedMerchantCaller(merchantId = MERCHANT): void {
   sqlMock.mockResolvedValueOnce([{
     id: 'mkey_C6SH',
@@ -201,8 +233,9 @@ describe('C6Sh connector remediation queue and timeline routes', () => {
       followup_review_id: 'cdrev_C6SH_FOLLOWUP',
       corrected_audit_event_id: 'caud_C6SH_CORRECTED_ATTACHED',
       followup_audit_event_id: 'caud_C6SH_FOLLOWUP_REQUESTED',
-      updated_at: '2026-06-08T00:05:00.000Z',
+      updated_at: '2026-06-08T00:08:00.000Z',
     })]);
+    sqlMock.mockResolvedValueOnce([followupReviewDbRow()]);
 
     const res = await app.inject({
       method: 'GET',
@@ -255,8 +288,24 @@ describe('C6Sh connector remediation queue and timeline routes', () => {
       'followup_review_requested',
       'followup_ready',
     ]);
+    expect(timeline[2]).toMatchObject({
+      key: 'followup_review_requested',
+      audit_event_id: 'caud_C6SH_FOLLOWUP_REQUESTED',
+    });
+    expect(timeline[3]).toMatchObject({
+      key: 'followup_ready',
+      event_type: 'connector_dry_run_review_decision_recorded',
+      occurred_at: '2026-06-08T00:07:00.000Z',
+      audit_event_id: 'caud_C6SH_FOLLOWUP_DECISION',
+      evidence_summary: {
+        followup_review_decision: 'accepted_for_sandbox_followup',
+        followup_ready_is_launch_approval: false,
+        production_approval_granted: false,
+      },
+    });
     expect(bodyText).toContain('caud_c6sh_remediation_requested');
     expect(bodyText).toContain('caud_c6sh_corrected_attached');
+    expect(bodyText).toContain('caud_c6sh_followup_decision');
     expect(bodyText).not.toMatch(/secret_value|access_token|checkout_url|payment_intent_id|provider_metadata"\s*:\s*\{|merchant_private_api_payload"\s*:\s*\{/);
     expect(sqlText()).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b|checkout_links|payment_intents/i);
   });
