@@ -2711,8 +2711,152 @@ components:
           items: { $ref: "#/components/schemas/CommerceConnector" }
         source_precedence:
           type: array
-          items: { $ref: "#/components/schemas/CommerceConnectorSourcePrecedenceEntry" }
+            items: { $ref: "#/components/schemas/CommerceConnectorSourcePrecedenceEntry" }
         controls: { $ref: "#/components/schemas/CommerceConnectorControls" }
+
+    CommerceConnectorDryRunRequest:
+      type: object
+      additionalProperties: false
+      required: [connector_type, source_label, rows]
+      description: >-
+        C6R sandbox connector sync dry-run input. Only local manual or
+        CSV-style catalog rows are accepted. Credentials, provider metadata,
+        raw merchant-system payloads, private API URLs, production config,
+        allowlists, public discovery, checkout/payment, live provider, live
+        Plural, outbound sync, and direct AgenticOrg execution fields are
+        rejected.
+      properties:
+        connector_type:
+          type: string
+          enum: [manual, csv]
+        source_label:
+          type: string
+          pattern: "^[A-Za-z0-9][A-Za-z0-9 .:_-]{2,120}$"
+        source_snapshot_at:
+          type: string
+          format: date-time
+        stale_after_seconds:
+          type: integer
+          minimum: 0
+          maximum: 31536000
+        preview_limit:
+          type: integer
+          minimum: 1
+          maximum: 10
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: true
+            description: >-
+              Local manual/CSV-style row. Supported safe fields include
+              product_id, title, description, brand, category_preset, category,
+              image_url, thumbnail, sku, variant_title, price_amount, price,
+              currency, availability_status, availabilityStatus,
+              warranty_summary, warrantyInformation, return_policy_summary,
+              returnPolicy, source_updated_at, and conflict.
+
+    CommerceConnectorDryRunPreviewVariant:
+      type: object
+      properties:
+        sku: { type: string }
+        variant_title: { type: string, nullable: true }
+        price_amount: { type: integer }
+        currency: { type: string }
+        availability_status:
+          type: string
+          enum: [in_stock, out_of_stock, pre_order, back_order, unknown]
+        warranty_summary: { type: string, nullable: true }
+        return_policy_summary: { type: string, nullable: true }
+
+    CommerceConnectorDryRunPreviewProduct:
+      type: object
+      properties:
+        source_product_ref: { type: string }
+        title: { type: string }
+        brand: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        image_url: { type: string, nullable: true }
+        category_preset: { type: string, enum: [electronics_appliances] }
+        variants:
+          type: array
+          items: { $ref: "#/components/schemas/CommerceConnectorDryRunPreviewVariant" }
+
+    CommerceConnectorDryRunBlocker:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
+        row_index: { type: integer, nullable: true }
+        field: { type: string, nullable: true }
+        remediation: { type: string }
+
+    CommerceConnectorDryRunWarning:
+      type: object
+      properties:
+        code: { type: string }
+        message: { type: string }
+        row_index: { type: integer, nullable: true }
+        field: { type: string, nullable: true }
+
+    CommerceConnectorDryRunResult:
+      type: object
+      description: >-
+        C6R redacted dry-run result. This is sandbox-only, dry-run-only,
+        non-live, not approved, non-public, non-enabling, and not certification
+        evidence.
+      properties:
+        dry_run_id: { type: string }
+        tenant_id: { type: string }
+        merchant_id: { type: string }
+        connector_type: { type: string, enum: [manual, csv] }
+        source_label: { type: string }
+        status: { type: string, enum: [passed, blocked] }
+        sandbox_only: { type: boolean, const: true }
+        not_live: { type: boolean, const: true }
+        not_approved: { type: boolean, const: true }
+        public_discovery_enabled: { type: boolean, const: false }
+        checkout_payment_enabled: { type: boolean, const: false }
+        live_provider_enabled: { type: boolean, const: false }
+        live_plural_enabled: { type: boolean, const: false }
+        rows_received: { type: integer }
+        products_detected: { type: integer }
+        variants_detected: { type: integer }
+        would_create_count: { type: integer }
+        would_update_count: { type: integer }
+        would_archive_count: { type: integer }
+        blocked_count: { type: integer }
+        warning_count: { type: integer }
+        normalized_preview:
+          type: array
+          maxItems: 10
+          items: { $ref: "#/components/schemas/CommerceConnectorDryRunPreviewProduct" }
+        blockers:
+          type: array
+          items: { $ref: "#/components/schemas/CommerceConnectorDryRunBlocker" }
+        warnings:
+          type: array
+          items: { $ref: "#/components/schemas/CommerceConnectorDryRunWarning" }
+        requested_audit_event_id: { type: string }
+        audit_event_id: { type: string }
+        generated_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    CommerceConnectorDryRunResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/CommerceConnectorDryRunResult" }
+        audit_events:
+          type: array
+          items:
+            type: object
+            properties:
+              event_type:
+                type: string
+                enum: [connector_dry_run_requested, connector_dry_run_completed, connector_dry_run_blocked]
+              audit_event_id: { type: string }
 
     UpdateWebhookSourceRequest:
       type: object
@@ -5467,6 +5611,75 @@ paths:
         "403": { description: Agent caller or cross-merchant caller is denied }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /v1/commerce/merchants/{merchant_id}/connectors/dry-run:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+    post:
+      tags: [Connectors]
+      summary: Run a sandbox connector sync dry-run
+      operationId: runCommerceConnectorDryRun
+      x-implemented: true
+      x-milestone: C6R
+      description: >-
+        Operator or owning merchant endpoint. Runs a local manual/CSV catalog
+        connector dry-run for a sandbox merchant and stores redacted metadata
+        only. The route normalizes rows into a capped preview and records
+        requested/completed/blocked audit evidence. It does not write live
+        catalog changes, call merchant systems, call providers, accept
+        credentials, enable public discovery, enable checkout/payment creation,
+        enable live payments, enable live Plural, write production config, set
+        allowlists, or approve production launch. CommerceAgent and AgenticOrg
+        direct execution callers are denied.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommerceConnectorDryRunRequest" }
+      responses:
+        "201":
+          description: Dry-run passed and redacted evidence was stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunResponse" }
+        "200":
+          description: Dry-run completed with row-level blockers
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Live, disabled, or non-sandbox merchant blocks dry-run evidence }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+      - { in: path, name: dry_run_id, required: true, schema: { type: string } }
+    get:
+      tags: [Connectors]
+      summary: Read sandbox connector dry-run evidence
+      operationId: getCommerceConnectorDryRun
+      x-implemented: true
+      x-milestone: C6R
+      description: >-
+        Reads tenant-scoped C6R dry-run evidence for a merchant. The response
+        is redacted metadata only and excludes raw files, raw merchant-system
+        payloads, credentials, provider metadata, private API URLs, checkout
+        URLs, payment IDs, production config, and allowlist values.
+      responses:
+        "200":
+          description: Dry-run evidence
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/CommerceConnectorDryRunResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Agent caller or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /v1/commerce/connectors:
     post:
