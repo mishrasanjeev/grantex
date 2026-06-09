@@ -433,6 +433,13 @@ function triageStatusVariant(status: CommerceConnectorDryRunRemediationTriageSta
   return 'default';
 }
 
+function reconciliationStatusVariant(status: ConnectorTriageReconciliationStatus | ConnectorTriageReconciliationCheck['status']): 'default' | 'success' | 'warning' | 'danger' {
+  if (status === 'aligned' || status === 'pass') return 'success';
+  if (status === 'blocked') return 'danger';
+  if (status === 'warning') return 'warning';
+  return 'default';
+}
+
 function triageFormFromRemediation(remediation: CommerceConnectorDryRunRemediation | null): {
   triage_status: CommerceConnectorDryRunRemediationTriageStatus;
   assigned_operator_id: string;
@@ -464,6 +471,38 @@ interface ConnectorTriageRehearsalStatus {
   connector_execution_enabled: false;
 }
 
+type ConnectorTriageReconciliationStatus = 'aligned' | 'warning' | 'blocked';
+
+interface ConnectorTriageReconciliationCheck {
+  key: string;
+  label: string;
+  status: 'pass' | 'warning' | 'blocked';
+  detail: string;
+}
+
+interface ConnectorTriageEvidenceReconciliation {
+  status: ConnectorTriageReconciliationStatus;
+  remediation_id: string;
+  queue_triage_status: CommerceConnectorDryRunRemediationTriageStatus | null;
+  timeline_triage_status: CommerceConnectorDryRunRemediationTriageStatus | null;
+  backend_triage_status: CommerceConnectorDryRunRemediationTriageStatus | null;
+  rehearsal_triage_status: CommerceConnectorDryRunRemediationTriageStatus | null;
+  merchant_followup_summary: string;
+  merchant_next_step: string;
+  audit_references: {
+    requested_audit_event_id: string | null;
+    corrected_audit_event_id: string | null;
+    followup_audit_event_id: string | null;
+    triage_audit_event_id: string | null;
+  };
+  stale_conflict_followup_guidance: boolean;
+  stale_conflict_handling: 'none' | 'sandbox_blocker_only';
+  redacted_audit_reference_continuity: boolean;
+  checks: ConnectorTriageReconciliationCheck[];
+  production_approval: false;
+  connector_execution_enabled: false;
+}
+
 function buildConnectorTriageRehearsalStatus(
   remediation: CommerceConnectorDryRunRemediation,
   timeline: CommerceConnectorDryRunRemediationTimeline,
@@ -489,6 +528,156 @@ function buildConnectorTriageRehearsalStatus(
     )),
     duplicate_handling: 'reuse_existing_state',
     internal_notes_in_merchant_guidance: false,
+    production_approval: false,
+    connector_execution_enabled: false,
+  };
+}
+
+function safeSummaryText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function containsStaleOrConflict(remediation: CommerceConnectorDryRunRemediation, timeline: CommerceConnectorDryRunRemediationTimeline): boolean {
+  const candidateText = [
+    remediation.public_safe_note,
+    remediation.triage?.merchant_followup_summary,
+    remediation.triage?.next_step,
+    timeline.merchant_status.merchant_followup_summary,
+    timeline.merchant_status.triage_next_step,
+    timeline.merchant_status.next_step,
+    ...remediation.blocker_summary.map(safeSummaryText),
+    ...remediation.warning_summary.map(safeSummaryText),
+  ].join(' ').toLowerCase();
+  return candidateText.includes('stale') || candidateText.includes('conflict');
+}
+
+function buildConnectorTriageEvidenceReconciliation(
+  timeline: CommerceConnectorDryRunRemediationTimeline,
+  queueItem: CommerceConnectorDryRunRemediationQueueItem | null,
+  backendRemediation: CommerceConnectorDryRunRemediation | null,
+  rehearsalStatus: ConnectorTriageRehearsalStatus | null,
+): ConnectorTriageEvidenceReconciliation {
+  const remediation = timeline.remediation;
+  const queueTriageStatus = queueItem?.triage?.triage_status ?? null;
+  const timelineTriageStatus = timeline.merchant_status.triage_status ?? remediation.triage?.triage_status ?? null;
+  const backendTriageStatus = backendRemediation?.triage?.triage_status ?? remediation.triage?.triage_status ?? null;
+  const rehearsalTriageStatus = rehearsalStatus?.triage_status ?? null;
+  const merchantFollowupSummary = timeline.merchant_status.merchant_followup_summary
+    ?? remediation.triage?.merchant_followup_summary
+    ?? rehearsalStatus?.merchant_followup_summary
+    ?? 'not_recorded';
+  const merchantNextStep = timeline.merchant_status.triage_next_step
+    ?? remediation.triage?.next_step
+    ?? rehearsalStatus?.merchant_next_step
+    ?? timeline.merchant_status.next_step;
+  const triageAuditReference = remediation.triage?.triage_audit_event_id
+    ?? remediation.audit_references.triage_audit_event_id
+    ?? rehearsalStatus?.audit_reference
+    ?? null;
+  const requiredAuditReferences = [
+    remediation.audit_references.requested_audit_event_id,
+    remediation.corrected_dry_run_id ? remediation.audit_references.corrected_audit_event_id : 'not_required',
+    remediation.followup_review_id ? remediation.audit_references.followup_audit_event_id : 'not_required',
+    timelineTriageStatus ? triageAuditReference : 'not_required',
+  ];
+  const redactedAuditReferenceContinuity = requiredAuditReferences.every(Boolean)
+    && timeline.timeline.every((entry) => (
+      entry.redaction.raw_connector_rows_included === false
+      && entry.redaction.credentials_included === false
+      && entry.redaction.provider_metadata_included === false
+      && entry.redaction.merchant_private_api_payload_included === false
+      && entry.redaction.production_config_values_included === false
+    ));
+  const staleConflictFollowupGuidance = containsStaleOrConflict(remediation, timeline);
+  const nonEnablingControlsPass = timeline.controls.public_discovery_enabled === false
+    && timeline.controls.checkout_payment_enabled === false
+    && timeline.controls.live_provider_enabled === false
+    && timeline.controls.live_plural_enabled === false
+    && timeline.controls.provider_call_enabled === false
+    && timeline.controls.merchant_private_api_calls_enabled === false
+    && timeline.controls.remediation_is_production_approval === false
+    && timeline.controls.remediation_enables_connector_execution === false
+    && timeline.controls.followup_ready_is_launch_approval === false;
+  const checks: ConnectorTriageReconciliationCheck[] = [
+    {
+      key: 'queue_timeline_triage_status',
+      label: 'Queue and timeline triage status',
+      status: !queueTriageStatus || queueTriageStatus === timelineTriageStatus ? 'pass' : 'warning',
+      detail: `queue=${queueTriageStatus ?? 'not_recorded'} timeline=${timelineTriageStatus ?? 'not_recorded'}`,
+    },
+    {
+      key: 'backend_timeline_triage_status',
+      label: 'Backend and timeline triage status',
+      status: !backendTriageStatus || backendTriageStatus === timelineTriageStatus ? 'pass' : 'warning',
+      detail: `backend=${backendTriageStatus ?? 'not_recorded'} timeline=${timelineTriageStatus ?? 'not_recorded'}`,
+    },
+    {
+      key: 'rehearsal_timeline_triage_status',
+      label: 'Rehearsal and timeline triage status',
+      status: !rehearsalTriageStatus || rehearsalTriageStatus === timelineTriageStatus ? 'pass' : 'warning',
+      detail: `rehearsal=${rehearsalTriageStatus ?? 'not_recorded'} timeline=${timelineTriageStatus ?? 'not_recorded'}`,
+    },
+    {
+      key: 'merchant_guidance_consistency',
+      label: 'Merchant-visible guidance consistency',
+      status: [queueItem?.triage?.merchant_followup_summary, remediation.triage?.merchant_followup_summary, rehearsalStatus?.merchant_followup_summary]
+        .filter(Boolean)
+        .every((summary) => summary === merchantFollowupSummary) ? 'pass' : 'warning',
+      detail: merchantFollowupSummary,
+    },
+    {
+      key: 'redacted_audit_reference_continuity',
+      label: 'Redacted audit reference continuity',
+      status: redactedAuditReferenceContinuity ? 'pass' : 'warning',
+      detail: `requested=${remediation.audit_references.requested_audit_event_id ?? 'not_recorded'} corrected=${remediation.audit_references.corrected_audit_event_id ?? 'not_recorded'} followup=${remediation.audit_references.followup_audit_event_id ?? 'not_recorded'} triage=${triageAuditReference ?? 'not_recorded'}`,
+    },
+    {
+      key: 'stale_conflict_followup_guidance',
+      label: 'Stale/conflict follow-up handling',
+      status: staleConflictFollowupGuidance ? 'blocked' : 'pass',
+      detail: staleConflictFollowupGuidance
+        ? 'Stale or conflicting follow-up guidance is a sandbox blocker only; it is not approval or connector execution readiness.'
+        : 'No stale or conflict follow-up blocker detected.',
+    },
+    {
+      key: 'non_enabling_controls',
+      label: 'Fixed non-enabling controls',
+      status: nonEnablingControlsPass ? 'pass' : 'blocked',
+      detail: nonEnablingControlsPass
+        ? 'Public discovery, checkout/payment, live provider, provider calls, merchant private API calls, and approval controls remain disabled.'
+        : 'One or more non-enabling controls is not false/off.',
+    },
+  ];
+  const status = checks.some((check) => check.status === 'blocked')
+    ? 'blocked'
+    : checks.some((check) => check.status === 'warning')
+      ? 'warning'
+      : 'aligned';
+  return {
+    status,
+    remediation_id: remediation.remediation_id,
+    queue_triage_status: queueTriageStatus,
+    timeline_triage_status: timelineTriageStatus,
+    backend_triage_status: backendTriageStatus,
+    rehearsal_triage_status: rehearsalTriageStatus,
+    merchant_followup_summary: merchantFollowupSummary,
+    merchant_next_step: merchantNextStep,
+    audit_references: {
+      requested_audit_event_id: remediation.audit_references.requested_audit_event_id,
+      corrected_audit_event_id: remediation.audit_references.corrected_audit_event_id,
+      followup_audit_event_id: remediation.audit_references.followup_audit_event_id,
+      triage_audit_event_id: triageAuditReference,
+    },
+    stale_conflict_followup_guidance: staleConflictFollowupGuidance,
+    stale_conflict_handling: staleConflictFollowupGuidance ? 'sandbox_blocker_only' : 'none',
+    redacted_audit_reference_continuity: redactedAuditReferenceContinuity,
+    checks,
     production_approval: false,
     connector_execution_enabled: false,
   };
@@ -1987,6 +2176,16 @@ export function CommerceOnboarding() {
       : connectorTriageSubmitting
         ? 'Connector triage is being recorded.'
         : 'Record sandbox-only operator triage; this does not approve launch or connector execution.';
+  const connectorTriageReconciliation = useMemo(() => {
+    if (!connectorRemediationTimeline) return null;
+    const queueItem = connectorRemediationQueue.find((item) => item.remediation_id === connectorRemediationTimeline.remediation.remediation_id) ?? null;
+    return buildConnectorTriageEvidenceReconciliation(
+      connectorRemediationTimeline,
+      queueItem,
+      connectorBackendRemediation,
+      connectorTriageRehearsalStatus,
+    );
+  }, [connectorBackendRemediation, connectorRemediationQueue, connectorRemediationTimeline, connectorTriageRehearsalStatus]);
   const connectorTriageControls = [
     { label: 'sandbox_only', value: true },
     { label: 'credential_entry_enabled', value: false },
@@ -3264,6 +3463,59 @@ export function CommerceOnboarding() {
                       <div className="text-xs font-medium text-gx-muted">Redacted merchant guidance in current state</div>
                       <div className="mt-1 text-sm text-gx-text">{connectorTriageRehearsalStatus.merchant_followup_summary}</div>
                       <div className="mt-1 text-xs text-gx-muted">Next step: {connectorTriageRehearsalStatus.merchant_next_step}</div>
+                    </div>
+                  </div>
+                ) : null}
+                {connectorTriageReconciliation ? (
+                  <div data-testid="connector-triage-reconciliation-summary" className="mt-3 rounded-md border border-gx-border p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-medium text-gx-text">Operator/merchant evidence reconciliation</div>
+                        <p className="mt-1 text-xs text-gx-muted">
+                          Compares queue state, redacted timeline state, backend remediation state, and rehearsal state without enabling connector execution.
+                        </p>
+                      </div>
+                      <Badge variant={reconciliationStatusVariant(connectorTriageReconciliation.status)}>
+                        {connectorTriageReconciliation.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-4">
+                      {[
+                        { label: 'queue_triage_status', value: connectorTriageReconciliation.queue_triage_status ?? 'not_recorded' },
+                        { label: 'timeline_triage_status', value: connectorTriageReconciliation.timeline_triage_status ?? 'not_recorded' },
+                        { label: 'backend_triage_status', value: connectorTriageReconciliation.backend_triage_status ?? 'not_recorded' },
+                        { label: 'rehearsal_triage_status', value: connectorTriageReconciliation.rehearsal_triage_status ?? 'not_recorded' },
+                        { label: 'requested_audit', value: connectorTriageReconciliation.audit_references.requested_audit_event_id ?? 'not_recorded' },
+                        { label: 'corrected_audit', value: connectorTriageReconciliation.audit_references.corrected_audit_event_id ?? 'not_recorded' },
+                        { label: 'followup_audit', value: connectorTriageReconciliation.audit_references.followup_audit_event_id ?? 'not_recorded' },
+                        { label: 'triage_audit', value: connectorTriageReconciliation.audit_references.triage_audit_event_id ?? 'not_recorded' },
+                        { label: 'redacted_audit_reference_continuity', value: connectorTriageReconciliation.redacted_audit_reference_continuity },
+                        { label: 'stale_conflict_handling', value: connectorTriageReconciliation.stale_conflict_handling },
+                        { label: 'connector_execution_enabled', value: connectorTriageReconciliation.connector_execution_enabled },
+                        { label: 'production_approval', value: connectorTriageReconciliation.production_approval },
+                      ].map((item) => (
+                        <div key={item.label} className="rounded-md border border-gx-border p-2">
+                          <div className="text-xs text-gx-muted">{item.label}</div>
+                          <div className="break-all text-sm font-medium text-gx-text">{String(item.value)}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div data-testid="connector-triage-reconciliation-guidance" className="mt-3 rounded-md border border-gx-border p-2">
+                      <div className="text-xs font-medium text-gx-muted">Reconciled merchant-visible guidance</div>
+                      <div className="mt-1 text-sm text-gx-text">{connectorTriageReconciliation.merchant_followup_summary}</div>
+                      <div className="mt-1 text-xs text-gx-muted">Next step: {connectorTriageReconciliation.merchant_next_step}</div>
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-2">
+                      {connectorTriageReconciliation.checks.map((check) => (
+                        <div key={check.key} className="rounded-md border border-gx-border p-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-xs font-medium text-gx-text">{check.label}</div>
+                            <Badge variant={reconciliationStatusVariant(check.status)}>{check.status}</Badge>
+                          </div>
+                          <div className="mt-1 text-xs text-gx-muted">{check.key}</div>
+                          <div className="mt-1 break-all text-xs text-gx-muted">{check.detail}</div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ) : null}
