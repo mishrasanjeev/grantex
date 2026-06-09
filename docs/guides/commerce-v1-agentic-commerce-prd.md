@@ -91,7 +91,7 @@ AgenticOrg must not:
 
 ## 4. Current Implementation Snapshot
 
-Status as of 2026-06-07:
+Status as of 2026-06-09:
 
 - Grantex seller-control-plane work is implemented through the sandbox
   read-only discovery handoff path: C5Z, C6A, C6B, C6C, C6D, C6E, C6F, and
@@ -100,9 +100,17 @@ Status as of 2026-06-07:
   C6H. C6I buyer-session orchestration is merged on AgenticOrg main.
 - Grantex protocol-adapter and connector foundations C6J, C6K, C6L, C6M, and
   C6N are merged on Grantex main.
+- Grantex C6O preview conformance fixtures, validation, reporting, status,
+  release gate, runbook, and launch-gap assessment are merged.
+- Grantex C6P-C6Si connector dry-run, review, portal, evidence packet,
+  remediation, persistence, queue, timeline, and operator triage foundations
+  are in progress or merged as sandbox-only, non-live, non-enabling work.
 - The open-protocol packaging draft is an internal docs-only PR refreshed on
   the merged C6I-C6N base. It is not public protocol publication, not
   certification, and not production approval.
+- C6T adds an IETF/NIST publication-preparation track. It is not an IETF
+  submission, not a NIST submission, not public protocol publication, and not
+  standards approval.
 - Public discovery, production Commerce V1, checkout/payment enablement, live
   payments, live Plural, production allowlists, certification claims, provider
   calls, and AgenticOrg direct merchant-system calls remain blocked.
@@ -370,6 +378,28 @@ Do not claim certified UCP, ACP, AP2, A2A, MPP, schema.org production, or live
 provider readiness until implementation, conformance tests, approvals, and
 release evidence exist.
 
+### 12.1 IETF And NIST Publication Tracks
+
+The external standards strategy is split into two preparation tracks:
+
+| Track | Intended artifact | Current posture | Required before external submission |
+| --- | --- | --- | --- |
+| IETF | Individual Internet-Draft candidate for an agentic commerce trust architecture. | C6T internal outline only; not submitted, not adopted, not an RFC, and not a standard. | Public-safe draft text, IPR/legal review, security/privacy considerations, non-Grantex-specific examples, and explicit approval to submit. |
+| NIST | Security and risk reference-architecture whitepaper candidate. | C6T internal outline only; not submitted to NIST, not accepted by NCCoE, and not NIST-approved. | Threat model, NIST AI RMF/CSF control mapping, public-safe architecture, collaborator/project path, and explicit approval to engage. |
+
+The IETF track should focus on protocol engineering: roles, message envelopes,
+capability profiles, consent, policy, evidence, refusal semantics, and
+interoperability with existing protocol surfaces.
+
+The NIST track should focus on risk management: threat model, trust boundaries,
+AI RMF mapping, cybersecurity controls, payment-provider boundary controls,
+connector governance, audit evidence, privacy, incident response, and rollback.
+
+Both tracks must describe Grantex and AgenticOrg as implementation experience
+only. They must not make Grantex-specific APIs mandatory, must not claim
+external certification, and must not describe sandbox evidence as production
+approval.
+
 ## 13. Conceptual Data Model
 
 The implementation should preserve these conceptual records. Some already exist
@@ -438,7 +468,7 @@ in V1 form; others are future gaps.
 | Live provider readiness | Payments need approval. | Grantex | Sandbox validation, live credential approval, webhook signatures. | Live provider risk. |
 | Commerce Passport production delivery | Real consent needs delivery. | Grantex | Email/SMS/passkey challenge, revocation, signed evidence. | Weak authorization. |
 | Policy simulator | Merchants need confidence. | Grantex | Preview policy by product/category/channel/amount. | Accidental capability exposure. |
-| Standards adapters | Major platforms need standard surfaces. | Grantex publishes; AgenticOrg consumes | C6J-C6M previews merged; conformance and publication next. | Fragmented protocol state. |
+| Standards adapters | Major platforms need standard surfaces. | Grantex publishes; AgenticOrg consumes | C6J-C6M previews, C6O conformance, and C6T IETF/NIST preparation are in place or in review; external publication remains blocked. | Fragmented protocol state or premature external claims. |
 | Buyer channel launch | Buyers need easy entry. | AgenticOrg + Grantex approval | C6I channel-neutral response merged; live channel adapters next. | Agentic commerce hard to use. |
 | Buyer UX | Buyers need understandable flow. | AgenticOrg | C6I read-only buyer session merged; cart/consent/checkout UX remains future. | Confusing or unsafe agent behavior. |
 | Merchant demo UX | Sellers need education. | AgenticOrg | Demo walkthroughs and blocked-path examples. | Misunderstanding production readiness. |
@@ -465,7 +495,7 @@ in V1 form; others are future gaps.
 | 11. Order/fulfillment backbone | Operational paid flow. | Order, shipment, pickup/delivery, cancellation. | Required before broad checkout. |
 | 12. Return/refund request | Safe post-purchase support. | Request, eligibility, manual approval, audit. | No automatic refund execution. |
 | 13. Settlement/payout reporting | Seller finance visibility. | Reconciliation and payout read model. | No raw provider payloads. |
-| 14. Standards hardening | Platform interoperability. | C6J-C6M preview adapters are merged and the open-protocol packaging draft is refreshed on merged C6I-C6N commits; public conformance pending. | No certification claims without evidence. |
+| 14. Standards hardening | Platform interoperability. | C6J-C6M preview adapters, C6O preview conformance, and C6T IETF/NIST publication-preparation outlines exist or are in review. | No submission, publication, or certification claims without explicit approval and evidence. |
 | 15. Controlled pilot | Minimal real launch. | One merchant, category, channel, provider, geography, rollback owner. | Separate explicit approval. |
 
 Current sequencing decision:
@@ -473,10 +503,10 @@ Current sequencing decision:
 1. C6I-C6N are merged in dependency order across AgenticOrg and Grantex.
 2. The open-protocol packaging draft is refreshed on the actual merged commits
    and remains internal, preview-only, non-publication, and non-certifying.
-3. The next runtime chain is C6O: public-safe conformance fixtures, the first
-   real connector sync adapter foundation, order/fulfillment backbone planning,
-   and controlled pilot readiness without enabling public discovery or live
-   checkout.
+3. C6O conformance and C6P-C6Si connector dry-run/remediation foundations are
+   the current runtime-hardening chain.
+4. C6T starts the standards-publication preparation track for IETF and NIST
+   without external submission, public publication, or certification claims.
 
 ## 17. Release Acceptance Criteria
 
@@ -563,8 +593,8 @@ This PRD has been reviewed against the requested coverage:
 - documentation/navigation/workflow coverage covered;
 - next implementation sequencing covered.
 
-Remaining decision for the team: use the merged C6I-C6N base and internal
-open-protocol packaging draft to plan C6O. The next implementation chain should
-focus on conformance fixtures, one real connector sync adapter foundation,
-order/fulfillment backbone planning, and controlled pilot readiness without
-enabling public discovery or live checkout.
+Remaining decision for the team: continue the C6P-C6Si connector
+dry-run/remediation chain for real merchant readiness while C6T prepares
+public-safe IETF and NIST draft materials. The next implementation chain should
+avoid external submission, public protocol publication, certification claims,
+public discovery, and live checkout until explicit approvals and evidence exist.
