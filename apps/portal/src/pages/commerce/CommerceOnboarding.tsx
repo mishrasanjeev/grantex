@@ -449,6 +449,51 @@ function triageFormFromRemediation(remediation: CommerceConnectorDryRunRemediati
   };
 }
 
+interface ConnectorTriageRehearsalStatus {
+  result: 'saved_or_already_current';
+  remediation_id: string;
+  triage_status: CommerceConnectorDryRunRemediationTriageStatus | null;
+  audit_reference: string | null;
+  merchant_followup_summary: string;
+  merchant_next_step: string;
+  timeline_entries: number;
+  redacted_timeline_continuity: boolean;
+  duplicate_handling: 'reuse_existing_state';
+  internal_notes_in_merchant_guidance: false;
+  production_approval: false;
+  connector_execution_enabled: false;
+}
+
+function buildConnectorTriageRehearsalStatus(
+  remediation: CommerceConnectorDryRunRemediation,
+  timeline: CommerceConnectorDryRunRemediationTimeline,
+): ConnectorTriageRehearsalStatus {
+  return {
+    result: 'saved_or_already_current',
+    remediation_id: remediation.remediation_id,
+    triage_status: remediation.triage?.triage_status ?? null,
+    audit_reference: remediation.triage?.triage_audit_event_id ?? remediation.audit_references.triage_audit_event_id ?? null,
+    merchant_followup_summary: timeline.merchant_status.merchant_followup_summary
+      ?? remediation.triage?.merchant_followup_summary
+      ?? 'not_recorded',
+    merchant_next_step: timeline.merchant_status.triage_next_step
+      ?? remediation.triage?.next_step
+      ?? timeline.merchant_status.next_step,
+    timeline_entries: timeline.timeline.length,
+    redacted_timeline_continuity: timeline.timeline.every((entry) => (
+      entry.redaction.raw_connector_rows_included === false
+      && entry.redaction.credentials_included === false
+      && entry.redaction.provider_metadata_included === false
+      && entry.redaction.merchant_private_api_payload_included === false
+      && entry.redaction.production_config_values_included === false
+    )),
+    duplicate_handling: 'reuse_existing_state',
+    internal_notes_in_merchant_guidance: false,
+    production_approval: false,
+    connector_execution_enabled: false,
+  };
+}
+
 function buildConnectorEvidencePacketReview(
   dryRun: CommerceConnectorDryRunResult,
   review: CommerceConnectorDryRunReview | null,
@@ -1221,6 +1266,7 @@ export function CommerceOnboarding() {
   const [connectorQueueLoading, setConnectorQueueLoading] = useState(false);
   const [connectorTimelineLoading, setConnectorTimelineLoading] = useState(false);
   const [connectorTriageSubmitting, setConnectorTriageSubmitting] = useState(false);
+  const [connectorTriageRehearsalStatus, setConnectorTriageRehearsalStatus] = useState<ConnectorTriageRehearsalStatus | null>(null);
   const [connectorForm, setConnectorForm] = useState<{
     connector_type: CommerceConnectorDryRunType;
     source_label: string;
@@ -1295,6 +1341,7 @@ export function CommerceOnboarding() {
       setConnectorRemediationQueue([]);
       setConnectorRemediationTimeline(null);
       setConnectorTriageForm(triageFormFromRemediation(null));
+      setConnectorTriageRehearsalStatus(null);
       setProposalNote(proposalRes?.data.proposal_note ?? '');
       setAgenticOrgNote('');
       setMerchantForm({
@@ -1712,6 +1759,11 @@ export function CommerceOnboarding() {
       setConnectorRemediationTimeline(res.data);
       setConnectorBackendRemediation(res.data.remediation);
       setConnectorTriageForm(triageFormFromRemediation(res.data.remediation));
+      setConnectorTriageRehearsalStatus(
+        res.data.remediation.triage?.triage_status
+          ? buildConnectorTriageRehearsalStatus(res.data.remediation, res.data)
+          : null,
+      );
       show('Connector remediation timeline loaded', 'success');
     } catch {
       show('Connector remediation timeline is unavailable', 'error');
@@ -1752,6 +1804,7 @@ export function CommerceOnboarding() {
         res.data.remediation_id,
       );
       setConnectorRemediationTimeline(timelineRes.data);
+      setConnectorTriageRehearsalStatus(buildConnectorTriageRehearsalStatus(res.data, timelineRes.data));
       show('Connector triage saved or already current', 'success');
     } catch {
       show('Connector triage is blocked for sandbox safety', 'error');
@@ -3056,6 +3109,18 @@ export function CommerceOnboarding() {
                       </div>
                     ))}
                   </div>
+                  <div data-testid="connector-merchant-followup-guidance" className="mt-3 rounded-md border border-gx-border p-2">
+                    <div className="text-xs font-medium text-gx-muted">Merchant-visible follow-up guidance</div>
+                    <div className="mt-1 text-sm text-gx-text">
+                      {connectorRemediationTimeline.merchant_status.merchant_followup_summary ?? 'No merchant-visible follow-up summary recorded.'}
+                    </div>
+                    <div className="mt-1 text-xs text-gx-muted">
+                      Next step: {connectorRemediationTimeline.merchant_status.triage_next_step ?? connectorRemediationTimeline.merchant_status.next_step}
+                    </div>
+                    <div className="mt-1 text-xs text-gx-muted">
+                      Internal notes, raw connector rows, provider metadata, credentials, and merchant private API payloads are excluded.
+                    </div>
+                  </div>
                   <div className="mt-3 grid gap-2">
                     {connectorRemediationTimeline.timeline.map((entry) => (
                       <div key={`${entry.sequence}-${entry.key}`} className="rounded-md border border-gx-border p-2">
@@ -3166,6 +3231,42 @@ export function CommerceOnboarding() {
                     </div>
                   ))}
                 </div>
+                {connectorTriageRehearsalStatus ? (
+                  <div data-testid="connector-triage-rehearsal-status" className="mt-3 rounded-md border border-gx-border p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-medium text-gx-text">Triage workflow rehearsal status</div>
+                        <p className="mt-1 text-xs text-gx-muted">
+                          Current triage state is persisted for sandbox follow-up only. Duplicate identical submissions reuse existing state and do not approve connector execution.
+                        </p>
+                      </div>
+                      <Badge variant="success">{connectorTriageRehearsalStatus.result}</Badge>
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-4">
+                      {[
+                        { label: 'remediation_id', value: connectorTriageRehearsalStatus.remediation_id },
+                        { label: 'triage_status', value: connectorTriageRehearsalStatus.triage_status ?? 'not_recorded' },
+                        { label: 'audit_reference', value: connectorTriageRehearsalStatus.audit_reference ?? 'not_recorded' },
+                        { label: 'duplicate_handling', value: connectorTriageRehearsalStatus.duplicate_handling },
+                        { label: 'timeline_entries', value: connectorTriageRehearsalStatus.timeline_entries },
+                        { label: 'redacted_timeline_continuity', value: connectorTriageRehearsalStatus.redacted_timeline_continuity },
+                        { label: 'internal_notes_in_merchant_guidance', value: connectorTriageRehearsalStatus.internal_notes_in_merchant_guidance },
+                        { label: 'connector_execution_enabled', value: connectorTriageRehearsalStatus.connector_execution_enabled },
+                        { label: 'production_approval', value: connectorTriageRehearsalStatus.production_approval },
+                      ].map((item) => (
+                        <div key={item.label} className="rounded-md border border-gx-border p-2">
+                          <div className="text-xs text-gx-muted">{item.label}</div>
+                          <div className="break-all text-sm font-medium text-gx-text">{String(item.value)}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div data-testid="connector-triage-rehearsal-guidance" className="mt-3 rounded-md border border-gx-border p-2">
+                      <div className="text-xs font-medium text-gx-muted">Redacted merchant guidance in current state</div>
+                      <div className="mt-1 text-sm text-gx-text">{connectorTriageRehearsalStatus.merchant_followup_summary}</div>
+                      <div className="mt-1 text-xs text-gx-muted">Next step: {connectorTriageRehearsalStatus.merchant_next_step}</div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 

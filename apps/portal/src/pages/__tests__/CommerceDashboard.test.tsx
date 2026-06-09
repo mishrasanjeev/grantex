@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
@@ -1899,6 +1899,7 @@ describe('CommerceOnboarding', () => {
   it('loads persisted remediation queue and redacted timeline without connector execution controls', async () => {
     mockGetCommerceConnectorDryRunRemediationTimeline
       .mockResolvedValueOnce({ data: connectorRemediationTimeline })
+      .mockResolvedValueOnce({ data: connectorRemediationTimelineTriaged })
       .mockResolvedValueOnce({ data: connectorRemediationTimelineTriaged });
     const user = userEvent.setup();
     r(<CommerceOnboarding />);
@@ -1953,12 +1954,37 @@ describe('CommerceOnboarding', () => {
     )).length).toBeGreaterThan(0);
     expect(screen.getAllByText('waiting_on_merchant').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Please rerun the sandbox dry-run after fixing category mapping.').length).toBeGreaterThan(0);
+    const merchantGuidance = screen.getByTestId('connector-merchant-followup-guidance');
+    expect(within(merchantGuidance).getByText('Merchant-visible follow-up guidance')).toBeInTheDocument();
+    expect(within(merchantGuidance).getByText('Please rerun the sandbox dry-run after fixing category mapping.')).toBeInTheDocument();
+    expect(within(merchantGuidance).getByText('Next step: Attach the corrected sandbox dry-run evidence.')).toBeInTheDocument();
+    expect(within(merchantGuidance).queryByText('Internal sandbox triage note must stay operator-only.')).not.toBeInTheDocument();
     expect(screen.getByText('triage_is_production_approval')).toBeInTheDocument();
     expect(screen.getAllByText((_content, node) => (
       node?.textContent?.includes('triage_enables_connector_execution: false') === true
       && node.childElementCount === 0
     )).length).toBeGreaterThan(0);
+    const rehearsalStatus = screen.getByTestId('connector-triage-rehearsal-status');
+    expect(within(rehearsalStatus).getByText('Triage workflow rehearsal status')).toBeInTheDocument();
+    expect(within(rehearsalStatus).getByText('saved_or_already_current')).toBeInTheDocument();
+    expect(within(rehearsalStatus).getByText('reuse_existing_state')).toBeInTheDocument();
+    expect(within(rehearsalStatus).getByText('redacted_timeline_continuity')).toBeInTheDocument();
+    expect(within(rehearsalStatus).getAllByText('true').length).toBeGreaterThan(0);
+    expect(within(rehearsalStatus).getByText('internal_notes_in_merchant_guidance')).toBeInTheDocument();
+    expect(within(rehearsalStatus).getByText('connector_execution_enabled')).toBeInTheDocument();
+    expect(within(rehearsalStatus).getByText('production_approval')).toBeInTheDocument();
+    expect(within(rehearsalStatus).getAllByText('false').length).toBeGreaterThanOrEqual(3);
+    expect(within(rehearsalStatus).queryByText('Internal sandbox triage note must stay operator-only.')).not.toBeInTheDocument();
     expect(mockShow).toHaveBeenCalledWith('Connector triage saved or already current', 'success');
+
+    await user.click(screen.getByRole('button', { name: 'Record operator triage' }));
+    await waitFor(() => expect(mockRecordCommerceConnectorDryRunRemediationTriage).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockGetCommerceConnectorDryRunRemediationTimeline).toHaveBeenCalledTimes(3));
+    const duplicateStatus = screen.getByTestId('connector-triage-rehearsal-status');
+    expect(within(duplicateStatus).getByText('reuse_existing_state')).toBeInTheDocument();
+    expect(within(duplicateStatus).getByText('saved_or_already_current')).toBeInTheDocument();
+    expect(within(duplicateStatus).getByText('caud_C6SIA_TRIAGE_RECORDED')).toBeInTheDocument();
+    expect(within(duplicateStatus).queryByText('Internal sandbox triage note must stay operator-only.')).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
     expect(screen.queryByText('production connector setup enabled')).not.toBeInTheDocument();
     expect(screen.queryByText('outbound connector sync enabled')).not.toBeInTheDocument();

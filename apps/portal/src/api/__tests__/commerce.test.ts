@@ -366,6 +366,71 @@ describe('commerce api', () => {
     }
   });
 
+  it('reuses the same public-safe triage request shape for duplicate-current submissions', async () => {
+    const response = {
+      data: {
+        remediation_id: 'cdrem/1',
+        triage: {
+          triage_status: 'waiting_on_merchant',
+          merchant_followup_summary: 'Rerun the sandbox dry-run after fixing category mapping.',
+          next_step: 'Attach corrected sandbox evidence.',
+          triage_audit_event_id: 'aud_triage',
+        },
+      },
+      audit_event_id: 'aud_triage',
+      controls: {
+        sandbox_only: true,
+        credential_entry_enabled: false,
+        outbound_sync_enabled: false,
+        production_connector_setup_enabled: false,
+        provider_call_enabled: false,
+        merchant_private_api_calls_enabled: false,
+        triage_is_production_approval: false,
+        triage_enables_connector_execution: false,
+      },
+    };
+    ok(response);
+    ok(response);
+
+    const input = {
+      triageStatus: 'waiting_on_merchant' as const,
+      assignedOperatorId: 'ops.c6sic',
+      triageNote: 'Internal sandbox triage note remains operator-only.',
+      merchantFollowupSummary: 'Rerun the sandbox dry-run after fixing category mapping.',
+      nextStep: 'Attach corrected sandbox evidence.',
+    };
+    await recordCommerceConnectorDryRunRemediationTriage('mch/1', 'cdrem/1', input);
+    await recordCommerceConnectorDryRunRemediationTriage('mch/1', 'cdrem/1', input);
+
+    expect(mockFetch.mock.calls).toHaveLength(2);
+    for (const call of mockFetch.mock.calls) {
+      expect(call[0]).toBe('http://localhost:3000/v1/commerce/merchants/mch%2F1/connectors/remediations/cdrem%2F1/triage');
+      const body = JSON.parse(call[1].body);
+      expect(body).toEqual({
+        triage_status: 'waiting_on_merchant',
+        assigned_operator_id: 'ops.c6sic',
+        triage_note: 'Internal sandbox triage note remains operator-only.',
+        merchant_followup_summary: 'Rerun the sandbox dry-run after fixing category mapping.',
+        next_step: 'Attach corrected sandbox evidence.',
+      });
+      const serialized = JSON.stringify(body).toLowerCase();
+      for (const forbidden of [
+        'credential',
+        'secret',
+        'provider_metadata',
+        'raw_payload',
+        'public_discovery_enabled',
+        'checkout_payment_enabled',
+        'live_provider_enabled',
+        'live_plural_enabled',
+        'production_allowlist',
+        'certification',
+      ]) {
+        expect(serialized).not.toContain(forbidden);
+      }
+    }
+  });
+
   it('calls webhook source and policy endpoints without secret-like list output assumptions', async () => {
     ok({ items: [] });
     await listCommerceWebhookSources({ merchantId: 'mch_1', status: 'active' });
