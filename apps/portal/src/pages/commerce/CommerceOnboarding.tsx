@@ -21,6 +21,7 @@ import {
   listCommerceWebhookSources,
   requestCommerceConnectorDryRunReview,
   requestCommerceConnectorRemediationFollowUpReview,
+  recordCommerceConnectorDryRunRemediationTriage,
   recordCommerceReadOnlyDiscoveryReviewDecision,
   requestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff,
   requestCommerceMerchantReadOnlyDiscoveryReview,
@@ -34,6 +35,7 @@ import {
   type CommerceConnectorDryRunRemediation,
   type CommerceConnectorDryRunRemediationQueueItem,
   type CommerceConnectorDryRunRemediationStatus,
+  type CommerceConnectorDryRunRemediationTriageStatus,
   type CommerceConnectorDryRunRemediationTimeline,
   type CommerceConnectorDryRunReview,
   type CommerceConnectorDryRunReviewDecision,
@@ -229,6 +231,14 @@ const connectorRemediationStatusOptions: CommerceConnectorDryRunRemediationStatu
   'closed_no_action',
 ];
 
+const connectorRemediationTriageStatusOptions: CommerceConnectorDryRunRemediationTriageStatus[] = [
+  'triage_in_progress',
+  'waiting_on_merchant',
+  'ready_for_followup_review',
+  'blocked_for_sandbox_followup',
+  'closed_no_action',
+];
+
 const connectorRowsPrivateFieldFragments = [
   'credential',
   'secret',
@@ -414,6 +424,29 @@ function backendRemediationStatusVariant(status: CommerceConnectorDryRunRemediat
   if (status === 'blocked_again' || status === 'closed_no_action') return 'danger';
   if (status === 'remediation_requested' || status === 'waiting_for_corrected_dry_run') return 'warning';
   return 'default';
+}
+
+function triageStatusVariant(status: CommerceConnectorDryRunRemediationTriageStatus | null | undefined): 'default' | 'success' | 'warning' | 'danger' {
+  if (status === 'ready_for_followup_review') return 'success';
+  if (status === 'blocked_for_sandbox_followup' || status === 'closed_no_action') return 'danger';
+  if (status === 'waiting_on_merchant' || status === 'triage_in_progress') return 'warning';
+  return 'default';
+}
+
+function triageFormFromRemediation(remediation: CommerceConnectorDryRunRemediation | null): {
+  triage_status: CommerceConnectorDryRunRemediationTriageStatus;
+  assigned_operator_id: string;
+  triage_note: string;
+  merchant_followup_summary: string;
+  next_step: string;
+} {
+  return {
+    triage_status: remediation?.triage?.triage_status ?? 'triage_in_progress',
+    assigned_operator_id: remediation?.triage?.assigned_operator_id ?? '',
+    triage_note: remediation?.triage?.triage_note ?? '',
+    merchant_followup_summary: remediation?.triage?.merchant_followup_summary ?? '',
+    next_step: remediation?.triage?.next_step ?? '',
+  };
 }
 
 function buildConnectorEvidencePacketReview(
@@ -1166,6 +1199,7 @@ export function CommerceOnboarding() {
   const [connectorRemediationQueue, setConnectorRemediationQueue] = useState<CommerceConnectorDryRunRemediationQueueItem[]>([]);
   const [connectorRemediationTimeline, setConnectorRemediationTimeline] = useState<CommerceConnectorDryRunRemediationTimeline | null>(null);
   const [connectorQueueStatusFilter, setConnectorQueueStatusFilter] = useState<CommerceConnectorDryRunRemediationStatus | ''>('');
+  const [connectorQueueTriageStatusFilter, setConnectorQueueTriageStatusFilter] = useState<CommerceConnectorDryRunRemediationTriageStatus | ''>('');
   const [merchantForm, setMerchantForm] = useState<MerchantPatchForm>(defaultPatch);
   const [agents, setAgents] = useState<CommerceAgent[]>([]);
   const [activePolicyCount, setActivePolicyCount] = useState(0);
@@ -1186,6 +1220,7 @@ export function CommerceOnboarding() {
   const [connectorDecisionSubmitting, setConnectorDecisionSubmitting] = useState(false);
   const [connectorQueueLoading, setConnectorQueueLoading] = useState(false);
   const [connectorTimelineLoading, setConnectorTimelineLoading] = useState(false);
+  const [connectorTriageSubmitting, setConnectorTriageSubmitting] = useState(false);
   const [connectorForm, setConnectorForm] = useState<{
     connector_type: CommerceConnectorDryRunType;
     source_label: string;
@@ -1201,6 +1236,7 @@ export function CommerceOnboarding() {
     decision: 'accepted_for_sandbox_followup',
     decision_note: '',
   });
+  const [connectorTriageForm, setConnectorTriageForm] = useState(triageFormFromRemediation(null));
   const [decisionForm, setDecisionForm] = useState<{
     decision: CommerceReadOnlyDiscoveryOperatorDecision;
     reason: string;
@@ -1258,6 +1294,7 @@ export function CommerceOnboarding() {
       setConnectorBackendRemediation(null);
       setConnectorRemediationQueue([]);
       setConnectorRemediationTimeline(null);
+      setConnectorTriageForm(triageFormFromRemediation(null));
       setProposalNote(proposalRes?.data.proposal_note ?? '');
       setAgenticOrgNote('');
       setMerchantForm({
@@ -1479,6 +1516,7 @@ export function CommerceOnboarding() {
     setConnectorReview(null);
     setConnectorRemediationQueue([]);
     setConnectorRemediationTimeline(null);
+    setConnectorTriageForm(triageFormFromRemediation(null));
     show('Sandbox sample rows restored', 'success');
   }
 
@@ -1490,6 +1528,7 @@ export function CommerceOnboarding() {
     setConnectorBackendRemediation(null);
     setConnectorRemediationQueue([]);
     setConnectorRemediationTimeline(null);
+    setConnectorTriageForm(triageFormFromRemediation(null));
     show('Sandbox connector rows cleared', 'success');
   }
 
@@ -1523,6 +1562,7 @@ export function CommerceOnboarding() {
           },
         );
         setConnectorBackendRemediation(remediationRes.data);
+        setConnectorTriageForm(triageFormFromRemediation(remediationRes.data));
         setConnectorRemediationTimeline(null);
       }
       setConnectorRemediationLoop((prev) => (
@@ -1553,6 +1593,7 @@ export function CommerceOnboarding() {
           { requestNote },
         );
         setConnectorBackendRemediation(res.data);
+        setConnectorTriageForm(triageFormFromRemediation(res.data));
         setConnectorRemediationTimeline(null);
         setConnectorReview(res.followup_review);
         setConnectorDryRun(res.corrected_dry_run);
@@ -1611,16 +1652,24 @@ export function CommerceOnboarding() {
           { publicSafeNote: res.data.decision_note ?? undefined },
         );
         setConnectorBackendRemediation(remediationRes.data);
+        setConnectorTriageForm(triageFormFromRemediation(remediationRes.data));
         setConnectorRemediationTimeline(null);
       } else if (connectorBackendRemediation?.followup_review_id === res.data.review_id) {
-        setConnectorBackendRemediation((prev) => prev ? {
-          ...prev,
-          status: res.data.status === 'accepted_for_sandbox_followup' ? 'followup_ready' : 'blocked_again',
-          audit_references: {
-            ...prev.audit_references,
-            followup_audit_event_id: prev.audit_references.followup_audit_event_id ?? res.data.audit_event_id,
-          },
-        } : prev);
+        const followupStatus: CommerceConnectorDryRunRemediationStatus = res.data.status === 'accepted_for_sandbox_followup'
+          ? 'followup_ready'
+          : 'blocked_again';
+        setConnectorBackendRemediation((prev) => {
+          const updated = prev ? {
+            ...prev,
+            status: followupStatus,
+            audit_references: {
+              ...prev.audit_references,
+              followup_audit_event_id: prev.audit_references.followup_audit_event_id ?? res.data.audit_event_id,
+            },
+          } : prev;
+          if (updated) setConnectorTriageForm(triageFormFromRemediation(updated));
+          return updated;
+        });
         setConnectorRemediationTimeline(null);
       }
       show('Connector dry-run review decision recorded', 'success');
@@ -1638,6 +1687,7 @@ export function CommerceOnboarding() {
       const res = await listCommerceConnectorDryRunRemediations({
         merchantId: merchant.merchant_id,
         status: connectorQueueStatusFilter || undefined,
+        triageStatus: connectorQueueTriageStatusFilter || undefined,
         limit: 10,
       });
       setConnectorRemediationQueue(res.items);
@@ -1660,11 +1710,53 @@ export function CommerceOnboarding() {
     try {
       const res = await getCommerceConnectorDryRunRemediationTimeline(merchant.merchant_id, id);
       setConnectorRemediationTimeline(res.data);
+      setConnectorBackendRemediation(res.data.remediation);
+      setConnectorTriageForm(triageFormFromRemediation(res.data.remediation));
       show('Connector remediation timeline loaded', 'success');
     } catch {
       show('Connector remediation timeline is unavailable', 'error');
     } finally {
       setConnectorTimelineLoading(false);
+    }
+  }
+
+  async function recordConnectorRemediationTriage() {
+    if (!merchant) return;
+    const remediation = connectorRemediationTimeline?.remediation ?? connectorBackendRemediation;
+    if (!remediation) {
+      show('Select a remediation record before recording triage', 'error');
+      return;
+    }
+    setConnectorTriageSubmitting(true);
+    try {
+      const res = await recordCommerceConnectorDryRunRemediationTriage(
+        merchant.merchant_id,
+        remediation.remediation_id,
+        {
+          triageStatus: connectorTriageForm.triage_status,
+          assignedOperatorId: connectorTriageForm.assigned_operator_id.trim() || undefined,
+          triageNote: connectorTriageForm.triage_note.trim() || undefined,
+          merchantFollowupSummary: connectorTriageForm.merchant_followup_summary.trim() || undefined,
+          nextStep: connectorTriageForm.next_step.trim() || undefined,
+        },
+      );
+      setConnectorBackendRemediation(res.data);
+      setConnectorTriageForm(triageFormFromRemediation(res.data));
+      setConnectorRemediationQueue((prev) => prev.map((item) => (
+        item.remediation_id === res.data.remediation_id
+          ? { ...item, ...res.data }
+          : item
+      )));
+      const timelineRes = await getCommerceConnectorDryRunRemediationTimeline(
+        merchant.merchant_id,
+        res.data.remediation_id,
+      );
+      setConnectorRemediationTimeline(timelineRes.data);
+      show('Connector triage saved or already current', 'success');
+    } catch {
+      show('Connector triage is blocked for sandbox safety', 'error');
+    } finally {
+      setConnectorTriageSubmitting(false);
     }
   }
 
@@ -1829,6 +1921,29 @@ export function CommerceOnboarding() {
       : connectorSubmitting
         ? 'Connector dry-run is being submitted.'
         : 'Dry-run is local snapshot validation only.';
+  const activeConnectorRemediation = connectorRemediationTimeline?.remediation ?? connectorBackendRemediation;
+  const connectorTriageNeedsMerchantSummary = connectorTriageForm.triage_status === 'waiting_on_merchant'
+    || connectorTriageForm.triage_status === 'blocked_for_sandbox_followup';
+  const connectorTriageDisabled = connectorTriageSubmitting
+    || !activeConnectorRemediation
+    || (connectorTriageNeedsMerchantSummary && !connectorTriageForm.merchant_followup_summary.trim());
+  const connectorTriageDisabledReason = !activeConnectorRemediation
+    ? 'Select a persisted remediation record before recording operator triage.'
+    : connectorTriageNeedsMerchantSummary && !connectorTriageForm.merchant_followup_summary.trim()
+      ? 'Waiting or blocked triage requires merchant-visible follow-up guidance.'
+      : connectorTriageSubmitting
+        ? 'Connector triage is being recorded.'
+        : 'Record sandbox-only operator triage; this does not approve launch or connector execution.';
+  const connectorTriageControls = [
+    { label: 'sandbox_only', value: true },
+    { label: 'credential_entry_enabled', value: false },
+    { label: 'outbound_sync_enabled', value: false },
+    { label: 'public_discovery_enabled', value: false },
+    { label: 'checkout_payment_enabled', value: false },
+    { label: 'live_provider_enabled', value: false },
+    { label: 'merchant_private_api_calls_enabled', value: false },
+    { label: 'triage_is_production_approval', value: false },
+  ];
   const connectorEvidence = merchant && connectorDryRun
     ? buildConnectorEvidenceExport(merchant.merchant_id, connectorDryRun, connectorReview, connectorRemediationLoop, connectorBackendRemediation)
     : null;
@@ -2804,7 +2919,7 @@ export function CommerceOnboarding() {
                   <Badge variant="success">read-only timeline</Badge>
                 </div>
               </div>
-              <div className="grid gap-3 md:grid-cols-[260px_auto_auto] md:items-end">
+              <div className="grid gap-3 md:grid-cols-[220px_220px_auto_auto] md:items-end">
                 <label className="text-sm font-medium text-gx-text">
                   Remediation status filter
                   <select
@@ -2814,6 +2929,19 @@ export function CommerceOnboarding() {
                   >
                     <option value="">all sandbox statuses</option>
                     {connectorRemediationStatusOptions.map((status) => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm font-medium text-gx-text">
+                  Triage status filter
+                  <select
+                    className="mt-1.5 w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+                    value={connectorQueueTriageStatusFilter}
+                    onChange={(e) => setConnectorQueueTriageStatusFilter(e.target.value as CommerceConnectorDryRunRemediationTriageStatus | '')}
+                  >
+                    <option value="">all triage statuses</option>
+                    {connectorRemediationTriageStatusOptions.map((status) => (
                       <option key={status} value={status}>{status}</option>
                     ))}
                   </select>
@@ -2860,6 +2988,9 @@ export function CommerceOnboarding() {
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant={backendRemediationStatusVariant(item.status)}>{item.status}</Badge>
+                          <Badge variant={triageStatusVariant(item.triage?.triage_status)}>
+                            {item.triage?.triage_status ?? 'triage_not_recorded'}
+                          </Badge>
                           <Button
                             variant="secondary"
                             size="sm"
@@ -2883,6 +3014,12 @@ export function CommerceOnboarding() {
                           </div>
                         ))}
                       </div>
+                      {item.triage?.merchant_followup_summary ? (
+                        <div className="mt-2 rounded-md border border-gx-border p-2">
+                          <div className="text-xs text-gx-muted">merchant_followup_summary</div>
+                          <div className="mt-1 text-sm text-gx-text">{item.triage.merchant_followup_summary}</div>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -2906,6 +3043,9 @@ export function CommerceOnboarding() {
                   <div className="mt-2 grid gap-2 md:grid-cols-4">
                     {[
                       { label: 'merchant_next_step', value: connectorRemediationTimeline.merchant_status.next_step },
+                      { label: 'merchant_followup_summary', value: connectorRemediationTimeline.merchant_status.merchant_followup_summary ?? 'not_recorded' },
+                      { label: 'triage_status', value: connectorRemediationTimeline.merchant_status.triage_status ?? 'not_recorded' },
+                      { label: 'triage_next_step', value: connectorRemediationTimeline.merchant_status.triage_next_step ?? 'not_recorded' },
                       { label: 'queue_status', value: connectorRemediationTimeline.operator_queue.queue_status },
                       { label: 'raw_rows_included', value: connectorRemediationTimeline.redaction_summary.raw_connector_rows_included },
                       { label: 'followup_ready_is_launch_approval', value: connectorRemediationTimeline.controls.followup_ready_is_launch_approval },
@@ -2927,11 +3067,106 @@ export function CommerceOnboarding() {
                         </div>
                         <div className="mt-1 text-xs text-gx-muted">{entry.event_type}</div>
                         <div className="mt-1 break-all text-xs text-gx-muted">Audit: {entry.audit_event_id ?? 'not_recorded'}</div>
+                        {entry.key === 'operator_triage_recorded' ? (
+                          <div className="mt-2 grid gap-1 text-xs text-gx-muted md:grid-cols-2">
+                            <div>triage_status: {String(entry.evidence_summary.triage_status ?? 'not_recorded')}</div>
+                            <div>merchant_summary_present: {String(entry.evidence_summary.merchant_followup_summary_present ?? false)}</div>
+                            <div>triage_is_production_approval: {String(entry.evidence_summary.triage_is_production_approval ?? false)}</div>
+                            <div>triage_enables_connector_execution: {String(entry.evidence_summary.triage_enables_connector_execution ?? false)}</div>
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>
                 </div>
               ) : null}
+
+              <div className="mt-3 rounded-md border border-gx-border p-3">
+                <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-medium text-gx-text">Operator triage controls</div>
+                    <p className="mt-1 text-xs text-gx-muted">
+                      Records C6Sia sandbox triage metadata for the selected remediation record only. Duplicate identical submissions return the existing audit reference and are not production approval.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="warning">operator-only</Badge>
+                    <Badge variant="success">tenant-scoped</Badge>
+                    <Badge variant="success">redacted guidance</Badge>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="text-sm font-medium text-gx-text">
+                    Triage status
+                    <select
+                      className="mt-1.5 w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+                      value={connectorTriageForm.triage_status}
+                      onChange={(e) => setConnectorTriageForm({ ...connectorTriageForm, triage_status: e.target.value as CommerceConnectorDryRunRemediationTriageStatus })}
+                    >
+                      {connectorRemediationTriageStatusOptions.map((status) => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <Input
+                    id="connector-triage-assigned-operator"
+                    label="Assigned operator reference"
+                    value={connectorTriageForm.assigned_operator_id}
+                    onChange={(e) => setConnectorTriageForm({ ...connectorTriageForm, assigned_operator_id: e.target.value })}
+                  />
+                  <div>
+                    <label htmlFor="connector-triage-note" className="mb-1.5 block text-sm font-medium text-gx-text">
+                      Internal triage note
+                    </label>
+                    <textarea
+                      id="connector-triage-note"
+                      value={connectorTriageForm.triage_note}
+                      onChange={(e) => setConnectorTriageForm({ ...connectorTriageForm, triage_note: e.target.value })}
+                      rows={3}
+                      className="w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="connector-triage-merchant-summary" className="mb-1.5 block text-sm font-medium text-gx-text">
+                      Merchant-visible follow-up summary
+                    </label>
+                    <textarea
+                      id="connector-triage-merchant-summary"
+                      value={connectorTriageForm.merchant_followup_summary}
+                      onChange={(e) => setConnectorTriageForm({ ...connectorTriageForm, merchant_followup_summary: e.target.value })}
+                      rows={3}
+                      className="w-full rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text focus:border-gx-accent focus:outline-none"
+                    />
+                  </div>
+                  <Input
+                    id="connector-triage-next-step"
+                    label="Triage next step"
+                    value={connectorTriageForm.next_step}
+                    onChange={(e) => setConnectorTriageForm({ ...connectorTriageForm, next_step: e.target.value })}
+                  />
+                  <div className="flex flex-col justify-end">
+                    <Button
+                      variant="secondary"
+                      onClick={recordConnectorRemediationTriage}
+                      disabled={connectorTriageDisabled}
+                      title={connectorTriageDisabledReason}
+                    >
+                      {connectorTriageSubmitting ? 'Recording triage' : 'Record operator triage'}
+                    </Button>
+                    <div className="mt-2 text-xs text-gx-muted">Triage action: {connectorTriageDisabledReason}</div>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-4">
+                  {connectorTriageControls.map((item) => (
+                    <div key={item.label} className="rounded-md border border-gx-border p-2">
+                      <div className="text-xs text-gx-muted">{item.label}</div>
+                      <Badge variant={item.value && item.label === 'sandbox_only' ? 'success' : item.value ? 'danger' : 'success'}>
+                        {String(item.value)}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {connectorEvidence ? (
