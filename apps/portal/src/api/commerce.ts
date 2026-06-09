@@ -239,6 +239,12 @@ export type CommerceConnectorDryRunRemediationStatus =
   | 'followup_ready'
   | 'blocked_again'
   | 'closed_no_action';
+export type CommerceConnectorDryRunRemediationTriageStatus =
+  | 'triage_in_progress'
+  | 'waiting_on_merchant'
+  | 'ready_for_followup_review'
+  | 'blocked_for_sandbox_followup'
+  | 'closed_no_action';
 
 export interface CommerceConnectorDryRunPreviewVariant {
   sku: string;
@@ -363,6 +369,19 @@ export interface CommerceConnectorDryRunRemediation {
     corrected_audit_event_id: string | null;
     followup_audit_event_id: string | null;
     closed_or_blocked_audit_event_id: string | null;
+    triage_audit_event_id?: string | null;
+  };
+  triage?: {
+    triage_status: CommerceConnectorDryRunRemediationTriageStatus | null;
+    assigned_operator_id: string | null;
+    triage_note: string | null;
+    merchant_followup_summary: string | null;
+    next_step: string | null;
+    triaged_by_operator_id: string | null;
+    triaged_at: string | null;
+    triage_audit_event_id: string | null;
+    triage_is_production_approval: false;
+    triage_enables_connector_execution: false;
   };
   controls: {
     sandbox_only: true;
@@ -376,6 +395,8 @@ export interface CommerceConnectorDryRunRemediation {
     remediation_is_production_approval: false;
     remediation_enables_connector_execution: false;
     followup_ready_is_launch_approval: false;
+    triage_is_production_approval?: false;
+    triage_enables_connector_execution?: false;
   };
   created_at: string | null;
   updated_at: string | null;
@@ -435,6 +456,9 @@ export interface CommerceConnectorDryRunRemediationTimeline {
   merchant_status: {
     visible_to_merchant: true;
     status: CommerceConnectorDryRunRemediationStatus;
+    triage_status?: CommerceConnectorDryRunRemediationTriageStatus | null;
+    merchant_followup_summary?: string | null;
+    triage_next_step?: string | null;
     corrected_dry_run_id: string | null;
     followup_review_id: string | null;
     next_step: string;
@@ -500,6 +524,20 @@ export interface CommerceConnectorDryRunFollowUpReviewResponse {
   corrected_dry_run: CommerceConnectorDryRunResult;
   followup_review: CommerceConnectorDryRunReview;
   audit_event_id: string | null;
+}
+
+export interface CommerceConnectorDryRunRemediationTriageResponse {
+  data: CommerceConnectorDryRunRemediation;
+  audit_event_id: string | null;
+  controls: CommerceConnectorDryRunRemediation['controls'] & {
+    credential_entry_enabled: false;
+    outbound_sync_enabled: false;
+    production_connector_setup_enabled: false;
+    provider_call_enabled: false;
+    merchant_private_api_calls_enabled: false;
+    triage_is_production_approval: false;
+    triage_enables_connector_execution: false;
+  };
 }
 
 export interface CommerceAgentFacingPreviewProductVariant {
@@ -1565,6 +1603,7 @@ export function getCommerceConnectorDryRunRemediation(
 export function listCommerceConnectorDryRunRemediations(params: {
   merchantId?: string;
   status?: CommerceConnectorDryRunRemediationStatus;
+  triageStatus?: CommerceConnectorDryRunRemediationTriageStatus;
   originalDecision?: 'needs_changes' | 'blocked';
   hasCorrectedDryRun?: boolean;
   hasFollowupReview?: boolean;
@@ -1583,6 +1622,7 @@ export function listCommerceConnectorDryRunRemediations(params: {
   }>(`/v1/commerce/connectors/remediations${qs({
     merchant_id: params.merchantId,
     status: params.status,
+    triage_status: params.triageStatus,
     original_decision: params.originalDecision,
     has_corrected_dry_run: params.hasCorrectedDryRun,
     has_followup_review: params.hasFollowupReview,
@@ -1596,6 +1636,29 @@ export function getCommerceConnectorDryRunRemediationTimeline(
 ): Promise<{ data: CommerceConnectorDryRunRemediationTimeline }> {
   return api.get<{ data: CommerceConnectorDryRunRemediationTimeline }>(
     `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/remediations/${encodeURIComponent(remediationId)}/timeline`,
+  );
+}
+
+export function recordCommerceConnectorDryRunRemediationTriage(
+  merchantId: string,
+  remediationId: string,
+  input: {
+    triageStatus: CommerceConnectorDryRunRemediationTriageStatus;
+    assignedOperatorId?: string;
+    triageNote?: string;
+    merchantFollowupSummary?: string;
+    nextStep?: string;
+  },
+): Promise<CommerceConnectorDryRunRemediationTriageResponse> {
+  return api.post<CommerceConnectorDryRunRemediationTriageResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/remediations/${encodeURIComponent(remediationId)}/triage`,
+    {
+      triage_status: input.triageStatus,
+      ...(input.assignedOperatorId ? { assigned_operator_id: input.assignedOperatorId } : {}),
+      ...(input.triageNote ? { triage_note: input.triageNote } : {}),
+      ...(input.merchantFollowupSummary ? { merchant_followup_summary: input.merchantFollowupSummary } : {}),
+      ...(input.nextStep ? { next_step: input.nextStep } : {}),
+    },
   );
 }
 

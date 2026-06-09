@@ -40,6 +40,7 @@ const mockRecordCommerceConnectorDryRunReviewDecision = vi.fn();
 const mockCreateCommerceConnectorDryRunRemediation = vi.fn();
 const mockAttachCommerceConnectorRemediationCorrectedDryRun = vi.fn();
 const mockRequestCommerceConnectorRemediationFollowUpReview = vi.fn();
+const mockRecordCommerceConnectorDryRunRemediationTriage = vi.fn();
 const mockListCommerceConnectorDryRunRemediations = vi.fn();
 const mockGetCommerceConnectorDryRunRemediationTimeline = vi.fn();
 const mockDisableMerchantAgenticCommerce = vi.fn();
@@ -91,6 +92,7 @@ vi.mock('../../api/commerce', () => ({
   createCommerceConnectorDryRunRemediation: (...a: unknown[]) => mockCreateCommerceConnectorDryRunRemediation(...a),
   attachCommerceConnectorRemediationCorrectedDryRun: (...a: unknown[]) => mockAttachCommerceConnectorRemediationCorrectedDryRun(...a),
   requestCommerceConnectorRemediationFollowUpReview: (...a: unknown[]) => mockRequestCommerceConnectorRemediationFollowUpReview(...a),
+  recordCommerceConnectorDryRunRemediationTriage: (...a: unknown[]) => mockRecordCommerceConnectorDryRunRemediationTriage(...a),
   listCommerceConnectorDryRunRemediations: (...a: unknown[]) => mockListCommerceConnectorDryRunRemediations(...a),
   getCommerceConnectorDryRunRemediationTimeline: (...a: unknown[]) => mockGetCommerceConnectorDryRunRemediationTimeline(...a),
   disableMerchantAgenticCommerce: (...a: unknown[]) => mockDisableMerchantAgenticCommerce(...a),
@@ -861,6 +863,19 @@ const connectorRemediation = {
     corrected_audit_event_id: null,
     followup_audit_event_id: null,
     closed_or_blocked_audit_event_id: null,
+    triage_audit_event_id: null,
+  },
+  triage: {
+    triage_status: null,
+    assigned_operator_id: null,
+    triage_note: null,
+    merchant_followup_summary: null,
+    next_step: null,
+    triaged_by_operator_id: null,
+    triaged_at: null,
+    triage_audit_event_id: null,
+    triage_is_production_approval: false as const,
+    triage_enables_connector_execution: false as const,
   },
   controls: {
     sandbox_only: true as const,
@@ -874,6 +889,8 @@ const connectorRemediation = {
     remediation_is_production_approval: false as const,
     remediation_enables_connector_execution: false as const,
     followup_ready_is_launch_approval: false as const,
+    triage_is_production_approval: false as const,
+    triage_enables_connector_execution: false as const,
   },
   created_at: '2026-01-01T00:44:00Z',
   updated_at: '2026-01-01T00:44:00Z',
@@ -899,6 +916,27 @@ const connectorRemediationFollowup = {
     followup_audit_event_id: 'caud_C6SG_FOLLOWUP_REQUESTED',
   },
   updated_at: '2026-01-01T00:51:30Z',
+};
+
+const connectorRemediationTriaged = {
+  ...connectorRemediationFollowup,
+  audit_references: {
+    ...connectorRemediationFollowup.audit_references,
+    triage_audit_event_id: 'caud_C6SIA_TRIAGE_RECORDED',
+  },
+  triage: {
+    triage_status: 'waiting_on_merchant' as const,
+    assigned_operator_id: 'ops.c6sib',
+    triage_note: 'Internal sandbox triage note must stay operator-only.',
+    merchant_followup_summary: 'Please rerun the sandbox dry-run after fixing category mapping.',
+    next_step: 'Attach the corrected sandbox dry-run evidence.',
+    triaged_by_operator_id: 'dev_TEST',
+    triaged_at: '2026-01-01T00:52:30Z',
+    triage_audit_event_id: 'caud_C6SIA_TRIAGE_RECORDED',
+    triage_is_production_approval: false as const,
+    triage_enables_connector_execution: false as const,
+  },
+  updated_at: '2026-01-01T00:52:30Z',
 };
 
 const connectorRemediationTimeline = {
@@ -995,6 +1033,53 @@ const connectorRemediationTimeline = {
     remediation_is_production_approval: false as const,
     remediation_enables_connector_execution: false as const,
     followup_ready_is_launch_approval: false as const,
+  },
+};
+
+const connectorRemediationTimelineTriaged = {
+  ...connectorRemediationTimeline,
+  remediation: connectorRemediationTriaged,
+  timeline: [
+    ...connectorRemediationTimeline.timeline,
+    {
+      sequence: 3,
+      key: 'operator_triage_recorded',
+      label: 'Operator triage recorded',
+      status: 'complete' as const,
+      event_type: 'connector_remediation_triage_recorded',
+      occurred_at: '2026-01-01T00:52:30Z',
+      audit_event_id: 'caud_C6SIA_TRIAGE_RECORDED',
+      actor: { kind: 'operator' as const, id: 'dev_TEST' },
+      resource_references: {
+        remediation_id: 'cdrem_C6SG',
+        original_dry_run_id: 'cdry_C6SB',
+        original_review_id: 'cdrev_C6SB',
+        corrected_dry_run_id: 'cdry_C6SF_CORRECTED',
+        followup_review_id: 'cdrev_C6SF_FOLLOWUP',
+      },
+      evidence_summary: {
+        triage_status: 'waiting_on_merchant',
+        assigned_operator_id_present: true,
+        triage_note_present: true,
+        merchant_followup_summary_present: true,
+        next_step_present: true,
+        triage_is_production_approval: false,
+        triage_enables_connector_execution: false,
+      },
+      redaction: {
+        raw_connector_rows_included: false as const,
+        credentials_included: false as const,
+        provider_metadata_included: false as const,
+        merchant_private_api_payload_included: false as const,
+        production_config_values_included: false as const,
+      },
+    },
+  ],
+  merchant_status: {
+    ...connectorRemediationTimeline.merchant_status,
+    triage_status: 'waiting_on_merchant' as const,
+    merchant_followup_summary: 'Please rerun the sandbox dry-run after fixing category mapping.',
+    triage_next_step: 'Attach the corrected sandbox dry-run evidence.',
   },
 };
 
@@ -1474,6 +1559,20 @@ describe('CommerceOnboarding', () => {
       followup_review: connectorReviewFollowup,
       audit_event_id: 'caud_C6SG_FOLLOWUP_REQUESTED',
     });
+    mockRecordCommerceConnectorDryRunRemediationTriage.mockResolvedValue({
+      data: connectorRemediationTriaged,
+      audit_event_id: 'caud_C6SIA_TRIAGE_RECORDED',
+      controls: {
+        sandbox_only: true,
+        credential_entry_enabled: false,
+        outbound_sync_enabled: false,
+        production_connector_setup_enabled: false,
+        provider_call_enabled: false,
+        merchant_private_api_calls_enabled: false,
+        triage_is_production_approval: false,
+        triage_enables_connector_execution: false,
+      },
+    });
     mockListCommerceConnectorDryRunRemediations.mockResolvedValue({
       items: [{
         ...connectorRemediationFollowup,
@@ -1639,9 +1738,9 @@ describe('CommerceOnboarding', () => {
     )).length).toBeGreaterThan(0);
     expect(screen.getByText('No credential entry')).toBeInTheDocument();
     expect(screen.getByText('Outbound sync off')).toBeInTheDocument();
-    expect(screen.getByText('credential_entry_enabled')).toBeInTheDocument();
-    expect(screen.getByText('outbound_sync_enabled')).toBeInTheDocument();
-    expect(screen.getByText('production_connector_setup')).toBeInTheDocument();
+    expect(screen.getAllByText('credential_entry_enabled').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('outbound_sync_enabled').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('production_connector_setup').length).toBeGreaterThan(0);
     expect(screen.getByText('merchant_private_api_calls')).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
     expect(screen.getByText('Rows parsed: 1')).toBeInTheDocument();
@@ -1798,6 +1897,9 @@ describe('CommerceOnboarding', () => {
   });
 
   it('loads persisted remediation queue and redacted timeline without connector execution controls', async () => {
+    mockGetCommerceConnectorDryRunRemediationTimeline
+      .mockResolvedValueOnce({ data: connectorRemediationTimeline })
+      .mockResolvedValueOnce({ data: connectorRemediationTimelineTriaged });
     const user = userEvent.setup();
     r(<CommerceOnboarding />);
 
@@ -1806,17 +1908,19 @@ describe('CommerceOnboarding', () => {
     await waitFor(() => expect(screen.getByText('Persisted remediation queue')).toBeInTheDocument());
 
     await user.selectOptions(screen.getByLabelText('Remediation status filter'), 'followup_review_requested');
+    await user.selectOptions(screen.getByLabelText('Triage status filter'), 'waiting_on_merchant');
     await user.click(screen.getByRole('button', { name: 'Load remediation queue' }));
     await waitFor(() => expect(mockListCommerceConnectorDryRunRemediations).toHaveBeenCalledWith({
       merchantId: 'mch_1',
       status: 'followup_review_requested',
+      triageStatus: 'waiting_on_merchant',
       limit: 10,
     }));
     expect(screen.getAllByText('cdrem_C6SG').length).toBeGreaterThan(0);
     expect(screen.getByText('operator_followup_required')).toBeInTheDocument();
     expect(screen.getAllByText('public_discovery_enabled').length).toBeGreaterThan(0);
     expect(screen.getAllByText('checkout_payment_enabled').length).toBeGreaterThan(0);
-    expect(screen.getByText('merchant_private_api_calls_enabled')).toBeInTheDocument();
+    expect(screen.getAllByText('merchant_private_api_calls_enabled').length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('button', { name: 'View timeline' }));
     await waitFor(() => expect(mockGetCommerceConnectorDryRunRemediationTimeline).toHaveBeenCalledWith('mch_1', 'cdrem_C6SG'));
@@ -1827,9 +1931,38 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('followup_ready_is_launch_approval')).toBeInTheDocument();
     expect(screen.getByText('connector_remediation_requested')).toBeInTheDocument();
     expect(screen.getByText('connector_remediation_followup_review_requested')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Triage status'), 'waiting_on_merchant');
+    await user.type(screen.getByLabelText('Assigned operator reference'), 'ops.c6sib');
+    await user.type(screen.getByLabelText('Internal triage note'), 'Internal sandbox triage note must stay operator-only.');
+    await user.type(screen.getByLabelText('Merchant-visible follow-up summary'), 'Please rerun the sandbox dry-run after fixing category mapping.');
+    await user.type(screen.getByLabelText('Triage next step'), 'Attach the corrected sandbox dry-run evidence.');
+    await user.click(screen.getByRole('button', { name: 'Record operator triage' }));
+    await waitFor(() => expect(mockRecordCommerceConnectorDryRunRemediationTriage).toHaveBeenCalledWith('mch_1', 'cdrem_C6SG', {
+      triageStatus: 'waiting_on_merchant',
+      assignedOperatorId: 'ops.c6sib',
+      triageNote: 'Internal sandbox triage note must stay operator-only.',
+      merchantFollowupSummary: 'Please rerun the sandbox dry-run after fixing category mapping.',
+      nextStep: 'Attach the corrected sandbox dry-run evidence.',
+    }));
+    await waitFor(() => expect(mockGetCommerceConnectorDryRunRemediationTimeline).toHaveBeenCalledTimes(2));
+    expect(screen.getByText('connector_remediation_triage_recorded')).toBeInTheDocument();
+    expect(screen.getAllByText((_content, node) => (
+      node?.textContent?.includes('caud_C6SIA_TRIAGE_RECORDED') === true
+      && node.childElementCount === 0
+    )).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('waiting_on_merchant').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Please rerun the sandbox dry-run after fixing category mapping.').length).toBeGreaterThan(0);
+    expect(screen.getByText('triage_is_production_approval')).toBeInTheDocument();
+    expect(screen.getAllByText((_content, node) => (
+      node?.textContent?.includes('triage_enables_connector_execution: false') === true
+      && node.childElementCount === 0
+    )).length).toBeGreaterThan(0);
+    expect(mockShow).toHaveBeenCalledWith('Connector triage saved or already current', 'success');
     expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
     expect(screen.queryByText('production connector setup enabled')).not.toBeInTheDocument();
     expect(screen.queryByText('outbound connector sync enabled')).not.toBeInTheDocument();
+    expect(screen.queryByText('public discovery enabled')).not.toBeInTheDocument();
   });
 
   it('rehearses remediation loop from needs-changes to corrected sandbox follow-up', async () => {
