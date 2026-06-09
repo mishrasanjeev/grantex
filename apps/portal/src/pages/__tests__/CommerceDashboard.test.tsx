@@ -1083,6 +1083,31 @@ const connectorRemediationTimelineTriaged = {
   },
 };
 
+const connectorRemediationStaleConflict = {
+  ...connectorRemediationTriaged,
+  warning_summary: [
+    {
+      code: 'last_sync_stale',
+      message: 'Stale source conflict detected in sandbox evidence.',
+    },
+  ],
+  triage: {
+    ...connectorRemediationTriaged.triage,
+    merchant_followup_summary: 'Resolve stale source conflict in sandbox evidence before follow-up.',
+    next_step: 'Refresh the local sandbox snapshot and rerun the dry-run.',
+  },
+};
+
+const connectorRemediationTimelineStaleConflict = {
+  ...connectorRemediationTimelineTriaged,
+  remediation: connectorRemediationStaleConflict,
+  merchant_status: {
+    ...connectorRemediationTimelineTriaged.merchant_status,
+    merchant_followup_summary: 'Resolve stale source conflict in sandbox evidence before follow-up.',
+    triage_next_step: 'Refresh the local sandbox snapshot and rerun the dry-run.',
+  },
+};
+
 const connectorDryRunCorrected = {
   ...connectorDryRun,
   dry_run_id: 'cdry_C6SF_CORRECTED',
@@ -1975,6 +2000,24 @@ describe('CommerceOnboarding', () => {
     expect(within(rehearsalStatus).getByText('production_approval')).toBeInTheDocument();
     expect(within(rehearsalStatus).getAllByText('false').length).toBeGreaterThanOrEqual(3);
     expect(within(rehearsalStatus).queryByText('Internal sandbox triage note must stay operator-only.')).not.toBeInTheDocument();
+    const reconciliationSummary = screen.getByTestId('connector-triage-reconciliation-summary');
+    expect(within(reconciliationSummary).getByText('Operator/merchant evidence reconciliation')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('aligned')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('queue_timeline_triage_status')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('backend_timeline_triage_status')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('rehearsal_timeline_triage_status')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('merchant_guidance_consistency')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getAllByText('redacted_audit_reference_continuity').length).toBeGreaterThan(0);
+    expect(within(reconciliationSummary).getByText('stale_conflict_followup_guidance')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('none')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('caud_C6SG_REMEDIATION_REQUESTED')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('caud_C6SG_CORRECTED_ATTACHED')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('caud_C6SG_FOLLOWUP_REQUESTED')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('caud_C6SIA_TRIAGE_RECORDED')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('connector_execution_enabled')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('production_approval')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getAllByText('false').length).toBeGreaterThanOrEqual(2);
+    expect(within(reconciliationSummary).queryByText('Internal sandbox triage note must stay operator-only.')).not.toBeInTheDocument();
     expect(mockShow).toHaveBeenCalledWith('Connector triage saved or already current', 'success');
 
     await user.click(screen.getByRole('button', { name: 'Record operator triage' }));
@@ -1985,10 +2028,79 @@ describe('CommerceOnboarding', () => {
     expect(within(duplicateStatus).getByText('saved_or_already_current')).toBeInTheDocument();
     expect(within(duplicateStatus).getByText('caud_C6SIA_TRIAGE_RECORDED')).toBeInTheDocument();
     expect(within(duplicateStatus).queryByText('Internal sandbox triage note must stay operator-only.')).not.toBeInTheDocument();
+    const duplicateReconciliation = screen.getByTestId('connector-triage-reconciliation-summary');
+    expect(within(duplicateReconciliation).getByText('aligned')).toBeInTheDocument();
+    expect(within(duplicateReconciliation).getByText('none')).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
     expect(screen.queryByText('production connector setup enabled')).not.toBeInTheDocument();
     expect(screen.queryByText('outbound connector sync enabled')).not.toBeInTheDocument();
     expect(screen.queryByText('public discovery enabled')).not.toBeInTheDocument();
+  }, 10000);
+
+  it('flags stale or conflicting follow-up guidance as a sandbox blocker only', async () => {
+    mockGetCommerceConnectorDryRunRemediationTimeline.mockReset();
+    mockListCommerceConnectorDryRunRemediations.mockResolvedValueOnce({
+      items: [{
+        ...connectorRemediationStaleConflict,
+        queue: {
+          operator_queue_status: 'followup_review_requested' as const,
+          merchant_visible_status: 'followup_review_requested' as const,
+          requires_corrected_dry_run: false,
+          requires_operator_followup: true,
+          timeline_available: true as const,
+          evidence_redacted: true as const,
+        },
+        summary: {
+          blocker_count: 0,
+          warning_count: 1,
+          corrected_dry_run_attached: true,
+          followup_review_requested: true,
+          last_audit_event_id: 'caud_C6SIA_TRIAGE_RECORDED',
+        },
+      }],
+      next_cursor: null,
+      filters: { merchant_id: 'mch_1' },
+      controls: {
+        sandbox_only: true,
+        public_discovery_enabled: false,
+        checkout_payment_enabled: false,
+        live_provider_enabled: false,
+        live_plural_enabled: false,
+      },
+    });
+    mockGetCommerceConnectorDryRunRemediationTimeline.mockResolvedValueOnce({
+      data: connectorRemediationTimelineStaleConflict,
+    });
+    const user = userEvent.setup();
+    r(<CommerceOnboarding />);
+
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
+    await waitFor(() => expect(screen.getByText('Persisted remediation queue')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Load remediation queue' }));
+    await waitFor(() => expect(screen.getByText('Resolve stale source conflict in sandbox evidence before follow-up.')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'View timeline' }));
+    await waitFor(() => expect(mockGetCommerceConnectorDryRunRemediationTimeline).toHaveBeenCalledWith('mch_1', 'cdrem_C6SG'));
+
+    const merchantGuidance = screen.getByTestId('connector-merchant-followup-guidance');
+    expect(within(merchantGuidance).getByText('Resolve stale source conflict in sandbox evidence before follow-up.')).toBeInTheDocument();
+    expect(within(merchantGuidance).getByText('Next step: Refresh the local sandbox snapshot and rerun the dry-run.')).toBeInTheDocument();
+    expect(within(merchantGuidance).queryByText('Internal sandbox triage note must stay operator-only.')).not.toBeInTheDocument();
+
+    const reconciliationSummary = screen.getByTestId('connector-triage-reconciliation-summary');
+    expect(within(reconciliationSummary).getByText('Operator/merchant evidence reconciliation')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getAllByText('blocked').length).toBeGreaterThan(0);
+    expect(within(reconciliationSummary).getByText('stale_conflict_followup_guidance')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('sandbox_blocker_only')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('Stale or conflicting follow-up guidance is a sandbox blocker only; it is not approval or connector execution readiness.')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('connector_execution_enabled')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getByText('production_approval')).toBeInTheDocument();
+    expect(within(reconciliationSummary).getAllByText('false').length).toBeGreaterThanOrEqual(2);
+    expect(within(reconciliationSummary).queryByText('Internal sandbox triage note must stay operator-only.')).not.toBeInTheDocument();
+    expect(screen.queryByText('connector execution ready')).not.toBeInTheDocument();
+    expect(screen.queryByText('production approval enabled')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
   });
 
   it('rehearses remediation loop from needs-changes to corrected sandbox follow-up', async () => {
