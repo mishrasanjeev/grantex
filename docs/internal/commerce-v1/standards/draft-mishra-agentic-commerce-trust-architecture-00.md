@@ -589,6 +589,8 @@ References are placeholders for later public-safe review.
   citation.
 - AP2-style evidence references, if public-safe and cleared for citation.
 - MCP/native API references, if public-safe and cleared for citation.
+- C6Tc public-safe example corpus references, if legal/security review clears
+  them for future external draft use.
 
 ## Appendix A. Internal Draft-Preparation Checklist
 
