@@ -1108,6 +1108,195 @@ const connectorRemediationTimelineStaleConflict = {
   },
 };
 
+const connectorRemediationFollowupReady = {
+  ...connectorRemediationTriaged,
+  status: 'followup_ready' as const,
+  triage: {
+    ...connectorRemediationTriaged.triage,
+    triage_status: 'ready_for_followup_review' as const,
+    merchant_followup_summary: 'Sandbox follow-up is ready for internal operator closure only.',
+    next_step: 'Review remaining launch blockers before any separate production approval request.',
+  },
+  updated_at: '2026-01-01T00:55:00Z',
+};
+
+const connectorRemediationTimelineFollowupReady = {
+  ...connectorRemediationTimelineTriaged,
+  remediation: connectorRemediationFollowupReady,
+  timeline: [
+    ...connectorRemediationTimelineTriaged.timeline,
+    {
+      sequence: 4,
+      key: 'followup_ready',
+      label: 'Sandbox follow-up ready',
+      status: 'complete' as const,
+      event_type: 'connector_dry_run_review_decision_recorded',
+      occurred_at: '2026-01-01T00:55:00Z',
+      audit_event_id: 'caud_C6SIE_FOLLOWUP_DECISION',
+      actor: { kind: null, id: null },
+      resource_references: {
+        remediation_id: 'cdrem_C6SG',
+        original_dry_run_id: 'cdry_C6SB',
+        original_review_id: 'cdrev_C6SB',
+        corrected_dry_run_id: 'cdry_C6SF_CORRECTED',
+        followup_review_id: 'cdrev_C6SF_FOLLOWUP',
+      },
+      evidence_summary: {
+        remediation_status: 'followup_ready',
+        followup_review_decision: 'accepted_for_sandbox_followup',
+        followup_ready_is_launch_approval: false,
+        production_approval_granted: false,
+      },
+      redaction: {
+        raw_connector_rows_included: false as const,
+        credentials_included: false as const,
+        provider_metadata_included: false as const,
+        merchant_private_api_payload_included: false as const,
+        production_config_values_included: false as const,
+      },
+    },
+  ],
+  operator_queue: {
+    ...connectorRemediationTimelineTriaged.operator_queue,
+    queue_status: 'followup_ready' as const,
+    requires_operator_followup: false,
+  },
+  merchant_status: {
+    ...connectorRemediationTimelineTriaged.merchant_status,
+    status: 'followup_ready' as const,
+    triage_status: 'ready_for_followup_review' as const,
+    merchant_followup_summary: 'Sandbox follow-up is ready for internal operator closure only.',
+    triage_next_step: 'Review remaining launch blockers before any separate production approval request.',
+    next_step: 'review_status_with_operator',
+  },
+};
+
+const connectorRemediationBlockedAgain = {
+  ...connectorRemediationFollowupReady,
+  status: 'blocked_again' as const,
+  triage: {
+    ...connectorRemediationFollowupReady.triage,
+    triage_status: 'blocked_for_sandbox_followup' as const,
+    merchant_followup_summary: 'Follow-up remains blocked in sandbox evidence.',
+    next_step: 'Correct the sandbox blocker and rerun the local dry-run.',
+  },
+  updated_at: '2026-01-01T00:56:00Z',
+};
+
+const connectorRemediationTimelineBlockedAgain = {
+  ...connectorRemediationTimelineFollowupReady,
+  remediation: connectorRemediationBlockedAgain,
+  timeline: [
+    ...connectorRemediationTimelineTriaged.timeline,
+    {
+      sequence: 4,
+      key: 'blocked_again',
+      label: 'Follow-up blocked or closed',
+      status: 'blocked' as const,
+      event_type: 'connector_dry_run_review_decision_recorded',
+      occurred_at: '2026-01-01T00:56:00Z',
+      audit_event_id: 'caud_C6SIE_BLOCKED_AGAIN_DECISION',
+      actor: { kind: null, id: null },
+      resource_references: {
+        remediation_id: 'cdrem_C6SG',
+        original_dry_run_id: 'cdry_C6SB',
+        original_review_id: 'cdrev_C6SB',
+        corrected_dry_run_id: 'cdry_C6SF_CORRECTED',
+        followup_review_id: 'cdrev_C6SF_FOLLOWUP',
+      },
+      evidence_summary: {
+        remediation_status: 'blocked_again',
+        followup_review_decision: 'blocked',
+        followup_ready_is_launch_approval: false,
+        production_approval_granted: false,
+      },
+      redaction: {
+        raw_connector_rows_included: false as const,
+        credentials_included: false as const,
+        provider_metadata_included: false as const,
+        merchant_private_api_payload_included: false as const,
+        production_config_values_included: false as const,
+      },
+    },
+  ],
+  operator_queue: {
+    ...connectorRemediationTimelineFollowupReady.operator_queue,
+    queue_status: 'blocked_again' as const,
+  },
+  merchant_status: {
+    ...connectorRemediationTimelineFollowupReady.merchant_status,
+    status: 'blocked_again' as const,
+    triage_status: 'blocked_for_sandbox_followup' as const,
+    merchant_followup_summary: 'Follow-up remains blocked in sandbox evidence.',
+    triage_next_step: 'Correct the sandbox blocker and rerun the local dry-run.',
+  },
+};
+
+const connectorRemediationClosedNoAction = {
+  ...connectorRemediationFollowupReady,
+  status: 'closed_no_action' as const,
+  audit_references: {
+    ...connectorRemediationFollowupReady.audit_references,
+    closed_or_blocked_audit_event_id: 'caud_C6SIE_CLOSED_NO_ACTION',
+  },
+  triage: {
+    ...connectorRemediationFollowupReady.triage,
+    triage_status: 'closed_no_action' as const,
+    merchant_followup_summary: 'Sandbox follow-up is closed with no production action.',
+    next_step: 'Open a new sandbox remediation if evidence changes.',
+  },
+  updated_at: '2026-01-01T00:57:00Z',
+};
+
+const connectorRemediationTimelineClosedNoAction = {
+  ...connectorRemediationTimelineFollowupReady,
+  remediation: connectorRemediationClosedNoAction,
+  timeline: [
+    ...connectorRemediationTimelineTriaged.timeline,
+    {
+      sequence: 4,
+      key: 'closed_no_action',
+      label: 'Follow-up blocked or closed',
+      status: 'blocked' as const,
+      event_type: 'connector_remediation_closed_or_blocked',
+      occurred_at: '2026-01-01T00:57:00Z',
+      audit_event_id: 'caud_C6SIE_CLOSED_NO_ACTION',
+      actor: { kind: null, id: null },
+      resource_references: {
+        remediation_id: 'cdrem_C6SG',
+        original_dry_run_id: 'cdry_C6SB',
+        original_review_id: 'cdrev_C6SB',
+        corrected_dry_run_id: 'cdry_C6SF_CORRECTED',
+        followup_review_id: 'cdrev_C6SF_FOLLOWUP',
+      },
+      evidence_summary: {
+        remediation_status: 'closed_no_action',
+        followup_review_decision: null,
+        followup_ready_is_launch_approval: false,
+        production_approval_granted: false,
+      },
+      redaction: {
+        raw_connector_rows_included: false as const,
+        credentials_included: false as const,
+        provider_metadata_included: false as const,
+        merchant_private_api_payload_included: false as const,
+        production_config_values_included: false as const,
+      },
+    },
+  ],
+  operator_queue: {
+    ...connectorRemediationTimelineFollowupReady.operator_queue,
+    queue_status: 'closed_no_action' as const,
+  },
+  merchant_status: {
+    ...connectorRemediationTimelineFollowupReady.merchant_status,
+    status: 'closed_no_action' as const,
+    triage_status: 'closed_no_action' as const,
+    merchant_followup_summary: 'Sandbox follow-up is closed with no production action.',
+    triage_next_step: 'Open a new sandbox remediation if evidence changes.',
+  },
+};
+
 const connectorDryRunCorrected = {
   ...connectorDryRun,
   dry_run_id: 'cdry_C6SF_CORRECTED',
@@ -2031,6 +2220,28 @@ describe('CommerceOnboarding', () => {
     const duplicateReconciliation = screen.getByTestId('connector-triage-reconciliation-summary');
     expect(within(duplicateReconciliation).getByText('aligned')).toBeInTheDocument();
     expect(within(duplicateReconciliation).getByText('none')).toBeInTheDocument();
+    const closureAssessment = screen.getByTestId('connector-followup-closure-gap-assessment');
+    expect(within(closureAssessment).getByText('Follow-up closure and launch-readiness gap assessment')).toBeInTheDocument();
+    expect(within(closureAssessment).getAllByText('waiting_for_operator_followup').length).toBeGreaterThan(0);
+    expect(within(closureAssessment).getByText('operator_closure_status_recorded')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('redacted_decision_audit_continuity')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('remaining_launch_blocker_matrix')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('launch_approval')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('public_discovery_approval')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('checkout_payment_approval')).toBeInTheDocument();
+    expect(within(closureAssessment).getAllByText('false').length).toBeGreaterThanOrEqual(4);
+    const launchBlockers = screen.getByTestId('connector-launch-blocker-matrix');
+    expect(within(launchBlockers).getByText('Grantex public discovery')).toBeInTheDocument();
+    expect(within(launchBlockers).getByText('AgenticOrg public commerce discovery')).toBeInTheDocument();
+    expect(within(launchBlockers).getByText('Production Commerce V1')).toBeInTheDocument();
+    expect(within(launchBlockers).getByText('Checkout/payment creation')).toBeInTheDocument();
+    expect(within(launchBlockers).getByText('Live providers, live Plural, and live payments')).toBeInTheDocument();
+    expect(within(launchBlockers).getByText('Connector credentials')).toBeInTheDocument();
+    expect(within(launchBlockers).getByText('Outbound connector sync')).toBeInTheDocument();
+    expect(within(launchBlockers).getByText('Merchant private API execution')).toBeInTheDocument();
+    expect(within(launchBlockers).getByText('Production allowlists')).toBeInTheDocument();
+    expect(within(launchBlockers).getByText('Public protocol publication')).toBeInTheDocument();
+    expect(within(launchBlockers).getByText('Certification claims')).toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
     expect(screen.queryByText('production connector setup enabled')).not.toBeInTheDocument();
     expect(screen.queryByText('outbound connector sync enabled')).not.toBeInTheDocument();
@@ -2098,8 +2309,178 @@ describe('CommerceOnboarding', () => {
     expect(within(reconciliationSummary).getByText('production_approval')).toBeInTheDocument();
     expect(within(reconciliationSummary).getAllByText('false').length).toBeGreaterThanOrEqual(2);
     expect(within(reconciliationSummary).queryByText('Internal sandbox triage note must stay operator-only.')).not.toBeInTheDocument();
+    const closureAssessment = screen.getByTestId('connector-followup-closure-gap-assessment');
+    expect(within(closureAssessment).getAllByText('sandbox_blocker').length).toBeGreaterThan(0);
+    expect(within(closureAssessment).getByText('stale_conflict_closure_guidance')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('sandbox_blocker_only')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('Stale or conflicting closure guidance is a sandbox blocker only; it is not launch readiness.')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('connector_execution_enabled')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('production_approval')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('launch_approval')).toBeInTheDocument();
+    expect(within(closureAssessment).getAllByText('false').length).toBeGreaterThanOrEqual(3);
     expect(screen.queryByText('connector execution ready')).not.toBeInTheDocument();
     expect(screen.queryByText('production approval enabled')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
+  });
+
+  it('shows follow-up ready closure with launch blockers and no approval semantics', async () => {
+    mockListCommerceConnectorDryRunRemediations.mockResolvedValueOnce({
+      items: [{
+        ...connectorRemediationFollowupReady,
+        queue: {
+          operator_queue_status: 'followup_ready' as const,
+          merchant_visible_status: 'followup_ready' as const,
+          requires_corrected_dry_run: false,
+          requires_operator_followup: false,
+          timeline_available: true as const,
+          evidence_redacted: true as const,
+        },
+        summary: {
+          blocker_count: 0,
+          warning_count: 0,
+          corrected_dry_run_attached: true,
+          followup_review_requested: true,
+          last_audit_event_id: 'caud_C6SIE_FOLLOWUP_DECISION',
+        },
+      }],
+      next_cursor: null,
+      filters: { merchant_id: 'mch_1' },
+      controls: {
+        sandbox_only: true,
+        public_discovery_enabled: false,
+        checkout_payment_enabled: false,
+        live_provider_enabled: false,
+        live_plural_enabled: false,
+      },
+    });
+    mockGetCommerceConnectorDryRunRemediationTimeline.mockResolvedValueOnce({
+      data: connectorRemediationTimelineFollowupReady,
+    });
+    const user = userEvent.setup();
+    r(<CommerceOnboarding />);
+
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
+    await waitFor(() => expect(screen.getByText('Persisted remediation queue')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Load remediation queue' }));
+    await waitFor(() => expect(screen.getAllByText('followup_ready').length).toBeGreaterThan(0));
+    await user.click(screen.getByRole('button', { name: 'View timeline' }));
+    await waitFor(() => expect(screen.getByTestId('connector-followup-closure-gap-assessment')).toBeInTheDocument());
+
+    const closureAssessment = screen.getByTestId('connector-followup-closure-gap-assessment');
+    expect(within(closureAssessment).getAllByText('followup_closure_ready').length).toBeGreaterThan(0);
+    expect(within(closureAssessment).getByText('caud_C6SIE_FOLLOWUP_DECISION')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('redacted_decision_audit_continuity')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText((_content, node) => (
+      node?.textContent === 'Next step: Review remaining launch blockers before requesting any separate production approval.'
+    ))).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('launch_approval')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('public_discovery_approval')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('checkout_payment_approval')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('connector_execution_enabled')).toBeInTheDocument();
+    expect(within(closureAssessment).getAllByText('false').length).toBeGreaterThanOrEqual(4);
+    expect(within(closureAssessment).queryByText('Internal sandbox triage note must stay operator-only.')).not.toBeInTheDocument();
+    expect(screen.queryByText('launch approval enabled')).not.toBeInTheDocument();
+    expect(screen.queryByText('checkout payment approval enabled')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
+  });
+
+  it('shows blocked-again and closed-no-action closure states as non-enabling', async () => {
+    mockListCommerceConnectorDryRunRemediations.mockResolvedValueOnce({
+      items: [{
+        ...connectorRemediationBlockedAgain,
+        queue: {
+          operator_queue_status: 'blocked_again' as const,
+          merchant_visible_status: 'blocked_again' as const,
+          requires_corrected_dry_run: false,
+          requires_operator_followup: false,
+          timeline_available: true as const,
+          evidence_redacted: true as const,
+        },
+        summary: {
+          blocker_count: 1,
+          warning_count: 0,
+          corrected_dry_run_attached: true,
+          followup_review_requested: true,
+          last_audit_event_id: 'caud_C6SIE_BLOCKED_AGAIN_DECISION',
+        },
+      }],
+      next_cursor: null,
+      filters: { merchant_id: 'mch_1' },
+      controls: {
+        sandbox_only: true,
+        public_discovery_enabled: false,
+        checkout_payment_enabled: false,
+        live_provider_enabled: false,
+        live_plural_enabled: false,
+      },
+    });
+    mockGetCommerceConnectorDryRunRemediationTimeline.mockResolvedValueOnce({
+      data: connectorRemediationTimelineBlockedAgain,
+    });
+    const user = userEvent.setup();
+    r(<CommerceOnboarding />);
+
+    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
+    await waitFor(() => expect(screen.getByText('Persisted remediation queue')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Load remediation queue' }));
+    await waitFor(() => expect(screen.getAllByText('blocked_again').length).toBeGreaterThan(0));
+    await user.click(screen.getByRole('button', { name: 'View timeline' }));
+    await waitFor(() => expect(screen.getByTestId('connector-followup-closure-gap-assessment')).toBeInTheDocument());
+    let closureAssessment = screen.getByTestId('connector-followup-closure-gap-assessment');
+    expect(within(closureAssessment).getAllByText('blocked_again').length).toBeGreaterThan(0);
+    expect(within(closureAssessment).getByText('caud_C6SIE_BLOCKED_AGAIN_DECISION')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('connector_execution_enabled')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('production_approval')).toBeInTheDocument();
+    expect(within(closureAssessment).getAllByText('false').length).toBeGreaterThanOrEqual(2);
+
+    mockListCommerceConnectorDryRunRemediations.mockResolvedValueOnce({
+      items: [{
+        ...connectorRemediationClosedNoAction,
+        queue: {
+          operator_queue_status: 'closed_no_action' as const,
+          merchant_visible_status: 'closed_no_action' as const,
+          requires_corrected_dry_run: false,
+          requires_operator_followup: false,
+          timeline_available: true as const,
+          evidence_redacted: true as const,
+        },
+        summary: {
+          blocker_count: 0,
+          warning_count: 0,
+          corrected_dry_run_attached: true,
+          followup_review_requested: true,
+          last_audit_event_id: 'caud_C6SIE_CLOSED_NO_ACTION',
+        },
+      }],
+      next_cursor: null,
+      filters: { merchant_id: 'mch_1' },
+      controls: {
+        sandbox_only: true,
+        public_discovery_enabled: false,
+        checkout_payment_enabled: false,
+        live_provider_enabled: false,
+        live_plural_enabled: false,
+      },
+    });
+    mockGetCommerceConnectorDryRunRemediationTimeline.mockResolvedValueOnce({
+      data: connectorRemediationTimelineClosedNoAction,
+    });
+    await user.click(screen.getByRole('button', { name: 'Load remediation queue' }));
+    await waitFor(() => expect(screen.getAllByText('closed_no_action').length).toBeGreaterThan(0));
+    await user.click(screen.getByRole('button', { name: 'View timeline' }));
+    await waitFor(() => expect(screen.getByText('caud_C6SIE_CLOSED_NO_ACTION')).toBeInTheDocument());
+    closureAssessment = screen.getByTestId('connector-followup-closure-gap-assessment');
+    expect(within(closureAssessment).getAllByText('closed_no_action').length).toBeGreaterThan(0);
+    expect(within(closureAssessment).getByText('Sandbox follow-up is closed with no production action.')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('launch_approval')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('public_discovery_approval')).toBeInTheDocument();
+    expect(within(closureAssessment).getByText('checkout_payment_approval')).toBeInTheDocument();
+    expect(within(closureAssessment).getAllByText('false').length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText('production approval enabled')).not.toBeInTheDocument();
+    expect(screen.queryByText('connector execution ready')).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
   });
 

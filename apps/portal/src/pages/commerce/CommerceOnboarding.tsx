@@ -472,6 +472,12 @@ interface ConnectorTriageRehearsalStatus {
 }
 
 type ConnectorTriageReconciliationStatus = 'aligned' | 'warning' | 'blocked';
+type ConnectorFollowupClosureStatus =
+  | 'waiting_for_operator_followup'
+  | 'followup_closure_ready'
+  | 'blocked_again'
+  | 'closed_no_action'
+  | 'sandbox_blocker';
 
 interface ConnectorTriageReconciliationCheck {
   key: string;
@@ -502,6 +508,115 @@ interface ConnectorTriageEvidenceReconciliation {
   production_approval: false;
   connector_execution_enabled: false;
 }
+
+interface ConnectorFollowupClosureGapCheck {
+  key: string;
+  label: string;
+  status: 'pass' | 'warning' | 'blocked';
+  detail: string;
+}
+
+interface ConnectorLaunchReadinessBlocker {
+  key: string;
+  label: string;
+  status: 'blocked';
+  detail: string;
+}
+
+interface ConnectorFollowupClosureGapAssessment {
+  status: ConnectorFollowupClosureStatus;
+  remediation_id: string;
+  remediation_status: CommerceConnectorDryRunRemediationStatus;
+  triage_status: CommerceConnectorDryRunRemediationTriageStatus | null;
+  merchant_closure_summary: string;
+  merchant_next_step: string;
+  audit_references: {
+    requested_audit_event_id: string | null;
+    corrected_audit_event_id: string | null;
+    followup_audit_event_id: string | null;
+    triage_audit_event_id: string | null;
+    decision_or_closure_audit_event_id: string | null;
+  };
+  redacted_decision_audit_continuity: boolean;
+  stale_conflict_closure_guidance: boolean;
+  stale_conflict_handling: 'none' | 'sandbox_blocker_only';
+  checks: ConnectorFollowupClosureGapCheck[];
+  remaining_launch_blockers: ConnectorLaunchReadinessBlocker[];
+  production_approval: false;
+  launch_approval: false;
+  public_discovery_approval: false;
+  checkout_payment_approval: false;
+  connector_execution_enabled: false;
+}
+
+const connectorRemainingLaunchBlockers: ConnectorLaunchReadinessBlocker[] = [
+  {
+    key: 'public_discovery_blocked',
+    label: 'Grantex public discovery',
+    status: 'blocked',
+    detail: 'Requires a separate public discovery approval and remains off in this sandbox closure assessment.',
+  },
+  {
+    key: 'agenticorg_public_commerce_discovery_blocked',
+    label: 'AgenticOrg public commerce discovery',
+    status: 'blocked',
+    detail: 'AgenticOrg continues to consume Grantex preview surfaces only; public commerce discovery remains blocked.',
+  },
+  {
+    key: 'production_commerce_v1_blocked',
+    label: 'Production Commerce V1',
+    status: 'blocked',
+    detail: 'Sandbox remediation closure is not production Commerce V1 enablement.',
+  },
+  {
+    key: 'checkout_payment_blocked',
+    label: 'Checkout/payment creation',
+    status: 'blocked',
+    detail: 'Checkout and payment creation remain disabled and require separate approval.',
+  },
+  {
+    key: 'live_provider_blocked',
+    label: 'Live providers, live Plural, and live payments',
+    status: 'blocked',
+    detail: 'Live payment providers, live Plural, and live payment execution remain blocked.',
+  },
+  {
+    key: 'credentials_blocked',
+    label: 'Connector credentials',
+    status: 'blocked',
+    detail: 'No credential entry or credential storage is introduced by this closure assessment.',
+  },
+  {
+    key: 'outbound_sync_blocked',
+    label: 'Outbound connector sync',
+    status: 'blocked',
+    detail: 'Outbound sync and production connector setup remain blocked.',
+  },
+  {
+    key: 'merchant_private_api_execution_blocked',
+    label: 'Merchant private API execution',
+    status: 'blocked',
+    detail: 'Neither Grantex nor AgenticOrg may execute merchant private APIs from this sandbox evidence.',
+  },
+  {
+    key: 'production_allowlist_blocked',
+    label: 'Production allowlists',
+    status: 'blocked',
+    detail: 'Production allowlists and concrete production config assignments remain blocked.',
+  },
+  {
+    key: 'public_protocol_publication_blocked',
+    label: 'Public protocol publication',
+    status: 'blocked',
+    detail: 'Open protocol/public publication remains blocked by separate review gates.',
+  },
+  {
+    key: 'certification_blocked',
+    label: 'Certification claims',
+    status: 'blocked',
+    detail: 'No UCP, ACP, AP2, schema.org, provider, or live-payment certification is claimed.',
+  },
+];
 
 function buildConnectorTriageRehearsalStatus(
   remediation: CommerceConnectorDryRunRemediation,
@@ -679,6 +794,151 @@ function buildConnectorTriageEvidenceReconciliation(
     redacted_audit_reference_continuity: redactedAuditReferenceContinuity,
     checks,
     production_approval: false,
+    connector_execution_enabled: false,
+  };
+}
+
+function followupClosureStatusVariant(status: ConnectorFollowupClosureStatus | ConnectorFollowupClosureGapCheck['status']): 'default' | 'success' | 'warning' | 'danger' {
+  if (status === 'followup_closure_ready' || status === 'pass') return 'success';
+  if (status === 'sandbox_blocker' || status === 'blocked_again' || status === 'closed_no_action' || status === 'blocked') return 'danger';
+  return 'warning';
+}
+
+function connectorTerminalClosureEntry(timeline: CommerceConnectorDryRunRemediationTimeline) {
+  return timeline.timeline.find((entry) => (
+    entry.key === 'followup_ready'
+    || entry.key === 'blocked_again'
+    || entry.key === 'closed_no_action'
+  )) ?? null;
+}
+
+function buildConnectorFollowupClosureGapAssessment(
+  timeline: CommerceConnectorDryRunRemediationTimeline,
+  reconciliation: ConnectorTriageEvidenceReconciliation | null,
+): ConnectorFollowupClosureGapAssessment {
+  const remediation = timeline.remediation;
+  const terminalEntry = connectorTerminalClosureEntry(timeline);
+  const triageStatus = timeline.merchant_status.triage_status ?? remediation.triage?.triage_status ?? null;
+  const decisionOrClosureAudit = terminalEntry?.audit_event_id
+    ?? remediation.audit_references.closed_or_blocked_audit_event_id
+    ?? null;
+  const staleConflictClosureGuidance = reconciliation?.stale_conflict_followup_guidance
+    ?? containsStaleOrConflict(remediation, timeline);
+  const nonEnablingControlsPass = timeline.controls.public_discovery_enabled === false
+    && timeline.controls.checkout_payment_enabled === false
+    && timeline.controls.live_provider_enabled === false
+    && timeline.controls.live_plural_enabled === false
+    && timeline.controls.credential_entry_enabled === false
+    && timeline.controls.outbound_sync_enabled === false
+    && timeline.controls.production_connector_setup_enabled === false
+    && timeline.controls.provider_call_enabled === false
+    && timeline.controls.merchant_private_api_calls_enabled === false
+    && timeline.controls.production_allowlist_written === false
+    && timeline.controls.remediation_is_production_approval === false
+    && timeline.controls.remediation_enables_connector_execution === false
+    && timeline.controls.followup_ready_is_launch_approval === false;
+  const requiredAuditReferences = [
+    remediation.audit_references.requested_audit_event_id,
+    remediation.corrected_dry_run_id ? remediation.audit_references.corrected_audit_event_id : 'not_required',
+    remediation.followup_review_id ? remediation.audit_references.followup_audit_event_id : 'not_required',
+    triageStatus ? reconciliation?.audit_references.triage_audit_event_id ?? remediation.audit_references.triage_audit_event_id ?? 'not_recorded' : 'not_required',
+    terminalEntry ? decisionOrClosureAudit : 'not_required',
+  ];
+  const redactedDecisionAuditContinuity = requiredAuditReferences.every((value) => Boolean(value) && value !== 'not_recorded')
+    && timeline.timeline.every((entry) => (
+      entry.redaction.raw_connector_rows_included === false
+      && entry.redaction.credentials_included === false
+      && entry.redaction.provider_metadata_included === false
+      && entry.redaction.merchant_private_api_payload_included === false
+      && entry.redaction.production_config_values_included === false
+    ));
+  const status: ConnectorFollowupClosureStatus = !nonEnablingControlsPass || staleConflictClosureGuidance
+    ? 'sandbox_blocker'
+    : remediation.status === 'followup_ready'
+      ? 'followup_closure_ready'
+      : remediation.status === 'blocked_again'
+        ? 'blocked_again'
+        : remediation.status === 'closed_no_action' || triageStatus === 'closed_no_action'
+          ? 'closed_no_action'
+          : 'waiting_for_operator_followup';
+  const merchantClosureSummary = timeline.merchant_status.merchant_followup_summary
+    ?? remediation.triage?.merchant_followup_summary
+    ?? (status === 'followup_closure_ready'
+      ? 'Sandbox follow-up closure is ready for internal review only; launch blockers remain.'
+      : 'No public-safe closure guidance recorded.');
+  const merchantNextStep = staleConflictClosureGuidance
+    ? 'Refresh or correct sandbox evidence before any follow-up closure is considered.'
+    : status === 'followup_closure_ready'
+      ? 'Review remaining launch blockers before requesting any separate production approval.'
+      : timeline.merchant_status.triage_next_step
+        ?? remediation.triage?.next_step
+        ?? timeline.merchant_status.next_step;
+  const checks: ConnectorFollowupClosureGapCheck[] = [
+    {
+      key: 'operator_closure_status_recorded',
+      label: 'Operator closure status recorded',
+      status: status === 'waiting_for_operator_followup' ? 'warning' : status === 'sandbox_blocker' ? 'blocked' : 'pass',
+      detail: `remediation_status=${remediation.status} triage_status=${triageStatus ?? 'not_recorded'}`,
+    },
+    {
+      key: 'merchant_visible_closure_guidance_redacted',
+      label: 'Merchant-visible closure guidance redacted',
+      status: redactedDecisionAuditContinuity ? 'pass' : 'warning',
+      detail: 'Guidance uses public-safe summary and next-step fields only.',
+    },
+    {
+      key: 'decision_audit_reference_continuity',
+      label: 'Decision or closure audit continuity',
+      status: terminalEntry && !decisionOrClosureAudit ? 'warning' : redactedDecisionAuditContinuity ? 'pass' : 'warning',
+      detail: `requested=${remediation.audit_references.requested_audit_event_id ?? 'not_recorded'} corrected=${remediation.audit_references.corrected_audit_event_id ?? 'not_recorded'} followup=${remediation.audit_references.followup_audit_event_id ?? 'not_recorded'} triage=${reconciliation?.audit_references.triage_audit_event_id ?? remediation.audit_references.triage_audit_event_id ?? 'not_recorded'} decision_or_closure=${decisionOrClosureAudit ?? 'not_recorded'}`,
+    },
+    {
+      key: 'stale_conflict_closure_guidance',
+      label: 'Stale/conflict closure guidance',
+      status: staleConflictClosureGuidance ? 'blocked' : 'pass',
+      detail: staleConflictClosureGuidance
+        ? 'Stale or conflicting closure guidance is a sandbox blocker only; it is not launch readiness.'
+        : 'No stale or conflict closure blocker detected.',
+    },
+    {
+      key: 'remaining_launch_blocker_matrix',
+      label: 'Remaining launch blocker matrix',
+      status: connectorRemainingLaunchBlockers.every((blocker) => blocker.status === 'blocked') ? 'pass' : 'blocked',
+      detail: 'Every public, production, live, provider, allowlist, publication, and certification item remains blocked.',
+    },
+    {
+      key: 'fixed_non_enabling_controls',
+      label: 'Fixed non-enabling controls',
+      status: nonEnablingControlsPass ? 'pass' : 'blocked',
+      detail: nonEnablingControlsPass
+        ? 'Public discovery, checkout/payment, live providers, credentials, outbound sync, provider calls, merchant private API calls, production approval, and launch approval remain off.'
+        : 'One or more non-enabling control is not false/off.',
+    },
+  ];
+
+  return {
+    status,
+    remediation_id: remediation.remediation_id,
+    remediation_status: remediation.status,
+    triage_status: triageStatus,
+    merchant_closure_summary: merchantClosureSummary,
+    merchant_next_step: merchantNextStep,
+    audit_references: {
+      requested_audit_event_id: remediation.audit_references.requested_audit_event_id,
+      corrected_audit_event_id: remediation.audit_references.corrected_audit_event_id,
+      followup_audit_event_id: remediation.audit_references.followup_audit_event_id,
+      triage_audit_event_id: reconciliation?.audit_references.triage_audit_event_id ?? remediation.audit_references.triage_audit_event_id ?? null,
+      decision_or_closure_audit_event_id: decisionOrClosureAudit,
+    },
+    redacted_decision_audit_continuity: redactedDecisionAuditContinuity,
+    stale_conflict_closure_guidance: staleConflictClosureGuidance,
+    stale_conflict_handling: staleConflictClosureGuidance ? 'sandbox_blocker_only' : 'none',
+    checks,
+    remaining_launch_blockers: connectorRemainingLaunchBlockers,
+    production_approval: false,
+    launch_approval: false,
+    public_discovery_approval: false,
+    checkout_payment_approval: false,
     connector_execution_enabled: false,
   };
 }
@@ -2186,6 +2446,13 @@ export function CommerceOnboarding() {
       connectorTriageRehearsalStatus,
     );
   }, [connectorBackendRemediation, connectorRemediationQueue, connectorRemediationTimeline, connectorTriageRehearsalStatus]);
+  const connectorFollowupClosureGapAssessment = useMemo(() => {
+    if (!connectorRemediationTimeline) return null;
+    return buildConnectorFollowupClosureGapAssessment(
+      connectorRemediationTimeline,
+      connectorTriageReconciliation,
+    );
+  }, [connectorRemediationTimeline, connectorTriageReconciliation]);
   const connectorTriageControls = [
     { label: 'sandbox_only', value: true },
     { label: 'credential_entry_enabled', value: false },
@@ -3516,6 +3783,80 @@ export function CommerceOnboarding() {
                           <div className="mt-1 break-all text-xs text-gx-muted">{check.detail}</div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                ) : null}
+                {connectorFollowupClosureGapAssessment ? (
+                  <div data-testid="connector-followup-closure-gap-assessment" className="mt-3 rounded-md border border-gx-border p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-medium text-gx-text">Follow-up closure and launch-readiness gap assessment</div>
+                        <p className="mt-1 text-xs text-gx-muted">
+                          Summarizes sandbox follow-up closure status, redacted audit continuity, and remaining launch blockers without enabling production behavior.
+                        </p>
+                      </div>
+                      <Badge variant={followupClosureStatusVariant(connectorFollowupClosureGapAssessment.status)}>
+                        {connectorFollowupClosureGapAssessment.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-4">
+                      {[
+                        { label: 'remediation_status', value: connectorFollowupClosureGapAssessment.remediation_status },
+                        { label: 'operator_closure_status', value: connectorFollowupClosureGapAssessment.status },
+                        { label: 'triage_status', value: connectorFollowupClosureGapAssessment.triage_status ?? 'not_recorded' },
+                        { label: 'requested_audit', value: connectorFollowupClosureGapAssessment.audit_references.requested_audit_event_id ?? 'not_recorded' },
+                        { label: 'corrected_audit', value: connectorFollowupClosureGapAssessment.audit_references.corrected_audit_event_id ?? 'not_recorded' },
+                        { label: 'followup_audit', value: connectorFollowupClosureGapAssessment.audit_references.followup_audit_event_id ?? 'not_recorded' },
+                        { label: 'triage_audit', value: connectorFollowupClosureGapAssessment.audit_references.triage_audit_event_id ?? 'not_recorded' },
+                        { label: 'decision_or_closure_audit', value: connectorFollowupClosureGapAssessment.audit_references.decision_or_closure_audit_event_id ?? 'not_recorded' },
+                        { label: 'redacted_decision_audit_continuity', value: connectorFollowupClosureGapAssessment.redacted_decision_audit_continuity },
+                        { label: 'stale_conflict_handling', value: connectorFollowupClosureGapAssessment.stale_conflict_handling },
+                        { label: 'connector_execution_enabled', value: connectorFollowupClosureGapAssessment.connector_execution_enabled },
+                        { label: 'production_approval', value: connectorFollowupClosureGapAssessment.production_approval },
+                        { label: 'launch_approval', value: connectorFollowupClosureGapAssessment.launch_approval },
+                        { label: 'public_discovery_approval', value: connectorFollowupClosureGapAssessment.public_discovery_approval },
+                        { label: 'checkout_payment_approval', value: connectorFollowupClosureGapAssessment.checkout_payment_approval },
+                      ].map((item) => (
+                        <div key={item.label} className="rounded-md border border-gx-border p-2">
+                          <div className="text-xs text-gx-muted">{item.label}</div>
+                          <div className="break-all text-sm font-medium text-gx-text">{String(item.value)}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div data-testid="connector-closure-merchant-guidance" className="mt-3 rounded-md border border-gx-border p-2">
+                      <div className="text-xs font-medium text-gx-muted">Merchant-visible closure/gap guidance</div>
+                      <div className="mt-1 text-sm text-gx-text">{connectorFollowupClosureGapAssessment.merchant_closure_summary}</div>
+                      <div className="mt-1 text-xs text-gx-muted">Next step: {connectorFollowupClosureGapAssessment.merchant_next_step}</div>
+                      <div className="mt-1 text-xs text-gx-muted">
+                        Closure guidance is sandbox evidence only; it is not production approval, launch approval, public discovery approval, or checkout/payment approval.
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-2 md:grid-cols-2">
+                      {connectorFollowupClosureGapAssessment.checks.map((check) => (
+                        <div key={check.key} className="rounded-md border border-gx-border p-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-xs font-medium text-gx-text">{check.label}</div>
+                            <Badge variant={followupClosureStatusVariant(check.status)}>{check.status}</Badge>
+                          </div>
+                          <div className="mt-1 text-xs text-gx-muted">{check.key}</div>
+                          <div className="mt-1 break-all text-xs text-gx-muted">{check.detail}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div data-testid="connector-launch-blocker-matrix" className="mt-3 rounded-md border border-gx-border p-3">
+                      <div className="text-sm font-medium text-gx-text">Remaining launch blocker matrix</div>
+                      <div className="mt-2 grid gap-2 md:grid-cols-2">
+                        {connectorFollowupClosureGapAssessment.remaining_launch_blockers.map((blocker) => (
+                          <div key={blocker.key} className="rounded-md border border-gx-border p-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="text-xs font-medium text-gx-text">{blocker.label}</div>
+                              <Badge variant="danger">{blocker.status}</Badge>
+                            </div>
+                            <div className="mt-1 text-xs text-gx-muted">{blocker.key}</div>
+                            <div className="mt-1 text-xs text-gx-muted">{blocker.detail}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ) : null}
