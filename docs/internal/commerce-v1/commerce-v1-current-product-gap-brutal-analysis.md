@@ -453,6 +453,177 @@ The next slices should be ordered to remove the largest live blockers, not to ad
 11. C7D sandbox checkout E2E: consent, passport, cart, payment intent, provider sandbox, order, fulfillment handoff, support fallback.
 12. C7E live provider readiness review: legal/security/provider/ops approval, not automatic enablement.
 
+## Second-Pass Brutal Addendum
+
+The first pass correctly identified the obvious product gaps. The second pass adds the gaps that usually get missed because they are not a shiny feature, but they are exactly what breaks real launches.
+
+### Hidden P0 Gaps
+
+| Gap | Owner | Why it is P0 | Required exit criteria |
+| --- | --- | --- | --- |
+| Contract versioning and compatibility | Grantex + AgenticOrg | If OpenAPI, MCP schemas, SDKs, AgenticOrg connector aliases, and protocol previews drift, agents will break or misread merchant state. | Versioned commerce contracts, compatibility matrix, generated SDK/API parity checks, deprecation policy, and cross-repo contract tests. |
+| Public claim governance | Grantex + AgenticOrg | A landing page or docs page can accidentally claim "live", "certified", or "standard" before the product is ready. | Claim audit across `README`, `web/**`, docs nav, docs guides, case studies, OpenAPI descriptions, launch posts, and AgenticOrg docs before any public push. |
+| Docs/navigation completeness | Grantex | Internal docs can exist but be invisible to real operators and developers. | Public-safe docs are linked in the correct nav; internal-only docs stay internal; docs.json/mint-style nav or equivalent docs index is updated when pages become public. |
+| Grantex docs-only CI guard | Grantex | Previous Grantex merges automatically started deploy workflows. That may be acceptable for code, but it is noisy and unsafe for docs-only planning. | Path-based workflow guards or admin policy so docs-only/internal planning changes do not trigger cloud deploy/build unless explicitly approved. |
+| Environment and flag governance | Grantex + AgenticOrg | One bad environment flag can bypass months of safety gates. | Change-control checklist for `COMMERCE_V1_ENABLED`, public discovery, allowlists, live mode, reconciliation worker, provider keys, AgenticOrg discovery flags, and channel adapters. |
+| Merchant/operator RBAC | Grantex | Sandbox workflows are powerful; wrong roles can approve, disable, or expose merchants incorrectly. | Explicit roles for submitter, merchant owner, operator reviewer, security reviewer, legal reviewer, ops owner, rollback owner, and read-only auditor with tests. |
+| Real tenant identity and account lifecycle | Grantex | Test tenants are not real merchant organizations. | Tenant creation, owner verification, role invitation, offboarding, disabled tenant behavior, and cross-tenant isolation proven in production-like tests. |
+| Evidence lifecycle | Grantex | Approval references and audit evidence become stale, expire, or become legally sensitive. | Evidence retention policy, expiry/re-review, redacted export, immutable audit, deletion/hold rules, and reviewer revalidation cadence. |
+| Data residency and regulated data boundary | Grantex | India live payments require data residency and payment-data handling proof. | Region architecture, data classification, storage location evidence, backup location proof, logging redaction, and legal signoff before live payment mode. |
+| Dependency/security backlog | Both | A product cannot claim production hardness while known dependency/security issues are ignored. | Dependency review, security scan triage, vulnerability acceptance/patch plan, and no critical unowned dependency risk before launch. |
+| Staging/live parity | Both | A green sandbox can still fail in production because auth, URLs, secrets, regions, CORS, callbacks, and webhooks differ. | Staging environment that mirrors production enough for full read-only and sandbox checkout smoke, with no synthetic shortcut hidden in config. |
+| Real rollback drill | Both | "We can turn it off" is not a rollback plan. | Timed rollback rehearsal for public discovery, AgenticOrg channel exposure, connector sync, payment provider errors, bad catalog import, and stale inventory. |
+
+### Underweighted Product Gaps
+
+| Area | Current risk | Brutal detail |
+| --- | --- | --- |
+| Category expansion | `electronics_appliances` has readiness logic, but real commerce needs category-specific fields. | Food, fashion, pharmacy, services, subscriptions, digital goods, regulated products, and high-value goods need different warranty, return, safety, tax, inventory, and delivery rules. |
+| Product content safety | Merchant catalog text can be prompt-injection or policy-bypass content. | Product descriptions, warranty copy, support text, and connector rows must be scanned/sanitized before becoming agent-visible context. |
+| Merchant content moderation | Public discovery can surface prohibited or sensitive products. | Need category policy, restricted goods handling, age-gated items, counterfeit claims, medical/financial/legal claims, and takedown process. |
+| Search/ranking fairness | AgenticOrg discovery can influence merchant revenue. | Need explainable ranking, sponsored-result separation if ads ever exist, deterministic fallback, and no hidden merchant favoritism without disclosure. |
+| Multi-merchant comparison | Current work is merchant-centric. | Buyers will ask "best option"; cross-merchant compare needs normalized product facts, price freshness, delivery, return policy, and anti-invention guardrails. |
+| Final price truth | Basic price is not final payable amount. | Taxes, fees, shipping, COD charges, discounts, coupons, EMI, payment-method surcharges, and region-specific charges must be grounded before checkout. |
+| Delivery promise truth | Delivery is currently a gap, not just an extra feature. | Discovery can show products, but checkout should not proceed unless delivery/serviceability evidence is explicit or the UX says delivery is unknown and checkout is blocked. |
+| Warranty/return policy normalization | Summaries are not enough for dispute-prone categories. | Need canonical policy fields, source reference, date/version, exceptions, region, product-category applicability, and refusal behavior when ambiguous. |
+| Support escalation | Agentic commerce needs human fallback. | Buyer and merchant need support ticket handoff, ownership, SLA, allowed language, privacy-safe transcript, and no automated promise beyond source data. |
+| Fraud and abuse | Agentic buying changes fraud surface. | Need velocity limits, merchant risk holds, buyer identity checks, suspicious agent behavior, repeated failed payments, bot/channel abuse, and audit alerts. |
+| Consent fatigue and dark patterns | Buyer consent copy can become rubber-stamp UX. | Need readable consent, amount/currency/merchant/channel/item clarity, expiry, revocation, no pre-checked approvals, and localized copy. |
+| Accessibility and localization | Real users are not all English-speaking developers. | Merchant dashboard and buyer consent need accessibility, mobile layout, local language support, timezone/currency formatting, and screen-reader-safe status labels. |
+| Offline and intermittent channels | WhatsApp/Telegram/mobile may be asynchronous. | Consent expiry, cart expiry, payment pending state, and user response timing need channel-specific handling. |
+| Privacy and transcript retention | Buyer-agent conversations can contain personal data. | Need transcript minimization, retention period, redaction, export/delete policy, and support-safe evidence references. |
+| Metering and commercial model | Running commerce costs money and creates value. | Need merchant billing/usage, per-channel attribution, transaction or discovery metrics, refund of platform fees, and invoice/reporting posture. |
+
+### Cross-Repo Integration Gaps
+
+| Integration point | Current state | Missing proof |
+| --- | --- | --- |
+| AgenticOrg agent creation | Agent creation and Grantex registration paths exist broadly, but commerce-specific buyer-agent creation is not a polished self-serve flow. | Non-technical buyer can create/select a commerce buyer agent, link session, and start read-only shopping from each target channel. |
+| AgenticOrg commerce tools | Grantex-only aliases exist. | Cross-repo tests prove every alias maps to current Grantex contracts and fails closed on schema mismatch. |
+| AgenticOrg public discovery gate | Fail-closed. | Real approved merchant handoff from Grantex flips only the intended read-only capability in AgenticOrg, with no write/payment/provider capability exposed. |
+| A2A/MCP/external discovery | AgenticOrg has A2A-style discovery surfaces. | Commerce agent card/tool metadata must reflect Grantex-approved commerce capabilities, not generic AgenticOrg capabilities. |
+| Channel-specific tool limits | Not fully proven. | ChatGPT/Claude/Gemini/WhatsApp/Telegram each need exact tool availability, auth, rate limits, consent UX, refusal copy, and smoke tests. |
+| Error translation | Guardrails normalize some Grantex errors. | Buyer-facing responses must preserve safety and not leak raw Grantex/provider/merchant details. |
+| Session and revocation propagation | Foundations exist. | Revoking a consent/passport/merchant/channel must take effect across active AgenticOrg sessions without stale cache exposure. |
+| Cross-repo release ordering | Many slices were stacked and merged carefully. | A permanent release checklist is needed so AgenticOrg never consumes a capability before Grantex has published and approved it. |
+
+### API, SDK, And Developer Experience Gaps
+
+| Gap | Risk | Required outcome |
+| --- | --- | --- |
+| OpenAPI vs implementation drift | Developers integrate against stale docs. | CI validates implemented route surface, OpenAPI, examples, and portal API clients together. |
+| SDK coverage for commerce | Merchant developers need SDK methods, not raw HTTP. | TypeScript SDK, Python SDK, and examples cover merchant profile, catalog, inventory, connector dry-run, review, consent/passport, cart, payment status, and future order APIs. |
+| Idempotency guide | Payment and connector retries can duplicate actions. | Public-safe idempotency docs, examples, error codes, retry windows, and replay behavior for every state-changing endpoint. |
+| Rate-limit contract | Channels and merchants need predictable throttling. | Per-role rate limits documented for merchant API, agent API, public discovery, connector dry-runs, consent, cart, checkout, and payment. |
+| Error taxonomy | Agents need machine-actionable refusals. | Stable error codes with retryability, remediation text, user-safe message, and internal support code. |
+| Example data policy | Examples can accidentally become production-looking. | Synthetic-only example policy, scanner, and test fixture rules for every example corpus. |
+| Developer sandbox | Merchants need safe experimentation. | Seeded sandbox tenant, fake connector, mock payment, buyer-agent simulator, and reset workflow without production flags. |
+
+### Operations, Reliability, And Support Gaps
+
+| Gap | Why it matters | Exit criteria |
+| --- | --- | --- |
+| SLOs and SLIs | Commerce needs measurable reliability. | Availability, latency, error rate, stale-data rate, payment-pending age, webhook lag, connector sync lag, and refusal-rate metrics are defined. |
+| Alert routing | Metrics without humans are decoration. | Alerts map to owners and runbooks for provider outage, stale catalog, public discovery failure, consent failure, audit write failure, and AgenticOrg channel outage. |
+| Audit write failure handling | Protected actions cannot silently proceed without audit. | Tests prove payment-affecting actions fail closed if required audit evidence cannot be written. |
+| Backup and restore | Commerce records need durable recovery. | Restore drill for commerce tenant, merchant, catalog, policy, consent, passport, cart, payment, audit, connector evidence, and config state. |
+| Migration rollback | Commerce schemas are growing quickly. | Every migration has rollback/forward-fix notes and production backfill safety plan. |
+| Stale cache handling | Agents may use cached catalog or passport state. | Cache TTLs, revocation invalidation, and stale-read labels are tested across Grantex and AgenticOrg. |
+| Incident communications | Merchants and buyers need timely truth. | Status templates, merchant notifications, buyer-safe outage/refusal messages, and support escalation are ready. |
+| Post-merge deploy controls | Main merges can trigger workflows. | Deploy jobs are either intentionally approved or path-guarded; docs-only analysis must not accidentally ship infrastructure. |
+
+### Legal, Compliance, And Trust Gaps
+
+| Gap | Brutal assessment |
+| --- | --- |
+| Payment legal approval | Live payment mode needs partner, legal, AFA, consent, chargeback, refund, settlement, and data-residency approval. |
+| Merchant terms | Sellers need terms covering agent visibility, catalog accuracy, pricing accuracy, fulfillment responsibility, returns, support, and data sharing. |
+| Buyer terms | Buyers need terms explaining agent limitations, consent, payment handoff, data use, refunds, and support. |
+| Privacy policy updates | Agentic commerce changes data categories: buyer intent, cart content, consent, agent transcript, payment references, merchant catalog exposure. |
+| DPDP/privacy operations | Data access, deletion, correction, retention, and grievance processes need commerce-specific handling. |
+| Standards/IP posture | Publishing an open protocol needs license, contribution, patent/IP, governance, and trademark posture. |
+| Regulated categories | Pharmacy, financial products, alcohol, age-restricted goods, medical claims, and high-risk products need explicit exclusion or controls. |
+| Tax/GST obligations | Tax display, invoices, merchant responsibility, and jurisdiction-specific disclaimers need legal/accounting review. |
+
+### Standards And Open Protocol Reality Check
+
+The architecture can evolve into an open protocol, but a protocol people can rely on needs more than adapter previews.
+
+Missing protocol work:
+
+- Normative language split from implementation examples.
+- Stable core object model independent of Grantex table names.
+- Canonical JSON schemas for merchant, capability, catalog item, offer, inventory, cart, consent, mandate evidence, order, fulfillment, return/refund, settlement, connector source, and audit reference.
+- Version negotiation and backward compatibility.
+- Threat model and security considerations written for third-party implementers, not just Grantex/AgenticOrg.
+- Privacy considerations with data minimization and transcript handling.
+- Registry story for capability names, error codes, evidence types, connector types, and refusal reasons.
+- Test vectors with no real merchant data.
+- Reference implementation boundaries: Grantex and AgenticOrg as examples, not required participants.
+- Conformance levels: read-only discovery, cart draft, consent/passport, checkout handoff, order status, refund request, settlement report.
+- Adapter mapping tables to schema.org, UCP-style, ACP-style, AP2-style, MCP, A2A, and merchant connector metadata.
+- Independent interoperability tests against at least one non-Grantex mock implementation before any serious public claim.
+
+Brutal conclusion: do not pitch this as "ignore UCP/ACP/AP2/schema.org" yet. The credible pitch is: "Use one canonical agentic commerce trust architecture with adapters to existing surfaces." The "you do not need to worry about other protocols" claim becomes safe only after adapters are complete, tested, versioned, and externally reviewed.
+
+### Launch Stages That Should Not Be Collapsed
+
+| Stage | What can be true | What must stay false |
+| --- | --- | --- |
+| Internal sandbox | Synthetic/demo merchant and fake connector data exercise workflows. | No real merchant approval, no public discovery, no live payment. |
+| Real merchant private readiness | A named merchant provides private approval evidence and repo-safe references. | Still no public discovery or checkout unless separately approved. |
+| Read-only public pilot | One approved merchant is visible through one approved read-only channel. | No cart/checkout/payment, no delivery guarantee, no standards certification claim. |
+| Sandbox checkout pilot | Buyer can exercise cart, consent, passport, mock/sandbox provider, order handoff. | No live money movement, no live provider, no production settlement. |
+| Paid limited pilot | One merchant, one geography, one provider, one channel, small caps, support staffed. | No broad merchant onboarding, no autonomous delegated payments, no unreviewed channel expansion. |
+| Broader launch | Repeatable merchant onboarding, connectors, order/fulfillment/refund/settlement, ops, docs, and compliance exist. | No unsupported category/channel/provider claims. |
+
+### What Must Be Audited Before Any Next "Go Live" Claim
+
+1. Public web pages and landing pages.
+2. README and marketplace/package pages.
+3. Docs navigation and public docs index.
+4. OpenAPI descriptions and examples.
+5. SDK examples and generated docs.
+6. AgenticOrg UI copy and agent templates.
+7. AgenticOrg A2A/MCP public discovery metadata.
+8. Commerce demo fixtures and example corpora.
+9. CI/deploy workflow path filters.
+10. Environment variable examples and deployment docs.
+11. Compliance/privacy/terms pages.
+12. Release notes and launch posts.
+
+The audit must prove the words match the product state. If the product is sandbox-only, every public surface must say so or avoid the claim entirely.
+
+### Stronger Fast-Track Order
+
+The previous fast-track list was reasonable but still too broad. A more disciplined sequence is:
+
+1. Merge C6Tc only after confirming public-safe examples do not imply publication or certification.
+2. Add this gap analysis to the PRD status section or link it from the internal Commerce V1 docs index.
+3. Add Grantex docs-only CI/deploy guard so future planning docs do not trigger deploy-adjacent workflows.
+4. Build contract parity checks between Grantex OpenAPI, portal client, MCP tool schemas, SDKs, and AgenticOrg aliases.
+5. Build real merchant readiness packet with private evidence references and reviewer RBAC, still no public discovery.
+6. Build first real connector credential-reference design with vault-only references, still no outbound sync.
+7. Build first real connector sandbox dry-run against a merchant-approved non-production source.
+8. Build first-party web buyer channel read-only smoke before attempting ChatGPT/Claude/Gemini/WhatsApp/Telegram.
+9. Build order foundation before any paid checkout pilot.
+10. Build fulfillment/support/return-refund handoff before live payment pilot.
+11. Build sandbox checkout E2E with order handoff and rollback drill.
+12. Only then ask for live provider readiness review.
+
+### Things That Would Be Reckless To Fast-Track
+
+- Scraping a "test merchant from web" and treating it as real approval.
+- Turning on public discovery for demo/synthetic merchant IDs.
+- Letting AgenticOrg call merchant private APIs directly "just for testing".
+- Using live provider credentials before legal/provider/security approval.
+- Launching checkout without order/fulfillment/support/return-refund handoff.
+- Publishing standards pages that imply IETF/NIST/UCP/ACP/AP2/schema.org certification.
+- Adding a channel adapter without channel-specific consent and refusal tests.
+- Assuming a green CI run proves live readiness.
+- Assuming a docs walkthrough is an operational runbook.
+- Assuming mock payment success means payment operations are ready.
+
 ## Bottom Line
 
 The architecture is directionally right. Grantex as seller control plane and AgenticOrg as buyer-agent layer is the right split. The protocol-adapter strategy is also right: one canonical Grantex commerce model, adapters to schema.org, UCP-style, ACP-style, AP2-style, MCP/native API, and future agent channels.
