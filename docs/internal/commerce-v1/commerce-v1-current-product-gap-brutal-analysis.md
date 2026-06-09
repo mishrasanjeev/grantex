@@ -6,11 +6,11 @@ Data cutoff: 2026-06-09.
 
 Implementation baseline:
 
-- Grantex `origin/main`: `1c3d99cf449ec7fb1a6feff151d5fd6cd9b28231`
+- Grantex `origin/main`: `d37bf9fcc70d6bf8a304dedbc520eaeab0fc8678`
 - AgenticOrg `origin/main`: `d02657be67c4be256cd1f0b3d52d46e20c5de891`
-- Grantex draft PR #543, `codex/commerce-c6tc-public-safe-example-corpus`, is open and not counted as landed implementation.
+- Grantex PR #543, `codex/commerce-c6tc-public-safe-example-corpus`, is merged and counted as landed internal docs/fixture work only. It is not public publication, certification, conformance evidence, production approval, public discovery approval, or checkout/payment approval.
 
-This document is not production approval, public discovery approval, checkout/payment approval, live provider approval, public protocol publication, IETF submission, NIST submission, certification, or compliance evidence. It is a blunt gap register for deciding what must be built before the product can be responsibly called live.
+This document is not production approval, public discovery approval, checkout/payment approval, live provider approval, public protocol publication, IETF submission, NIST submission, certification, or compliance evidence. It approves no real merchant, production launch, public discovery, checkout/payment, live provider, live Plural, protocol publication, certification, conformance, compliance, or standards submission. It is a blunt gap register for deciding what must be built before the product can be responsibly called live.
 
 ## Executive Verdict
 
@@ -21,7 +21,7 @@ What exists is valuable:
 - Grantex has the seller control-plane backbone for sandbox merchant onboarding, category/catalog readiness, public-safe preview, review request, operator decision, rollout proposal dry run, AgenticOrg sandbox handoff, connector registry, connector dry-run review, remediation evidence, standards previews, and internal conformance gates.
 - AgenticOrg has Grantex-only commerce connector aliases and channel-neutral read-only buyer discovery/session orchestration.
 - The architecture correctly keeps merchant systems, payment providers, consent, policy, Commerce Passports, and audit inside Grantex.
-- Standards packaging is moving in the right direction: schema.org JSON-LD preview, UCP-style preview, ACP-style preview, AP2-style evidence preview, IETF draft skeleton, and NIST reference-architecture skeleton.
+- Standards packaging is moving in the right direction: schema.org JSON-LD preview, UCP-style preview, ACP-style preview, AP2-style evidence preview, internal public-safe example corpus, IETF draft skeleton, and NIST reference-architecture skeleton.
 
 The hard truth:
 
@@ -82,6 +82,7 @@ Implemented or substantially present:
 - UCP-style capability profile preview.
 - ACP-style cart/checkout shape preview.
 - AP2-style evidence preview.
+- C6Tc internal public-safe example corpus for future IETF/NIST draft preparation, with synthetic data and non-enabling markers.
 - Preview conformance fixtures, validators, status rendering, CI gate, and release-review runbook.
 - IETF and NIST internal draft-preparation materials.
 
@@ -304,6 +305,7 @@ What exists:
 - Internal preview adapters.
 - Internal conformance fixtures and validator.
 - Internal report/status/gate/runbook.
+- Internal public-safe synthetic example corpus.
 - Internal IETF skeleton.
 - Internal NIST reference architecture skeleton.
 
@@ -311,7 +313,8 @@ What is missing:
 
 - Public protocol specification with stable versioning.
 - Public JSON schemas.
-- Public example corpus that contains no private or production-sensitive data.
+- Public/legal/security-reviewed publication path for the internal example corpus.
+- Public release criteria proving examples remain synthetic, non-live, non-enabling, and free of private merchant/provider data outside the repo.
 - Public conformance test suite.
 - Public compatibility matrix for schema.org, UCP, ACP, AP2, MCP, A2A, and merchant connector metadata.
 - Change control, deprecation policy, security considerations, privacy considerations, and IANA or registry posture if pursuing IETF.
@@ -369,12 +372,14 @@ The docs are stronger than the product in several places. That is useful for pla
 Needed documentation hardening:
 
 - Keep one canonical PRD status table current after every C6 slice.
+- Keep a route inventory that separates implemented runtime routes, internal-only docs, public docs, portal routes, and future protocol artifacts.
 - Add a public/merchant-facing "what is sandbox vs live" page before any merchant demo.
 - Add a buyer-facing "what agents can and cannot do" page before any buyer demo.
 - Add connector setup guides only after real connector execution exists.
 - Add order/fulfillment/refund docs only when APIs exist or clearly label them future.
 - Add protocol docs only as draft/internal until publication approval.
 - Add docs.json or landing-page links only for safe public content.
+- Add landing-page copy review before any public page mentions agentic commerce, protocol work, public discovery, checkout, provider, certification, conformance, compliance, IETF, NIST, NCCoE, UCP, ACP, AP2, schema.org, MCP, or A2A claims.
 - Keep internal-only gap, standards, and guardrail docs out of public marketing claims.
 
 ## No-Go Conditions
@@ -398,8 +403,8 @@ Do not jump straight to live payments. The fastest credible route is a narrow re
 
 ### Track 1 - Finish The Current Standards/Protocol Prep Without Overclaiming
 
-1. Review and merge C6Tc public-safe example corpus if clean.
-2. Add public-safe protocol manifest and schema draft only after examples are clean.
+1. Treat merged C6Tc as an internal-only example source, not as public publication.
+2. Add public-safe protocol manifest and schema draft only after examples remain clean under legal/security review.
 3. Keep IETF/NIST work internal until legal/product/security approve external submission.
 4. Create a public conformance package only after the internal validator is stable and examples are safe.
 
@@ -440,18 +445,17 @@ Do not jump straight to live payments. The fastest credible route is a narrow re
 
 The next slices should be ordered to remove the largest live blockers, not to add more demos.
 
-1. C6Tc readiness and merge: public-safe standards example corpus.
-2. C6U real merchant pilot readiness packet: private evidence references, owners, approval states, launch blockers, and no live enablement.
-3. C6V real connector credential-reference design: vault-backed references, no raw secrets, no outbound sync yet.
-4. C6W first real connector sandbox dry-run: one connector, one merchant, one category, no public discovery.
-5. C6X read-only public discovery allowlist proposal: named merchant only, docs plus guarded config proposal, no automatic enablement.
-6. C6Y AgenticOrg first-party web buyer channel smoke: read-only, Grantex-only, no checkout.
-7. C6Z channel adapter matrix: ChatGPT, Claude, Gemini, WhatsApp, Telegram with exact launch constraints and tests.
-8. C7A order backbone foundation: order record, status, audit, dashboard/API.
-9. C7B fulfillment/status foundation: delivery/pickup/shipment status, serviceability, and refusal behavior.
-10. C7C return/refund request foundation: request, eligibility, manual approval, status, audit, no auto-refund execution.
-11. C7D sandbox checkout E2E: consent, passport, cart, payment intent, provider sandbox, order, fulfillment handoff, support fallback.
-12. C7E live provider readiness review: legal/security/provider/ops approval, not automatic enablement.
+1. C6U real merchant pilot readiness packet: private evidence references, owners, approval states, launch blockers, and no live enablement.
+2. C6V real connector credential-reference design: vault-backed references, no raw secrets, no outbound sync yet.
+3. C6W first real connector sandbox dry-run: one connector, one merchant, one category, no public discovery.
+4. C6X read-only public discovery allowlist proposal: named merchant only, docs plus guarded config proposal, no automatic enablement.
+5. C6Y AgenticOrg first-party web buyer channel smoke: read-only, Grantex-only, no checkout.
+6. C6Z channel adapter matrix: ChatGPT, Claude, Gemini, WhatsApp, Telegram with exact launch constraints and tests.
+7. C7A order backbone foundation: order record, status, audit, dashboard/API.
+8. C7B fulfillment/status foundation: delivery/pickup/shipment status, serviceability, and refusal behavior.
+9. C7C return/refund request foundation: request, eligibility, manual approval, status, audit, no auto-refund execution.
+10. C7D sandbox checkout E2E: consent, passport, cart, payment intent, provider sandbox, order, fulfillment handoff, support fallback.
+11. C7E live provider readiness review: legal/security/provider/ops approval, not automatic enablement.
 
 ## Second-Pass Brutal Addendum
 
@@ -464,6 +468,7 @@ The first pass correctly identified the obvious product gaps. The second pass ad
 | Contract versioning and compatibility | Grantex + AgenticOrg | If OpenAPI, MCP schemas, SDKs, AgenticOrg connector aliases, and protocol previews drift, agents will break or misread merchant state. | Versioned commerce contracts, compatibility matrix, generated SDK/API parity checks, deprecation policy, and cross-repo contract tests. |
 | Public claim governance | Grantex + AgenticOrg | A landing page or docs page can accidentally claim "live", "certified", or "standard" before the product is ready. | Claim audit across `README`, `web/**`, docs nav, docs guides, case studies, OpenAPI descriptions, launch posts, and AgenticOrg docs before any public push. |
 | Docs/navigation completeness | Grantex | Internal docs can exist but be invisible to real operators and developers. | Public-safe docs are linked in the correct nav; internal-only docs stay internal; docs.json/mint-style nav or equivalent docs index is updated when pages become public. |
+| Public route and metadata inventory | Grantex + AgenticOrg | A route, A2A card, MCP tool listing, docs nav entry, or landing-page link can expose a capability before product approval. | Inventory implemented routes, public metadata, docs navigation, landing pages, OpenAPI examples, SDK examples, and AgenticOrg A2A/MCP discovery output before every public push. |
 | Grantex docs-only CI guard | Grantex | Previous Grantex merges automatically started deploy workflows. That may be acceptable for code, but it is noisy and unsafe for docs-only planning. | Path-based workflow guards or admin policy so docs-only/internal planning changes do not trigger cloud deploy/build unless explicitly approved. |
 | Environment and flag governance | Grantex + AgenticOrg | One bad environment flag can bypass months of safety gates. | Change-control checklist for `COMMERCE_V1_ENABLED`, public discovery, allowlists, live mode, reconciliation worker, provider keys, AgenticOrg discovery flags, and channel adapters. |
 | Merchant/operator RBAC | Grantex | Sandbox workflows are powerful; wrong roles can approve, disable, or expose merchants incorrectly. | Explicit roles for submitter, merchant owner, operator reviewer, security reviewer, legal reviewer, ops owner, rollback owner, and read-only auditor with tests. |
@@ -500,7 +505,7 @@ The first pass correctly identified the obvious product gaps. The second pass ad
 | --- | --- | --- |
 | AgenticOrg agent creation | Agent creation and Grantex registration paths exist broadly, but commerce-specific buyer-agent creation is not a polished self-serve flow. | Non-technical buyer can create/select a commerce buyer agent, link session, and start read-only shopping from each target channel. |
 | AgenticOrg commerce tools | Grantex-only aliases exist. | Cross-repo tests prove every alias maps to current Grantex contracts and fails closed on schema mismatch. |
-| AgenticOrg public discovery gate | Fail-closed. | Real approved merchant handoff from Grantex flips only the intended read-only capability in AgenticOrg, with no write/payment/provider capability exposed. |
+| AgenticOrg public discovery gate | Source code has a fail-closed gate, but deployed metadata must still be checked. | Real approved merchant handoff from Grantex flips only the intended read-only capability in AgenticOrg, with no write/payment/provider capability exposed; production A2A/MCP metadata must be verified after every release. |
 | A2A/MCP/external discovery | AgenticOrg has A2A-style discovery surfaces. | Commerce agent card/tool metadata must reflect Grantex-approved commerce capabilities, not generic AgenticOrg capabilities. |
 | Channel-specific tool limits | Not fully proven. | ChatGPT/Claude/Gemini/WhatsApp/Telegram each need exact tool availability, auth, rate limits, consent UX, refusal copy, and smoke tests. |
 | Error translation | Guardrails normalize some Grantex errors. | Buyer-facing responses must preserve safety and not leak raw Grantex/provider/merchant details. |
@@ -598,18 +603,17 @@ The audit must prove the words match the product state. If the product is sandbo
 
 The previous fast-track list was reasonable but still too broad. A more disciplined sequence is:
 
-1. Merge C6Tc only after confirming public-safe examples do not imply publication or certification.
-2. Add this gap analysis to the PRD status section or link it from the internal Commerce V1 docs index.
-3. Add Grantex docs-only CI/deploy guard so future planning docs do not trigger deploy-adjacent workflows.
-4. Build contract parity checks between Grantex OpenAPI, portal client, MCP tool schemas, SDKs, and AgenticOrg aliases.
-5. Build real merchant readiness packet with private evidence references and reviewer RBAC, still no public discovery.
-6. Build first real connector credential-reference design with vault-only references, still no outbound sync.
-7. Build first real connector sandbox dry-run against a merchant-approved non-production source.
-8. Build first-party web buyer channel read-only smoke before attempting ChatGPT/Claude/Gemini/WhatsApp/Telegram.
-9. Build order foundation before any paid checkout pilot.
-10. Build fulfillment/support/return-refund handoff before live payment pilot.
-11. Build sandbox checkout E2E with order handoff and rollback drill.
-12. Only then ask for live provider readiness review.
+1. Add this gap analysis to the PRD status section or link it from the internal Commerce V1 docs index.
+2. Add Grantex docs-only CI/deploy guard so future planning docs do not trigger deploy-adjacent workflows.
+3. Build contract parity checks between Grantex OpenAPI, portal client, MCP tool schemas, SDKs, and AgenticOrg aliases.
+4. Build real merchant readiness packet with private evidence references and reviewer RBAC, still no public discovery.
+5. Build first real connector credential-reference design with vault-only references, still no outbound sync.
+6. Build first real connector sandbox dry-run against a merchant-approved non-production source.
+7. Build first-party web buyer channel read-only smoke before attempting ChatGPT/Claude/Gemini/WhatsApp/Telegram.
+8. Build order foundation before any paid checkout pilot.
+9. Build fulfillment/support/return-refund handoff before live payment pilot.
+10. Build sandbox checkout E2E with order handoff and rollback drill.
+11. Only then ask for live provider readiness review.
 
 ### Things That Would Be Reckless To Fast-Track
 
