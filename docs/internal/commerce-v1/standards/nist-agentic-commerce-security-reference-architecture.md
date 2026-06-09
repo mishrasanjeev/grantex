@@ -554,6 +554,8 @@ References are placeholders for later public-safe review.
 - Public-safe capability profile references, if cleared.
 - Public-safe checkout-shape references, if cleared.
 - Public-safe evidence references, if cleared.
+- C6Tc public-safe example corpus references, if legal/security review clears
+  them for future external draft use.
 
 ## Appendix A. Internal Draft-Preparation Checklist
 
