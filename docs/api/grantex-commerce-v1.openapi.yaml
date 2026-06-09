@@ -2991,6 +2991,44 @@ components:
           nullable: true
           maxLength: 2000
 
+    CommerceConnectorDryRunRemediationTriageRequest:
+      type: object
+      additionalProperties: false
+      required: [triage_status]
+      description: >-
+        Operator-only C6Sia triage metadata for a persisted sandbox connector
+        dry-run remediation. This records assignment, status notes, and
+        merchant-visible follow-up guidance without approving production
+        launch, enabling connector execution, public discovery,
+        checkout/payment, live providers, production allowlists, publication,
+        or certification.
+      properties:
+        triage_status:
+          type: string
+          enum:
+            - unassigned
+            - triage_in_progress
+            - waiting_on_merchant
+            - ready_for_followup_review
+            - blocked_for_sandbox_followup
+            - closed_no_action
+        assigned_operator_id:
+          type: string
+          nullable: true
+          maxLength: 128
+        triage_note:
+          type: string
+          nullable: true
+          maxLength: 2000
+        merchant_followup_summary:
+          type: string
+          nullable: true
+          maxLength: 2000
+        next_step:
+          type: string
+          nullable: true
+          maxLength: 2000
+
     CommerceConnectorDryRunRemediation:
       type: object
       description: >-
@@ -3039,6 +3077,33 @@ components:
             corrected_audit_event_id: { type: string, nullable: true }
             followup_audit_event_id: { type: string, nullable: true }
             closed_or_blocked_audit_event_id: { type: string, nullable: true }
+            triage_audit_event_id: { type: string, nullable: true }
+        triage:
+          type: object
+          additionalProperties: false
+          description: >-
+            C6Sia operator-only triage state and merchant-visible safe guidance
+            for sandbox remediation follow-up. It is not production approval
+            and does not enable connector execution.
+          properties:
+            triage_status:
+              type: string
+              enum:
+                - unassigned
+                - triage_in_progress
+                - waiting_on_merchant
+                - ready_for_followup_review
+                - blocked_for_sandbox_followup
+                - closed_no_action
+            assigned_operator_id: { type: string, nullable: true }
+            triage_note: { type: string, nullable: true }
+            merchant_followup_summary: { type: string, nullable: true }
+            next_step: { type: string, nullable: true }
+            triaged_by_operator_id: { type: string, nullable: true }
+            triaged_at: { type: string, format: date-time, nullable: true }
+            triage_audit_event_id: { type: string, nullable: true }
+            triage_is_production_approval: { type: boolean, const: false }
+            triage_enables_connector_execution: { type: boolean, const: false }
         controls:
           type: object
           additionalProperties: false
@@ -3054,6 +3119,8 @@ components:
             remediation_is_production_approval: { type: boolean, const: false }
             remediation_enables_connector_execution: { type: boolean, const: false }
             followup_ready_is_launch_approval: { type: boolean, const: false }
+            triage_is_production_approval: { type: boolean, const: false }
+            triage_enables_connector_execution: { type: boolean, const: false }
         created_at: { type: string, format: date-time, nullable: true }
         updated_at: { type: string, format: date-time, nullable: true }
 
@@ -3103,6 +3170,16 @@ components:
                 warning_count: { type: integer, minimum: 0 }
                 corrected_dry_run_attached: { type: boolean }
                 followup_review_requested: { type: boolean }
+                triage_status:
+                  type: string
+                  enum:
+                    - unassigned
+                    - triage_in_progress
+                    - waiting_on_merchant
+                    - ready_for_followup_review
+                    - blocked_for_sandbox_followup
+                    - closed_no_action
+                assigned_operator_id: { type: string, nullable: true }
                 last_audit_event_id: { type: string, nullable: true }
 
     CommerceConnectorDryRunRemediationListResponse:
@@ -3201,6 +3278,9 @@ components:
           properties:
             visible_to_merchant: { type: boolean, const: true }
             status: { type: string }
+            triage_status: { type: string }
+            merchant_followup_summary: { type: string, nullable: true }
+            triage_next_step: { type: string, nullable: true }
             corrected_dry_run_id: { type: string, nullable: true }
             followup_review_id: { type: string, nullable: true }
             next_step: { type: string }
@@ -3235,6 +3315,8 @@ components:
             remediation_is_production_approval: { type: boolean, const: false }
             remediation_enables_connector_execution: { type: boolean, const: false }
             followup_ready_is_launch_approval: { type: boolean, const: false }
+            triage_is_production_approval: { type: boolean, const: false }
+            triage_enables_connector_execution: { type: boolean, const: false }
 
     CommerceConnectorDryRunRemediationTimelineResponse:
       type: object
@@ -3248,6 +3330,31 @@ components:
         original_dry_run: { $ref: "#/components/schemas/CommerceConnectorDryRunResult" }
         original_review: { $ref: "#/components/schemas/CommerceConnectorDryRunReview" }
         audit_event_id: { type: string, nullable: true }
+
+    CommerceConnectorDryRunRemediationTriageResponse:
+      type: object
+      properties:
+        data: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediation" }
+        audit_event_id: { type: string, nullable: true }
+        controls:
+          type: object
+          additionalProperties: false
+          properties:
+            sandbox_only: { type: boolean, const: true }
+            not_live: { type: boolean, const: true }
+            not_approved: { type: boolean, const: true }
+            public_discovery_enabled: { type: boolean, const: false }
+            checkout_payment_enabled: { type: boolean, const: false }
+            live_provider_enabled: { type: boolean, const: false }
+            live_plural_enabled: { type: boolean, const: false }
+            credential_entry_enabled: { type: boolean, const: false }
+            outbound_sync_enabled: { type: boolean, const: false }
+            production_connector_setup_enabled: { type: boolean, const: false }
+            provider_call_enabled: { type: boolean, const: false }
+            merchant_private_api_calls_enabled: { type: boolean, const: false }
+            production_allowlist_written: { type: boolean, const: false }
+            triage_is_production_approval: { type: boolean, const: false }
+            triage_enables_connector_execution: { type: boolean, const: false }
 
     CommerceConnectorDryRunCorrectedResponse:
       type: object
@@ -6220,6 +6327,18 @@ paths:
               - followup_ready
               - blocked_again
               - closed_no_action
+        - in: query
+          name: triage_status
+          required: false
+          schema:
+            type: string
+            enum:
+              - unassigned
+              - triage_in_progress
+              - waiting_on_merchant
+              - ready_for_followup_review
+              - blocked_for_sandbox_followup
+              - closed_no_action
         - { in: query, name: original_decision, required: false, schema: { type: string, enum: [needs_changes, blocked] } }
         - { in: query, name: has_corrected_dry_run, required: false, schema: { type: boolean } }
         - { in: query, name: has_followup_review, required: false, schema: { type: boolean } }
@@ -6300,6 +6419,49 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { description: Agent caller or cross-merchant caller is denied }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /v1/commerce/merchants/{merchant_id}/connectors/remediations/{remediation_id}/triage:
+    parameters:
+      - { in: path, name: merchant_id, required: true, schema: { type: string } }
+      - { in: path, name: remediation_id, required: true, schema: { type: string } }
+    post:
+      tags: [Connectors]
+      summary: Record sandbox connector remediation operator triage
+      operationId: recordCommerceConnectorRemediationTriage
+      x-implemented: true
+      x-milestone: C6Sia
+      description: >-
+        Operator-only endpoint. Records redacted C6Sia triage state,
+        assignment, notes, and merchant-visible public-safe follow-up guidance
+        for a persisted sandbox connector remediation. Duplicate identical
+        triage requests return the existing record and audit reference without
+        creating duplicate rows or audit evidence. This is internal sandbox
+        evidence only and does not approve production launch, enable connector
+        execution, enable public discovery, enable checkout/payment creation,
+        enable live payments, enable live Plural, call providers, call merchant
+        private APIs, write production config, set allowlists, publish protocol
+        material, or claim certification.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediationTriageRequest" }
+      responses:
+        "201":
+          description: Triage state recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediationTriageResponse" }
+        "200":
+          description: Existing identical triage state returned
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CommerceConnectorDryRunRemediationTriageResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { description: Merchant, agent, or cross-merchant caller is denied }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Merchant is live/disabled or remediation controls are unsafe }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
 
   /v1/commerce/merchants/{merchant_id}/connectors/remediations/{remediation_id}/timeline:
     parameters:

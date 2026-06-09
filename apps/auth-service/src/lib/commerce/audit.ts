@@ -44,6 +44,7 @@ export type CommerceAuditEventType =
   | 'connector_remediation_corrected_dry_run_attached'
   | 'connector_remediation_followup_review_requested'
   | 'connector_remediation_closed_or_blocked'
+  | 'connector_remediation_triage_recorded'
   | 'commerce_agent.created'
   | 'agent.updated'
   | 'commerce_agent.trust_status.updated'

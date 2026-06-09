@@ -123,6 +123,7 @@ interface ConnectorDryRunRemediationParams {
 interface ConnectorDryRunRemediationListQuery {
   merchant_id?: string;
   status?: string;
+  triage_status?: string;
   original_decision?: string;
   has_corrected_dry_run?: string;
   has_followup_review?: string;
@@ -140,6 +141,14 @@ interface ConnectorDryRunReviewRequestBody {
 
 interface ConnectorDryRunRemediationRequestBody {
   public_safe_note?: unknown;
+}
+
+interface ConnectorDryRunRemediationTriageBody {
+  triage_status?: unknown;
+  assigned_operator_id?: unknown;
+  triage_note?: unknown;
+  merchant_followup_summary?: unknown;
+  next_step?: unknown;
 }
 
 interface ConnectorDryRunCorrectedBody {
@@ -245,6 +254,14 @@ interface ConnectorDryRunRemediationRow {
   live_provider_enabled: boolean;
   provider_specific_live_enabled: boolean;
   production_allowlist_written: boolean;
+  triage_status: ConnectorDryRunRemediationTriageStatus;
+  assigned_operator_id: string | null;
+  triage_note: string | null;
+  merchant_followup_summary: string | null;
+  triage_next_step: string | null;
+  triaged_by_operator_id: string | null;
+  triaged_at: Date | string | null;
+  triage_audit_event_id: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -269,6 +286,14 @@ type ConnectorDryRunRemediationStatus =
   | 'blocked_again'
   | 'closed_no_action';
 
+type ConnectorDryRunRemediationTriageStatus =
+  | 'unassigned'
+  | 'triage_in_progress'
+  | 'waiting_on_merchant'
+  | 'ready_for_followup_review'
+  | 'blocked_for_sandbox_followup'
+  | 'closed_no_action';
+
 const REMEDIATION_STATUS_VALUES: ConnectorDryRunRemediationStatus[] = [
   'remediation_requested',
   'waiting_for_corrected_dry_run',
@@ -276,6 +301,15 @@ const REMEDIATION_STATUS_VALUES: ConnectorDryRunRemediationStatus[] = [
   'followup_review_requested',
   'followup_ready',
   'blocked_again',
+  'closed_no_action',
+];
+
+const REMEDIATION_TRIAGE_STATUS_VALUES: ConnectorDryRunRemediationTriageStatus[] = [
+  'unassigned',
+  'triage_in_progress',
+  'waiting_on_merchant',
+  'ready_for_followup_review',
+  'blocked_for_sandbox_followup',
   'closed_no_action',
 ];
 
@@ -340,6 +374,13 @@ const PATCH_FIELDS = new Set([
 const REVIEW_REQUEST_FIELDS = new Set(['request_note']);
 const REVIEW_DECISION_FIELDS = new Set(['decision', 'decision_note']);
 const REMEDIATION_REQUEST_FIELDS = new Set(['public_safe_note']);
+const REMEDIATION_TRIAGE_FIELDS = new Set([
+  'triage_status',
+  'assigned_operator_id',
+  'triage_note',
+  'merchant_followup_summary',
+  'next_step',
+]);
 const REMEDIATION_CORRECTED_FIELDS = new Set(['corrected_dry_run_id', 'public_safe_note']);
 const REMEDIATION_FOLLOWUP_FIELDS = new Set(['request_note']);
 const REVIEW_DECISIONS = new Set<ConnectorDryRunReviewDecision>([
@@ -348,6 +389,7 @@ const REVIEW_DECISIONS = new Set<ConnectorDryRunReviewDecision>([
   'blocked',
 ]);
 const REMEDIATION_STATUSES = new Set<ConnectorDryRunRemediationStatus>(REMEDIATION_STATUS_VALUES);
+const REMEDIATION_TRIAGE_STATUSES = new Set<ConnectorDryRunRemediationTriageStatus>(REMEDIATION_TRIAGE_STATUS_VALUES);
 const REMEDIATION_ORIGINAL_DECISIONS = new Set(['needs_changes', 'blocked']);
 const SENSITIVE_FIELD_RE =
   /(^|_)(secret|token|api_key|apikey|password|credential|credentials|private_key|client_secret|access_token|refresh_token|raw_payload|authorization|bearer)(_|$)/i;
@@ -814,6 +856,17 @@ function dryRunControlsAreSafe(row: ConnectorDryRunRow): boolean {
     && row.provider_specific_live_enabled === false;
 }
 
+function remediationControlsAreSafe(row: ConnectorDryRunRemediationRow): boolean {
+  return row.sandbox_only === true
+    && row.not_live === true
+    && row.not_approved === true
+    && row.public_discovery_enabled === false
+    && row.checkout_payment_enabled === false
+    && row.live_provider_enabled === false
+    && row.provider_specific_live_enabled === false
+    && row.production_allowlist_written === false;
+}
+
 function toDryRunReview(row: ConnectorDryRunReviewRow): Record<string, unknown> {
   return {
     review_id: row.id,
@@ -880,6 +933,19 @@ function toDryRunRemediation(row: ConnectorDryRunRemediationRow): Record<string,
       corrected_audit_event_id: row.corrected_audit_event_id,
       followup_audit_event_id: row.followup_audit_event_id,
       closed_or_blocked_audit_event_id: row.closed_or_blocked_audit_event_id,
+      triage_audit_event_id: row.triage_audit_event_id,
+    },
+    triage: {
+      triage_status: row.triage_status,
+      assigned_operator_id: row.assigned_operator_id,
+      triage_note: row.triage_note,
+      merchant_followup_summary: row.merchant_followup_summary,
+      next_step: row.triage_next_step,
+      triaged_by_operator_id: row.triaged_by_operator_id,
+      triaged_at: rowDateOrNull(row.triaged_at),
+      triage_audit_event_id: row.triage_audit_event_id,
+      triage_is_production_approval: false,
+      triage_enables_connector_execution: false,
     },
     controls: {
       sandbox_only: row.sandbox_only,
@@ -893,6 +959,8 @@ function toDryRunRemediation(row: ConnectorDryRunRemediationRow): Record<string,
       remediation_is_production_approval: false,
       remediation_enables_connector_execution: false,
       followup_ready_is_launch_approval: false,
+      triage_is_production_approval: false,
+      triage_enables_connector_execution: false,
     },
     created_at: rowDateOrNull(row.created_at),
     updated_at: rowDateOrNull(row.updated_at),
@@ -917,6 +985,8 @@ function dryRunRemediationControls(row: ConnectorDryRunRemediationRow): Record<s
     remediation_is_production_approval: false,
     remediation_enables_connector_execution: false,
     followup_ready_is_launch_approval: false,
+    triage_is_production_approval: false,
+    triage_enables_connector_execution: false,
   };
 }
 
@@ -940,7 +1010,10 @@ function toDryRunRemediationQueueItem(row: ConnectorDryRunRemediationRow): Recor
       warning_count: warningSummary.length,
       corrected_dry_run_attached: row.corrected_dry_run_id !== null,
       followup_review_requested: row.followup_review_id !== null,
-      last_audit_event_id: row.followup_audit_event_id
+      triage_status: row.triage_status,
+      assigned_operator_id: row.assigned_operator_id,
+      last_audit_event_id: row.triage_audit_event_id
+        ?? row.followup_audit_event_id
         ?? row.corrected_audit_event_id
         ?? row.closed_or_blocked_audit_event_id
         ?? row.requested_audit_event_id,
@@ -1045,6 +1118,36 @@ function toDryRunRemediationTimeline(
     }));
   }
 
+  if (row.triage_audit_event_id) {
+    entries.push(timelineEntry({
+      sequence: entries.length + 1,
+      key: 'operator_triage_recorded',
+      label: 'Operator triage recorded',
+      status: row.triage_status === 'blocked_for_sandbox_followup' ? 'blocked' : 'complete',
+      eventType: 'connector_remediation_triage_recorded',
+      occurredAt: row.triaged_at,
+      auditEventId: row.triage_audit_event_id,
+      actorKind: 'operator',
+      actorId: row.triaged_by_operator_id,
+      resourceReferences: {
+        remediation_id: row.id,
+        original_dry_run_id: row.original_dry_run_id,
+        original_review_id: row.original_review_id,
+        corrected_dry_run_id: row.corrected_dry_run_id,
+        followup_review_id: row.followup_review_id,
+      },
+      evidenceSummary: {
+        triage_status: row.triage_status,
+        assigned_operator_id_present: row.assigned_operator_id !== null,
+        triage_note_present: row.triage_note !== null,
+        merchant_followup_summary_present: row.merchant_followup_summary !== null,
+        next_step_present: row.triage_next_step !== null,
+        triage_is_production_approval: false,
+        triage_enables_connector_execution: false,
+      },
+    }));
+  }
+
   if (row.followup_review_id) {
     entries.push(timelineEntry({
       sequence: entries.length + 1,
@@ -1117,6 +1220,9 @@ function toDryRunRemediationTimeline(
     merchant_status: {
       visible_to_merchant: true,
       status: row.status,
+      triage_status: row.triage_status,
+      merchant_followup_summary: row.merchant_followup_summary,
+      triage_next_step: row.triage_next_step,
       corrected_dry_run_id: row.corrected_dry_run_id,
       followup_review_id: row.followup_review_id,
       next_step: row.status === 'remediation_requested' || row.status === 'waiting_for_corrected_dry_run'
@@ -1239,6 +1345,9 @@ async function readDryRunRemediationById(
            sandbox_only, not_live, not_approved, public_discovery_enabled,
            checkout_payment_enabled, live_provider_enabled,
            provider_specific_live_enabled, production_allowlist_written,
+           triage_status, assigned_operator_id, triage_note,
+           merchant_followup_summary, triage_next_step,
+           triaged_by_operator_id, triaged_at, triage_audit_event_id,
            created_at, updated_at
       FROM commerce_connector_dry_run_remediations
      WHERE tenant_id = ${tenantId}
@@ -1266,6 +1375,9 @@ async function readDryRunRemediationForOriginal(
            sandbox_only, not_live, not_approved, public_discovery_enabled,
            checkout_payment_enabled, live_provider_enabled,
            provider_specific_live_enabled, production_allowlist_written,
+           triage_status, assigned_operator_id, triage_note,
+           merchant_followup_summary, triage_next_step,
+           triaged_by_operator_id, triaged_at, triage_audit_event_id,
            created_at, updated_at
       FROM commerce_connector_dry_run_remediations
      WHERE tenant_id = ${tenantId}
@@ -1283,6 +1395,7 @@ async function readDryRunRemediationQueue(
     tenantId: string;
     merchantId: string | null;
     status: ConnectorDryRunRemediationStatus | null;
+    triageStatus: ConnectorDryRunRemediationTriageStatus | null;
     originalDecision: 'needs_changes' | 'blocked' | null;
     hasCorrectedDryRun: boolean | null;
     hasFollowupReview: boolean | null;
@@ -1299,11 +1412,15 @@ async function readDryRunRemediationQueue(
            sandbox_only, not_live, not_approved, public_discovery_enabled,
            checkout_payment_enabled, live_provider_enabled,
            provider_specific_live_enabled, production_allowlist_written,
+           triage_status, assigned_operator_id, triage_note,
+           merchant_followup_summary, triage_next_step,
+           triaged_by_operator_id, triaged_at, triage_audit_event_id,
            created_at, updated_at
       FROM commerce_connector_dry_run_remediations
      WHERE tenant_id = ${input.tenantId}
        AND (${input.merchantId}::text IS NULL OR merchant_id = ${input.merchantId})
        AND (${input.status}::text IS NULL OR status = ${input.status})
+       AND (${input.triageStatus}::text IS NULL OR triage_status = ${input.triageStatus})
        AND (${input.originalDecision}::text IS NULL OR original_decision = ${input.originalDecision})
        AND (
          ${input.hasCorrectedDryRun}::boolean IS NULL
@@ -1486,6 +1603,66 @@ function validateRemediationRequestBody(body: Record<string, unknown>): { public
     });
   }
   return { publicSafeNote };
+}
+
+function safeOperatorReference(value: unknown, fieldName: string, fields: Record<string, string>): string | null {
+  if (value === undefined || value === null) return null;
+  if (!isString(value)) {
+    fields[fieldName] = 'must be a string when provided';
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!/^[A-Za-z0-9._:-]{1,128}$/.test(trimmed)) {
+    fields[fieldName] = 'must be a public-safe operator reference';
+    return null;
+  }
+  if (SENSITIVE_VALUE_RE.test(trimmed) || REVIEW_UNSAFE_VALUE_RE.test(trimmed)) {
+    fields[fieldName] = 'must not include secrets, provider metadata, private API values, production config, allowlists, checkout, or payment artifacts';
+    return null;
+  }
+  return trimmed;
+}
+
+function validateRemediationTriageBody(
+  body: Record<string, unknown>,
+  defaultOperatorId: string,
+): {
+  triageStatus: ConnectorDryRunRemediationTriageStatus;
+  assignedOperatorId: string | null;
+  triageNote: string | null;
+  merchantFollowupSummary: string | null;
+  nextStep: string | null;
+} {
+  const fields: Record<string, string> = {};
+  rejectUnsupportedOrPrivateFields(body, REMEDIATION_TRIAGE_FIELDS, fields);
+  const rawStatus = body['triage_status'];
+  let triageStatus: ConnectorDryRunRemediationTriageStatus = 'triage_in_progress';
+  if (REMEDIATION_TRIAGE_STATUSES.has(rawStatus as ConnectorDryRunRemediationTriageStatus)) {
+    triageStatus = rawStatus as ConnectorDryRunRemediationTriageStatus;
+  } else {
+    fields['triage_status'] = `must be one of: ${REMEDIATION_TRIAGE_STATUS_VALUES.join(', ')}`;
+  }
+  const assignedOperatorId = body['assigned_operator_id'] === undefined
+    ? defaultOperatorId
+    : safeOperatorReference(body['assigned_operator_id'], 'assigned_operator_id', fields);
+  const triageNote = safeReviewNote(body['triage_note'], 'triage_note', fields);
+  const merchantFollowupSummary = safeReviewNote(
+    body['merchant_followup_summary'],
+    'merchant_followup_summary',
+    fields,
+  );
+  const nextStep = safeReviewNote(body['next_step'], 'next_step', fields);
+  if ((triageStatus === 'waiting_on_merchant' || triageStatus === 'blocked_for_sandbox_followup')
+    && !merchantFollowupSummary) {
+    fields['merchant_followup_summary'] = 'required for merchant-visible waiting or blocked triage statuses';
+  }
+  if (Object.keys(fields).length > 0) {
+    throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+      details: { fields },
+      retryable: false,
+    });
+  }
+  return { triageStatus, assignedOperatorId, triageNote, merchantFollowupSummary, nextStep };
 }
 
 function validateCorrectedDryRunBody(body: Record<string, unknown>): {
@@ -1791,6 +1968,9 @@ async function insertDryRunRemediationRequest(
               sandbox_only, not_live, not_approved, public_discovery_enabled,
               checkout_payment_enabled, live_provider_enabled,
               provider_specific_live_enabled, production_allowlist_written,
+              triage_status, assigned_operator_id, triage_note,
+              merchant_followup_summary, triage_next_step,
+              triaged_by_operator_id, triaged_at, triage_audit_event_id,
               created_at, updated_at
   `;
   const row = rows[0];
@@ -1862,6 +2042,9 @@ async function attachCorrectedDryRunToRemediation(
               sandbox_only, not_live, not_approved, public_discovery_enabled,
               checkout_payment_enabled, live_provider_enabled,
               provider_specific_live_enabled, production_allowlist_written,
+              triage_status, assigned_operator_id, triage_note,
+              merchant_followup_summary, triage_next_step,
+              triaged_by_operator_id, triaged_at, triage_audit_event_id,
               created_at, updated_at
   `;
   const row = rows[0];
@@ -1932,12 +2115,103 @@ async function attachFollowupReviewToRemediation(
               sandbox_only, not_live, not_approved, public_discovery_enabled,
               checkout_payment_enabled, live_provider_enabled,
               provider_specific_live_enabled, production_allowlist_written,
+              triage_status, assigned_operator_id, triage_note,
+              merchant_followup_summary, triage_next_step,
+              triaged_by_operator_id, triaged_at, triage_audit_event_id,
               created_at, updated_at
   `;
   const row = rows[0];
   if (!row) {
     throw new CommerceHttpError(409, 'connector_remediation_followup_review_conflict',
       'Connector remediation already references a different follow-up review', { retryable: false });
+  }
+  return { row, auditEventId: audit.id, created: true };
+}
+
+async function recordDryRunRemediationTriage(
+  tx: TxSql,
+  input: {
+    tenantId: string;
+    merchantId: string;
+    remediation: ConnectorDryRunRemediationRow;
+    operatorId: string;
+    triageStatus: ConnectorDryRunRemediationTriageStatus;
+    assignedOperatorId: string | null;
+    triageNote: string | null;
+    merchantFollowupSummary: string | null;
+    nextStep: string | null;
+    requestId: string;
+  },
+): Promise<{ row: ConnectorDryRunRemediationRow; auditEventId: string | null; created: boolean }> {
+  const unchanged = input.remediation.triage_status === input.triageStatus
+    && (input.remediation.assigned_operator_id ?? null) === input.assignedOperatorId
+    && (input.remediation.triage_note ?? null) === input.triageNote
+    && (input.remediation.merchant_followup_summary ?? null) === input.merchantFollowupSummary
+    && (input.remediation.triage_next_step ?? null) === input.nextStep;
+  if (unchanged) {
+    return { row: input.remediation, auditEventId: input.remediation.triage_audit_event_id, created: false };
+  }
+  const audit = await appendCommerceAudit(tx as unknown as Sql, {
+    tenantId: input.tenantId,
+    merchantId: input.merchantId,
+    eventType: 'connector_remediation_triage_recorded',
+    resourceType: 'commerce_connector_dry_run_remediation',
+    resourceId: input.remediation.id,
+    requestId: input.requestId,
+    metadata: {
+      remediation_id: input.remediation.id,
+      original_dry_run_id: input.remediation.original_dry_run_id,
+      original_review_id: input.remediation.original_review_id,
+      previous_triage_status: input.remediation.triage_status,
+      triage_status: input.triageStatus,
+      assigned_operator_id_present: input.assignedOperatorId !== null,
+      triage_note_present: input.triageNote !== null,
+      merchant_followup_summary_present: input.merchantFollowupSummary !== null,
+      next_step_present: input.nextStep !== null,
+      sandbox_only: true,
+      not_live: true,
+      not_approved: true,
+      public_discovery_enabled: false,
+      checkout_payment_enabled: false,
+      live_provider_enabled: false,
+      [PROVIDER_SPECIFIC_LIVE_DISABLED_KEY]: false,
+      production_allowlist_written: false,
+      triage_is_production_approval: false,
+      triage_enables_connector_execution: false,
+    },
+  });
+  const rows = await tx<ConnectorDryRunRemediationRow[]>`
+    UPDATE commerce_connector_dry_run_remediations
+       SET triage_status = ${input.triageStatus},
+           assigned_operator_id = ${input.assignedOperatorId},
+           triage_note = ${input.triageNote},
+           merchant_followup_summary = ${input.merchantFollowupSummary},
+           triage_next_step = ${input.nextStep},
+           triaged_by_operator_id = ${input.operatorId},
+           triaged_at = NOW(),
+           triage_audit_event_id = ${audit.id},
+           updated_at = NOW()
+     WHERE tenant_id = ${input.tenantId}
+       AND merchant_id = ${input.merchantId}
+       AND id = ${input.remediation.id}
+    RETURNING id, tenant_id, merchant_id, original_dry_run_id,
+              original_review_id, original_decision, status, public_safe_note,
+              blocker_summary, warning_summary, corrected_dry_run_id,
+              followup_review_id, requested_by_kind, requested_by_id,
+              requested_audit_event_id, corrected_audit_event_id,
+              followup_audit_event_id, closed_or_blocked_audit_event_id,
+              sandbox_only, not_live, not_approved, public_discovery_enabled,
+              checkout_payment_enabled, live_provider_enabled,
+              provider_specific_live_enabled, production_allowlist_written,
+              triage_status, assigned_operator_id, triage_note,
+              merchant_followup_summary, triage_next_step,
+              triaged_by_operator_id, triaged_at, triage_audit_event_id,
+              created_at, updated_at
+  `;
+  const row = rows[0];
+  if (!row) {
+    throw new CommerceHttpError(404, 'connector_remediation_not_found',
+      'Connector dry-run remediation was not found in this tenant and merchant');
   }
   return { row, auditEventId: audit.id, created: true };
 }
@@ -2545,6 +2819,14 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
     if (rawStatus !== undefined && status === null) {
       fields['status'] = `must be one of: ${REMEDIATION_STATUS_VALUES.join(', ')}`;
     }
+    const rawTriageStatus = request.query.triage_status;
+    const triageStatus = rawTriageStatus
+      && REMEDIATION_TRIAGE_STATUSES.has(rawTriageStatus as ConnectorDryRunRemediationTriageStatus)
+      ? rawTriageStatus as ConnectorDryRunRemediationTriageStatus
+      : null;
+    if (rawTriageStatus !== undefined && triageStatus === null) {
+      fields['triage_status'] = `must be one of: ${REMEDIATION_TRIAGE_STATUS_VALUES.join(', ')}`;
+    }
     const rawOriginalDecision = request.query.original_decision;
     const originalDecision = rawOriginalDecision && REMEDIATION_ORIGINAL_DECISIONS.has(rawOriginalDecision)
       ? rawOriginalDecision as 'needs_changes' | 'blocked'
@@ -2577,6 +2859,7 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
       tenantId,
       merchantId,
       status,
+      triageStatus,
       originalDecision,
       hasCorrectedDryRun,
       hasFollowupReview,
@@ -2588,6 +2871,7 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
       filters: {
         merchant_id: merchantId,
         status,
+        triage_status: triageStatus,
         original_decision: originalDecision,
         has_corrected_dry_run: hasCorrectedDryRun,
         has_followup_review: hasFollowupReview,
@@ -2646,6 +2930,71 @@ export async function commerceConnectorRoutes(app: FastifyInstance): Promise<voi
         'Connector remediation follow-up review was not found in this tenant and merchant');
     }
     return reply.status(200).send({ data: toDryRunRemediationTimeline(remediation, followupReview) });
+  });
+
+  app.post<{
+    Params: Required<Pick<ConnectorDryRunRemediationParams, 'merchantId' | 'remediationId'>>;
+    Body: ConnectorDryRunRemediationTriageBody;
+  }>('/merchants/:merchantId/connectors/remediations/:remediationId/triage', async (request, reply) => {
+    if (!isPlainObject(request.body ?? {})) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { body: 'must be a JSON object' } },
+        retryable: false,
+      });
+    }
+    const operator = operatorCaller(request);
+    const merchantId = merchantIdForConnectorRequest(request, request.params.merchantId);
+    const tenantId = request.commerceTenantId;
+    const body = validateRemediationTriageBody((request.body ?? {}) as Record<string, unknown>, operator.developerId);
+    const sql = getSql();
+    const merchant = await readMerchantForDryRun(sql, tenantId, merchantId);
+    if (!merchant) {
+      throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+    }
+    const remediation = await readDryRunRemediationById(sql, tenantId, merchantId, request.params.remediationId);
+    if (!remediation) {
+      throw new CommerceHttpError(404, 'connector_remediation_not_found',
+        'Connector dry-run remediation was not found in this tenant and merchant');
+    }
+    const blockerCodes: string[] = [];
+    if (merchant.disabled_at !== null) blockerCodes.push('merchant_disabled');
+    if (merchant.environment !== 'sandbox') blockerCodes.push('live_merchant_mode_blocked');
+    if (!remediationControlsAreSafe(remediation)) blockerCodes.push('remediation_controls_not_safe');
+    if (blockerCodes.length > 0) {
+      const auditEventId = await appendRemediationBlockedAudit(sql, {
+        tenantId,
+        merchantId,
+        remediationId: remediation.id,
+        requestId: request.id,
+        blockerCodes,
+      });
+      throw new CommerceHttpError(409, 'connector_remediation_triage_blocked',
+        'Connector remediation triage is blocked for sandbox safety', {
+          auditEventId,
+          details: remediationBlockedDetails(remediation, blockerCodes),
+          retryable: false,
+        });
+    }
+    const result = await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      return recordDryRunRemediationTriage(tx, {
+        tenantId,
+        merchantId,
+        remediation,
+        operatorId: operator.developerId,
+        triageStatus: body.triageStatus,
+        assignedOperatorId: body.assignedOperatorId,
+        triageNote: body.triageNote,
+        merchantFollowupSummary: body.merchantFollowupSummary,
+        nextStep: body.nextStep,
+        requestId: request.id,
+      });
+    });
+    return reply.status(result.created ? 201 : 200).send({
+      data: toDryRunRemediation(result.row),
+      audit_event_id: result.auditEventId,
+      controls: dryRunRemediationControls(result.row),
+    });
   });
 
   app.post<{

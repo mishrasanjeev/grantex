@@ -360,6 +360,22 @@ or concrete allowlists. It does not approve production launch, connector
 execution, outbound sync, public discovery, checkout/payment, live providers,
 public protocol publication, or certification.
 
+C6Sia adds backend-only operator triage controls for the same persisted
+remediation loop. Operators can record a tenant-scoped triage status, assignment
+reference, public-safe internal note, and merchant-visible follow-up guidance.
+Duplicate identical triage updates return the existing evidence and audit
+reference instead of creating duplicate rows or audit events.
+
+C6Sia triage helps the merchant understand the next sandbox correction step,
+for example rerunning a local manual/CSV dry-run or attaching corrected
+evidence. It is not production approval, connector execution approval, outbound
+sync approval, public discovery approval, checkout/payment approval, live
+provider approval, public protocol publication, or certification. The triage
+fields must not include raw rows, raw merchant-system payloads, credentials,
+tokens, provider metadata, private API URLs, checkout URLs, payment identifiers,
+production config values, concrete allowlists, customer data, or secret
+material.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent
