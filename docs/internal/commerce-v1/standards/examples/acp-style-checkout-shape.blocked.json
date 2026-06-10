@@ -1,0 +1,48 @@
+{
+  "example_id": "acp_checkout_shape_example_blocked_001",
+  "example_kind": "acp_style_checkout_shape",
+  "scenario": "blocked_checkout",
+  "status": "internal_example_only",
+  "internal_example_only": true,
+  "synthetic_data": true,
+  "public_submission_status": "not_submitted",
+  "certification_claims": [],
+  "production_approval": false,
+  "public_discovery_enabled": false,
+  "checkout_payment_enabled": false,
+  "live_provider_enabled": false,
+  "checkout_shape": {
+    "checkout_reference": "checkout_example_blocked_001",
+    "merchant_reference": "mer_example_home_001",
+    "buyer_session_reference": "buyer_session_example_001",
+    "line_items": [
+      {
+        "item_id": "item_example_lamp_001",
+        "variant_id": "variant_example_lamp_warm_001",
+        "quantity": 1,
+        "inventory_state": "stale"
+      }
+    ],
+    "cart_total": {
+      "amount": "49.00",
+      "currency": "USD"
+    },
+    "checkout_state": "blocked",
+    "payment_state": "not_created"
+  },
+  "refusal": {
+    "reason_codes": [
+      "consent_required",
+      "checkout_not_enabled",
+      "stale_inventory",
+      "live_payment_not_enabled"
+    ],
+    "safe_message": "Checkout is blocked in this synthetic internal example."
+  },
+  "blocked_controls": {
+    "checkout_creation_enabled": false,
+    "payment_creation_enabled": false,
+    "provider_call_enabled": false,
+    "live_payment_enabled": false
+  }
+}

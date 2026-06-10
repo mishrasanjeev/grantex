@@ -1,0 +1,138 @@
+{
+  "manifest_kind": "agentic_commerce_public_safe_example_corpus_manifest",
+  "manifest_version": "c6tc-public-safe-1",
+  "created_at": "2026-06-09T00:00:00.000Z",
+  "status": "internal_draft_preparation_only",
+  "internal_example_only": true,
+  "synthetic_data": true,
+  "public_submission_status": "not_submitted",
+  "certification_claims": [],
+  "production_approval": false,
+  "public_discovery_enabled": false,
+  "checkout_payment_enabled": false,
+  "live_provider_enabled": false,
+  "non_live": true,
+  "non_enabling": true,
+  "non_publication": true,
+  "non_certifying": true,
+  "global_controls": {
+    "ietf_submission": false,
+    "nist_submission": false,
+    "nccoe_acceptance": false,
+    "public_protocol_publication": false,
+    "public_guidance_publication": false,
+    "production_commerce_v1_enabled": false,
+    "checkout_payment_creation_enabled": false,
+    "live_payment_enabled": false,
+    "live_plural_enabled": false,
+    "provider_call_enabled": false,
+    "merchant_private_api_call_enabled": false,
+    "production_allowlists_set": false,
+    "cloud_resources_created": false,
+    "production_config_changed": false,
+    "secrets_included": false,
+    "credentials_included": false,
+    "raw_payloads_included": false,
+    "real_provider_references_included": false,
+    "real_merchant_data_included": false
+  },
+  "synthetic_identifiers": {
+    "merchant_id": "mer_example_home_001",
+    "merchant_name": "Example Home Goods Merchant",
+    "item_id": "item_example_lamp_001",
+    "variant_id": "variant_example_lamp_warm_001",
+    "buyer_session_id": "buyer_session_example_001",
+    "evidence_id": "evidence_example_001",
+    "connector_source_id": "source_example_catalog_001",
+    "policy_id": "policy_example_v1"
+  },
+  "examples": [
+    {
+      "path": "buyer-session.discovery.available.json",
+      "surface": "buyer_session",
+      "scenario": "read_only_discovery_success"
+    },
+    {
+      "path": "buyer-session.checkout-refused.json",
+      "surface": "buyer_session",
+      "scenario": "checkout_payment_refused"
+    },
+    {
+      "path": "capability-profile.read-only.json",
+      "surface": "capability_profile",
+      "scenario": "read_only"
+    },
+    {
+      "path": "capability-profile.blocked.json",
+      "surface": "capability_profile",
+      "scenario": "blocked"
+    },
+    {
+      "path": "evidence-envelope.consent-preview.json",
+      "surface": "evidence_envelope",
+      "scenario": "consent_preview"
+    },
+    {
+      "path": "connector-source-metadata.dry-run.json",
+      "surface": "connector_source_metadata",
+      "scenario": "dry_run_source_precedence"
+    },
+    {
+      "path": "schemaorg-product-offer.preview.json",
+      "surface": "schemaorg_style_product_offer_preview",
+      "scenario": "public_safe_preview"
+    },
+    {
+      "path": "acp-style-checkout-shape.blocked.json",
+      "surface": "acp_style_checkout_shape",
+      "scenario": "blocked_checkout"
+    },
+    {
+      "path": "ap2-style-evidence.unsigned-preview.json",
+      "surface": "ap2_style_evidence_preview",
+      "scenario": "unsigned_preview"
+    }
+  ],
+  "required_refusal_codes_covered": [
+    "consent_required",
+    "public_discovery_disabled",
+    "checkout_not_enabled",
+    "live_payment_not_enabled",
+    "merchant_private_api_not_allowed",
+    "provider_call_not_allowed",
+    "stale_inventory"
+  ],
+  "forbidden_content": [
+    "real_merchant_names",
+    "real_addresses",
+    "real_phone_numbers",
+    "real_emails",
+    "pan_gst_or_tax_ids",
+    "provider_credentials",
+    "tokens_jwts_or_passports",
+    "idempotency_keys",
+    "webhook_secrets",
+    "db_or_redis_urls",
+    "private_keys",
+    "raw_payload_dumps",
+    "production_config_values",
+    "concrete_allowlist_values",
+    "real_provider_references",
+    "real_platform_tenant_or_merchant_ids"
+  ],
+  "stop_conditions": [
+    "external_submission",
+    "public_protocol_publication",
+    "public_guidance_publication",
+    "certification_claim_added",
+    "conformance_or_compliance_claim_added",
+    "real_merchant_or_private_data_added",
+    "provider_specific_reference_added",
+    "production_config_or_allowlist_added",
+    "public_discovery_enablement",
+    "checkout_payment_enablement",
+    "live_payment_enablement",
+    "provider_call_enablement",
+    "merchant_private_api_call_enablement"
+  ]
+}
