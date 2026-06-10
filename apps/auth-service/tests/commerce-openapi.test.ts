@@ -62,6 +62,95 @@ describe('Grantex Commerce V1 OpenAPI 3.1 contract', () => {
     expect(content).toMatch(/x-milestone:\s*M2/);
   });
 
+  it('declares the C6J schema.org JSON-LD preview as implemented and preview-only', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/schemaorg-jsonld-preview');
+    expect(content).toMatch(/operationId:\s*getMerchantSchemaOrgJsonLdPreview/);
+    expect(content).toMatch(/x-milestone:\s*C6J/);
+    expect(content).toMatch(/SchemaOrgJsonLdPreview:/);
+    expect(content).toMatch(/schemaorg_publication_enabled:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/certification_claims:[\s\S]*maxItems:\s*0/);
+  });
+
+  it('declares the C6K UCP-style capability profile preview with Grantex-owned namespace only', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/ucp-capability-profile-preview');
+    expect(content).toMatch(/operationId:\s*getMerchantUcpCapabilityProfilePreview/);
+    expect(content).toMatch(/x-milestone:\s*C6K/);
+    expect(content).toMatch(/UcpCapabilityProfilePreview:/);
+    expect(content).toMatch(/namespace:\s*\{\s*type:\s*string,\s*enum:\s*\[dev\.grantex\.commerce\.discovery\.preview\]\s*\}/);
+    expect(content).toMatch(/ucp_certification_claim:\s*\{\s*type:\s*string,\s*enum:\s*\[none\]\s*\}/);
+    expect(content).not.toContain('dev.ucp.* capabilities as certified');
+  });
+
+  it('declares the C6L ACP-style checkout shape preview as sandbox-only and non-enabling', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/acp-checkout-shape-preview');
+    expect(content).toMatch(/operationId:\s*getMerchantAcpCheckoutShapePreview/);
+    expect(content).toMatch(/x-milestone:\s*C6L/);
+    expect(content).toMatch(/AcpCheckoutShapePreview:/);
+    expect(content).toMatch(/profile_style:\s*\{\s*type:\s*string,\s*enum:\s*\[acp_style_checkout_shape_preview\]\s*\}/);
+    expect(content).toMatch(/acp_certification_claim:\s*\{\s*type:\s*string,\s*enum:\s*\[none\]\s*\}/);
+    expect(content).toMatch(/payment_intent_creation_enabled:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/provider_call_enabled_by_preview:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+  });
+
+  it('declares the C6M AP2-style evidence preview as unsigned and non-enabling', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/ap2-evidence-preview');
+    expect(content).toMatch(/operationId:\s*getMerchantAp2EvidencePreview/);
+    expect(content).toMatch(/x-milestone:\s*C6M/);
+    expect(content).toMatch(/Ap2EvidencePreview:/);
+    expect(content).toMatch(/profile_style:\s*\{\s*type:\s*string,\s*enum:\s*\[ap2_style_evidence_preview\]\s*\}/);
+    expect(content).toMatch(/ap2_certification_claim:\s*\{\s*type:\s*string,\s*enum:\s*\[none\]\s*\}/);
+    expect(content).toMatch(/signature_status:\s*\{\s*type:\s*string,\s*enum:\s*\[unsigned_preview\]\s*\}/);
+    expect(content).toMatch(/signed_production_mandate_created:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/payment_network_submission_enabled:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+  });
+
+  it('declares the C6N existing-system connector registry as metadata-only', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/connectors');
+    expect(content).toContain('/v1/commerce/connectors/{connector_key}');
+    expect(content).toMatch(/operationId:\s*createCommerceConnector/);
+    expect(content).toMatch(/operationId:\s*listCommerceConnectors/);
+    expect(content).toMatch(/operationId:\s*updateCommerceConnector/);
+    expect(content).toMatch(/x-milestone:\s*C6N/);
+    expect(content).toMatch(/metadata_only_registry:\s*\{\s*type:\s*boolean,\s*const:\s*true\s*\}/);
+    expect(content).toMatch(/credentials_stored_by_registry:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/agenticorg_direct_execution_allowed:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/provider_call_enabled_by_registry:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+  });
+
+  it('declares the C6R sandbox connector dry-run APIs as non-enabling', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/connectors/dry-run');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}');
+    expect(content).toMatch(/operationId:\s*runCommerceConnectorDryRun/);
+    expect(content).toMatch(/operationId:\s*getCommerceConnectorDryRun/);
+    expect(content).toMatch(/x-milestone:\s*C6R/);
+    expect(content).toMatch(/CommerceConnectorDryRunResult:/);
+    expect(content).toMatch(/sandbox_only:\s*\{\s*type:\s*boolean,\s*const:\s*true\s*\}/);
+    expect(content).toMatch(/public_discovery_enabled:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/checkout_payment_enabled:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/live_provider_enabled:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+  });
+
+  it('declares the C6Sa connector dry-run review APIs as sandbox evidence only', () => {
+    const content = readFileSync(yamlPath, 'utf8');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}/review-request');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}/review');
+    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/connectors/dry-runs/{dry_run_id}/review/decision');
+    expect(content).toMatch(/operationId:\s*requestCommerceConnectorDryRunReview/);
+    expect(content).toMatch(/operationId:\s*getCommerceConnectorDryRunReview/);
+    expect(content).toMatch(/operationId:\s*recordCommerceConnectorDryRunReviewDecision/);
+    expect(content).toMatch(/x-milestone:\s*C6Sa/);
+    expect(content).toMatch(/CommerceConnectorDryRunReview:/);
+    expect(content).toMatch(/review_is_production_approval:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/review_enables_connector_execution:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).toMatch(/production_allowlist_written:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+  });
+
   it('M2 passport endpoints flipped to x-implemented: true', () => {
     const content = readFileSync(yamlPath, 'utf8');
     // Each of the five passport routes must now carry x-implemented: true
