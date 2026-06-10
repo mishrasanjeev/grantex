@@ -1,0 +1,95 @@
+{
+  "fixture_kind": "agentic_commerce_c6oa_preview_conformance_fixture",
+  "fixture_version": "c6oa-preview-1",
+  "surface": "schemaorg_jsonld_preview",
+  "scenario": "blocked_refusal",
+  "synthetic": true,
+  "data_classification": "synthetic_preview_only",
+  "sandbox_only": true,
+  "preview_only": true,
+  "non_live": true,
+  "non_enabling": true,
+  "non_publication": true,
+  "non_certifying": true,
+  "publication_status": "not_published",
+  "certification_claims": [],
+  "generated_at": "2026-06-07T00:00:00.000Z",
+  "source_reference": {
+    "system": "grantex",
+    "merged_base": "80def0d6a6ccd61a5418d8a0628ffc533b08def0",
+    "canonical_state": "synthetic_missing_catalog_fixture",
+    "tenant_scoped": true
+  },
+  "controls": {
+    "schemaorg_publication_enabled": false,
+    "public_discovery_enabled": false,
+    "production_commerce_v1_enabled": false,
+    "checkout_payment_creation_enabled": false,
+    "checkout_link_creation_enabled": false,
+    "live_payment_enabled": false,
+    "live_provider_enabled": false,
+    "provider_call_enabled": false,
+    "provider_credentials_exposed": false,
+    "merchant_private_api_call_enabled": false,
+    "agenticorg_direct_execution_allowed": false,
+    "production_allowlist_written": false
+  },
+  "expected_blockers": [
+    "schemaorg_product_evidence_missing",
+    "schemaorg_offer_evidence_missing",
+    "schemaorg_return_policy_evidence_missing",
+    "schemaorg_shipping_details_evidence_missing"
+  ],
+  "payload": {
+    "status": "blocked",
+    "message": "Schema.org JSON-LD preview is blocked until public-safe sandbox catalog evidence exists.",
+    "preview_only": true,
+    "publication_status": "not_published",
+    "schemaorg_publication_enabled": false,
+    "public_discovery_enabled": false,
+    "checkout_payment_enabled": false,
+    "live_provider_enabled": false,
+    "production_allowlist_written": false,
+    "live_mode_status": "not_live",
+    "production_approval_status": "not_approved",
+    "certification_claims": [],
+    "jsonld": {
+      "@context": "https://schema.org",
+      "@graph": []
+    },
+    "included_types": [],
+    "omitted_types": [
+      "Product",
+      "Offer",
+      "MerchantReturnPolicy",
+      "OfferShippingDetails"
+    ],
+    "allowed_capabilities": [
+      "schemaorg_jsonld_preview_read"
+    ],
+    "blocked_capabilities": [
+      "schemaorg_publication",
+      "public_discovery",
+      "checkout_payment_creation",
+      "live_payment",
+      "provider_credentials",
+      "production_allowlist"
+    ],
+    "blockers": [
+      "schemaorg_product_evidence_missing",
+      "schemaorg_offer_evidence_missing",
+      "schemaorg_return_policy_evidence_missing",
+      "schemaorg_shipping_details_evidence_missing"
+    ],
+    "evidence_summary": {
+      "product_count": 0,
+      "offer_count": 0,
+      "return_policy_count": 0,
+      "shipping_details_count": 0,
+      "omitted_unsafe_field_count": 0,
+      "readiness_state": "catalog_missing",
+      "read_only": true,
+      "public_safe": true
+    }
+  }
+}
