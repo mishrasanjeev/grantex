@@ -1,0 +1,61 @@
+{
+  "example_id": "buyer_session_example_checkout_refused_001",
+  "example_kind": "buyer_session",
+  "scenario": "checkout_payment_refused",
+  "status": "internal_example_only",
+  "internal_example_only": true,
+  "synthetic_data": true,
+  "public_submission_status": "not_submitted",
+  "certification_claims": [],
+  "production_approval": false,
+  "public_discovery_enabled": false,
+  "checkout_payment_enabled": false,
+  "live_provider_enabled": false,
+  "merchant": {
+    "merchant_id": "mer_example_home_001",
+    "display_name": "Example Home Goods Merchant",
+    "environment": "internal_preview"
+  },
+  "buyer_session": {
+    "buyer_session_id": "buyer_session_example_001",
+    "buyer_agent_id": "agent_example_home_001",
+    "agent_platform_id": "platform_example_001",
+    "requested_capability": "checkout.payment.request",
+    "authority_state": "not_authorized_for_payment"
+  },
+  "requested_item": {
+    "item_id": "item_example_lamp_001",
+    "variant_id": "variant_example_lamp_warm_001",
+    "quantity": 1,
+    "inventory_freshness": "stale"
+  },
+  "refusal": {
+    "result_state": "refused",
+    "primary_reason": "consent_required",
+    "safe_buyer_message": "This request cannot continue because checkout and payment are not enabled for this internal example.",
+    "operator_safe_detail": "Synthetic example only; no provider call, private merchant API call, live payment, or public discovery action is permitted.",
+    "reason_codes": [
+      "consent_required",
+      "checkout_not_enabled",
+      "live_payment_not_enabled",
+      "merchant_private_api_not_allowed",
+      "provider_call_not_allowed",
+      "stale_inventory"
+    ]
+  },
+  "blocked_actions": {
+    "checkout_create": true,
+    "payment_create": true,
+    "live_payment": true,
+    "provider_call": true,
+    "merchant_private_api_call": true
+  },
+  "redaction": {
+    "tokens_included": false,
+    "jwts_included": false,
+    "passports_included": false,
+    "idempotency_keys_included": false,
+    "provider_references_included": false,
+    "raw_payloads_included": false
+  }
+}

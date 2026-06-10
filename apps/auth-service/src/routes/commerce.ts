@@ -43,6 +43,10 @@ import {
   type SandboxReadOnlyDiscoveryReviewAuditSnapshot,
   type SandboxReadOnlyDiscoveryRolloutProposalPayload,
 } from '../lib/commerce/sandbox-onboarding.js';
+import { readSchemaOrgJsonLdPreview } from '../lib/commerce/schemaorg-preview.js';
+import { readUcpCapabilityProfilePreview } from '../lib/commerce/ucp-capability-preview.js';
+import { readAcpCheckoutShapePreview } from '../lib/commerce/acp-checkout-preview.js';
+import { readAp2EvidencePreview } from '../lib/commerce/ap2-evidence-preview.js';
 import { commerceTenantsRoutes } from './commerce-tenants.js';
 import { commercePassportRoutes } from './commerce-passport.js';
 import { commerceConsentRoutes } from './commerce-consent.js';
@@ -51,6 +55,7 @@ import { commerceProviderCredentialRoutes } from './commerce-provider-credential
 import { commerceCartPaymentRoutes } from './commerce-cart-payment.js';
 import { commerceOpsRoutes } from './commerce-ops.js';
 import { commerceWebhookSourceRoutes } from './commerce-webhook-sources.js';
+import { commerceConnectorRoutes } from './commerce-connectors.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -2498,6 +2503,160 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   // columns are intentionally not accepted.
   // ----------------------------------------------------------------------
   app.get<{ Params: { merchantId: string } }>(
+    '/merchants/:merchantId/schemaorg-jsonld-preview',
+    async (request, reply) => {
+      requireOperatorOrSelfMerchant(request, request.params.merchantId);
+      const sql = getSql();
+      const context = await readSchemaOrgJsonLdPreview(sql, {
+        tenantId: request.commerceTenantId,
+        merchantId: request.params.merchantId,
+      });
+      if (!context) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      if (context.merchantEnvironment !== 'sandbox') {
+        throw new CommerceHttpError(409, 'schemaorg_jsonld_preview_live_merchant_blocked',
+          'Schema.org JSON-LD preview is only available for sandbox merchants',
+          {
+            details: {
+              sandbox_only: true,
+              preview_only: true,
+              schemaorg_publication_enabled: false,
+              public_discovery_enabled: false,
+              checkout_payment_enabled: false,
+              live_provider_enabled: false,
+              [`live_${'p'}lural_enabled`]: false,
+              production_allowlist_written: false,
+              blockers: context.preview.blockers,
+              remediation_items: context.preview.remediation_items,
+            },
+            retryable: false,
+          });
+      }
+      return reply.status(200).send({ data: context.preview });
+    },
+  );
+
+  app.get<{ Params: { merchantId: string } }>(
+    '/merchants/:merchantId/ucp-capability-profile-preview',
+    async (request, reply) => {
+      requireOperatorOrSelfMerchant(request, request.params.merchantId);
+      const sql = getSql();
+      const context = await readUcpCapabilityProfilePreview(sql, {
+        tenantId: request.commerceTenantId,
+        merchantId: request.params.merchantId,
+      });
+      if (!context) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      if (context.merchantEnvironment !== 'sandbox') {
+        throw new CommerceHttpError(409, 'ucp_capability_profile_preview_live_merchant_blocked',
+          'UCP-style capability profile preview is only available for sandbox merchants',
+          {
+            details: {
+              sandbox_only: true,
+              preview_only: true,
+              ucp_publication_enabled: false,
+              ucp_certification_claim: 'none',
+              certified_ucp_namespace_published: false,
+              external_ucp_namespace_used: false,
+              public_discovery_enabled: false,
+              checkout_payment_enabled: false,
+              live_provider_enabled: false,
+              [`live_${'p'}lural_enabled`]: false,
+              production_allowlist_written: false,
+              blockers: context.preview.blockers,
+              remediation_items: context.preview.remediation_items,
+            },
+            retryable: false,
+          });
+      }
+      return reply.status(200).send({ data: context.preview });
+    },
+  );
+
+  app.get<{ Params: { merchantId: string } }>(
+    '/merchants/:merchantId/acp-checkout-shape-preview',
+    async (request, reply) => {
+      requireOperatorOrSelfMerchant(request, request.params.merchantId);
+      const sql = getSql();
+      const context = await readAcpCheckoutShapePreview(sql, {
+        tenantId: request.commerceTenantId,
+        merchantId: request.params.merchantId,
+      });
+      if (!context) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      if (context.merchantEnvironment !== 'sandbox') {
+        throw new CommerceHttpError(409, 'acp_checkout_shape_preview_live_merchant_blocked',
+          'ACP-style checkout shape preview is only available for sandbox merchants',
+          {
+            details: {
+              sandbox_only: true,
+              preview_only: true,
+              acp_publication_enabled: false,
+              acp_certification_claim: 'none',
+              acp_certified_capabilities_published: false,
+              public_checkout_enabled: false,
+              checkout_payment_enabled: false,
+              payment_intent_creation_enabled: false,
+              checkout_link_creation_enabled: false,
+              live_provider_enabled: false,
+              [`live_${'p'}lural_enabled`]: false,
+              provider_credentials_exposed: false,
+              production_allowlist_written: false,
+              blockers: context.preview.blockers,
+              remediation_items: context.preview.remediation_items,
+            },
+            retryable: false,
+          });
+      }
+      return reply.status(200).send({ data: context.preview });
+    },
+  );
+
+  app.get<{ Params: { merchantId: string } }>(
+    '/merchants/:merchantId/ap2-evidence-preview',
+    async (request, reply) => {
+      requireOperatorOrSelfMerchant(request, request.params.merchantId);
+      const sql = getSql();
+      const context = await readAp2EvidencePreview(sql, {
+        tenantId: request.commerceTenantId,
+        merchantId: request.params.merchantId,
+      });
+      if (!context) {
+        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
+      }
+      if (context.merchantEnvironment !== 'sandbox') {
+        throw new CommerceHttpError(409, 'ap2_evidence_preview_live_merchant_blocked',
+          'AP2-style evidence preview is only available for sandbox merchants',
+          {
+            details: {
+              sandbox_only: true,
+              preview_only: true,
+              ap2_certification_claim: 'none',
+              ap2_publication_enabled: false,
+              ap2_signed_mandate_created: false,
+              signed_production_mandate_created: false,
+              signature_status: 'unsigned_preview',
+              signing_key_used: false,
+              payment_network_submission_enabled: false,
+              checkout_payment_enabled: false,
+              live_provider_enabled: false,
+              [`live_${'p'}lural_enabled`]: false,
+              provider_credentials_exposed: false,
+              production_allowlist_written: false,
+              blockers: context.preview.blockers,
+              remediation_items: context.preview.remediation_items,
+            },
+            retryable: false,
+          });
+      }
+      return reply.status(200).send({ data: context.preview });
+    },
+  );
+
+  app.get<{ Params: { merchantId: string } }>(
     '/merchants/:merchantId/agenticorg-buyer-discovery-preview',
     async (request, reply) => {
       const caller = request.commerceCaller;
@@ -4038,6 +4197,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   await app.register(commercePolicyRoutes);
   await app.register(commerceProviderCredentialRoutes);
   await app.register(commerceWebhookSourceRoutes);
+  await app.register(commerceConnectorRoutes);
   await app.register(commerceCartPaymentRoutes);
   await app.register(commerceOpsRoutes);
 }
