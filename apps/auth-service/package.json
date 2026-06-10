@@ -38,7 +38,7 @@
     "ulid": "^3.0.2"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
+    "@types/node": "^25.9.1",
     "@vitest/coverage-v8": "^4.1.7",
     "pino-pretty": "^13.0.0",
     "typescript": "^6.0.3",
