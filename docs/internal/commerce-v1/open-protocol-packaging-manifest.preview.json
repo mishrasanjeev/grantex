@@ -1,0 +1,192 @@
+{
+  "manifest_kind": "agentic_commerce_open_protocol_packaging_preview",
+  "manifest_version": "c6i_c6n_preview_2026_06_07",
+  "status": "internal_packaging_draft",
+  "created_at": "2026-06-07",
+  "publication_status": "not_published",
+  "preview_only": true,
+  "sandbox_only": true,
+  "non_live": true,
+  "non_enabling": true,
+  "certification_claims": [],
+  "merged_base": {
+    "agenticorg_main_tip_after_c6i": "d02657be67c4be256cd1f0b3d52d46e20c5de891",
+    "grantex_main_tip_after_c6n": "488505e19a4283d875c3a88a760e8b752c288403"
+  },
+  "merged_prs": [
+    {
+      "slice": "C6I",
+      "repo": "agentic-org",
+      "pr": 718,
+      "url": "https://github.com/mishrasanjeev/agentic-org/pull/718",
+      "final_head_sha": "787b56c621ee5cb8d4ce4321056844ae25280fa0",
+      "merge_commit_sha": "d02657be67c4be256cd1f0b3d52d46e20c5de891",
+      "merge_status": "merged",
+      "role": "buyer_session_orchestration"
+    },
+    {
+      "slice": "C6J",
+      "repo": "grantex",
+      "pr": 511,
+      "url": "https://github.com/mishrasanjeev/grantex/pull/511",
+      "final_head_sha": "ac90162ca0aee9a1e955fb70f388f6634b0e5d68",
+      "merge_commit_sha": "54eca8eb43a3b196f9a15958567aa44f24fc0521",
+      "merge_status": "merged",
+      "role": "schemaorg_jsonld_preview"
+    },
+    {
+      "slice": "C6K",
+      "repo": "grantex",
+      "pr": 512,
+      "url": "https://github.com/mishrasanjeev/grantex/pull/512",
+      "final_head_sha": "c8eedb2dff57763bfc87c76009f849084f0f2abd",
+      "merge_commit_sha": "9d2a69b72756f28093c222796c8de822ab5ce0c3",
+      "merge_status": "merged",
+      "role": "ucp_style_capability_profile_preview"
+    },
+    {
+      "slice": "C6L",
+      "repo": "grantex",
+      "pr": 513,
+      "url": "https://github.com/mishrasanjeev/grantex/pull/513",
+      "final_head_sha": "cd0da84f6e08c4dd4d3d4e16dfb739c97f6da5ff",
+      "merge_commit_sha": "f606fc0963ba3622c7ab46b33b12637fa8d45485",
+      "merge_status": "merged",
+      "role": "acp_style_checkout_shape_preview"
+    },
+    {
+      "slice": "C6M",
+      "repo": "grantex",
+      "pr": 514,
+      "url": "https://github.com/mishrasanjeev/grantex/pull/514",
+      "final_head_sha": "d3a2e521b1fa7bb81f3629c61d0c3bc4554ed364",
+      "merge_commit_sha": "38af5020fa7a5e4b24cdedc49194d0a2894677d0",
+      "merge_status": "merged",
+      "role": "ap2_style_evidence_preview"
+    },
+    {
+      "slice": "C6N",
+      "repo": "grantex",
+      "pr": 515,
+      "url": "https://github.com/mishrasanjeev/grantex/pull/515",
+      "final_head_sha": "50efe65b6806d03e7ed3896b1da418580769b4f6",
+      "merge_commit_sha": "488505e19a4283d875c3a88a760e8b752c288403",
+      "merge_status": "merged",
+      "role": "merchant_existing_system_connector_foundation"
+    }
+  ],
+  "packaged_surfaces": {
+    "buyer_session": {
+      "owner": "AgenticOrg",
+      "source_slice": "C6I",
+      "channel_neutral": true,
+      "grounded_in_grantex": true,
+      "read_only_discovery": true,
+      "refuses_checkout_payment": true,
+      "refuses_live_provider": true,
+      "refuses_fulfillment": true,
+      "refuses_refund_return": true,
+      "agenticorg_direct_provider_calls_enabled": false,
+      "agenticorg_direct_merchant_api_calls_enabled": false
+    },
+    "schemaorg_jsonld_preview": {
+      "owner": "Grantex",
+      "source_slice": "C6J",
+      "schemaorg_publication_enabled": false,
+      "public_discovery_enabled": false,
+      "production_commerce_v1_enabled": false,
+      "checkout_payment_enabled": false,
+      "live_provider_enabled": false,
+      "provider_credentials_exposed": false,
+      "production_allowlist_written": false
+    },
+    "ucp_style_capability_profile_preview": {
+      "owner": "Grantex",
+      "source_slice": "C6K",
+      "namespace": "dev.grantex.commerce.discovery.preview",
+      "external_ucp_namespace_used": false,
+      "ucp_publication_enabled": false,
+      "ucp_certification_claim": "none",
+      "certified_ucp_namespace_published": false,
+      "certified_capabilities_published": false,
+      "commerce_v1_runtime_enabled_by_preview": false
+    },
+    "acp_style_checkout_shape_preview": {
+      "owner": "Grantex",
+      "source_slice": "C6L",
+      "acp_publication_enabled": false,
+      "acp_certification_claim": "none",
+      "public_checkout_enabled": false,
+      "payment_intent_creation_enabled_by_preview": false,
+      "checkout_link_creation_enabled_by_preview": false,
+      "provider_call_enabled_by_preview": false,
+      "live_payment_enabled_by_preview": false
+    },
+    "ap2_style_evidence_preview": {
+      "owner": "Grantex",
+      "source_slice": "C6M",
+      "ap2_publication_enabled": false,
+      "ap2_certification_claim": "none",
+      "deterministic_unsigned_preview": true,
+      "ap2_signed_mandate_created": false,
+      "signed_production_mandate_created": false,
+      "payment_network_submission_enabled": false,
+      "checkout_payment_creation_enabled_by_preview": false
+    },
+    "merchant_connector_registry": {
+      "owner": "Grantex",
+      "source_slice": "C6N",
+      "metadata_only_registry": true,
+      "credentials_stored_by_registry": false,
+      "outbound_sync_enabled_by_registry": false,
+      "agenticorg_direct_execution_allowed": false,
+      "provider_call_enabled_by_registry": false,
+      "checkout_payment_enabled_by_registry": false,
+      "live_payment_enabled_by_registry": false,
+      "public_discovery_enabled_by_registry": false,
+      "production_config_written_by_registry": false
+    }
+  },
+  "global_controls": {
+    "public_protocol_publication_approved": false,
+    "schemaorg_publication_enabled": false,
+    "commerce_public_discovery_enabled": false,
+    "agenticorg_public_discovery_enabled": false,
+    "production_commerce_v1_enabled": false,
+    "production_checkout_payment_creation_enabled": false,
+    "public_checkout_enabled": false,
+    "live_payment_enabled": false,
+    "live_provider_enabled": false,
+    "provider_calls_enabled": false,
+    "merchant_private_api_calls_from_agenticorg_enabled": false,
+    "provider_credentials_included": false,
+    "secrets_included": false,
+    "production_allowlists_written": false,
+    "cloud_resources_created": false,
+    "deployment_performed": false
+  },
+  "publication_blockers": [
+    "public_protocol_publication_not_approved",
+    "public_discovery_not_approved",
+    "production_commerce_v1_not_approved",
+    "production_checkout_payment_creation_not_approved",
+    "live_provider_not_approved",
+    "live_payment_not_approved",
+    "certification_evidence_missing",
+    "merchant_publication_approval_missing",
+    "agenticorg_public_discovery_not_enabled_by_approved_rollout"
+  ],
+  "stop_conditions": [
+    "public_discovery_flag_assignment",
+    "production_allowlist_assignment",
+    "production_commerce_v1_enablement",
+    "checkout_payment_enablement",
+    "live_payment_enablement",
+    "provider_call_enablement",
+    "merchant_private_api_call_from_agenticorg",
+    "secret_or_credential_material_added",
+    "certification_claim_added",
+    "sandbox_or_synthetic_data_treated_as_production_approval"
+  ],
+  "next_review_prompt": "Plan Agentic Commerce C6O conformance fixtures and first real connector sync adapter foundation. Do not deploy, run cloud commands, create cloud resources, change production config, touch secrets, enable public discovery, enable production Commerce V1, enable checkout/payment creation, enable live payments, call providers, call merchant private APIs from AgenticOrg, or claim certification. Use the merged C6I-C6N base: AgenticOrg PR #718 and Grantex PRs #511-#515. Define C6O reviewable slices for preview conformance fixtures, schema/manifest validators, and the first safe real connector sync adapter plan. Keep all artifacts sandbox-only, preview-only, non-live, non-publication, and non-certifying."
+}

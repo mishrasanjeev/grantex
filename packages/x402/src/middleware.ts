@@ -51,6 +51,7 @@ export interface GDTRequestInfo {
  * // Require a valid GDT for the weather scope
  * app.use('/api/weather', x402Middleware({
  *   requiredScopes: ['weather:read'],
+ *   requiredAmount: 0.001,
  *   currency: 'USDC',
  * }));
  *
@@ -63,8 +64,16 @@ export interface GDTRequestInfo {
 export function x402Middleware(options: X402MiddlewareOptions = {}) {
   const {
     requiredScopes,
+    requiredAmount,
     currency = 'USDC',
   } = options;
+
+  if (requiredAmount === undefined && !options.extractAmount) {
+    throw new Error('x402Middleware requires a server-trusted requiredAmount or extractAmount');
+  }
+  if (requiredAmount !== undefined) {
+    assertValidRequiredAmount(requiredAmount);
+  }
 
   return async function gdtVerificationMiddleware(
     req: ExpressRequest,
@@ -86,10 +95,17 @@ export function x402Middleware(options: X402MiddlewareOptions = {}) {
       return;
     }
 
-    // Extract spend amount from request
-    const amount = options.extractAmount
-      ? options.extractAmount(req)
-      : parseFloat(req.get(HEADERS.PAYMENT_AMOUNT) ?? req.get('x-payment-amount') ?? '0');
+    let amount: number;
+    try {
+      amount = options.extractAmount ? options.extractAmount(req) : requiredAmount!;
+      assertValidRequiredAmount(amount);
+    } catch (err) {
+      res.status(500).json({
+        error: 'INVALID_PAYMENT_REQUIREMENT',
+        message: err instanceof Error ? err.message : 'Invalid server payment requirement',
+      });
+      return;
+    }
 
     // Determine the resource scope to check
     const resource = requiredScopes?.[0] ?? deriveResourceScope(req);
@@ -168,4 +184,10 @@ function deriveResourceScope(req: ExpressRequest): string {
   const resource = segments.find((s) => s !== 'api') ?? 'unknown';
 
   return `${resource}:${action}`;
+}
+
+function assertValidRequiredAmount(amount: number): void {
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new Error('x402Middleware amount must be a finite non-negative number');
+  }
 }
