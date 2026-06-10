@@ -1042,7 +1042,6 @@ export function computeSandboxCategoryReadiness(
   const noCheckoutPayment = merchant.agentic_commerce_enabled !== true;
   const preset = merchant.category_preset?.trim() || null;
   const presetRecognized = preset === ELECTRONICS_APPLIANCES_PRESET;
-  const productCount = countValue(catalogSummary?.product_count);
   const variantCount = countValue(catalogSummary?.variant_count);
   const resolvedCatalogReadiness = catalogReadiness ?? computeSandboxCatalogReadiness(merchant, catalogSummary);
   const warrantyCount = countValue(catalogSummary?.variants_with_warranty_summary);
