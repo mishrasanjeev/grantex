@@ -327,8 +327,8 @@ describe('Coverage gaps — middleware.ts', () => {
     expect(next).toHaveBeenCalled();
   });
 
-  it('defaults amount to 0 when no header and no extractAmount', async () => {
-    const middleware = x402Middleware({ requiredScopes: ['weather:read'] });
+  it('allows explicitly configured zero amount requirements', async () => {
+    const middleware = x402Middleware({ requiredScopes: ['weather:read'], requiredAmount: 0 });
     const req = {
       headers: { 'x-grantex-gdt': validToken },
       path: '/api/weather', method: 'GET',
@@ -391,6 +391,7 @@ describe('Coverage gaps — middleware.ts', () => {
   it('handles invalid token that throws during verify', async () => {
     const middleware = x402Middleware({
       requiredScopes: ['weather:read'],
+      requiredAmount: 0.001,
     });
     const req = {
       headers: { 'x-grantex-gdt': 'not-a-valid-jwt' },

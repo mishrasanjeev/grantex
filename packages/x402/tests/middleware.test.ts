@@ -66,7 +66,7 @@ describe('x402Middleware', () => {
 
   describe('required mode (default)', () => {
     it('rejects requests without GDT header', async () => {
-      const middleware = x402Middleware({ requiredScopes: ['weather:read'] });
+      const middleware = x402Middleware({ requiredScopes: ['weather:read'], requiredAmount: 0.001 });
       const req = mockReq();
       const res = mockRes();
       const next = vi.fn();
@@ -79,7 +79,7 @@ describe('x402Middleware', () => {
     });
 
     it('passes valid GDT requests', async () => {
-      const middleware = x402Middleware({ requiredScopes: ['weather:read'] });
+      const middleware = x402Middleware({ requiredScopes: ['weather:read'], requiredAmount: 0.001 });
       const req = mockReq({ 'X-Grantex-GDT': validToken, 'X-Payment-Amount': '0.001' });
       const res = mockRes();
       const next = vi.fn();
@@ -91,7 +91,7 @@ describe('x402Middleware', () => {
     });
 
     it('rejects invalid GDT tokens', async () => {
-      const middleware = x402Middleware({ requiredScopes: ['weather:read'] });
+      const middleware = x402Middleware({ requiredScopes: ['weather:read'], requiredAmount: 0.001 });
       const req = mockReq({ 'X-Grantex-GDT': 'invalid.jwt.token' });
       const res = mockRes();
       const next = vi.fn();
@@ -103,7 +103,7 @@ describe('x402Middleware', () => {
     });
 
     it('rejects wrong scope', async () => {
-      const middleware = x402Middleware({ requiredScopes: ['finance:read'] });
+      const middleware = x402Middleware({ requiredScopes: ['finance:read'], requiredAmount: 0.001 });
       const req = mockReq({ 'X-Grantex-GDT': validToken, 'X-Payment-Amount': '0.001' });
       const res = mockRes();
       const next = vi.fn();
@@ -116,8 +116,30 @@ describe('x402Middleware', () => {
     });
 
     it('rejects spend limit exceeded', async () => {
-      const middleware = x402Middleware({ requiredScopes: ['weather:read'] });
-      const req = mockReq({ 'X-Grantex-GDT': validToken, 'X-Payment-Amount': '50' });
+      const middleware = x402Middleware({ requiredScopes: ['weather:read'], requiredAmount: 50 });
+      const req = mockReq({ 'X-Grantex-GDT': validToken, 'X-Payment-Amount': '0.001' });
+      const res = mockRes();
+      const next = vi.fn();
+
+      await middleware(req as never, res as never, next);
+
+      expect(res.statusCode).toBe(403);
+      expect(next).not.toHaveBeenCalled();
+    });
+
+    it('requires a server-trusted amount source', () => {
+      expect(() => x402Middleware({ requiredScopes: ['weather:read'] })).toThrow(
+        'x402Middleware requires a server-trusted requiredAmount or extractAmount',
+      );
+    });
+
+    it('uses server-required amount instead of client payment headers', async () => {
+      const limitedToken = await issueGDT({
+        ...baseParams,
+        spendLimit: { amount: 1, currency: 'USDC', period: '24h' },
+      });
+      const middleware = x402Middleware({ requiredScopes: ['weather:read'], requiredAmount: 5 });
+      const req = mockReq({ 'X-Grantex-GDT': limitedToken, 'X-Payment-Amount': '0.001' });
       const res = mockRes();
       const next = vi.fn();
 
@@ -153,6 +175,7 @@ describe('x402Middleware', () => {
 
       const middleware = x402Middleware({
         requiredScopes: ['weather:read', 'weather:write'],
+        requiredAmount: 0.001,
       });
       const req = mockReq({ 'X-Grantex-GDT': multiToken, 'X-Payment-Amount': '0.001' });
       const res = mockRes();
@@ -166,6 +189,7 @@ describe('x402Middleware', () => {
     it('rejects when some scopes are missing', async () => {
       const middleware = x402Middleware({
         requiredScopes: ['weather:read', 'weather:write'],
+        requiredAmount: 0.001,
       });
       const req = mockReq({ 'X-Grantex-GDT': validToken, 'X-Payment-Amount': '0.001' });
       const res = mockRes();
