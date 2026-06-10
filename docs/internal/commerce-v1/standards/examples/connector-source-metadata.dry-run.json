@@ -1,0 +1,44 @@
+{
+  "example_id": "connector_source_example_001",
+  "example_kind": "connector_source_metadata",
+  "scenario": "dry_run_source_precedence",
+  "status": "internal_example_only",
+  "internal_example_only": true,
+  "synthetic_data": true,
+  "public_submission_status": "not_submitted",
+  "certification_claims": [],
+  "production_approval": false,
+  "public_discovery_enabled": false,
+  "checkout_payment_enabled": false,
+  "live_provider_enabled": false,
+  "merchant": {
+    "merchant_id": "mer_example_home_001",
+    "display_name": "Example Home Goods Merchant"
+  },
+  "connector_source": {
+    "source_id": "source_example_catalog_001",
+    "source_kind": "generic_catalog_source",
+    "source_mode": "dry_run_only",
+    "source_precedence": 10,
+    "source_of_truth_for": [
+      "catalog_title",
+      "price",
+      "inventory_status"
+    ],
+    "last_dry_run_result": "blocked_due_to_stale_inventory",
+    "private_payloads_exposed": false,
+    "credentials_included": false,
+    "outbound_sync_enabled": false
+  },
+  "item_state": {
+    "item_id": "item_example_lamp_001",
+    "variant_id": "variant_example_lamp_warm_001",
+    "inventory_state": "stale",
+    "refusal_code": "stale_inventory"
+  },
+  "operator_summary": {
+    "safe_detail": "Synthetic dry-run metadata only; no private source payload or merchant private API call is included.",
+    "merchant_private_api_call_enabled": false,
+    "provider_call_enabled": false
+  }
+}
