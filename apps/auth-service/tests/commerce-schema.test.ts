@@ -25,6 +25,7 @@ describe('Commerce schema — tenant_id presence on every tenant-owned table', (
     ['035_commerce_products.sql', 'commerce_products'],
     ['035_commerce_products.sql', 'commerce_product_variants'],
     ['036_commerce_audit_events.sql', 'commerce_audit_events'],
+    ['052_commerce_connectors.sql', 'commerce_connectors'],
   ] as const;
 
   it.each(tenantOwned)('%s: %s carries tenant_id NOT NULL with FK', (file, table) => {
