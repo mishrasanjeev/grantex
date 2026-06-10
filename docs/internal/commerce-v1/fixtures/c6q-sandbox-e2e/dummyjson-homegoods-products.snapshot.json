@@ -1,0 +1,73 @@
+{
+  "fixture_version": "c6q-dummyjson-homegoods-sandbox-v1",
+  "fixture_status": "sandbox_only_not_live_not_public_not_allowlisted_not_approved",
+  "source": {
+    "source_type": "public_fake_catalog",
+    "source_name": "dummyjson_products",
+    "source_url": "https://dummyjson.com/docs/products",
+    "snapshot_recorded_at": "2026-06-08T00:00:00.000Z",
+    "snapshot_policy": "stable redacted fake/test fixture for deterministic local tests",
+    "credentials_required": false,
+    "outbound_sync_enabled": false,
+    "live_network_required_for_tests": false
+  },
+  "merchant": {
+    "name": "DummyJSON Home Goods Sandbox Store",
+    "merchant_id": "mch_sandbox_dummyjson_homegoods_0001",
+    "tenant_id": "cten_sandbox_dummyjson_homegoods_0001",
+    "requested_category_preset": "home_furniture",
+    "runtime_category_preset": "electronics_appliances",
+    "category_mismatch_reason": "home_furniture is not implemented; electronics_appliances is the only runtime category preset",
+    "status": {
+      "sandbox_only": true,
+      "not_live": true,
+      "not_approved": true,
+      "not_public": true,
+      "not_allowlisted": true
+    }
+  },
+  "products": [
+    {
+      "id": 900001,
+      "title": "Modular Sofa Test Fixture",
+      "description": "Fake home seating item for sandbox catalog rehearsal.",
+      "category": "furniture",
+      "brand": "DummyJSON Test Fixture",
+      "thumbnail": "https://cdn.dummyjson.com/products/images/furniture/Modular%20Sofa%20Test%20Fixture/thumbnail.png",
+      "price": 129.99,
+      "currency": "USD",
+      "availabilityStatus": "in_stock",
+      "sku": "DJS-HG-SOFA-001",
+      "warrantyInformation": "Fixture warranty summary for local rehearsal.",
+      "returnPolicy": "Fixture return summary for local rehearsal."
+    },
+    {
+      "id": 900002,
+      "title": "Oak Shelf Test Fixture",
+      "description": "Fake shelving item for sandbox catalog rehearsal.",
+      "category": "home-decoration",
+      "brand": "DummyJSON Test Fixture",
+      "thumbnail": "https://cdn.dummyjson.com/products/images/home-decoration/Oak%20Shelf%20Test%20Fixture/thumbnail.png",
+      "price": 49.5,
+      "currency": "USD",
+      "availabilityStatus": "pre_order",
+      "sku": "DJS-HG-SHELF-001",
+      "warrantyInformation": "Fixture warranty summary for local rehearsal.",
+      "returnPolicy": "Fixture return summary for local rehearsal."
+    },
+    {
+      "id": 900003,
+      "title": "Table Lamp Test Fixture",
+      "description": "Fake lighting item for sandbox catalog rehearsal.",
+      "category": "lighting",
+      "brand": "DummyJSON Test Fixture",
+      "thumbnail": "https://cdn.dummyjson.com/products/images/home-decoration/Table%20Lamp%20Test%20Fixture/thumbnail.png",
+      "price": 34,
+      "currency": "USD",
+      "availabilityStatus": "back_order",
+      "sku": "DJS-HG-LAMP-001",
+      "warrantyInformation": "Fixture warranty summary for local rehearsal.",
+      "returnPolicy": "Fixture return summary for local rehearsal."
+    }
+  ]
+}

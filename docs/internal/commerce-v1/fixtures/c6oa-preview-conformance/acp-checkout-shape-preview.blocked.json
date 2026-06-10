@@ -1,0 +1,178 @@
+{
+  "fixture_kind": "agentic_commerce_c6oa_preview_conformance_fixture",
+  "fixture_version": "c6oa-preview-1",
+  "surface": "acp_style_checkout_shape_preview",
+  "scenario": "blocked_refusal",
+  "synthetic": true,
+  "data_classification": "synthetic_preview_only",
+  "sandbox_only": true,
+  "preview_only": true,
+  "non_live": true,
+  "non_enabling": true,
+  "non_publication": true,
+  "non_certifying": true,
+  "publication_status": "not_published",
+  "certification_claims": [],
+  "generated_at": "2026-06-07T00:00:00.000Z",
+  "source_reference": {
+    "system": "grantex",
+    "merged_base": "80def0d6a6ccd61a5418d8a0628ffc533b08def0",
+    "canonical_state": "synthetic_checkout_evidence_missing_fixture",
+    "tenant_scoped": true
+  },
+  "controls": {
+    "acp_publication_enabled": false,
+    "public_discovery_enabled": false,
+    "production_commerce_v1_enabled": false,
+    "checkout_payment_creation_enabled": false,
+    "checkout_link_creation_enabled": false,
+    "live_payment_enabled": false,
+    "live_provider_enabled": false,
+    "provider_call_enabled": false,
+    "provider_credentials_exposed": false,
+    "merchant_private_api_call_enabled": false,
+    "agenticorg_direct_execution_allowed": false,
+    "production_allowlist_written": false
+  },
+  "expected_blockers": [
+    "active_policy_evidence_missing",
+    "granted_checkout_consent_evidence_missing",
+    "checkout_passport_evidence_missing",
+    "cart_foundation_evidence_missing",
+    "payment_intent_foundation_evidence_missing"
+  ],
+  "payload": {
+    "status": "blocked",
+    "message": "ACP-style checkout shape preview is blocked until sandbox cart, consent, passport, policy, and payment intent evidence exists.",
+    "preview_only": true,
+    "profile_style": "acp_style_checkout_shape_preview",
+    "profile_version": "c6l-preview-1",
+    "acp_publication_enabled": false,
+    "acp_certification_claim": "none",
+    "acp_certified_capabilities_published": false,
+    "public_checkout_enabled": false,
+    "checkout_payment_enabled": false,
+    "payment_intent_creation_enabled": false,
+    "checkout_link_creation_enabled": false,
+    "live_provider_enabled": false,
+    "provider_credentials_exposed": false,
+    "production_allowlist_written": false,
+    "live_mode_status": "not_live",
+    "production_approval_status": "not_approved",
+    "certification_claims": [],
+    "cart_shape": {
+      "status": "blocked",
+      "object_style": "acp_cart_preview",
+      "operations": {
+        "create_cart": {
+          "endpoint_template": "/v1/commerce/carts",
+          "enabled_by_preview": false,
+          "requires_idempotency_key": true,
+          "requires_registered_agent": true,
+          "requires_checkout_passport": false,
+          "preview_only": true
+        }
+      },
+      "field_mappings": [
+        {
+          "acp_field": "acp.cart.items",
+          "grantex_source": "commerce_carts.line_items_snapshot",
+          "status": "blocked",
+          "evidence": "synthetic missing cart snapshot",
+          "blockers": [
+            "cart_foundation_evidence_missing"
+          ]
+        }
+      ],
+      "latest_cart_summary": {
+        "present": false,
+        "line_item_count": 0,
+        "snapshot_hash_present": false,
+        "passport_bound": false
+      }
+    },
+    "checkout_shape": {
+      "status": "blocked",
+      "object_style": "acp_checkout_preview",
+      "operations": {
+        "create_payment_intent": {
+          "endpoint_template": "/v1/commerce/payments/intents",
+          "enabled_by_preview": false,
+          "requires_idempotency_key": true,
+          "requires_checkout_passport": true,
+          "requires_active_policy": true,
+          "requires_granted_consent": true,
+          "provider_call_enabled": false,
+          "preview_only": true
+        }
+      },
+      "field_mappings": [
+        {
+          "acp_field": "acp.checkout.consent",
+          "grantex_source": "commerce_consent_records.status=granted",
+          "status": "blocked",
+          "evidence": "synthetic missing consent evidence",
+          "blockers": [
+            "granted_checkout_consent_evidence_missing"
+          ]
+        }
+      ],
+      "latest_payment_intent_summary": {
+        "present": false,
+        "policy_decision_present": false,
+        "checkout_url_exposed": false,
+        "provider_payment_reference_exposed": false,
+        "provider_metadata_exposed": false,
+        "provider_raw_status_exposed": false,
+        "passport_reference_exposed": false
+      }
+    },
+    "blocked_capabilities": [
+      "acp_publication",
+      "public_checkout",
+      "checkout_payment_creation",
+      "checkout_link_creation",
+      "live_payment",
+      "provider_credentials",
+      "provider_runtime_call",
+      "refund_return_execution",
+      "fulfillment_execution",
+      "production_allowlist"
+    ],
+    "controls": {
+      "sandbox_only": true,
+      "acp_publication_enabled": false,
+      "acp_certification_claim": "none",
+      "public_checkout_enabled": false,
+      "payment_intent_creation_enabled_by_preview": false,
+      "checkout_link_creation_enabled_by_preview": false,
+      "provider_call_enabled_by_preview": false,
+      "live_payment_enabled_by_preview": false,
+      "provider_credentials_exposed": false,
+      "production_allowlist_written": false
+    },
+    "blockers": [
+      "active_policy_evidence_missing",
+      "granted_checkout_consent_evidence_missing",
+      "checkout_passport_evidence_missing",
+      "cart_foundation_evidence_missing",
+      "payment_intent_foundation_evidence_missing",
+      "provider_or_checkout_runtime_not_enabled_by_preview",
+      "acp_certification_not_claimed"
+    ],
+    "evidence_summary": {
+      "active_policy_count": 0,
+      "granted_checkout_consent_count": 0,
+      "active_checkout_passport_count": 0,
+      "unrevoked_checkout_passport_count": 0,
+      "sandbox_cart_count": 0,
+      "sandbox_payment_intent_count": 0,
+      "latest_cart_line_item_count": 0,
+      "latest_payment_intent_present": false,
+      "sandbox_only": true,
+      "read_only": true,
+      "payment_enabled": false,
+      "provider_called": false
+    }
+  }
+}
