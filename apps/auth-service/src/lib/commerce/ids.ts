@@ -13,7 +13,13 @@ export const newCommerceProviderCredentialId = (): string => `cpc_${ulid()}`;
 export const newCommerceIdempotencyRecordId = (): string => `cidm_${ulid()}`;
 export const newCommerceCartId = (): string => `ccart_${ulid()}`;
 export const newCommercePaymentIntentId = (): string => `cpi_${ulid()}`;
+export const newCommerceOrderId = (): string => `cord_${ulid()}`;
+export const newCommerceOrderHandoffId = (): string => `cohf_${ulid()}`;
 export const newCommerceWebhookEventId = (): string => `cwh_${ulid()}`;
+export const newCommerceConnectorId = (): string => `cconn_${ulid()}`;
+export const newCommerceConnectorDryRunId = (): string => `cdry_${ulid()}`;
+export const newCommerceConnectorDryRunReviewId = (): string => `cdrev_${ulid()}`;
+export const newCommerceConnectorDryRunRemediationId = (): string => `cdrem_${ulid()}`;
 
 // M2 — passport / consent / merchant key / passport key id generators.
 export const newCommerceConsentRecordId = (): string => `crec_${ulid()}`;

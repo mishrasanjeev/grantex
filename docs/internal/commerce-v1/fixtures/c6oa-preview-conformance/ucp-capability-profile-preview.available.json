@@ -1,0 +1,155 @@
+{
+  "fixture_kind": "agentic_commerce_c6oa_preview_conformance_fixture",
+  "fixture_version": "c6oa-preview-1",
+  "surface": "ucp_style_capability_profile_preview",
+  "scenario": "preview_available",
+  "synthetic": true,
+  "data_classification": "synthetic_preview_only",
+  "sandbox_only": true,
+  "preview_only": true,
+  "non_live": true,
+  "non_enabling": true,
+  "non_publication": true,
+  "non_certifying": true,
+  "publication_status": "not_published",
+  "certification_claims": [],
+  "generated_at": "2026-06-07T00:00:00.000Z",
+  "source_reference": {
+    "system": "grantex",
+    "merged_base": "80def0d6a6ccd61a5418d8a0628ffc533b08def0",
+    "canonical_state": "synthetic_capability_profile_fixture",
+    "tenant_scoped": true
+  },
+  "controls": {
+    "ucp_publication_enabled": false,
+    "public_discovery_enabled": false,
+    "production_commerce_v1_enabled": false,
+    "checkout_payment_creation_enabled": false,
+    "checkout_link_creation_enabled": false,
+    "live_payment_enabled": false,
+    "live_provider_enabled": false,
+    "provider_call_enabled": false,
+    "provider_credentials_exposed": false,
+    "merchant_private_api_call_enabled": false,
+    "agenticorg_direct_execution_allowed": false,
+    "production_allowlist_written": false
+  },
+  "expected_blockers": [
+    "ucp_certification_not_claimed",
+    "public_discovery_not_enabled_by_preview",
+    "runtime_execution_not_enabled_by_preview"
+  ],
+  "payload": {
+    "status": "preview_only",
+    "message": "UCP-style capability profile preview generated in the Grantex-owned namespace. It is metadata only and does not publish or certify capabilities.",
+    "preview_only": true,
+    "profile_style": "ucp_style_preview",
+    "namespace": "dev.grantex.commerce.discovery.preview",
+    "profile_version": "c6k-preview-1",
+    "ucp_publication_enabled": false,
+    "ucp_certification_claim": "none",
+    "certified_ucp_namespace_published": false,
+    "external_ucp_namespace_used": false,
+    "certified_capabilities_published": false,
+    "public_discovery_enabled": false,
+    "checkout_payment_enabled": false,
+    "live_provider_enabled": false,
+    "production_allowlist_written": false,
+    "live_mode_status": "not_live",
+    "production_approval_status": "not_approved",
+    "certification_claims": [],
+    "merchant_preview": {
+      "display_name": "Synthetic Fixture Store",
+      "category_preset": "electronics_appliances",
+      "country_code": "US",
+      "default_currency": "USD",
+      "readiness_state": "sandbox_ready",
+      "agentic_commerce_requested": true
+    },
+    "services": [
+      {
+        "id": "dev.grantex.commerce.discovery.preview.service.commerce_discovery",
+        "namespace": "dev.grantex.commerce.discovery.preview",
+        "kind": "commerce_discovery_preview",
+        "label": "Grantex Commerce discovery capability preview",
+        "status": "preview_available",
+        "preview_only": true,
+        "capability_ids": [
+          "dev.grantex.commerce.discovery.preview.capability.merchant_profile.read",
+          "dev.grantex.commerce.discovery.preview.capability.catalog.search"
+        ]
+      }
+    ],
+    "capabilities": [
+      {
+        "id": "dev.grantex.commerce.discovery.preview.capability.merchant_profile.read",
+        "namespace": "dev.grantex.commerce.discovery.preview",
+        "label": "Merchant profile read preview",
+        "status": "preview_available",
+        "category": "read_only_discovery",
+        "maps_to_grantex_tool": "merchant.get_profile",
+        "required_scopes": [
+          "commerce:catalog.read"
+        ],
+        "preview_only": true,
+        "non_enabling": true,
+        "blockers": []
+      },
+      {
+        "id": "dev.grantex.commerce.discovery.preview.capability.checkout_create",
+        "namespace": "dev.grantex.commerce.discovery.preview",
+        "label": "checkout.create metadata only",
+        "status": "blocked",
+        "category": "non_enabling_write_preview",
+        "maps_to_grantex_tool": "checkout.create",
+        "required_scopes": [
+          "commerce:checkout.create"
+        ],
+        "preview_only": true,
+        "non_enabling": true,
+        "blockers": [
+          "runtime_execution_not_enabled_by_preview"
+        ]
+      }
+    ],
+    "transports": [
+      {
+        "id": "dev.grantex.commerce.discovery.preview.transport.native_rest",
+        "namespace": "dev.grantex.commerce.discovery.preview",
+        "kind": "native_rest",
+        "endpoint_template": "/v1/commerce",
+        "auth_required": true,
+        "preview_only": true,
+        "public_route_enabled": false,
+        "runtime_enabled_by_preview": false,
+        "status": "metadata_only"
+      }
+    ],
+    "controls": {
+      "sandbox_only": true,
+      "public_discovery_route_enabled": false,
+      "commerce_v1_runtime_enabled_by_preview": false,
+      "checkout_payment_creation_enabled_by_preview": false,
+      "live_payment_enabled_by_preview": false,
+      "provider_credentials_exposed": false,
+      "production_allowlist_written": false,
+      "ucp_publication_enabled": false,
+      "ucp_certification_claim": "none"
+    },
+    "blockers": [
+      "ucp_certification_not_claimed",
+      "public_discovery_not_enabled_by_preview",
+      "runtime_execution_not_enabled_by_preview"
+    ],
+    "evidence_summary": {
+      "product_count": 2,
+      "variant_count": 2,
+      "read_only_capability_count": 1,
+      "blocked_capability_count": 1,
+      "transport_count": 1,
+      "readiness_state": "sandbox_ready",
+      "read_only": true,
+      "public_safe": true
+    }
+  }
+}
