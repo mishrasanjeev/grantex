@@ -1,0 +1,202 @@
+{
+  "fixture_kind": "agentic_commerce_c6oa_preview_conformance_fixture",
+  "fixture_version": "c6oa-preview-1",
+  "surface": "ap2_style_evidence_preview",
+  "scenario": "blocked_refusal",
+  "synthetic": true,
+  "data_classification": "synthetic_preview_only",
+  "sandbox_only": true,
+  "preview_only": true,
+  "non_live": true,
+  "non_enabling": true,
+  "non_publication": true,
+  "non_certifying": true,
+  "publication_status": "not_published",
+  "certification_claims": [],
+  "generated_at": "2026-06-07T00:00:00.000Z",
+  "source_reference": {
+    "system": "grantex",
+    "merged_base": "80def0d6a6ccd61a5418d8a0628ffc533b08def0",
+    "canonical_state": "synthetic_ap2_evidence_missing_fixture",
+    "tenant_scoped": true
+  },
+  "controls": {
+    "ap2_publication_enabled": false,
+    "public_discovery_enabled": false,
+    "production_commerce_v1_enabled": false,
+    "checkout_payment_creation_enabled": false,
+    "checkout_link_creation_enabled": false,
+    "live_payment_enabled": false,
+    "live_provider_enabled": false,
+    "provider_call_enabled": false,
+    "provider_credentials_exposed": false,
+    "merchant_private_api_call_enabled": false,
+    "agenticorg_direct_execution_allowed": false,
+    "production_allowlist_written": false
+  },
+  "expected_blockers": [
+    "commerce_passport_evidence_missing",
+    "consent_evidence_missing",
+    "policy_decision_evidence_missing",
+    "cart_hash_evidence_missing",
+    "amount_cap_evidence_missing",
+    "agent_identity_evidence_missing",
+    "audit_reference_evidence_missing",
+    "idempotency_evidence_missing"
+  ],
+  "payload": {
+    "status": "blocked",
+    "message": "AP2-style evidence preview is blocked until sandbox passport, consent, policy, cart hash, amount cap, agent, audit, and idempotency evidence exists.",
+    "preview_only": true,
+    "profile_style": "ap2_style_evidence_preview",
+    "profile_version": "c6m-preview-1",
+    "ap2_certification_claim": "none",
+    "ap2_publication_enabled": false,
+    "ap2_signed_mandate_created": false,
+    "signed_production_mandate_created": false,
+    "signature_status": "unsigned_preview",
+    "signing_key_used": false,
+    "payment_network_submission_enabled": false,
+    "public_discovery_enabled": false,
+    "checkout_payment_enabled": false,
+    "live_provider_enabled": false,
+    "provider_credentials_exposed": false,
+    "production_allowlist_written": false,
+    "live_mode_status": "not_live",
+    "production_approval_status": "not_approved",
+    "certification_claims": [],
+    "evidence_package": {
+      "format": "ap2_style_unsigned_evidence_preview",
+      "deterministic": true,
+      "signed": false,
+      "hash_algorithm": "sha256",
+      "evidence_hash": "sha256_fixture_blocked_9d32d7e52f3a1b80",
+      "signing_key_reference": null,
+      "production_mandate_reference": null,
+      "includes": [
+        "commerce_passport",
+        "consent_record",
+        "policy_decision",
+        "cart_hash",
+        "amount_cap",
+        "merchant_state",
+        "agent_identity",
+        "audit_reference",
+        "idempotency_replay"
+      ]
+    },
+    "merchant_state": {
+      "display_name": "Synthetic Fixture Store",
+      "environment": "sandbox",
+      "country_code": "US",
+      "default_currency": "USD",
+      "readiness_state": "evidence_missing",
+      "agentic_commerce_requested": false,
+      "agentic_commerce_enabled": false
+    },
+    "commerce_passport_evidence": {
+      "present": false,
+      "passport_jti_exposed": false,
+      "raw_passport_jwt_exposed": false
+    },
+    "consent_evidence": {
+      "present": false,
+      "consent_record_id_exposed": false,
+      "consent_request_id_exposed": false,
+      "user_principal_exposed": false
+    },
+    "policy_evidence": {
+      "present": false,
+      "active_policy_present": false,
+      "policy_version_present": false,
+      "decision_reference_present": false,
+      "decision_reference_hash": null,
+      "raw_policy_rules_exposed": false
+    },
+    "cart_evidence": {
+      "present": false,
+      "line_item_count": 0,
+      "snapshot_hash": null,
+      "idempotency_key_hash_present": false,
+      "raw_line_items_exposed": false,
+      "cart_id_exposed": false
+    },
+    "amount_evidence": {
+      "payment_amount_minor_units": null,
+      "payment_currency": null,
+      "amount_cap_minor_units": null,
+      "amount_cap_currency": null,
+      "amount_cap_source": "missing",
+      "within_amount_cap": null
+    },
+    "agent_identity_evidence": {
+      "present": false,
+      "agent_reference_hash": null,
+      "agent_id_exposed": false,
+      "agent_api_key_exposed": false
+    },
+    "audit_evidence": {
+      "present": false,
+      "audit_reference_hash": null,
+      "audit_event_id_exposed": false
+    },
+    "replay_idempotency_evidence": {
+      "idempotency_supported": true,
+      "replay_record_source": "commerce_idempotency_records",
+      "cart_idempotency_key_hash_present": false,
+      "payment_intent_idempotency_key_hash_present": false,
+      "audit_idempotency_key_hash_present": false,
+      "raw_idempotency_key_exposed": false
+    },
+    "payment_intent_evidence": {
+      "present": false,
+      "provider_reference_exposed": false,
+      "checkout_url_exposed": false,
+      "provider_metadata_exposed": false,
+      "provider_raw_status_exposed": false
+    },
+    "controls": {
+      "sandbox_only": true,
+      "deterministic_unsigned_preview": true,
+      "signing_enabled_by_preview": false,
+      "ap2_certification_claim": "none",
+      "ap2_publication_enabled": false,
+      "payment_network_submission_enabled": false,
+      "checkout_payment_creation_enabled_by_preview": false,
+      "live_payment_enabled_by_preview": false,
+      "provider_call_enabled_by_preview": false,
+      "provider_credentials_exposed": false,
+      "production_allowlist_written": false
+    },
+    "blockers": [
+      "commerce_passport_evidence_missing",
+      "consent_evidence_missing",
+      "policy_decision_evidence_missing",
+      "cart_hash_evidence_missing",
+      "amount_cap_evidence_missing",
+      "agent_identity_evidence_missing",
+      "audit_reference_evidence_missing",
+      "idempotency_evidence_missing",
+      "unsigned_preview_only",
+      "ap2_certification_not_claimed",
+      "payment_network_submission_not_enabled_by_preview"
+    ],
+    "evidence_summary": {
+      "complete_required_evidence": false,
+      "passport_present": false,
+      "consent_granted": false,
+      "active_policy_present": false,
+      "policy_decision_present": false,
+      "cart_hash_present": false,
+      "amount_cap_present": false,
+      "merchant_state_present": true,
+      "agent_identity_present": false,
+      "audit_reference_present": false,
+      "idempotency_evidence_present": false,
+      "sandbox_only": true,
+      "unsigned_preview": true,
+      "payment_enabled": false,
+      "provider_called": false
+    }
+  }
+}
