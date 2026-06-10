@@ -65,6 +65,7 @@ const app = express();
 // Require a valid GDT for weather endpoints
 app.use('/api/weather', x402Middleware({
   requiredScopes: ['weather:read'],
+  requiredAmount: 0.001,
   currency: 'USDC',
 }));
 
@@ -173,11 +174,12 @@ Express middleware for GDT verification.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `required` | `boolean` | `true` | Require GDT (403 if missing) |
 | `requiredScopes` | `string[]` | - | Required scopes to check |
+| `requiredAmount` | `number` | - | Fixed server-trusted spend amount for this route |
 | `currency` | `Currency` | `'USDC'` | Currency for verification |
-| `extractAmount` | `(req) => number` | - | Custom amount extractor |
-| `verifyFn` | `Function` | `verifyGDT` | Custom verification |
+| `extractAmount` | `(req) => number` | - | Custom server-trusted amount extractor |
+
+`x402Middleware` requires either `requiredAmount` or `extractAmount`. Do not derive the amount from client-supplied `X-Payment-*` headers.
 
 ### `generateKeyPair(): Ed25519KeyPair`
 
