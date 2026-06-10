@@ -7,6 +7,17 @@ on:
     branches: [main]
 
 jobs:
+  commerce-preview-conformance:
+    name: Commerce Preview Conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+      - name: Preview conformance gate (local only)
+        run: node scripts/commerce-c6oe-preview-conformance-gate.mjs --mode pr
+
   auth-service:
     name: Auth Service
     runs-on: ubuntu-latest

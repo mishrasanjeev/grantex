@@ -102,15 +102,15 @@ describe('Edge cases', () => {
       expect(r2.valid).toBe(false);
     });
 
-    it('handles negative request amount gracefully', async () => {
+    it('rejects negative request amount', async () => {
       const token = await issueGDT(baseParams);
       const result = await verifyGDT(token, {
         resource: 'weather:read',
         amount: -1,
         currency: 'USDC',
       });
-      // Negative amount is technically <= limit, so it passes scope/limit checks
-      expect(result.valid).toBe(true);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Invalid request amount');
     });
   });
 
