@@ -166,7 +166,9 @@ export interface X402FetchOptions extends RequestInit {
 export interface X402MiddlewareOptions {
   /** Expected scope(s) the request must match. If not set, any scope passes. */
   requiredScopes?: string[];
-  /** Extract the spend amount from the request. Default: reads X-Payment-Amount header. */
+  /** Fixed spend amount required by this protected route. */
+  requiredAmount?: number;
+  /** Extract the spend amount from server-trusted route state. Do not read client payment headers. */
   extractAmount?: (req: unknown) => number;
   /** Currency to use for verification. Default: 'USDC'. */
   currency?: Currency;
