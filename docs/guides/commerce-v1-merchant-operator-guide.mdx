@@ -180,6 +180,202 @@ DB/Redis URLs, private keys, production config values, concrete allowlist
 values, customer data, checkout/payment claims, live-provider claims, public
 discovery claims, or launch claims into C6G evidence.
 
+C6R adds a sandbox connector sync dry-run foundation for merchants and
+operators who want to preview how an existing catalog system would map into
+Grantex. The first supported dry-run inputs are local manual or CSV-style
+catalog rows, including the C6Q DummyJSON-style fake fixture used in tests. The
+dry-run normalizes rows into a capped product and variant preview, records
+counts, blockers, warnings, and redacted audit references, and stores only
+tenant-scoped dry-run metadata.
+
+C6R does not connect to Shopify, WooCommerce, Magento, custom APIs, ERP, OMS,
+WMS, logistics, CRM/support, payment providers, Plural, Stripe, Pine, or
+merchant private APIs. It does not accept credentials, provider metadata,
+private API URLs, raw payloads, production config values, concrete allowlists,
+checkout URLs, payment IDs, or customer data. It does not write live catalog
+changes, enable outbound sync, enable public discovery, enable AgenticOrg
+public discovery, enable checkout/payment creation, enable live payments, or
+approve production launch.
+
+Merchant and operator review should look at:
+
+- dry-run status and generated timestamp;
+- row, product, variant, would-create, would-update, blocked, and warning
+  counts;
+- capped normalized preview rows;
+- blocker and warning codes;
+- requested/completed/blocked audit event IDs;
+- fixed controls showing sandbox-only, not-live, not-approved, public discovery
+  off, checkout/payment off, live provider off, and no provider credentials.
+
+AgenticOrg never directly calls merchant private APIs. It continues to consume
+only Grantex-owned preview and buyer discovery surfaces after Grantex records
+the required sandbox evidence.
+
+C6Sa adds an operator review foundation for C6R dry-run evidence. A merchant or
+operator can request review of a tenant-scoped connector dry-run. Operators can
+read the redacted evidence and record one of three sandbox-only outcomes:
+
+- `accepted_for_sandbox_followup`: follow-up sandbox work may continue.
+- `needs_changes`: the merchant must fix the local snapshot or mapping before
+  another review.
+- `blocked`: the review is closed because the evidence is unsafe or incomplete.
+
+The C6Sa decision is not merchant approval, production approval, connector
+execution approval, public discovery approval, checkout/payment approval, live
+provider approval, public protocol publication, or certification. It does not
+write catalog changes, call merchant systems, call providers, store credentials,
+enable outbound sync, set allowlists, or change production configuration.
+
+C6Sa review notes must be public-safe. Do not paste secrets, private merchant
+artifacts, provider credentials, raw payloads, tokens, DB/Redis URLs, private
+keys, production config values, concrete allowlist values, checkout URLs,
+payment identifiers, customer data, live-provider claims, launch claims, or
+certification claims into review evidence.
+
+C6Sb adds the credential-free portal foundation for C6R dry-runs and C6Sa
+review evidence. Merchants and operators can use the Commerce onboarding portal
+to paste or select local sandbox manual/CSV catalog rows, run the tenant-scoped
+dry-run, review counts and capped normalized preview rows, request operator
+review, and record a sandbox evidence decision.
+
+The C6Sb portal panel is not production connector setup. It does not include
+credential entry, outbound sync controls, private API URL execution, provider
+setup, live merchant-system execution, public discovery controls,
+checkout/payment controls, live payment controls, live Plural controls, or
+production allowlist controls. It displays fixed safety controls such as
+`credential_entry_enabled: false`, `outbound_sync_enabled: false`,
+`production_connector_setup: false`, and `merchant_private_api_calls: false`.
+
+Operators should treat C6Sb output as internal sandbox evidence only. A passing
+dry-run or `accepted_for_sandbox_followup` review decision is not merchant
+approval, production approval, connector execution approval, public discovery
+approval, checkout/payment approval, live provider approval, public protocol
+publication, or certification.
+
+C6Sc hardens that portal flow for self-serve sandbox use. Merchants and
+operators can validate local manual/CSV rows before submission, see parsed row
+counts, reset the sample fixture, clear local rows, and read disabled-state
+reasons before requesting review or recording a decision. JSON parse errors are
+shown before any dry-run request is sent.
+
+C6Sc also adds a redacted evidence handoff for internal review. The handoff can
+be copied or downloaded locally as JSON or Markdown and includes only safe
+summary fields, fixed non-enabling controls, blockers, warnings, and audit
+references from the C6R dry-run and C6Sa review responses. It excludes raw
+rows, raw merchant-system payloads, credentials, tokens, provider metadata,
+private API URLs, checkout URLs, payment identifiers, production config values,
+concrete allowlists, customer data, and normalized product titles.
+
+C6Sc exports are local/internal evidence only. Do not commit timestamped or
+merchant-specific exports unless a later approved work item says so. A copied
+or downloaded handoff does not approve production launch, connector execution,
+public discovery, checkout/payment, live providers, public protocol
+publication, or certification.
+
+C6Sd adds a local evidence packet schema and operator packet review checklist
+to the C6Sc handoff. The packet includes a Grantex-owned schema version,
+checklist result, sandbox follow-up readiness summary, redaction summary, and
+audit references. The packet status can be `ready_for_sandbox_followup`,
+`needs_operator_review`, or `blocked`.
+
+`ready_for_sandbox_followup` means only that sandbox follow-up review work can
+continue after a passed dry-run, accepted C6Sa review, clear blockers, and fixed
+non-enabling controls. It is not production approval, connector execution
+approval, outbound sync approval, public discovery approval, checkout/payment
+approval, live provider approval, public protocol publication, or
+certification.
+
+C6Sd evidence packets remain local/internal review artifacts. They must not
+contain raw rows, normalized product titles, credentials, tokens, provider
+metadata, private API URLs, checkout URLs, payment identifiers, production
+config values, concrete allowlists, customer data, or secret material.
+
+C6Se adds a local operator handoff and self-serve remediation workflow to the
+same redacted evidence packet. A `ready` handoff means an operator can continue
+an internal sandbox follow-up conversation with the merchant. It is not
+production approval, connector execution approval, outbound sync approval,
+public discovery approval, checkout/payment approval, live provider approval,
+public protocol publication, or certification.
+
+If a packet is pending or blocked, the remediation workflow points merchants
+and operators back to the relevant C6R dry-run blockers/warnings, C6Sd packet
+checks, and C6Sa review decisions. `needs_changes` and `blocked` decisions keep
+the handoff blocked and require local snapshot remediation plus another
+sandbox dry-run before follow-up can continue.
+
+C6Se exports are still local/internal evidence only. They include handoff and
+remediation summaries, non-enabling controls, and audit references, and they
+exclude raw rows, raw merchant-system payloads, normalized product titles,
+credentials, tokens, provider metadata, private API URLs, checkout URLs,
+payment identifiers, production config values, concrete allowlists, customer
+data, and secret material.
+
+C6Sf rehearses the remediation loop locally in the portal. After a
+`needs_changes` or `blocked` C6Sa connector review decision, the portal can
+show the previous issue summary, a corrected sandbox dry-run, the refreshed
+packet status, and the operator follow-up status. This is only a local
+review-aid for sandbox evidence; it does not persist follow-up approval or
+enable connector execution.
+
+C6Sf `followup_ready` means only that a corrected dry-run has an accepted
+sandbox follow-up decision in the local evidence packet. It is not production
+approval, connector execution approval, outbound sync approval, public
+discovery approval, checkout/payment approval, live provider approval, public
+protocol publication, or certification.
+
+C6Sg persists the connector dry-run remediation loop in Grantex so the evidence
+does not exist only in browser state. A merchant or operator can create a
+tenant-scoped remediation record from a `needs_changes` or `blocked` C6Sa
+review, attach a corrected passed C6R dry-run, and request a follow-up C6Sa
+review. Duplicate remediation requests, corrected dry-run attachments, and
+follow-up review requests return existing evidence instead of creating duplicate
+rows or audit events.
+
+The persisted C6Sg record stores only redacted summary evidence: original
+dry-run and review IDs, original decision, remediation status, capped
+blocker/warning summaries, corrected dry-run ID, follow-up review ID, public-safe
+notes, and audit references. It does not store raw rows, raw files, raw
+merchant-system payloads, credentials, tokens, provider metadata, private API
+URLs, checkout URLs, payment identifiers, production config values, concrete
+allowlists, customer data, or secret material.
+
+C6Sg `followup_ready` means only that the corrected sandbox dry-run has a
+follow-up review accepted for sandbox follow-up. It is not production approval,
+connector execution approval, outbound sync approval, public discovery approval,
+checkout/payment approval, live provider approval, public protocol publication,
+or certification.
+
+C6Sh adds a tenant-scoped remediation queue and redacted evidence timeline for
+the persisted C6Sg loop. Operators can filter sandbox remediation records by
+merchant, status, original decision, corrected dry-run attachment, and follow-up
+review request. Merchants can see their own sandbox remediation status and the
+next safe step in the portal.
+
+The C6Sh timeline is redacted evidence visibility only. It shows remediation
+status, audit references, corrected dry-run and follow-up review links, and
+fixed non-enabling controls. It does not store or display raw connector rows,
+credentials, provider metadata, private API payloads, production config values,
+or concrete allowlists. It does not approve production launch, connector
+execution, outbound sync, public discovery, checkout/payment, live providers,
+public protocol publication, or certification.
+
+C6Sia adds backend-only operator triage controls for the same persisted
+remediation loop. Operators can record a tenant-scoped triage status, assignment
+reference, public-safe internal note, and merchant-visible follow-up guidance.
+Duplicate identical triage updates return the existing evidence and audit
+reference instead of creating duplicate rows or audit events.
+
+C6Sia triage helps the merchant understand the next sandbox correction step,
+for example rerunning a local manual/CSV dry-run or attaching corrected
+evidence. It is not production approval, connector execution approval, outbound
+sync approval, public discovery approval, checkout/payment approval, live
+provider approval, public protocol publication, or certification. The triage
+fields must not include raw rows, raw merchant-system payloads, credentials,
+tokens, provider metadata, private API URLs, checkout URLs, payment identifiers,
+production config values, concrete allowlists, customer data, or secret
+material.
+
 ## Catalog And Inventory
 
 Catalog and inventory grounding is the first safety step. Agents must not invent

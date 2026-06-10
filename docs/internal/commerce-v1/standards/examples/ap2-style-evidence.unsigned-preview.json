@@ -1,0 +1,42 @@
+{
+  "example_id": "ap2_evidence_example_unsigned_001",
+  "example_kind": "ap2_style_evidence_preview",
+  "scenario": "unsigned_preview",
+  "status": "internal_example_only",
+  "internal_example_only": true,
+  "synthetic_data": true,
+  "public_submission_status": "not_submitted",
+  "certification_claims": [],
+  "production_approval": false,
+  "public_discovery_enabled": false,
+  "checkout_payment_enabled": false,
+  "live_provider_enabled": false,
+  "evidence_preview": {
+    "evidence_reference": "evidence_example_001",
+    "merchant_reference": "mer_example_home_001",
+    "buyer_reference": "buyer_example_001",
+    "buyer_agent_reference": "agent_example_home_001",
+    "requested_action": "payment_authority_preview",
+    "consent_state": "not_granted",
+    "policy_reference": "policy_example_v1",
+    "amount_limit": {
+      "amount": "50.00",
+      "currency": "USD"
+    },
+    "signature_state": "unsigned_internal_preview",
+    "provider_state": "not_invoked",
+    "payment_state": "not_created"
+  },
+  "blocked_reasons": [
+    "consent_required",
+    "provider_call_not_allowed",
+    "live_payment_not_enabled"
+  ],
+  "redaction": {
+    "token_material_included": false,
+    "private_key_material_included": false,
+    "provider_credentials_included": false,
+    "raw_payment_payload_included": false,
+    "real_provider_reference_included": false
+  }
+}
