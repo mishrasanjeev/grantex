@@ -220,6 +220,326 @@ export interface CommerceCatalogReadiness {
   };
 }
 
+export type CommerceConnectorDryRunType = 'manual' | 'csv';
+export type CommerceConnectorDryRunStatus = 'passed' | 'blocked';
+export type CommerceConnectorDryRunReviewStatus =
+  | 'pending_operator_review'
+  | 'accepted_for_sandbox_followup'
+  | 'needs_changes'
+  | 'blocked';
+export type CommerceConnectorDryRunReviewDecision =
+  | 'accepted_for_sandbox_followup'
+  | 'needs_changes'
+  | 'blocked';
+export type CommerceConnectorDryRunRemediationStatus =
+  | 'remediation_requested'
+  | 'waiting_for_corrected_dry_run'
+  | 'corrected_dry_run_attached'
+  | 'followup_review_requested'
+  | 'followup_ready'
+  | 'blocked_again'
+  | 'closed_no_action';
+export type CommerceConnectorDryRunRemediationTriageStatus =
+  | 'triage_in_progress'
+  | 'waiting_on_merchant'
+  | 'ready_for_followup_review'
+  | 'blocked_for_sandbox_followup'
+  | 'closed_no_action';
+
+export interface CommerceConnectorDryRunPreviewVariant {
+  sku: string;
+  variant_title: string | null;
+  price_amount: number | string;
+  currency: string;
+  availability_status: 'in_stock' | 'out_of_stock' | 'pre_order' | 'back_order' | 'unknown';
+  warranty_summary: string | null;
+  return_policy_summary: string | null;
+}
+
+export interface CommerceConnectorDryRunPreviewProduct {
+  source_product_ref: string;
+  title: string;
+  brand: string | null;
+  description: string | null;
+  image_url: string | null;
+  category_preset: string;
+  variants: CommerceConnectorDryRunPreviewVariant[];
+}
+
+export interface CommerceConnectorDryRunBlocker {
+  code: string;
+  message: string;
+  row_index: number | null;
+  field: string | null;
+  remediation: string;
+}
+
+export interface CommerceConnectorDryRunWarning {
+  code: string;
+  message: string;
+  row_index: number | null;
+  field: string | null;
+}
+
+export interface CommerceConnectorDryRunResult {
+  dry_run_id: string;
+  tenant_id: string;
+  merchant_id: string;
+  connector_type: CommerceConnectorDryRunType;
+  source_label: string;
+  status: CommerceConnectorDryRunStatus;
+  sandbox_only: true;
+  not_live: true;
+  not_approved: true;
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  live_plural_enabled: false;
+  rows_received: number;
+  products_detected: number;
+  variants_detected: number;
+  would_create_count: number;
+  would_update_count: number;
+  would_archive_count: number;
+  blocked_count: number;
+  warning_count: number;
+  normalized_preview: CommerceConnectorDryRunPreviewProduct[];
+  blockers: CommerceConnectorDryRunBlocker[];
+  warnings: CommerceConnectorDryRunWarning[];
+  requested_audit_event_id: string;
+  audit_event_id: string;
+  generated_at: string;
+  created_at: string;
+}
+
+export interface CommerceConnectorDryRunReview {
+  review_id: string;
+  tenant_id: string;
+  merchant_id: string;
+  dry_run_id: string;
+  status: CommerceConnectorDryRunReviewStatus;
+  decision: CommerceConnectorDryRunReviewDecision | null;
+  decision_note: string | null;
+  requested_by: {
+    kind: 'operator' | 'merchant';
+    id: string;
+  };
+  decided_by_operator_id: string | null;
+  dry_run_status: CommerceConnectorDryRunStatus;
+  dry_run_generated_at: string | null;
+  evidence_summary: Record<string, unknown>;
+  requested_audit_event_id: string;
+  audit_event_id: string | null;
+  controls: {
+    sandbox_only: true;
+    not_live: true;
+    not_approved: true;
+    public_discovery_enabled: false;
+    checkout_payment_enabled: false;
+    live_provider_enabled: false;
+    live_plural_enabled: false;
+    production_allowlist_written: false;
+    review_is_production_approval: false;
+    review_enables_connector_execution: false;
+  };
+  created_at: string | null;
+  updated_at: string | null;
+  decided_at: string | null;
+}
+
+export interface CommerceConnectorDryRunRemediation {
+  remediation_id: string;
+  tenant_id: string;
+  merchant_id: string;
+  original_dry_run_id: string;
+  original_review_id: string;
+  original_decision: 'needs_changes' | 'blocked';
+  status: CommerceConnectorDryRunRemediationStatus;
+  public_safe_note: string | null;
+  blocker_summary: unknown[];
+  warning_summary: unknown[];
+  corrected_dry_run_id: string | null;
+  followup_review_id: string | null;
+  requested_by: {
+    kind: 'operator' | 'merchant';
+    id: string;
+  };
+  audit_references: {
+    requested_audit_event_id: string;
+    corrected_audit_event_id: string | null;
+    followup_audit_event_id: string | null;
+    closed_or_blocked_audit_event_id: string | null;
+    triage_audit_event_id?: string | null;
+  };
+  triage?: {
+    triage_status: CommerceConnectorDryRunRemediationTriageStatus | null;
+    assigned_operator_id: string | null;
+    triage_note: string | null;
+    merchant_followup_summary: string | null;
+    next_step: string | null;
+    triaged_by_operator_id: string | null;
+    triaged_at: string | null;
+    triage_audit_event_id: string | null;
+    triage_is_production_approval: false;
+    triage_enables_connector_execution: false;
+  };
+  controls: {
+    sandbox_only: true;
+    not_live: true;
+    not_approved: true;
+    public_discovery_enabled: false;
+    checkout_payment_enabled: false;
+    live_provider_enabled: false;
+    live_plural_enabled: false;
+    production_allowlist_written: false;
+    remediation_is_production_approval: false;
+    remediation_enables_connector_execution: false;
+    followup_ready_is_launch_approval: false;
+    triage_is_production_approval?: false;
+    triage_enables_connector_execution?: false;
+  };
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface CommerceConnectorDryRunRemediationQueueItem extends CommerceConnectorDryRunRemediation {
+  queue: {
+    operator_queue_status: CommerceConnectorDryRunRemediationStatus;
+    merchant_visible_status: CommerceConnectorDryRunRemediationStatus;
+    requires_corrected_dry_run: boolean;
+    requires_operator_followup: boolean;
+    timeline_available: true;
+    evidence_redacted: true;
+  };
+  summary: {
+    blocker_count: number;
+    warning_count: number;
+    corrected_dry_run_attached: boolean;
+    followup_review_requested: boolean;
+    last_audit_event_id: string | null;
+  };
+}
+
+export interface CommerceConnectorDryRunRemediationTimelineEntry {
+  sequence: number;
+  key: string;
+  label: string;
+  status: 'complete' | 'pending' | 'blocked';
+  event_type: string;
+  occurred_at: string | null;
+  audit_event_id: string | null;
+  actor: {
+    kind: 'operator' | 'merchant' | null;
+    id: string | null;
+  };
+  resource_references: Record<string, string | null>;
+  evidence_summary: Record<string, unknown>;
+  redaction: {
+    raw_connector_rows_included: false;
+    credentials_included: false;
+    provider_metadata_included: false;
+    merchant_private_api_payload_included: false;
+    production_config_values_included: false;
+  };
+}
+
+export interface CommerceConnectorDryRunRemediationTimeline {
+  remediation: CommerceConnectorDryRunRemediation;
+  timeline: CommerceConnectorDryRunRemediationTimelineEntry[];
+  operator_queue: {
+    queue_status: CommerceConnectorDryRunRemediationStatus;
+    visible_to_operator: true;
+    evidence_redacted: true;
+    requires_corrected_dry_run: boolean;
+    requires_operator_followup: boolean;
+  };
+  merchant_status: {
+    visible_to_merchant: true;
+    status: CommerceConnectorDryRunRemediationStatus;
+    triage_status?: CommerceConnectorDryRunRemediationTriageStatus | null;
+    merchant_followup_summary?: string | null;
+    triage_next_step?: string | null;
+    corrected_dry_run_id: string | null;
+    followup_review_id: string | null;
+    next_step: string;
+  };
+  redaction_summary: {
+    blocker_summary_count: number;
+    warning_summary_count: number;
+    raw_connector_rows_included: false;
+    credentials_included: false;
+    provider_metadata_included: false;
+    merchant_private_api_payload_included: false;
+    production_config_values_included: false;
+  };
+  controls: {
+    sandbox_only: true;
+    not_live: true;
+    not_approved: true;
+    public_discovery_enabled: false;
+    checkout_payment_enabled: false;
+    live_provider_enabled: false;
+    live_plural_enabled: false;
+    production_allowlist_written: false;
+    credential_entry_enabled: false;
+    outbound_sync_enabled: false;
+    production_connector_setup_enabled: false;
+    provider_call_enabled: false;
+    merchant_private_api_calls_enabled: false;
+    remediation_is_production_approval: false;
+    remediation_enables_connector_execution: false;
+    followup_ready_is_launch_approval: false;
+  };
+}
+
+export interface CommerceConnectorDryRunResponse {
+  data: CommerceConnectorDryRunResult;
+  audit_events: Array<{
+    event_type: 'connector_dry_run_requested' | 'connector_dry_run_completed' | 'connector_dry_run_blocked';
+    audit_event_id: string;
+  }>;
+}
+
+export interface CommerceConnectorDryRunReviewResponse {
+  data: CommerceConnectorDryRunReview;
+  dry_run: CommerceConnectorDryRunResult;
+  audit_event_id: string | null;
+}
+
+export interface CommerceConnectorDryRunRemediationResponse {
+  data: CommerceConnectorDryRunRemediation;
+  original_dry_run: CommerceConnectorDryRunResult;
+  original_review: CommerceConnectorDryRunReview;
+  audit_event_id: string | null;
+}
+
+export interface CommerceConnectorDryRunCorrectedResponse {
+  data: CommerceConnectorDryRunRemediation;
+  corrected_dry_run: CommerceConnectorDryRunResult;
+  audit_event_id: string | null;
+}
+
+export interface CommerceConnectorDryRunFollowUpReviewResponse {
+  data: CommerceConnectorDryRunRemediation;
+  corrected_dry_run: CommerceConnectorDryRunResult;
+  followup_review: CommerceConnectorDryRunReview;
+  audit_event_id: string | null;
+}
+
+export interface CommerceConnectorDryRunRemediationTriageResponse {
+  data: CommerceConnectorDryRunRemediation;
+  audit_event_id: string | null;
+  controls: CommerceConnectorDryRunRemediation['controls'] & {
+    credential_entry_enabled: false;
+    outbound_sync_enabled: false;
+    production_connector_setup_enabled: false;
+    provider_call_enabled: false;
+    merchant_private_api_calls_enabled: false;
+    triage_is_production_approval: false;
+    triage_enables_connector_execution: false;
+  };
+}
+
 export interface CommerceAgentFacingPreviewProductVariant {
   sku: string;
   variant_title: string | null;
@@ -503,6 +823,75 @@ export interface CommerceAgenticOrgBuyerDiscoveryPreview {
   rollout_status: 'rollout_not_requested';
 }
 
+export interface CommerceSchemaOrgJsonLdPreview {
+  status: 'preview_only' | 'blocked';
+  message: string;
+  preview_only: true;
+  publication_status: 'not_published';
+  schemaorg_publication_enabled: false;
+  public_discovery_enabled: false;
+  checkout_payment_enabled: false;
+  live_provider_enabled: false;
+  live_plural_enabled: false;
+  production_allowlist_written: false;
+  live_mode_status: 'not_live';
+  production_approval_status: 'not_approved';
+  certification_claims: [];
+  generated_at: string;
+  jsonld: {
+    '@context': 'https://schema.org';
+    '@graph': Array<{
+      '@type': 'Product';
+      name: string;
+      description?: string;
+      image?: string;
+      category?: string;
+      brand?: { '@type': 'Brand'; name: string };
+      offers?: Array<{
+        '@type': 'Offer';
+        price: string;
+        priceCurrency: string;
+        availability?: string;
+        hasMerchantReturnPolicy?: {
+          '@type': 'MerchantReturnPolicy';
+          description: string;
+          applicableCountry?: string;
+        };
+      }>;
+    }>;
+  };
+  included_types: Array<'Product' | 'Offer' | 'MerchantReturnPolicy' | 'OfferShippingDetails'>;
+  omitted_types: Array<'Product' | 'Offer' | 'MerchantReturnPolicy' | 'OfferShippingDetails'>;
+  allowed_capabilities: ['schemaorg_jsonld_preview_read'];
+  blocked_capabilities: Array<
+    | 'schemaorg_publication'
+    | 'public_discovery'
+    | 'checkout_payment_creation'
+    | 'live_payment'
+    | 'live_plural'
+    | 'provider_credentials'
+    | 'production_allowlist'
+  >;
+  blockers: string[];
+  remediation_items: string[];
+  source_reference: {
+    system: 'grantex';
+    canonical_state: 'merchant_catalog_readiness';
+    endpoint_template: '/v1/commerce/merchants/{merchant_id}/schemaorg-jsonld-preview';
+    tenant_scoped: true;
+  };
+  evidence_summary: {
+    product_count: number;
+    offer_count: number;
+    return_policy_count: number;
+    shipping_details_count: number;
+    omitted_unsafe_field_count: number;
+    readiness_state: string;
+    read_only: true;
+    public_safe: true;
+  };
+}
+
 export interface CommerceSandboxOnboarding {
   merchant_id: string;
   tenant_id: string;
@@ -780,7 +1169,7 @@ export interface CommerceWellKnownProfile {
   capabilities: string[];
 }
 
-function qs(params: Record<string, string | number | null | undefined>): string {
+function qs(params: Record<string, string | number | boolean | null | undefined>): string {
   const q = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && String(value).length > 0) {
@@ -972,6 +1361,14 @@ export function getCommerceMerchantAgenticOrgBuyerDiscoveryPreview(
   );
 }
 
+export function getCommerceMerchantSchemaOrgJsonLdPreview(
+  merchantId: string,
+): Promise<{ data: CommerceSchemaOrgJsonLdPreview }> {
+  return api.get<{ data: CommerceSchemaOrgJsonLdPreview }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/schemaorg-jsonld-preview`,
+  );
+}
+
 export function requestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff(
   merchantId: string,
   input: { handoffNote?: string } = {},
@@ -1111,6 +1508,185 @@ export function bulkIngestCommerceProducts(input: {
     dry_run: input.dryRun ?? true,
     products: input.products,
   });
+}
+
+export function runCommerceConnectorDryRun(input: {
+  merchantId: string;
+  connectorType: CommerceConnectorDryRunType;
+  sourceLabel: string;
+  sourceSnapshotAt?: string;
+  previewLimit?: number;
+  rows: Array<Record<string, unknown>>;
+}): Promise<CommerceConnectorDryRunResponse> {
+  return api.post<CommerceConnectorDryRunResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(input.merchantId)}/connectors/dry-run`,
+    {
+      connector_type: input.connectorType,
+      source_label: input.sourceLabel,
+      ...(input.sourceSnapshotAt ? { source_snapshot_at: input.sourceSnapshotAt } : {}),
+      ...(input.previewLimit ? { preview_limit: input.previewLimit } : {}),
+      rows: input.rows,
+    },
+  );
+}
+
+export function getCommerceConnectorDryRun(
+  merchantId: string,
+  dryRunId: string,
+): Promise<{ data: CommerceConnectorDryRunResult }> {
+  return api.get<{ data: CommerceConnectorDryRunResult }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/dry-runs/${encodeURIComponent(dryRunId)}`,
+  );
+}
+
+export function requestCommerceConnectorDryRunReview(
+  merchantId: string,
+  dryRunId: string,
+  input: { requestNote?: string } = {},
+): Promise<CommerceConnectorDryRunReviewResponse> {
+  return api.post<CommerceConnectorDryRunReviewResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/dry-runs/${encodeURIComponent(dryRunId)}/review-request`,
+    {
+      ...(input.requestNote ? { request_note: input.requestNote } : {}),
+    },
+  );
+}
+
+export function getCommerceConnectorDryRunReview(
+  merchantId: string,
+  dryRunId: string,
+): Promise<CommerceConnectorDryRunReviewResponse> {
+  return api.get<CommerceConnectorDryRunReviewResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/dry-runs/${encodeURIComponent(dryRunId)}/review`,
+  );
+}
+
+export function recordCommerceConnectorDryRunReviewDecision(
+  merchantId: string,
+  dryRunId: string,
+  input: {
+    decision: CommerceConnectorDryRunReviewDecision;
+    decisionNote?: string;
+  },
+): Promise<CommerceConnectorDryRunReviewResponse> {
+  return api.post<CommerceConnectorDryRunReviewResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/dry-runs/${encodeURIComponent(dryRunId)}/review/decision`,
+    {
+      decision: input.decision,
+      ...(input.decisionNote ? { decision_note: input.decisionNote } : {}),
+    },
+  );
+}
+
+export function createCommerceConnectorDryRunRemediation(
+  merchantId: string,
+  dryRunId: string,
+  input: { publicSafeNote?: string } = {},
+): Promise<CommerceConnectorDryRunRemediationResponse> {
+  return api.post<CommerceConnectorDryRunRemediationResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/dry-runs/${encodeURIComponent(dryRunId)}/remediation`,
+    {
+      ...(input.publicSafeNote ? { public_safe_note: input.publicSafeNote } : {}),
+    },
+  );
+}
+
+export function getCommerceConnectorDryRunRemediation(
+  merchantId: string,
+  remediationId: string,
+): Promise<{ data: CommerceConnectorDryRunRemediation }> {
+  return api.get<{ data: CommerceConnectorDryRunRemediation }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/remediations/${encodeURIComponent(remediationId)}`,
+  );
+}
+
+export function listCommerceConnectorDryRunRemediations(params: {
+  merchantId?: string;
+  status?: CommerceConnectorDryRunRemediationStatus;
+  triageStatus?: CommerceConnectorDryRunRemediationTriageStatus;
+  originalDecision?: 'needs_changes' | 'blocked';
+  hasCorrectedDryRun?: boolean;
+  hasFollowupReview?: boolean;
+  limit?: number;
+} = {}): Promise<{
+  items: CommerceConnectorDryRunRemediationQueueItem[];
+  next_cursor: string | null;
+  filters: Record<string, unknown>;
+  controls: Record<string, unknown>;
+}> {
+  return api.get<{
+    items: CommerceConnectorDryRunRemediationQueueItem[];
+    next_cursor: string | null;
+    filters: Record<string, unknown>;
+    controls: Record<string, unknown>;
+  }>(`/v1/commerce/connectors/remediations${qs({
+    merchant_id: params.merchantId,
+    status: params.status,
+    triage_status: params.triageStatus,
+    original_decision: params.originalDecision,
+    has_corrected_dry_run: params.hasCorrectedDryRun,
+    has_followup_review: params.hasFollowupReview,
+    limit: params.limit,
+  })}`);
+}
+
+export function getCommerceConnectorDryRunRemediationTimeline(
+  merchantId: string,
+  remediationId: string,
+): Promise<{ data: CommerceConnectorDryRunRemediationTimeline }> {
+  return api.get<{ data: CommerceConnectorDryRunRemediationTimeline }>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/remediations/${encodeURIComponent(remediationId)}/timeline`,
+  );
+}
+
+export function recordCommerceConnectorDryRunRemediationTriage(
+  merchantId: string,
+  remediationId: string,
+  input: {
+    triageStatus: CommerceConnectorDryRunRemediationTriageStatus;
+    assignedOperatorId?: string;
+    triageNote?: string;
+    merchantFollowupSummary?: string;
+    nextStep?: string;
+  },
+): Promise<CommerceConnectorDryRunRemediationTriageResponse> {
+  return api.post<CommerceConnectorDryRunRemediationTriageResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/remediations/${encodeURIComponent(remediationId)}/triage`,
+    {
+      triage_status: input.triageStatus,
+      ...(input.assignedOperatorId ? { assigned_operator_id: input.assignedOperatorId } : {}),
+      ...(input.triageNote ? { triage_note: input.triageNote } : {}),
+      ...(input.merchantFollowupSummary ? { merchant_followup_summary: input.merchantFollowupSummary } : {}),
+      ...(input.nextStep ? { next_step: input.nextStep } : {}),
+    },
+  );
+}
+
+export function attachCommerceConnectorRemediationCorrectedDryRun(
+  merchantId: string,
+  remediationId: string,
+  input: { correctedDryRunId: string; publicSafeNote?: string },
+): Promise<CommerceConnectorDryRunCorrectedResponse> {
+  return api.post<CommerceConnectorDryRunCorrectedResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/remediations/${encodeURIComponent(remediationId)}/corrected-dry-run`,
+    {
+      corrected_dry_run_id: input.correctedDryRunId,
+      ...(input.publicSafeNote ? { public_safe_note: input.publicSafeNote } : {}),
+    },
+  );
+}
+
+export function requestCommerceConnectorRemediationFollowUpReview(
+  merchantId: string,
+  remediationId: string,
+  input: { requestNote?: string } = {},
+): Promise<CommerceConnectorDryRunFollowUpReviewResponse> {
+  return api.post<CommerceConnectorDryRunFollowUpReviewResponse>(
+    `/v1/commerce/merchants/${encodeURIComponent(merchantId)}/connectors/remediations/${encodeURIComponent(remediationId)}/follow-up-review`,
+    {
+      ...(input.requestNote ? { request_note: input.requestNote } : {}),
+    },
+  );
 }
 
 export function listCommerceWebhookSources(params: {
