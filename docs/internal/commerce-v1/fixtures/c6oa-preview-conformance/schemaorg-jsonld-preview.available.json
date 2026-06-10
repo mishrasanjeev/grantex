@@ -1,0 +1,117 @@
+{
+  "fixture_kind": "agentic_commerce_c6oa_preview_conformance_fixture",
+  "fixture_version": "c6oa-preview-1",
+  "surface": "schemaorg_jsonld_preview",
+  "scenario": "preview_available",
+  "synthetic": true,
+  "data_classification": "synthetic_preview_only",
+  "sandbox_only": true,
+  "preview_only": true,
+  "non_live": true,
+  "non_enabling": true,
+  "non_publication": true,
+  "non_certifying": true,
+  "publication_status": "not_published",
+  "certification_claims": [],
+  "generated_at": "2026-06-07T00:00:00.000Z",
+  "source_reference": {
+    "system": "grantex",
+    "merged_base": "80def0d6a6ccd61a5418d8a0628ffc533b08def0",
+    "canonical_state": "synthetic_merchant_catalog_readiness_fixture",
+    "tenant_scoped": true
+  },
+  "controls": {
+    "schemaorg_publication_enabled": false,
+    "public_discovery_enabled": false,
+    "production_commerce_v1_enabled": false,
+    "checkout_payment_creation_enabled": false,
+    "checkout_link_creation_enabled": false,
+    "live_payment_enabled": false,
+    "live_provider_enabled": false,
+    "provider_call_enabled": false,
+    "provider_credentials_exposed": false,
+    "merchant_private_api_call_enabled": false,
+    "agenticorg_direct_execution_allowed": false,
+    "production_allowlist_written": false
+  },
+  "expected_blockers": [
+    "schemaorg_shipping_details_evidence_missing",
+    "schemaorg_publication_not_enabled"
+  ],
+  "payload": {
+    "status": "preview_only",
+    "message": "Synthetic schema.org JSON-LD preview generated from public-safe fixture evidence. It is not published and does not approve production use.",
+    "preview_only": true,
+    "publication_status": "not_published",
+    "schemaorg_publication_enabled": false,
+    "public_discovery_enabled": false,
+    "checkout_payment_enabled": false,
+    "live_provider_enabled": false,
+    "production_allowlist_written": false,
+    "live_mode_status": "not_live",
+    "production_approval_status": "not_approved",
+    "certification_claims": [],
+    "jsonld": {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Product",
+          "name": "Synthetic countertop kettle",
+          "description": "Synthetic appliance catalog item for read-only preview conformance.",
+          "image": "https://assets.example.test/commerce-fixtures/kettle.jpg",
+          "category": "electronics_appliances",
+          "brand": {
+            "@type": "Brand",
+            "name": "Fixture Home"
+          },
+          "offers": [
+            {
+              "@type": "Offer",
+              "price": "49.00",
+              "priceCurrency": "USD",
+              "availability": "https://schema.org/InStock",
+              "hasMerchantReturnPolicy": {
+                "@type": "MerchantReturnPolicy",
+                "description": "Synthetic returns accepted within seven days for unopened fixture items.",
+                "applicableCountry": "US"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "included_types": [
+      "Product",
+      "Offer",
+      "MerchantReturnPolicy"
+    ],
+    "omitted_types": [
+      "OfferShippingDetails"
+    ],
+    "allowed_capabilities": [
+      "schemaorg_jsonld_preview_read"
+    ],
+    "blocked_capabilities": [
+      "schemaorg_publication",
+      "public_discovery",
+      "checkout_payment_creation",
+      "live_payment",
+      "provider_credentials",
+      "production_allowlist"
+    ],
+    "blockers": [
+      "schemaorg_shipping_details_evidence_missing",
+      "schemaorg_publication_not_enabled"
+    ],
+    "evidence_summary": {
+      "product_count": 1,
+      "offer_count": 1,
+      "return_policy_count": 1,
+      "shipping_details_count": 0,
+      "omitted_unsafe_field_count": 0,
+      "readiness_state": "sandbox_ready",
+      "read_only": true,
+      "public_safe": true
+    }
+  }
+}
