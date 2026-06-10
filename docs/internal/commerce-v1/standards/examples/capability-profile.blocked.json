@@ -1,0 +1,53 @@
+{
+  "example_id": "capability_profile_example_blocked_001",
+  "example_kind": "capability_profile",
+  "scenario": "blocked",
+  "status": "internal_example_only",
+  "internal_example_only": true,
+  "synthetic_data": true,
+  "public_submission_status": "not_submitted",
+  "certification_claims": [],
+  "production_approval": false,
+  "public_discovery_enabled": false,
+  "checkout_payment_enabled": false,
+  "live_provider_enabled": false,
+  "merchant": {
+    "merchant_id": "mer_example_home_001",
+    "display_name": "Example Home Goods Merchant",
+    "environment": "internal_preview"
+  },
+  "profile_state": "blocked",
+  "blocked_capabilities": [
+    {
+      "capability": "public_discovery.publish",
+      "reason_code": "public_discovery_disabled"
+    },
+    {
+      "capability": "checkout.create",
+      "reason_code": "checkout_not_enabled"
+    },
+    {
+      "capability": "payment.create",
+      "reason_code": "live_payment_not_enabled"
+    },
+    {
+      "capability": "merchant_private_api.call",
+      "reason_code": "merchant_private_api_not_allowed"
+    },
+    {
+      "capability": "provider.call",
+      "reason_code": "provider_call_not_allowed"
+    }
+  ],
+  "safe_remediation": [
+    "keep_profile_internal",
+    "complete_public_safe_review_before_external_use",
+    "do_not_treat_synthetic_example_as_production_approval"
+  ],
+  "redaction": {
+    "private_policy_details_included": false,
+    "private_source_details_included": false,
+    "provider_metadata_included": false,
+    "production_allowlist_values_included": false
+  }
+}
