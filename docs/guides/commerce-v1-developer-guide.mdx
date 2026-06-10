@@ -29,6 +29,146 @@ aliases:
 | Checkout create | Create a checkout handoff through Grantex. |
 | Payment status | Poll Grantex payment status, not a provider directly. |
 
+### Schema.org JSON-LD Preview
+
+Operators and owning merchants can inspect the C6J schema.org JSON-LD preview
+through:
+
+`GET /v1/commerce/merchants/{merchant_id}/schemaorg-jsonld-preview`
+
+The endpoint is tenant-scoped and sandbox-only. It returns a preview-only
+`https://schema.org` JSON-LD graph generated from canonical Grantex merchant,
+catalog, and readiness state. The adapter serializes only sanitized evidence
+for schema.org `Product`, `Offer`, `MerchantReturnPolicy`, and
+`OfferShippingDetails` fields. It does not expose exact internal tenant,
+merchant, product, variant, or SKU IDs.
+
+The response includes explicit non-enabling flags:
+
+- `schemaorg_publication_enabled: false`
+- `public_discovery_enabled: false`
+- `checkout_payment_enabled: false`
+- `live_provider_enabled: false`
+- `live_plural_enabled: false`
+- `production_allowlist_written: false`
+- `certification_claims: []`
+
+CommerceAgent and service callers are denied. Live merchants return a blocking
+error. Missing or unsafe catalog evidence is omitted and reported through
+`blockers`, `omitted_types`, and `remediation_items`; clients must not fill in
+missing seller, product, price, inventory, shipping, refund, launch, payment, or
+certification facts.
+
+### UCP-Style Capability Profile Preview
+
+Operators and owning merchants can inspect the C6K UCP-style capability profile
+preview through:
+
+`GET /v1/commerce/merchants/{merchant_id}/ucp-capability-profile-preview`
+
+The endpoint is tenant-scoped and sandbox-only. It returns services,
+capabilities, transports, controls, blockers, and evidence summary fields from
+canonical Grantex merchant/catalog/readiness state. Every capability ID uses the
+Grantex-owned namespace:
+
+`dev.grantex.commerce.discovery.preview`
+
+The endpoint must not publish `dev.ucp.*`, must not claim UCP certification,
+and must not enable a public discovery route. Response controls explicitly keep
+public discovery, checkout/payment creation, live provider access, live Plural,
+production allowlist writes, UCP publication, and UCP certification disabled.
+
+Read-only discovery capabilities can be marked `preview_available` when Grantex
+has public-safe profile and catalog evidence. Checkout, payment, fulfillment,
+refund/return execution, provider credentials, and live paths remain `blocked`
+metadata only.
+
+### ACP-Style Checkout Shape Preview
+
+Operators and owning merchants can inspect the C6L ACP-style checkout shape
+preview through:
+
+`GET /v1/commerce/merchants/{merchant_id}/acp-checkout-shape-preview`
+
+The endpoint is tenant-scoped and sandbox-only. It reads canonical Grantex cart,
+payment intent, consent, Commerce Passport, and active policy evidence, then
+returns ACP-style cart and checkout mapping objects as preview metadata. It does
+not call the payment provider and does not reuse the runtime checkout/payment
+creation handlers.
+
+The response includes explicit non-enabling controls:
+
+- `acp_publication_enabled: false`
+- `acp_certification_claim: none`
+- `public_checkout_enabled: false`
+- `payment_intent_creation_enabled: false`
+- `checkout_link_creation_enabled: false`
+- `provider_call_enabled_by_preview: false`
+- `live_payment_enabled_by_preview: false`
+- `live_plural_enabled_by_preview: false`
+
+Checkout mapping stays blocked when granted checkout consent, an unrevoked
+checkout Commerce Passport, an active policy, cart evidence, or sandbox payment
+intent evidence is missing. Unsupported fields such as public checkout URLs,
+provider payment references, provider metadata, live execution, fulfillment,
+and refunds/returns are represented as explicit blockers.
+
+### AP2-Style Evidence Preview
+
+Operators and owning merchants can inspect the C6M AP2-style evidence preview
+through:
+
+`GET /v1/commerce/merchants/{merchant_id}/ap2-evidence-preview`
+
+The endpoint is tenant-scoped, sandbox-only, deterministic, and unsigned. It
+reads canonical Grantex evidence from Commerce Passport, consent record, policy
+decision, cart snapshot hash, amount cap, merchant state, agent identity, audit
+reference, and existing idempotency evidence.
+
+The response is protocol packaging evidence only. It is not AP2 certification,
+is not AP2 publication, is not a signed production mandate, does not submit to
+a payment network, and does not enable checkout/payment creation, live payment,
+live Plural, public discovery, provider calls, provider credentials, production
+configuration, or production allowlists.
+
+Required evidence gaps return `status: blocked` with explicit blockers. The
+preview exposes hashes and presence flags where possible, but does not expose
+tenant IDs, exact merchant IDs, passport JTIs, consent record IDs, audit event
+IDs, provider references, raw line items, raw payloads, JWTs, idempotency keys,
+secrets, or private configuration.
+
+### Existing-System Connector Registry
+
+Operators and owning merchants can manage the C6N connector registry through:
+
+- `POST /v1/commerce/connectors`
+- `GET /v1/commerce/connectors`
+- `PATCH /v1/commerce/connectors/{connector_key}`
+
+The registry is a metadata-only foundation for existing merchant systems:
+manual maintenance, CSV, custom API, Shopify, WooCommerce, Magento, ERP,
+billing, OMS, WMS, logistics, CRM/support, and payment provider. It records
+connector type, display name, source-of-truth domains, source priority, sync
+status, health state, last sync timestamps, stale thresholds, webhook source
+references, and conflict blockers.
+
+The source precedence model covers `catalog`, `price`, `inventory`, `order`,
+`fulfillment`, `refund`, `settlement`, and `support`. List responses derive the
+primary connector per domain and include stale/conflict blockers instead of
+publishing stale facts as if they were current.
+
+This registry does not store credentials, raw payloads, provider metadata,
+private URLs, production config, or secrets. It does not call Shopify,
+WooCommerce, Magento, custom APIs, ERP, billing, OMS, WMS, logistics,
+CRM/support, payment providers, Plural, Stripe, or Pine. It also does not
+enable checkout/payment creation, fulfillment, refund execution, live payments,
+live Plural, public discovery, production Commerce V1, or protocol
+certification.
+
+AgenticOrg must never call merchant private systems directly. AgenticOrg reads
+only Grantex-grounded commerce APIs; Grantex owns connector metadata, source
+precedence, freshness, and blocker evidence.
+
 ## Auth And Caller Model
 
 Commerce callers are modeled as agents operating for a tenant, merchant, and

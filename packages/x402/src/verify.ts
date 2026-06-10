@@ -105,6 +105,10 @@ export async function verifyGDT(token: string, context: VerifyContext): Promise<
 
   partial.scopes = grantedScopes;
 
+  if (!Number.isFinite(context.amount) || context.amount < 0) {
+    return fail('Invalid request amount: must be a finite non-negative number', partial);
+  }
+
   // Step 5: Check scope match
   if (!scopeMatches(context.resource, grantedScopes)) {
     await logEvent('rejection', sub, iss, grantedScopes, jti, {
