@@ -1,0 +1,47 @@
+{
+  "example_id": "schemaorg_product_offer_example_001",
+  "example_kind": "schemaorg_style_product_offer_preview",
+  "scenario": "public_safe_preview",
+  "status": "internal_example_only",
+  "internal_example_only": true,
+  "synthetic_data": true,
+  "public_submission_status": "not_submitted",
+  "certification_claims": [],
+  "production_approval": false,
+  "public_discovery_enabled": false,
+  "checkout_payment_enabled": false,
+  "live_provider_enabled": false,
+  "schemaorg_style": {
+    "context_label": "schema_org_context_placeholder_public_safe",
+    "type": "Product",
+    "identifier": "item_example_lamp_001",
+    "name": "Example Table Lamp",
+    "brand": "Example Home Goods Merchant",
+    "description": "Synthetic public-safe product preview for internal standards draft preparation.",
+    "image_included": false,
+    "offer": {
+      "type": "Offer",
+      "identifier": "offer_example_lamp_001",
+      "price": "49.00",
+      "price_currency": "USD",
+      "availability": "preview_available",
+      "seller": "Example Home Goods Merchant",
+      "checkout_url_included": false
+    }
+  },
+  "excluded_fields": [
+    "real_product_url",
+    "real_image_url",
+    "real_address",
+    "real_phone",
+    "real_email",
+    "tax_id",
+    "provider_reference",
+    "production_config"
+  ],
+  "publication_controls": {
+    "schemaorg_publication_enabled": false,
+    "public_protocol_publication": false,
+    "external_submission": false
+  }
+}
