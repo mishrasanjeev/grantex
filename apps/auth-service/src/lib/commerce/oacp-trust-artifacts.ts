@@ -367,6 +367,68 @@ export interface OacpBlockedArtifactFixture {
   fixture: OacpArtifactFixture;
 }
 
+export const OACP_C6W4_PROTOCOL_ADAPTER_SURFACES = [
+  'schema_org_jsonld',
+  'ucp_capability_profile',
+  'acp_commerce_capability',
+  'ap2_evidence_intent_summary',
+  'a2a_agent_card_task_capability',
+  'mcp_tool_resource_capability',
+] as const;
+
+export type OacpProtocolAdapterSurface = typeof OACP_C6W4_PROTOCOL_ADAPTER_SURFACES[number];
+
+export type OacpAdapterPreviewRefusalCode =
+  | 'unknown_adapter_surface'
+  | 'source_artifact_missing'
+  | 'source_artifact_invalid'
+  | 'source_artifact_expired_or_stale'
+  | 'private_or_forbidden_payload_field';
+
+export interface OacpProtocolAdapterDescriptor {
+  surface: OacpProtocolAdapterSurface;
+  summary: string;
+  required_artifact_types: readonly OacpArtifactType[];
+  max_ttl_seconds: number;
+  blocked_capabilities: readonly string[];
+}
+
+export interface OacpProtocolAdapterPreviewInput {
+  surface: OacpProtocolAdapterSurface;
+  artifacts: readonly OacpArtifactFixture[];
+  generated_at: string;
+  now_iso?: string | undefined;
+}
+
+export type OacpProtocolAdapterPreviewResult =
+  | {
+    generated: true;
+    status: 'preview_only';
+    surface: OacpProtocolAdapterSurface;
+    adapter_descriptor: OacpProtocolAdapterDescriptor;
+    source_artifact_ids: string[];
+    source_artifact_families: OacpArtifactType[];
+    source_authority: 'grantex_canonical_oacp_artifact_authority';
+    generated_at: string;
+    expires_at: string;
+    max_ttl_seconds: number;
+    freshness_tier: OacpArtifactEnvelope['freshness_class'] | 'mixed';
+    unsupported_capabilities: string[];
+    blocked_capabilities: string[];
+    non_authoritative_for_transaction: true;
+    no_checkout_payment_enablement: true;
+    no_live_provider_enablement: true;
+    no_public_discovery_enablement: true;
+    surface_payload: Record<string, unknown>;
+  }
+  | {
+    generated: false;
+    status: 'refused';
+    surface: string;
+    refusal_code: OacpAdapterPreviewRefusalCode;
+    message: string;
+  };
+
 export type OacpOfflineCommitmentDecision =
   | {
     allowed: true;
@@ -476,6 +538,66 @@ const OACP_REQUIRED_SAFETY_FIELDS = [
   'stale_behavior',
   'refusal_code_if_invalid',
 ] as const;
+
+const C6W4_COMMON_BLOCKED_ADAPTER_CAPABILITIES = [
+  'checkout_create',
+  'payment_authorize',
+  'payment_capture',
+  'refund_execute',
+  'settlement_execute',
+  'payout_execute',
+  'fulfillment_start',
+  'merchant_approval',
+  'public_discovery_publish',
+  'public_discovery_unpublish',
+  'live_provider_call',
+  'merchant_private_api_call',
+] as const;
+
+export const OACP_C6W4_PROTOCOL_ADAPTER_DESCRIPTORS: Record<OacpProtocolAdapterSurface, OacpProtocolAdapterDescriptor> = {
+  schema_org_jsonld: {
+    surface: 'schema_org_jsonld',
+    summary: 'schema.org JSON-LD style internal discovery preview derived from signed OACP artifacts.',
+    required_artifact_types: ['merchant_capability', 'seller_agent_capability', 'catalog_snapshot', 'policy', 'protocol_adapter'],
+    max_ttl_seconds: OACP_ARTIFACT_TTLS_SECONDS.protocol_adapter,
+    blocked_capabilities: C6W4_COMMON_BLOCKED_ADAPTER_CAPABILITIES,
+  },
+  ucp_capability_profile: {
+    surface: 'ucp_capability_profile',
+    summary: 'UCP-style internal capability profile preview derived from signed OACP artifacts.',
+    required_artifact_types: ['merchant_capability', 'seller_agent_capability', 'policy', 'protocol_adapter'],
+    max_ttl_seconds: OACP_ARTIFACT_TTLS_SECONDS.protocol_adapter,
+    blocked_capabilities: C6W4_COMMON_BLOCKED_ADAPTER_CAPABILITIES,
+  },
+  acp_commerce_capability: {
+    surface: 'acp_commerce_capability',
+    summary: 'ACP-style commerce capability shape preview without checkout or payment authority.',
+    required_artifact_types: ['merchant_capability', 'seller_agent_capability', 'policy', 'protocol_adapter'],
+    max_ttl_seconds: OACP_ARTIFACT_TTLS_SECONDS.protocol_adapter,
+    blocked_capabilities: C6W4_COMMON_BLOCKED_ADAPTER_CAPABILITIES,
+  },
+  ap2_evidence_intent_summary: {
+    surface: 'ap2_evidence_intent_summary',
+    summary: 'AP2-style evidence and intent summary preview without mandate or payment execution authority.',
+    required_artifact_types: ['merchant_capability', 'seller_agent_capability', 'policy', 'commitment_evidence', 'protocol_adapter'],
+    max_ttl_seconds: OACP_ARTIFACT_TTLS_SECONDS.protocol_adapter,
+    blocked_capabilities: C6W4_COMMON_BLOCKED_ADAPTER_CAPABILITIES,
+  },
+  a2a_agent_card_task_capability: {
+    surface: 'a2a_agent_card_task_capability',
+    summary: 'A2A-style agent card and task capability preview for read-only agent routing.',
+    required_artifact_types: ['merchant_capability', 'seller_agent_capability', 'policy', 'protocol_adapter'],
+    max_ttl_seconds: OACP_ARTIFACT_TTLS_SECONDS.protocol_adapter,
+    blocked_capabilities: C6W4_COMMON_BLOCKED_ADAPTER_CAPABILITIES,
+  },
+  mcp_tool_resource_capability: {
+    surface: 'mcp_tool_resource_capability',
+    summary: 'MCP-style tool and resource capability preview limited to read-only commerce facts.',
+    required_artifact_types: ['merchant_capability', 'seller_agent_capability', 'policy', 'protocol_adapter'],
+    max_ttl_seconds: OACP_ARTIFACT_TTLS_SECONDS.protocol_adapter,
+    blocked_capabilities: C6W4_COMMON_BLOCKED_ADAPTER_CAPABILITIES,
+  },
+};
 
 export const OACP_ARTIFACT_SCHEMA_DESCRIPTORS: Record<OacpArtifactType, OacpArtifactSchemaDescriptor> = {
   merchant_capability: {
@@ -1253,6 +1375,298 @@ export function validateOacpArtifactSchema(input: {
     artifact_type: artifactTypeValue,
     schema_version: String(envelope.schema_version),
     required_payload_fields: descriptor.required_payload_fields,
+  };
+}
+
+function adapterPreviewRefusal(
+  surface: string,
+  refusal_code: OacpAdapterPreviewRefusalCode,
+  message: string,
+): OacpProtocolAdapterPreviewResult {
+  return {
+    generated: false,
+    status: 'refused',
+    surface,
+    refusal_code,
+    message,
+  };
+}
+
+function isOacpProtocolAdapterSurface(value: string): value is OacpProtocolAdapterSurface {
+  return (OACP_C6W4_PROTOCOL_ADAPTER_SURFACES as readonly string[]).includes(value);
+}
+
+function stringArrayValue(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function artifactTypeFromFixture(fixture: OacpArtifactFixture): OacpArtifactType | null {
+  const artifactType = fixture.envelope.artifact_type;
+  return typeof artifactType === 'string' && isOacpArtifactType(artifactType) ? artifactType : null;
+}
+
+function stringValue(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key];
+  return typeof value === 'string' ? value : null;
+}
+
+function numberValue(record: Record<string, unknown>, key: string): number | null {
+  const value = record[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function buildSourceArtifactIndex(artifacts: readonly OacpArtifactFixture[]): Map<OacpArtifactType, OacpArtifactFixture> {
+  const index = new Map<OacpArtifactType, OacpArtifactFixture>();
+  for (const artifact of artifacts) {
+    const artifactType = artifactTypeFromFixture(artifact);
+    if (artifactType !== null && !index.has(artifactType)) {
+      index.set(artifactType, artifact);
+    }
+  }
+  return index;
+}
+
+function sourceArtifactId(fixture: OacpArtifactFixture | undefined): string | null {
+  return fixture && typeof fixture.envelope.artifact_id === 'string' ? fixture.envelope.artifact_id : null;
+}
+
+function freshnessTierForArtifacts(artifacts: readonly OacpArtifactFixture[]): OacpArtifactEnvelope['freshness_class'] | 'mixed' {
+  const freshness = new Set(
+    artifacts
+      .map((artifact) => artifact.envelope.freshness_class)
+      .filter((value): value is OacpArtifactEnvelope['freshness_class'] => (
+        value === 'fresh' || value === 'acceptable' || value === 'stale' || value === 'unknown'
+      )),
+  );
+  const onlyFreshness = [...freshness][0];
+  return freshness.size === 1 && onlyFreshness !== undefined ? onlyFreshness : 'mixed';
+}
+
+function unsupportedCapabilitiesForArtifacts(
+  descriptor: OacpProtocolAdapterDescriptor,
+  artifacts: readonly OacpArtifactFixture[],
+): string[] {
+  const capabilities = new Set<string>(descriptor.blocked_capabilities);
+  for (const artifact of artifacts) {
+    const safety = asRecord(artifact.envelope.safety);
+    for (const item of stringArrayValue(safety?.forbidden_agent_uses)) {
+      capabilities.add(item);
+    }
+  }
+  return [...capabilities].sort();
+}
+
+function buildPreviewSourceRefs(artifacts: readonly OacpArtifactFixture[]): Array<Record<string, unknown>> {
+  return artifacts.map((artifact) => ({
+    artifact_id: artifact.envelope.artifact_id,
+    artifact_type: artifact.envelope.artifact_type,
+    issuer: artifact.envelope.issuer,
+    policy_version: artifact.envelope.policy_version,
+    freshness_class: artifact.envelope.freshness_class,
+    expires_at: artifact.envelope.expires_at,
+    evidence_refs: stringArrayValue(artifact.envelope.evidence_refs),
+  }));
+}
+
+function buildC6W4SurfacePayload(
+  surface: OacpProtocolAdapterSurface,
+  byType: Map<OacpArtifactType, OacpArtifactFixture>,
+  sourceArtifacts: readonly OacpArtifactFixture[],
+  unsupportedCapabilities: readonly string[],
+): Record<string, unknown> {
+  const merchant = byType.get('merchant_capability')?.payload ?? {};
+  const seller = byType.get('seller_agent_capability')?.payload ?? {};
+  const catalog = byType.get('catalog_snapshot')?.payload ?? {};
+  const policy = byType.get('policy')?.payload ?? {};
+  const price = byType.get('price');
+  const inventory = byType.get('inventory');
+  const commitment = byType.get('commitment_evidence');
+  const source_refs = buildPreviewSourceRefs(sourceArtifacts);
+  const merchantName = stringValue(merchant, 'merchant_display_name') ?? 'Synthetic OACP merchant';
+  const sellerAgentId = stringValue(seller, 'seller_agent_id') ?? 'seller_agent_unknown';
+  const supportedTasks = stringArrayValue(seller.supported_tasks);
+  const publicClaimLimits = stringArrayValue(seller.public_claim_limits);
+  const basePayload = {
+    preview_only: true,
+    internal_only: true,
+    non_publication: true,
+    non_certifying: true,
+    source_refs,
+    unsupported_capabilities: unsupportedCapabilities,
+  };
+
+  if (surface === 'schema_org_jsonld') {
+    return {
+      ...basePayload,
+      '@context': 'https://schema.org',
+      '@type': 'OfferCatalog',
+      name: merchantName,
+      itemListElement: stringArrayValue(catalog.product_refs).map((productId) => ({
+        '@type': 'Product',
+        productID: productId,
+        name: productId,
+        offers: {
+          '@type': 'Offer',
+          availability: 'PreviewOnly',
+          priceSpecification: 'NonFinalPreview',
+        },
+      })),
+      final_price_inventory_or_delivery_promise: false,
+    };
+  }
+
+  if (surface === 'ucp_capability_profile') {
+    return {
+      ...basePayload,
+      profile_kind: 'ucp_style_internal_capability_preview',
+      merchant_display_name: merchantName,
+      read_capabilities: ['merchant_profile.read', 'catalog.preview', 'policy.summary'],
+      unsupported_write_capabilities: unsupportedCapabilities,
+      public_claim_limits: publicClaimLimits,
+    };
+  }
+
+  if (surface === 'acp_commerce_capability') {
+    return {
+      ...basePayload,
+      shape_kind: 'acp_style_commerce_capability_preview',
+      seller_agent_id: sellerAgentId,
+      supported_non_binding_tasks: supportedTasks,
+      checkout_or_payment_authority: false,
+      policy_summary_refs: {
+        return_policy_summary: stringValue(policy, 'return_policy_summary'),
+        fulfillment_policy_summary: stringValue(policy, 'fulfillment_policy_summary'),
+      },
+    };
+  }
+
+  if (surface === 'ap2_evidence_intent_summary') {
+    return {
+      ...basePayload,
+      summary_kind: 'ap2_style_evidence_intent_preview',
+      intent_status: 'non_binding_preview_only',
+      commitment_ref: sourceArtifactId(commitment) ?? null,
+      payment_or_mandate_authorization: false,
+      evidence_refs: source_refs.flatMap((ref) => stringArrayValue(ref.evidence_refs)),
+    };
+  }
+
+  if (surface === 'a2a_agent_card_task_capability') {
+    return {
+      ...basePayload,
+      card_kind: 'a2a_style_agent_card_preview',
+      agent_id: sellerAgentId,
+      display_name: merchantName,
+      tasks: supportedTasks.map((task) => ({
+        task,
+        mode: 'non_binding_preview',
+        transaction_authority: false,
+      })),
+    };
+  }
+
+  return {
+    ...basePayload,
+    capability_kind: 'mcp_style_tool_resource_preview',
+    tools: [
+      { name: 'oacp.preview.merchant.read', write: false, source_required: true },
+      { name: 'oacp.preview.policy.read', write: false, source_required: true },
+    ],
+    resources: [
+      { uri_template: 'oacp-preview://merchant/{merchant_id}', source_required: true },
+      { uri_template: 'oacp-preview://policy/{merchant_id}', source_required: true },
+    ],
+    write_tools: [],
+    non_final_price_preview: price ? {
+      source_artifact_id: sourceArtifactId(price),
+      product_id: stringValue(price.payload, 'product_id'),
+      variant_id: stringValue(price.payload, 'variant_id'),
+      currency: stringValue(price.payload, 'currency'),
+      amount_minor_units: numberValue(price.payload, 'amount_minor_units'),
+      final_price_promise: false,
+    } : null,
+    non_final_inventory_preview: inventory ? {
+      source_artifact_id: sourceArtifactId(inventory),
+      product_id: stringValue(inventory.payload, 'product_id'),
+      availability_state: stringValue(inventory.payload, 'availability_state'),
+      hold_or_delivery_promise: false,
+    } : null,
+  };
+}
+
+export function buildOacpC6W4ProtocolAdapterPreview(
+  input: OacpProtocolAdapterPreviewInput,
+): OacpProtocolAdapterPreviewResult {
+  if (!isOacpProtocolAdapterSurface(input.surface)) {
+    return adapterPreviewRefusal(input.surface, 'unknown_adapter_surface', 'Unknown adapter preview surface.');
+  }
+  const descriptor = OACP_C6W4_PROTOCOL_ADAPTER_DESCRIPTORS[input.surface];
+  const byType = buildSourceArtifactIndex(input.artifacts);
+  for (const artifactType of descriptor.required_artifact_types) {
+    if (!byType.has(artifactType)) {
+      return adapterPreviewRefusal(input.surface, 'source_artifact_missing', `Missing required source artifact: ${artifactType}.`);
+    }
+  }
+
+  const generatedMillis = parseIsoMillis(input.generated_at);
+  if (generatedMillis === null) {
+    return adapterPreviewRefusal(input.surface, 'source_artifact_invalid', 'generated_at must be a valid ISO timestamp.');
+  }
+
+  const sourceArtifacts = input.artifacts.filter((artifact) => artifactTypeFromFixture(artifact) !== null);
+  const validationNow = input.now_iso ?? input.generated_at;
+  for (const artifact of sourceArtifacts) {
+    const artifactType = artifactTypeFromFixture(artifact);
+    const validation = validateOacpArtifactSchema({
+      envelope: artifact.envelope,
+      payload: artifact.payload,
+      now_iso: validationNow,
+    });
+    if (!validation.valid) {
+      const refusal = validation.refusal_code === 'private_or_forbidden_payload_field'
+        ? 'private_or_forbidden_payload_field'
+        : validation.refusal_code === 'artifact_expired_or_stale'
+          ? 'source_artifact_expired_or_stale'
+          : 'source_artifact_invalid';
+      return adapterPreviewRefusal(input.surface, refusal, validation.message);
+    }
+  }
+
+  const expiresMillis = sourceArtifacts
+    .map((artifact) => parseIsoMillis(typeof artifact.envelope.expires_at === 'string' ? artifact.envelope.expires_at : undefined))
+    .filter((value): value is number => value !== null);
+  if (expiresMillis.length !== sourceArtifacts.length) {
+    return adapterPreviewRefusal(input.surface, 'source_artifact_invalid', 'Every source artifact must have a valid expiry.');
+  }
+  const earliestExpiryMillis = Math.min(...expiresMillis);
+  const ttlSeconds = Math.floor((earliestExpiryMillis - generatedMillis) / 1000);
+  if (ttlSeconds <= 0) {
+    return adapterPreviewRefusal(input.surface, 'source_artifact_expired_or_stale', 'Adapter preview cannot outlive source artifacts.');
+  }
+
+  const boundedTtlSeconds = Math.min(ttlSeconds, descriptor.max_ttl_seconds);
+  const boundedExpiresAt = new Date(generatedMillis + boundedTtlSeconds * 1000).toISOString();
+  const unsupportedCapabilities = unsupportedCapabilitiesForArtifacts(descriptor, sourceArtifacts);
+
+  return {
+    generated: true,
+    status: 'preview_only',
+    surface: input.surface,
+    adapter_descriptor: descriptor,
+    source_artifact_ids: sourceArtifacts.map((artifact) => String(artifact.envelope.artifact_id)),
+    source_artifact_families: sourceArtifacts.map((artifact) => artifactTypeFromFixture(artifact)).filter((value): value is OacpArtifactType => value !== null),
+    source_authority: 'grantex_canonical_oacp_artifact_authority',
+    generated_at: input.generated_at,
+    expires_at: boundedExpiresAt,
+    max_ttl_seconds: boundedTtlSeconds,
+    freshness_tier: freshnessTierForArtifacts(sourceArtifacts),
+    unsupported_capabilities: unsupportedCapabilities,
+    blocked_capabilities: unsupportedCapabilities,
+    non_authoritative_for_transaction: true,
+    no_checkout_payment_enablement: true,
+    no_live_provider_enablement: true,
+    no_public_discovery_enablement: true,
+    surface_payload: buildC6W4SurfacePayload(input.surface, byType, sourceArtifacts, unsupportedCapabilities),
   };
 }
 
