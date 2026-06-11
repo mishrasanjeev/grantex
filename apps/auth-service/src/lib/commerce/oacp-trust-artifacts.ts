@@ -720,7 +720,6 @@ export const OACP_ARTIFACT_SCHEMA_DESCRIPTORS: Record<OacpArtifactType, OacpArti
 };
 
 const C6W3_BASE_ISSUED_AT = '2026-06-11T00:00:00.000Z';
-const C6W3_BASE_NOW = '2026-06-11T00:01:00.000Z';
 const C6W3_BASE_SCOPE = {
   tenant_id: 'cten_C6W3',
   merchant_id: 'mch_C6W3',
