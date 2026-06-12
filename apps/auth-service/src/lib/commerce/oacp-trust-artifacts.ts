@@ -1616,7 +1616,6 @@ export function buildOacpC6W4ProtocolAdapterPreview(
   const sourceArtifacts = input.artifacts.filter((artifact) => artifactTypeFromFixture(artifact) !== null);
   const validationNow = input.now_iso ?? input.generated_at;
   for (const artifact of sourceArtifacts) {
-    const artifactType = artifactTypeFromFixture(artifact);
     const validation = validateOacpArtifactSchema({
       envelope: artifact.envelope,
       payload: artifact.payload,
