@@ -3850,7 +3850,6 @@ export function verifyOacpC6W9ExecutionControllerHandoffDryRun(
   const sourceRefsPresent = packet.source_artifact_ids.length > 0 && packet.source_artifact_families.length > 0;
   const evidenceRefsPresent = packet.response_evidence_refs.length > 0;
   const auditLineagePresent = packet.audit_lineage_refs.length > 0;
-  const lineagePresent = packet.reconciliation_id.length > 0 && packet.envelope_id.length > 0;
   const decisionLineageComplete = auditLineagePresent
     && packet.audit_lineage_refs.includes(packet.reconciliation_id)
     && packet.audit_lineage_refs.includes(packet.envelope_id)
