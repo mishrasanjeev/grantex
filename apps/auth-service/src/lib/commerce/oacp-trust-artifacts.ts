@@ -827,6 +827,139 @@ export type OacpC6W8EligibilityPacketResult =
     blocked_packet?: OacpC6W8ExecutionHandoffEligibilityPacket;
   };
 
+export const OACP_C6W9_DRY_RUN_VERIFICATION_KINDS = [
+  'execution_controller_handoff_dry_run',
+  'audit_readiness_verification',
+  'missing_contract_requirement',
+  'blocked_handoff_verification',
+  'manual_review_required_verification',
+] as const;
+
+export const OACP_C6W9_VERIFIER_STATUSES = [
+  'dry_run_accepted_for_future_controller',
+  'missing_contract_requirement',
+  'needs_human_review',
+  'blocked',
+  'stale',
+  'expired',
+  'mismatched',
+  'unsupported',
+  'unsafe',
+] as const;
+
+export const OACP_C6W9_CONTRACT_CHECKS = [
+  'packet_kind_recognized',
+  'eligibility_status_acceptable',
+  'reconciliation_lineage_present',
+  'envelope_lineage_present',
+  'source_artifact_refs_present',
+  'evidence_refs_redacted_and_non_private',
+  'required_confirmations_present',
+  'freshness_ttl_valid',
+  'mandate_evidence_valid',
+  'action_class_risk_tier_consistent',
+  'commitment_risk_context_present',
+  'non_enablement_flags_intact',
+  'no_executable_url_or_target',
+  'no_raw_private_labels_or_payloads',
+  'no_publication_certification_readiness_claims',
+] as const;
+
+export const OACP_C6W9_AUDIT_READINESS_CHECKS = [
+  'audit_lineage_refs_present',
+  'audit_refs_redacted',
+  'decision_lineage_complete',
+  'source_refs_carried_forward',
+  'evidence_refs_carried_forward',
+  'messages_safe_and_non_executing',
+] as const;
+
+export type OacpC6W9DryRunVerificationKind = typeof OACP_C6W9_DRY_RUN_VERIFICATION_KINDS[number];
+export type OacpC6W9VerifierStatus = typeof OACP_C6W9_VERIFIER_STATUSES[number];
+export type OacpC6W9ContractCheck = typeof OACP_C6W9_CONTRACT_CHECKS[number];
+export type OacpC6W9AuditReadinessCheck = typeof OACP_C6W9_AUDIT_READINESS_CHECKS[number];
+
+export type OacpC6W9DryRunRefusalCode =
+  | 'packet_missing'
+  | 'packet_allows_execution'
+  | 'packet_not_prepared_reconciled_or_eligibility_only'
+  | 'non_enablement_flags_missing'
+  | 'private_or_forbidden_verification_field'
+  | 'verification_kind_status_mismatch'
+  | 'packet_indicates_forbidden_execution';
+
+export interface OacpC6W9DryRunVerifierInput {
+  verification_kind: OacpC6W9DryRunVerificationKind;
+  eligibility_packet: OacpC6W8ExecutionHandoffEligibilityPacket | null;
+  created_at: string;
+  provided_confirmations?: readonly string[] | undefined;
+  verification_flags?: readonly string[] | undefined;
+  claimed_packet_id?: string | undefined;
+  claimed_reconciliation_id?: string | undefined;
+  claimed_envelope_id?: string | undefined;
+  mandate_evidence_issued_at?: string | null | undefined;
+  amount_minor_units?: number | null | undefined;
+  currency?: string | null | undefined;
+  total_quantity?: number | null | undefined;
+}
+
+export interface OacpC6W9ExecutionControllerDryRunVerification {
+  verification_id: string;
+  verification_kind: OacpC6W9DryRunVerificationKind;
+  verification_status: OacpC6W9VerifierStatus;
+  created_at: string;
+  expires_at: string;
+  max_ttl_seconds: number;
+  eligibility_packet_id: string;
+  packet_kind: OacpC6W8EligibilityPacketKind;
+  eligibility_status: OacpC6W8EligibilityStatus;
+  reconciliation_id: string;
+  envelope_id: string;
+  requested_action: OacpC6W5CommitmentBoundaryAction;
+  action_class: OacpC6W5ActionClass;
+  risk_tier: OacpRiskTier;
+  source_artifact_ids: string[];
+  source_artifact_families: OacpArtifactType[];
+  response_evidence_refs: string[];
+  audit_lineage_refs: string[];
+  required_confirmations: string[];
+  missing_requirements: string[];
+  freshness_summary: OacpC6W5FreshnessSummary;
+  contract_checks: Record<OacpC6W9ContractCheck, boolean>;
+  audit_readiness_checks: Record<OacpC6W9AuditReadinessCheck, boolean>;
+  unsupported_capabilities: string[];
+  blocked_capabilities: string[];
+  buyer_safe_message: string;
+  seller_safe_message: string;
+  operator_safe_message: string;
+  next_human_step: string;
+  next_system_step_label: string;
+  allowed_to_preview: boolean;
+  allowed_to_prepare: boolean;
+  allowed_for_future_handoff: boolean;
+  allowed_to_execute: false;
+  dry_run_only: true;
+  eligibility_only: true;
+  non_authoritative_for_transaction: true;
+  no_checkout_payment_enablement: true;
+  no_live_provider_enablement: true;
+  no_public_discovery_enablement: true;
+}
+
+export type OacpC6W9DryRunVerifierResult =
+  | {
+    verified: true;
+    status: OacpC6W9VerifierStatus;
+    verification: OacpC6W9ExecutionControllerDryRunVerification;
+  }
+  | {
+    verified: false;
+    status: 'blocked' | 'unsafe';
+    refusal_code: OacpC6W9DryRunRefusalCode;
+    message: string;
+    blocked_verification?: OacpC6W9ExecutionControllerDryRunVerification;
+  };
+
 export type OacpOfflineCommitmentDecision =
   | {
     allowed: true;
@@ -3394,6 +3527,441 @@ export function prepareOacpC6W8ExecutionHandoffEligibilityPacket(
   }
 
   return { prepared: true, status, packet };
+}
+
+const C6W9_VERIFICATION_TTL_SECONDS: Record<OacpC6W9DryRunVerificationKind, number> = {
+  execution_controller_handoff_dry_run: 5 * 60,
+  audit_readiness_verification: 10 * 60,
+  missing_contract_requirement: 5 * 60,
+  blocked_handoff_verification: 5 * 60,
+  manual_review_required_verification: 10 * 60,
+};
+
+const C6W9_FORBIDDEN_TARGET_PATTERN = /(https?:\/\/|endpoint|checkout[_-]?url|payment[_-]?url|order[_-]?target|provider[_-]?target|merchant[_-]?private|live[_-]?rail|carrier[_-]?target|shipping[_-]?target)/i;
+const C6W9_PUBLICATION_CLAIM_PATTERN = /(protocol[_-]?(publication|submission)|certification|compliance|conformance|standardization|production[_-]?ready|execution[_-]?ready)/i;
+
+function c6w9BlankContractChecks(value = false): Record<OacpC6W9ContractCheck, boolean> {
+  return {
+    packet_kind_recognized: value,
+    eligibility_status_acceptable: value,
+    reconciliation_lineage_present: value,
+    envelope_lineage_present: value,
+    source_artifact_refs_present: value,
+    evidence_refs_redacted_and_non_private: value,
+    required_confirmations_present: value,
+    freshness_ttl_valid: value,
+    mandate_evidence_valid: value,
+    action_class_risk_tier_consistent: value,
+    commitment_risk_context_present: value,
+    non_enablement_flags_intact: value,
+    no_executable_url_or_target: value,
+    no_raw_private_labels_or_payloads: value,
+    no_publication_certification_readiness_claims: value,
+  };
+}
+
+function c6w9BlankAuditChecks(value = false): Record<OacpC6W9AuditReadinessCheck, boolean> {
+  return {
+    audit_lineage_refs_present: value,
+    audit_refs_redacted: value,
+    decision_lineage_complete: value,
+    source_refs_carried_forward: value,
+    evidence_refs_carried_forward: value,
+    messages_safe_and_non_executing: value,
+  };
+}
+
+function c6w9SafeRefs(values: readonly string[] | undefined): string[] | null {
+  const refs = [...new Set((values ?? []).map((value) => value.trim()).filter((value) => value.length > 0))];
+  for (const ref of refs) {
+    if (C6W8_PRIVATE_VALUE_PATTERN.test(ref)) return null;
+  }
+  return refs;
+}
+
+function c6w9ValuesSafe(values: readonly string[] | undefined): boolean {
+  const refs = c6w9SafeRefs(values);
+  if (refs === null) return false;
+  return refs.every((value) => !C6W9_FORBIDDEN_TARGET_PATTERN.test(value));
+}
+
+function c6w9ValuesDoNotClaimPublicationOrReadiness(values: readonly string[] | undefined): boolean {
+  return (values ?? []).every((value) => !C6W9_PUBLICATION_CLAIM_PATTERN.test(value));
+}
+
+function c6w9ExpiresAt(input: {
+  verification_kind: OacpC6W9DryRunVerificationKind;
+  created_at: string;
+  packet: OacpC6W8ExecutionHandoffEligibilityPacket;
+}): { expires_at: string; max_ttl_seconds: number; expired: boolean } | null {
+  const createdMillis = Date.parse(input.created_at);
+  const packetExpiryMillis = Date.parse(input.packet.expires_at);
+  if (!Number.isFinite(createdMillis) || !Number.isFinite(packetExpiryMillis)) return null;
+  const defaultExpiryMillis = createdMillis + C6W9_VERIFICATION_TTL_SECONDS[input.verification_kind] * 1000;
+  const expiresMillis = Math.min(defaultExpiryMillis, packetExpiryMillis);
+  if (expiresMillis <= createdMillis) {
+    return { expires_at: input.created_at, max_ttl_seconds: 0, expired: true };
+  }
+  return {
+    expires_at: new Date(expiresMillis).toISOString(),
+    max_ttl_seconds: Math.floor((expiresMillis - createdMillis) / 1000),
+    expired: false,
+  };
+}
+
+function c6w9ProvidedConfirmationsPresent(
+  required: readonly string[],
+  provided: readonly string[] | undefined,
+): boolean {
+  if (required.length === 0) return false;
+  const safeProvided = c6w9SafeRefs(provided);
+  if (safeProvided === null) return false;
+  const providedSet = new Set(safeProvided);
+  return required.every((confirmation) => providedSet.has(confirmation));
+}
+
+function c6w9RiskContextMissing(input: OacpC6W9DryRunVerifierInput, packet: OacpC6W8ExecutionHandoffEligibilityPacket): boolean {
+  if (!c6w5RequiresRiskContext(packet.requested_action, packet.action_class)) return false;
+  return input.amount_minor_units === null
+    || input.amount_minor_units === undefined
+    || input.amount_minor_units <= 0
+    || input.currency === null
+    || input.currency === undefined
+    || input.currency.trim().length === 0
+    || input.total_quantity === null
+    || input.total_quantity === undefined
+    || input.total_quantity <= 0;
+}
+
+function c6w9MandateEvidenceStale(input: OacpC6W9DryRunVerifierInput, packet: OacpC6W8ExecutionHandoffEligibilityPacket): boolean {
+  if (
+    packet.requested_action !== 'payment_intent'
+    && packet.requested_action !== 'mandate_setup_use'
+    && packet.requested_action !== 'prepare_mandate_capability_check_request'
+  ) {
+    return false;
+  }
+  if (input.mandate_evidence_issued_at === null || input.mandate_evidence_issued_at === undefined) return true;
+  const issuedMillis = Date.parse(input.mandate_evidence_issued_at);
+  const createdMillis = Date.parse(input.created_at);
+  if (!Number.isFinite(issuedMillis) || !Number.isFinite(createdMillis)) return true;
+  return createdMillis - issuedMillis > 120 * 1000;
+}
+
+function c6w9ActionRiskConsistent(packet: OacpC6W8ExecutionHandoffEligibilityPacket): boolean {
+  if (packet.action_class === 'always_blocked' || packet.risk_tier === 'critical') return false;
+  if (packet.action_class === 'commitment_bound') {
+    return packet.risk_tier === 'medium' || packet.risk_tier === 'high';
+  }
+  if (packet.action_class === 'commitment_adjacent') {
+    return packet.risk_tier === 'low' || packet.risk_tier === 'medium';
+  }
+  return packet.risk_tier === 'informational' || packet.risk_tier === 'low';
+}
+
+function c6w9FreshnessValid(input: OacpC6W9DryRunVerifierInput, packet: OacpC6W8ExecutionHandoffEligibilityPacket, ttl: { expired: boolean } | null): boolean {
+  const earliestExpiresAt = packet.freshness_summary.earliest_expires_at;
+  const earliestExpiryMillis = earliestExpiresAt === null ? Number.NaN : Date.parse(earliestExpiresAt);
+  const createdMillis = Date.parse(input.created_at);
+  return ttl !== null
+    && !ttl.expired
+    && packet.max_ttl_seconds > 0
+    && packet.freshness_summary.freshness_tier !== 'stale'
+    && packet.freshness_summary.freshness_tier !== 'unknown'
+    && earliestExpiresAt !== null
+    && Number.isFinite(earliestExpiryMillis)
+    && Number.isFinite(createdMillis)
+    && earliestExpiryMillis > createdMillis;
+}
+
+function c6w9NonEnablementFlagsIntact(packet: OacpC6W8ExecutionHandoffEligibilityPacket): boolean {
+  return packet.allowed_to_execute === false
+    && packet.prepared_only === true
+    && packet.reconciled_only === true
+    && packet.eligibility_only === true
+    && packet.non_authoritative_for_transaction === true
+    && packet.no_checkout_payment_enablement === true
+    && packet.no_live_provider_enablement === true
+    && packet.no_public_discovery_enablement === true;
+}
+
+function c6w9NoExecutableTarget(input: OacpC6W9DryRunVerifierInput, packet: OacpC6W8ExecutionHandoffEligibilityPacket): boolean {
+  return c6w9ValuesSafe(input.verification_flags)
+    && c6w9ValuesSafe([packet.next_system_step_label])
+    && c6w9ValuesSafe(packet.audit_lineage_refs)
+    && c6w9ValuesSafe(packet.response_evidence_refs);
+}
+
+function c6w9NoPublicationOrReadinessClaims(input: OacpC6W9DryRunVerifierInput, packet: OacpC6W8ExecutionHandoffEligibilityPacket): boolean {
+  return c6w9ValuesDoNotClaimPublicationOrReadiness(input.verification_flags)
+    && c6w9ValuesDoNotClaimPublicationOrReadiness([packet.next_system_step_label])
+    && c6w9ValuesDoNotClaimPublicationOrReadiness(packet.audit_lineage_refs)
+    && c6w9ValuesDoNotClaimPublicationOrReadiness(packet.response_evidence_refs);
+}
+
+function c6w9ClaimedLineageMatches(input: OacpC6W9DryRunVerifierInput, packet: OacpC6W8ExecutionHandoffEligibilityPacket): boolean {
+  return (input.claimed_packet_id === undefined || input.claimed_packet_id === packet.packet_id)
+    && (input.claimed_reconciliation_id === undefined || input.claimed_reconciliation_id === packet.reconciliation_id)
+    && (input.claimed_envelope_id === undefined || input.claimed_envelope_id === packet.envelope_id);
+}
+
+function c6w9StatusFromPacket(packet: OacpC6W8ExecutionHandoffEligibilityPacket): OacpC6W9VerifierStatus {
+  if (packet.eligibility_status === 'eligible_for_future_handoff') return 'dry_run_accepted_for_future_controller';
+  if (packet.eligibility_status === 'missing_evidence') return 'missing_contract_requirement';
+  if (packet.eligibility_status === 'needs_human_review') return 'needs_human_review';
+  return packet.eligibility_status;
+}
+
+function c6w9KindMatchesStatus(kind: OacpC6W9DryRunVerificationKind, status: OacpC6W9VerifierStatus): boolean {
+  if (status === 'dry_run_accepted_for_future_controller') {
+    return kind === 'execution_controller_handoff_dry_run' || kind === 'audit_readiness_verification';
+  }
+  if (status === 'missing_contract_requirement') return kind === 'missing_contract_requirement';
+  if (status === 'needs_human_review') return kind === 'manual_review_required_verification';
+  return kind === 'blocked_handoff_verification';
+}
+
+function c6w9OperatorMessage(status: OacpC6W9VerifierStatus): string {
+  if (status === 'dry_run_accepted_for_future_controller') {
+    return 'C6W9 dry-run accepted the local packet contract shape for a future controller review. This is not execution readiness and does not execute.';
+  }
+  if (status === 'missing_contract_requirement') return 'C6W9 found missing contract evidence, freshness, risk, or confirmation requirements.';
+  if (status === 'needs_human_review') return 'C6W9 requires human review labels only and does not approve merchant, payment, or rail behavior.';
+  if (status === 'stale' || status === 'expired') return 'C6W9 found stale or expired packet lineage; refresh source artifacts before another dry run.';
+  if (status === 'mismatched') return 'C6W9 found mismatched packet, reconciliation, envelope, or lineage references.';
+  if (status === 'unsupported') return 'C6W9 marks this handoff contract unsupported under the internal non-executing policy.';
+  if (status === 'unsafe') return 'C6W9 blocked unsafe private, executable, or publication-oriented packet content.';
+  return 'C6W9 blocks the future handoff path and keeps the request non-executing.';
+}
+
+function c6w9VerificationId(input: {
+  verification_kind: OacpC6W9DryRunVerificationKind;
+  verification_status: OacpC6W9VerifierStatus;
+  eligibility_packet_id: string;
+  created_at: string;
+  audit_lineage_refs: string[];
+}): string {
+  return `oacp_c6w9_verification_${sha256hex(stableJson(input)).slice(0, 20)}`;
+}
+
+function c6w9BuildVerification(input: {
+  verifierInput: OacpC6W9DryRunVerifierInput;
+  packet: OacpC6W8ExecutionHandoffEligibilityPacket;
+  status: OacpC6W9VerifierStatus;
+  ttl: { expires_at: string; max_ttl_seconds: number };
+  contract_checks: Record<OacpC6W9ContractCheck, boolean>;
+  audit_readiness_checks: Record<OacpC6W9AuditReadinessCheck, boolean>;
+  missing_requirements: string[];
+}): OacpC6W9ExecutionControllerDryRunVerification {
+  const allowedForFutureHandoff = input.status === 'dry_run_accepted_for_future_controller'
+    && input.packet.allowed_for_future_handoff === true;
+  return {
+    verification_id: c6w9VerificationId({
+      verification_kind: input.verifierInput.verification_kind,
+      verification_status: input.status,
+      eligibility_packet_id: input.packet.packet_id,
+      created_at: input.verifierInput.created_at,
+      audit_lineage_refs: input.packet.audit_lineage_refs,
+    }),
+    verification_kind: input.verifierInput.verification_kind,
+    verification_status: input.status,
+    created_at: input.verifierInput.created_at,
+    expires_at: input.ttl.expires_at,
+    max_ttl_seconds: input.ttl.max_ttl_seconds,
+    eligibility_packet_id: input.packet.packet_id,
+    packet_kind: input.packet.packet_kind,
+    eligibility_status: input.packet.eligibility_status,
+    reconciliation_id: input.packet.reconciliation_id,
+    envelope_id: input.packet.envelope_id,
+    requested_action: input.packet.requested_action,
+    action_class: input.packet.action_class,
+    risk_tier: input.packet.risk_tier,
+    source_artifact_ids: [...input.packet.source_artifact_ids],
+    source_artifact_families: [...input.packet.source_artifact_families],
+    response_evidence_refs: [...input.packet.response_evidence_refs],
+    audit_lineage_refs: [...input.packet.audit_lineage_refs],
+    required_confirmations: [...input.packet.required_confirmations],
+    missing_requirements: input.missing_requirements,
+    freshness_summary: input.packet.freshness_summary,
+    contract_checks: input.contract_checks,
+    audit_readiness_checks: input.audit_readiness_checks,
+    unsupported_capabilities: [...input.packet.unsupported_capabilities],
+    blocked_capabilities: [...input.packet.blocked_capabilities],
+    buyer_safe_message: input.packet.buyer_safe_message,
+    seller_safe_message: input.packet.seller_safe_message,
+    operator_safe_message: c6w9OperatorMessage(input.status),
+    next_human_step: input.packet.next_human_step,
+    next_system_step_label: input.packet.next_system_step_label,
+    allowed_to_preview: input.packet.allowed_to_preview,
+    allowed_to_prepare: allowedForFutureHandoff && input.packet.allowed_to_prepare,
+    allowed_for_future_handoff: allowedForFutureHandoff,
+    allowed_to_execute: false,
+    dry_run_only: true,
+    eligibility_only: true,
+    non_authoritative_for_transaction: true,
+    no_checkout_payment_enablement: true,
+    no_live_provider_enablement: true,
+    no_public_discovery_enablement: true,
+  };
+}
+
+function c6w9Refusal(
+  refusal_code: OacpC6W9DryRunRefusalCode,
+  message: string,
+  status: 'blocked' | 'unsafe' = 'blocked',
+  blocked_verification?: OacpC6W9ExecutionControllerDryRunVerification,
+): OacpC6W9DryRunVerifierResult {
+  return blocked_verification === undefined
+    ? { verified: false, status, refusal_code, message }
+    : { verified: false, status, refusal_code, message, blocked_verification };
+}
+
+export function verifyOacpC6W9ExecutionControllerHandoffDryRun(
+  input: OacpC6W9DryRunVerifierInput,
+): OacpC6W9DryRunVerifierResult {
+  if (input.eligibility_packet === null) {
+    return c6w9Refusal('packet_missing', 'C6W9 requires a C6W8 eligibility packet before dry-run verification.');
+  }
+  const packet = input.eligibility_packet;
+  const safeProvidedConfirmations = c6w9SafeRefs(input.provided_confirmations);
+  const safeVerificationFlags = c6w9SafeRefs(input.verification_flags);
+  if (safeProvidedConfirmations === null || safeVerificationFlags === null) {
+    return c6w9Refusal('private_or_forbidden_verification_field', 'C6W9 verifier input contains private, raw, or unredacted fields.', 'unsafe');
+  }
+  if (packet.allowed_to_execute !== false) {
+    return c6w9Refusal('packet_allows_execution', 'C6W9 refuses eligibility packets that allow execution.', 'unsafe');
+  }
+  if (packet.prepared_only !== true || packet.reconciled_only !== true || packet.eligibility_only !== true) {
+    return c6w9Refusal('packet_not_prepared_reconciled_or_eligibility_only', 'C6W9 accepts prepared-only, reconciled-only, eligibility-only packets only.');
+  }
+
+  const ttl = c6w9ExpiresAt({ verification_kind: input.verification_kind, created_at: input.created_at, packet });
+  const contractChecks = c6w9BlankContractChecks();
+  const auditChecks = c6w9BlankAuditChecks();
+  const refsSafe = c6w9SafeRefs(packet.response_evidence_refs) !== null && c6w9SafeRefs(packet.audit_lineage_refs) !== null;
+  const confirmationsPresent = c6w9ProvidedConfirmationsPresent(packet.required_confirmations, input.provided_confirmations);
+  const freshnessValid = c6w9FreshnessValid(input, packet, ttl);
+  const mandateEvidenceValid = !c6w9MandateEvidenceStale(input, packet);
+  const riskContextPresent = !c6w9RiskContextMissing(input, packet);
+  const lineageMatches = c6w9ClaimedLineageMatches(input, packet);
+  const noExecutableTarget = c6w9NoExecutableTarget(input, packet);
+  const noPublicationClaims = c6w9NoPublicationOrReadinessClaims(input, packet);
+  const nonEnablementFlagsIntact = c6w9NonEnablementFlagsIntact(packet);
+  const sourceRefsPresent = packet.source_artifact_ids.length > 0 && packet.source_artifact_families.length > 0;
+  const evidenceRefsPresent = packet.response_evidence_refs.length > 0;
+  const auditLineagePresent = packet.audit_lineage_refs.length > 0;
+  const lineagePresent = packet.reconciliation_id.length > 0 && packet.envelope_id.length > 0;
+  const decisionLineageComplete = auditLineagePresent
+    && packet.audit_lineage_refs.includes(packet.reconciliation_id)
+    && packet.audit_lineage_refs.includes(packet.envelope_id)
+    && lineageMatches;
+  let status = c6w9StatusFromPacket(packet);
+
+  contractChecks.packet_kind_recognized = (OACP_C6W8_ELIGIBILITY_PACKET_KINDS as readonly string[]).includes(packet.packet_kind);
+  contractChecks.eligibility_status_acceptable = packet.eligibility_status === 'eligible_for_future_handoff';
+  contractChecks.reconciliation_lineage_present = packet.reconciliation_id.length > 0 && lineageMatches;
+  contractChecks.envelope_lineage_present = packet.envelope_id.length > 0 && lineageMatches;
+  contractChecks.source_artifact_refs_present = sourceRefsPresent;
+  contractChecks.evidence_refs_redacted_and_non_private = refsSafe && evidenceRefsPresent;
+  contractChecks.required_confirmations_present = confirmationsPresent;
+  contractChecks.freshness_ttl_valid = freshnessValid;
+  contractChecks.mandate_evidence_valid = mandateEvidenceValid;
+  contractChecks.action_class_risk_tier_consistent = c6w9ActionRiskConsistent(packet);
+  contractChecks.commitment_risk_context_present = riskContextPresent;
+  contractChecks.non_enablement_flags_intact = nonEnablementFlagsIntact;
+  contractChecks.no_executable_url_or_target = noExecutableTarget;
+  contractChecks.no_raw_private_labels_or_payloads = refsSafe && noExecutableTarget;
+  contractChecks.no_publication_certification_readiness_claims = noPublicationClaims;
+
+  auditChecks.audit_lineage_refs_present = auditLineagePresent;
+  auditChecks.audit_refs_redacted = refsSafe;
+  auditChecks.decision_lineage_complete = decisionLineageComplete;
+  auditChecks.source_refs_carried_forward = sourceRefsPresent;
+  auditChecks.evidence_refs_carried_forward = evidenceRefsPresent;
+  auditChecks.messages_safe_and_non_executing = c6w9ValuesSafe([
+    packet.buyer_safe_message,
+    packet.seller_safe_message,
+    packet.next_human_step,
+    packet.next_system_step_label,
+  ]);
+
+  const missingRequirements = new Set(packet.missing_requirements);
+  if (!contractChecks.reconciliation_lineage_present || !contractChecks.envelope_lineage_present || !decisionLineageComplete) {
+    status = 'mismatched';
+    missingRequirements.add('complete_packet_reconciliation_envelope_lineage');
+  }
+  if (!sourceRefsPresent || !evidenceRefsPresent || !auditLineagePresent) {
+    status = 'missing_contract_requirement';
+    missingRequirements.add('source_evidence_and_audit_refs');
+  }
+  if (!confirmationsPresent) {
+    status = 'missing_contract_requirement';
+    for (const confirmation of packet.required_confirmations) missingRequirements.add(`confirmation:${confirmation}`);
+  }
+  if (!riskContextPresent) {
+    status = 'missing_contract_requirement';
+    missingRequirements.add('amount_currency_quantity_context');
+  }
+  if (!mandateEvidenceValid) {
+    status = 'stale';
+    missingRequirements.add('fresh_mandate_capability_evidence');
+  }
+  if (!freshnessValid) {
+    status = ttl === null || ttl.expired ? 'expired' : 'stale';
+    missingRequirements.add('fresh_source_artifacts');
+  }
+  if (!contractChecks.action_class_risk_tier_consistent) {
+    status = packet.risk_tier === 'critical' ? 'unsupported' : 'mismatched';
+    missingRequirements.add('consistent_action_class_and_risk_tier');
+  }
+  if (
+    !contractChecks.non_enablement_flags_intact
+    || !contractChecks.no_executable_url_or_target
+    || !contractChecks.no_raw_private_labels_or_payloads
+    || !contractChecks.no_publication_certification_readiness_claims
+  ) {
+    status = 'unsafe';
+    missingRequirements.add('non_enablement_and_private_target_controls');
+  }
+  if (!nonEnablementFlagsIntact) {
+    return c6w9Refusal('non_enablement_flags_missing', 'C6W9 refuses packets with missing or false non-enablement flags.', 'unsafe');
+  }
+  if (!noExecutableTarget || !noPublicationClaims || !refsSafe) {
+    return c6w9Refusal('private_or_forbidden_verification_field', 'C6W9 refuses private refs, executable targets, publication claims, or readiness claims.', 'unsafe');
+  }
+  if (!c6w9KindMatchesStatus(input.verification_kind, status)) {
+    const blocked = ttl === null
+      ? undefined
+      : c6w9BuildVerification({
+        verifierInput: input,
+        packet,
+        status: 'mismatched',
+        ttl,
+        contract_checks: contractChecks,
+        audit_readiness_checks: auditChecks,
+        missing_requirements: [...missingRequirements, 'verification_kind_status_mismatch'],
+      });
+    return c6w9Refusal('verification_kind_status_mismatch', 'C6W9 verification kind does not match the derived dry-run status.', 'blocked', blocked);
+  }
+
+  const verificationTtl = ttl ?? { expires_at: input.created_at, max_ttl_seconds: 0 };
+  const verification = c6w9BuildVerification({
+    verifierInput: input,
+    packet,
+    status,
+    ttl: verificationTtl,
+    contract_checks: contractChecks,
+    audit_readiness_checks: auditChecks,
+    missing_requirements: [...missingRequirements],
+  });
+
+  try {
+    assertNoForbiddenOacpArtifactFields(verification);
+  } catch {
+    return c6w9Refusal('private_or_forbidden_verification_field', 'C6W9 dry-run verification contains private or enabling fields.', 'unsafe');
+  }
+
+  return { verified: true, status, verification };
 }
 
 export function assertNoForbiddenOacpArtifactFields(value: unknown): void {
