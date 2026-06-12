@@ -535,6 +535,87 @@ export interface OacpC6W5CommitmentBoundaryDecision {
   no_public_discovery_enablement: true;
 }
 
+export const OACP_C6W6_PREPARED_ENVELOPE_KINDS = [
+  'buyer_confirmation_request',
+  'seller_source_refresh_request',
+  'merchant_confirmation_request',
+  'mandate_capability_evidence_request',
+  'support_escalation_preparation',
+] as const;
+
+export type OacpC6W6PreparedEnvelopeKind = typeof OACP_C6W6_PREPARED_ENVELOPE_KINDS[number];
+
+export type OacpC6W6EnvelopeRefusalCode =
+  | 'resolver_decision_missing'
+  | 'resolver_decision_allows_execution'
+  | 'source_artifacts_missing'
+  | 'source_freshness_missing_or_stale'
+  | 'action_blocked_in_c6w6'
+  | 'risk_context_missing_or_ambiguous'
+  | 'envelope_kind_action_mismatch'
+  | 'private_or_forbidden_envelope_field';
+
+export interface OacpC6W6PreparedEnvelopeInput {
+  envelope_kind: OacpC6W6PreparedEnvelopeKind;
+  resolver_decision: OacpC6W5CommitmentBoundaryDecision | null;
+  created_at: string;
+  source_resolver_decision_id?: string | null | undefined;
+  evidence_refs?: readonly string[] | undefined;
+  unsupported_capabilities?: readonly string[] | undefined;
+  amount_minor_units?: number | null | undefined;
+  currency?: string | null | undefined;
+  total_quantity?: number | null | undefined;
+  max_quantity_per_sku?: number | null | undefined;
+}
+
+export interface OacpC6W6PreparedCommitmentEnvelope {
+  envelope_id: string;
+  envelope_kind: OacpC6W6PreparedEnvelopeKind;
+  envelope_status: 'prepared_only' | 'blocked';
+  created_at: string;
+  expires_at: string;
+  max_ttl_seconds: number;
+  source_resolver_decision_id: string;
+  action_class: OacpC6W5ActionClass;
+  requested_action: OacpC6W5CommitmentBoundaryAction;
+  risk_tier: OacpRiskTier;
+  offline_mode_status: OacpC6W5OfflineModeStatus;
+  allowed_to_preview: boolean;
+  allowed_to_prepare: boolean;
+  allowed_to_execute: false;
+  prepared_only: true;
+  source_artifact_ids: string[];
+  source_artifact_families: OacpArtifactType[];
+  source_authority: 'grantex_canonical_oacp_artifact_authority';
+  required_fresh_artifact_families: OacpArtifactType[];
+  freshness_summary: OacpC6W5FreshnessSummary;
+  blocked_capabilities: string[];
+  unsupported_capabilities: string[];
+  buyer_safe_message: string;
+  seller_safe_message: string;
+  next_human_step: string;
+  next_system_step_label: string;
+  redacted_evidence_refs: string[];
+  non_authoritative_for_transaction: true;
+  no_checkout_payment_enablement: true;
+  no_live_provider_enablement: true;
+  no_public_discovery_enablement: true;
+}
+
+export type OacpC6W6PreparedEnvelopeResult =
+  | {
+    generated: true;
+    status: 'prepared_only';
+    envelope: OacpC6W6PreparedCommitmentEnvelope;
+  }
+  | {
+    generated: false;
+    status: 'blocked';
+    refusal_code: OacpC6W6EnvelopeRefusalCode;
+    message: string;
+    blocked_envelope?: OacpC6W6PreparedCommitmentEnvelope;
+  };
+
 export type OacpOfflineCommitmentDecision =
   | {
     allowed: true;
@@ -2164,6 +2245,271 @@ export function evaluateOacpC6W5CommitmentBoundaryMetadata(
     buyer_safe_message: buyerSafeMessage,
     blocked_capabilities: blockedCapabilities,
   });
+}
+
+const C6W6_ENVELOPE_TTL_SECONDS: Record<OacpC6W6PreparedEnvelopeKind, number> = {
+  buyer_confirmation_request: 15 * 60,
+  seller_source_refresh_request: 30 * 60,
+  merchant_confirmation_request: 10 * 60,
+  mandate_capability_evidence_request: 2 * 60,
+  support_escalation_preparation: 10 * 60,
+};
+
+const C6W6_MERCHANT_CONFIRMATION_ACTIONS = new Set<OacpC6W5CommitmentBoundaryAction>([
+  'price_lock',
+  'inventory_hold',
+  'reservation',
+  'order_placement',
+]);
+
+const C6W6_MANDATE_EVIDENCE_ACTIONS = new Set<OacpC6W5CommitmentBoundaryAction>([
+  'payment_intent',
+  'mandate_setup_use',
+  'prepare_mandate_capability_check_request',
+]);
+
+const C6W6_SUPPORT_PREPARATION_ACTIONS = new Set<OacpC6W5CommitmentBoundaryAction>([
+  'support_escalation_sla_promise',
+  'refund_request',
+  'return_authorization',
+  'cancellation',
+]);
+
+const C6W6_PRIVATE_VALUE_PATTERN = /(https?:\/\/|postgres:\/\/|redis:\/\/|mongodb:\/\/|private[_-]?key|raw[_-]?jwt|access[_-]?token|api[_-]?key|password|secret|credential|allowlist)/i;
+
+function c6w6ResolverDecisionId(decision: OacpC6W5CommitmentBoundaryDecision): string {
+  return `oacp_c6w5_decision_${sha256hex(stableJson({
+    action: decision.action,
+    action_class: decision.action_class,
+    source_artifact_ids: decision.source_artifact_ids,
+    required_fresh_artifact_families: decision.required_fresh_artifact_families,
+    freshness_summary: decision.freshness_summary,
+    risk_tier: decision.risk_tier,
+    offline_mode_status: decision.offline_mode_status,
+  })).slice(0, 20)}`;
+}
+
+function c6w6RedactedEvidenceRefs(evidenceRefs: readonly string[] | undefined): string[] {
+  return [...new Set((evidenceRefs ?? [])
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .map((value) => (C6W6_PRIVATE_VALUE_PATTERN.test(value) ? 'redacted_private_evidence_ref' : value)))]
+    .slice(0, 20);
+}
+
+function c6w6ExpiresAt(input: {
+  kind: OacpC6W6PreparedEnvelopeKind;
+  created_at: string;
+  decision: OacpC6W5CommitmentBoundaryDecision;
+}): { expires_at: string; max_ttl_seconds: number } | null {
+  const createdMillis = parseIsoMillis(input.created_at);
+  if (createdMillis === null) return null;
+  const defaultTtl = C6W6_ENVELOPE_TTL_SECONDS[input.kind];
+  const earliestSourceExpiry = parseIsoMillis(input.decision.freshness_summary.earliest_expires_at ?? undefined);
+  const defaultExpiry = createdMillis + defaultTtl * 1000;
+  const expiresMillis = earliestSourceExpiry === null ? defaultExpiry : Math.min(defaultExpiry, earliestSourceExpiry);
+  if (expiresMillis <= createdMillis) return null;
+  return {
+    expires_at: new Date(expiresMillis).toISOString(),
+    max_ttl_seconds: Math.floor((expiresMillis - createdMillis) / 1000),
+  };
+}
+
+function c6w6KindMatchesDecision(
+  kind: OacpC6W6PreparedEnvelopeKind,
+  decision: OacpC6W5CommitmentBoundaryDecision,
+): boolean {
+  if (kind === 'seller_source_refresh_request') return decision.action_class !== 'always_blocked';
+  if (kind === 'buyer_confirmation_request') return decision.allowed_to_prepare;
+  if (kind === 'merchant_confirmation_request') return decision.allowed_to_prepare && C6W6_MERCHANT_CONFIRMATION_ACTIONS.has(decision.action);
+  if (kind === 'mandate_capability_evidence_request') return decision.allowed_to_prepare && C6W6_MANDATE_EVIDENCE_ACTIONS.has(decision.action);
+  return decision.allowed_to_prepare && C6W6_SUPPORT_PREPARATION_ACTIONS.has(decision.action);
+}
+
+function c6w6NeedsRiskContext(
+  kind: OacpC6W6PreparedEnvelopeKind,
+  decision: OacpC6W5CommitmentBoundaryDecision,
+): boolean {
+  return kind !== 'seller_source_refresh_request' && decision.action_class === 'commitment_bound';
+}
+
+function c6w6RiskContextMissing(input: OacpC6W6PreparedEnvelopeInput, decision: OacpC6W5CommitmentBoundaryDecision): boolean {
+  if (!c6w6NeedsRiskContext(input.envelope_kind, decision)) return false;
+  return !isKnownCurrency(input.currency)
+    || input.amount_minor_units === null
+    || input.amount_minor_units === undefined
+    || input.amount_minor_units < 0
+    || input.total_quantity === null
+    || input.total_quantity === undefined
+    || input.total_quantity <= 0;
+}
+
+function c6w6NextHumanStep(kind: OacpC6W6PreparedEnvelopeKind, decision: OacpC6W5CommitmentBoundaryDecision): string {
+  if (kind === 'buyer_confirmation_request') return `Review sourced ${decision.action} preparation and confirm whether a non-executing request should be sent.`;
+  if (kind === 'seller_source_refresh_request') return 'Ask the seller agent or source owner to refresh stale or missing source facts before preparation continues.';
+  if (kind === 'merchant_confirmation_request') return `Ask the merchant source owner to confirm ${decision.action} facts before any execution path exists.`;
+  if (kind === 'mandate_capability_evidence_request') return 'Ask for provider-owned mandate capability evidence to be supplied as cached evidence only.';
+  return 'Prepare a support escalation note without promising SLA, refund, return, replacement, or settlement outcome.';
+}
+
+function c6w6NextSystemStepLabel(kind: OacpC6W6PreparedEnvelopeKind): string {
+  if (kind === 'buyer_confirmation_request') return 'local_human_confirmation_handoff';
+  if (kind === 'seller_source_refresh_request') return 'seller_source_refresh_handoff_label';
+  if (kind === 'merchant_confirmation_request') return 'merchant_source_confirmation_handoff_label';
+  if (kind === 'mandate_capability_evidence_request') return 'mandate_evidence_preparation_handoff_label';
+  return 'support_escalation_preparation_handoff_label';
+}
+
+function c6w6SellerSafeMessage(kind: OacpC6W6PreparedEnvelopeKind, decision: OacpC6W5CommitmentBoundaryDecision): string {
+  if (kind === 'seller_source_refresh_request') {
+    return `Refresh requested for ${decision.required_fresh_artifact_families.join(', ') || 'source'} facts; do not include private credentials or raw payloads.`;
+  }
+  if (kind === 'merchant_confirmation_request') return 'Merchant confirmation is prepared as evidence-only text; no order, hold, checkout, or payment is created.';
+  if (kind === 'mandate_capability_evidence_request') return 'Mandate capability evidence is requested as cached evidence only; no provider rail is called.';
+  if (kind === 'support_escalation_preparation') return 'Support escalation is non-binding and must not promise SLA, refund, return, replacement, settlement, or payout.';
+  return 'Buyer confirmation is local and non-executing; seller cards and adapter previews are not transaction authority.';
+}
+
+function c6w6EnvelopeId(input: {
+  kind: OacpC6W6PreparedEnvelopeKind;
+  created_at: string;
+  decision_id: string;
+  requested_action: OacpC6W5CommitmentBoundaryAction;
+}): string {
+  return `oacp_c6w6_envelope_${sha256hex(stableJson(input)).slice(0, 20)}`;
+}
+
+function c6w6PreparedEnvelope(input: {
+  kind: OacpC6W6PreparedEnvelopeKind;
+  created_at: string;
+  decision_id: string;
+  decision: OacpC6W5CommitmentBoundaryDecision;
+  status: 'prepared_only' | 'blocked';
+  expires_at: string;
+  max_ttl_seconds: number;
+  redacted_evidence_refs: string[];
+  unsupported_capabilities: string[];
+}): OacpC6W6PreparedCommitmentEnvelope {
+  return {
+    envelope_id: c6w6EnvelopeId({
+      kind: input.kind,
+      created_at: input.created_at,
+      decision_id: input.decision_id,
+      requested_action: input.decision.action,
+    }),
+    envelope_kind: input.kind,
+    envelope_status: input.status,
+    created_at: input.created_at,
+    expires_at: input.expires_at,
+    max_ttl_seconds: input.max_ttl_seconds,
+    source_resolver_decision_id: input.decision_id,
+    action_class: input.decision.action_class,
+    requested_action: input.decision.action,
+    risk_tier: input.decision.risk_tier,
+    offline_mode_status: input.decision.offline_mode_status,
+    allowed_to_preview: input.status === 'prepared_only' && input.decision.allowed_to_preview,
+    allowed_to_prepare: input.status === 'prepared_only' && input.decision.allowed_to_prepare,
+    allowed_to_execute: false,
+    prepared_only: true,
+    source_artifact_ids: [...input.decision.source_artifact_ids],
+    source_artifact_families: [...input.decision.source_artifact_families],
+    source_authority: input.decision.source_authority,
+    required_fresh_artifact_families: [...input.decision.required_fresh_artifact_families],
+    freshness_summary: input.decision.freshness_summary,
+    blocked_capabilities: [...input.decision.blocked_capabilities],
+    unsupported_capabilities: input.unsupported_capabilities,
+    buyer_safe_message: input.decision.buyer_safe_message,
+    seller_safe_message: c6w6SellerSafeMessage(input.kind, input.decision),
+    next_human_step: c6w6NextHumanStep(input.kind, input.decision),
+    next_system_step_label: c6w6NextSystemStepLabel(input.kind),
+    redacted_evidence_refs: input.redacted_evidence_refs,
+    non_authoritative_for_transaction: true,
+    no_checkout_payment_enablement: true,
+    no_live_provider_enablement: true,
+    no_public_discovery_enablement: true,
+  };
+}
+
+function c6w6Refusal(
+  refusal_code: OacpC6W6EnvelopeRefusalCode,
+  message: string,
+  blocked_envelope?: OacpC6W6PreparedCommitmentEnvelope,
+): OacpC6W6PreparedEnvelopeResult {
+  return blocked_envelope === undefined
+    ? { generated: false, status: 'blocked', refusal_code, message }
+    : { generated: false, status: 'blocked', refusal_code, message, blocked_envelope };
+}
+
+export function prepareOacpC6W6CommitmentRequestEnvelope(
+  input: OacpC6W6PreparedEnvelopeInput,
+): OacpC6W6PreparedEnvelopeResult {
+  if (input.resolver_decision === null) {
+    return c6w6Refusal('resolver_decision_missing', 'C6W6 requires a C6W5 resolver decision before preparing an envelope.');
+  }
+
+  const decision = input.resolver_decision;
+  const decisionId = input.source_resolver_decision_id ?? c6w6ResolverDecisionId(decision);
+  const ttl = c6w6ExpiresAt({ kind: input.envelope_kind, created_at: input.created_at, decision });
+  const redactedEvidenceRefs = c6w6RedactedEvidenceRefs(input.evidence_refs);
+  const unsupportedCapabilities = [...new Set(input.unsupported_capabilities ?? [])].sort();
+  const blockedEnvelope = ttl === null
+    ? undefined
+    : c6w6PreparedEnvelope({
+      kind: input.envelope_kind,
+      created_at: input.created_at,
+      decision_id: decisionId,
+      decision,
+      status: 'blocked',
+      expires_at: ttl.expires_at,
+      max_ttl_seconds: ttl.max_ttl_seconds,
+      redacted_evidence_refs: redactedEvidenceRefs,
+      unsupported_capabilities: unsupportedCapabilities,
+    });
+
+  if (decision.allowed_to_execute !== false) {
+    return c6w6Refusal('resolver_decision_allows_execution', 'C6W6 cannot prepare envelopes from executable decisions.', blockedEnvelope);
+  }
+  if (decision.source_artifact_ids.length === 0 || decision.source_artifact_families.length === 0) {
+    return c6w6Refusal('source_artifacts_missing', 'C6W6 requires source artifact references for prepared handoff envelopes.', blockedEnvelope);
+  }
+  if (decision.action_class === 'always_blocked') {
+    return c6w6Refusal('action_blocked_in_c6w6', 'Always-blocked actions cannot produce prepared C6W6 envelopes.', blockedEnvelope);
+  }
+  if (
+    decision.freshness_summary.earliest_expires_at === null
+    || decision.freshness_summary.freshness_tier === 'stale'
+    || decision.freshness_summary.freshness_tier === 'unknown'
+  ) {
+    return c6w6Refusal('source_freshness_missing_or_stale', 'Prepared envelopes require source freshness and TTL metadata.', blockedEnvelope);
+  }
+  if (ttl === null) {
+    return c6w6Refusal('source_freshness_missing_or_stale', 'Prepared envelope TTL cannot outlive source artifact freshness.');
+  }
+  if (!c6w6KindMatchesDecision(input.envelope_kind, decision)) {
+    return c6w6Refusal('envelope_kind_action_mismatch', 'Envelope kind does not match the C6W5 action class or requested action.', blockedEnvelope);
+  }
+  if (c6w6RiskContextMissing(input, decision)) {
+    return c6w6Refusal('risk_context_missing_or_ambiguous', 'Commitment-bound envelopes require amount, currency, and quantity context.', blockedEnvelope);
+  }
+
+  const envelope = c6w6PreparedEnvelope({
+    kind: input.envelope_kind,
+    created_at: input.created_at,
+    decision_id: decisionId,
+    decision,
+    status: 'prepared_only',
+    expires_at: ttl.expires_at,
+    max_ttl_seconds: ttl.max_ttl_seconds,
+    redacted_evidence_refs: redactedEvidenceRefs,
+    unsupported_capabilities: unsupportedCapabilities,
+  });
+
+  try {
+    assertNoForbiddenOacpArtifactFields(envelope);
+  } catch {
+    return c6w6Refusal('private_or_forbidden_envelope_field', 'Prepared envelope contains forbidden private or enabling fields.', blockedEnvelope);
+  }
+
+  return { generated: true, status: 'prepared_only', envelope };
 }
 
 export function assertNoForbiddenOacpArtifactFields(value: unknown): void {
