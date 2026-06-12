@@ -464,7 +464,7 @@ export const OACP_C6W5_COMMITMENT_BOUND_ACTIONS = [
 
 export const OACP_C6W5_ALWAYS_BLOCKED_ACTIONS = [
   'live_payment_execution',
-  'live_plural_provider_call',
+  'live_provider_rail_call',
   'public_discovery_enablement',
   'production_checkout_payment_creation',
   'merchant_private_api_call',
@@ -741,7 +741,7 @@ readonly OacpArtifactType[]
   return_authorization: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'commitment_evidence'],
   support_escalation_sla_promise: C6W5_BASE_PREVIEW_ARTIFACTS,
   live_payment_execution: [],
-  live_plural_provider_call: [],
+  live_provider_rail_call: [],
   public_discovery_enablement: [],
   production_checkout_payment_creation: [],
   merchant_private_api_call: [],
@@ -777,7 +777,7 @@ export const OACP_C6W5_ACTION_RISK_TIERS: Record<OacpC6W5CommitmentBoundaryActio
   return_authorization: 'high',
   support_escalation_sla_promise: 'medium',
   live_payment_execution: 'critical',
-  live_plural_provider_call: 'critical',
+  live_provider_rail_call: 'critical',
   public_discovery_enablement: 'critical',
   production_checkout_payment_creation: 'critical',
   merchant_private_api_call: 'critical',

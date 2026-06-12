@@ -6,7 +6,7 @@ Status: implementation foundation, internal-only, non-enabling.
 
 C6W5 defines a local commitment-boundary model over signed Grantex OACP artifacts and C6W4 adapter previews.
 
-This slice adds pure helper logic and focused tests only. It does not add endpoints, migrations, workflows, routes, OpenAPI, production config, secrets, provider adapters, public discovery, checkout/payment, live provider, live Plural, merchant private API, or cloud behavior.
+This slice adds pure helper logic and focused tests only. It does not add endpoints, migrations, workflows, routes, OpenAPI, production config, secrets, provider adapters, public discovery, checkout/payment, live provider or rail behavior, merchant private API, or cloud behavior.
 
 Grantex remains the canonical artifact, protocol, policy, and trust authority. AgenticOrg remains the buyer/seller agent runtime. Merchant systems remain operational sources of record, and provider or fintech rails own mandate and payment execution.
 
@@ -17,7 +17,7 @@ C6W5 classifies actions into four internal classes:
 - Non-binding preview: browse merchant profile, inspect seller card, compare catalog summaries, explain policy, explain available capabilities, show source/freshness labels, prepare buyer questions, and prepare seller-agent remediation suggestions.
 - Commitment-adjacent: prepare draft quote, prepare draft cart, ask merchant or seller agent to refresh source facts, prepare non-binding reservation request, prepare mandate capability check request, and prepare human confirmation prompt.
 - Commitment-bound: price lock, inventory hold, reservation, order placement, payment intent, mandate setup/use, cancellation, refund request, return authorization, and support escalation with merchant SLA promise.
-- Always blocked in C6W5: live payment execution, live Plural/provider calls, public discovery enablement, production checkout/payment creation, merchant or provider private API calls, protocol publication/submission, certification/conformance claims, and final delivery/refund/settlement/payout promises without source artifact authority.
+- Always blocked in C6W5: live payment execution, live provider or rail calls, public discovery enablement, production checkout/payment creation, merchant or provider private API calls, protocol publication/submission, certification/conformance claims, and final delivery/refund/settlement/payout promises without source artifact authority.
 
 Every decision returns:
 
@@ -82,7 +82,7 @@ C6W5 does not enable:
 - Payment capture or debit.
 - Live payments.
 - Live provider use.
-- Live Plural use.
+- Live provider rail use.
 - Provider calls.
 - Carrier or shipping provider calls.
 - Merchant private API calls.
