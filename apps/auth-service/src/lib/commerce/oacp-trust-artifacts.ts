@@ -725,6 +725,108 @@ export type OacpC6W7PreparedResponseReconciliationResult =
     blocked_reconciliation?: OacpC6W7PreparedResponseReconciliation;
   };
 
+export const OACP_C6W8_ELIGIBILITY_PACKET_KINDS = [
+  'execution_handoff_eligibility_packet',
+  'audit_trail_preparation_packet',
+  'missing_evidence_packet',
+  'blocked_execution_packet',
+  'manual_review_packet',
+] as const;
+
+export const OACP_C6W8_ELIGIBILITY_STATUSES = [
+  'eligible_for_future_handoff',
+  'missing_evidence',
+  'needs_human_review',
+  'blocked',
+  'stale',
+  'expired',
+  'mismatched',
+  'unsupported',
+] as const;
+
+export type OacpC6W8EligibilityPacketKind = typeof OACP_C6W8_ELIGIBILITY_PACKET_KINDS[number];
+export type OacpC6W8EligibilityStatus = typeof OACP_C6W8_ELIGIBILITY_STATUSES[number];
+
+export type OacpC6W8EligibilityRefusalCode =
+  | 'reconciliation_missing'
+  | 'reconciliation_allows_execution'
+  | 'reconciliation_not_prepared_or_reconciled_only'
+  | 'packet_kind_status_mismatch'
+  | 'evidence_refs_missing'
+  | 'private_or_forbidden_packet_field'
+  | 'packet_indicates_forbidden_execution'
+  | 'risk_context_missing_or_ambiguous'
+  | 'mandate_evidence_stale';
+
+export interface OacpC6W8EligibilityPacketInput {
+  packet_kind: OacpC6W8EligibilityPacketKind;
+  reconciliation: OacpC6W7PreparedResponseReconciliation | null;
+  created_at: string;
+  audit_lineage_refs?: readonly string[] | undefined;
+  required_confirmations?: readonly string[] | undefined;
+  provided_confirmations?: readonly string[] | undefined;
+  packet_flags?: readonly string[] | undefined;
+  mandate_evidence_issued_at?: string | null | undefined;
+  amount_minor_units?: number | null | undefined;
+  currency?: string | null | undefined;
+  total_quantity?: number | null | undefined;
+}
+
+export interface OacpC6W8ExecutionHandoffEligibilityPacket {
+  packet_id: string;
+  packet_kind: OacpC6W8EligibilityPacketKind;
+  created_at: string;
+  expires_at: string;
+  max_ttl_seconds: number;
+  reconciliation_id: string;
+  envelope_id: string;
+  response_kind: OacpC6W7ResponseEvidenceKind;
+  response_status: OacpC6W7ReconciliationStatus;
+  requested_action: OacpC6W5CommitmentBoundaryAction;
+  action_class: OacpC6W5ActionClass;
+  risk_tier: OacpRiskTier;
+  eligibility_status: OacpC6W8EligibilityStatus;
+  eligibility_reason: string;
+  missing_requirements: string[];
+  required_confirmations: string[];
+  source_artifact_ids: string[];
+  source_artifact_families: OacpArtifactType[];
+  response_evidence_refs: string[];
+  audit_lineage_refs: string[];
+  freshness_summary: OacpC6W5FreshnessSummary;
+  unsupported_capabilities: string[];
+  blocked_capabilities: string[];
+  buyer_safe_message: string;
+  seller_safe_message: string;
+  next_human_step: string;
+  next_system_step_label: string;
+  allowed_to_preview: boolean;
+  allowed_to_prepare: boolean;
+  allowed_for_future_handoff: boolean;
+  allowed_to_execute: false;
+  prepared_only: true;
+  reconciled_only: true;
+  eligibility_only: true;
+  non_authoritative_for_transaction: true;
+  no_checkout_payment_enablement: true;
+  no_live_provider_enablement: true;
+  no_public_discovery_enablement: true;
+}
+
+export type OacpC6W8EligibilityPacketResult =
+  | {
+    prepared: true;
+    status: OacpC6W8EligibilityStatus;
+    packet: OacpC6W8ExecutionHandoffEligibilityPacket;
+  }
+  | {
+    prepared: false;
+    status: 'blocked';
+    refusal_code: OacpC6W8EligibilityRefusalCode;
+    message: string;
+    blocked_packet?: OacpC6W8ExecutionHandoffEligibilityPacket;
+  };
+
 export type OacpOfflineCommitmentDecision =
   | {
     allowed: true;
@@ -2899,6 +3001,399 @@ export function reconcileOacpC6W7PreparedCommitmentResponse(
   }
 
   return { reconciled: true, status: input.response_status, reconciliation };
+}
+
+const C6W8_PACKET_TTL_SECONDS: Record<OacpC6W8EligibilityPacketKind, number> = {
+  execution_handoff_eligibility_packet: 10 * 60,
+  audit_trail_preparation_packet: 30 * 60,
+  missing_evidence_packet: 10 * 60,
+  blocked_execution_packet: 10 * 60,
+  manual_review_packet: 15 * 60,
+};
+
+const C6W8_PRIVATE_VALUE_PATTERN = /(https?:\/\/|postgres:\/\/|redis:\/\/|mongodb:\/\/|private[_-]?key|raw[_-]?jwt|passport|access[_-]?token|api[_-]?key|password|secret|credential|allowlist|customer[_-]?(data|identifier|email|phone|address)|raw[_-]?(provider|connector)[_-]?payload|unredacted|private[_-]?(merchant|customer|provider))/i;
+const C6W8_FORBIDDEN_EXECUTION_PATTERN = /(execute|executed|checkout|payment|order[_-]?(create|created|placed)|hold[_-]?(create|created)|refund[_-]?(create|created|execute|executed)|return[_-]?(create|created|execute|executed)|shipment|shipping|carrier|provider[_-]?call|merchant[_-]?private[_-]?api|public[_-]?discovery[_-]?(enable|publish)|protocol[_-]?(publication|submission)|certification|conformance|standardization|production[_-]?ready|live[_-]?(provider|rail|payment)|mandate[_-]?(create|created))/i;
+
+function c6w8SafeRefs(values: readonly string[] | undefined): string[] | null {
+  const refs = [...new Set((values ?? [])
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0))];
+  for (const ref of refs) {
+    if (C6W8_PRIVATE_VALUE_PATTERN.test(ref)) return null;
+  }
+  return refs;
+}
+
+function c6w8ExpiresAt(input: {
+  packet_kind: OacpC6W8EligibilityPacketKind;
+  created_at: string;
+  reconciliation: OacpC6W7PreparedResponseReconciliation;
+}): { expires_at: string; max_ttl_seconds: number; expired: boolean } | null {
+  const createdMillis = Date.parse(input.created_at);
+  const reconciliationExpiryMillis = Date.parse(input.reconciliation.expires_at);
+  if (!Number.isFinite(createdMillis) || !Number.isFinite(reconciliationExpiryMillis)) return null;
+  const defaultExpiryMillis = createdMillis + C6W8_PACKET_TTL_SECONDS[input.packet_kind] * 1000;
+  const expiresMillis = Math.min(defaultExpiryMillis, reconciliationExpiryMillis);
+  if (expiresMillis <= createdMillis) {
+    return { expires_at: input.created_at, max_ttl_seconds: 0, expired: true };
+  }
+  return {
+    expires_at: new Date(expiresMillis).toISOString(),
+    max_ttl_seconds: Math.floor((expiresMillis - createdMillis) / 1000),
+    expired: false,
+  };
+}
+
+function c6w8DefaultConfirmations(reconciliation: OacpC6W7PreparedResponseReconciliation): string[] {
+  if (reconciliation.response_kind === 'buyer_confirmation_response') return ['buyer_confirmation'];
+  if (reconciliation.response_kind === 'seller_source_refresh_response') return ['seller_source_refresh'];
+  if (reconciliation.response_kind === 'merchant_confirmation_response') return ['merchant_source_confirmation'];
+  if (reconciliation.response_kind === 'mandate_capability_evidence_response') return ['mandate_capability_evidence'];
+  return ['support_owner_review'];
+}
+
+function c6w8MissingConfirmations(required: readonly string[], provided: readonly string[] | undefined): string[] {
+  const providedSet = new Set((provided ?? []).map((value) => value.trim()).filter((value) => value.length > 0));
+  return required.filter((confirmation) => !providedSet.has(confirmation));
+}
+
+function c6w8RiskContextMissing(input: OacpC6W8EligibilityPacketInput, reconciliation: OacpC6W7PreparedResponseReconciliation): boolean {
+  if (!c6w5RequiresRiskContext(reconciliation.requested_action, reconciliation.action_class)) return false;
+  return input.amount_minor_units === null
+    || input.amount_minor_units === undefined
+    || input.amount_minor_units <= 0
+    || input.currency === null
+    || input.currency === undefined
+    || input.currency.trim().length === 0
+    || input.total_quantity === null
+    || input.total_quantity === undefined
+    || input.total_quantity <= 0;
+}
+
+function c6w8MandateEvidenceStale(input: OacpC6W8EligibilityPacketInput, reconciliation: OacpC6W7PreparedResponseReconciliation): boolean {
+  if (
+    reconciliation.response_kind !== 'mandate_capability_evidence_response'
+    && reconciliation.requested_action !== 'payment_intent'
+    && reconciliation.requested_action !== 'mandate_setup_use'
+    && reconciliation.requested_action !== 'prepare_mandate_capability_check_request'
+  ) {
+    return false;
+  }
+  if (input.mandate_evidence_issued_at === null || input.mandate_evidence_issued_at === undefined) return true;
+  const issuedMillis = Date.parse(input.mandate_evidence_issued_at);
+  const createdMillis = Date.parse(input.created_at);
+  if (!Number.isFinite(issuedMillis) || !Number.isFinite(createdMillis)) return true;
+  return createdMillis - issuedMillis > 120 * 1000;
+}
+
+function c6w8PacketIndicatesForbiddenExecution(input: OacpC6W8EligibilityPacketInput): boolean {
+  for (const value of input.packet_flags ?? []) {
+    if (C6W8_FORBIDDEN_EXECUTION_PATTERN.test(value)) return true;
+  }
+  return false;
+}
+
+function c6w8SourceFreshnessStatus(
+  reconciliation: OacpC6W7PreparedResponseReconciliation,
+  ttl: { expired: boolean } | null,
+): OacpC6W8EligibilityStatus | null {
+  const freshness = reconciliation.freshness_summary;
+  if (
+    reconciliation.source_artifact_ids.length === 0
+    || reconciliation.source_artifact_families.length === 0
+    || freshness.earliest_expires_at === null
+    || freshness.freshness_tier === 'unknown'
+  ) {
+    return 'missing_evidence';
+  }
+  if (ttl === null || ttl.expired || freshness.freshness_tier === 'stale') return 'expired';
+  return null;
+}
+
+function c6w8StatusFromReconciliation(status: OacpC6W7ReconciliationStatus): OacpC6W8EligibilityStatus {
+  if (status === 'accepted_for_preparation') return 'eligible_for_future_handoff';
+  if (status === 'needs_source_refresh') return 'missing_evidence';
+  if (status === 'needs_human_review') return 'needs_human_review';
+  if (status === 'expired') return 'expired';
+  if (status === 'stale') return 'stale';
+  if (status === 'mismatched') return 'mismatched';
+  if (status === 'rejected') return 'blocked';
+  return 'blocked';
+}
+
+function c6w8PacketKindMatchesStatus(
+  packetKind: OacpC6W8EligibilityPacketKind,
+  status: OacpC6W8EligibilityStatus,
+): boolean {
+  if (status === 'eligible_for_future_handoff') {
+    return packetKind === 'execution_handoff_eligibility_packet' || packetKind === 'audit_trail_preparation_packet';
+  }
+  if (status === 'missing_evidence') return packetKind === 'missing_evidence_packet';
+  if (status === 'needs_human_review') return packetKind === 'manual_review_packet';
+  return packetKind === 'blocked_execution_packet';
+}
+
+function c6w8Reason(status: OacpC6W8EligibilityStatus, packetKind: OacpC6W8EligibilityPacketKind): string {
+  if (status === 'eligible_for_future_handoff') {
+    return 'C6W8 found a prepared-only, reconciled-only request with local evidence refs and required confirmations for a future controlled handoff packet.';
+  }
+  if (status === 'missing_evidence') return 'C6W8 cannot prepare future handoff eligibility because required evidence, freshness, or confirmation material is missing.';
+  if (status === 'needs_human_review') return 'C6W8 requires a human review label before any future handoff packet can be considered.';
+  if (status === 'expired' || status === 'stale') return 'C6W8 source or reconciliation freshness is stale or expired; refresh source artifacts before another prepared handoff.';
+  if (status === 'mismatched') return 'C6W8 detected a mismatch between reconciliation evidence and the prepared envelope lineage.';
+  if (status === 'unsupported') return 'C6W8 marks this request unsupported for future handoff under the internal non-executing policy.';
+  return `${packetKind} blocks future handoff and does not approve checkout, payment, order, hold, refund, return, shipping, provider rail, or merchant private API behavior.`;
+}
+
+function c6w8BuyerSafeMessage(status: OacpC6W8EligibilityStatus, reconciliation: OacpC6W7PreparedResponseReconciliation): string {
+  if (status === 'eligible_for_future_handoff') {
+    return `The ${reconciliation.requested_action} request is eligible only for a future controlled handoff packet. Nothing has been executed.`;
+  }
+  if (status === 'missing_evidence') return 'More source evidence or confirmation is needed before this request can move beyond preparation.';
+  if (status === 'needs_human_review') return 'A human review is required before another prepared step can be considered.';
+  if (status === 'stale' || status === 'expired') return 'The cached source evidence is stale or expired, so the request is not eligible for handoff.';
+  if (status === 'mismatched') return 'The response evidence does not match the prepared request lineage.';
+  return 'The request is blocked from future handoff and has not been executed.';
+}
+
+function c6w8SellerSafeMessage(status: OacpC6W8EligibilityStatus, reconciliation: OacpC6W7PreparedResponseReconciliation): string {
+  if (status === 'eligible_for_future_handoff') {
+    return `Carry forward redacted refs for ${reconciliation.reconciliation_id}; merchant systems and provider rails remain operational authorities.`;
+  }
+  if (status === 'missing_evidence') return 'Provide refreshed source artifacts or confirmation refs only; do not send private payloads or credentials.';
+  if (status === 'needs_human_review') return 'Route to the named human review owner label before any future prepared handoff.';
+  if (status === 'stale' || status === 'expired') return 'Refresh source facts from operational systems before preparing another packet.';
+  if (status === 'mismatched') return 'Reconcile the mismatch against the original envelope and cached source refs.';
+  return 'Do not treat this packet as transaction authority or an execution approval.';
+}
+
+function c6w8NextHumanStep(status: OacpC6W8EligibilityStatus): string {
+  if (status === 'eligible_for_future_handoff') return 'Human owner must verify the audit lineage before any future execution-controller slice can consume this packet.';
+  if (status === 'missing_evidence') return 'Collect the missing source evidence or confirmation refs through non-executing channels.';
+  if (status === 'needs_human_review') return 'Assign a human reviewer to inspect the reconciliation and source lineage.';
+  if (status === 'stale' || status === 'expired') return 'Ask the source owner to refresh cached artifacts before preparing another packet.';
+  if (status === 'mismatched') return 'Resolve the mismatch before preparing any future handoff packet.';
+  return 'Stop the handoff path and keep the buyer and seller messages non-executing.';
+}
+
+function c6w8NextSystemStepLabel(status: OacpC6W8EligibilityStatus): string {
+  if (status === 'eligible_for_future_handoff') return 'future_execution_controller_review_label';
+  if (status === 'missing_evidence') return 'missing_evidence_refresh_label';
+  if (status === 'needs_human_review') return 'manual_review_packet_label';
+  if (status === 'stale' || status === 'expired') return 'source_refresh_packet_label';
+  if (status === 'mismatched') return 'lineage_mismatch_review_label';
+  if (status === 'unsupported') return 'unsupported_handoff_label';
+  return 'blocked_handoff_label';
+}
+
+function c6w8PacketId(input: {
+  packet_kind: OacpC6W8EligibilityPacketKind;
+  reconciliation_id: string;
+  eligibility_status: OacpC6W8EligibilityStatus;
+  created_at: string;
+  audit_lineage_refs: string[];
+}): string {
+  return `oacp_c6w8_packet_${sha256hex(stableJson(input)).slice(0, 20)}`;
+}
+
+function c6w8Packet(input: {
+  packet_kind: OacpC6W8EligibilityPacketKind;
+  reconciliation: OacpC6W7PreparedResponseReconciliation;
+  status: OacpC6W8EligibilityStatus;
+  reason: string;
+  missing_requirements: string[];
+  required_confirmations: string[];
+  created_at: string;
+  expires_at: string;
+  max_ttl_seconds: number;
+  response_evidence_refs: string[];
+  audit_lineage_refs: string[];
+}): OacpC6W8ExecutionHandoffEligibilityPacket {
+  const allowedForFutureHandoff = input.status === 'eligible_for_future_handoff';
+  return {
+    packet_id: c6w8PacketId({
+      packet_kind: input.packet_kind,
+      reconciliation_id: input.reconciliation.reconciliation_id,
+      eligibility_status: input.status,
+      created_at: input.created_at,
+      audit_lineage_refs: input.audit_lineage_refs,
+    }),
+    packet_kind: input.packet_kind,
+    created_at: input.created_at,
+    expires_at: input.expires_at,
+    max_ttl_seconds: input.max_ttl_seconds,
+    reconciliation_id: input.reconciliation.reconciliation_id,
+    envelope_id: input.reconciliation.envelope_id,
+    response_kind: input.reconciliation.response_kind,
+    response_status: input.reconciliation.response_status,
+    requested_action: input.reconciliation.requested_action,
+    action_class: input.reconciliation.action_class,
+    risk_tier: input.reconciliation.risk_tier,
+    eligibility_status: input.status,
+    eligibility_reason: input.reason,
+    missing_requirements: input.missing_requirements,
+    required_confirmations: input.required_confirmations,
+    source_artifact_ids: [...input.reconciliation.source_artifact_ids],
+    source_artifact_families: [...input.reconciliation.source_artifact_families],
+    response_evidence_refs: input.response_evidence_refs,
+    audit_lineage_refs: input.audit_lineage_refs,
+    freshness_summary: input.reconciliation.freshness_summary,
+    unsupported_capabilities: [...input.reconciliation.unsupported_capabilities],
+    blocked_capabilities: [...input.reconciliation.blocked_capabilities],
+    buyer_safe_message: c6w8BuyerSafeMessage(input.status, input.reconciliation),
+    seller_safe_message: c6w8SellerSafeMessage(input.status, input.reconciliation),
+    next_human_step: c6w8NextHumanStep(input.status),
+    next_system_step_label: c6w8NextSystemStepLabel(input.status),
+    allowed_to_preview: input.reconciliation.allowed_to_preview,
+    allowed_to_prepare: allowedForFutureHandoff && input.reconciliation.allowed_to_prepare,
+    allowed_for_future_handoff: allowedForFutureHandoff,
+    allowed_to_execute: false,
+    prepared_only: true,
+    reconciled_only: true,
+    eligibility_only: true,
+    non_authoritative_for_transaction: true,
+    no_checkout_payment_enablement: true,
+    no_live_provider_enablement: true,
+    no_public_discovery_enablement: true,
+  };
+}
+
+function c6w8Refusal(
+  refusal_code: OacpC6W8EligibilityRefusalCode,
+  message: string,
+  blocked_packet?: OacpC6W8ExecutionHandoffEligibilityPacket,
+): OacpC6W8EligibilityPacketResult {
+  return blocked_packet === undefined
+    ? { prepared: false, status: 'blocked', refusal_code, message }
+    : { prepared: false, status: 'blocked', refusal_code, message, blocked_packet };
+}
+
+export function prepareOacpC6W8ExecutionHandoffEligibilityPacket(
+  input: OacpC6W8EligibilityPacketInput,
+): OacpC6W8EligibilityPacketResult {
+  if (input.reconciliation === null) {
+    return c6w8Refusal('reconciliation_missing', 'C6W8 requires a C6W7 reconciliation before preparing eligibility packets.');
+  }
+
+  const reconciliation = input.reconciliation;
+  const responseEvidenceRefs = c6w8SafeRefs(reconciliation.response_evidence_refs);
+  const requestedLineageRefs = c6w8SafeRefs(input.audit_lineage_refs);
+  const requestedRequiredConfirmations = input.required_confirmations === undefined
+    ? undefined
+    : c6w8SafeRefs(input.required_confirmations);
+  const requestedProvidedConfirmations = c6w8SafeRefs(input.provided_confirmations);
+  const requestedPacketFlags = c6w8SafeRefs(input.packet_flags);
+  const ttl = c6w8ExpiresAt({ packet_kind: input.packet_kind, created_at: input.created_at, reconciliation });
+  const defaultAuditLineageRefs = [
+    reconciliation.reconciliation_id,
+    reconciliation.envelope_id,
+    ...reconciliation.source_artifact_ids,
+    ...reconciliation.response_evidence_refs,
+  ];
+  const auditLineageRefs = requestedLineageRefs === null
+    ? null
+    : [...new Set([...(requestedLineageRefs.length > 0 ? requestedLineageRefs : defaultAuditLineageRefs)])];
+  if (
+    responseEvidenceRefs === null
+    || auditLineageRefs === null
+    || requestedRequiredConfirmations === null
+    || requestedProvidedConfirmations === null
+    || requestedPacketFlags === null
+  ) {
+    return c6w8Refusal('private_or_forbidden_packet_field', 'C6W8 packet refs contain private, raw, or unredacted fields.');
+  }
+  const requiredConfirmations = [
+    ...new Set(
+      requestedRequiredConfirmations !== undefined && requestedRequiredConfirmations.length > 0
+        ? requestedRequiredConfirmations
+        : c6w8DefaultConfirmations(reconciliation),
+    ),
+  ];
+  const missingConfirmations = c6w8MissingConfirmations(requiredConfirmations, requestedProvidedConfirmations ?? undefined);
+  const missingRequirements: string[] = [];
+  let status = c6w8StatusFromReconciliation(reconciliation.response_status);
+
+  if (responseEvidenceRefs.length === 0 || auditLineageRefs.length === 0) {
+    return c6w8Refusal('evidence_refs_missing', 'C6W8 requires redacted response evidence refs and audit lineage refs.');
+  }
+  if (reconciliation.allowed_to_execute !== false) {
+    return c6w8Refusal('reconciliation_allows_execution', 'C6W8 refuses executable reconciliation input.');
+  }
+  if (reconciliation.prepared_only !== true || reconciliation.reconciled_only !== true) {
+    return c6w8Refusal('reconciliation_not_prepared_or_reconciled_only', 'C6W8 accepts prepared-only and reconciled-only input only.');
+  }
+  if (c6w8PacketIndicatesForbiddenExecution(input)) {
+    return c6w8Refusal('packet_indicates_forbidden_execution', 'C6W8 refuses packet flags that imply live execution or publication behavior.');
+  }
+  if (c6w8RiskContextMissing(input, reconciliation)) {
+    return c6w8Refusal('risk_context_missing_or_ambiguous', 'C6W8 requires amount, currency, and quantity context for commitment-bound eligibility.');
+  }
+  if (c6w8MandateEvidenceStale(input, reconciliation)) {
+    return c6w8Refusal('mandate_evidence_stale', 'Mandate capability evidence is missing or stale at the C6W8 commitment boundary.');
+  }
+
+  const sourceStatus = c6w8SourceFreshnessStatus(reconciliation, ttl);
+  if (sourceStatus !== null) {
+    status = sourceStatus;
+    missingRequirements.push('fresh_source_artifacts');
+  }
+  if ((OACP_C6W5_ALWAYS_BLOCKED_ACTIONS as readonly string[]).includes(reconciliation.requested_action)) {
+    status = 'blocked';
+    missingRequirements.push('requested_action_blocked_by_c6w5');
+  }
+  if (reconciliation.risk_tier === 'critical') {
+    status = 'unsupported';
+    missingRequirements.push('critical_risk_not_supported_for_prepared_handoff');
+  }
+  for (const confirmation of missingConfirmations) {
+    missingRequirements.push(`confirmation:${confirmation}`);
+  }
+  if (missingConfirmations.length > 0 && status === 'eligible_for_future_handoff') {
+    status = 'missing_evidence';
+  }
+  if (!c6w8PacketKindMatchesStatus(input.packet_kind, status)) {
+    const blockedPacket = ttl === null
+      ? undefined
+      : c6w8Packet({
+        packet_kind: 'blocked_execution_packet',
+        reconciliation,
+        status: 'mismatched',
+        reason: c6w8Reason('mismatched', 'blocked_execution_packet'),
+        missing_requirements: ['packet_kind_status_mismatch'],
+        required_confirmations: requiredConfirmations,
+        created_at: input.created_at,
+        expires_at: ttl.expires_at,
+        max_ttl_seconds: ttl.max_ttl_seconds,
+        response_evidence_refs: responseEvidenceRefs,
+        audit_lineage_refs: auditLineageRefs,
+      });
+    return c6w8Refusal('packet_kind_status_mismatch', 'C6W8 packet kind does not match the derived eligibility status.', blockedPacket);
+  }
+  if (ttl === null) {
+    return c6w8Refusal('private_or_forbidden_packet_field', 'C6W8 cannot derive a safe TTL from reconciliation metadata.');
+  }
+
+  const packet = c6w8Packet({
+    packet_kind: input.packet_kind,
+    reconciliation,
+    status,
+    reason: c6w8Reason(status, input.packet_kind),
+    missing_requirements: missingRequirements,
+    required_confirmations: requiredConfirmations,
+    created_at: input.created_at,
+    expires_at: ttl.expires_at,
+    max_ttl_seconds: ttl.max_ttl_seconds,
+    response_evidence_refs: responseEvidenceRefs,
+    audit_lineage_refs: auditLineageRefs,
+  });
+
+  try {
+    assertNoForbiddenOacpArtifactFields(packet);
+  } catch {
+    return c6w8Refusal('private_or_forbidden_packet_field', 'C6W8 eligibility packet contains private or enabling fields.');
+  }
+
+  return { prepared: true, status, packet };
 }
 
 export function assertNoForbiddenOacpArtifactFields(value: unknown): void {
