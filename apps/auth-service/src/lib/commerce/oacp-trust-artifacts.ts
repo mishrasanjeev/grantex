@@ -429,6 +429,112 @@ export type OacpProtocolAdapterPreviewResult =
     message: string;
   };
 
+export const OACP_C6W5_NON_BINDING_PREVIEW_ACTIONS = [
+  'browse_merchant_profile',
+  'inspect_seller_card',
+  'compare_catalog_summaries',
+  'explain_policy',
+  'explain_available_capabilities',
+  'show_source_freshness_labels',
+  'prepare_buyer_question',
+  'prepare_seller_agent_remediation_suggestion',
+] as const;
+
+export const OACP_C6W5_COMMITMENT_ADJACENT_ACTIONS = [
+  'prepare_draft_quote',
+  'prepare_draft_cart',
+  'ask_refresh_source_facts',
+  'prepare_non_binding_reservation_request',
+  'prepare_mandate_capability_check_request',
+  'prepare_human_confirmation_prompt',
+] as const;
+
+export const OACP_C6W5_COMMITMENT_BOUND_ACTIONS = [
+  'price_lock',
+  'inventory_hold',
+  'reservation',
+  'order_placement',
+  'payment_intent',
+  'mandate_setup_use',
+  'cancellation',
+  'refund_request',
+  'return_authorization',
+  'support_escalation_sla_promise',
+] as const;
+
+export const OACP_C6W5_ALWAYS_BLOCKED_ACTIONS = [
+  'live_payment_execution',
+  'live_provider_rail_call',
+  'public_discovery_enablement',
+  'production_checkout_payment_creation',
+  'merchant_private_api_call',
+  'provider_private_api_call',
+  'protocol_publication_submission',
+  'certification_conformance_claim',
+  'final_delivery_refund_settlement_payout_promise',
+] as const;
+
+export type OacpC6W5NonBindingPreviewAction = typeof OACP_C6W5_NON_BINDING_PREVIEW_ACTIONS[number];
+export type OacpC6W5CommitmentAdjacentAction = typeof OACP_C6W5_COMMITMENT_ADJACENT_ACTIONS[number];
+export type OacpC6W5CommitmentBoundAction = typeof OACP_C6W5_COMMITMENT_BOUND_ACTIONS[number];
+export type OacpC6W5AlwaysBlockedAction = typeof OACP_C6W5_ALWAYS_BLOCKED_ACTIONS[number];
+export type OacpC6W5CommitmentBoundaryAction =
+  | OacpC6W5NonBindingPreviewAction
+  | OacpC6W5CommitmentAdjacentAction
+  | OacpC6W5CommitmentBoundAction
+  | OacpC6W5AlwaysBlockedAction;
+export type OacpC6W5ActionClass =
+  | 'non_binding_preview'
+  | 'commitment_adjacent'
+  | 'commitment_bound'
+  | 'always_blocked';
+export type OacpC6W5OfflineModeStatus =
+  | 'online_policy_available'
+  | 'offline_cache_valid'
+  | 'offline_prepared_not_executed'
+  | 'offline_blocked';
+
+export interface OacpC6W5FreshnessSummary {
+  freshness_tier: OacpArtifactEnvelope['freshness_class'] | 'mixed';
+  artifact_freshness: Record<string, OacpArtifactEnvelope['freshness_class']>;
+  earliest_expires_at: string | null;
+}
+
+export interface OacpC6W5CommitmentBoundaryInput {
+  action: OacpC6W5CommitmentBoundaryAction;
+  artifacts: readonly OacpArtifactFixture[];
+  adapter_preview: OacpProtocolAdapterPreviewResult;
+  now_iso: string;
+  grantex_available: boolean;
+  revocation_snapshot_age_seconds?: number | null | undefined;
+  currency?: string | null | undefined;
+  amount_minor_units?: number | null | undefined;
+  total_quantity?: number | null | undefined;
+  max_quantity_per_sku?: number | null | undefined;
+}
+
+export interface OacpC6W5CommitmentBoundaryDecision {
+  action: OacpC6W5CommitmentBoundaryAction;
+  action_class: OacpC6W5ActionClass;
+  allowed_to_preview: boolean;
+  allowed_to_prepare: boolean;
+  allowed_to_execute: false;
+  refusal_or_escalation_reason: string | null;
+  required_fresh_artifact_families: OacpArtifactType[];
+  source_artifact_ids: string[];
+  source_artifact_families: OacpArtifactType[];
+  source_authority: 'grantex_canonical_oacp_artifact_authority';
+  freshness_summary: OacpC6W5FreshnessSummary;
+  risk_tier: OacpRiskTier;
+  offline_mode_status: OacpC6W5OfflineModeStatus;
+  buyer_safe_message: string;
+  blocked_capabilities: string[];
+  non_authoritative_for_transaction: true;
+  no_checkout_payment_enablement: true;
+  no_live_provider_enablement: true;
+  no_public_discovery_enablement: true;
+}
+
 export type OacpOfflineCommitmentDecision =
   | {
     allowed: true;
@@ -597,6 +703,88 @@ export const OACP_C6W4_PROTOCOL_ADAPTER_DESCRIPTORS: Record<OacpProtocolAdapterS
     max_ttl_seconds: OACP_ARTIFACT_TTLS_SECONDS.protocol_adapter,
     blocked_capabilities: C6W4_COMMON_BLOCKED_ADAPTER_CAPABILITIES,
   },
+};
+
+const C6W5_BASE_PREVIEW_ARTIFACTS: readonly OacpArtifactType[] = [
+  'merchant_capability',
+  'seller_agent_capability',
+  'policy',
+  'protocol_adapter',
+] as const;
+
+export const OACP_C6W5_REQUIRED_FRESH_ARTIFACT_FAMILIES: Record<
+OacpC6W5CommitmentBoundaryAction,
+readonly OacpArtifactType[]
+> = {
+  browse_merchant_profile: C6W5_BASE_PREVIEW_ARTIFACTS,
+  inspect_seller_card: C6W5_BASE_PREVIEW_ARTIFACTS,
+  compare_catalog_summaries: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'catalog_snapshot'],
+  explain_policy: C6W5_BASE_PREVIEW_ARTIFACTS,
+  explain_available_capabilities: C6W5_BASE_PREVIEW_ARTIFACTS,
+  show_source_freshness_labels: C6W5_BASE_PREVIEW_ARTIFACTS,
+  prepare_buyer_question: C6W5_BASE_PREVIEW_ARTIFACTS,
+  prepare_seller_agent_remediation_suggestion: C6W5_BASE_PREVIEW_ARTIFACTS,
+  prepare_draft_quote: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'catalog_snapshot', 'price'],
+  prepare_draft_cart: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'catalog_snapshot', 'price', 'inventory'],
+  ask_refresh_source_facts: C6W5_BASE_PREVIEW_ARTIFACTS,
+  prepare_non_binding_reservation_request: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'offer', 'inventory'],
+  prepare_mandate_capability_check_request: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'mandate_capability'],
+  prepare_human_confirmation_prompt: C6W5_BASE_PREVIEW_ARTIFACTS,
+  price_lock: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'offer', 'price'],
+  inventory_hold: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'inventory'],
+  reservation: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'offer', 'inventory'],
+  order_placement: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'offer', 'price', 'inventory'],
+  payment_intent: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'price', 'mandate_capability'],
+  mandate_setup_use: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'mandate_capability'],
+  cancellation: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'commitment_evidence'],
+  refund_request: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'commitment_evidence'],
+  return_authorization: [...C6W5_BASE_PREVIEW_ARTIFACTS, 'commitment_evidence'],
+  support_escalation_sla_promise: C6W5_BASE_PREVIEW_ARTIFACTS,
+  live_payment_execution: [],
+  live_provider_rail_call: [],
+  public_discovery_enablement: [],
+  production_checkout_payment_creation: [],
+  merchant_private_api_call: [],
+  provider_private_api_call: [],
+  protocol_publication_submission: [],
+  certification_conformance_claim: [],
+  final_delivery_refund_settlement_payout_promise: [],
+};
+
+export const OACP_C6W5_ACTION_RISK_TIERS: Record<OacpC6W5CommitmentBoundaryAction, OacpRiskTier> = {
+  browse_merchant_profile: 'informational',
+  inspect_seller_card: 'informational',
+  compare_catalog_summaries: 'informational',
+  explain_policy: 'informational',
+  explain_available_capabilities: 'informational',
+  show_source_freshness_labels: 'informational',
+  prepare_buyer_question: 'informational',
+  prepare_seller_agent_remediation_suggestion: 'informational',
+  prepare_draft_quote: 'low',
+  prepare_draft_cart: 'low',
+  ask_refresh_source_facts: 'low',
+  prepare_non_binding_reservation_request: 'low',
+  prepare_mandate_capability_check_request: 'low',
+  prepare_human_confirmation_prompt: 'low',
+  price_lock: 'medium',
+  inventory_hold: 'medium',
+  reservation: 'medium',
+  order_placement: 'high',
+  payment_intent: 'high',
+  mandate_setup_use: 'high',
+  cancellation: 'high',
+  refund_request: 'high',
+  return_authorization: 'high',
+  support_escalation_sla_promise: 'medium',
+  live_payment_execution: 'critical',
+  live_provider_rail_call: 'critical',
+  public_discovery_enablement: 'critical',
+  production_checkout_payment_creation: 'critical',
+  merchant_private_api_call: 'critical',
+  provider_private_api_call: 'critical',
+  protocol_publication_submission: 'critical',
+  certification_conformance_claim: 'critical',
+  final_delivery_refund_settlement_payout_promise: 'critical',
 };
 
 export const OACP_ARTIFACT_SCHEMA_DESCRIPTORS: Record<OacpArtifactType, OacpArtifactSchemaDescriptor> = {
@@ -1667,6 +1855,315 @@ export function buildOacpC6W4ProtocolAdapterPreview(
     no_public_discovery_enablement: true,
     surface_payload: buildC6W4SurfacePayload(input.surface, byType, sourceArtifacts, unsupportedCapabilities),
   };
+}
+
+function c6w5ActionClass(action: OacpC6W5CommitmentBoundaryAction): OacpC6W5ActionClass {
+  if ((OACP_C6W5_NON_BINDING_PREVIEW_ACTIONS as readonly string[]).includes(action)) return 'non_binding_preview';
+  if ((OACP_C6W5_COMMITMENT_ADJACENT_ACTIONS as readonly string[]).includes(action)) return 'commitment_adjacent';
+  if ((OACP_C6W5_COMMITMENT_BOUND_ACTIONS as readonly string[]).includes(action)) return 'commitment_bound';
+  return 'always_blocked';
+}
+
+function c6w5BlockedCapabilities(preview: OacpProtocolAdapterPreviewResult): string[] {
+  const blocked = new Set<string>(C6W4_COMMON_BLOCKED_ADAPTER_CAPABILITIES);
+  if (preview.generated) {
+    for (const capability of preview.blocked_capabilities) blocked.add(capability);
+    for (const capability of preview.unsupported_capabilities) blocked.add(capability);
+  }
+  for (const action of OACP_C6W5_ALWAYS_BLOCKED_ACTIONS) blocked.add(action);
+  return [...blocked].sort();
+}
+
+function c6w5FreshnessSummary(artifacts: readonly OacpArtifactFixture[]): OacpC6W5FreshnessSummary {
+  const artifact_freshness: Record<string, OacpArtifactEnvelope['freshness_class']> = {};
+  const expiresMillis: number[] = [];
+  for (const artifact of artifacts) {
+    const freshness = artifact.envelope.freshness_class;
+    if (freshness === 'fresh' || freshness === 'acceptable' || freshness === 'stale' || freshness === 'unknown') {
+      artifact_freshness[String(artifact.envelope.artifact_id)] = freshness;
+    }
+    const expiresAt = parseIsoMillis(typeof artifact.envelope.expires_at === 'string' ? artifact.envelope.expires_at : undefined);
+    if (expiresAt !== null) expiresMillis.push(expiresAt);
+  }
+  return {
+    freshness_tier: freshnessTierForArtifacts(artifacts),
+    artifact_freshness,
+    earliest_expires_at: expiresMillis.length > 0 ? new Date(Math.min(...expiresMillis)).toISOString() : null,
+  };
+}
+
+function c6w5Decision(input: {
+  action: OacpC6W5CommitmentBoundaryAction;
+  action_class: OacpC6W5ActionClass;
+  allowed_to_preview: boolean;
+  allowed_to_prepare: boolean;
+  reason: string | null;
+  required: readonly OacpArtifactType[];
+  source_artifacts: readonly OacpArtifactFixture[];
+  risk_tier: OacpRiskTier;
+  offline_mode_status: OacpC6W5OfflineModeStatus;
+  buyer_safe_message: string;
+  blocked_capabilities: readonly string[];
+}): OacpC6W5CommitmentBoundaryDecision {
+  return {
+    action: input.action,
+    action_class: input.action_class,
+    allowed_to_preview: input.allowed_to_preview,
+    allowed_to_prepare: input.allowed_to_prepare,
+    allowed_to_execute: false,
+    refusal_or_escalation_reason: input.reason,
+    required_fresh_artifact_families: [...input.required],
+    source_artifact_ids: input.source_artifacts.map((artifact) => String(artifact.envelope.artifact_id)),
+    source_artifact_families: input.source_artifacts
+      .map((artifact) => artifactTypeFromFixture(artifact))
+      .filter((value): value is OacpArtifactType => value !== null),
+    source_authority: 'grantex_canonical_oacp_artifact_authority',
+    freshness_summary: c6w5FreshnessSummary(input.source_artifacts),
+    risk_tier: input.risk_tier,
+    offline_mode_status: input.offline_mode_status,
+    buyer_safe_message: input.buyer_safe_message,
+    blocked_capabilities: [...input.blocked_capabilities],
+    non_authoritative_for_transaction: true,
+    no_checkout_payment_enablement: true,
+    no_live_provider_enablement: true,
+    no_public_discovery_enablement: true,
+  };
+}
+
+function c6w5RequiresRiskContext(action: OacpC6W5CommitmentBoundaryAction, actionClass: OacpC6W5ActionClass): boolean {
+  if (actionClass === 'non_binding_preview' || actionClass === 'always_blocked') return false;
+  return action !== 'ask_refresh_source_facts'
+    && action !== 'prepare_human_confirmation_prompt'
+    && action !== 'prepare_mandate_capability_check_request';
+}
+
+function c6w5RiskContextReason(input: OacpC6W5CommitmentBoundaryInput, riskTier: OacpRiskTier): string | null {
+  if (
+    !isKnownCurrency(input.currency)
+    || input.amount_minor_units === null
+    || input.amount_minor_units === undefined
+    || input.amount_minor_units < 0
+    || input.total_quantity === null
+    || input.total_quantity === undefined
+    || input.total_quantity <= 0
+  ) {
+    return 'risk_context_missing_or_ambiguous';
+  }
+  const amountCap = amountCapForCurrency(riskTier, input.currency);
+  if (amountCap === null || input.amount_minor_units > amountCap) return 'risk_cap_exceeded';
+  const cap = OACP_FIRST_RELEASE_RISK_CAPS[riskTier];
+  if (cap.total_quantity_cap !== null && input.total_quantity > cap.total_quantity_cap) return 'quantity_cap_exceeded';
+  if (
+    input.max_quantity_per_sku !== null
+    && input.max_quantity_per_sku !== undefined
+    && cap.per_sku_quantity_cap !== null
+    && input.max_quantity_per_sku > cap.per_sku_quantity_cap
+  ) {
+    return 'quantity_cap_exceeded';
+  }
+  return null;
+}
+
+export function evaluateOacpC6W5CommitmentBoundaryMetadata(
+  input: OacpC6W5CommitmentBoundaryInput,
+): OacpC6W5CommitmentBoundaryDecision {
+  const actionClass = c6w5ActionClass(input.action);
+  const riskTier = OACP_C6W5_ACTION_RISK_TIERS[input.action];
+  const required = OACP_C6W5_REQUIRED_FRESH_ARTIFACT_FAMILIES[input.action];
+  const blockedCapabilities = c6w5BlockedCapabilities(input.adapter_preview);
+  const sourceArtifacts = input.artifacts.filter((artifact) => artifactTypeFromFixture(artifact) !== null);
+  const byType = buildSourceArtifactIndex(sourceArtifacts);
+  const baseOfflineStatus: OacpC6W5OfflineModeStatus = input.grantex_available
+    ? 'online_policy_available'
+    : actionClass === 'commitment_bound'
+      ? 'offline_prepared_not_executed'
+      : 'offline_cache_valid';
+
+  if (actionClass === 'always_blocked') {
+    return c6w5Decision({
+      action: input.action,
+      action_class: actionClass,
+      allowed_to_preview: false,
+      allowed_to_prepare: false,
+      reason: 'blocked_in_c6w5',
+      required,
+      source_artifacts: sourceArtifacts,
+      risk_tier: riskTier,
+      offline_mode_status: 'offline_blocked',
+      buyer_safe_message: 'This C6W5 action is blocked and cannot be prepared or executed from adapter previews.',
+      blocked_capabilities: blockedCapabilities,
+    });
+  }
+
+  if (!input.adapter_preview.generated || input.adapter_preview.status !== 'preview_only') {
+    return c6w5Decision({
+      action: input.action,
+      action_class: actionClass,
+      allowed_to_preview: false,
+      allowed_to_prepare: false,
+      reason: 'adapter_preview_invalid',
+      required,
+      source_artifacts: sourceArtifacts,
+      risk_tier: riskTier,
+      offline_mode_status: input.grantex_available ? 'online_policy_available' : 'offline_blocked',
+      buyer_safe_message: 'Adapter preview metadata is invalid, so C6W5 refuses the boundary decision.',
+      blocked_capabilities: blockedCapabilities,
+    });
+  }
+
+  const previewExpiresAt = parseIsoMillis(input.adapter_preview.expires_at);
+  const nowMillis = parseIsoMillis(input.now_iso);
+  if (
+    nowMillis === null
+    || previewExpiresAt === null
+    || nowMillis > previewExpiresAt
+    || input.adapter_preview.non_authoritative_for_transaction !== true
+    || input.adapter_preview.no_checkout_payment_enablement !== true
+    || input.adapter_preview.no_live_provider_enablement !== true
+    || input.adapter_preview.no_public_discovery_enablement !== true
+  ) {
+    return c6w5Decision({
+      action: input.action,
+      action_class: actionClass,
+      allowed_to_preview: false,
+      allowed_to_prepare: false,
+      reason: 'adapter_preview_missing_safety_or_freshness',
+      required,
+      source_artifacts: sourceArtifacts,
+      risk_tier: riskTier,
+      offline_mode_status: input.grantex_available ? 'online_policy_available' : 'offline_blocked',
+      buyer_safe_message: 'Adapter previews cannot override missing safety flags or expired metadata.',
+      blocked_capabilities: blockedCapabilities,
+    });
+  }
+
+  const missing = required.filter((artifactType) => !byType.has(artifactType));
+  if (missing.length > 0) {
+    return c6w5Decision({
+      action: input.action,
+      action_class: actionClass,
+      allowed_to_preview: actionClass === 'non_binding_preview',
+      allowed_to_prepare: false,
+      reason: `required_artifact_missing:${missing.join(',')}`,
+      required,
+      source_artifacts: sourceArtifacts,
+      risk_tier: riskTier,
+      offline_mode_status: input.grantex_available ? 'online_policy_available' : 'offline_blocked',
+      buyer_safe_message: 'Required source artifacts are missing, so the action can only remain non-executing.',
+      blocked_capabilities: blockedCapabilities,
+    });
+  }
+
+  const requiredArtifacts = required
+    .map((artifactType) => byType.get(artifactType))
+    .filter((artifact): artifact is OacpArtifactFixture => artifact !== undefined);
+  for (const artifact of requiredArtifacts) {
+    const validation = validateOacpArtifactSchema({
+      envelope: artifact.envelope,
+      payload: artifact.payload,
+      now_iso: input.now_iso,
+    });
+    if (!validation.valid) {
+      return c6w5Decision({
+        action: input.action,
+        action_class: actionClass,
+        allowed_to_preview: false,
+        allowed_to_prepare: false,
+        reason: validation.refusal_code,
+        required,
+        source_artifacts: requiredArtifacts,
+        risk_tier: riskTier,
+        offline_mode_status: input.grantex_available ? 'online_policy_available' : 'offline_blocked',
+        buyer_safe_message: 'A required OACP artifact is invalid, stale, revoked, or ambiguous.',
+        blocked_capabilities: blockedCapabilities,
+      });
+    }
+    const freshness = artifact.envelope.freshness_class;
+    if (
+      freshness === 'stale'
+      || freshness === 'unknown'
+      || (actionClass !== 'non_binding_preview' && freshness !== 'fresh')
+    ) {
+      return c6w5Decision({
+        action: input.action,
+        action_class: actionClass,
+        allowed_to_preview: actionClass === 'non_binding_preview',
+        allowed_to_prepare: false,
+        reason: 'artifact_freshness_missing_stale_or_ambiguous',
+        required,
+        source_artifacts: requiredArtifacts,
+        risk_tier: riskTier,
+        offline_mode_status: input.grantex_available ? 'online_policy_available' : 'offline_blocked',
+        buyer_safe_message: 'Source facts must be fresh enough before a commitment-bound request is prepared.',
+        blocked_capabilities: blockedCapabilities,
+      });
+    }
+  }
+
+  const revocationMaxAge = OACP_REVOCATION_SNAPSHOT_MAX_AGE_SECONDS[riskTier];
+  if (
+    actionClass !== 'non_binding_preview'
+    && (
+      input.revocation_snapshot_age_seconds === null
+      || input.revocation_snapshot_age_seconds === undefined
+      || revocationMaxAge === null
+      || input.revocation_snapshot_age_seconds > revocationMaxAge
+    )
+  ) {
+    return c6w5Decision({
+      action: input.action,
+      action_class: actionClass,
+      allowed_to_preview: true,
+      allowed_to_prepare: false,
+      reason: 'revocation_snapshot_missing_or_stale',
+      required,
+      source_artifacts: requiredArtifacts,
+      risk_tier: riskTier,
+      offline_mode_status: input.grantex_available ? 'online_policy_available' : 'offline_blocked',
+      buyer_safe_message: 'The local revocation posture is too stale for a commitment-bound preparation.',
+      blocked_capabilities: blockedCapabilities,
+    });
+  }
+
+  if (c6w5RequiresRiskContext(input.action, actionClass)) {
+    const riskReason = c6w5RiskContextReason(input, riskTier);
+    if (riskReason !== null) {
+      return c6w5Decision({
+        action: input.action,
+        action_class: actionClass,
+        allowed_to_preview: true,
+        allowed_to_prepare: false,
+        reason: riskReason,
+        required,
+        source_artifacts: requiredArtifacts,
+        risk_tier: riskTier,
+        offline_mode_status: input.grantex_available ? 'online_policy_available' : 'offline_blocked',
+        buyer_safe_message: 'Amount, currency, or quantity is missing or outside the conservative C6W5 risk caps.',
+        blocked_capabilities: blockedCapabilities,
+      });
+    }
+  }
+
+  const allowedToPrepare = actionClass !== 'non_binding_preview';
+  const buyerSafeMessage = actionClass === 'non_binding_preview'
+    ? 'Preview can continue from sourced OACP artifacts; this is not purchase approval.'
+    : actionClass === 'commitment_adjacent'
+      ? 'Prepared request only; no checkout, payment, provider call, or merchant private API call is executed.'
+      : 'Prepared, not executed. C6W5 does not grant transaction authority from adapter previews.';
+
+  return c6w5Decision({
+    action: input.action,
+    action_class: actionClass,
+    allowed_to_preview: true,
+    allowed_to_prepare: allowedToPrepare,
+    reason: actionClass === 'commitment_bound' ? 'prepared_not_executed_c6w5' : null,
+    required,
+    source_artifacts: requiredArtifacts,
+    risk_tier: riskTier,
+    offline_mode_status: baseOfflineStatus,
+    buyer_safe_message: buyerSafeMessage,
+    blocked_capabilities: blockedCapabilities,
+  });
 }
 
 export function assertNoForbiddenOacpArtifactFields(value: unknown): void {
