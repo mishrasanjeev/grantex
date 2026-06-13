@@ -1,6 +1,6 @@
 ---
 title: End-To-End Agentic Commerce Flow
-description: Plain-language buyer and seller flow for Grantex-controlled agentic commerce with AgenticOrg as the buyer-agent layer.
+description: Plain-language buyer and seller flow for OACP agentic commerce with AgenticOrg agents and Grantex trust authority.
 ---
 
 # End-To-End Agentic Commerce Flow
@@ -15,26 +15,32 @@ For the consolidated PRD that governs this flow, read
 
 ## One-Sentence Architecture
 
-Sellers connect their existing commerce systems to Grantex; buyers start from
-their preferred agent or chat surface; AgenticOrg helps the buyer shop; Grantex
-enforces merchant truth, consent, payment, policy, audit, and rollback.
+Sellers start in AgenticOrg Seller Commerce Agent and connect existing merchant
+systems through approved connector custody. Grantex validates public-safe facts
+into signed OACP artifacts and policy decisions. Buyers start from their
+preferred agent or chat surface. Provider and fintech rails own mandate and
+payment execution.
 
 ```mermaid
 flowchart TB
   seller["Seller / merchant"]
+  selleragent["AgenticOrg Seller Commerce Agent"]
   systems["Existing systems: storefront, catalog, ERP, PIM, inventory, OMS, logistics, payment, support"]
-  grantex["Grantex Commerce control plane"]
-  publish["Approved API, MCP, UCP-style, ACP-style, schema.org, AP2-evidence-ready surfaces"]
-  agenticorg["AgenticOrg buyer-agent layer"]
+  grantex["Grantex OACP authority"]
+  publish["Signed OACP artifacts and adapter previews"]
+  agenticorg["AgenticOrg buyer-agent runtime and cache"]
   channels["ChatGPT, Claude, Gemini, WhatsApp, Telegram, web/mobile, future channels"]
+  provider["Provider/fintech mandate and payment rails"]
   buyer["Buyer"]
 
-  seller --> systems
-  systems --> grantex
+  seller --> selleragent
+  selleragent --> systems
+  selleragent --> grantex
   grantex --> publish
   publish --> agenticorg
   agenticorg --> channels
   channels --> buyer
+  agenticorg -. "approved capability verification" .-> provider
 ```
 
 ## What Sellers Do One Time
@@ -49,12 +55,12 @@ approval.
 | 2. Complete merchant profile | Enter legal name, display name, category, country, currency, support contact, business policies. | Store canonical merchant profile and public-safe display fields separately from private artifacts. | No public discovery until profile is reviewed. |
 | 3. Verify business | Provide legal/compliance artifacts in a private evidence system outside Git. | Store only non-secret evidence references and review state. | KYB/KYC/legal/compliance approval required for live. |
 | 4. Choose category preset | Select home goods, electronics, fashion, grocery, pharmacy, services, B2B, or another preset. | Apply required field checklist, policy defaults, tax/return/warranty expectations. | Category-specific critical fields must pass. |
-| 5. Connect existing systems | Connect Shopify, WooCommerce, Magento, custom storefront, ERP/PIM, WMS, OMS, logistics, payment provider, CRM/support, or upload CSV/API data. | Normalize data into canonical catalog, inventory, policy, order, fulfillment, payment, support, and audit models. | Connector health and credential isolation required. |
+| 5. Connect existing systems | Use AgenticOrg Seller Commerce Agent, merchant-owned connectors, external integration providers, or CSV/API to connect Shopify, WooCommerce, Magento, custom storefront, ERP/PIM, WMS, OMS, logistics, payment provider, CRM/support, or upload CSV/API data. | Validate public-safe facts, source/freshness, and non-sensitive evidence refs into OACP artifacts. | Connector health and credential isolation required; Grantex does not need raw connector credentials by default. |
 | 6. Define source of truth | Decide whether storefront, ERP/PIM, WMS, OMS, or another system wins for each data type. | Record source precedence, freshness timestamps, sync history, and conflict rules. | No silent overwrite or stale publish. |
 | 7. Prepare catalog | Fix titles, descriptions, images, brand, variants, SKU, price, tax, warranty, return summary, category, availability. | Validate required fields, generate public-safe preview, schema.org draft, MCP/native output. | Missing critical catalog data blocks launch. |
 | 8. Prepare inventory and delivery | Configure stock state, freshness TTL, delivery/pickup promises, shipping fees, serviceability, logistics source. | Block guarantees when stock or delivery data is stale, unknown, or unsupported. | Checkout blocked when inventory/delivery evidence is insufficient. |
 | 9. Configure agent permissions | Choose browse, compare, cart draft, checkout consent request, order status, support handoff, return/refund request. | Convert choices into merchant policy, channel capabilities, scopes, amount caps, and audit rules. | Each capability requires explicit approval. |
-| 10. Configure payment path | Connect sandbox provider first; request live provider only after legal/security/ops approval. | Keep provider credentials isolated, validate webhooks, use provider-neutral payment intent. | Live provider remains blocked until approved. |
+| 10. Configure mandate/payment path | Configure provider-owned mandate or payment rails outside Grantex; request live rail only after legal/security/ops approval. | Validate non-sensitive capability/evidence refs only where policy or artifact lineage requires them. | Live provider remains blocked until approved. |
 | 11. Review buyer preview | See exactly what agents and buyers may see. | Render public payload preview and blocked-path warnings. | Product wording and security approval required. |
 | 12. Run scans | Run secret/private-detail, overclaim, merchant-ID/name, synthetic-ID, config/allowlist, stale-data, and policy scans. | Produce redacted evidence and blocker codes. | Clean scans required for intake readiness. |
 | 13. Assign owners | Assign merchant owner, legal, product wording, security, ops/support, backup/RPO, rollback, smoke, evidence retention, AgenticOrg dependency owner. | Record non-secret owner references and approval state. | Missing owners block rollout. |
@@ -75,8 +81,9 @@ look like normal account linking and permission control.
 | 5. Consent when needed | Approve or deny payment-affecting actions in the Grantex consent flow. | Never bypass consent. | Issue scoped Commerce Passport only after consent and policy pass. |
 | 6. Manage history/revocation | Ask what happened or revoke permissions. | Show redacted session state and safe summaries. | Own revocation, audit evidence, and protected action history. |
 
-Buyer setup is not a standing payment approval. Checkout/payment must still pass
-fresh consent, merchant policy, amount cap, idempotency, and audit.
+Buyer setup is not a standing payment approval. Commitment-bound actions must
+still pass fresh consent, merchant policy, amount cap, idempotency,
+source/freshness, provider-owned mandate/payment capability, and audit evidence.
 
 ## Regular Transaction Flow
 
@@ -86,61 +93,45 @@ sequenceDiagram
   participant C as Buyer chat channel
   participant A as AgenticOrg
   participant G as Grantex
-  participant S as Seller systems
-  participant P as Payment provider or hosted checkout
+  participant S as Merchant system or connector
+  participant P as Provider/fintech rail
 
-  B->>C: Ask to discover, compare, or buy
+  B->>C: Ask to discover, compare, or prepare
   C->>A: Start or resume buyer-agent session
-  A->>G: Read approved merchant and channel capabilities
-  G-->>A: Capability state and blocker codes
-  A->>G: Search catalog and fetch product details
-  G->>S: Use synced catalog, price, policy, and inventory truth
-  G-->>A: Grounded products, prices, freshness, return/warranty summary
-  A-->>B: Explain options, caveats, and unknowns
-  B->>A: Choose item or ask for cart
-  A->>G: Create cart draft with exact variant IDs
-  G-->>A: Cart, totals, policy, supported checkout state
-  A-->>B: Consent request copy and safe checkout handoff
-  B->>G: Approve or deny consent
-  G->>G: Verify consent, policy, amount cap, merchant state, audit
-  alt approved
-    G-->>A: Scoped Commerce Passport status
-    A->>G: Create payment intent and checkout handoff
-    G->>P: Provider-neutral approved path
-    P-->>G: Webhook/status
-    G->>S: Create/reference order and fulfillment flow when supported
-    G-->>A: Payment/order status
-    A-->>B: Buyer-safe status and next step
-  else denied or blocked
-    G-->>A: Safe blocker code
-    A-->>B: Refusal, correction, or support handoff
-  end
+  A->>A: Use cached OACP artifacts if valid for TTL/risk
+  A->>G: Refresh/verify artifacts when missing, stale, revoked, or high risk
+  G-->>A: Signed artifacts or blocker codes
+  A-->>B: Grounded options, source/freshness, caveats
+  B->>A: Request commitment-bound action
+  A->>G: Boundary/envelope/reconciliation/eligibility/dry-run checks
+  G-->>A: Non-executing eligibility or blocker
+  A->>S: Request source confirmation via approved connector handoff
+  S-->>A: Confirmation evidence or refusal
+  A->>P: Verify provider-owned mandate capability when approved
+  P-->>A: Capability evidence or refusal
+  A-->>B: Prepared handoff, consent request, or safe refusal
 ```
 
 ## Happy Path In Plain English
 
-1. Buyer asks an agent to help find, compare, or buy.
+1. Buyer asks an agent to help find, compare, or prepare.
 2. AgenticOrg starts the buyer-agent session in the buyer's chosen channel.
-3. AgenticOrg asks Grantex which merchant and channel actions are approved.
-4. AgenticOrg searches Grantex catalog and checks inventory through Grantex.
-5. Grantex returns only grounded product, price, policy, return, warranty, and
-   inventory freshness facts.
-6. AgenticOrg explains options and warns about unknown or stale information.
-7. Buyer chooses an item.
-8. AgenticOrg asks Grantex to create a cart draft using exact product/variant IDs.
-9. Grantex recalculates totals, policy, amount caps, inventory freshness, and
-   checkout eligibility.
-10. AgenticOrg presents Grantex-provided consent and checkout copy.
-11. Buyer approves or denies in the Grantex consent handoff.
-12. Grantex issues a scoped Commerce Passport only when consent and policy pass.
-13. AgenticOrg asks Grantex to create payment intent and checkout handoff.
-14. Provider interaction happens through Grantex's provider-neutral adapter.
-15. Grantex receives webhooks, reconciles status, writes audit, and creates or
-   references order state when supported.
-16. AgenticOrg reports buyer-safe status and next steps.
-17. Post-purchase order, delivery, support, return, refund, settlement, and payout
-   views remain Grantex-owned and are exposed to agents only after implementation
-   and approval.
+3. AgenticOrg reads valid cached OACP artifacts when TTL, revocation, and risk
+   rules allow.
+4. AgenticOrg asks Grantex to refresh or verify artifacts when facts are stale,
+   missing, revoked, ambiguous, or high risk.
+5. AgenticOrg explains grounded facts and warns about unknown or stale
+   information.
+6. If the buyer requests a commitment-bound action, AgenticOrg uses C6W5-C6W9
+   style boundary, envelope, reconciliation, eligibility, and dry-run checks.
+7. Merchant-system confirmation happens through approved connector handoff or
+   merchant-owned systems.
+8. Provider-owned mandate/payment capability verification stays with the
+   provider/fintech rail and may be verified directly by AgenticOrg where
+   approved.
+9. Current OACP work stops at prepared handoff/dry-run. It does not create
+   orders, holds, checkout/payment, mandates, refunds, returns, shipments,
+   settlement, or payout actions.
 
 ## Exception Flows
 
@@ -153,7 +144,7 @@ sequenceDiagram
 | Inventory stale | Buyer gets warning or checkout refusal. | Seller sees stale inventory blocker. | Grantex blocks promises and may block checkout. |
 | Consent denied | Checkout stops. | Seller sees no payment attempt. | Grantex records denial and no passport is issued. |
 | Policy denied | Buyer sees safe reason such as "this purchase is not allowed by merchant policy." | Seller sees policy blocker code. | Grantex writes audit without leaking private policy. |
-| Payment pending/failed | Buyer sees pending/failed status and next safe step. | Seller sees reconciliation status. | Provider webhook/replay remains Grantex-owned. |
+| Payment pending/failed | Buyer sees pending/failed status and next safe step. | Seller sees reconciliation status. | Provider/fintech rail remains payment authority; Grantex uses non-sensitive evidence refs where required. |
 | Order/fulfillment missing | Buyer cannot get a delivery promise. | Seller sees order/fulfillment gap. | Paid launch should be blocked until operational path exists. |
 | Refund/return requested | Buyer gets manual support handoff now; future request/status later. | Seller handles refund in approved system. | No automatic refund execution until separately approved. |
 
@@ -162,16 +153,16 @@ sequenceDiagram
 | Data or action | Source of truth |
 | --- | --- |
 | Merchant identity and approval | Grantex |
-| Product and variant data | Grantex canonical catalog sourced from merchant systems |
-| Price, tax, discount, EMI, offer | Grantex canonical pricing/offer model |
-| Inventory and delivery promise | Grantex inventory/logistics model |
+| Product and variant data | Merchant systems, validated into Grantex/OACP public-safe artifacts |
+| Price, tax, discount, EMI, offer | Merchant systems/provider rails, validated into OACP source/freshness artifacts |
+| Inventory and delivery promise | Merchant WMS/OMS/logistics, validated into OACP source/freshness artifacts |
 | Buyer conversation | AgenticOrg channel/session layer |
 | Consent and Commerce Passport | Grantex |
-| Payment intent and checkout handoff | Grantex |
-| Provider credentials and webhooks | Grantex |
-| Order, fulfillment, return, refund, settlement | Grantex |
-| Buyer-facing explanation | AgenticOrg, grounded only in Grantex responses |
-| Audit and protected action evidence | Grantex, with AgenticOrg redacted session evidence where relevant |
+| Payment mandate and execution | Provider/fintech rail |
+| Provider capability evidence refs | Provider/fintech rail, optionally referenced by Grantex/OACP policy |
+| Order, fulfillment, return, refund, settlement | Merchant OMS/support/provider systems, exposed through approved artifacts only |
+| Buyer-facing explanation | AgenticOrg, grounded only in OACP artifacts and approved source evidence |
+| Audit and protected action evidence | Grantex artifact rules plus AgenticOrg redacted session evidence where relevant |
 
 ## Production Gates
 
