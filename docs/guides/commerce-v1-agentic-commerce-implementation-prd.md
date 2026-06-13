@@ -134,7 +134,7 @@ The repo already has important foundations:
 | Inventory | Variant availability buckets and freshness fields: `in_stock`, `out_of_stock`, `pre_order`, `back_order`, `unknown`, `last_synced_at`. | Enough for read-only discovery; not enough for reservations, location stock, delivery promise, or quantity accounting. |
 | Consent and Commerce Passport | Consent request, exchange, verify, revoke, challenge flow, scoped passport checks. | Core trust layer exists; production delivery and AP2-style signed mandate evidence still pending. |
 | Cart and payment intent | Cart draft and provider-neutral payment intent endpoints with idempotency and amount-cap checks. | Mock/sandbox path foundation exists; live provider path remains gated. |
-| Provider credentials and webhooks | Provider credential storage/validation path, provider webhook intake, replay, reconciliation metadata, ops health. | Foundation exists; live Plural/provider readiness still requires approvals and stronger evidence. |
+| Provider evidence and webhooks | Provider capability evidence references, webhook intake metadata, replay metadata, reconciliation metadata, and ops-health posture. | Foundation exists; live provider rails still require approvals and stronger evidence, and provider/fintech rails remain payment authority. |
 | Merchant webhooks | Signed merchant webhook source and `catalog.product.updated` intake. | Good first sync event; price-only, inventory-only, order, fulfillment, return, and support webhooks are pending. |
 | MCP/native agent surface | `merchant.get_profile`, `catalog.search`, `catalog.get_item`, `inventory.check`, `cart.create`, `checkout.create`, `payment.create_intent`, `payment.get_status`. | Correct agent surface; public discovery remains fail-closed. |
 | Docs navigation | Commerce V1 docs group exists in `docs/docs.json`. | Updated by this PRD pass to include this implementation PRD. |
@@ -238,13 +238,13 @@ evidence exist.
 | Large catalog import | Real merchants have many SKUs. | Async import jobs, dry-run diff, row-level errors, duplicate handling, rollback, idempotency, import history. | Grantex | Import can be retried and audited without data loss. |
 | Catalog data quality | Agents need complete public-safe product facts. | Required field checks by category, image validation, brand/model/specs, warranty summary, return summary, tax/GST metadata. | Grantex | Readiness score blocks missing critical fields. |
 | Inventory depth | Agents must not promise unavailable stock. | Quantity, location, stock confidence, freshness TTL, source system, future reservation/stock hold. | Grantex | Checkout blocked or warned when stale/unknown. |
-| Delivery and pickup promise | Buyers need delivery confidence before checkout. | Delivery options, pickup slots, address serviceability, shipping fee/tax, delivery ETA, carrier/logistics integration. | Grantex | No delivery promise without fresh evidence. |
-| Pricing, tax, offers, EMI | Agents need correct totals. | Price freshness, tax inclusivity, GST slab, shipping/handling, coupons, discounts, EMI/affordability metadata behind provider adapter. | Grantex | Agent cannot invent discounts or affordability. |
-| Cart update lifecycle | ACP and real checkout need update/cancel flows. | Cart update, recalculate totals, fulfillment option selection, cancel/expire, buyer messages. | Grantex | Idempotent update and audit coverage. |
-| Order lifecycle | Payment without order operations is incomplete. | Order create/read/list, order status, order permalink/reference, status webhooks, manual review, cancellation. | Grantex | Paid checkout creates or references an order. |
-| Fulfillment lifecycle | Merchant ops need shipment and pickup tracking. | Fulfillment status, shipment tracking, pickup/delivery slots, partial fulfillment, failed delivery event. | Grantex | Buyer-agent can read only verified status. |
-| Returns and refund requests | Post-purchase trust needs a safe path. | Return/refund request, eligibility preview, manual approval, provider handoff, audit, future provider execution. | Grantex | No automatic refund execution until separately approved. |
-| Settlement and payouts | Merchants need to know when they are paid. | Settlement/payout read model, provider reconciliation, fee/tax summary, payout export. | Grantex | No raw provider payload exposure. |
+| Delivery and pickup promise | Buyers need delivery confidence before checkout. | Delivery options, pickup slots, address serviceability, shipping fee/tax, delivery ETA, carrier/logistics evidence. | Merchant/logistics source + Grantex evidence policy | No delivery promise without fresh evidence. |
+| Pricing, tax, offers, EMI | Agents need correct totals. | Price freshness, tax inclusivity, GST slab, shipping/handling, coupons, discounts, EMI/affordability evidence. | Merchant/provider source + Grantex policy | Agent cannot invent discounts or affordability. |
+| Cart update lifecycle | ACP-style and real checkout need update/cancel flows. | Cart update, recalculate totals, fulfillment option selection, cancel/expire, buyer messages. | Future execution controller + Grantex policy | Idempotent update and audit coverage before any live path. |
+| Order lifecycle | Payment without order operations is incomplete. | Order create/read/list, order status, order permalink/reference, status webhooks, manual review, cancellation. | Merchant OMS + future execution controller + Grantex evidence policy | Paid checkout creates or references an order only after separate approval. |
+| Fulfillment lifecycle | Merchant ops need shipment and pickup tracking. | Fulfillment status, shipment tracking, pickup/delivery slots, partial fulfillment, failed delivery event. | Merchant/logistics source + Grantex evidence policy | Buyer-agent can read only verified status. |
+| Returns and refund requests | Post-purchase trust needs a safe path. | Return/refund request, eligibility preview, manual approval, provider handoff, audit, future provider execution. | Merchant support/provider rail + Grantex policy | No automatic refund execution until separately approved. |
+| Settlement and payouts | Merchants need to know when they are paid. | Settlement/payout read model, provider reconciliation, fee/tax summary, payout export. | Provider/fintech rail + merchant finance + Grantex evidence refs | No raw provider payload exposure. |
 | Provider-owned mandate readiness | Buyers need provider-backed mandates or payment capability where allowed. | Provider capability verification, non-sensitive evidence refs, human approval, rollback, and separate live rail approval. | Provider/fintech + AgenticOrg verifier + Grantex policy | Live provider remains blocked until approvals exist. |
 | Commerce Passport production delivery | Users need real consent challenge delivery. | Verified email/SMS/passkey challenge, revocation freshness, signed evidence, user-facing revocation history. | Grantex | No payment-affecting action without valid passport. |
 | Policy simulator | Merchants need to understand agent permissions. | Simulate policy for product/category/amount/agent/channel before activation. | Grantex | Policy activation requires preview and audit. |
@@ -303,7 +303,8 @@ Before any real merchant pilot, all of these must be true:
 - Catalog, price, tax, warranty, return policy, and inventory freshness checks
   pass for the selected category.
 - schema.org output is generated only from approved public-safe fields.
-- AgenticOrg sees only Grantex-published capabilities.
+- AgenticOrg sees only OACP-authorized capabilities with source/freshness
+  labels and refusal semantics.
 - Checkout/payment creation remains blocked until Commerce Passport consent,
   policy, audit, idempotency, provider readiness, and rollback checks pass.
 - Orders, fulfillment, support, and refund handoff are available for any paid

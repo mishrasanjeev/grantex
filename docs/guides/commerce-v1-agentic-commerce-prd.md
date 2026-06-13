@@ -135,7 +135,7 @@ Status as of 2026-06-13:
 | Inventory | Variant availability and freshness exist. | Quantity, location, confidence, reservations, stock holds, and delivery feasibility are missing. |
 | Consent and Commerce Passport | Consent request/exchange/verify/revoke/challenge foundation exists. C6M AP2-style deterministic unsigned evidence preview is merged. | Production challenge delivery, signed mandate evidence, independent AP2 conformance, and live payment approval are pending. |
 | Cart/payment intent | Cart draft and provider-neutral payment intent foundation exists. C6L ACP-style cart/checkout shape preview is merged. | Cart update/cancel/expire, fulfillment selection, ACP conformance, and broad live checkout readiness are pending. |
-| Provider/webhooks | Provider credential and webhook intake/replay/reconciliation foundations exist. | Live Plural/provider approval, signature evidence, outage handling, and rollback proof remain gated. |
+| Provider evidence/webhooks | Provider capability evidence references, webhook intake metadata, replay metadata, and reconciliation posture foundations exist. | Live provider-rail approval, signature evidence, outage handling, and rollback proof remain gated; provider/fintech rails remain payment authority. |
 | Merchant webhooks | Signed merchant webhook source and catalog update intake exist. | Inventory-only, price-only, order, fulfillment, support, return, and refund webhooks are pending. |
 | Existing-system connectors | C6N metadata-only connector registry, source precedence, sync health, stale/conflict blockers, and no-credential/no-execution guardrails are merged. | Real Shopify/WooCommerce/Magento/ERP/OMS/WMS/logistics/support/payment sync adapters remain pending. |
 | Standards adapters | C6J schema.org JSON-LD preview, C6K UCP-style capability profile preview, C6L ACP-style checkout shape preview, and C6M AP2-style evidence preview are merged. | Public publication, certification, conformance suites, live capability negotiation, and public discovery remain blocked. |
@@ -146,7 +146,7 @@ Status as of 2026-06-13:
 
 | Capability | Current state | Gap |
 | --- | --- | --- |
-| Grantex-only connector aliases | Merchant profile, catalog search/detail, inventory, cart, consent, payment intent, checkout, payment status, and read-only buyer discovery preview aliases exist. | Order, fulfillment, support, return, refund, settlement, and payout aliases wait on Grantex APIs. |
+| Grantex/OACP connector aliases | Merchant profile, catalog search/detail, inventory, cart, consent, prepared checkout state, payment-status evidence, and read-only buyer discovery preview aliases exist. | Order, fulfillment, support, return, refund, settlement, and payout views wait on future approved artifact/evidence APIs. |
 | Buyer discovery workflow | C6H read-only consumer foundation is merged. C6I channel-neutral buyer-session orchestration is merged. | Live channel adapters and write-capable buyer flows remain blocked. |
 | Sales agent guardrails | Missing consent/passport, amount-cap breach, disabled merchant/agent, policy denial, no-direct-provider, and read-only buyer discovery refusal protections exist or are merged in C6I. | Guardrails must expand as Grantex adds order, fulfillment, support, return, refund, settlement, and payout capabilities. |
 | Demo/evals | Demo, golden evals, hosted smoke, no-direct-provider regressions, and focused buyer discovery tests exist. | Channel-specific smoke and live buyer UX evals are pending. |
@@ -342,7 +342,7 @@ Plain-English rules:
 | Delivery unavailable | Buyer gets no delivery promise. | Seller sees logistics/serviceability blocker. | Checkout blocked if fulfillment proof required. |
 | Consent denied/expired | Checkout stops. | Seller sees no payment attempt. | No passport issued or stale passport revoked. |
 | Policy denied | Buyer sees safe reason without private policy. | Seller sees blocker code. | Audit written, private policy not leaked. |
-| Payment failed/pending | Buyer sees status and next supported step. | Seller sees reconciliation state. | Provider webhook/replay remains Grantex-owned. |
+| Payment failed/pending | Buyer sees status and next supported step. | Seller sees reconciliation state. | Provider/fintech rail remains payment authority; Grantex keeps only non-sensitive status/evidence refs where policy or artifact lineage requires them. |
 | Order API missing | Buyer cannot get order promise. | Seller sees launch gap. | Broad paid rollout blocked. |
 | Refund/return requested | Buyer gets manual support handoff now; future request/status later. | Seller handles in approved system. | No automatic refund execution until separately approved. |
 | Settlement/payout question | Buyer usually does not see it; seller sees payout status when available. | Seller sees payout/reconciliation report. | No raw provider payload exposure. |
@@ -352,16 +352,16 @@ Plain-English rules:
 Merchants should not rebuild for agents. They should connect the systems they
 already run.
 
-| System | Grantex should ingest | Canonical Grantex target | Notes |
+| System | Facts OACP needs | Correct source and authority model | Notes |
 | --- | --- | --- | --- |
-| Shopify/WooCommerce/Magento/custom storefront | Products, variants, media, collections, availability, pricing. | CommerceProduct, CommerceProductVariant, catalog readiness, schema.org feed. | Start read-only; writeback only after approval. |
-| ERP/PIM | Product master, attributes, tax codes, SKU hierarchy, category truth. | Catalog/category/policy mapping. | Merchant declares source-of-truth precedence. |
-| Inventory/WMS | Stock state, quantity, location, reservation, confidence, reorder state. | Availability now; future inventory levels/reservations. | Browse can use buckets; checkout needs stronger freshness. |
-| OMS | Order creation, order ID, status, cancellation, fulfillment, return status. | Future CommerceOrder and timeline. | Required before broad checkout. |
-| Logistics | Delivery promise, shipping price, pickup slot, tracking, failed delivery. | Fulfillment options and tracking events. | Needed for buyer trust and UCP order capability. |
+| Shopify/WooCommerce/Magento/custom storefront | Products, variants, media, collections, availability, pricing. | Merchant storefront remains source; AgenticOrg or merchant-approved connector captures facts; Grantex validates public-safe catalog artifacts. | Start read-only; writeback only after approval. |
+| ERP/PIM | Product master, attributes, tax codes, SKU hierarchy, category truth. | Merchant ERP/PIM remains source; Grantex validates source precedence and category/policy artifacts. | Merchant declares source-of-truth precedence. |
+| Inventory/WMS | Stock state, quantity, location, reservation, confidence, reorder state. | Merchant WMS remains source; Grantex validates freshness, refusal rules, and evidence refs. | Browse can use buckets; checkout needs stronger freshness. |
+| OMS | Order creation, order ID, status, cancellation, fulfillment, return status. | Merchant OMS remains operational owner; future artifacts expose public-safe status evidence only. | Required before broad checkout. |
+| Logistics | Delivery promise, shipping price, pickup slot, tracking, failed delivery. | Carrier/logistics systems remain source; Grantex validates delivery-promise evidence only after approval. | Needed for buyer trust and UCP-style order capability. |
 | Payment or mandate provider | Provider-owned mandate capability, payment intent/order, hosted checkout, status webhook, settlement, refunds. | Non-sensitive capability/evidence refs and future provider-neutral status artifacts where approved. | Credentials and mandate setup stay provider/fintech-owned; Grantex does not mediate every payment action. |
-| CRM/support | Ticket, support status, return/refund escalation, customer communication. | Support/return/refund request timeline. | Start manual/reference, automate later. |
-| CSV/manual/API | Bootstrap catalog, policy, inventory, and approval metadata. | Same canonical objects. | Must include dry-run, validation, history, and rollback. |
+| CRM/support | Ticket, support status, return/refund escalation, customer communication. | Merchant support system remains owner; artifacts expose support/return/refund evidence only where approved. | Start manual/reference, automate later. |
+| CSV/manual/API | Bootstrap catalog, policy, inventory, and approval metadata. | Manual source remains declared; Grantex validates public-safe artifacts and provenance. | Must include dry-run, validation, history, and rollback. |
 
 Connector rule:
 
