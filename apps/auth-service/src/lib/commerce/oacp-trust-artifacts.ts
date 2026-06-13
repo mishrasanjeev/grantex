@@ -960,6 +960,126 @@ export type OacpC6W9DryRunVerifierResult =
     blocked_verification?: OacpC6W9ExecutionControllerDryRunVerification;
   };
 
+export const OACP_C6X2_CACHE_VERIFIER_STATUSES = [
+  'accepted_for_non_binding_cache_use',
+  'prepared_only_for_commitment_boundary',
+  'blocked',
+  'stale',
+  'expired',
+  'revoked',
+  'mismatched',
+  'unsafe',
+  'unsupported',
+] as const;
+
+export type OacpC6X2CacheVerifierStatus =
+  typeof OACP_C6X2_CACHE_VERIFIER_STATUSES[number];
+
+export type OacpC6X2CachedArtifactVerifierRefusalCode =
+  | 'cached_artifact_missing'
+  | 'artifact_id_missing'
+  | 'authority_or_issuer_missing'
+  | 'scope_missing'
+  | 'artifact_expired_or_stale'
+  | 'revocation_state_ambiguous'
+  | 'artifact_revoked'
+  | 'scope_mismatch'
+  | 'private_or_forbidden_cached_artifact_field'
+  | 'non_enablement_flags_missing'
+  | 'publication_or_readiness_claim'
+  | 'signature_or_verifier_posture_missing'
+  | 'payload_hash_mismatch'
+  | 'unsupported_artifact_family';
+
+export interface OacpC6X2RevocationSnapshotPosture {
+  readonly status: 'fresh' | 'stale' | 'unknown';
+  readonly observed_at?: string;
+  readonly age_seconds?: number;
+  readonly revoked_artifact_ids?: readonly string[];
+  readonly revoked_subject_ids?: readonly string[];
+}
+
+export interface OacpC6X2CacheScope {
+  readonly buyer_agent_id?: string;
+  readonly seller_agent_id?: string;
+  readonly tenant_id?: string;
+  readonly merchant_id?: string;
+}
+
+export interface OacpC6X2CachedArtifactVerifierInput {
+  readonly artifact: OacpArtifactFixture | null;
+  readonly now_iso: string;
+  readonly expected_scope?: Partial<OacpArtifactScope>;
+  readonly cache_scope?: OacpC6X2CacheScope;
+  readonly risk_tier?: OacpRiskTier;
+  readonly revocation_snapshot?: OacpC6X2RevocationSnapshotPosture;
+  readonly verifier_result_ref?: string | null;
+  readonly signature_verified?: boolean | null;
+}
+
+export interface OacpC6X2CachedArtifactVerifierRefusal {
+  readonly verified: false;
+  readonly status: Exclude<
+    OacpC6X2CacheVerifierStatus,
+    | 'accepted_for_non_binding_cache_use'
+    | 'prepared_only_for_commitment_boundary'
+  >;
+  readonly refusal_code: OacpC6X2CachedArtifactVerifierRefusalCode;
+  readonly message: string;
+  readonly allowed_to_execute: false;
+  readonly non_authoritative_for_transaction: true;
+  readonly no_checkout_payment_enablement: true;
+  readonly no_live_provider_enablement: true;
+  readonly no_public_discovery_enablement: true;
+  readonly verifier_result_only: true;
+}
+
+export interface OacpC6X2CachedArtifactVerification {
+  readonly verified: true;
+  readonly status: Extract<
+    OacpC6X2CacheVerifierStatus,
+    | 'accepted_for_non_binding_cache_use'
+    | 'prepared_only_for_commitment_boundary'
+  >;
+  readonly artifact_id: string;
+  readonly artifact_family: OacpArtifactType;
+  readonly artifact_type: OacpArtifactType;
+  readonly issuer: string;
+  readonly issuer_key_id: string;
+  readonly source_authority: string;
+  readonly subject_type: string;
+  readonly subject_id: string;
+  readonly cache_scope: OacpC6X2CacheScope;
+  readonly issued_at: string;
+  readonly generated_at: string;
+  readonly expires_at: string;
+  readonly max_ttl_seconds: number;
+  readonly freshness_status: OacpArtifactEnvelope['freshness_class'];
+  readonly revocation_status: 'fresh' | 'not_revoked';
+  readonly revocation_snapshot_observed_at: string;
+  readonly source_refs: readonly string[];
+  readonly evidence_refs: readonly string[];
+  readonly blocked_capabilities: readonly string[];
+  readonly unsupported_capabilities: readonly string[];
+  readonly detached_jws_signature_present: true;
+  readonly signature_verified: boolean;
+  readonly verifier_result_ref: string | null;
+  readonly allowed_to_execute: false;
+  readonly non_authoritative_for_transaction: true;
+  readonly no_checkout_payment_enablement: true;
+  readonly no_live_provider_enablement: true;
+  readonly no_public_discovery_enablement: true;
+  readonly no_provider_calls: true;
+  readonly no_merchant_private_api_calls: true;
+  readonly verifier_result_only: true;
+  readonly buyer_safe_message: string;
+  readonly operator_safe_message: string;
+}
+
+export type OacpC6X2CachedArtifactVerifierResult =
+  | OacpC6X2CachedArtifactVerification
+  | OacpC6X2CachedArtifactVerifierRefusal;
+
 export type OacpOfflineCommitmentDecision =
   | {
     allowed: true;
@@ -3961,6 +4081,291 @@ export function verifyOacpC6W9ExecutionControllerHandoffDryRun(
   }
 
   return { verified: true, status, verification };
+}
+
+const C6X2_PRIVATE_VALUE_PATTERN =
+  /(raw[_-]?jwt|bearer\s+[a-z0-9._-]+|private[_-]?key|api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret|db[_-]?url|redis[_-]?url|merchant[_-]?private[_-]?api|raw[_-]?(provider|connector)[_-]?payload|production[_-]?allowlist)/i;
+const C6X2_ENABLEMENT_PATTERN =
+  /(checkout[_-]?payment[_-]?enabled|live[_-]?provider[_-]?enabled|public[_-]?discovery[_-]?enabled|order[_-]?created|payment[_-]?captured|provider[_-]?executed|shipping[_-]?created|hold[_-]?created|refund[_-]?created|return[_-]?created)/i;
+const C6X2_PUBLICATION_OR_READINESS_PATTERN =
+  /(protocol[_-]?(publication|submission)|certif(y|ied|ication)|conform(ance)?|standardization|production[_-]?ready|public[_-]?launch[_-]?ready|execution[_-]?ready)/i;
+
+function c6x2Refusal(
+  status: OacpC6X2CachedArtifactVerifierRefusal['status'],
+  refusal_code: OacpC6X2CachedArtifactVerifierRefusalCode,
+  message: string,
+): OacpC6X2CachedArtifactVerifierRefusal {
+  return {
+    verified: false,
+    status,
+    refusal_code,
+    message,
+    allowed_to_execute: false,
+    non_authoritative_for_transaction: true,
+    no_checkout_payment_enablement: true,
+    no_live_provider_enablement: true,
+    no_public_discovery_enablement: true,
+    verifier_result_only: true,
+  };
+}
+
+function c6x2StringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string').map((entry) => entry.trim()).filter(Boolean)
+    : [];
+}
+
+function c6x2StringField(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function c6x2PayloadStringList(payload: unknown, keys: readonly string[]): string[] {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return [];
+  const record = payload as Record<string, unknown>;
+  return keys.flatMap((key) => c6x2StringList(record[key]));
+}
+
+function c6x2PayloadStringField(payload: unknown, keys: readonly string[]): string | null {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const record = payload as Record<string, unknown>;
+  for (const key of keys) {
+    const value = c6x2StringField(record[key]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function c6x2SafeRefs(values: readonly string[]): boolean {
+  return values.every((value) => {
+    const trimmed = value.trim();
+    return trimmed.length > 0
+      && !C6X2_PRIVATE_VALUE_PATTERN.test(trimmed)
+      && !C6X2_ENABLEMENT_PATTERN.test(trimmed);
+  });
+}
+
+function c6x2NoPublicationOrReadinessClaims(values: readonly string[]): boolean {
+  return values.every((value) => !C6X2_PUBLICATION_OR_READINESS_PATTERN.test(value));
+}
+
+function c6x2PartialScopeMatches(
+  envelope: Record<string, unknown>,
+  expectedScope: Partial<OacpArtifactScope> | undefined,
+): boolean {
+  if (expectedScope === undefined) return true;
+  const keys: Array<keyof OacpArtifactScope> = [
+    'tenant_id',
+    'merchant_id',
+    'buyer_agent_id',
+    'seller_agent_id',
+  ];
+  return keys.every((key) => {
+    const expected = expectedScope[key];
+    return expected === undefined || expected === envelope[key];
+  });
+}
+
+function c6x2RequiredScopePresent(envelope: Record<string, unknown>, artifactType: OacpArtifactType): boolean {
+  const descriptor = OACP_ARTIFACT_SCHEMA_DESCRIPTORS[artifactType];
+  if (descriptor.requires_tenant_id && c6x2StringField(envelope.tenant_id) === null) return false;
+  if (descriptor.requires_merchant_id && c6x2StringField(envelope.merchant_id) === null) return false;
+  if (descriptor.requires_buyer_agent_id && c6x2StringField(envelope.buyer_agent_id) === null) return false;
+  if (descriptor.requires_seller_agent_id && c6x2StringField(envelope.seller_agent_id) === null) return false;
+  return true;
+}
+
+function c6x2CacheScopeFromEnvelope(
+  envelope: Record<string, unknown>,
+  override: OacpC6X2CacheScope | undefined,
+): OacpC6X2CacheScope {
+  const scope: {
+    buyer_agent_id?: string;
+    seller_agent_id?: string;
+    tenant_id?: string;
+    merchant_id?: string;
+  } = {};
+  const buyerAgentId = override?.buyer_agent_id ?? c6x2StringField(envelope.buyer_agent_id);
+  const sellerAgentId = override?.seller_agent_id ?? c6x2StringField(envelope.seller_agent_id);
+  const tenantId = override?.tenant_id ?? c6x2StringField(envelope.tenant_id);
+  const merchantId = override?.merchant_id ?? c6x2StringField(envelope.merchant_id);
+  if (buyerAgentId !== null && buyerAgentId !== undefined) scope.buyer_agent_id = buyerAgentId;
+  if (sellerAgentId !== null && sellerAgentId !== undefined) scope.seller_agent_id = sellerAgentId;
+  if (tenantId !== null && tenantId !== undefined) scope.tenant_id = tenantId;
+  if (merchantId !== null && merchantId !== undefined) scope.merchant_id = merchantId;
+  return scope;
+}
+
+export function verifyOacpC6X2CachedArtifactEnvelope(
+  input: OacpC6X2CachedArtifactVerifierInput,
+): OacpC6X2CachedArtifactVerifierResult {
+  if (input.artifact === null) {
+    return c6x2Refusal('blocked', 'cached_artifact_missing', 'C6X2 cached artifact verification requires a local cached artifact envelope.');
+  }
+
+  try {
+    assertNoForbiddenOacpArtifactFields(input.artifact);
+  } catch {
+    return c6x2Refusal('unsafe', 'private_or_forbidden_cached_artifact_field', 'C6X2 refuses cached artifacts with private, raw, or enabling fields.');
+  }
+
+  const envelope = input.artifact.envelope as Record<string, unknown>;
+  const payload = input.artifact.payload;
+  const artifactId = c6x2StringField(envelope.artifact_id);
+  if (artifactId === null) {
+    return c6x2Refusal('blocked', 'artifact_id_missing', 'C6X2 cached artifact verification requires an artifact id.');
+  }
+
+  const rawArtifactType = c6x2StringField(envelope.artifact_type);
+  if (rawArtifactType === null || !(OACP_ARTIFACT_TYPES as readonly string[]).includes(rawArtifactType)) {
+    return c6x2Refusal('unsupported', 'unsupported_artifact_family', 'C6X2 cached artifact verification supports known internal OACP artifact families only.');
+  }
+  const artifactType = rawArtifactType as OacpArtifactType;
+
+  const issuer = c6x2StringField(envelope.issuer);
+  const issuerKeyId = c6x2StringField(envelope.issuer_key_id);
+  const subjectType = c6x2StringField(envelope.subject_type);
+  const subjectId = c6x2StringField(envelope.subject_id);
+  if (issuer === null || issuerKeyId === null) {
+    return c6x2Refusal('blocked', 'authority_or_issuer_missing', 'C6X2 cached artifact verification requires issuer and authority key references.');
+  }
+  if (subjectType === null || subjectId === null || !c6x2RequiredScopePresent(envelope, artifactType)) {
+    return c6x2Refusal('blocked', 'scope_missing', 'C6X2 cached artifact verification requires complete tenant, merchant, buyer, or seller scope metadata.');
+  }
+  if (!c6x2PartialScopeMatches(envelope, input.expected_scope)) {
+    return c6x2Refusal('mismatched', 'scope_mismatch', 'C6X2 refuses cached artifacts whose scope does not match the requesting agent or tenant.');
+  }
+
+  const issuedAt = c6x2StringField(envelope.issued_at);
+  const expiresAt = c6x2StringField(envelope.expires_at);
+  const generatedAt = c6x2StringField(envelope.source_observed_at) ?? issuedAt;
+  const issuedMillis = issuedAt === null ? null : parseIsoMillis(issuedAt);
+  const expiresMillis = expiresAt === null ? null : parseIsoMillis(expiresAt);
+  const nowMillis = parseIsoMillis(input.now_iso);
+  if (
+    issuedAt === null
+    || expiresAt === null
+    || generatedAt === null
+    || issuedMillis === null
+    || expiresMillis === null
+    || nowMillis === null
+    || expiresMillis <= nowMillis
+    || expiresMillis < issuedMillis
+  ) {
+    return c6x2Refusal('expired', 'artifact_expired_or_stale', 'C6X2 refuses missing, stale, or expired cached artifact freshness metadata.');
+  }
+
+  const maxTtlSeconds = OACP_ARTIFACT_TTLS_SECONDS[artifactType];
+  if (Math.floor((expiresMillis - issuedMillis) / 1000) > maxTtlSeconds) {
+    return c6x2Refusal('stale', 'artifact_expired_or_stale', 'C6X2 refuses cached artifacts whose TTL exceeds the pinned internal artifact policy.');
+  }
+
+  const freshnessStatus = c6x2StringField(envelope.freshness_class);
+  if (freshnessStatus !== 'fresh' && freshnessStatus !== 'acceptable') {
+    return c6x2Refusal('stale', 'artifact_expired_or_stale', 'C6X2 cached artifacts must have fresh or acceptable freshness posture.');
+  }
+
+  const riskTier = input.risk_tier ?? 'low';
+  const revocationMaxAge = OACP_REVOCATION_SNAPSHOT_MAX_AGE_SECONDS[riskTier];
+  const revocationSnapshot = input.revocation_snapshot;
+  if (
+    revocationMaxAge === null
+    || revocationMaxAge === undefined
+    || revocationSnapshot === undefined
+    || revocationSnapshot.status !== 'fresh'
+    || revocationSnapshot.observed_at === undefined
+    || revocationSnapshot.age_seconds === undefined
+    || revocationSnapshot.age_seconds > revocationMaxAge
+    || parseIsoMillis(revocationSnapshot.observed_at) === null
+  ) {
+    return c6x2Refusal('stale', 'revocation_state_ambiguous', 'C6X2 requires a fresh local revocation snapshot before cached artifact use.');
+  }
+  if (
+    revocationSnapshot.revoked_artifact_ids?.includes(artifactId) === true
+    || revocationSnapshot.revoked_subject_ids?.includes(subjectId) === true
+  ) {
+    return c6x2Refusal('revoked', 'artifact_revoked', 'C6X2 refuses cached artifacts marked revoked by the local revocation snapshot.');
+  }
+
+  if (hashOacpPayload(payload) !== envelope.payload_hash) {
+    return c6x2Refusal('unsafe', 'payload_hash_mismatch', 'C6X2 refuses cached artifacts whose payload hash does not match the envelope.');
+  }
+
+  const signatureValue = c6x2StringField(envelope.signature);
+  if (
+    signatureValue === null
+    || !isDetachedJws(signatureValue)
+    || (input.signature_verified !== true && c6x2StringField(input.verifier_result_ref) === null)
+  ) {
+    return c6x2Refusal('unsafe', 'signature_or_verifier_posture_missing', 'C6X2 requires detached-JWS posture and a local signature verifier reference.');
+  }
+
+  const evidenceRefs = [
+    ...c6x2StringList(envelope.evidence_refs),
+    ...c6x2PayloadStringList(payload, ['source_evidence_refs', 'evidence_refs']),
+  ];
+  const sourceRefs = c6x2PayloadStringList(payload, ['source_refs', 'artifact_source_refs']);
+  const verifierResultRef = c6x2StringField(input.verifier_result_ref);
+  const refsForSafety = [
+    ...evidenceRefs,
+    ...sourceRefs,
+    ...(verifierResultRef === null ? [] : [verifierResultRef]),
+  ];
+  if (!c6x2SafeRefs(refsForSafety)) {
+    return c6x2Refusal('unsafe', 'private_or_forbidden_cached_artifact_field', 'C6X2 refuses cached artifact refs that expose private data, credentials, or enabling labels.');
+  }
+  if (!c6x2NoPublicationOrReadinessClaims(refsForSafety)) {
+    return c6x2Refusal('unsafe', 'publication_or_readiness_claim', 'C6X2 refuses cached artifact refs with publication, readiness, or approval claims.');
+  }
+
+  const safety = envelope.safety as Record<string, unknown> | undefined;
+  if (safety === undefined || safety.public_safe !== true || safety.contains_private_data !== false) {
+    return c6x2Refusal('unsafe', 'non_enablement_flags_missing', 'C6X2 requires public-safe, non-sensitive cached artifact safety flags.');
+  }
+
+  const blockedCapabilities = [
+    ...c6x2StringList(safety.forbidden_agent_uses),
+    ...c6x2PayloadStringList(payload, ['blocked_capabilities', 'forbidden_tasks']),
+  ];
+  const unsupportedCapabilities = c6x2PayloadStringList(payload, ['unsupported_capabilities', 'unsupported_actions']);
+  const sourceAuthority = c6x2PayloadStringField(payload, ['source_authority', 'authority']) ?? issuer;
+
+  return {
+    verified: true,
+    status: 'accepted_for_non_binding_cache_use',
+    artifact_id: artifactId,
+    artifact_family: artifactType,
+    artifact_type: artifactType,
+    issuer,
+    issuer_key_id: issuerKeyId,
+    source_authority: sourceAuthority,
+    subject_type: subjectType,
+    subject_id: subjectId,
+    cache_scope: c6x2CacheScopeFromEnvelope(envelope, input.cache_scope),
+    issued_at: issuedAt,
+    generated_at: generatedAt,
+    expires_at: expiresAt,
+    max_ttl_seconds: maxTtlSeconds,
+    freshness_status: freshnessStatus,
+    revocation_status: 'fresh',
+    revocation_snapshot_observed_at: revocationSnapshot.observed_at,
+    source_refs: sourceRefs,
+    evidence_refs: evidenceRefs,
+    blocked_capabilities: blockedCapabilities,
+    unsupported_capabilities: unsupportedCapabilities,
+    detached_jws_signature_present: true,
+    signature_verified: input.signature_verified === true,
+    verifier_result_ref: verifierResultRef,
+    allowed_to_execute: false,
+    non_authoritative_for_transaction: true,
+    no_checkout_payment_enablement: true,
+    no_live_provider_enablement: true,
+    no_public_discovery_enablement: true,
+    no_provider_calls: true,
+    no_merchant_private_api_calls: true,
+    verifier_result_only: true,
+    buyer_safe_message: 'Cached OACP artifact can support non-binding preview or preparation only; it is not transaction authority.',
+    operator_safe_message: 'C6X2 verifier accepted cached artifact metadata without provider, merchant private API, checkout, or payment execution.',
+  };
 }
 
 export function assertNoForbiddenOacpArtifactFields(value: unknown): void {
