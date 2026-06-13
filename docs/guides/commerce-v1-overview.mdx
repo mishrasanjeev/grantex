@@ -5,10 +5,12 @@ description: Start here for Grantex Agentic Commerce architecture, readiness, sa
 
 # Commerce V1 Overview
 
-Grantex Commerce V1 is the control plane for agentic commerce. It keeps consent,
-Commerce Passports, merchant policy, amount caps, audit, catalog grounding,
-webhook replay safety, and payment-provider boundaries inside Grantex while
-agents interact through approved REST and MCP surfaces.
+Grantex Commerce V1 is the trust, protocol, policy, and canonical-artifact
+authority for agentic commerce. AgenticOrg runs buyer and seller agents.
+Merchant systems remain operational sources of record. Provider and fintech
+rails own mandate and payment execution. Grantex keeps OACP artifacts,
+source/freshness rules, refusal semantics, consent posture, and audit evidence
+safe without becoming a toll booth for every non-binding agent interaction.
 
 This is a documentation and education page. It does not enable production
 Commerce V1, live payments, live Plural, or production discovery.
@@ -19,7 +21,8 @@ Commerce V1, live payments, live Plural, or production discovery.
 | --- | --- | --- |
 | Local/internal sandbox | Implemented | Synthetic catalog, cart, consent, passport, payment, webhook, and audit flows. |
 | Temporary Grantex Option A smoke | Verified | internal evidence record (operator-internal, available on request) records 14 passed, 0 failed, 6 failed-safe, 0 skipped. |
-| AgenticOrg real-staging handoff | Verified externally | AgenticOrg evidence records Grantex-only tools and redacted fixture handling. |
+| AgenticOrg real-staging handoff | Verified externally | AgenticOrg evidence records authority-checked tools and redacted fixture handling. |
+| Internal OACP foundation | Implemented through C6W9 | Artifact family, adapter preview, commitment boundary, prepared envelope, reconciliation, eligibility packet, and dry-run verifier foundations are internal and non-executing. |
 | Hosted AgenticOrg API-only discovery | Verified externally | AgenticOrg C3 evidence records hosted MCP/A2A discovery against temporary Grantex smoke. |
 | Grantex production Commerce V1 discovery | Disabled/fail-closed | internal production-discovery readiness record (operator-internal, available on request). |
 | Production checkout/live payments | Blocked | Requires legal, compliance, security, operations, provider, rollback, and human approval gates. |
@@ -41,42 +44,40 @@ Commerce V1, live payments, live Plural, or production discovery.
 
 ```mermaid
 flowchart LR
-  buyer[End user] --> agent[Commerce agent]
-  agent --> tools[AgenticOrg Grantex-only commerce tools]
-  tools --> api[Grantex Commerce REST/MCP]
-  api --> catalog[Catalog and inventory]
-  api --> consent[Consent request]
-  consent --> passport[Commerce Passport]
-  api --> policy[Policy and amount caps]
-  policy --> audit[Audit and observability]
-  api --> payment[Provider-neutral payment intent]
-  payment --> mock[Mock provider evidence]
-  payment -. future gate .-> live[Live provider / Plural]
+  buyer[End user] --> agent[AgenticOrg buyer agent]
+  seller[Merchant] --> selleragent[AgenticOrg seller agent]
+  selleragent --> systems[Merchant systems]
+  selleragent --> grantex[Grantex OACP authority]
+  grantex --> artifacts[Signed artifacts and adapter previews]
+  artifacts --> agent
+  agent -. approved capability verification .-> provider[Provider/fintech rail]
+  provider -. non-sensitive evidence refs .-> grantex
 ```
 
-The important boundary is that the agent does not own payment-provider access.
-AgenticOrg uses `grantex_commerce:*` tools. Grantex owns provider abstraction,
-policy enforcement, audit, webhook replay safety, and any future live-provider
-enablement.
+The important boundary is that the agent does not execute payments or become the
+merchant system of record. AgenticOrg may initiate approved connector sync jobs
+and may verify provider-owned mandate capability where approved. Grantex owns
+artifact authority, policy enforcement, refusal semantics, and evidence
+requirements.
 
 For the full consolidated product requirements, use
 `docs/guides/commerce-v1-agentic-commerce-prd.md` as the source of truth.
 
 ## End-To-End Flow Summary
 
-1. Seller completes one-time setup in Grantex: workspace, verification,
-   connected systems, catalog, inventory, policy, payment path, approvals,
-   smoke evidence, and rollback ownership.
+1. Seller starts in AgenticOrg Seller Commerce Agent, creates an onboarding
+   packet, connects systems through approved connector custody, and requests
+   Grantex authority review.
 2. Buyer completes one-time setup in their preferred channel: account/session
    linking, safe preferences, and understanding that checkout requires Grantex
    consent.
 3. Buyer asks an AgenticOrg-powered agent to discover, compare, or buy.
-4. AgenticOrg calls only approved Grantex commerce tools.
-5. Grantex grounds product, price, inventory, delivery, return, consent,
-   checkout, payment, order, fulfillment, support, refund, settlement, audit,
-   and rollback state.
-6. AgenticOrg explains what Grantex knows, warns about stale or unknown data,
-   and refuses unsupported claims.
+4. AgenticOrg uses cached OACP artifacts when TTL, revocation, and risk rules
+   allow; otherwise it asks Grantex to refresh or verify.
+5. Commitment-bound actions require boundary, envelope, reconciliation,
+   eligibility, and dry-run checks before any future handoff.
+6. AgenticOrg explains sourced facts, warns about stale or unknown data, and
+   refuses unsupported claims.
 
 ## Consent And Commerce Passport Lifecycle
 
@@ -85,17 +86,14 @@ sequenceDiagram
   participant U as User
   participant A as Commerce Agent
   participant G as Grantex
-  participant P as Provider Adapter
+  participant P as Provider/Fintech Rail
   A->>G: Search catalog and check inventory
-  A->>G: Create cart draft
-  A->>G: Request consent with supported scopes
+  G-->>A: OACP artifacts or blocker codes
+  A->>G: Request boundary/envelope/dry-run checks
   G-->>U: Consent UI / approval challenge
   U-->>G: Approve or deny
-  G-->>A: Commerce Passport if approved
-  A->>G: Create payment intent with passport
-  G->>G: Enforce merchant policy and amount cap
-  G->>P: Mock-provider payment path in current evidence
-  A->>G: Create checkout and poll payment status
+  A->>P: Verify provider-owned mandate capability when approved
+  P-->>A: Capability evidence or refusal
 ```
 
 The Commerce Passport is scoped runtime material. It may be used during approved
@@ -125,7 +123,7 @@ readiness, or provider certification.
 | Local mock demo and internal sandbox work. | Production Commerce V1 discovery enablement. |
 | Approved temporary Option A smoke resources. | Production checkout or payment execution. |
 | Mock-provider evidence with scrubbed reports. | Live Plural or live provider credentials. |
-| AgenticOrg Grantex-only commerce tools. | Direct Stripe, Plural, Pine, or provider credential paths from AgenticOrg commerce. |
+| OACP artifact-backed AgenticOrg commerce tools and approved capability verification. | Direct payment execution, live provider credentials, or unapproved private merchant API execution from AgenticOrg commerce. |
 | Public JWKS references as verification metadata. | Raw passports, bearer tokens, idempotency key values, secrets, DB/Redis URLs, or raw payloads in docs/evidence. |
 
 ## Related Documents
