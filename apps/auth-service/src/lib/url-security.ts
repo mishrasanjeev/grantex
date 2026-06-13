@@ -38,6 +38,8 @@ type SafeFetchOverride = (
   policy: OutboundUrlPolicy,
   resolver?: OutboundDnsResolver,
 ) => Promise<Response>;
+type SafeHeadersInit = RequestInit['headers'];
+type SafeRequestBody = RequestInit['body'];
 
 const LOCAL_HOSTNAMES = new Set([
   'localhost',
@@ -199,7 +201,7 @@ function createPinnedLookup(target: PinnedOutboundTarget) {
   };
 }
 
-function normalizeHeaders(headers: HeadersInit | undefined): Record<string, string> {
+function normalizeHeaders(headers: SafeHeadersInit | undefined): Record<string, string> {
   const normalized = new Headers(headers);
   if (normalized.has('host')) {
     throw new Error('Host header override is not allowed for pinned outbound requests');
@@ -212,7 +214,7 @@ function normalizeHeaders(headers: HeadersInit | undefined): Record<string, stri
   return result;
 }
 
-function normalizeRequestBody(body: BodyInit | null | undefined): string | Buffer | Uint8Array | undefined {
+function normalizeRequestBody(body: SafeRequestBody | null | undefined): string | Buffer | Uint8Array | undefined {
   if (body === null || body === undefined) return undefined;
   if (typeof body === 'string') return body;
   if (body instanceof URLSearchParams) return body.toString();
