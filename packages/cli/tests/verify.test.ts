@@ -3,11 +3,13 @@ import * as jose from 'jose';
 import { verifyCommand } from '../src/commands/verify.js';
 import { setJsonMode } from '../src/format.js';
 
+type TestKeyPair = Awaited<ReturnType<typeof jose.generateKeyPair>>;
+
 // Helper: create a self-signed JWT for testing
 async function createTestJwt(
   claims: Record<string, unknown> = {},
   opts: { expired?: boolean; alg?: string } = {},
-): Promise<{ token: string; publicKey: jose.KeyLike; privateKey: jose.KeyLike }> {
+): Promise<{ token: string; publicKey: TestKeyPair['publicKey']; privateKey: TestKeyPair['privateKey'] }> {
   const alg = opts.alg ?? 'RS256';
   const { publicKey, privateKey } = await jose.generateKeyPair(alg);
   const now = Math.floor(Date.now() / 1000);
