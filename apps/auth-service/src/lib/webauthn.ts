@@ -18,12 +18,16 @@ export interface StoredCredential {
   transports: string[];
 }
 
+export interface GeneratedWebAuthnOptions {
+  challenge: string;
+}
+
 export async function generateRegOptions(
   principalId: string,
   rpName: string,
   existingCredentials: StoredCredential[],
-) {
-  return generateRegistrationOptions({
+): Promise<GeneratedWebAuthnOptions> {
+  return await generateRegistrationOptions({
     rpName,
     rpID: config.fidoRpId,
     userName: principalId,
@@ -54,8 +58,8 @@ export async function verifyRegResponse(
 
 export async function generateAuthOptions(
   credentials: StoredCredential[],
-) {
-  return generateAuthenticationOptions({
+): Promise<GeneratedWebAuthnOptions> {
+  return await generateAuthenticationOptions({
     rpID: config.fidoRpId,
     allowCredentials: credentials.map((c) => ({
       id: c.credentialId,
