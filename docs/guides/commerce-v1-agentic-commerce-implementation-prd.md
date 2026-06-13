@@ -351,14 +351,14 @@ Blog series plan:
 | From schema.org To ACP To AP2: Adapter Previews Without Overclaiming | Standards and developers | OACP artifact -> adapter preview fan-out. |
 | What Still Blocks Autonomous Commerce | Leadership and operators | Gap map from C6W9 to live pilot. |
 
-Avoid these claims until separately approved:
+Avoid claims that imply:
 
-- "Live payments enabled."
-- "Certified UCP/ACP/AP2 compliant."
-- "Public discovery enabled."
-- "Automatic refunds."
-- "No review required."
-- "Works with every merchant system."
+- live payment capability already exists;
+- UCP, ACP, or AP2 certification already exists;
+- public discovery is already active;
+- automatic refunds are available;
+- human or source review is unnecessary;
+- every merchant system is already supported.
 
 Detailed page and blog plan lives in
 `docs/internal/commerce-v1/commerce-v1-oacp-landing-blog-plan.md`.
