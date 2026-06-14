@@ -381,7 +381,8 @@ Immediate actions:
 
 Safe replay rules:
 
-- Ops health reports non-mock replay as `provider_webhook_replay_non_mock_not_approved`.
+- Ops health reports webhook backlog and failure counts; the replay endpoint rejects non-mock replay
+  with `provider_replay_not_supported`.
 - Replay is available only when the original provider signature was valid, the provider is `mock`,
   `processing_status=failed`, `replay_status=fresh`, and encrypted replay material exists.
 - Do not replay invalid-signature, stale, unsupported-provider, malformed, or unauthenticated events.
