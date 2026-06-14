@@ -5,10 +5,12 @@ description: Sandbox operations, import columns, and runbooks for Grantex Commer
 
 # Commerce V1 Operations
 
-This guide is the Milestone 6A through 7C operating baseline for Grantex Commerce V1 on
-`grantex.dev`. It covers sandbox use, safe observability, pilot readiness evidence, and runbooks
-only. It does not enable deployment, production configuration, live payment mode, or real Plural
-payments.
+This guide is the current operating baseline for Grantex Commerce V1 on
+`grantex.dev`. It covers sandbox use, safe observability, the approved Shopify
+live pilot, pilot readiness evidence, and runbooks. Production Commerce V1 is
+deployed for `mch_shopify_mgx0n6_22` from `mgx0n6-22.myshopify.com`. The Plural
+adapter is configured with credentials that authenticate against
+UAT-compatible rails, so this guide does not claim production Plural settlement.
 
 ## Sandbox Playground Usage
 
@@ -27,9 +29,10 @@ The playground may store only non-secret connection settings such as API base UR
 It must not store bearer tokens, Commerce Passports, provider credentials, payment credentials, or
 idempotency keys in `localStorage` or `sessionStorage`.
 
-Live payment mode remains unavailable. Plural remains blocked for live mode; the hosted-checkout
-adapter has token, order, status, and HMAC webhook contracts in code, but any Plural sandbox run
-still requires explicit sandbox flags, stored credentials, redacted evidence, and operator review.
+Production live-pilot mode is available for the approved Shopify merchant.
+Plural hosted-checkout and webhook contracts are configured through stored
+credentials, but production Plural settlement remains an external provider
+claim that requires credentials accepted by production Plural rails.
 
 ## Security And Rate-Limit Evidence
 
@@ -79,7 +82,9 @@ M7B dashboard status:
   the internal local-pilot-load report (operator-internal artifact in
   `docs/internal/commerce-v1/`, available to authorized reviewers via
   `security@grantex.dev`).
-- Live Plural readiness is marked `blocked`.
+- Live-pilot readiness is complete for the approved Shopify merchant.
+- Plural adapter health must be read with the UAT-compatible credential caveat
+  until production Plural credentials are accepted by production rails.
 - Failed provider webhook replay is operator-only and mock-provider-only until non-mock replay storage,
   payload retention, and operator approval are separately cleared.
   Replay is available only for future failed events with valid original signatures and encrypted replay material.
@@ -185,17 +190,20 @@ Setup path:
    `PLURAL_SANDBOX_ENABLED=true`, stored sandbox credentials, and a scrubbed evidence report.
 7. Confirm emergency disable ownership before any external pilot traffic.
 
-## Support Ownership Placeholder
+## Support Ownership
 
-Support ownership must be assigned before external pilot:
+Approved Shopify pilot owner references are stored in private operational
+systems outside the repository. Future expansion must assign these roles before
+traffic is widened:
 
-- Product owner: TBD.
-- Engineering owner: TBD.
-- Security reviewer: TBD.
-- Operations/on-call owner: TBD.
-- Legal/compliance reviewer: TBD.
+- Product owner.
+- Engineering owner.
+- Security reviewer.
+- Operations/on-call owner.
+- Legal/compliance reviewer.
 
-Until owners are assigned, the system is ready for internal sandbox only.
+Do not place private names, phone numbers, escalation channels, or approval
+artifacts in public docs.
 
 ## On-Call Escalation Template
 
@@ -211,7 +219,7 @@ Escalation fields:
 - Provider webhook event ID.
 - Normalized error code.
 - Whether emergency disable is active.
-- Whether live mode or Plural was involved. Expected M7A answer: no.
+- Whether live mode, Plural, mock provider, or another provider was involved.
 
 Initial response:
 
@@ -232,8 +240,9 @@ Live readiness requires reviewed backup and restore evidence for:
 - RPO target and RTO target approved by operations.
 - Restore drill evidence in a non-production environment.
 
-M7A does not certify live RPO or RTO. It records the requirement and keeps external pilot blocked
-until operations signoff is complete.
+Historical M7A evidence did not certify live RPO or RTO. The approved Shopify
+pilot uses private operations signoff; future expansion must refresh restore and
+RPO/RTO evidence before rollout.
 
 ## Final V1 Sign-Off Checklist
 
@@ -246,8 +255,10 @@ until operations signoff is complete.
   success counts, error counts, and duplicate webhook transition evidence.
 - First pilot merchant is named or internal sandbox pilot is approved.
 - Support, security, legal, compliance, and operations owners are assigned.
-- Plural sandbox adapter evidence is either complete for the target pilot or explicitly out of scope.
-- Live payment mode remains disabled unless all legal, compliance, security, and operations gates approve it.
+- Plural adapter evidence is complete for the approved pilot or explicitly out
+  of scope for a future target.
+- Live payment mode remains controlled by legal, compliance, security,
+  operations, provider, and runtime-readiness gates.
 
 M7C internal-sandbox signoff status:
 
@@ -257,13 +268,15 @@ M7C internal-sandbox signoff status:
 | Non-local URL refusal | Passing | Harness refuses production-like base URLs before network calls |
 | Local sandbox seed path | Available | `node scripts/commerce-pilot-seed-local.mjs --run --migrate --env-output=.tmp/commerce-pilot-load.env` |
 | Measured local load report | Passing | `docs/internal/commerce-v1/commerce-v1-local-pilot-load.md` records localhost/mock run results: payment intent create 100/100 p95 16.53 ms, catalog search 500/500 p95 5.41 ms, mock provider webhook 52/52 p95 20.45 ms, duplicate transitions 0 |
-| Internal sandbox recommendation | Ready for internal sandbox only | External/live pilot remains blocked |
+| Historical internal sandbox recommendation | Superseded by approved Shopify pilot | Keep this localhost/mock evidence as regression coverage only |
 
-## Not-Ready-If Checklist
+## Expansion Not-Ready-If Checklist
 
-V1 is not ready for external pilot if any item is true:
+V1 is not ready to expand beyond the approved Shopify live pilot if any item is
+true:
 
-- Live Plural or real payment processing is required.
+- Production Plural settlement or real provider certification is required but
+  production provider credentials do not authenticate.
 - Plural sandbox E2E evidence, webhook verification evidence, or provider approval is missing for the target pilot.
 - No named support or on-call owner exists.
 - No approved sandbox pilot merchant exists.
@@ -360,8 +373,9 @@ Immediate actions:
 Escalation:
 
 - Legal and payment operations must approve any real provider retry strategy.
-- Plural remains blocked for live mode until legal, provider, security, operations, and readiness-gate
-  evidence is complete.
+- Plural production settlement remains unclaimed until legal, provider,
+  security, operations, readiness-gate evidence, and production credential
+  authentication are complete.
 
 ## Webhook Backlog And Failure Runbook
 
@@ -471,28 +485,30 @@ Re-enable decision:
 - Re-enable requires incident review, active policy evidence, and audit semantics.
 - Re-enable must not enable live payments, live Plural, provider credentials, or production config.
 
-## Legal And Live Mode Blockers
+## Legal And Live Mode Controls
 
-Before enabling real Plural or live payments, require human signoff for:
+Before expanding live provider behavior beyond the approved Shopify pilot,
+require human signoff for:
 
 - Confirmed production Plural account, credential fields, idempotency behavior, callback URLs, and webhook secret rotation.
 - Legal review of user consent, payment authorization, refund handling, dispute handling, and customer support obligations.
 - Compliance review for India payment requirements, strong customer authentication, data residency, and audit retention.
 - Security review for provider credential vaulting, webhook secret rotation, and incident response.
 - Operations review for provider outage handling, webhook replay tooling, reconciliation scheduler, dashboard coverage, and on-call ownership.
-- Merchant pilot approval with explicit sandbox-to-live promotion criteria.
+- Merchant pilot approval with explicit sandbox-to-live or pilot-to-broader
+  promotion criteria.
 
 ### Machine-Readable Acknowledgement Gate
 
-Live payment mode must remain blocked until the runtime live-readiness snapshot
-has no blockers. The snapshot may report only booleans, requirement keys, env
+Live payment mode must remain controlled by the runtime live-readiness snapshot.
+The snapshot may report only booleans, requirement keys, env
 names, and blocker strings. It must not include tokens, passports, provider
 payloads, credentials, DB URLs, Redis URLs, webhook secrets, raw signatures, or
 plaintext idempotency values.
 
-Feature flags alone are not sufficient. Before any live-mode proposal can pass,
-operators must record all of these acknowledgement names in the approved runtime
-configuration source:
+Feature flags alone are not sufficient. For the approved Shopify live pilot,
+operators recorded all of these acknowledgement names in the approved runtime
+configuration source, and future live-mode proposals must do the same:
 
 - `COMMERCE_LIVE_LEGAL_APPROVED`
 - `COMMERCE_LIVE_PROVIDER_CONTRACT_CONFIRMED`

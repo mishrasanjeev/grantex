@@ -10,13 +10,13 @@ with Grantex Commerce V1. It is written for merchant business owners, ecommerce
 operators, product teams, compliance reviewers, security reviewers, support
 teams, and launch owners.
 
-This document is guidance only. It does not approve a merchant for production
-discovery, does not approve any allowlist value, does not enable public
-discovery, does not enable Commerce V1 in production, does not enable checkout
-or payment creation, does not enable live payments, and does not enable live
-Plural. A merchant can move toward launch only through separate human approval,
-technical validation, legal/compliance review, security review, operations
-readiness, rollback readiness, and production rollout approval.
+This document is guidance only. It describes the approval model now used for the
+approved Shopify live pilot and for future merchants. It does not approve a new
+merchant, a new allowlist value, a new provider settlement claim, or a broader
+self-serve production rollout. A merchant can move toward launch only through
+separate human approval, technical validation, legal/compliance review,
+security review, operations readiness, rollback readiness, and production
+rollout approval.
 
 ## What Agentic Commerce Means
 
@@ -41,17 +41,18 @@ direct access to payments or private systems.
 
 ## Current Safety Posture
 
-Grantex Commerce V1 documentation separates local/demo/smoke work from real
-merchant production rollout.
+Grantex Commerce V1 documentation separates local/demo/smoke work from the
+approved Shopify live pilot and from future merchant production rollout.
 
 | Area | Merchant-facing status |
 | --- | --- |
 | Synthetic demo packets | Safe for demos and education only. They are not merchant approval. |
-| Real merchant onboarding | Requires human artifacts and approval references outside public docs. |
-| Read-only discovery | Must remain fail-closed until separately approved. |
-| Checkout/payment creation | Requires a separate approved path and is not enabled by this guide. |
-| Live payments and live Plural | Blocked until explicit provider, legal, compliance, security, and operations approval. |
-| AgenticOrg public commerce discovery | Gated until Grantex readiness and separate AgenticOrg approval exist. |
+| Approved Shopify live pilot | Live for `mch_shopify_mgx0n6_22` from `mgx0n6-22.myshopify.com`. |
+| Future real merchant onboarding | Requires human artifacts and approval references outside public docs. |
+| Read-only discovery | Live for the approved pilot; future merchants remain fail-closed until separately approved. |
+| Checkout/payment creation | Enabled only through the approved Grantex control-plane path and still requires consent, policy, passport, and idempotency controls. |
+| Plural adapter | Configured for the pilot with UAT-compatible credentials; production Plural settlement is not claimed. |
+| AgenticOrg public commerce discovery | Gated by Grantex readiness and separate AgenticOrg approval for each merchant/channel. |
 
 If any instruction conflicts with these safety controls, stop and escalate to
 the Grantex launch owner before proceeding.
@@ -809,7 +810,7 @@ Use this checklist before asking for rollout approval.
 | Read-only smoke | Smoke owner and validation plan are ready. |
 | Evidence retention | Redacted evidence owner and retention plan are ready. |
 | AgenticOrg | Dependency remains gated until separate approval. |
-| Production safety | Checkout, live payments, live Plural, and provider credentials remain blocked unless separately approved. |
+| Production safety | Checkout, provider behavior, Plural production settlement, and provider credentials remain controlled unless separately approved. |
 
 ## Common Merchant Questions
 
@@ -848,9 +849,8 @@ rollback discovery until the issue is corrected.
 ### What does launch approval mean?
 
 Launch approval is explicit permission for a narrow reviewed rollout step. It
-does not automatically approve checkout, live payments, live Plural, provider
-credentials, or downstream AgenticOrg public discovery unless those are
-separately approved.
+does not automatically approve provider settlement claims, provider credentials,
+or downstream AgenticOrg public discovery unless those are separately approved.
 
 ## Stop Conditions
 

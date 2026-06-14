@@ -26,7 +26,19 @@
   </url>
   <url>
     <loc>https://grantex.dev/commerce</loc>
-    <lastmod>2026-05-17</lastmod>
+    <lastmod>2026-06-14</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://docs.grantex.dev/blog/shopify-oacp-commerce-live-flow</loc>
+    <lastmod>2026-06-14</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://docs.grantex.dev/guides/commerce-v1-overview</loc>
+    <lastmod>2026-06-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Grantex Agentic Commerce V1</title>
-  <meta name="description" content="Plain-language education for Grantex Agentic Commerce V1 consent, Commerce Passport, policy, audit, and payment-control flows." />
+  <title>Grantex Agentic Commerce V1 Live Pilot</title>
+  <meta name="description" content="Plain-language education for the Grantex Agentic Commerce V1 live pilot with Shopify catalog grounding, consent, Commerce Passport, policy, audit, Plural webhook intake, and payment-control flows." />
   <style>
     :root {
       color-scheme: light;
@@ -149,19 +149,19 @@
     <div class="wrap hero-grid">
       <div>
         <div class="eyebrow">Agentic Commerce V1</div>
-        <h1>Consent-first checkout control for commerce agents.</h1>
+        <h1>Consent-first live commerce control for agents.</h1>
         <p>
-          Grantex keeps consent, Commerce Passports, merchant policy, amount caps,
-          audit, and provider boundaries in one control layer while agents use
-          approved catalog, cart, consent, and payment-intent tools.
+          Grantex is live for the approved Shopify pilot merchant. It keeps
+          consent, Commerce Passports, merchant policy, amount caps, audit, and
+          provider boundaries in one control layer while agents use approved
+          catalog, cart, consent, and payment-intent tools.
         </p>
         <div class="badges">
-          <span class="badge ready">Internal sandbox ready</span>
-          <span class="badge ready">Hosted smoke verified</span>
-          <span class="badge review">Production discovery disabled</span>
-          <span class="badge review">Live-readiness gate active</span>
-          <span class="badge blocked">Live payments blocked</span>
-          <span class="badge blocked">Live Plural blocked</span>
+          <span class="badge ready">Production live pilot</span>
+          <span class="badge ready">Shopify merchant imported</span>
+          <span class="badge ready">OACP E2E verified</span>
+          <span class="badge ready">Ops health green</span>
+          <span class="badge review">Plural UAT-compatible rails</span>
         </div>
       </div>
       <div class="panel" aria-label="Agentic checkout flow">
@@ -197,17 +197,17 @@
 
   <section id="readiness">
     <div class="wrap">
-      <h2>Readiness is staged, not implied</h2>
+      <h2>Readiness is live-pilot scoped</h2>
       <table class="status-table">
         <thead><tr><th>Layer</th><th>Status</th><th>Meaning</th></tr></thead>
         <tbody>
           <tr><td>Internal sandbox</td><td>Ready</td><td>Synthetic data, mock-provider paths, and gated Plural sandbox adapter tests exist for controlled validation.</td></tr>
           <tr><td>Temporary smoke</td><td>Verified</td><td>Option A and hosted AgenticOrg smoke evidence used temporary resources and scrubbed reports.</td></tr>
-          <tr><td>Plural sandbox adapter</td><td>Gated</td><td>Hosted checkout, order status, and HMAC webhook verification require explicit sandbox flags and stored credentials.</td></tr>
-          <tr><td>Production discovery</td><td>Disabled/fail-closed</td><td>Read-only discovery requires a later approved proposal.</td></tr>
-          <tr><td>Live-readiness gate</td><td>Active</td><td>Feature flags alone do not start live mode; missing evidence returns <code>live_readiness_blocked</code>.</td></tr>
-          <tr><td>Live checkout/payments</td><td>Blocked</td><td>Legal, compliance, security, operations, provider, OACP E2E, audit, rollback, and human approval evidence remain required.</td></tr>
-          <tr><td>Live Plural</td><td>Blocked</td><td>No current evidence enables live Plural, live provider credentials, or provider-side live payment execution.</td></tr>
+          <tr><td>Shopify merchant</td><td>Live</td><td><code>mgx0n6-22.myshopify.com</code> is imported as <code>mch_shopify_mgx0n6_22</code> with 5 products and 5 variants.</td></tr>
+          <tr><td>Production discovery</td><td>Live pilot</td><td>The approved merchant profile is available through <code>/.well-known/grantex-commerce</code>.</td></tr>
+          <tr><td>Live-readiness gate</td><td>Complete</td><td>Runtime acknowledgements are complete for the approved pilot; missing evidence still returns <code>live_readiness_blocked</code>.</td></tr>
+          <tr><td>Live checkout control plane</td><td>Enabled</td><td>Consent, Passport, policy, amount-cap, idempotency, webhook, reconciliation, and audit controls are deployed.</td></tr>
+          <tr><td>Plural adapter</td><td>Configured</td><td>Webhook intake is deployed. Current credentials authenticate against Plural UAT-compatible rails, so production Plural settlement is not claimed.</td></tr>
         </tbody>
       </table>
       <div class="ladder" aria-label="Readiness gate ladder">
@@ -215,9 +215,9 @@
         <div class="rung allowed">Option A smoke<span>Temporary Grantex service</span></div>
         <div class="rung allowed">AgenticOrg eval<span>Grantex-only path</span></div>
         <div class="rung allowed">Hosted API smoke<span>MCP/A2A discovery</span></div>
-        <div class="rung review-line">Read-only discovery<span>Human proposal required</span></div>
-        <div class="rung review-line">Live gate<span>Machine-readable evidence</span></div>
-        <div class="rung blocked-line">Live payments<span>Blocked</span></div>
+        <div class="rung allowed">Shopify import<span>Real merchant profile</span></div>
+        <div class="rung allowed">Live gate<span>Evidence complete</span></div>
+        <div class="rung review-line">Plural settlement<span>Not claimed</span></div>
       </div>
     </div>
   </section>
@@ -236,11 +236,12 @@
 
   <section class="cta">
     <div class="wrap">
-      <h2>Use this page as education, not enablement.</h2>
+      <h2>Use this page as the live-pilot map.</h2>
       <p>
-        Production Commerce V1 discovery, live checkout, live payments, live Plural,
-        external pilot readiness, and provider certification remain blocked until
-        explicit human gates approve them.
+        Production Commerce V1 is deployed for the approved Shopify merchant
+        flow. Agents still use Grantex-only commerce surfaces, and Plural
+        production settlement is not claimed until production Plural credentials
+        authenticate against production rails.
       </p>
       <p><a href="https://docs.grantex.dev/guides/commerce-v1-overview">Read the Commerce V1 docs</a></p>
     </div>

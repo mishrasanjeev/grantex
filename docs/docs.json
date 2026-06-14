@@ -716,6 +716,7 @@
           {
             "group": "Posts",
             "pages": [
+              "blog/shopify-oacp-commerce-live-flow",
               "blog/commerce-live-readiness-gate",
               "blog/dpdp-act-ai-agents",
               "blog/agent-security-breaches-2025-2026",

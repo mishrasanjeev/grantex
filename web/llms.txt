@@ -42,6 +42,16 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - @grantex/mcp-auth: OAuth 2.1 auth server for MCP servers
 - @grantex/dpdp: DPDP Act 2023 + EU AI Act control mappings
 
+## Agentic Commerce V1 Live Pilot
+
+- Live pilot merchant: `mch_shopify_mgx0n6_22` from `mgx0n6-22.myshopify.com`
+- Production commerce profile: `https://api.grantex.dev/.well-known/grantex-commerce`
+- Public education page: https://grantex.dev/commerce
+- End-to-end launch blog: https://docs.grantex.dev/blog/shopify-oacp-commerce-live-flow
+- Commerce docs: https://docs.grantex.dev/guides/commerce-v1-overview
+- Plural webhook URL: `https://api.grantex.dev/v1/webhooks/providers/plural`
+- Plural caveat: current credentials authenticate against UAT-compatible rails; do not claim production Plural settlement certification.
+
 ## Key Features
 
 - Scoped permissions: `resource:action[:constraint]` format (e.g., `payments:initiate:max_500`)
