@@ -56,6 +56,7 @@ import { commerceCartPaymentRoutes } from './commerce-cart-payment.js';
 import { commerceOpsRoutes } from './commerce-ops.js';
 import { commerceWebhookSourceRoutes } from './commerce-webhook-sources.js';
 import { commerceConnectorRoutes } from './commerce-connectors.js';
+import { commerceOacpRuntimeRoutes } from './commerce-oacp-runtime.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -1081,12 +1082,12 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
 
   // Single preHandler: feature-flag gate + commerce caller resolution +
   // tenant materialization. Tenant rules:
-  //   - Operator with explicit mapping → use it.
-  //   - Operator with no mapping AND isAutoTenantAllowed() → auto-provision
+  //   - Operator with explicit mapping -> use it.
+  //   - Operator with no mapping AND isAutoTenantAllowed() -> auto-provision
   //     (sandbox/test only; production blocked at the lib layer).
-  //   - Operator with no mapping AND not auto-allowed → 422 tenant_not_provisioned.
-  //   - Merchant/agent caller → caller carries its own tenantId.
-  //   - Platform admin caller (no developer record) → tenantId left empty;
+  //   - Operator with no mapping AND not auto-allowed -> 422 tenant_not_provisioned.
+  //   - Merchant/agent caller -> caller carries its own tenantId.
+  //   - Platform admin caller (no developer record) -> tenantId left empty;
   //     operator endpoints accepting admin must consume tenant_id from path/body.
   app.addHook('preHandler', async (request) => {
     if (!isCommerceV1Enabled()) {
@@ -1098,7 +1099,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       );
     }
     // Public consent endpoints (the SSR page + approve/deny) do not have
-    // a Bearer caller — the user reaches them via a magic link from
+    // a Bearer caller - the user reaches them via a magic link from
     // their agent. Those routes opt in to publicConsent in their own
     // route config and handle Host isolation + CSRF themselves.
     if (request.routeOptions.config?.publicConsent === true) return;
@@ -1143,7 +1144,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
           },
         );
       }
-      // tenantStatus === null → no mapping. Optional auto-provision (test/sandbox only).
+      // tenantStatus === null -> no mapping. Optional auto-provision (test/sandbox only).
       if (isAutoTenantAllowed()) {
         request.commerceTenantId = await resolveOrCreateTenantForDeveloper(
           sql,
@@ -1172,7 +1173,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ----------------------------------------------------------------------
-  // Per-route caller-kind enforcement helpers (Finding 2 — promised
+  // Per-route caller-kind enforcement helpers (Finding 2 - promised
   // M2 caller matrix). The shape is `requireX(request)` throws 403 when
   // the resolved caller kind isn't in the route's allowlist.
   // ----------------------------------------------------------------------
@@ -1185,7 +1186,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   }
   /**
    * Operator OR merchant for the merchant_id the caller is reading.
-   * Agents are explicitly denied — admin merchant data is not part of
+   * Agents are explicitly denied - admin merchant data is not part of
    * any agent's surface in M2.
    */
   function requireOperatorOrSelfMerchant(
@@ -1200,7 +1201,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   }
   /**
    * Operator OR the agent reading their own record. Merchants are
-   * explicitly denied — they don't enumerate arbitrary agents.
+   * explicitly denied - they don't enumerate arbitrary agents.
    */
   function requireOperatorOrSelfAgent(
     request: FastifyRequest,
@@ -1214,7 +1215,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   }
 
   // ----------------------------------------------------------------------
-  // POST /merchants  — operator only
+  // POST /merchants  - operator only
   // ----------------------------------------------------------------------
   app.post<{ Body: MerchantCreateBody }>('/merchants', async (request, reply) => {
     requireOperator(request);
@@ -1303,7 +1304,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ----------------------------------------------------------------------
-  // GET /merchants/:merchantId — operator OR merchant for own merchant.
+  // GET /merchants/:merchantId - operator OR merchant for own merchant.
   // Agent denied (admin merchant data is not in any agent's M2 surface).
   // ----------------------------------------------------------------------
   app.get<{ Params: { merchantId: string } }>('/merchants/:merchantId', async (request, reply) => {
@@ -2498,7 +2499,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // ----------------------------------------------------------------------
-  // PATCH /merchants/:merchantId — operator OR merchant for own merchant.
+  // PATCH /merchants/:merchantId - operator OR merchant for own merchant.
   // Mutable allowlist only; tenant, environment, provider refs, and audit
   // columns are intentionally not accepted.
   // ----------------------------------------------------------------------
@@ -3036,7 +3037,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // ----------------------------------------------------------------------
-  // POST /agents — operator only; trust_status server-controlled (M1 hardening)
+  // POST /agents - operator only; trust_status server-controlled (M1 hardening)
   // ----------------------------------------------------------------------
   app.post<{ Body: AgentCreateBody }>('/agents', async (request, reply) => {
     requireOperator(request);
@@ -3099,7 +3100,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ----------------------------------------------------------------------
-  // GET /agents — tenant-bound list. Operator callers list tenant agents;
+  // GET /agents - tenant-bound list. Operator callers list tenant agents;
   // merchant callers may request their own merchant scope. CommerceAgents
   // are tenant-scoped in the current schema, so merchant_id is verified as
   // tenant-owned but is not treated as an exclusive join.
@@ -3206,7 +3207,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ----------------------------------------------------------------------
-  // GET /agents/:agentId — operator OR the agent reading own record.
+  // GET /agents/:agentId - operator OR the agent reading own record.
   // Merchant denied.
   // ----------------------------------------------------------------------
   app.get<{ Params: { agentId: string } }>('/agents/:agentId', async (request, reply) => {
@@ -3228,7 +3229,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ----------------------------------------------------------------------
-  // PATCH /agents/:agentId — operator only. Agent self-updates are denied
+  // PATCH /agents/:agentId - operator only. Agent self-updates are denied
   // so an agent cannot self-elevate trust/status.
   // ----------------------------------------------------------------------
   app.patch<{ Params: { agentId: string }; Body: AgentPatchBody }>(
@@ -3334,7 +3335,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // ----------------------------------------------------------------------
-  // POST /catalog/products — operator only
+  // POST /catalog/products - operator only
   // ----------------------------------------------------------------------
   app.post<{ Body: ProductCreateBody }>('/catalog/products', async (request, reply) => {
     requireOperator(request);
@@ -4130,7 +4131,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
       cursor?: string;
     };
   }>('/audit/events', async (request, reply) => {
-    // GET /audit/events — operator only in M2. Merchant + agent audit
+    // GET /audit/events - operator only in M2. Merchant + agent audit
     // surfaces (scoped reads) land in M5/M6 once the SDK and dashboard
     // need them.
     requireOperator(request);
@@ -4198,6 +4199,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   await app.register(commerceProviderCredentialRoutes);
   await app.register(commerceWebhookSourceRoutes);
   await app.register(commerceConnectorRoutes);
+  await app.register(commerceOacpRuntimeRoutes);
   await app.register(commerceCartPaymentRoutes);
   await app.register(commerceOpsRoutes);
 }
