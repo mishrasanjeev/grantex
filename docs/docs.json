@@ -202,7 +202,8 @@
               "sdks/typescript/events",
               "sdks/typescript/usage",
               "sdks/typescript/domains",
-              "sdks/typescript/passports"
+              "sdks/typescript/passports",
+              "sdks/typescript/commerce"
             ]
           },
           {

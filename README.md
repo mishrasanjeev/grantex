@@ -67,6 +67,8 @@ flowchart LR
 
 Start with the [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx), then use the [developer guide](docs/guides/commerce-v1-developer-guide.mdx), [merchant/operator guide](docs/guides/commerce-v1-merchant-operator-guide.mdx), and [operations guide](docs/guides/commerce-v1-operations.mdx). The public education page is `web/commerce.html`, the end-to-end launch story is in [the Shopify OACP live-flow blog](docs/blog/shopify-oacp-commerce-live-flow.mdx), and the guard model is in [the Commerce live-readiness gate blog](docs/blog/commerce-live-readiness-gate.mdx).
 
+The TypeScript SDK now exposes the live-pilot control plane as `grantex.commerce.*`, including public merchant profile lookup, catalog search, cart creation, Commerce Passport consent/exchange, payment intent creation, checkout handoff, provider credential metadata, webhook source management, and operator health checks. Commerce write calls that mutate carts or payments accept `idempotencyKey` and send it as the required `Idempotency-Key` header.
+
 ## Current Development Snapshot
 
 The latest repository changelog currently tops out at v0.3.8. Package versions are being reconciled across SDKs and adapters; use [COMPATIBILITY.md](COMPATIBILITY.md) as the current source of truth for package-specific versions.

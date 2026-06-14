@@ -20,6 +20,7 @@ import { WebAuthnClient } from './resources/webauthn.js';
 import { CredentialsClient } from './resources/credentials.js';
 import { PassportsClient } from './resources/passports.js';
 import { DpdpClient } from './resources/dpdp.js';
+import { CommerceClient } from './resources/commerce.js';
 import { ToolManifest, permissionCovers, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 import { verifyGrantToken } from './verify.js';
 import type {
@@ -65,6 +66,7 @@ export class Grantex {
   readonly credentials: CredentialsClient;
   readonly passports: PassportsClient;
   readonly dpdp: DpdpClient;
+  readonly commerce: CommerceClient;
 
   get lastRateLimit(): RateLimit | undefined {
     return this.#http.lastRateLimit;
@@ -110,6 +112,7 @@ export class Grantex {
     this.credentials = new CredentialsClient(this.#http);
     this.passports = new PassportsClient(this.#http);
     this.dpdp = new DpdpClient(this.#http);
+    this.commerce = new CommerceClient(this.#http);
     this.#jwksUri = options.jwksUri ?? `${normalizedBaseUrl}/.well-known/jwks.json`;
     this.#issuer = options.issuer;
     this.#enforceMode = (options as Record<string, unknown>)['enforceMode'] as 'strict' | 'permissive' ?? 'strict';

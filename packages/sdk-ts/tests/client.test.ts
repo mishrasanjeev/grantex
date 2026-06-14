@@ -105,6 +105,28 @@ describe('Grantex client', () => {
       }
     });
 
+    it('exposes nested error code and message from Commerce envelopes', async () => {
+      vi.stubGlobal(
+        'fetch',
+        makeFetch(401, {
+          error: {
+            code: 'webhook_signature_invalid',
+            message: 'Webhook signature is invalid',
+          },
+        }),
+      );
+      const grantex = new Grantex({ apiKey: 'test_key', maxRetries: 0 });
+      try {
+        await grantex.agents.list();
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(GrantexAuthError);
+        const apiErr = err as GrantexAuthError;
+        expect(apiErr.code).toBe('webhook_signature_invalid');
+        expect(apiErr.message).toBe('Webhook signature is invalid');
+      }
+    });
+
     it('throws GrantexNetworkError when fetch throws', async () => {
       vi.stubGlobal(
         'fetch',

@@ -33,6 +33,10 @@ export interface HttpClientOptions {
   maxRetries?: number;
 }
 
+export interface RequestOptions {
+  headers?: Record<string, string>;
+}
+
 export class HttpClient {
   readonly #baseUrl: string;
   readonly #apiKey: string;
@@ -51,24 +55,24 @@ export class HttpClient {
     return this.#lastRateLimit;
   }
 
-  async get<T>(path: string): Promise<T> {
-    return this.#request<T>('GET', path, undefined);
+  async get<T>(path: string, options?: RequestOptions): Promise<T> {
+    return this.#request<T>('GET', path, undefined, options);
   }
 
-  async post<T>(path: string, body?: unknown): Promise<T> {
-    return this.#request<T>('POST', path, body);
+  async post<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
+    return this.#request<T>('POST', path, body, options);
   }
 
-  async put<T>(path: string, body?: unknown): Promise<T> {
-    return this.#request<T>('PUT', path, body);
+  async put<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
+    return this.#request<T>('PUT', path, body, options);
   }
 
-  async patch<T>(path: string, body?: unknown): Promise<T> {
-    return this.#request<T>('PATCH', path, body);
+  async patch<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
+    return this.#request<T>('PATCH', path, body, options);
   }
 
-  async delete<T>(path: string): Promise<T> {
-    return this.#request<T>('DELETE', path, undefined);
+  async delete<T>(path: string, options?: RequestOptions): Promise<T> {
+    return this.#request<T>('DELETE', path, undefined, options);
   }
 
   async rawGet(path: string): Promise<Response> {
@@ -80,7 +84,7 @@ export class HttpClient {
     });
   }
 
-  async #request<T>(method: string, path: string, body: unknown): Promise<T> {
+  async #request<T>(method: string, path: string, body: unknown, options?: RequestOptions): Promise<T> {
     const url = `${this.#baseUrl}${path}`;
 
     const headers: Record<string, string> = {
@@ -91,6 +95,11 @@ export class HttpClient {
 
     if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
+    }
+    if (options?.headers) {
+      for (const [key, value] of Object.entries(options.headers)) {
+        headers[key] = value;
+      }
     }
 
     let lastError: unknown;
@@ -213,6 +222,10 @@ function extractErrorCode(body: unknown): string | undefined {
   ) {
     return (body as Record<string, string>)['code']!;
   }
+  const nested = nestedError(body);
+  if (nested && typeof nested['code'] === 'string') {
+    return nested['code'];
+  }
   return undefined;
 }
 
@@ -225,6 +238,10 @@ function extractErrorMessage(body: unknown, status: number): string {
   ) {
     return (body as Record<string, string>)['message']!;
   }
+  const nested = nestedError(body);
+  if (nested && typeof nested['message'] === 'string') {
+    return nested['message'];
+  }
   if (
     body !== null &&
     typeof body === 'object' &&
@@ -234,4 +251,11 @@ function extractErrorMessage(body: unknown, status: number): string {
     return (body as Record<string, string>)['error']!;
   }
   return `HTTP ${status}`;
+}
+
+function nestedError(body: unknown): Record<string, unknown> | undefined {
+  if (body === null || typeof body !== 'object') return undefined;
+  const error = (body as Record<string, unknown>)['error'];
+  if (error === null || typeof error !== 'object' || Array.isArray(error)) return undefined;
+  return error as Record<string, unknown>;
 }
