@@ -78,6 +78,9 @@ export async function commerceWellKnownRoutes(app: FastifyInstance): Promise<voi
         throw new CommerceHttpError(422, 'merchant_selector_required',
           'Multiple commerce merchants are available; pass ?merchant_id=...');
       }
+      const livePaymentsEnabled = process.env['COMMERCE_LIVE_MODE_ENABLED'] === 'true';
+      const livePluralEnabled = process.env['PLURAL_LIVE_ENABLED'] === 'true';
+      const checkoutPaymentRuntimeEnabled = commerceV1Enabled && livePaymentsEnabled;
 
       return reply.status(200).send({
         version: 'grantex-commerce-v1',
@@ -104,16 +107,18 @@ export async function commerceWellKnownRoutes(app: FastifyInstance): Promise<voi
           mode: publicDiscoveryEnabled ? 'public_read_only_discovery' : 'commerce_v1_runtime_discovery',
           read_only_discovery_only: publicDiscoveryEnabled && !commerceV1Enabled,
           commerce_v1_runtime_enabled: commerceV1Enabled,
-          checkout_payment_creation_enabled_by_discovery_gate: false,
-          live_payments_enabled: false,
-          live_plural_enabled: false,
+          checkout_payment_creation_enabled_by_discovery_gate: checkoutPaymentRuntimeEnabled,
+          live_payments_enabled: livePaymentsEnabled,
+          live_plural_enabled: livePluralEnabled,
           provider_credentials_exposed: false,
           readiness_claim: 'none',
           certification_claim: 'none',
           notes: [
             'COMMERCE_PUBLIC_DISCOVERY_ENABLED publishes metadata only.',
             'Checkout and payment creation require separate Commerce V1 runtime approval.',
-            'Live payments and live Plural remain disabled by this discovery gate.',
+            livePaymentsEnabled && livePluralEnabled
+              ? 'Live Commerce and live Plural runtime flags are enabled for approved authenticated flows.'
+              : 'Live payments and live Plural remain disabled by this discovery gate.',
             'This profile makes no production-readiness or certification claim.',
           ],
         },

@@ -12,7 +12,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  COMMERCE_LIVE_READINESS_REQUIREMENTS,
   ensureCommerceLiveMode,
+  getCommerceLiveReadinessSnapshot,
   getCommerceLiveModeStatus,
   isLiveCommerceSideEffect,
 } from '../src/lib/commerce/live-mode-guard.js';
@@ -21,6 +23,14 @@ import { CommerceHttpError } from '../src/lib/commerce/errors.js';
 // vitest.config.ts does NOT set COMMERCE_LIVE_MODE_ENABLED, so the
 // default state across this suite is fail-closed (the production
 // posture documented in README.md:42).
+
+function stubLiveReadiness(): void {
+  vi.stubEnv('COMMERCE_LIVE_MODE_ENABLED', 'true');
+  vi.stubEnv('PLURAL_LIVE_ENABLED', 'true');
+  for (const requirement of COMMERCE_LIVE_READINESS_REQUIREMENTS) {
+    vi.stubEnv(requirement.env, 'true');
+  }
+}
 
 describe('ensureCommerceLiveMode — decision matrix', () => {
   afterEach(() => {
@@ -79,9 +89,29 @@ describe('ensureCommerceLiveMode — decision matrix', () => {
     });
   });
 
-  it('passes live + plural when both flags are explicitly set', () => {
+  it('rejects live + plural when flags are set but readiness evidence is missing', () => {
     vi.stubEnv('COMMERCE_LIVE_MODE_ENABLED', 'true');
     vi.stubEnv('PLURAL_LIVE_ENABLED', 'true');
+    let captured: unknown;
+    try {
+      ensureCommerceLiveMode({ environment: 'live', providerKey: 'plural' });
+    } catch (err) {
+      captured = err;
+    }
+    expect(captured).toBeInstanceOf(CommerceHttpError);
+    const err = captured as CommerceHttpError;
+    expect(err.statusCode).toBe(403);
+    expect(err.code).toBe('plural_live_disabled');
+    expect(err.options.details).toMatchObject({
+      reason: 'live_readiness_blocked',
+      provider_key: 'plural',
+    });
+    expect((err.options.details as { blockers: string[] }).blockers)
+      .toContain('missing_legal_approval_recorded');
+  });
+
+  it('passes live + plural only when flags and all readiness acknowledgements are set', () => {
+    stubLiveReadiness();
     expect(() =>
       ensureCommerceLiveMode({ environment: 'live', providerKey: 'plural' }),
     ).not.toThrow();
@@ -135,6 +165,22 @@ describe('getCommerceLiveModeStatus / isLiveCommerceSideEffect', () => {
     expect(isLiveCommerceSideEffect({ environment: 'sandbox', providerKey: 'plural' })).toBe(true);
     expect(isLiveCommerceSideEffect({ environment: 'live', providerKey: 'plural' })).toBe(true);
     expect(isLiveCommerceSideEffect({ environment: 'live' })).toBe(true);
+  });
+
+  it('reports a machine-readable live-readiness snapshot without secret values', () => {
+    vi.stubEnv('COMMERCE_LIVE_MODE_ENABLED', 'true');
+    vi.stubEnv('PLURAL_LIVE_ENABLED', 'true');
+    const blocked = getCommerceLiveReadinessSnapshot();
+    expect(blocked.startable).toBe(false);
+    expect(blocked.blockers).toContain('missing_provider_contract_confirmed');
+    expect(blocked.requiredEvidence.map((requirement) => requirement.env))
+      .toContain('COMMERCE_LIVE_PROVIDER_CONTRACT_CONFIRMED');
+    expect(JSON.stringify(blocked)).not.toMatch(/Bearer\s|sk_live_|pk_live_|-----BEGIN/i);
+
+    stubLiveReadiness();
+    const ready = getCommerceLiveReadinessSnapshot();
+    expect(ready.startable).toBe(true);
+    expect(ready.blockers).toEqual([]);
   });
 });
 

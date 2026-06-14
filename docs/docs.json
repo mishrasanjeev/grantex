@@ -202,7 +202,8 @@
               "sdks/typescript/events",
               "sdks/typescript/usage",
               "sdks/typescript/domains",
-              "sdks/typescript/passports"
+              "sdks/typescript/passports",
+              "sdks/typescript/commerce"
             ]
           },
           {
@@ -258,6 +259,7 @@
               "sdks/python/usage",
               "sdks/python/domains",
               "sdks/python/passports",
+              "sdks/python/commerce",
               "sdks/python/vault"
             ]
           },
@@ -314,6 +316,7 @@
               "sdks/go/usage",
               "sdks/go/domains",
               "sdks/go/passports",
+              "sdks/go/commerce",
               "sdks/go/vault"
             ]
           },
@@ -716,6 +719,8 @@
           {
             "group": "Posts",
             "pages": [
+              "blog/shopify-oacp-commerce-live-flow",
+              "blog/commerce-live-readiness-gate",
               "blog/dpdp-act-ai-agents",
               "blog/agent-security-breaches-2025-2026",
               "blog/owasp-agentic-top-10-compliance",

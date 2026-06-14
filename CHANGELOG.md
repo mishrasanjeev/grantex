@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## v0.3.11 (2026-06-14)
+
+### Fixes
+- TypeScript, Python, and Go SDKs trim API key input before constructing `Authorization` headers.
+- TypeScript SDK package version advanced to `0.3.11` for the publishable Commerce V1/OACP npm release.
+- Python SDK package version advanced to `0.3.11` after the `0.3.10` Commerce upload.
+
+## v0.3.10 (2026-06-14)
+
+### Added
+- Python SDK: `client.commerce.*` Commerce V1/OACP client for merchant discovery, catalog grounding, MCP tool calls, carts, consent, Commerce Passport, payment intents, checkout links, provider credentials, webhook sources, and operator health.
+- Go SDK: `client.Commerce.*` Commerce V1/OACP client with matching discovery, catalog, idempotent write, MCP, provider webhook, and ops helpers.
+- Python and Go Commerce V1 SDK docs.
+
+### Fixes
+- Python and Go SDK HTTP clients now support per-call headers for idempotency keys and provider webhook handling.
+- Python and Go SDK error handling now parses nested Commerce/Fastify error envelopes.
+- Python and Go SDK user-agent versions updated to `0.3.10`.
+
+## v0.3.9 (2026-06-14)
+
+### Added
+- TypeScript SDK: `grantex.commerce.*` Commerce V1/OACP client for merchant discovery, catalog grounding, MCP tool calls, carts, consent, Commerce Passport, payment intents, checkout links, provider credentials, webhook sources, and operator health.
+- TypeScript SDK docs: Commerce V1 guide published under the TypeScript SDK resources.
+
+### Fixes
+- TypeScript SDK HTTP client now supports per-call headers for idempotency keys and provider webhook handling.
+- TypeScript SDK error handling now parses nested Commerce/Fastify error envelopes.
+- TypeScript SDK user-agent version updated to `@grantex/sdk/0.3.9`.
+
+### Verification
+- SDK typecheck, tests, build, Commerce hardening validator, pilot-readiness validator, and live production read-path SDK probe passed.
+- Live probe covered the Shopify merchant profile, authenticated catalog search, MCP catalog search, ops health, and Plural webhook signature fail-closed behavior.
+
 ## v0.3.8 / @grantex/mcp 0.1.9 (2026-04-08)
 
 ### Security

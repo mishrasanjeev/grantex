@@ -1,0 +1,87 @@
+---
+title: "Commerce V1"
+sidebarTitle: "Commerce V1"
+description: "Use the Grantex Python SDK Commerce V1 client for OACP merchant discovery, catalog grounding, consent, payment, webhook, and ops flows."
+---
+
+The Python SDK exposes Commerce V1 under `client.commerce`.
+
+```python
+from grantex import Grantex
+
+client = Grantex(api_key="gx_live_...")
+
+profile = client.commerce.get_profile(merchant_id="mch_shopify_mgx0n6_22")
+print(profile["merchant"]["merchant_id"])
+
+products = client.commerce.search_catalog({
+    "merchant_id": "mch_shopify_mgx0n6_22",
+    "query": "lamp",
+    "limit": 3,
+})
+print(products["items"])
+```
+
+## Idempotent Writes
+
+Commerce write operations that can create payment-affecting resources take an
+idempotency key as a keyword argument. The SDK sends it as the `Idempotency-Key`
+header, not in the JSON body.
+
+```python
+cart = client.commerce.create_cart(
+    {
+        "merchant_id": "mch_shopify_mgx0n6_22",
+        "currency": "INR",
+        "line_items": [{"variant_id": "var_123", "quantity": 1}],
+    },
+    idempotency_key="cart-2026-06-14-001",
+)
+```
+
+## MCP Tool Calls
+
+```python
+result = client.commerce.mcp({
+    "jsonrpc": "2.0",
+    "id": "catalog-search-1",
+    "method": "tools/call",
+    "params": {
+        "name": "catalog.search",
+        "arguments": {
+            "merchant_id": "mch_shopify_mgx0n6_22",
+            "query": "lamp",
+            "limit": 1,
+        },
+    },
+})
+```
+
+## Ops And Webhooks
+
+```python
+health = client.commerce.get_ops_health({
+    "merchant_id": "mch_shopify_mgx0n6_22",
+    "environment": "live",
+})
+
+try:
+    client.commerce.handle_provider_webhook("plural", {}, headers={})
+except Exception as exc:
+    # Missing or invalid provider signatures fail closed.
+    print(exc)
+```
+
+## Common Methods
+
+| Method | Purpose |
+| --- | --- |
+| `get_profile()` | Fetch the public Commerce V1 merchant profile |
+| `search_catalog()` / `list_catalog_products()` | Ground agent shopping flows in merchant catalog data |
+| `create_cart()` / `get_cart()` | Create and read Commerce carts |
+| `create_consent_request()` / `exchange_consent_for_passport()` | Request buyer consent and mint Commerce Passports |
+| `verify_passport()` / `revoke_passport()` | Verify or revoke Commerce Passports |
+| `create_payment_intent()` / `get_payment_intent()` | Create and inspect provider-neutral payment intents |
+| `create_checkout_link()` | Create hosted checkout handoff links |
+| `create_provider_credential()` / `validate_provider_credential()` | Manage provider credential metadata and validation |
+| `get_ops_health()` / `list_provider_webhook_events()` | Run operator health and webhook queue checks |

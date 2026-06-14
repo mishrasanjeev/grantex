@@ -9,7 +9,7 @@ import httpx
 from ._errors import GrantexApiError, GrantexAuthError, GrantexNetworkError
 from ._types import RateLimit
 
-_SDK_VERSION = "0.1.0"
+_SDK_VERSION = "0.3.11"
 _DEFAULT_TIMEOUT = 30.0
 _DEFAULT_MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 0.5  # seconds
@@ -49,7 +49,7 @@ class HttpClient:
         self._max_retries = max_retries
         self._client = httpx.Client(
             headers={
-                "Authorization": f"Bearer {api_key}",
+                "Authorization": f"Bearer {api_key.strip()}",
                 "User-Agent": f"grantex-python/{_SDK_VERSION}",
                 "Accept": "application/json",
             },
@@ -60,26 +60,34 @@ class HttpClient:
     def last_rate_limit(self) -> RateLimit | None:
         return self._last_rate_limit
 
-    def get(self, path: str) -> Any:
-        return self._request("GET", path)
+    def get(self, path: str, headers: dict[str, str] | None = None) -> Any:
+        return self._request("GET", path, headers=headers)
 
-    def post(self, path: str, body: Any = None) -> Any:
-        return self._request("POST", path, body=body)
+    def post(self, path: str, body: Any = None, headers: dict[str, str] | None = None) -> Any:
+        return self._request("POST", path, body=body, headers=headers)
 
-    def put(self, path: str, body: Any = None) -> Any:
-        return self._request("PUT", path, body=body)
+    def put(self, path: str, body: Any = None, headers: dict[str, str] | None = None) -> Any:
+        return self._request("PUT", path, body=body, headers=headers)
 
-    def patch(self, path: str, body: Any = None) -> Any:
-        return self._request("PATCH", path, body=body)
+    def patch(self, path: str, body: Any = None, headers: dict[str, str] | None = None) -> Any:
+        return self._request("PATCH", path, body=body, headers=headers)
 
-    def delete(self, path: str) -> Any:
-        return self._request("DELETE", path)
+    def delete(self, path: str, headers: dict[str, str] | None = None) -> Any:
+        return self._request("DELETE", path, headers=headers)
 
-    def _request(self, method: str, path: str, body: Any = None) -> Any:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        body: Any = None,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
         url = f"{self._base_url}{path}"
         kwargs: dict[str, Any] = {}
         if body is not None:
             kwargs["json"] = body
+        if headers:
+            kwargs["headers"] = headers
 
         last_error: Exception | None = None
 
@@ -190,6 +198,10 @@ def _parse_retry_after(headers: httpx.Headers) -> float | None:
 def _extract_error_code(body: Any) -> str | None:
     if isinstance(body, dict) and isinstance(body.get("code"), str):
         return str(body["code"])
+    if isinstance(body, dict) and isinstance(body.get("error"), dict):
+        error = body["error"]
+        if isinstance(error.get("code"), str):
+            return str(error["code"])
     return None
 
 
@@ -199,4 +211,8 @@ def _extract_error_message(body: Any, status: int) -> str:
             return str(body["message"])
         if isinstance(body.get("error"), str):
             return str(body["error"])
+        if isinstance(body.get("error"), dict):
+            error = body["error"]
+            if isinstance(error.get("message"), str):
+                return str(error["message"])
     return f"HTTP {status}"

@@ -72,6 +72,80 @@ const grantex = new Grantex({
 | `jwksUri` | `string` | `${baseUrl}/.well-known/jwks.json` | JWKS URL used for offline verification |
 | `timeout` | `number` | `30000` | Request timeout in milliseconds |
 
+## Commerce V1 / OACP
+
+The SDK includes a `commerce` resource for the Grantex Commerce V1 control
+plane and OACP live-pilot flow.
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY! });
+
+// Public merchant publishing profile
+const profile = await grantex.commerce.getProfile({
+  merchantId: 'mch_shopify_mgx0n6_22',
+});
+console.log(profile.merchant?.merchant_id);
+
+// Catalog grounding
+const catalog = await grantex.commerce.searchCatalog({
+  merchant_id: 'mch_shopify_mgx0n6_22',
+  query: 'shirt',
+  limit: 5,
+});
+
+// Agent cart creation. Commerce write paths require Idempotency-Key.
+const cart = await grantex.commerce.createCart({
+  idempotencyKey: crypto.randomUUID(),
+  merchant_id: 'mch_shopify_mgx0n6_22',
+  currency: 'INR',
+  line_items: [
+    { variant_id: String(catalog.items[0]?.['variant_id']), quantity: 1 },
+  ],
+});
+
+// Consent request and Commerce Passport exchange
+const consent = await grantex.commerce.createConsentRequest({
+  merchant_id: 'mch_shopify_mgx0n6_22',
+  passport_type: 'checkout',
+  max_amount: Number(cart.data['total_amount']),
+  currency: 'INR',
+});
+
+// Redirect the buyer to consent.data['consent_url'], then exchange after
+// the consent request is granted.
+const passport = await grantex.commerce.exchangeConsentForPassport({
+  consent_request_id: String(consent.data['consent_request_id']),
+});
+
+const payment = await grantex.commerce.createPaymentIntent({
+  idempotencyKey: crypto.randomUUID(),
+  merchant_id: 'mch_shopify_mgx0n6_22',
+  cart_id: String(cart.data['cart_id']),
+  passport_jwt: String(passport.data['passport_jwt']),
+  amount_minor_units: Number(cart.data['total_amount']),
+  currency: 'INR',
+  provider_key: 'plural',
+});
+
+const checkout = await grantex.commerce.createCheckoutLink(
+  String(payment.data['payment_intent_id']),
+  {
+    idempotencyKey: crypto.randomUUID(),
+    passport_jwt: String(passport.data['passport_jwt']),
+    success_url: 'https://buyer.example/success',
+    cancel_url: 'https://buyer.example/cancel',
+  },
+);
+```
+
+Plural webhook intake is available at
+`https://api.grantex.dev/v1/webhooks/providers/plural`. Provider webhooks are
+normally called by the provider dashboard, not by application code. The SDK
+also exposes `grantex.commerce.getOpsHealth()` and
+`grantex.commerce.listProviderWebhookEvents()` for operator health checks.
+
 ## PKCE Support
 
 The SDK includes built-in PKCE (Proof Key for Code Exchange) support using the S256 method for secure authorization flows:

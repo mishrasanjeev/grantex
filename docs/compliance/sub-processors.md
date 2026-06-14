@@ -39,7 +39,7 @@ The following providers are integrated in code but **disabled by default**; oper
 - **No SMS provider configured.**
 - **No CRM, analytics, or session-replay tooling** (e.g., Segment, Mixpanel, FullStory) is referenced in the runtime code paths.
 - **No third-party customer-support tool** is integrated into the hosted product.
-- **No live payment processor.** Plural is a *planned* integration that is currently fail-closed in code (`COMMERCE_LIVE_MODE_ENABLED` / `PLURAL_LIVE_ENABLED` default to off — see `apps/auth-service/src/lib/commerce/live-mode-guard.ts`).
+- **No live payment processor.** Plural has a gated sandbox hosted-checkout adapter, but live Plural processing is fail-closed in code (`COMMERCE_LIVE_MODE_ENABLED` / `PLURAL_LIVE_ENABLED` default to off — see `apps/auth-service/src/lib/commerce/live-mode-guard.ts`).
 
 ## Change process
 

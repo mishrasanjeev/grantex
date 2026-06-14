@@ -1,4 +1,4 @@
-> **Internal artifact — not public marketing or compliance evidence.**
+> **Internal artifact - not public marketing or compliance evidence.**
 > This file was relocated from `docs/reports/` to `docs/internal/commerce-v1/`
 > on 2026-05-24 to mark it as operator-internal documentation. It is
 > excluded from the public Mintlify navigation (`docs/docs.json`). Do

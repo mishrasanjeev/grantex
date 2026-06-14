@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const sdkVersion = "0.1.0"
+const sdkVersion = "0.3.11"
 
 func parseRateLimitHeaders(header http.Header) *RateLimit {
 	limitStr := header.Get("X-RateLimit-Limit")
@@ -64,26 +64,30 @@ type httpClient struct {
 }
 
 func (h *httpClient) get(ctx context.Context, path string) ([]byte, error) {
-	return h.do(ctx, http.MethodGet, path, nil)
+	return h.doWithHeaders(ctx, http.MethodGet, path, nil, nil)
 }
 
 func (h *httpClient) post(ctx context.Context, path string, body interface{}) ([]byte, error) {
-	return h.do(ctx, http.MethodPost, path, body)
+	return h.doWithHeaders(ctx, http.MethodPost, path, body, nil)
 }
 
 func (h *httpClient) put(ctx context.Context, path string, body interface{}) ([]byte, error) {
-	return h.do(ctx, http.MethodPut, path, body)
+	return h.doWithHeaders(ctx, http.MethodPut, path, body, nil)
 }
 
 func (h *httpClient) patch(ctx context.Context, path string, body interface{}) ([]byte, error) {
-	return h.do(ctx, http.MethodPatch, path, body)
+	return h.doWithHeaders(ctx, http.MethodPatch, path, body, nil)
 }
 
 func (h *httpClient) del(ctx context.Context, path string) ([]byte, error) {
-	return h.do(ctx, http.MethodDelete, path, nil)
+	return h.doWithHeaders(ctx, http.MethodDelete, path, nil, nil)
 }
 
-func (h *httpClient) do(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
+func (h *httpClient) postWithHeaders(ctx context.Context, path string, body interface{}, headers map[string]string) ([]byte, error) {
+	return h.doWithHeaders(ctx, http.MethodPost, path, body, headers)
+}
+
+func (h *httpClient) doWithHeaders(ctx context.Context, method, path string, body interface{}, headers map[string]string) ([]byte, error) {
 	maxRetries := h.maxRetries
 	if !h.maxRetriesSet {
 		maxRetries = defaultMaxRetries
@@ -112,7 +116,7 @@ func (h *httpClient) do(ctx context.Context, method, path string, body interface
 			}
 		}
 
-		respBody, err := h.doOnce(ctx, method, path, bodyBytes)
+		respBody, err := h.doOnce(ctx, method, path, bodyBytes, headers)
 		if err == nil {
 			return respBody, nil
 		}
@@ -139,9 +143,9 @@ func isRetryable(err error) bool {
 	if errors.As(err, &apiErr) {
 		switch apiErr.StatusCode {
 		case http.StatusTooManyRequests, // 429
-			http.StatusBadGateway,      // 502
+			http.StatusBadGateway,         // 502
 			http.StatusServiceUnavailable, // 503
-			http.StatusGatewayTimeout:  // 504
+			http.StatusGatewayTimeout:     // 504
 			return true
 		}
 	}
@@ -174,7 +178,7 @@ func (h *httpClient) retryDelay(attempt int, lastErr error) time.Duration {
 }
 
 // doOnce executes a single HTTP request (no retries).
-func (h *httpClient) doOnce(ctx context.Context, method, path string, bodyBytes []byte) ([]byte, error) {
+func (h *httpClient) doOnce(ctx context.Context, method, path string, bodyBytes []byte, extraHeaders map[string]string) ([]byte, error) {
 	url := strings.TrimRight(h.baseURL, "/") + path
 
 	var bodyReader io.Reader
@@ -189,8 +193,12 @@ func (h *httpClient) doOnce(ctx context.Context, method, path string, bodyBytes 
 
 	req.Header.Set("Authorization", "Bearer "+h.apiKey)
 	req.Header.Set("User-Agent", "grantex-go/"+sdkVersion)
+	req.Header.Set("Accept", "application/json")
 	if bodyBytes != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for key, value := range extraHeaders {
+		req.Header.Set(key, value)
 	}
 
 	resp, err := h.client.Do(req)
@@ -223,20 +231,28 @@ func (h *httpClient) parseError(statusCode int, body []byte, rl *RateLimit) erro
 		RateLimit:  rl,
 	}
 
-	var parsed struct {
-		Error     string `json:"error"`
-		Code      string `json:"code"`
-		Message   string `json:"message"`
-		RequestID string `json:"requestId"`
-	}
+	var parsed map[string]interface{}
 	if json.Unmarshal(body, &parsed) == nil {
-		if parsed.Message != "" {
-			apiErr.Message = parsed.Message
-		} else if parsed.Error != "" {
-			apiErr.Message = parsed.Error
+		if message, ok := parsed["message"].(string); ok {
+			apiErr.Message = message
 		}
-		apiErr.Code = parsed.Code
-		apiErr.RequestID = parsed.RequestID
+		if errorValue, ok := parsed["error"].(string); ok && apiErr.Message == "" {
+			apiErr.Message = errorValue
+		}
+		if code, ok := parsed["code"].(string); ok {
+			apiErr.Code = code
+		}
+		if requestID, ok := parsed["requestId"].(string); ok {
+			apiErr.RequestID = requestID
+		}
+		if nested, ok := parsed["error"].(map[string]interface{}); ok {
+			if message, ok := nested["message"].(string); ok && apiErr.Message == "" {
+				apiErr.Message = message
+			}
+			if code, ok := nested["code"].(string); ok && apiErr.Code == "" {
+				apiErr.Code = code
+			}
+		}
 	} else {
 		apiErr.Message = string(body)
 	}

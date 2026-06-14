@@ -16,7 +16,7 @@ const requiredSections = [
   '## Reconciliation Failure Runbook',
   '## Audit Write Failure Runbook',
   '## Emergency Disable Runbook',
-  '## Legal And Live Mode Blockers',
+  '## Legal And Live Mode Controls',
   '## Human Review Gates',
 ];
 
@@ -24,8 +24,8 @@ for (const section of requiredSections) {
   assert.ok(guide.includes(section), `${section} is documented`);
 }
 
-assert.ok(guide.includes('Live payment mode remains unavailable'), 'live payment blocker is explicit');
-assert.ok(guide.includes('Plural remains blocked'), 'Plural blocker is explicit');
+assert.ok(guide.includes('Production live-pilot mode is available for the approved Shopify merchant'), 'live pilot availability is explicit');
+assert.ok(guide.includes('production Plural settlement remains'), 'Plural production-settlement caveat is explicit');
 assert.ok(guide.includes('must not store bearer tokens'), 'playground secret storage rule is explicit');
 assert.ok(guide.includes('grantex_commerce_audit_write_failures_total'), 'audit write failure metric is documented');
 assert.ok(guide.includes('webhook_failed_event_list_and_replay_api_contract_deferred'), 'webhook replay blocker is documented');

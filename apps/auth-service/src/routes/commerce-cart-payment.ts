@@ -1396,6 +1396,7 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
         checkout_url: string;
         expires_at: string;
         raw_status: string;
+        provider_order_id?: string;
         provider_metadata?: Record<string, unknown>;
       };
       try {
@@ -1404,10 +1405,17 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
           merchant_id: paymentIntent.merchant_id,
           payment_intent_id: paymentIntent.id,
           provider_payment_id: paymentIntent.provider_payment_id,
+          provider_order_id: paymentIntent.provider_order_id,
+          provider_metadata: paymentIntent.provider_metadata
+            && typeof paymentIntent.provider_metadata === 'object'
+            && !Array.isArray(paymentIntent.provider_metadata)
+            ? paymentIntent.provider_metadata as Record<string, unknown>
+            : {},
           amount: {
             amount_minor_units: rowAmount(paymentIntent.amount),
             currency: paymentIntent.currency,
           },
+          environment: paymentIntent.provider_environment,
           success_url: successUrl as string,
           cancel_url: cancelUrl as string,
           expires_at: dateLikeToIso(paymentIntent.expires_at),
@@ -1449,6 +1457,7 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
           UPDATE commerce_payment_intents
              SET checkout_url = ${providerResult.checkout_url},
                  checkout_expires_at = ${providerResult.expires_at}::timestamptz,
+                 provider_order_id = COALESCE(${providerResult.provider_order_id ?? null}, provider_order_id),
                  status = ${'checkout_created'},
                  provider_raw_status = ${providerResult.raw_status},
                  provider_metadata = COALESCE(provider_metadata, '{}'::jsonb)

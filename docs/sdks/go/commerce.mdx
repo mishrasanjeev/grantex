@@ -1,0 +1,90 @@
+---
+title: "Commerce V1"
+sidebarTitle: "Commerce V1"
+description: "Use the Grantex Go SDK Commerce V1 client for OACP merchant discovery, catalog grounding, consent, payment, webhook, and ops flows."
+---
+
+The Go SDK exposes Commerce V1 under `client.Commerce`.
+
+```go
+ctx := context.Background()
+client := grantex.NewClient("gx_live_...")
+
+profile, err := client.Commerce.GetProfile(ctx, "mch_shopify_mgx0n6_22")
+if err != nil {
+    return err
+}
+fmt.Println(profile.Merchant["merchant_id"])
+
+products, err := client.Commerce.SearchCatalog(ctx, grantex.CommerceRecord{
+    "merchant_id": "mch_shopify_mgx0n6_22",
+    "query":       "lamp",
+    "limit":       3,
+})
+if err != nil {
+    return err
+}
+fmt.Println(products.Items)
+```
+
+## Idempotent Writes
+
+Commerce write operations that can create payment-affecting resources take an
+idempotency key argument. The SDK sends it as the `Idempotency-Key` header, not
+in the JSON body.
+
+```go
+cart, err := client.Commerce.CreateCart(ctx, grantex.CommerceRecord{
+    "merchant_id": "mch_shopify_mgx0n6_22",
+    "currency":    "INR",
+    "line_items": []grantex.CommerceRecord{
+        {"variant_id": "var_123", "quantity": 1},
+    },
+}, "cart-2026-06-14-001")
+```
+
+## MCP Tool Calls
+
+```go
+result, err := client.Commerce.MCP(ctx, grantex.CommerceRecord{
+    "jsonrpc": "2.0",
+    "id":      "catalog-search-1",
+    "method":  "tools/call",
+    "params": grantex.CommerceRecord{
+        "name": "catalog.search",
+        "arguments": grantex.CommerceRecord{
+            "merchant_id": "mch_shopify_mgx0n6_22",
+            "query":       "lamp",
+            "limit":       1,
+        },
+    },
+})
+```
+
+## Ops And Webhooks
+
+```go
+health, err := client.Commerce.GetOpsHealth(ctx, map[string]string{
+    "merchant_id": "mch_shopify_mgx0n6_22",
+    "environment": "live",
+})
+
+_, err = client.Commerce.HandleProviderWebhook(ctx, "plural", grantex.CommerceRecord{}, nil)
+if err != nil {
+    // Missing or invalid provider signatures fail closed.
+}
+```
+
+## Common Methods
+
+| Method | Purpose |
+| --- | --- |
+| `GetProfile` | Fetch the public Commerce V1 merchant profile |
+| `SearchCatalog` / `ListCatalogProducts` | Ground agent shopping flows in merchant catalog data |
+| `CreateCart` / `GetCart` | Create and read Commerce carts |
+| `CreateConsentRequest` / `ExchangeConsentForPassport` | Request buyer consent and mint Commerce Passports |
+| `VerifyPassport` / `RevokePassport` | Verify or revoke Commerce Passports |
+| `CreatePaymentIntent` / `GetPaymentIntent` | Create and inspect provider-neutral payment intents |
+| `CreateCheckoutLink` | Create hosted checkout handoff links |
+| `CreateProviderCredential` / `ValidateProviderCredential` | Manage provider credential metadata and validation |
+| `GetOpsHealth` / `ListProviderWebhookEvents` | Run operator health and webhook queue checks |

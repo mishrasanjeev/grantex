@@ -38,6 +38,51 @@ export { ToolManifest, Permission, permissionCovers, type EnforceOptions, type E
 // DPDP Compliance
 export { DpdpClient } from './resources/dpdp.js';
 
+// Commerce V1 / OACP control plane
+export {
+  CommerceClient,
+  type CommerceEnvironment,
+  type CommerceProviderKey,
+  type CommercePassportType,
+  type CommercePaymentStatus,
+  type CommerceRecord,
+  type CommerceDataResponse,
+  type CommerceListResponse,
+  type CommerceProfile,
+  type CommerceIdempotentRequest,
+  type CommerceTenantCreateParams,
+  type CommerceTenantUpdateParams,
+  type CommerceDeveloperTenantBindParams,
+  type CommerceMerchantCreateParams,
+  type CommerceMerchantUpdateParams,
+  type CommerceAgentCreateParams,
+  type CommerceAgentUpdateParams,
+  type CommerceCatalogVariantInput,
+  type CommerceCatalogProductCreateParams,
+  type CommerceCatalogProductUpdateParams,
+  type CommerceCatalogProductListParams,
+  type CommerceCatalogSearchParams,
+  type CommerceCartCreateParams,
+  type CommerceConsentRequestCreateParams,
+  type CommerceConsentExchangeParams,
+  type CommercePassportVerifyParams,
+  type CommercePassportRevokeParams,
+  type CommercePolicyCreateParams,
+  type CommercePolicyEvaluateParams,
+  type CommercePaymentIntentCreateParams,
+  type CommercePaymentIntentListParams,
+  type CommerceCheckoutLinkCreateParams,
+  type CommerceProviderCredentialCreateParams,
+  type CommerceProviderCredentialPatchParams,
+  type CommerceProviderCredentialListParams,
+  type CommerceWebhookSourceCreateParams,
+  type CommerceWebhookSourceListParams,
+  type CommerceOpsHealthParams,
+  type CommerceProviderWebhookEventListParams,
+  type CommerceProviderWebhookReplayParams,
+  type CommerceMcpJsonRpcRequest,
+} from './resources/commerce.js';
+
 // Types
 export type {
   RateLimit,

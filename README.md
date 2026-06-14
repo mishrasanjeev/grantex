@@ -33,11 +33,11 @@
 
 </div>
 
-## Agentic Commerce V1 (closed beta)
+## Agentic Commerce V1 (live pilot)
 
-Grantex Commerce V1 is the closed-beta consent, Commerce Passport, policy, audit, and payment-control layer for agentic checkout. It lets commerce agents use sandbox catalog data, create carts, request user consent, receive a scoped Commerce Passport, and exercise mock provider payment intents without giving the agent direct access to payment providers.
+Grantex Commerce V1 is the live-pilot consent, Commerce Passport, policy, audit, and payment-control layer for agentic checkout. It lets commerce agents use an approved Shopify merchant profile, create carts, request user consent, receive a scoped Commerce Passport, and create provider-neutral payment intents without giving the agent direct access to payment providers.
 
-> Production Commerce V1 discovery is disabled/fail-closed. Live checkout, live payments, and live Plural are not enabled. Public demos and playgrounds are mock-provider only until legal, compliance, security, operations, and provider approvals are complete.
+> Production Commerce V1 is live for the approved Shopify pilot merchant `mch_shopify_mgx0n6_22` from `mgx0n6-22.myshopify.com`. The runtime live-readiness gate is complete, ops health is green, and Plural webhook intake is deployed at `https://api.grantex.dev/v1/webhooks/providers/plural`. Plural credentials currently authenticate against Plural UAT-compatible rails, so public docs do not claim production Plural settlement.
 
 ```mermaid
 flowchart LR
@@ -48,24 +48,30 @@ flowchart LR
   gx --> catalog[Catalog, cart, inventory]
   gx --> provider[Provider-neutral payment intent]
   provider --> mock[Mock provider verified in smoke]
-  provider -. blocked .-> plural[Future live Plural gate]
+  provider --> plural[Plural hosted-checkout adapter]
+  plural --> webhook[Signed Plural webhook intake]
 ```
 
 | Area | Current posture |
 | --- | --- |
 | Internal sandbox | Implemented for synthetic catalog, consent, passport, cart, payment, webhook, and audit flows. |
 | Temporary Option A smoke | Verified with mock provider and cleaned-up smoke resources. |
+| Shopify pilot merchant | Live profile imported from `mgx0n6-22.myshopify.com` as `mch_shopify_mgx0n6_22`, with 5 products and 5 variants available through Grantex catalog search. |
+| Plural hosted-checkout adapter | Implemented behind the provider abstraction for token, checkout order, status polling, and HMAC webhook verification; configured with stored credentials that authenticate against the Plural UAT-compatible endpoint. |
 | AgenticOrg real-staging handoff | Verified through Grantex-only tools with redacted fixture handling. |
 | Hosted AgenticOrg discovery | Verified in temporary API-only hosted smoke. |
-| Production read-only discovery | Disabled/fail-closed. |
-| Live checkout/payments | Blocked pending legal, compliance, security, operations, and provider approvals. |
-| Live Plural | Blocked; mock provider only in current evidence. |
+| Production discovery | Available for the approved Commerce V1 runtime merchant profile through `/.well-known/grantex-commerce`. |
+| Live-readiness gate | Complete for the approved pilot; feature flags alone remain insufficient and missing evidence returns `live_readiness_blocked`. |
+| Live checkout/payments | Enabled for the approved Commerce V1 live-pilot control-plane path, with consent, policy, passport, idempotency, webhook, reconciliation, and audit controls. |
+| Plural production settlement claim | Not claimed; the current credentials validate against Plural UAT-compatible rails. |
 
-Start with the [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx), then use the [developer guide](docs/guides/commerce-v1-developer-guide.mdx), [merchant/operator guide](docs/guides/commerce-v1-merchant-operator-guide.mdx), and [operations guide](docs/guides/commerce-v1-operations.mdx). The public education page is `web/commerce.html`.
+Start with the [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx), then use the [developer guide](docs/guides/commerce-v1-developer-guide.mdx), [merchant/operator guide](docs/guides/commerce-v1-merchant-operator-guide.mdx), and [operations guide](docs/guides/commerce-v1-operations.mdx). The public education page is `web/commerce.html`, the end-to-end launch story is in [the Shopify OACP live-flow blog](docs/blog/shopify-oacp-commerce-live-flow.mdx), and the guard model is in [the Commerce live-readiness gate blog](docs/blog/commerce-live-readiness-gate.mdx).
+
+The TypeScript SDK now exposes the live-pilot control plane as `grantex.commerce.*`, including public merchant profile lookup, catalog search, cart creation, Commerce Passport consent/exchange, payment intent creation, checkout handoff, provider credential metadata, webhook source management, and operator health checks. Commerce write calls that mutate carts or payments accept `idempotencyKey` and send it as the required `Idempotency-Key` header.
 
 ## Current Development Snapshot
 
-The latest repository changelog currently tops out at v0.3.8. Package versions are being reconciled across SDKs and adapters; use [COMPATIBILITY.md](COMPATIBILITY.md) as the current source of truth for package-specific versions.
+The latest repository changelog currently tops out at v0.3.11. Package versions are being reconciled across SDKs and adapters; use [COMPATIBILITY.md](COMPATIBILITY.md) as the current source of truth for package-specific versions.
 
 - **@grantex/gemma**: Offline consent bundles and on-device verification examples
 - **MCP Auth Server**: OAuth 2.1 + PKCE for MCP servers, managed and self-hosted modes
