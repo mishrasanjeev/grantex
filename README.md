@@ -71,7 +71,7 @@ The TypeScript SDK now exposes the live-pilot control plane as `grantex.commerce
 
 ## Current Development Snapshot
 
-The latest repository changelog currently tops out at v0.3.9. Package versions are being reconciled across SDKs and adapters; use [COMPATIBILITY.md](COMPATIBILITY.md) as the current source of truth for package-specific versions.
+The latest repository changelog currently tops out at v0.3.11. Package versions are being reconciled across SDKs and adapters; use [COMPATIBILITY.md](COMPATIBILITY.md) as the current source of truth for package-specific versions.
 
 - **@grantex/gemma**: Offline consent bundles and on-device verification examples
 - **MCP Auth Server**: OAuth 2.1 + PKCE for MCP servers, managed and self-hosted modes

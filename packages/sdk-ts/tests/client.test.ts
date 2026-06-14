@@ -308,7 +308,7 @@ describe('Grantex client', () => {
 
       const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
       const headers = init.headers as Record<string, string>;
-      expect(headers['User-Agent']).toBe('@grantex/sdk/0.3.9');
+      expect(headers['User-Agent']).toBe('@grantex/sdk/0.3.11');
     });
   });
 });

@@ -1,7 +1,7 @@
 import { GrantexApiError, GrantexAuthError, GrantexNetworkError } from './errors.js';
 import type { RateLimit } from './types.js';
 
-const SDK_VERSION = '0.3.9';
+const SDK_VERSION = '0.3.11';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 500;
@@ -46,7 +46,7 @@ export class HttpClient {
 
   constructor(options: HttpClientOptions) {
     this.#baseUrl = options.baseUrl.replace(/\/$/, '');
-    this.#apiKey = options.apiKey;
+    this.#apiKey = options.apiKey.trim();
     this.#timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
     this.#maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   }

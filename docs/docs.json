@@ -259,6 +259,7 @@
               "sdks/python/usage",
               "sdks/python/domains",
               "sdks/python/passports",
+              "sdks/python/commerce",
               "sdks/python/vault"
             ]
           },
@@ -315,6 +316,7 @@
               "sdks/go/usage",
               "sdks/go/domains",
               "sdks/go/passports",
+              "sdks/go/commerce",
               "sdks/go/vault"
             ]
           },

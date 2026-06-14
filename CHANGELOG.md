@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## v0.3.11 (2026-06-14)
+
+### Fixes
+- TypeScript, Python, and Go SDKs trim API key input before constructing `Authorization` headers.
+- TypeScript SDK package version advanced to `0.3.11` for the publishable Commerce V1/OACP npm release.
+- Python SDK package version advanced to `0.3.11` after the `0.3.10` Commerce upload.
+
+## v0.3.10 (2026-06-14)
+
+### Added
+- Python SDK: `client.commerce.*` Commerce V1/OACP client for merchant discovery, catalog grounding, MCP tool calls, carts, consent, Commerce Passport, payment intents, checkout links, provider credentials, webhook sources, and operator health.
+- Go SDK: `client.Commerce.*` Commerce V1/OACP client with matching discovery, catalog, idempotent write, MCP, provider webhook, and ops helpers.
+- Python and Go Commerce V1 SDK docs.
+
+### Fixes
+- Python and Go SDK HTTP clients now support per-call headers for idempotency keys and provider webhook handling.
+- Python and Go SDK error handling now parses nested Commerce/Fastify error envelopes.
+- Python and Go SDK user-agent versions updated to `0.3.10`.
+
 ## v0.3.9 (2026-06-14)
 
 ### Added

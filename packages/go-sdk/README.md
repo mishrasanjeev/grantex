@@ -84,6 +84,17 @@ client := grantex.NewClient("api-key",
 | `client.SCIM` | CreateToken, ListTokens, RevokeToken, ListUsers, GetUser, CreateUser, ReplaceUser, UpdateUser, DeleteUser |
 | `client.SSO` | CreateConfig, GetConfig, DeleteConfig, GetLoginURL, HandleCallback |
 | `client.PrincipalSessions` | Create |
+| `client.Commerce` | GetProfile, SearchCatalog, CreateCart, CreatePaymentIntent, CreateCheckoutLink, GetOpsHealth |
+
+## Commerce V1 / OACP
+
+```go
+profile, err := client.Commerce.GetProfile(ctx, "mch_shopify_mgx0n6_22")
+products, err := client.Commerce.SearchCatalog(ctx, grantex.CommerceRecord{
+    "merchant_id": "mch_shopify_mgx0n6_22",
+    "limit":       3,
+})
+```
 
 ## Standalone Functions
 
