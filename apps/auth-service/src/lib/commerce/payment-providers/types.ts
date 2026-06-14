@@ -90,7 +90,10 @@ export interface PaymentProvider {
     merchant_id: string;
     payment_intent_id: string;
     provider_payment_id: string;
+    provider_order_id?: string | null;
+    provider_metadata?: Record<string, unknown>;
     amount: Money;
+    environment: CommerceEnvironment;
     success_url: string;
     cancel_url: string;
     expires_at: string;
@@ -99,6 +102,7 @@ export interface PaymentProvider {
     checkout_url: string;
     expires_at: string;
     raw_status: string;
+    provider_order_id?: string;
     provider_metadata?: Record<string, unknown>;
   }>;
 
@@ -107,6 +111,8 @@ export interface PaymentProvider {
     merchant_id: string;
     payment_intent_id: string;
     provider_payment_id: string;
+    provider_order_id?: string | null;
+    environment: CommerceEnvironment;
   }): Promise<{
     status: 'payment_pending' | 'paid' | 'failed' | 'expired' | 'cancelled';
     raw_status: string;

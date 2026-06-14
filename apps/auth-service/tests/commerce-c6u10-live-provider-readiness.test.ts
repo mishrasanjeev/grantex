@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import {
+  COMMERCE_LIVE_READINESS_REQUIREMENTS,
   ensureCommerceLiveMode,
+  getCommerceLiveReadinessSnapshot,
   getCommerceLiveModeStatus,
 } from '../src/lib/commerce/live-mode-guard.js';
 import { CommerceHttpError } from '../src/lib/commerce/errors.js';
@@ -46,6 +48,7 @@ describe('C6U10 live provider readiness packet', () => {
       'Live Provider Prerequisites',
       'Legal, Partner, Security, And Operator Checklist',
       'Feature Flag And Config Checklist',
+      'Machine-Readable Live Readiness Gate',
       'Credential Handling Checklist',
       'Provider Adapter Contract Checklist',
       'Webhook Signature Checklist',
@@ -66,6 +69,11 @@ describe('C6U10 live provider readiness packet', () => {
 
     expect(doc).toContain('C6U10 adds no endpoint, route, OpenAPI schema, migration, workflow');
     expect(doc).toContain('OpenAPI is unchanged because this packet exposes no API surface');
+    expect(doc).toContain('Feature flags alone are not sufficient evidence');
+    for (const requirement of COMMERCE_LIVE_READINESS_REQUIREMENTS) {
+      expect(doc).toContain(requirement.key);
+      expect(doc).toContain(requirement.env);
+    }
   });
 
   it('keeps current live mode and provider execution flags fail-closed', () => {
@@ -108,6 +116,22 @@ describe('C6U10 live provider readiness packet', () => {
       () => ensureCommerceLiveMode({ providerKey: 'plural' }),
       'plural_live_disabled',
       'plural_live_disabled',
+    );
+  });
+
+  it('reports live readiness blockers when flags are present but approval evidence is absent', () => {
+    vi.stubEnv('COMMERCE_LIVE_MODE_ENABLED', 'true');
+    vi.stubEnv('PLURAL_LIVE_ENABLED', 'true');
+
+    const readiness = getCommerceLiveReadinessSnapshot();
+    expect(readiness.startable).toBe(false);
+    expect(readiness.blockers).toContain('missing_legal_approval_recorded');
+    expect(readiness.blockers).toContain('missing_hosted_oacp_e2e_passed');
+
+    expectCommerceError(
+      () => ensureCommerceLiveMode({ environment: 'live', providerKey: 'plural' }),
+      'plural_live_disabled',
+      'live_readiness_blocked',
     );
   });
 

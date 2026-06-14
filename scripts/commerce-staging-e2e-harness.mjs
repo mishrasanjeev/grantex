@@ -22,7 +22,7 @@ const DEFAULT_API_BASE = 'https://api-staging.grantex.dev';
 const DEFAULT_PORTAL_BASE = 'https://staging.grantex.dev';
 const DEFAULT_AGENTICORG_BASE = 'https://staging.agenticorg.ai';
 const DEFAULT_MANIFEST = 'docs/examples/commerce-staging-seed.manifest.json';
-const DEFAULT_REPORT = 'docs/reports/commerce-v1-hosted-staging-e2e.md';
+const DEFAULT_REPORT = 'docs/internal/commerce-v1/commerce-v1-hosted-staging-e2e.md';
 
 const POSITIVE_CHECKS = [
   'Grantex health',
@@ -190,7 +190,7 @@ function loadManifest(pathInput) {
   assertNoForbiddenManifestSecrets(parsed);
 
   if (parsed.provider?.provider_key !== 'mock') {
-    fail('Refusing non-mock provider in staging manifest; future --allow-provider-sandbox mode is not implemented');
+    fail('Refusing non-mock provider in default staging manifest; run Plural sandbox through a dedicated credentialed validation harness');
   }
   if (parsed.provider?.live_payments_enabled !== false || parsed.provider?.plural_live_enabled !== false) {
     fail('Refusing staging manifest with live provider flags');
@@ -280,7 +280,7 @@ const allowedSmokeOrigin = validateSmokeCloudRunUrl(
 );
 
 if (provider !== 'mock') {
-  fail('Refusing non-mock provider; future --allow-provider-sandbox mode is not implemented');
+  fail('Refusing non-mock provider in default staging harness; run Plural sandbox through a dedicated credentialed validation harness');
 }
 if (isTrue(process.env.COMMERCE_LIVE_MODE_ENABLED)) {
   fail('Refusing COMMERCE_LIVE_MODE_ENABLED=true for hosted staging E2E harness');

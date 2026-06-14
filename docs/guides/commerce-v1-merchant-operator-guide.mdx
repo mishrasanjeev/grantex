@@ -6,8 +6,9 @@ description: Merchant onboarding, catalog, policy, audit, webhook, emergency con
 # Commerce V1 Merchant And Operator Guide
 
 This guide is for merchant, support, security, and operations teams. It explains
-what Grantex Commerce V1 can support in internal sandbox and temporary smoke
-runs today, and what remains blocked before any production or live-payment use.
+what Grantex Commerce V1 supports for the approved Shopify live pilot, how
+internal sandbox and temporary smoke evidence still fit, and which boundaries
+remain controlled before broader merchant or provider expansion.
 
 ## Operating Principle
 
@@ -29,10 +30,10 @@ paths directly.
 | Step | Current guidance |
 | --- | --- |
 | Tenant and merchant registration | Use synthetic fixtures for sandbox and smoke evidence. Production onboarding requires human approval. |
-| Catalog import | Use approved catalog schemas and product/variant IDs. Keep raw supplier or provider payload dumps out of evidence. |
+| Catalog import | The approved Shopify pilot imports `mgx0n6-22.myshopify.com` as `mch_shopify_mgx0n6_22`; other merchants require the same approval and import discipline. |
 | Agent trust | Register or allow only approved agent IDs. Untrusted agents must fail safely. |
 | Policy activation | Configure amount caps, allowed scopes, merchant status, and checkout controls. |
-| Provider status | Mock provider only for current evidence. Live provider credentials remain blocked. |
+| Provider status | Plural adapter and webhook intake are configured for the pilot with UAT-compatible credentials; do not claim production Plural settlement. |
 | Audit review | Confirm consent, passport, cart, payment intent, and webhook metadata are observable without secret values. |
 
 ## Seller Self-Serve Sandbox Onboarding
@@ -438,15 +439,15 @@ Emergency controls must prefer fail-closed behavior:
 - Confirm cleanup of temporary Cloud Run, Cloud SQL, Redis, smoke secrets, and
   image tags after hosted smoke.
 
-## Production No-Go Checklist
+## Production Expansion Checklist
 
-Do not proceed to production discovery, checkout, live payments, live Plural, or
-external pilot claims if any of these are true:
+Do not expand beyond the approved Shopify live pilot if any of these are true:
 
-- Grantex production Commerce V1 discovery has not been explicitly approved.
+- The merchant is not explicitly approved for the target environment.
 - AgenticOrg commerce discovery is not gated or reviewed against the approved
   Grantex production discovery payload.
-- Provider/live-payment/live Plural signoff is missing.
+- Provider/live-payment/Plural production settlement signoff is missing for the
+  claimed provider behavior.
 - Legal, compliance, security, operations, and product approvals are incomplete.
 - The rollback plan is missing.
 - Evidence includes secrets, raw payloads, passports/JWTs, DB/Redis URLs,

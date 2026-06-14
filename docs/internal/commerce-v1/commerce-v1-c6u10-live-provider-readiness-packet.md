@@ -61,6 +61,37 @@ The following remain unchanged by C6U10:
 
 A later review must include a config diff, operator approval record, rollback owner, and test evidence before any flag change is considered.
 
+## Machine-Readable Live Readiness Gate
+
+The runtime guard now exposes a machine-readable live-readiness snapshot. The
+snapshot is intentionally safe to log because it contains only boolean
+readiness states, requirement keys, environment variable names, and blocker
+codes. It must not contain secret values, bearer tokens, Commerce Passports,
+provider credentials, webhook secrets, database URLs, Redis URLs, private keys,
+raw provider payloads, or merchant-private payloads.
+
+Live Plural cannot be considered startable unless the ordinary live flags and
+all of these acknowledgement variables are present in the approved deployment
+environment:
+
+| Requirement key | Runtime acknowledgement name |
+| --- | --- |
+| `legal_approval_recorded` | `COMMERCE_LIVE_LEGAL_APPROVED` |
+| `provider_contract_confirmed` | `COMMERCE_LIVE_PROVIDER_CONTRACT_CONFIRMED` |
+| `plural_sandbox_e2e_passed` | `COMMERCE_LIVE_PLURAL_SANDBOX_E2E_PASSED` |
+| `plural_webhook_signature_confirmed` | `COMMERCE_LIVE_PLURAL_WEBHOOK_SIGNATURE_CONFIRMED` |
+| `india_data_residency_confirmed` | `COMMERCE_LIVE_INDIA_RESIDENCY_CONFIRMED` |
+| `final_user_confirmation_approved` | `COMMERCE_LIVE_FINAL_USER_CONFIRMATION_APPROVED` |
+| `pilot_merchant_approved` | `COMMERCE_LIVE_PILOT_MERCHANT_APPROVED` |
+| `hosted_oacp_e2e_passed` | `COMMERCE_LIVE_HOSTED_OACP_E2E_PASSED` |
+| `production_secrets_reviewed` | `COMMERCE_LIVE_SECRETS_REVIEWED` |
+| `audit_append_only_verified` | `COMMERCE_LIVE_AUDIT_APPEND_ONLY_VERIFIED` |
+| `operator_runbook_approved` | `COMMERCE_LIVE_OPERATOR_RUNBOOK_APPROVED` |
+| `rollback_owner_assigned` | `COMMERCE_LIVE_ROLLBACK_OWNER_ASSIGNED` |
+
+If any acknowledgement is absent, the guard returns
+`live_readiness_blocked`. Feature flags alone are not sufficient evidence.
+
 ## Credential Handling Checklist
 
 Provider credential evidence must be stored outside source control and outside docs/tests. The future review packet must show:
@@ -175,6 +206,7 @@ A later review packet must include:
 
 - Resolved JWKS blocker evidence.
 - Passing focused live-mode guard tests.
+- Passing machine-readable live-readiness snapshot with no blockers.
 - Passing no-Plural-leak and provider-neutrality scans.
 - Passing checkout/payment refusal tests with live flags off.
 - Provider adapter contract review notes.

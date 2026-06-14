@@ -10,7 +10,6 @@ const guide = readFileSync(join(docsDir, 'guides', 'commerce-v1-operations.mdx')
 const openapi = readFileSync(join(docsDir, 'api', 'grantex-commerce-v1.openapi.yaml'), 'utf8');
 const template = readFileSync(join(docsDir, 'examples', 'commerce-pilot-merchant.sandbox.json'), 'utf8');
 const stagingSeedManifestText = readFileSync(join(docsDir, 'examples', 'commerce-staging-seed.manifest.json'), 'utf8');
-const loadReport = readFileSync(join(docsDir, 'reports', 'commerce-v1-local-pilot-load.md'), 'utf8');
 const hostedStagingPlan = readFileSync(join(docsDir, 'guides', 'commerce-v1-hosted-staging-plan.md'), 'utf8');
 const stagingDataSetup = readFileSync(join(docsDir, 'guides', 'commerce-v1-staging-data-setup.md'), 'utf8');
 const hostedStagingE2E = readFileSync(join(docsDir, 'guides', 'commerce-v1-hosted-staging-e2e.md'), 'utf8');
@@ -22,6 +21,7 @@ const repeatableOptionASmokeWorkflow = readFileSync(
 // Internal commerce-v1 reports moved from docs/reports/ to
 // docs/internal/commerce-v1/ on 2026-05-24 per brutal-review P0-5.
 const internalCommerceV1Dir = join(docsDir, 'internal', 'commerce-v1');
+const loadReport = readFileSync(join(internalCommerceV1Dir, 'commerce-v1-local-pilot-load.md'), 'utf8');
 const hostedStagingE2ETemplate = readFileSync(join(internalCommerceV1Dir, 'commerce-v1-hosted-staging-e2e.template.md'), 'utf8');
 const optionASmokeEvidence = readFileSync(join(internalCommerceV1Dir, 'commerce-v1-option-a-smoke-evidence.md'), 'utf8');
 const contractGapReport = readFileSync(join(internalCommerceV1Dir, 'commerce-v1-contract-completeness-gap-report.md'), 'utf8');
@@ -93,11 +93,11 @@ for (const required of [
   'Catalog search',
   'Provider webhooks',
   'Pilot Merchant Configuration Path',
-  'Support Ownership Placeholder',
+  'Support Ownership',
   'On-Call Escalation Template',
   'Backup Restore And RPO Notes',
   'Final V1 Sign-Off Checklist',
-  'Not-Ready-If Checklist',
+  'Expansion Not-Ready-If Checklist',
   'M7C internal-sandbox signoff status',
   'COMMERCE_LOAD_CART_IDS',
   'COMMERCE_LOAD_PROVIDER_PAYMENT_IDS',
@@ -695,7 +695,7 @@ for (const required of [
   'complete-state `catalog.product.updated`',
   'M12D Portal Onboarding/Catalog/Webhook-Source/Policy/Publish Controls',
   'M14 Failed Webhook Replay And Emergency Re-enable',
-  'M13 Plural Sandbox Integration After External Contract',
+  'M13 Plural Sandbox Integration Follow-Up',
 ]) {
   assert.ok(contractGapReport.includes(required), `contract gap report includes ${required}`);
 }

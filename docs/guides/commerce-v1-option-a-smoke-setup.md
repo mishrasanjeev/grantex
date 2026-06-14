@@ -351,7 +351,8 @@ gcloud artifacts docker images delete us-central1-docker.pkg.dev/grantex-prod/gr
 - Mock provider only.
 - Keep `COMMERCE_LIVE_MODE_ENABLED=false`.
 - Keep `PLURAL_LIVE_ENABLED=false`.
-- Keep `PLURAL_SANDBOX_ENABLED=false` until external Plural sandbox contract is confirmed.
+- Keep `PLURAL_SANDBOX_ENABLED=false` for Option A; run Plural sandbox only in a separate
+  credentialed validation with scrubbed evidence.
 - Use mock provider only.
 - Keep Cloud Run `min-instances=0` and `max-instances=1` for the smoke service.
 - Do not configure custom DNS in Option A.

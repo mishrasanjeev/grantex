@@ -19,7 +19,7 @@
     "provider_key": "mock",
     "plural_live_enabled": false,
     "plural_sandbox_ready": false,
-    "plural_blocker": "Plural API and webhook signature contract unconfirmed"
+    "plural_blocker": "Plural sandbox requires explicit credentials, PLURAL_SANDBOX_ENABLED=true, and scrubbed E2E evidence"
   },
   "policy": {
     "active_policy_required": true,

@@ -12,8 +12,11 @@ rails own mandate and payment execution. Grantex keeps OACP artifacts,
 source/freshness rules, refusal semantics, consent posture, and audit evidence
 safe without becoming a toll booth for every non-binding agent interaction.
 
-This is a documentation and education page. It does not enable production
-Commerce V1, live payments, live Plural, or production discovery.
+This is the current live-pilot overview. Production Commerce V1 is deployed for
+the approved Shopify merchant `mch_shopify_mgx0n6_22` from
+`mgx0n6-22.myshopify.com`. The Grantex control plane is live; public docs do
+not claim production Plural settlement because the available Plural credentials
+authenticate against Plural UAT-compatible rails.
 
 ## Current Posture
 
@@ -24,9 +27,12 @@ Commerce V1, live payments, live Plural, or production discovery.
 | AgenticOrg real-staging handoff | Verified externally | AgenticOrg evidence records authority-checked tools and redacted fixture handling. |
 | Internal OACP foundation | Implemented through C6W9 | Artifact family, adapter preview, commitment boundary, prepared envelope, reconciliation, eligibility packet, and dry-run verifier foundations are internal and non-executing. |
 | Hosted AgenticOrg API-only discovery | Verified externally | AgenticOrg C3 evidence records hosted MCP/A2A discovery against temporary Grantex smoke. |
-| Grantex production Commerce V1 discovery | Disabled/fail-closed | internal production-discovery readiness record (operator-internal, available on request). |
-| Production checkout/live payments | Blocked | Requires legal, compliance, security, operations, provider, rollback, and human approval gates. |
-| Live Plural | Blocked | Mock provider only in current smoke evidence. |
+| Plural sandbox hosted-checkout adapter | Implemented/gated | Token, hosted checkout order creation, order-status polling, and HMAC webhook verification are behind the provider abstraction and require explicit sandbox flags and credentials. |
+| Shopify live pilot merchant | Deployed | `mgx0n6-22.myshopify.com` is imported as `mch_shopify_mgx0n6_22` with 5 products and 5 variants. |
+| Grantex production Commerce V1 discovery | Live pilot | `/.well-known/grantex-commerce` returns the approved live merchant profile. |
+| Machine-readable live-readiness gate | Complete for the approved pilot | Runtime snapshot requires explicit legal, provider, security, operations, OACP E2E, audit, rollback, and human approval evidence. Missing evidence still returns `live_readiness_blocked`. |
+| Production checkout control plane | Enabled for the approved pilot | Consent, Commerce Passport, policy, amount-cap, cart, payment-intent, webhook, reconciliation, and audit controls are deployed. |
+| Plural adapter | Configured | Webhook intake and adapter health are deployed; production Plural settlement is not claimed while credentials authenticate against UAT-compatible rails. |
 
 ## Start Here
 
@@ -50,6 +56,8 @@ flowchart LR
   selleragent --> grantex[Grantex OACP authority]
   grantex --> artifacts[Signed artifacts and adapter previews]
   artifacts --> agent
+  grantex --> plural[Plural hosted-checkout adapter and webhook intake]
+  plural -. settlement claim not made .-> provider
   agent -. approved capability verification .-> provider[Provider/fintech rail]
   provider -. non-sensitive evidence refs .-> grantex
 ```
@@ -94,6 +102,9 @@ sequenceDiagram
   U-->>G: Approve or deny
   A->>P: Verify provider-owned mandate capability when approved
   P-->>A: Capability evidence or refusal
+  G->>P: Provider-neutral payment path or configured Plural adapter
+  A->>P: Verify provider-owned mandate capability when approved
+  P-->>A: Capability evidence or refusal
 ```
 
 The Commerce Passport is scoped runtime material. It may be used during approved
@@ -107,22 +118,23 @@ flowchart TB
   local[Local tests and internal sandbox] --> optionA[Temporary Grantex Option A smoke]
   optionA --> real[Local AgenticOrg real-staging eval]
   real --> hosted[Temporary hosted AgenticOrg API smoke]
-  hosted --> prodReadOnly[Read-only production discovery proposal]
-  prodReadOnly --> external[External sandbox pilot proposal]
-  external --> live[Live payment and live Plural gate]
+  hosted --> shopify[Shopify merchant import]
+  shopify --> live[Approved live-pilot runtime]
+  live --> provider[Provider settlement expansion]
 ```
 
-Each gate is separate. Passing a temporary smoke run does not imply production
-discovery, production checkout, live payments, live Plural, external pilot
-readiness, or provider certification.
+Each gate is separate. The approved Shopify live pilot does not imply broad
+merchant self-service, provider certification, or production Plural settlement.
+The runtime live-readiness gate still requires machine-readable approval
+evidence; feature flags alone are not sufficient to start live commerce.
 
 ## Allowed And Blocked
 
-| Allowed now | Blocked now |
+| Enabled now | Controlled or not claimed |
 | --- | --- |
-| Local mock demo and internal sandbox work. | Production Commerce V1 discovery enablement. |
-| Approved temporary Option A smoke resources. | Production checkout or payment execution. |
-| Mock-provider evidence with scrubbed reports. | Live Plural or live provider credentials. |
+| Local mock demo and internal sandbox work. | Broad public self-serve merchant onboarding. |
+| Approved temporary Option A smoke resources and historical evidence. | Provider certification or standards certification claims. |
+| Shopify live pilot profile and catalog discovery for `mch_shopify_mgx0n6_22`. | Production Plural settlement claims while only UAT-compatible credentials are validated. |
 | OACP artifact-backed AgenticOrg commerce tools and approved capability verification. | Direct payment execution, live provider credentials, or unapproved private merchant API execution from AgenticOrg commerce. |
 | Public JWKS references as verification metadata. | Raw passports, bearer tokens, idempotency key values, secrets, DB/Redis URLs, or raw payloads in docs/evidence. |
 

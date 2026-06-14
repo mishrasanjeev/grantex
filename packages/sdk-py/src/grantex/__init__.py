@@ -144,6 +144,7 @@ from ._types import (
 )
 from .resources._passports import PassportsClient
 from .resources._dpdp import DpdpClient
+from .resources._commerce import CommerceClient
 from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent, StreamOptions, Subscription
 
 # ─── Aliases for cross-SDK naming consistency ────────────────────────────────
@@ -159,7 +160,7 @@ from ._webhook import verify_webhook_signature
 from .manifest import ToolManifest, Permission, EnforceResult
 from ._fastapi import GrantexEnforcer
 
-__version__ = "0.3.9"
+__version__ = "0.3.11"
 
 __all__ = [
     # Main client
@@ -308,6 +309,7 @@ __all__ = [
     "Subscription",
     # DPDP (Digital Personal Data Protection)
     "DpdpClient",
+    "CommerceClient",
     "CreateConsentRecordParams",
     "ConsentRecord",
     "ListConsentRecordsResponse",

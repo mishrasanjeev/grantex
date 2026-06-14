@@ -120,6 +120,17 @@ token = client.tokens.exchange(ExchangeTokenParams(
 | **Billing** | `client.billing.status()`, `.checkout()`, `.portal()` |
 | **SCIM 2.0** | `client.scim.create_user()`, `.list_users()`, `.get_user()`, `.update_user()`, `.delete_user()` |
 | **OIDC SSO** | `client.sso.create_config()`, `.get_config()`, `.login()`, `.callback()` |
+| **Commerce V1/OACP** | `client.commerce.get_profile()`, `.search_catalog()`, `.create_cart()`, `.get_ops_health()` |
+
+## Commerce V1 / OACP
+
+```python
+profile = client.commerce.get_profile(merchant_id="mch_shopify_mgx0n6_22")
+products = client.commerce.search_catalog({
+    "merchant_id": "mch_shopify_mgx0n6_22",
+    "limit": 3,
+})
+```
 
 ## Configuration
 

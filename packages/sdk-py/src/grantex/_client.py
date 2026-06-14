@@ -37,6 +37,7 @@ from .resources._webauthn import WebAuthnClient
 from .resources._credentials import CredentialsClient
 from .resources._passports import PassportsClient
 from .resources._dpdp import DpdpClient
+from .resources._commerce import CommerceClient
 from .manifest import ToolManifest, Permission, EnforceResult
 from ._verify import verify_grant_token
 from ._types import VerifyGrantTokenOptions
@@ -68,6 +69,7 @@ class Grantex:
     credentials: CredentialsClient
     passports: PassportsClient
     dpdp: DpdpClient
+    commerce: CommerceClient
 
     @property
     def last_rate_limit(self) -> RateLimit | None:
@@ -82,7 +84,7 @@ class Grantex:
         max_retries: int = 3,
         enforce_mode: str = "strict",
     ) -> None:
-        resolved_key = api_key or os.environ.get("GRANTEX_API_KEY", "")
+        resolved_key = (api_key or os.environ.get("GRANTEX_API_KEY", "")).strip()
         if not resolved_key:
             raise ValueError(
                 "Grantex API key is required. Pass `api_key` or set the "
@@ -119,6 +121,7 @@ class Grantex:
         self.credentials = CredentialsClient(self._http)
         self.passports = PassportsClient(self._http)
         self.dpdp = DpdpClient(self._http)
+        self.commerce = CommerceClient(self._http)
         self._manifests: dict[str, ToolManifest] = {}
         self._jwks_uri = f"{base_url.rstrip('/')}/.well-known/jwks.json"
 

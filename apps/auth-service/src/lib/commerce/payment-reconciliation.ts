@@ -241,6 +241,8 @@ export async function reconcilePaymentIntent(
       merchant_id: row.merchant_id,
       payment_intent_id: row.id,
       provider_payment_id: row.provider_payment_id,
+      provider_order_id: row.provider_order_id,
+      environment: row.provider_environment,
     });
   } catch (err) {
     const normalized = isPaymentProviderError(err)

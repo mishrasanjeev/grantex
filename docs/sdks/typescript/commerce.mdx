@@ -1,0 +1,142 @@
+---
+title: "Commerce V1"
+sidebarTitle: "Commerce V1"
+description: "Use the @grantex/sdk Commerce V1 client for OACP merchant discovery, catalog grounding, consent, Commerce Passport, payment intent, checkout, webhook, and ops flows."
+---
+
+`grantex.commerce` exposes the Grantex Commerce V1 control plane used by the
+approved Shopify live pilot and OACP flow.
+
+## Live Pilot Profile
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+const profile = await grantex.commerce.getProfile({
+  merchantId: 'mch_shopify_mgx0n6_22',
+});
+
+console.log(profile.merchant?.merchant_id);
+console.log(profile.supported_tools);
+```
+
+## Catalog Grounding
+
+```typescript
+const catalog = await grantex.commerce.searchCatalog({
+  merchant_id: 'mch_shopify_mgx0n6_22',
+  query: 'shirt',
+  limit: 5,
+});
+
+const item = await grantex.commerce.getCatalogProduct(
+  String(catalog.items[0]?.['product_id']),
+  { merchant_id: 'mch_shopify_mgx0n6_22' },
+);
+```
+
+## Checkout Flow
+
+Commerce write paths that mutate carts, payment intents, or checkout links
+require an idempotency key. The SDK sends `idempotencyKey` as the
+`Idempotency-Key` header and does not include it in the JSON body.
+
+```typescript
+const cart = await grantex.commerce.createCart({
+  idempotencyKey: crypto.randomUUID(),
+  merchant_id: 'mch_shopify_mgx0n6_22',
+  currency: 'INR',
+  line_items: [{ variant_id: 'cvar_...', quantity: 1 }],
+});
+
+const consent = await grantex.commerce.createConsentRequest({
+  merchant_id: 'mch_shopify_mgx0n6_22',
+  passport_type: 'checkout',
+  max_amount: Number(cart.data['total_amount']),
+  currency: 'INR',
+});
+
+// Redirect the buyer to consent.data['consent_url'] and exchange only after
+// the consent is granted.
+const passport = await grantex.commerce.exchangeConsentForPassport({
+  consent_request_id: String(consent.data['consent_request_id']),
+});
+
+const payment = await grantex.commerce.createPaymentIntent({
+  idempotencyKey: crypto.randomUUID(),
+  merchant_id: 'mch_shopify_mgx0n6_22',
+  cart_id: String(cart.data['cart_id']),
+  passport_jwt: String(passport.data['passport_jwt']),
+  amount_minor_units: Number(cart.data['total_amount']),
+  currency: 'INR',
+  provider_key: 'plural',
+});
+
+const checkout = await grantex.commerce.createCheckoutLink(
+  String(payment.data['payment_intent_id']),
+  {
+    idempotencyKey: crypto.randomUUID(),
+    passport_jwt: String(passport.data['passport_jwt']),
+    success_url: 'https://buyer.example/success',
+    cancel_url: 'https://buyer.example/cancel',
+  },
+);
+```
+
+## MCP Tool Calls
+
+AgenticOrg-compatible MCP calls can be made through `commerce.mcp()`.
+
+```typescript
+const result = await grantex.commerce.mcp({
+  jsonrpc: '2.0',
+  id: 'catalog-search-1',
+  method: 'tools/call',
+  params: {
+    name: 'catalog.search',
+    arguments: {
+      merchant_id: 'mch_shopify_mgx0n6_22',
+      limit: 2,
+    },
+  },
+});
+```
+
+## Ops And Webhooks
+
+```typescript
+const health = await grantex.commerce.getOpsHealth({
+  merchant_id: 'mch_shopify_mgx0n6_22',
+  environment: 'live',
+});
+
+const failedWebhooks = await grantex.commerce.listProviderWebhookEvents({
+  merchant_id: 'mch_shopify_mgx0n6_22',
+  provider_key: 'plural',
+  processing_status: 'failed',
+});
+```
+
+Plural provider webhook intake is deployed at
+`https://api.grantex.dev/v1/webhooks/providers/plural`. Provider webhooks are
+normally called by the provider dashboard, not application code. The SDK exposes
+`handleProviderWebhook()` mainly for harnesses and controlled provider tests.
+
+Production Plural settlement certification is not claimed while the available
+Plural credentials authenticate against UAT-compatible rails.
+
+## Common Methods
+
+| Method | Purpose |
+|---|---|
+| `getProfile()` | Read `/.well-known/grantex-commerce` merchant publishing profile |
+| `searchCatalog()` / `getCatalogProduct()` | Ground catalog search and item reads |
+| `createCart()` / `getCart()` | Create and read Commerce carts |
+| `createConsentRequest()` / `exchangeConsentForPassport()` | Create buyer consent and mint Commerce Passports after approval |
+| `verifyPassport()` / `revokePassport()` | Verify or revoke Commerce Passports |
+| `createPaymentIntent()` / `getPaymentIntent()` | Create and inspect provider-neutral payment intents |
+| `createCheckoutLink()` | Create hosted checkout handoff links |
+| `createProviderCredential()` / `validateProviderCredential()` | Manage provider credential metadata and validation |
+| `getOpsHealth()` / `listProviderWebhookEvents()` | Run operator health and webhook queue checks |

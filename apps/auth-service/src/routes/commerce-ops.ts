@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { getSql, type TxSql } from '../db/client.js';
 import { appendCommerceAudit } from '../lib/commerce/audit.js';
 import { CommerceHttpError } from '../lib/commerce/errors.js';
+import { getCommerceLiveReadinessSnapshot } from '../lib/commerce/live-mode-guard.js';
 import { getPaymentProvider, type CommerceEnvironment, type ProviderKey } from '../lib/commerce/payment-providers/index.js';
 import { assertPaymentStatusTransition, type CommercePaymentStatus } from '../lib/commerce/payment-state.js';
 import { sha256hex } from '../lib/hash.js';
@@ -362,12 +363,21 @@ export async function commerceOpsRoutes(app: FastifyInstance): Promise<void> {
     if (!config.commerceReconciliationWorkerEnabled) {
       blockers.push('reconciliation_worker_not_enabled_for_runtime');
     }
-    blockers.push('plural_api_and_webhook_contract_unconfirmed');
-    blockers.push('provider_webhook_replay_mock_only_until_plural_contract');
+    const liveReadiness = getCommerceLiveReadinessSnapshot();
+    if (environment === 'live' && !liveReadiness.startable) {
+      blockers.push('plural_live_readiness_blocked');
+    }
     const dbOk = database['ok'] === true;
+    const providerStatuses = Object.values(providers).map((provider) => provider['status']);
+    const providersHealthy = providerStatuses.every((status) => status === 'healthy');
+    const status = !dbOk
+      ? 'down'
+      : providersHealthy && blockers.length === 0
+        ? 'healthy'
+        : 'degraded';
 
     const body = {
-      status: dbOk ? 'degraded' : 'down',
+      status,
       checked_at: checkedAt,
       tenant_id: tenantId,
       merchant_id: request.query.merchant_id ?? null,

@@ -162,8 +162,9 @@ describe('Commerce operations health', () => {
       backlog_count: 2,
       recent_failure_count: 1,
     });
-    expect(body.blockers).toContain('plural_api_and_webhook_contract_unconfirmed');
-    expect(body.blockers).toContain('provider_webhook_replay_mock_only_until_plural_contract');
+    expect(body.blockers).toContain('reconciliation_worker_not_enabled_for_runtime');
+    expect(body.blockers).not.toContain('plural_live_readiness_blocked');
+    expect(body.blockers).not.toContain('provider_webhook_replay_non_mock_not_approved');
     expect(res.body).not.toContain('mock-webhook-secret');
     expect(res.body).not.toContain('Bearer');
     expect(res.body).not.toContain('encrypted_secret_blob');
@@ -385,7 +386,7 @@ describe('Commerce M6C security and rate-limit hardening', () => {
 
   it('documents deferred webhook replay and emergency re-enable blockers', () => {
     const guide = readFileSync(OPS_GUIDE_PATH, 'utf8');
-    expect(guide).toContain('provider_webhook_replay_mock_only_until_plural_contract');
+    expect(guide).toContain('provider_replay_not_supported');
     expect(guide).toContain('Do not replay invalid-signature, stale, unsupported-provider, malformed, or unauthenticated events');
     expect(guide).toContain('Emergency re-enable is operator-only');
     expect(guide).toContain('reviewed active policy');
