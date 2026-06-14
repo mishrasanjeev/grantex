@@ -1,6 +1,6 @@
 {
   "name": "@grantex/sdk",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "TypeScript SDK for the Grantex delegated authorization protocol",
   "homepage": "https://grantex.dev",
   "bugs": {

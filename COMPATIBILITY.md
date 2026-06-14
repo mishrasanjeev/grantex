@@ -1,6 +1,6 @@
 # Grantex Compatibility Matrix
 
-Last updated: 2026-05-24
+Last updated: 2026-06-14
 
 This repository currently uses package-specific versions. The public README should not be read as a monorepo-wide `v2.5` release. Until a release tool such as Changesets or Nx enforces this automatically, use this matrix to choose compatible packages.
 
@@ -8,8 +8,8 @@ This repository currently uses package-specific versions. The public README shou
 
 | Surface | Current value | Notes |
 | --- | --- | --- |
-| Repository changelog | v0.3.8 | Latest top-level release entry in `CHANGELOG.md`. |
-| TypeScript SDK | @grantex/sdk 0.3.8 | Primary TypeScript client package. |
+| Repository changelog | v0.3.9 | Latest top-level release entry in `CHANGELOG.md`. |
+| TypeScript SDK | @grantex/sdk 0.3.9 | Primary TypeScript client package. |
 | Python SDK | grantex 0.3.9 | Primary Python client package. |
 | OpenAPI | 0.1.3 | Needs reconciliation with SDK versions. |
 | MCP Auth | @grantex/mcp-auth 2.0.1 | Independently versioned package. |
@@ -20,7 +20,7 @@ The repository contains 28 packages under `packages/` (matching the README "28 p
 
 | # | Directory | Published name | Version | Status |
 | ---: | --- | --- | ---: | --- |
-| 1 | `packages/sdk-ts` | @grantex/sdk | 0.3.8 | Primary SDK (TypeScript) |
+| 1 | `packages/sdk-ts` | @grantex/sdk | 0.3.9 | Primary SDK (TypeScript) |
 | 2 | `packages/sdk-py` | grantex | 0.3.9 | Primary SDK (Python) |
 | 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | Go module (1.26.1) | Primary SDK (Go) |
 | 4 | `packages/cli` | @grantex/cli | 0.2.4 | Tooling |
