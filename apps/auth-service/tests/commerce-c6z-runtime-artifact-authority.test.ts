@@ -157,6 +157,19 @@ describe('C6Z Grantex runtime artifact authority', () => {
       allowed_to_execute: false,
     });
 
+    expect(issueC6ZInternalOacpArtifacts({
+      request: authorityRequest(),
+      evidence: {
+        ...connectorEvidence(),
+        inventory_snapshot_refs: ['raw_provider_payload:provider'],
+      },
+      now_iso: NOW,
+    })).toMatchObject({
+      status: 'rejected',
+      refusal_code: 'private_or_executable_connector_evidence',
+      allowed_to_execute: false,
+    });
+
     expect(validateC6ZSellerAuthorityRequest(
       authorityRequest({ requested_authority_scope: ['checkout.create'] }),
       NOW,
@@ -191,5 +204,30 @@ describe('C6Z Grantex runtime artifact authority', () => {
       no_public_discovery_enablement: true,
     });
     expect(body.artifacts[0].envelope.tenant_id).toBe('cten_C6Z');
+  });
+
+  it('receives valid intake requests without issuing artifacts until connector evidence is present', async () => {
+    seedCommerceContext('cten_C6Z');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/oacp/c6z/authority-requests',
+      headers: authHeader(),
+      payload: {
+        now_iso: NOW,
+        request: authorityRequest(),
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toMatchObject({
+      route_kind: 'grantex_internal_c6z_authority_request',
+      status: 'received',
+      artifact_issuance_attempted: false,
+      artifacts: [],
+      allowed_to_execute: false,
+      no_payment_execution: true,
+      no_public_discovery_enablement: true,
+    });
   });
 });

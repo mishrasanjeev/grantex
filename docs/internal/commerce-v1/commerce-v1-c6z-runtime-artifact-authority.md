@@ -40,12 +40,12 @@ It accepts:
 
 It returns one of:
 
-- `received`
+- `received` when a valid intake request arrives before connector evidence
 - `pending_sandbox_review`
 - `rejected`
 - `artifact_issuance_ready`
 
-No live approval or public discovery state is created by this endpoint.
+No live approval or public discovery state is created by this endpoint. Internal artifacts are issued only when the request is valid and redacted connector evidence is present.
 
 ## Issued Artifact Families
 
