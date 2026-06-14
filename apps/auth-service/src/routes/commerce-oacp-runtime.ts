@@ -31,8 +31,13 @@ export async function commerceOacpRuntimeRoutes(app: FastifyInstance) {
     const authorityRequest = body.request;
     const requestStatus = validateC6ZSellerAuthorityRequest(authorityRequest, now);
     if (!body.connector_evidence || requestStatus.status !== 'artifact_issuance_ready') {
+      const intakeOnly = !body.connector_evidence && requestStatus.status === 'artifact_issuance_ready';
       return reply.status(requestStatus.status === 'rejected' ? 422 : 202).send({
         ...requestStatus,
+        status: intakeOnly ? 'received' : requestStatus.status,
+        message: intakeOnly
+          ? 'Authority request received. Connector evidence is required before internal C6Z artifact issuance.'
+          : requestStatus.message,
         route_kind: 'grantex_internal_c6z_authority_request',
         artifact_issuance_attempted: false,
       });
