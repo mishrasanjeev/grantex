@@ -27,7 +27,7 @@ This plan defines the hosted staging target for Grantex Commerce V1 so AgenticOr
 | Database | Dedicated staging Cloud SQL Postgres | No production clone with live customer data. Use sanitized seed data. |
 | Cache | Dedicated staging Redis | No shared production Redis DB or key prefix. |
 | Secrets | Dedicated staging Secret Manager secrets | Never mount production secret versions. |
-| Commerce provider | Mock provider only | Plural sandbox remains disabled until a real Plural sandbox contract is confirmed. |
+| Commerce provider | Mock by default; optional Plural sandbox validation | Plural sandbox stays disabled unless sandbox credentials, `PLURAL_SANDBOX_ENABLED=true`, and scrubbed E2E evidence are approved for that staging run. |
 | Metrics | Authenticated staging metrics | `METRICS_REQUIRE_AUTH=true`. |
 | Reconciliation | Enabled after smoke passes | Start disabled for first deploy if needed, then set `COMMERCE_RECONCILIATION_WORKER_ENABLED=true`. |
 
@@ -64,7 +64,7 @@ LDAP_TLS_REJECT_UNAUTHORIZED=true
 
 Notes:
 
-- `PLURAL_SANDBOX_ENABLED=false` stays false unless and until a real Plural sandbox contract, credentials path, and webhook contract are confirmed.
+- `PLURAL_SANDBOX_ENABLED=false` stays false unless the staging run explicitly uses stored Plural sandbox credentials, approved callback URLs, webhook secret configuration, and scrubbed E2E evidence.
 - `COMMERCE_V1_ENABLED=true` is permitted only on hosted staging. It is not approval to enable production Commerce V1.
 - `COMMERCE_RECONCILIATION_WORKER_ENABLED=true` should be applied after health, JWKS, well-known, commerce smoke, and webhook smoke checks pass.
 - Portal staging must point to `https://api-staging.grantex.dev`, not `https://grantex.dev` or the production API.
@@ -239,7 +239,7 @@ Risk/cost tradeoffs:
 - Confirm whether staging should be public with auth/rate limits or IP/access-gated.
 - Confirm whether staging email/OTP is needed; if not, omit `RESEND_API_KEY`.
 - Confirm which existing Commerce Passport signing key path will be used in staging.
-- Confirm that Plural sandbox remains disabled until the real Plural sandbox contract is available.
+- Confirm whether Plural sandbox should remain disabled or be enabled only for a dedicated credentialed sandbox validation.
 
 ## Implementation Sequence For M10+
 

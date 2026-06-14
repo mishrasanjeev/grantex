@@ -362,8 +362,8 @@ export async function commerceOpsRoutes(app: FastifyInstance): Promise<void> {
     if (!config.commerceReconciliationWorkerEnabled) {
       blockers.push('reconciliation_worker_not_enabled_for_runtime');
     }
-    blockers.push('plural_api_and_webhook_contract_unconfirmed');
-    blockers.push('provider_webhook_replay_mock_only_until_plural_contract');
+    blockers.push('plural_live_readiness_blocked');
+    blockers.push('provider_webhook_replay_non_mock_not_approved');
     const dbOk = database['ok'] === true;
 
     const body = {

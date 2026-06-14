@@ -27,8 +27,9 @@ The playground may store only non-secret connection settings such as API base UR
 It must not store bearer tokens, Commerce Passports, provider credentials, payment credentials, or
 idempotency keys in `localStorage` or `sessionStorage`.
 
-Live payment mode remains unavailable. Plural remains blocked until exact API and webhook signature
-details are confirmed and legal, compliance, and operations reviews are complete.
+Live payment mode remains unavailable. Plural remains blocked for live mode; the hosted-checkout
+adapter has token, order, status, and HMAC webhook contracts in code, but any Plural sandbox run
+still requires explicit sandbox flags, stored credentials, redacted evidence, and operator review.
 
 ## Security And Rate-Limit Evidence
 
@@ -79,7 +80,8 @@ M7B dashboard status:
   `docs/internal/commerce-v1/`, available to authorized reviewers via
   `security@grantex.dev`).
 - Live Plural readiness is marked `blocked`.
-- Failed provider webhook replay is operator-only and mock-provider-only until the Plural contract is confirmed.
+- Failed provider webhook replay is operator-only and mock-provider-only until non-mock replay storage,
+  payload retention, and operator approval are separately cleared.
   Replay is available only for future failed events with valid original signatures and encrypted replay material.
 
 ## Local Pilot Load Harness
@@ -179,7 +181,8 @@ Setup path:
 3. Keep provider key set to `mock`.
 4. Create and activate a policy with explicit amount and scope caps.
 5. Register only trusted CommerceAgents needed for the pilot.
-6. Keep live Plural disabled and Plural sandbox marked blocked until API and webhook contracts are confirmed.
+6. Keep live Plural disabled. Enable Plural sandbox only for controlled credentialed validation with
+   `PLURAL_SANDBOX_ENABLED=true`, stored sandbox credentials, and a scrubbed evidence report.
 7. Confirm emergency disable ownership before any external pilot traffic.
 
 ## Support Ownership Placeholder
@@ -243,7 +246,7 @@ until operations signoff is complete.
   success counts, error counts, and duplicate webhook transition evidence.
 - First pilot merchant is named or internal sandbox pilot is approved.
 - Support, security, legal, compliance, and operations owners are assigned.
-- Plural API and webhook signature blockers are resolved or explicitly accepted as mock-only sandbox scope.
+- Plural sandbox adapter evidence is either complete for the target pilot or explicitly out of scope.
 - Live payment mode remains disabled unless all legal, compliance, security, and operations gates approve it.
 
 M7C internal-sandbox signoff status:
@@ -261,7 +264,7 @@ M7C internal-sandbox signoff status:
 V1 is not ready for external pilot if any item is true:
 
 - Live Plural or real payment processing is required.
-- Plural API or webhook signature scheme remains unconfirmed for the target pilot.
+- Plural sandbox E2E evidence, webhook verification evidence, or provider approval is missing for the target pilot.
 - No named support or on-call owner exists.
 - No approved sandbox pilot merchant exists.
 - Local load evidence is missing or fails the p95 targets.
@@ -357,7 +360,8 @@ Immediate actions:
 Escalation:
 
 - Legal and payment operations must approve any real provider retry strategy.
-- Plural remains blocked until exact API behavior and error mapping are confirmed.
+- Plural remains blocked for live mode until legal, provider, security, operations, and readiness-gate
+  evidence is complete.
 
 ## Webhook Backlog And Failure Runbook
 
@@ -377,7 +381,7 @@ Immediate actions:
 
 Safe replay rules:
 
-- Ops health reports mock-only replay as `provider_webhook_replay_mock_only_until_plural_contract`.
+- Ops health reports non-mock replay as `provider_webhook_replay_non_mock_not_approved`.
 - Replay is available only when the original provider signature was valid, the provider is `mock`,
   `processing_status=failed`, `replay_status=fresh`, and encrypted replay material exists.
 - Do not replay invalid-signature, stale, unsupported-provider, malformed, or unauthenticated events.
@@ -390,7 +394,8 @@ Safe replay rules:
 - Responses, logs, audit metadata, and portal UI must never include raw payloads, raw signatures,
   encrypted payload material, webhook secrets, provider credentials, bearer tokens, passports, or
   plaintext idempotency keys.
-- Plural replay remains blocked until the external Plural API and webhook signature contract is confirmed.
+- Plural replay remains blocked until non-mock replay retention, provider approval, and operator controls
+  are separately approved.
 
 ## Reconciliation Failure Runbook
 
@@ -469,12 +474,40 @@ Re-enable decision:
 
 Before enabling real Plural or live payments, require human signoff for:
 
-- Confirmed Plural API contract, credential fields, idempotency behavior, and webhook signature scheme.
+- Confirmed production Plural account, credential fields, idempotency behavior, callback URLs, and webhook secret rotation.
 - Legal review of user consent, payment authorization, refund handling, dispute handling, and customer support obligations.
 - Compliance review for India payment requirements, strong customer authentication, data residency, and audit retention.
 - Security review for provider credential vaulting, webhook secret rotation, and incident response.
 - Operations review for provider outage handling, webhook replay tooling, reconciliation scheduler, dashboard coverage, and on-call ownership.
 - Merchant pilot approval with explicit sandbox-to-live promotion criteria.
+
+### Machine-Readable Acknowledgement Gate
+
+Live payment mode must remain blocked until the runtime live-readiness snapshot
+has no blockers. The snapshot may report only booleans, requirement keys, env
+names, and blocker strings. It must not include tokens, passports, provider
+payloads, credentials, DB URLs, Redis URLs, webhook secrets, raw signatures, or
+plaintext idempotency values.
+
+Feature flags alone are not sufficient. Before any live-mode proposal can pass,
+operators must record all of these acknowledgement names in the approved runtime
+configuration source:
+
+- `COMMERCE_LIVE_LEGAL_APPROVED`
+- `COMMERCE_LIVE_PROVIDER_CONTRACT_CONFIRMED`
+- `COMMERCE_LIVE_PLURAL_SANDBOX_E2E_PASSED`
+- `COMMERCE_LIVE_PLURAL_WEBHOOK_SIGNATURE_CONFIRMED`
+- `COMMERCE_LIVE_INDIA_RESIDENCY_CONFIRMED`
+- `COMMERCE_LIVE_FINAL_USER_CONFIRMATION_APPROVED`
+- `COMMERCE_LIVE_PILOT_MERCHANT_APPROVED`
+- `COMMERCE_LIVE_HOSTED_OACP_E2E_PASSED`
+- `COMMERCE_LIVE_SECRETS_REVIEWED`
+- `COMMERCE_LIVE_AUDIT_APPEND_ONLY_VERIFIED`
+- `COMMERCE_LIVE_OPERATOR_RUNBOOK_APPROVED`
+- `COMMERCE_LIVE_ROLLBACK_OWNER_ASSIGNED`
+
+If any acknowledgement is absent, Commerce must return the
+`live_readiness_blocked` reason and the release remains blocked.
 
 Do not advertise external commerce protocol certification unless a separate conformance and legal review
 has approved the exact claim.

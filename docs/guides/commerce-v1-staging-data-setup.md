@@ -29,7 +29,8 @@ The source fixture is `docs/examples/commerce-staging-seed.manifest.json`.
 - Use `provider_key=mock` only.
 - Keep `COMMERCE_LIVE_MODE_ENABLED=false`.
 - Keep `PLURAL_LIVE_ENABLED=false`.
-- Keep `PLURAL_SANDBOX_ENABLED=false` unless a real Plural sandbox contract is confirmed in a later milestone.
+- Keep `PLURAL_SANDBOX_ENABLED=false` unless the staging run explicitly uses stored Plural
+  sandbox credentials and captures scrubbed E2E evidence.
 - Keep seed output redacted: IDs and counts are okay; secret values and generated references are not.
 - Treat generated staging payment references as ephemeral evidence, not commit material.
 

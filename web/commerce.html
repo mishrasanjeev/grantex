@@ -107,7 +107,7 @@
     .status-table th { background: #eef6f1; font-size: 13px; text-transform: uppercase; color: var(--muted); }
     .ladder {
       display: grid;
-      grid-template-columns: repeat(6, 1fr);
+      grid-template-columns: repeat(7, 1fr);
       gap: 10px;
       margin-top: 22px;
     }
@@ -159,6 +159,7 @@
           <span class="badge ready">Internal sandbox ready</span>
           <span class="badge ready">Hosted smoke verified</span>
           <span class="badge review">Production discovery disabled</span>
+          <span class="badge review">Live-readiness gate active</span>
           <span class="badge blocked">Live payments blocked</span>
           <span class="badge blocked">Live Plural blocked</span>
         </div>
@@ -200,11 +201,13 @@
       <table class="status-table">
         <thead><tr><th>Layer</th><th>Status</th><th>Meaning</th></tr></thead>
         <tbody>
-          <tr><td>Internal sandbox</td><td>Ready</td><td>Synthetic data and mock-provider paths exist for controlled validation.</td></tr>
+          <tr><td>Internal sandbox</td><td>Ready</td><td>Synthetic data, mock-provider paths, and gated Plural sandbox adapter tests exist for controlled validation.</td></tr>
           <tr><td>Temporary smoke</td><td>Verified</td><td>Option A and hosted AgenticOrg smoke evidence used temporary resources and scrubbed reports.</td></tr>
+          <tr><td>Plural sandbox adapter</td><td>Gated</td><td>Hosted checkout, order status, and HMAC webhook verification require explicit sandbox flags and stored credentials.</td></tr>
           <tr><td>Production discovery</td><td>Disabled/fail-closed</td><td>Read-only discovery requires a later approved proposal.</td></tr>
-          <tr><td>Live checkout/payments</td><td>Blocked</td><td>Legal, compliance, security, operations, and provider gates remain required.</td></tr>
-          <tr><td>Live Plural</td><td>Blocked</td><td>No current evidence enables live Plural or live provider credentials.</td></tr>
+          <tr><td>Live-readiness gate</td><td>Active</td><td>Feature flags alone do not start live mode; missing evidence returns <code>live_readiness_blocked</code>.</td></tr>
+          <tr><td>Live checkout/payments</td><td>Blocked</td><td>Legal, compliance, security, operations, provider, OACP E2E, audit, rollback, and human approval evidence remain required.</td></tr>
+          <tr><td>Live Plural</td><td>Blocked</td><td>No current evidence enables live Plural, live provider credentials, or provider-side live payment execution.</td></tr>
         </tbody>
       </table>
       <div class="ladder" aria-label="Readiness gate ladder">
@@ -213,6 +216,7 @@
         <div class="rung allowed">AgenticOrg eval<span>Grantex-only path</span></div>
         <div class="rung allowed">Hosted API smoke<span>MCP/A2A discovery</span></div>
         <div class="rung review-line">Read-only discovery<span>Human proposal required</span></div>
+        <div class="rung review-line">Live gate<span>Machine-readable evidence</span></div>
         <div class="rung blocked-line">Live payments<span>Blocked</span></div>
       </div>
     </div>

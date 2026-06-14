@@ -228,9 +228,11 @@ idempotency mechanism was used, but never the value.
 ## Webhooks And Replay
 
 Grantex owns provider webhook ingestion, verification, replay controls, and
-reconciliation status. Current smoke evidence uses the mock-provider path only.
-Failed webhook replay is an operator-only capability and remains mock-provider
-only until the live provider contract and signature behavior are approved.
+reconciliation status. Current public smoke evidence uses the mock-provider path
+only. The Plural hosted-checkout adapter verifies the documented HMAC webhook
+scheme behind the provider abstraction, but failed webhook replay remains
+operator-only and mock-provider-only until non-mock replay retention and
+operator controls are separately approved.
 
 Replay safety rules:
 
@@ -255,10 +257,12 @@ outcomes, not retry storms. Important classes include:
 
 ## Sandbox And Mock Provider
 
-Use mock-provider/internal sandbox flows for development. Production Commerce V1,
-live payments, and live Plural are disabled. Approved temporary Option A smoke
-uses isolated Cloud Run, Cloud SQL, Redis, smoke secrets, and mock provider
-resources that are deleted immediately after evidence capture.
+Use mock-provider/internal sandbox flows for development. The Plural sandbox
+adapter can be exercised only with `PLURAL_SANDBOX_ENABLED=true`, stored sandbox
+credentials, and scrubbed evidence. Production Commerce V1, live payments, and
+live Plural are disabled. Approved temporary Option A smoke uses isolated Cloud
+Run, Cloud SQL, Redis, smoke secrets, and mock provider resources that are
+deleted immediately after evidence capture.
 
 Developers should use:
 
@@ -271,6 +275,35 @@ Developers should use:
 - the internal production-discovery readiness record (same access
   path) for the current posture.
 
+## Live-Readiness Guard
+
+The live commerce guard exposes a machine-readable readiness snapshot for
+operators and tests. The snapshot reports only booleans, requirement keys, env
+names, and blocker strings. It must not contain tokens, passports, credentials,
+provider payloads, idempotency values, DB URLs, Redis URLs, or raw webhook
+material.
+
+Live checkout and live Plural still require the master live-mode flag, the
+Plural live flag, and every readiness acknowledgement. When any acknowledgement
+is absent, live provider paths fail closed with `live_readiness_blocked`.
+Important acknowledgement names include `COMMERCE_LIVE_LEGAL_APPROVED`,
+`COMMERCE_LIVE_PROVIDER_CONTRACT_CONFIRMED`,
+`COMMERCE_LIVE_PLURAL_SANDBOX_E2E_PASSED`,
+`COMMERCE_LIVE_PLURAL_WEBHOOK_SIGNATURE_CONFIRMED`,
+`COMMERCE_LIVE_INDIA_RESIDENCY_CONFIRMED`,
+`COMMERCE_LIVE_FINAL_USER_CONFIRMATION_APPROVED`,
+`COMMERCE_LIVE_PILOT_MERCHANT_APPROVED`,
+`COMMERCE_LIVE_HOSTED_OACP_E2E_PASSED`,
+`COMMERCE_LIVE_SECRETS_REVIEWED`,
+`COMMERCE_LIVE_AUDIT_APPEND_ONLY_VERIFIED`,
+`COMMERCE_LIVE_OPERATOR_RUNBOOK_APPROVED`, and
+`COMMERCE_LIVE_ROLLBACK_OWNER_ASSIGNED`.
+
+This guard is a release blocker, not a launch instruction. Public docs, demos,
+and AgenticOrg handoffs must continue to describe mock-provider evidence and
+clearly labeled sandbox-provider evidence only until the live packet is approved
+and verified.
+
 ## Blocked Until Future Approval
 
 - Production Commerce V1 discovery enablement.
@@ -278,5 +311,5 @@ Developers should use:
 - Production checkout or live payment execution.
 - Live Plural or live provider credentials.
 - Direct provider calls from AgenticOrg commerce.
-- Public docs that imply AP2, UCP, ACP, Plural, payment-provider, or external
-  pilot certification.
+- Public docs that imply AP2, UCP, ACP, Plural live mode, payment-provider, or
+  external pilot certification.

@@ -1,0 +1,80 @@
+---
+title: "Why Grantex Commerce Live Mode Needs a Readiness Gate"
+description: "How Grantex separates sandbox checkout evidence from live payment authorization for agentic commerce."
+date: "2026-06-14"
+authors:
+  - name: "Sanjeev Mishra"
+---
+
+Agentic commerce needs more than a working demo. A commerce agent can search a
+catalog, prepare a cart, ask for consent, and create a mock payment intent, but
+that does not prove the system is ready to touch live payment rails.
+
+Grantex Commerce V1 now treats that distinction as a runtime boundary. Sandbox
+evidence can prove the control plane works. Live mode still needs a separate
+readiness gate.
+
+## What Works Today
+
+The current Commerce V1 evidence covers the closed-beta path:
+
+- Grantex-controlled catalog, cart, consent, Commerce Passport, policy, audit,
+  webhook, and mock-provider flows.
+- AgenticOrg handoff through Grantex-only commerce tools.
+- Shopify and other merchant-system connectors as metadata foundations, not
+  credentialed production sync or direct private API execution.
+- Plural behind the provider abstraction, including a gated sandbox
+  hosted-checkout adapter, with live provider execution still blocked.
+- OACP trust-artifact foundations for describing commerce capability and policy
+  without turning those artifacts into payment authority.
+
+That is enough for controlled sandbox validation. It is not enough for live
+checkout.
+
+## Why Flags Are Not Enough
+
+Live payment execution depends on legal language, provider contracts, webhook
+signature behavior, India data-residency review, final user confirmation,
+merchant support ownership, append-only audit verification, incident runbooks,
+and rollback ownership.
+
+Those are not just deployment details. They are part of the safety model.
+
+Commerce V1 therefore exposes a machine-readable live-readiness snapshot. The
+snapshot reports only safe values: booleans, requirement keys, env names, and
+blocker strings. It does not carry passports, bearer tokens, provider secrets,
+raw payloads, DB URLs, Redis URLs, or webhook secrets.
+
+If any readiness acknowledgement is missing, live provider paths fail closed
+with `live_readiness_blocked`.
+
+## The Required Evidence
+
+The live-readiness gate requires acknowledgements for legal approval, provider
+contract confirmation, Plural sandbox E2E completion, webhook signature
+confirmation, India data residency, final user confirmation text, named pilot
+merchant approval, hosted OACP E2E evidence, production secret review,
+append-only audit verification, operator runbook approval, and rollback owner
+assignment.
+
+This keeps the release posture clear:
+
+- Sandbox and mock-provider evidence can continue.
+- Public docs and demos must not imply live payment availability.
+- AgenticOrg must keep using Grantex-only commerce tools.
+- Shopify and Plural remain controlled integrations, not shortcuts around the
+  Grantex consent, policy, and audit layer.
+- Live mode starts only after the evidence packet and runtime snapshot both
+  clear.
+
+## Current Status
+
+As of June 14, 2026, Commerce V1 remains closed beta. Public evidence remains
+mock-provider only unless a sandbox-provider run is explicitly labeled, scrubbed,
+and approved. Production discovery, live checkout, live payments, live Plural,
+provider credentials, and external pilot readiness remain blocked until the
+legal, provider, security, operations, OACP, audit, rollback, and human approval
+gates are complete.
+
+That is deliberate. In agentic commerce, the boundary between "the demo works"
+and "money can move" has to be visible in code, tests, docs, and operations.

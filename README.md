@@ -35,9 +35,9 @@
 
 ## Agentic Commerce V1 (closed beta)
 
-Grantex Commerce V1 is the closed-beta consent, Commerce Passport, policy, audit, and payment-control layer for agentic checkout. It lets commerce agents use sandbox catalog data, create carts, request user consent, receive a scoped Commerce Passport, and exercise mock provider payment intents without giving the agent direct access to payment providers.
+Grantex Commerce V1 is the closed-beta consent, Commerce Passport, policy, audit, and payment-control layer for agentic checkout. It lets commerce agents use sandbox catalog data, create carts, request user consent, receive a scoped Commerce Passport, and exercise mock provider payment intents or gated Plural sandbox hosted-checkout flows without giving the agent direct access to payment providers.
 
-> Production Commerce V1 discovery is disabled/fail-closed. Live checkout, live payments, and live Plural are not enabled. Public demos and playgrounds are mock-provider only until legal, compliance, security, operations, and provider approvals are complete.
+> Production Commerce V1 discovery is disabled/fail-closed. Live checkout, live payments, and live Plural are not enabled. Public demos and playgrounds remain mock-provider only until legal, compliance, security, operations, provider, and machine-readable live-readiness evidence gates are complete.
 
 ```mermaid
 flowchart LR
@@ -48,20 +48,23 @@ flowchart LR
   gx --> catalog[Catalog, cart, inventory]
   gx --> provider[Provider-neutral payment intent]
   provider --> mock[Mock provider verified in smoke]
-  provider -. blocked .-> plural[Future live Plural gate]
+  provider --> pluralSandbox[Plural hosted-checkout adapter behind sandbox flag]
+  pluralSandbox -. blocked .-> pluralLive[Live Plural gate]
 ```
 
 | Area | Current posture |
 | --- | --- |
 | Internal sandbox | Implemented for synthetic catalog, consent, passport, cart, payment, webhook, and audit flows. |
 | Temporary Option A smoke | Verified with mock provider and cleaned-up smoke resources. |
+| Plural hosted-checkout adapter | Implemented behind the provider abstraction for token, checkout order, status polling, and HMAC webhook verification; disabled unless sandbox flags and credentials are present. |
 | AgenticOrg real-staging handoff | Verified through Grantex-only tools with redacted fixture handling. |
 | Hosted AgenticOrg discovery | Verified in temporary API-only hosted smoke. |
 | Production read-only discovery | Disabled/fail-closed. |
-| Live checkout/payments | Blocked pending legal, compliance, security, operations, and provider approvals. |
-| Live Plural | Blocked; mock provider only in current evidence. |
+| Live-readiness gate | Implemented; feature flags alone are insufficient and missing evidence returns `live_readiness_blocked`. |
+| Live checkout/payments | Blocked pending legal, compliance, security, operations, provider, OACP E2E, audit, rollback, and human approval evidence. |
+| Live Plural | Blocked by the guard; no live provider evidence or live payment authorization is enabled. |
 
-Start with the [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx), then use the [developer guide](docs/guides/commerce-v1-developer-guide.mdx), [merchant/operator guide](docs/guides/commerce-v1-merchant-operator-guide.mdx), and [operations guide](docs/guides/commerce-v1-operations.mdx). The public education page is `web/commerce.html`.
+Start with the [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx), then use the [developer guide](docs/guides/commerce-v1-developer-guide.mdx), [merchant/operator guide](docs/guides/commerce-v1-merchant-operator-guide.mdx), and [operations guide](docs/guides/commerce-v1-operations.mdx). The public education page is `web/commerce.html`, and the live-readiness explainer is in [the Commerce live-readiness gate blog](docs/blog/commerce-live-readiness-gate.mdx).
 
 ## Current Development Snapshot
 

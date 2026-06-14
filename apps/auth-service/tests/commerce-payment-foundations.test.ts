@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -29,6 +30,11 @@ const OPENAPI_PATH = join(TEST_DIR, '..', '..', '..', 'docs', 'api', 'grantex-co
 
 beforeAll(async () => {
   app = await buildTestApp();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 function credentialRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -129,7 +135,7 @@ describe('Payment provider adapters', () => {
       && err.normalized.retryable === true);
   });
 
-  it('PluralPaymentProvider reports explicit blocked configuration without raw provider errors', async () => {
+  it('PluralPaymentProvider reports explicit disabled configuration without raw provider errors', async () => {
     const provider = new PluralPaymentProvider();
     const validation = await provider.validateCredentials({
       tenant_id: TEST_COMMERCE_TENANT_ID,
@@ -139,16 +145,198 @@ describe('Payment provider adapters', () => {
     });
 
     expect(validation.valid).toBe(false);
-    expect(validation.error).toMatchObject({
+    const validationError = validation.error;
+    expect(validationError).toBeDefined();
+    if (!validationError) throw new Error('expected Plural validation error');
+    expect(validationError).toMatchObject({
       code: 'provider_validation_failed',
       provider_key: 'plural',
       retryable: false,
     });
-    expect(validation.error.provider_error_code).toMatch(/plural_.*blocked|plural_api_contract_unconfirmed/);
-    expect(validation.error.safe_metadata).toMatchObject({
-      api_contract_confirmed: false,
-      webhook_signature_confirmed: false,
+    expect(validationError.provider_error_code).toMatch(/plural_.*blocked|plural_provider_disabled/);
+    expect(validationError.safe_metadata).toMatchObject({
+      api_contract_confirmed: true,
+      webhook_signature_confirmed: true,
+      integration_mode: 'hosted_checkout',
     });
+  });
+
+  it('PluralPaymentProvider prepares payment intent references without creating provider state', async () => {
+    vi.stubEnv('PLURAL_SANDBOX_ENABLED', 'true');
+    vi.stubEnv('PLURAL_PINE_CLIENT_ID', 'plural-client');
+    vi.stubEnv('PLURAL_PINE_CLIENT_SECRET', 'plural-secret');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new PluralPaymentProvider();
+    const result = await provider.createPaymentIntent({
+      tenant_id: TEST_COMMERCE_TENANT_ID,
+      merchant_id: MERCHANT,
+      agent_id: 'cag_TEST',
+      payment_intent_id: 'cpi_PLURAL_TEST',
+      cart_id: 'cart_TEST',
+      passport_jti: 'cpsp_TEST',
+      amount: { amount_minor_units: 2500, currency: 'INR' },
+      line_items_snapshot: [],
+      idempotency_key: 'idem_PLURAL',
+      environment: 'sandbox',
+      metadata: {},
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      provider_payment_id: 'cpi_PLURAL_TEST',
+      status: 'authorized',
+      raw_status: 'plural_ready_for_checkout',
+      provider_metadata: {
+        provider_environment: 'sandbox',
+        integration_mode: 'hosted_checkout',
+        merchant_order_reference: 'cpi_PLURAL_TEST',
+        amount_minor_units: 2500,
+        currency: 'INR',
+      },
+    });
+  });
+
+  it('PluralPaymentProvider creates hosted checkout orders through Plural', async () => {
+    vi.stubEnv('PLURAL_SANDBOX_ENABLED', 'true');
+    vi.stubEnv('PLURAL_PINE_CLIENT_ID', 'plural-client-checkout');
+    vi.stubEnv('PLURAL_PINE_CLIENT_SECRET', 'plural-secret');
+    vi.stubEnv('PLURAL_PINE_BASE_URL', 'https://plural.test/api');
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        access_token: 'plural-access-token',
+        expires_in: 3000,
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        order_id: 'order_PLURAL_123',
+        redirect_url: 'https://payments.example/checkout/order_PLURAL_123',
+        status: 'CREATED',
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const provider = new PluralPaymentProvider();
+    const result = await provider.createCheckoutLink({
+      tenant_id: TEST_COMMERCE_TENANT_ID,
+      merchant_id: MERCHANT,
+      payment_intent_id: 'cpi_PLURAL_TEST',
+      provider_payment_id: 'cpi_PLURAL_TEST',
+      amount: { amount_minor_units: 2500, currency: 'INR' },
+      environment: 'sandbox',
+      success_url: 'https://shop.example/success',
+      cancel_url: 'https://shop.example/cancel',
+      expires_at: '2026-06-14T12:00:00.000Z',
+      idempotency_key: 'idem_PLURAL',
+    });
+
+    expect(result).toMatchObject({
+      checkout_url: 'https://payments.example/checkout/order_PLURAL_123',
+      provider_order_id: 'order_PLURAL_123',
+      raw_status: 'CREATED',
+      provider_metadata: {
+        provider_environment: 'sandbox',
+        integration_mode: 'hosted_checkout',
+        plural_order_id: 'order_PLURAL_123',
+        merchant_order_reference: 'cpi_PLURAL_TEST',
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://plural.test/api/auth/v1/token');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://plural.test/api/checkout/v1/orders');
+    const orderRequest = fetchMock.mock.calls[1]?.[1] as { body?: string; headers?: Record<string, string> };
+    expect(orderRequest.headers?.Authorization).toBe('Bearer plural-access-token');
+    expect(JSON.parse(orderRequest.body ?? '{}')).toMatchObject({
+      merchant_order_reference: 'cpi_PLURAL_TEST',
+      order_amount: { value: 2500, currency: 'INR' },
+      pre_auth: false,
+      callback_url: 'https://shop.example/success',
+      failure_callback_url: 'https://shop.example/cancel',
+    });
+  });
+
+  it('PluralPaymentProvider verifies Plural webhook HMAC signatures', async () => {
+    vi.stubEnv('COMMERCE_LIVE_MODE_ENABLED', 'true');
+    vi.stubEnv('PLURAL_LIVE_ENABLED', 'true');
+    vi.stubEnv('PLURAL_PINE_CLIENT_ID', 'plural-client-webhook');
+    vi.stubEnv('PLURAL_PINE_CLIENT_SECRET', 'plural-secret');
+    const secretBytes = Buffer.from('plural-webhook-secret', 'utf8');
+    vi.stubEnv('PLURAL_WEBHOOK_SECRET', secretBytes.toString('base64'));
+    const rawBody = JSON.stringify({
+      order_id: 'order_PLURAL_123',
+      merchant_order_reference: 'cpi_PLURAL_TEST',
+      status: 'PROCESSED',
+    });
+    const webhookId = 'wh_PLURAL_123';
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature = createHmac('sha256', secretBytes)
+      .update(Buffer.concat([
+        Buffer.from(`${webhookId}.${timestamp}.`, 'utf8'),
+        Buffer.from(rawBody, 'utf8'),
+      ]))
+      .digest('base64');
+
+    const provider = new PluralPaymentProvider();
+    const result = await provider.handleWebhook({
+      provider_key: 'plural',
+      headers: {
+        'webhook-id': webhookId,
+        'webhook-timestamp': timestamp,
+        'webhook-signature': `v1,${signature}`,
+      },
+      raw_body: rawBody,
+      received_at: new Date().toISOString(),
+    });
+
+    expect(result).toMatchObject({
+      event_id: webhookId,
+      event_type: 'payment.paid',
+      merchant_ref: 'cpi_PLURAL_TEST',
+      provider_payment_id: 'cpi_PLURAL_TEST',
+      status: 'PROCESSED',
+      signature_valid: true,
+      replay: false,
+      provider_metadata: {
+        signature_scheme: 'plural-hmac-sha256-v1',
+        plural_order_id: 'order_PLURAL_123',
+        merchant_order_reference: 'cpi_PLURAL_TEST',
+      },
+    });
+  });
+
+  it('PluralPaymentProvider rejects invalid or stale Plural webhooks', async () => {
+    vi.stubEnv('COMMERCE_LIVE_MODE_ENABLED', 'true');
+    vi.stubEnv('PLURAL_LIVE_ENABLED', 'true');
+    vi.stubEnv('PLURAL_PINE_CLIENT_ID', 'plural-client-webhook-invalid');
+    vi.stubEnv('PLURAL_PINE_CLIENT_SECRET', 'plural-secret');
+    vi.stubEnv('PLURAL_WEBHOOK_SECRET', Buffer.from('plural-webhook-secret', 'utf8').toString('base64'));
+    const provider = new PluralPaymentProvider();
+    const rawBody = JSON.stringify({ order_id: 'order_PLURAL_123', status: 'PROCESSED' });
+
+    await expect(provider.handleWebhook({
+      provider_key: 'plural',
+      headers: {
+        'webhook-id': 'wh_BAD',
+        'webhook-timestamp': String(Math.floor(Date.now() / 1000)),
+        'webhook-signature': 'v1,bad',
+      },
+      raw_body: rawBody,
+      received_at: new Date().toISOString(),
+    })).rejects.toSatisfy((err: unknown) =>
+      isPaymentProviderError(err)
+      && err.normalized.code === 'webhook_signature_invalid');
+
+    await expect(provider.handleWebhook({
+      provider_key: 'plural',
+      headers: {
+        'webhook-id': 'wh_STALE',
+        'webhook-timestamp': String(Math.floor(Date.now() / 1000) - 600),
+        'webhook-signature': 'v1,bad',
+      },
+      raw_body: rawBody,
+      received_at: new Date().toISOString(),
+    })).rejects.toSatisfy((err: unknown) =>
+      isPaymentProviderError(err)
+      && err.normalized.code === 'webhook_replay_detected');
   });
 });
 

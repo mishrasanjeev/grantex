@@ -24,9 +24,11 @@ Commerce V1, live payments, live Plural, or production discovery.
 | AgenticOrg real-staging handoff | Verified externally | AgenticOrg evidence records authority-checked tools and redacted fixture handling. |
 | Internal OACP foundation | Implemented through C6W9 | Artifact family, adapter preview, commitment boundary, prepared envelope, reconciliation, eligibility packet, and dry-run verifier foundations are internal and non-executing. |
 | Hosted AgenticOrg API-only discovery | Verified externally | AgenticOrg C3 evidence records hosted MCP/A2A discovery against temporary Grantex smoke. |
+| Plural sandbox hosted-checkout adapter | Implemented/gated | Token, hosted checkout order creation, order-status polling, and HMAC webhook verification are behind the provider abstraction and require explicit sandbox flags and credentials. |
 | Grantex production Commerce V1 discovery | Disabled/fail-closed | internal production-discovery readiness record (operator-internal, available on request). |
-| Production checkout/live payments | Blocked | Requires legal, compliance, security, operations, provider, rollback, and human approval gates. |
-| Live Plural | Blocked | Mock provider only in current smoke evidence. |
+| Machine-readable live-readiness gate | Implemented | Runtime snapshot requires explicit legal, provider, security, operations, OACP E2E, audit, rollback, and human approval evidence. Missing evidence returns `live_readiness_blocked`. |
+| Production checkout/live payments | Blocked | Requires the live-readiness gate plus legal, compliance, security, operations, provider, rollback, and human approval gates. |
+| Live Plural | Blocked | No live provider evidence or live payment authorization is enabled; live Plural remains blocked by the guard. |
 
 ## Start Here
 
@@ -50,6 +52,8 @@ flowchart LR
   selleragent --> grantex[Grantex OACP authority]
   grantex --> artifacts[Signed artifacts and adapter previews]
   artifacts --> agent
+  grantex --> pluralSandbox[Plural sandbox hosted-checkout adapter behind flag]
+  pluralSandbox -. live gate .-> live[Live payment and live Plural gate]
   agent -. approved capability verification .-> provider[Provider/fintech rail]
   provider -. non-sensitive evidence refs .-> grantex
 ```
@@ -94,6 +98,9 @@ sequenceDiagram
   U-->>G: Approve or deny
   A->>P: Verify provider-owned mandate capability when approved
   P-->>A: Capability evidence or refusal
+  G->>P: Mock provider or gated Plural sandbox adapter; live Plural blocked
+  A->>P: Verify provider-owned mandate capability when approved
+  P-->>A: Capability evidence or refusal
 ```
 
 The Commerce Passport is scoped runtime material. It may be used during approved
@@ -114,7 +121,9 @@ flowchart TB
 
 Each gate is separate. Passing a temporary smoke run does not imply production
 discovery, production checkout, live payments, live Plural, external pilot
-readiness, or provider certification.
+readiness, or provider certification. The runtime live-readiness gate also
+requires machine-readable approval evidence; feature flags alone are not
+sufficient to start live commerce.
 
 ## Allowed And Blocked
 
@@ -122,7 +131,7 @@ readiness, or provider certification.
 | --- | --- |
 | Local mock demo and internal sandbox work. | Production Commerce V1 discovery enablement. |
 | Approved temporary Option A smoke resources. | Production checkout or payment execution. |
-| Mock-provider evidence with scrubbed reports. | Live Plural or live provider credentials. |
+| Mock-provider evidence and gated Plural sandbox adapter tests with scrubbed reports. | Live Plural or live provider credentials. |
 | OACP artifact-backed AgenticOrg commerce tools and approved capability verification. | Direct payment execution, live provider credentials, or unapproved private merchant API execution from AgenticOrg commerce. |
 | Public JWKS references as verification metadata. | Raw passports, bearer tokens, idempotency key values, secrets, DB/Redis URLs, or raw payloads in docs/evidence. |
 

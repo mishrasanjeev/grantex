@@ -34,7 +34,8 @@ import type { CommerceEnvironment, ProviderKey } from './payment-providers/index
 export type LiveModeBlockReason =
   | 'live_mode_disabled'
   | 'plural_live_disabled'
-  | 'plural_sandbox_disabled';
+  | 'plural_sandbox_disabled'
+  | 'live_readiness_blocked';
 
 export interface LiveModeStatus {
   /** COMMERCE_LIVE_MODE_ENABLED — master switch for any live commerce side effects. */
@@ -43,6 +44,99 @@ export interface LiveModeStatus {
   pluralLiveEnabled: boolean;
   /** PLURAL_SANDBOX_ENABLED — Plural sandbox enablement (separate from mock). */
   pluralSandboxEnabled: boolean;
+}
+
+export type CommerceLiveReadinessEvidenceKey =
+  | 'legal_approval_recorded'
+  | 'provider_contract_confirmed'
+  | 'plural_sandbox_e2e_passed'
+  | 'plural_webhook_signature_confirmed'
+  | 'india_data_residency_confirmed'
+  | 'final_user_confirmation_approved'
+  | 'pilot_merchant_approved'
+  | 'hosted_oacp_e2e_passed'
+  | 'production_secrets_reviewed'
+  | 'audit_append_only_verified'
+  | 'operator_runbook_approved'
+  | 'rollback_owner_assigned';
+
+export interface CommerceLiveReadinessRequirement {
+  key: CommerceLiveReadinessEvidenceKey;
+  env: string;
+  description: string;
+}
+
+export const COMMERCE_LIVE_READINESS_REQUIREMENTS: readonly CommerceLiveReadinessRequirement[] = [
+  {
+    key: 'legal_approval_recorded',
+    env: 'COMMERCE_LIVE_LEGAL_APPROVED',
+    description: 'Legal approval recorded for geography, consent text, retention, and live payment posture.',
+  },
+  {
+    key: 'provider_contract_confirmed',
+    env: 'COMMERCE_LIVE_PROVIDER_CONTRACT_CONFIRMED',
+    description: 'Plural API, checkout, status, credential, and error contracts confirmed.',
+  },
+  {
+    key: 'plural_sandbox_e2e_passed',
+    env: 'COMMERCE_LIVE_PLURAL_SANDBOX_E2E_PASSED',
+    description: 'Plural sandbox checkout path passed agent-to-consent-to-checkout-to-webhook evidence.',
+  },
+  {
+    key: 'plural_webhook_signature_confirmed',
+    env: 'COMMERCE_LIVE_PLURAL_WEBHOOK_SIGNATURE_CONFIRMED',
+    description: 'Plural webhook signature, timestamp, replay, and idempotency contract confirmed.',
+  },
+  {
+    key: 'india_data_residency_confirmed',
+    env: 'COMMERCE_LIVE_INDIA_RESIDENCY_CONFIRMED',
+    description: 'India payment-data residency and storage review completed.',
+  },
+  {
+    key: 'final_user_confirmation_approved',
+    env: 'COMMERCE_LIVE_FINAL_USER_CONFIRMATION_APPROVED',
+    description: 'Final user confirmation copy and hosted checkout handoff language approved.',
+  },
+  {
+    key: 'pilot_merchant_approved',
+    env: 'COMMERCE_LIVE_PILOT_MERCHANT_APPROVED',
+    description: 'Named pilot merchant, operator, catalog, and support owners approved.',
+  },
+  {
+    key: 'hosted_oacp_e2e_passed',
+    env: 'COMMERCE_LIVE_HOSTED_OACP_E2E_PASSED',
+    description: 'Hosted OACP end-to-end evidence passed with redacted report references.',
+  },
+  {
+    key: 'production_secrets_reviewed',
+    env: 'COMMERCE_LIVE_SECRETS_REVIEWED',
+    description: 'Production secret storage, rotation, access review, and no-log checks completed.',
+  },
+  {
+    key: 'audit_append_only_verified',
+    env: 'COMMERCE_LIVE_AUDIT_APPEND_ONLY_VERIFIED',
+    description: 'Commerce audit table append-only permissions verified for the application role.',
+  },
+  {
+    key: 'operator_runbook_approved',
+    env: 'COMMERCE_LIVE_OPERATOR_RUNBOOK_APPROVED',
+    description: 'Operator runbook, on-call, alerting, incident, and kill-switch plan approved.',
+  },
+  {
+    key: 'rollback_owner_assigned',
+    env: 'COMMERCE_LIVE_ROLLBACK_OWNER_ASSIGNED',
+    description: 'Rollback owner, rollback command plan, and post-rollback verification assigned.',
+  },
+] as const;
+
+export type CommerceLiveReadinessEvidence = Record<CommerceLiveReadinessEvidenceKey, boolean>;
+
+export interface CommerceLiveReadinessSnapshot {
+  startable: boolean;
+  flags: LiveModeStatus;
+  evidence: CommerceLiveReadinessEvidence;
+  blockers: string[];
+  requiredEvidence: readonly CommerceLiveReadinessRequirement[];
 }
 
 export interface LiveModeRequest {
@@ -71,6 +165,50 @@ export function getCommerceLiveModeStatus(): LiveModeStatus {
     liveModeEnabled: process.env['COMMERCE_LIVE_MODE_ENABLED'] === 'true',
     pluralLiveEnabled: process.env['PLURAL_LIVE_ENABLED'] === 'true',
     pluralSandboxEnabled: process.env['PLURAL_SANDBOX_ENABLED'] === 'true',
+  };
+}
+
+function envFlagEnabled(
+  env: Record<string, string | undefined>,
+  name: string,
+): boolean {
+  return env[name] === 'true';
+}
+
+export function getCommerceLiveReadinessEvidence(
+  env: Record<string, string | undefined> = process.env,
+): CommerceLiveReadinessEvidence {
+  return Object.fromEntries(
+    COMMERCE_LIVE_READINESS_REQUIREMENTS.map((requirement) => [
+      requirement.key,
+      envFlagEnabled(env, requirement.env),
+    ]),
+  ) as CommerceLiveReadinessEvidence;
+}
+
+export function getCommerceLiveReadinessSnapshot(
+  env: Record<string, string | undefined> = process.env,
+): CommerceLiveReadinessSnapshot {
+  const flags = {
+    liveModeEnabled: envFlagEnabled(env, 'COMMERCE_LIVE_MODE_ENABLED'),
+    pluralLiveEnabled: envFlagEnabled(env, 'PLURAL_LIVE_ENABLED'),
+    pluralSandboxEnabled: envFlagEnabled(env, 'PLURAL_SANDBOX_ENABLED'),
+  };
+  const evidence = getCommerceLiveReadinessEvidence(env);
+  const blockers: string[] = [];
+
+  if (!flags.liveModeEnabled) blockers.push('commerce_live_mode_flag_disabled');
+  if (!flags.pluralLiveEnabled) blockers.push('plural_live_mode_flag_disabled');
+  for (const requirement of COMMERCE_LIVE_READINESS_REQUIREMENTS) {
+    if (!evidence[requirement.key]) blockers.push(`missing_${requirement.key}`);
+  }
+
+  return {
+    startable: blockers.length === 0,
+    flags,
+    evidence,
+    blockers,
+    requiredEvidence: COMMERCE_LIVE_READINESS_REQUIREMENTS,
   };
 }
 
@@ -146,6 +284,24 @@ export function ensureCommerceLiveMode(req: LiveModeRequest = {}): void {
         },
       );
     }
+    const readiness = getCommerceLiveReadinessSnapshot();
+    if (!readiness.startable) {
+      throw new CommerceHttpError(
+        403,
+        'plural_live_disabled',
+        'Plural live mode is blocked by the Commerce live-readiness gate',
+        {
+          retryable: false,
+          details: {
+            reason: 'live_readiness_blocked' satisfies LiveModeBlockReason,
+            remediation: 'Complete the live-readiness evidence packet before enabling Plural live mode.',
+            provider_key: 'plural',
+            blockers: readiness.blockers,
+            required_evidence: readiness.requiredEvidence.map((requirement) => requirement.key),
+          },
+        },
+      );
+    }
     return;
   }
 
@@ -162,6 +318,24 @@ export function ensureCommerceLiveMode(req: LiveModeRequest = {}): void {
         details: {
           reason: 'live_mode_disabled' satisfies LiveModeBlockReason,
           remediation: 'Set COMMERCE_LIVE_MODE_ENABLED=true after the readiness gate is signed off.',
+          ...(providerKey !== undefined ? { provider_key: providerKey } : {}),
+        },
+      },
+    );
+  }
+  const readiness = getCommerceLiveReadinessSnapshot();
+  if (!readiness.startable) {
+    throw new CommerceHttpError(
+      403,
+      'commerce_live_mode_disabled',
+      'Live commerce side effects are blocked by the Commerce live-readiness gate',
+      {
+        retryable: false,
+        details: {
+          reason: 'live_readiness_blocked' satisfies LiveModeBlockReason,
+          remediation: 'Complete the live-readiness evidence packet before enabling live commerce mode.',
+          blockers: readiness.blockers,
+          required_evidence: readiness.requiredEvidence.map((requirement) => requirement.key),
           ...(providerKey !== undefined ? { provider_key: providerKey } : {}),
         },
       },

@@ -3526,7 +3526,7 @@ components:
         status:
           type: string
           enum: [healthy, degraded, down]
-          description: Overall commerce operations status. Expected M14 status is degraded while Plural remains externally blocked and provider webhook replay is mock-only.
+          description: Overall commerce operations status. Expected status is degraded until hosted staging evidence, live-readiness evidence, and non-mock webhook replay controls are complete.
         checked_at: { type: string, format: date-time }
         tenant_id: { type: string }
         merchant_id: { type: string, nullable: true }
@@ -4693,9 +4693,10 @@ paths:
       description: >-
         Operator-only readiness view for Commerce V1 API, database,
         provider adapter health, reconciliation worker configuration, and
-        webhook backlog counts. Plural remains externally blocked. M14 adds
-        mock-provider replay for eligible failed events with encrypted payload
-        material and operator-only emergency re-enable.
+        webhook backlog counts. Plural sandbox is gated by explicit flags and
+        credentials; live Plural remains blocked by the readiness gate. M14
+        adds mock-provider replay for eligible failed events with encrypted
+        payload material and operator-only emergency re-enable.
       parameters:
         - { in: query, name: merchant_id, schema: { type: string }, description: Optional merchant scope for webhook backlog counts and provider adapter probe. }
         - { in: query, name: environment, schema: { type: string, enum: [sandbox, live], default: sandbox } }
@@ -5843,9 +5844,10 @@ paths:
         Requires Idempotency-Key and an existing Grantex-created payment
         intent with stored passport and policy decision evidence. Transitions
         authorized payment intents through checkout_created into payment_pending
-        through the neutral
-        PaymentProvider interface. Plural remains blocked until API and
-        webhook signature details are confirmed.
+        through the neutral PaymentProvider interface. Mock is available for
+        local/internal smoke. Plural hosted checkout is implemented behind the
+        provider abstraction and requires explicit sandbox/live flags plus
+        stored credentials; live Plural remains blocked by the readiness gate.
       parameters:
         - in: header
           name: Idempotency-Key

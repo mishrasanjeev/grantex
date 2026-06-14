@@ -152,7 +152,9 @@ function targetStatusForWebhook(eventType: string, providerStatus?: string): Com
   if (eventType === 'payment.expired') return 'expired';
   const status = providerStatus?.toLowerCase();
   if (status === 'paid' || status === 'succeeded' || status === 'success' || status === 'mock_paid') return 'paid';
+  if (status === 'processed' || status === 'authorized' || status === 'captured') return 'paid';
   if (status === 'failed' || status === 'declined' || status === 'mock_failed') return 'failed';
+  if (status === 'cancelled' || status === 'canceled') return 'failed';
   if (status === 'expired' || status === 'mock_expired') return 'expired';
   return null;
 }
@@ -165,7 +167,7 @@ async function findPaymentIntentForWebhook(
     merchantRef?: string | undefined;
   },
 ): Promise<PaymentIntentForWebhookRow | null> {
-  if (!input.providerPaymentId || !input.merchantRef) return null;
+  if (!input.providerPaymentId) return null;
   const rows = await sql<PaymentIntentForWebhookRow[]>`
     SELECT pi.id, pi.tenant_id, pi.merchant_id, pi.agent_id, pi.passport_jti,
            pi.amount, pi.currency, pi.provider, pi.provider_payment_id,
@@ -176,8 +178,14 @@ async function findPaymentIntentForWebhook(
         ON m.tenant_id = pi.tenant_id
        AND m.id = pi.merchant_id
      WHERE pi.provider = ${input.providerKey}
-       AND pi.provider_payment_id = ${input.providerPaymentId}
-       AND pi.merchant_id = ${input.merchantRef}
+       AND (
+         pi.provider_payment_id = ${input.providerPaymentId}
+         OR pi.provider_order_id = ${input.providerPaymentId}
+       )
+       AND (
+         ${input.merchantRef ?? null}::text IS NULL
+         OR pi.merchant_id = ${input.merchantRef ?? null}
+       )
      LIMIT 1
   `;
   return rows[0] ?? null;
@@ -750,7 +758,10 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
              AND tenant_id = ${paymentIntent.tenant_id}
              AND merchant_id = ${paymentIntent.merchant_id}
              AND provider = ${providerKey}
-             AND provider_payment_id = ${parsed.provider_payment_id ?? null}
+             AND (
+               provider_payment_id = ${parsed.provider_payment_id ?? null}
+               OR provider_order_id = ${parsed.provider_payment_id ?? null}
+             )
              AND status = ${paymentIntent.status}
           RETURNING id, tenant_id, merchant_id, agent_id, passport_jti,
                     amount, currency, provider, provider_payment_id,
