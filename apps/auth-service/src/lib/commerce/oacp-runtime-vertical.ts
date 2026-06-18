@@ -14,6 +14,9 @@ export const C6Z_ARTIFACT_FAMILIES = [
   'offer_price_snapshot',
   'inventory_snapshot',
   'policy_scope',
+  'public_discovery_state',
+  'mandate_capability',
+  'protocol_adapter',
   'authority_request_status',
 ] as const;
 
@@ -100,6 +103,9 @@ const FAMILY_TYPE: Record<C6ZArtifactFamily, OacpArtifactType> = {
   offer_price_snapshot: 'price',
   inventory_snapshot: 'inventory',
   policy_scope: 'policy',
+  public_discovery_state: 'public_discovery',
+  mandate_capability: 'mandate_capability',
+  protocol_adapter: 'protocol_adapter',
   authority_request_status: 'protocol_adapter',
 };
 const FAMILY_TTL_SECONDS: Record<C6ZArtifactFamily, number> = {
@@ -110,6 +116,9 @@ const FAMILY_TTL_SECONDS: Record<C6ZArtifactFamily, number> = {
   offer_price_snapshot: 5 * 60,
   inventory_snapshot: 60,
   policy_scope: 6 * 60 * 60,
+  public_discovery_state: 15 * 60,
+  mandate_capability: 2 * 60,
+  protocol_adapter: 24 * 60 * 60,
   authority_request_status: 15 * 60,
 };
 const PRIVATE_VALUE_MARKERS = [
@@ -315,6 +324,24 @@ function payloadForFamily(
     price_snapshot_refs: family === 'offer_price_snapshot' ? evidence.price_snapshot_refs : undefined,
     inventory_snapshot_refs: family === 'inventory_snapshot' ? evidence.inventory_snapshot_refs : undefined,
     requested_authority_scope: family === 'policy_scope' ? request.requested_authority_scope : undefined,
+    public_discovery_state: family === 'public_discovery_state' ? 'disabled' : undefined,
+    public_discovery_publication_allowed: family === 'public_discovery_state' ? false : undefined,
+    mandate_capability_status: family === 'mandate_capability' ? 'provider_owned_verification_required' : undefined,
+    provider_execution_authority: family === 'mandate_capability' ? 'provider_owned_not_grantex_or_agenticorg' : undefined,
+    adapter_surfaces: family === 'protocol_adapter'
+      ? [
+        'schema_org_product_offer_jsonld',
+        'ucp_style_capability_profile',
+        'acp_style_commerce_interaction',
+        'ap2_style_payment_mandate_evidence',
+        'a2a_agent_card_task_metadata',
+        'mcp_tool_manifest_resource_metadata',
+        'openapi_buyer_safe_bridge_schema',
+      ]
+      : undefined,
+    adapter_claim_boundary: family === 'protocol_adapter'
+      ? 'compatibility_mapping_only_no_certification_or_standardization_claim'
+      : undefined,
     authority_request_status: family === 'authority_request_status' ? 'artifact_issuance_ready' : undefined,
     unsupported_capabilities: [
       'checkout_payment_execution',
@@ -347,7 +374,7 @@ function artifactSafety(family: C6ZArtifactFamily) {
     commitment_allowed: false,
     offline_commitment_allowed: false,
     requires_online_confirmation: true,
-    requires_provider_direct_verification: family === 'policy_scope',
+    requires_provider_direct_verification: ['policy_scope', 'mandate_capability'].includes(family),
     requires_merchant_system_confirmation: ['offer_price_snapshot', 'inventory_snapshot'].includes(family),
     stale_behavior: 'refuse_final_commitment' as const,
     refusal_code_if_invalid: 'c6z_artifact_invalid',

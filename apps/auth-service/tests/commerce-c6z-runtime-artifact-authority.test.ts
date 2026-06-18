@@ -97,9 +97,12 @@ describe('C6Z Grantex runtime artifact authority', () => {
       'catalog_snapshot',
       'connector_evidence',
       'inventory_snapshot',
+      'mandate_capability',
       'merchant_profile',
       'offer_price_snapshot',
       'policy_scope',
+      'protocol_adapter',
+      'public_discovery_state',
       'seller_agent_card',
     ]);
     for (const artifact of result.artifacts) {
@@ -118,6 +121,20 @@ describe('C6Z Grantex runtime artifact authority', () => {
         status: 'valid',
       });
     }
+    expect(result.artifacts.find((artifact) => artifact.artifact_family === 'public_discovery_state')?.payload)
+      .toMatchObject({
+        public_discovery_state: 'disabled',
+        public_discovery_publication_allowed: false,
+      });
+    expect(result.artifacts.find((artifact) => artifact.artifact_family === 'mandate_capability')?.payload)
+      .toMatchObject({
+        mandate_capability_status: 'provider_owned_verification_required',
+        provider_execution_authority: 'provider_owned_not_grantex_or_agenticorg',
+      });
+    expect(result.artifacts.find((artifact) => artifact.artifact_family === 'protocol_adapter')?.payload)
+      .toMatchObject({
+        adapter_claim_boundary: 'compatibility_mapping_only_no_certification_or_standardization_claim',
+      });
   });
 
   it('fails closed for stale evidence, missing scope, secrets, raw payloads, and execution targets', () => {
@@ -198,7 +215,7 @@ describe('C6Z Grantex runtime artifact authority', () => {
     expect(body).toMatchObject({
       route_kind: 'grantex_internal_c6z_authority_request',
       status: 'artifact_issuance_ready',
-      artifact_count: 8,
+      artifact_count: 11,
       allowed_to_execute: false,
       no_payment_execution: true,
       no_public_discovery_enablement: true,

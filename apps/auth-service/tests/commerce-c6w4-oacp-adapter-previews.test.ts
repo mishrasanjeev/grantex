@@ -89,6 +89,11 @@ describe('C6W4 OACP protocol adapter preview foundation', () => {
       artifacts: c6w4SourceArtifactsWithInventory(),
       generated_at: '2026-06-11T00:00:30.000Z',
     });
+    const openapi = buildOacpC6W4ProtocolAdapterPreview({
+      surface: 'openapi_buyer_safe_bridge_schema',
+      artifacts,
+      generated_at: '2026-06-11T00:01:00.000Z',
+    });
 
     expect(schemaOrg.generated && schemaOrg.surface_payload).toMatchObject({
       '@context': 'https://schema.org',
@@ -111,6 +116,12 @@ describe('C6W4 OACP protocol adapter preview foundation', () => {
         source_artifact_id: 'inventory_C6W3',
         hold_or_delivery_promise: false,
       },
+    });
+    expect(openapi.generated && openapi.surface_payload).toMatchObject({
+      schema_kind: 'openapi_function_bridge_preview',
+      operation_id: 'askSellerCommerceAgent',
+      transaction_authority: false,
+      write_operations: [],
     });
   });
 

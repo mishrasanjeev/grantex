@@ -10,6 +10,22 @@ both sellers and buyers. It is documentation only. It does not enable production
 Commerce V1, public discovery, checkout/payment creation, live payments, live
 Plural, merchant approval, or a production allowlist.
 
+## Current OACP Runtime Closure Boundary
+
+The launch-closure runtime path is narrower than the full future commerce
+journey below. The current OACP runtime proof is: AgenticOrg creates a Seller
+Commerce Agent onboarding packet, performs read-only Shopify Admin GraphQL sync
+when merchant credentials are valid, sends a Grantex authority request, receives
+internal signed OACP artifacts, caches them, and answers non-binding buyer
+questions with source and freshness labels. Checkout, payment, order, mandate,
+refund, return, shipment, inventory hold, public discovery publication, and live
+provider execution remain outside this runtime proof.
+
+Any cart, checkout, consent, Commerce Passport, order, return, refund,
+fulfillment, or payment-control wording in this guide describes separate future
+or Grantex Commerce payment-control pilot scope. It is not evidence that OACP
+runtime artifacts enable transaction execution.
+
 For the consolidated PRD that governs this flow, read
 `docs/guides/commerce-v1-agentic-commerce-prd.md`.
 
@@ -45,9 +61,10 @@ flowchart TB
 
 ## What Sellers Do One Time
 
-The seller one-time journey should be self-serve, but not self-approval. The
-seller can prepare and request launch; Grantex and human reviewers still control
-approval.
+The OACP runtime seller journey starts in AgenticOrg Seller Commerce Agent. The
+seller can prepare an onboarding packet and connector evidence; Grantex controls
+artifact authority and policy decisions. Merchant approval, public launch, and
+transaction execution require separate approvals outside this runtime proof.
 
 | Step | Seller action | Grantex responsibility | Launch gate |
 | --- | --- | --- | --- |

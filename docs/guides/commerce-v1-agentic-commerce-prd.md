@@ -16,6 +16,21 @@ merchant, enable public discovery, enable production Commerce V1, enable
 checkout/payment creation, enable live payments, enable live Plural, or set a
 production allowlist.
 
+## Current OACP Runtime Closure Boundary
+
+For the runtime launch-closure branch, the implemented path is deliberately
+non-executing: AgenticOrg owns seller onboarding, merchant connector initiation,
+artifact cache consumption, buyer sessions, and bridge adapters; Grantex owns
+authority validation and canonical OACP artifact issuance. Merchant systems
+remain source of record, and provider/fintech rails own mandate and payment
+execution.
+
+Sections that discuss consent, Commerce Passport, checkout, order, fulfillment,
+refunds, or payment-control belong to the broader Grantex Commerce pilot or
+future execution-controller work. They must not be read as OACP artifact runtime
+approval for public discovery, payment, mandate, order, or merchant-private API
+mutation.
+
 ## 1. Product Thesis
 
 Agentic commerce should let a buyer ask an AI agent to discover, compare, and

@@ -42,7 +42,7 @@ Implementation status:
 | C6W7 | Local response evidence reconciliation. | Reconciled only; no execution. |
 | C6W8 | Eligibility and audit-readiness packets. | Eligibility only; no approval. |
 | C6W9 | Dry-run verifier for future execution-controller contract shape. | Dry-run only; no readiness claim. |
-| C6Z | Runtime artifact authority route and AgenticOrg vertical wiring. | Route verified in isolation; full production vertical blocked. |
+| C6Z | Runtime artifact authority route and AgenticOrg vertical wiring. | Launch-closure branch expands to 11 artifact families and local non-executing runtime proof; full production vertical remains blocked until valid Shopify and Grantex tenant-token mapping are present. |
 
 ## Landing Page: Grantex
 
@@ -89,7 +89,8 @@ Required sections:
    - ACP-style;
    - AP2-style;
    - A2A-style;
-   - MCP-style.
+   - MCP-style;
+   - OpenAPI/function buyer-safe bridge schema.
 6. Pending before public launch
    - persistent cache;
    - real connectors;
@@ -120,6 +121,19 @@ flowchart LR
   buyeragent -. "capability verification" .-> provider
   provider -. "evidence refs" .-> grantex
 ```
+
+## Required Blog Drafts
+
+Each draft must stay non-executing and must include the stated diagram. None may
+claim certification, conformance, standardization, public discovery, merchant
+approval, payment approval, or live-provider readiness.
+
+| Draft | Core message | Required diagram |
+| --- | --- | --- |
+| How OACP Connects Seller Agents, Buyer Agents, Grantex, Shopify, and Plural/Pine | Four parties keep separate responsibilities: AgenticOrg runtime, Grantex authority, Shopify source of record, provider-owned execution. | Four-party architecture. |
+| Why Grantex Is A Trust Authority, Not A Transaction Toll Booth | Cached Grantex-issued artifacts can support non-binding answers until TTL, revocation, risk, freshness, or commitment boundaries require refresh. | Buyer question through cache. |
+| From Shopify To ChatGPT/Claude/Gemini: Buyer-Safe Commerce Through OACP | Shopify read-only sync becomes OACP artifacts, then AgenticOrg bridge adapters answer with source/freshness labels. | Shopify sync to OACP artifacts plus channel bridge flow. |
+| Mandates And Payments In Agentic Commerce: Provider-Owned Execution, Agent-Owned Context | AgenticOrg can verify capability metadata where approved; providers own mandate/payment execution and Grantex stores only non-sensitive evidence refs. | Mandate capability evidence flow and refusal/fail-closed flow. |
 
 ## Landing Page: AgenticOrg
 
