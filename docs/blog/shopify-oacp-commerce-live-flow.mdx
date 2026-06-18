@@ -1,171 +1,64 @@
 ---
-title: "Shopify To OACP: The Grantex Commerce Live Flow"
-description: "The end-to-end live-pilot path from a Shopify merchant profile to AgenticOrg discovery, Grantex consent, Commerce Passport, payment intent, Plural webhook intake, reconciliation, and audit."
-date: "2026-06-14"
+title: "Shopify, Grantex Commerce, And OACP: Current Boundary"
+description: "Separates the Grantex Commerce payment-control pilot from the blocked AgenticOrg C6Z OACP runtime artifact vertical."
+date: "2026-06-18"
 authors:
   - name: "Sanjeev Mishra"
 ---
 
-Grantex Commerce V1 is now live for the approved Shopify pilot merchant
-`mch_shopify_mgx0n6_22`, imported from `mgx0n6-22.myshopify.com`.
+This draft is retained as a boundary note, not as a launch announcement.
 
-The important design choice is still the same: the agent does not get direct
-payment-provider credentials or private merchant-system access. AgenticOrg uses
-Grantex commerce tools. Grantex owns the consent, Commerce Passport, merchant
-policy, payment-control, webhook, reconciliation, and audit boundary.
+Grantex Commerce payment-control pilot work and the AgenticOrg C6Z OACP runtime
+artifact vertical are separate. The payment-control pilot can discuss Grantex
+Commerce V1, consent, Commerce Passport, payment intent, webhook intake,
+reconciliation, and audit inside its own approved scope. It must not be used as
+proof that the AgenticOrg production OACP artifact vertical is complete.
 
-## What Is Deployed
+## Current C6Z OACP Runtime Status
 
-The live pilot currently has:
+As of June 18, 2026, the real production C6Z OACP runtime vertical is blocked:
 
-- Shopify merchant profile imported as `mch_shopify_mgx0n6_22`.
-- Tenant `cten_shopify_mgx0n6_22`.
-- AgenticOrg commerce agent `cag_agenticorg_mgx0n6_22`.
-- Five Shopify products and five variants available through Grantex catalog
-  search.
-- Commerce discovery metadata at
-  `https://api.grantex.dev/.well-known/grantex-commerce`.
-- Plural webhook intake at
-  `https://api.grantex.dev/v1/webhooks/providers/plural`.
-- Live Commerce V1 runtime flags and live-readiness acknowledgements enabled.
-- Reconciliation worker enabled.
-- Operator health reporting green for database, mock adapter, Plural adapter,
-  and reconciliation.
+- AgenticOrg production is healthy at commit
+  `2fdccc7ca1337b3b2caa20a2e9ac1d03c7bfbc9c`.
+- Grantex production is healthy at commit
+  `7fd4dd3c865fbd8187d92aec792cff249c9c01c3`.
+- AgenticOrg Shopify Admin GraphQL read-only sync for
+  `mgx0n6-22.myshopify.com` fails with `401 Unauthorized`.
+- A direct status-only Shopify GraphQL probe using the mounted AgenticOrg C6Z
+  Shopify token also returns `401`.
+- Grantex C6Z authority called with the AgenticOrg-configured internal token
+  returns `422 tenant_not_provisioned`.
+- Grantex C6Z authority called by a platform-admin operator can issue 8
+  internal artifacts, all verifier-valid and all non-executing.
 
-Plural credentials currently authenticate against Plural UAT-compatible rails.
-That makes the adapter and webhook path operational for the pilot, but this post
-does not claim production Plural settlement certification.
+## Correct Architecture
 
-## End-To-End Flow
+- AgenticOrg is the buyer and seller AI-agent runtime.
+- Grantex is the trust, protocol, policy, and canonical OACP artifact authority.
+- Shopify remains the operational system of record for merchant catalog facts.
+- Plural/Pine and other provider or fintech rails own mandate and payment
+  execution.
+- Valid cached OACP artifacts may support non-binding buyer answers without
+  routing every buyer turn through Grantex.
 
-```mermaid
-sequenceDiagram
-  participant S as Shopify merchant
-  participant G as Grantex Commerce
-  participant A as AgenticOrg commerce agent
-  participant U as Buyer
-  participant P as Plural/Pine
+## What Is Not Claimed
 
-  S->>G: Import profile, products, variants
-  A->>G: Discover merchant profile
-  A->>G: Search catalog and inspect item
-  A->>G: Check inventory and create cart
-  A->>G: Request checkout consent
-  U->>G: Approve or deny consent
-  G-->>A: Commerce Passport when approved
-  A->>G: Create payment intent
-  A->>G: Request checkout handoff
-  G->>P: Provider adapter call when policy allows
-  P-->>G: Signed webhook or status response
-  G->>G: Reconcile status and append audit events
-  A->>G: Poll payment status
-```
+This draft does not claim:
 
-## Step 1: Import The Merchant
+- OACP certification, conformance, compliance, or external standardization.
+- Public OACP discovery.
+- Merchant approval, production payment approval, mandate approval, or
+  live-provider readiness from OACP work.
+- Checkout, payment, order, mandate, refund, return, shipment, inventory hold,
+  provider execution, or merchant-private API mutation.
 
-The pilot starts from the real Shopify shop profile. The importer reads the
-shop profile and active products, normalizes the catalog into Grantex commerce
-tables, archives stale Shopify-imported rows, and appends an audit event.
+## Required Before A Launch Post
 
-The production result is intentionally small and reviewable:
-
-| Field | Value |
-| --- | --- |
-| Shopify shop | `mgx0n6-22.myshopify.com` |
-| Merchant ID | `mch_shopify_mgx0n6_22` |
-| Tenant ID | `cten_shopify_mgx0n6_22` |
-| Currency | `INR` |
-| Country | `IN` |
-| Product count | 5 |
-| Variant count | 5 |
-
-No Shopify token, Grantex API key, provider credential, webhook secret, passport,
-or database URL is included in docs or evidence.
-
-## Step 2: Publish The Merchant Profile
-
-Agents can retrieve the approved merchant profile through:
-
-```bash
-curl "https://api.grantex.dev/.well-known/grantex-commerce?merchant_id=mch_shopify_mgx0n6_22"
-```
-
-The profile tells agents which Grantex-native REST and MCP surfaces are
-available. It also reports the live-pilot posture: live payments and live Plural
-runtime flags are enabled for the approved pilot, while provider credentials
-remain hidden.
-
-## Step 3: Ground Catalog Search
-
-AgenticOrg searches catalog through Grantex, not Shopify directly:
-
-```http
-POST /v1/commerce/catalog/search
-Authorization: Bearer <agent-api-key>
-Content-Type: application/json
-
-{
-  "merchant_id": "mch_shopify_mgx0n6_22",
-  "limit": 5
-}
-```
-
-The live smoke returns the five imported products. Agents must use returned
-product and variant IDs; they must not invent price, stock, warranty, return, or
-delivery facts.
-
-## Step 4: Create Cart, Consent, And Passport
-
-Checkout-affecting work is consent-first:
-
-1. The agent creates a cart from grounded variant IDs.
-2. The agent asks Grantex for a consent request.
-3. The buyer approves or denies the request in Grantex.
-4. Grantex issues a scoped Commerce Passport only after consent and policy pass.
-
-The Commerce Passport is runtime-sensitive material. It should never appear in
-logs, docs, screenshots, tickets, or chat.
-
-## Step 5: Create Payment Intent And Checkout Handoff
-
-The agent creates a provider-neutral payment intent through Grantex. Grantex
-checks tenant ownership, merchant status, active policy, amount caps, passport
-scope, idempotency, and live-readiness controls before any provider-affecting
-work proceeds.
-
-AgenticOrg never receives Plural credentials and never calls Pine or Plural
-directly for this flow.
-
-## Step 6: Receive Plural Webhook And Reconcile
-
-Plural/Pine webhook callbacks are pointed at:
-
-```text
-https://api.grantex.dev/v1/webhooks/providers/plural
-```
-
-The route verifies provider headers and signature material before processing.
-Unsigned or missing-header requests fail with `webhook_signature_invalid`.
-That is the expected fail-closed result for unauthenticated probes.
-
-Reconciliation runs as a background safety net and updates payment status from
-safe provider state when needed.
-
-## Step 7: Audit The Flow
-
-Every protected transition writes safe audit evidence. Audit records may include
-IDs, policy versions, decision references, hashes, provider reference IDs, and
-normalized error codes. They must not include bearer tokens, raw passports, raw
-credentials, webhook secrets, raw signatures, payment card data, database URLs,
-Redis URLs, or plaintext idempotency keys.
-
-## What This Launch Means
-
-This is a live Grantex control-plane pilot for a named Shopify merchant. It
-proves the end-to-end OACP path from merchant profile and catalog grounding to
-AgenticOrg tool use, consent, Commerce Passport, payment intent, Plural webhook
-intake, reconciliation, and audit.
-
-It does not claim broad merchant self-service, provider certification, or
-production Plural settlement while the available Plural credentials authenticate
-against UAT-compatible rails.
+1. Rotate or replace the AgenticOrg C6Z Shopify Admin token and confirm
+   read-only GraphQL access.
+2. Provision or replace the AgenticOrg-to-Grantex internal token so the
+   configured path can issue artifacts without platform-admin substitution.
+3. Re-run the full production vertical and capture redacted evidence for:
+   Shopify product/variant counts, Grantex artifact issuance, AgenticOrg cache
+   records, buyer answer source/freshness labels, MCP seller facts, Plural/Pine
+   capability metadata, public discovery disabled, and no execution.
