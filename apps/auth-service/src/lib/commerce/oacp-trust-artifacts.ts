@@ -374,6 +374,7 @@ export const OACP_C6W4_PROTOCOL_ADAPTER_SURFACES = [
   'ap2_evidence_intent_summary',
   'a2a_agent_card_task_capability',
   'mcp_tool_resource_capability',
+  'openapi_buyer_safe_bridge_schema',
 ] as const;
 
 export type OacpProtocolAdapterSurface = typeof OACP_C6W4_PROTOCOL_ADAPTER_SURFACES[number];
@@ -1244,6 +1245,13 @@ export const OACP_C6W4_PROTOCOL_ADAPTER_DESCRIPTORS: Record<OacpProtocolAdapterS
   mcp_tool_resource_capability: {
     surface: 'mcp_tool_resource_capability',
     summary: 'MCP-style tool and resource capability preview limited to read-only commerce facts.',
+    required_artifact_types: ['merchant_capability', 'seller_agent_capability', 'policy', 'protocol_adapter'],
+    max_ttl_seconds: OACP_ARTIFACT_TTLS_SECONDS.protocol_adapter,
+    blocked_capabilities: C6W4_COMMON_BLOCKED_ADAPTER_CAPABILITIES,
+  },
+  openapi_buyer_safe_bridge_schema: {
+    surface: 'openapi_buyer_safe_bridge_schema',
+    summary: 'OpenAPI/function bridge schema preview for buyer-safe product questions only.',
     required_artifact_types: ['merchant_capability', 'seller_agent_capability', 'policy', 'protocol_adapter'],
     max_ttl_seconds: OACP_ARTIFACT_TTLS_SECONDS.protocol_adapter,
     blocked_capabilities: C6W4_COMMON_BLOCKED_ADAPTER_CAPABILITIES,
@@ -2298,32 +2306,46 @@ function buildC6W4SurfacePayload(
     };
   }
 
+  if (surface === 'mcp_tool_resource_capability') {
+    return {
+      ...basePayload,
+      capability_kind: 'mcp_style_tool_resource_preview',
+      tools: [
+        { name: 'oacp.preview.merchant.read', write: false, source_required: true },
+        { name: 'oacp.preview.policy.read', write: false, source_required: true },
+      ],
+      resources: [
+        { uri_template: 'oacp-preview://merchant/{merchant_id}', source_required: true },
+        { uri_template: 'oacp-preview://policy/{merchant_id}', source_required: true },
+      ],
+      write_tools: [],
+      non_final_price_preview: price ? {
+        source_artifact_id: sourceArtifactId(price),
+        product_id: stringValue(price.payload, 'product_id'),
+        variant_id: stringValue(price.payload, 'variant_id'),
+        currency: stringValue(price.payload, 'currency'),
+        amount_minor_units: numberValue(price.payload, 'amount_minor_units'),
+        final_price_promise: false,
+      } : null,
+      non_final_inventory_preview: inventory ? {
+        source_artifact_id: sourceArtifactId(inventory),
+        product_id: stringValue(inventory.payload, 'product_id'),
+        availability_state: stringValue(inventory.payload, 'availability_state'),
+        hold_or_delivery_promise: false,
+      } : null,
+    };
+  }
+
   return {
     ...basePayload,
-    capability_kind: 'mcp_style_tool_resource_preview',
-    tools: [
-      { name: 'oacp.preview.merchant.read', write: false, source_required: true },
-      { name: 'oacp.preview.policy.read', write: false, source_required: true },
-    ],
-    resources: [
-      { uri_template: 'oacp-preview://merchant/{merchant_id}', source_required: true },
-      { uri_template: 'oacp-preview://policy/{merchant_id}', source_required: true },
-    ],
-    write_tools: [],
-    non_final_price_preview: price ? {
-      source_artifact_id: sourceArtifactId(price),
-      product_id: stringValue(price.payload, 'product_id'),
-      variant_id: stringValue(price.payload, 'variant_id'),
-      currency: stringValue(price.payload, 'currency'),
-      amount_minor_units: numberValue(price.payload, 'amount_minor_units'),
-      final_price_promise: false,
-    } : null,
-    non_final_inventory_preview: inventory ? {
-      source_artifact_id: sourceArtifactId(inventory),
-      product_id: stringValue(inventory.payload, 'product_id'),
-      availability_state: stringValue(inventory.payload, 'availability_state'),
-      hold_or_delivery_promise: false,
-    } : null,
+    schema_kind: 'openapi_function_bridge_preview',
+    operation_id: 'askSellerCommerceAgent',
+    method: 'POST',
+    path_template: '/api/v1/commerce/runtime/bridges/openapi/ask',
+    request_fields: ['tenant_id', 'merchant_id', 'seller_agent_id', 'buyer_agent_id', 'question', 'channel', 'action_intent'],
+    response_fields: ['answer', 'source_label', 'freshness_label', 'artifact_refs', 'refusal_reason'],
+    write_operations: [],
+    transaction_authority: false,
   };
 }
 

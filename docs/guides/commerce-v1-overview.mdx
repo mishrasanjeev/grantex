@@ -12,11 +12,14 @@ rails own mandate and payment execution. Grantex keeps OACP artifacts,
 source/freshness rules, refusal semantics, consent posture, and audit evidence
 safe without becoming a toll booth for every non-binding agent interaction.
 
-This is the current live-pilot overview. Production Commerce V1 is deployed for
-the approved Shopify merchant `mch_shopify_mgx0n6_22` from
-`mgx0n6-22.myshopify.com`. The Grantex control plane is live; public docs do
-not claim production Plural settlement because the available Plural credentials
-authenticate against Plural UAT-compatible rails.
+This page also references the separate Grantex Commerce payment-control pilot.
+That pilot is not OACP runtime artifact launch proof. OACP runtime proof is
+limited to AgenticOrg seller onboarding, read-only Shopify evidence, Grantex
+internal artifact issuance, AgenticOrg cache consumption, buyer-safe answers,
+bridge metadata, and provider-owned capability metadata. Public discovery,
+checkout, payment, order, mandate, refund, return, shipment, live-provider
+execution, certification, conformance, standardization, and public OACP
+publication are not enabled by the OACP runtime artifact path.
 
 ## Current Posture
 
@@ -28,11 +31,11 @@ authenticate against Plural UAT-compatible rails.
 | Internal OACP foundation | Implemented through C6W9 | Artifact family, adapter preview, commitment boundary, prepared envelope, reconciliation, eligibility packet, and dry-run verifier foundations are internal and non-executing. |
 | Hosted AgenticOrg API-only discovery | Verified externally | AgenticOrg C3 evidence records hosted MCP/A2A discovery against temporary Grantex smoke. |
 | Plural sandbox hosted-checkout adapter | Implemented/gated | Token, hosted checkout order creation, order-status polling, and HMAC webhook verification are behind the provider abstraction and require explicit sandbox flags and credentials. |
-| Shopify live pilot merchant | Deployed | `mgx0n6-22.myshopify.com` is imported as `mch_shopify_mgx0n6_22` with 5 products and 5 variants. |
-| Grantex production Commerce V1 discovery | Live pilot | `/.well-known/grantex-commerce` returns the approved live merchant profile. |
-| Machine-readable live-readiness gate | Complete for the approved pilot | Runtime snapshot requires explicit legal, provider, security, operations, OACP E2E, audit, rollback, and human approval evidence. Missing evidence still returns `live_readiness_blocked`. |
-| Production checkout control plane | Enabled for the approved pilot | Consent, Commerce Passport, policy, amount-cap, cart, payment-intent, webhook, reconciliation, and audit controls are deployed. |
-| Plural adapter | Configured | Webhook intake and adapter health are deployed; production Plural settlement is not claimed while credentials authenticate against UAT-compatible rails. |
+| Shopify payment-control pilot merchant | Deployed for the separate Grantex Commerce pilot | `mgx0n6-22.myshopify.com` is imported as `mch_shopify_mgx0n6_22`; this is not OACP runtime artifact launch proof. |
+| Grantex production Commerce V1 discovery | Separate payment-control pilot surface | `/.well-known/grantex-commerce` belongs to Grantex Commerce V1 discovery, not AgenticOrg OACP runtime public discovery. |
+| Machine-readable live-readiness gate | Separate payment-control pilot gate | Runtime snapshot requires explicit legal, provider, security, operations, OACP E2E, audit, rollback, and human approval evidence. Missing evidence still returns `live_readiness_blocked`. |
+| Production checkout control plane | Separate payment-control pilot only | Consent, Commerce Passport, policy, amount-cap, cart, payment-intent, webhook, reconciliation, and audit controls are not enabled by OACP runtime artifact proof. |
+| Plural adapter | Separate payment-control pilot adapter | Webhook intake and adapter health are deployed; production Plural settlement is not claimed while credentials authenticate against UAT-compatible rails. |
 
 ## Start Here
 
@@ -44,7 +47,7 @@ authenticate against Plural UAT-compatible rails.
 | Merchants and operators | Read `docs/guides/commerce-v1-merchant-operator-guide.mdx`, then `docs/guides/commerce-v1-operations.mdx`. |
 | AgenticOrg integration owners | Read this page, the AgenticOrg commerce docs, and the Option A smoke workflow. |
 | Reviewers assessing readiness | Read the smoke evidence and production discovery readiness report before any enablement proposal. |
-| End users | Use the plain-language consent flow below: agents can prepare a purchase, but Grantex controls what may proceed and records what happened. |
+| End users | For OACP runtime, use buyer-safe product questions with source/freshness labels. Purchases, payments, mandates, and orders are outside this runtime proof. |
 
 ## Architecture
 
@@ -77,9 +80,9 @@ For the full consolidated product requirements, use
    packet, connects systems through approved connector custody, and requests
    Grantex authority review.
 2. Buyer completes one-time setup in their preferred channel: account/session
-   linking, safe preferences, and understanding that checkout requires Grantex
-   consent.
-3. Buyer asks an AgenticOrg-powered agent to discover, compare, or buy.
+   linking, safe preferences, and understanding that current OACP runtime
+   answers are non-binding.
+3. Buyer asks an AgenticOrg-powered agent to discover or compare.
 4. AgenticOrg uses cached OACP artifacts when TTL, revocation, and risk rules
    allow; otherwise it asks Grantex to refresh or verify.
 5. Commitment-bound actions require boundary, envelope, reconciliation,

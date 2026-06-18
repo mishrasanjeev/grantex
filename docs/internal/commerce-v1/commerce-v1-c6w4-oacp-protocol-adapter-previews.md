@@ -8,7 +8,7 @@ C6W4 adds internal protocol adapter preview helpers over the C6W3 OACP artifact 
 
 This slice adds:
 
-- Internal adapter descriptors for schema.org JSON-LD style discovery, UCP-style capability profiles, ACP-style commerce capability shapes, AP2-style evidence and intent summaries, A2A-style agent card/task capabilities, and MCP-style tool/resource capabilities.
+- Internal adapter descriptors for schema.org JSON-LD style discovery, UCP-style capability profiles, ACP-style commerce capability shapes, AP2-style evidence and intent summaries, A2A-style agent card/task capabilities, MCP-style tool/resource capabilities, and OpenAPI/function buyer-safe bridge schemas.
 - Pure helper mapping from signed OACP artifact fixtures to bounded preview payloads.
 - Focused tests for source artifact binding, TTL bounding, source authority, unsupported capabilities, and fail-closed private/missing/stale artifact handling.
 
@@ -24,6 +24,7 @@ No endpoint, migration, workflow, provider adapter, public discovery, checkout/p
 | AP2-style evidence/intent summary | Internal evidence and intent summary without mandate or payment execution. | merchant_capability, seller_agent_capability, policy, commitment_evidence, protocol_adapter |
 | A2A-style agent card/task capability | Internal buyer/seller agent card and task capability preview. | merchant_capability, seller_agent_capability, policy, protocol_adapter |
 | MCP-style tool/resource capability | Internal read-only tool/resource capability shape. | merchant_capability, seller_agent_capability, policy, protocol_adapter |
+| OpenAPI buyer-safe bridge schema | Internal function/API bridge shape for buyer-safe questions. | merchant_capability, seller_agent_capability, policy, protocol_adapter |
 
 ## Preview Safety Contract
 

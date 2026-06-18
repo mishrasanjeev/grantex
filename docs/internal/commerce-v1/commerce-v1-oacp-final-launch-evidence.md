@@ -1,6 +1,6 @@
 # Commerce V1 OACP Final Launch Evidence
 
-Status: blocked for production C6Z launch.
+Status: local internal authority proof complete; production C6Z vertical blocked by external credentials/provisioning.
 
 Evidence date: 2026-06-18.
 
@@ -36,15 +36,45 @@ Platform-admin isolation result:
 
 - status `artifact_issuance_ready`
 - route kind `grantex_internal_c6z_authority_request`
-- artifact count `8`
-- artifact families: `merchant_profile`, `seller_agent_card`, `connector_evidence`, `catalog_snapshot`, `offer_price_snapshot`, `inventory_snapshot`, `policy_scope`, `authority_request_status`
-- verifier summary: 8 valid, 0 invalid
+- artifact count `11` after this branch
+- artifact families: `merchant_profile`, `seller_agent_card`, `connector_evidence`, `catalog_snapshot`, `offer_price_snapshot`, `inventory_snapshot`, `policy_scope`, `public_discovery_state`, `mandate_capability`, `protocol_adapter`, `authority_request_status`
+- verifier summary expected after this branch: 11 valid, 0 invalid
 - `allowed_to_execute=false`
 - `no_payment_execution=true`
 - `no_public_discovery_enablement=true`
 - `non_authoritative_for_transaction=true`
 
 This proves the Grantex issuer route can issue internal C6Z artifacts, but it does not prove the configured AgenticOrg-to-Grantex production path.
+
+## Local Launch-Closure Evidence
+
+`npm --prefix apps/auth-service run build` followed by
+`node scripts/commerce-oacp-runtime-launch-check.mjs` now produces a redacted
+authority evidence packet:
+
+- generated at: `2026-06-18T06:12:10.504Z` in the latest local run
+- request id: `agenticorg_oacp_launch_request_001`
+- tenant id: `11111111-1111-1111-1111-111111111111`
+- merchant id: `merchant_oacp_launch_evidence`
+- seller agent id: `seller_agent_oacp_launch`
+- evidence id: `shopify_evidence_oacp_launch`
+- source evidence ref: `agenticorg:shopify:evidence:oacp-launch:redacted`
+- authority request status: `artifact_issuance_ready`
+- artifact family count: `11`
+- artifact verifier summary: `11` valid, `0` invalid
+- public discovery state: `disabled`
+- mandate capability status: `provider_owned_verification_required`
+- protocol adapter boundary: `compatibility_mapping_only_no_certification_or_standardization_claim`
+- `allowed_to_execute=false`
+- `raw_payload_stored=false`
+- `no_payment_execution=true`
+- `non_authoritative_for_transaction=true`
+
+Artifact IDs are internal local authority IDs only, one per required family:
+`merchant_profile`, `seller_agent_card`, `connector_evidence`,
+`catalog_snapshot`, `offer_price_snapshot`, `inventory_snapshot`,
+`policy_scope`, `public_discovery_state`, `mandate_capability`,
+`protocol_adapter`, and `authority_request_status`.
 
 ## AgenticOrg Vertical Evidence
 
@@ -72,9 +102,10 @@ The real production vertical did not complete.
 
 ## Local Validation
 
-- `npm --prefix apps/auth-service test -- commerce-c6z-runtime-artifact-authority.test.ts`: passed, 5 tests.
+- `npm --prefix apps/auth-service test -- commerce-c6z-runtime-artifact-authority.test.ts`: covers C6Z authority issuance and 11-family verifier behavior.
 - `npm --prefix apps/auth-service run typecheck`: passed.
 - `node scripts/commerce-c6oe-preview-conformance-gate.mjs --mode pr`: passed.
+- `node scripts/commerce-oacp-runtime-launch-check.mjs`: local-safe authority issuance evidence harness after `apps/auth-service` build output exists.
 
 ## Skipped Or Blocked Checks
 
@@ -87,7 +118,7 @@ The real production vertical did not complete.
 
 ## Exact Launch Status
 
-- Internal runtime demo: blocked in production.
+- Internal runtime demo: complete locally across the Grantex authority proof and AgenticOrg runtime harness; blocked in production by external credentials/provisioning.
 - Closed merchant pilot: blocked.
 - Public OACP preview: blocked.
 

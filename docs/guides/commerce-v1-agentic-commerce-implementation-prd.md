@@ -26,6 +26,16 @@ This document is not a rollout approval. It does not enable production Commerce
 V1, public discovery, checkout/payment creation, live payments, live Plural, or
 any production allowlist.
 
+## Current OACP Runtime Closure Boundary
+
+The launch-closure implementation proves a non-executing OACP runtime vertical:
+AgenticOrg seller onboarding and read-only connector sync, Grantex internal
+artifact authority issuance, AgenticOrg durable cache consumption, buyer-safe
+answers, bridge adapters, and provider-owned capability metadata checks. It does
+not enable checkout, payment, order, mandate, refund, return, shipment,
+inventory hold, public discovery publication, live provider execution, or
+merchant-private API mutation.
+
 ## 1. Architecture In Plain English
 
 ```mermaid

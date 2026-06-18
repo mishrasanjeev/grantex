@@ -19,10 +19,12 @@ Last updated: 2026-06-18.
 4. Create or reuse an AgenticOrg Seller Commerce Agent onboarding packet for the approved Shopify pilot merchant.
 5. Run AgenticOrg Shopify Admin GraphQL read-only sync.
 6. Send AgenticOrg authority request to Grantex.
-7. Cache returned Grantex artifacts in AgenticOrg.
-8. Ask a buyer product question from cache and record source/freshness labels.
-9. Smoke the MCP seller facts bridge against the cached data.
-10. Run Plural/Pine capability metadata verification only; do not execute mandates or payments.
+7. Confirm Grantex issues 11 internal artifact families: `merchant_profile`, `seller_agent_card`, `connector_evidence`, `catalog_snapshot`, `offer_price_snapshot`, `inventory_snapshot`, `policy_scope`, `public_discovery_state`, `mandate_capability`, `protocol_adapter`, and `authority_request_status`.
+8. Cache returned Grantex artifacts in AgenticOrg.
+9. Ask a buyer product question from cache and record source/freshness labels.
+10. Smoke the web, MCP, OpenAPI/function, and A2A bridge contracts against the cached data.
+11. Confirm WhatsApp and Telegram bridge adapters either answer through the same contract or return `blocked_missing_credentials` without outbound sends.
+12. Run Plural/Pine capability metadata verification only; do not execute mandates or payments.
 
 ## Current Blockers
 
