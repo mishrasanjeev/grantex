@@ -1,0 +1,37 @@
+# Commerce V1 OACP Runtime Launch Runbook
+
+Status: internal runbook for the C6Z OACP runtime artifact vertical.
+
+Last updated: 2026-06-18.
+
+## Safe Preconditions
+
+- Use production AgenticOrg and production Grantex only with approved smoke credentials.
+- Do not print tokens, raw Shopify payloads, raw Grantex artifacts, raw provider payloads, JWTs, passports, DB URLs, Redis URLs, or Secret Manager values.
+- Keep public discovery disabled.
+- Do not create checkout, payment, order, mandate, refund, return, shipment, inventory hold, live-provider execution, production allowlist entries, or public OACP publication.
+
+## Required Production Checks
+
+1. Confirm AgenticOrg health reports the deployed commit and healthy DB/Redis.
+2. Confirm Grantex health reports healthy DB/Redis and the deployed commit/revision.
+3. Confirm Grantex C6Z route refuses unauthenticated or invalid calls with `401` or `403`.
+4. Create or reuse an AgenticOrg Seller Commerce Agent onboarding packet for the approved Shopify pilot merchant.
+5. Run AgenticOrg Shopify Admin GraphQL read-only sync.
+6. Send AgenticOrg authority request to Grantex.
+7. Cache returned Grantex artifacts in AgenticOrg.
+8. Ask a buyer product question from cache and record source/freshness labels.
+9. Smoke the MCP seller facts bridge against the cached data.
+10. Run Plural/Pine capability metadata verification only; do not execute mandates or payments.
+
+## Current Blockers
+
+As of 2026-06-18, step 5 is blocked because Shopify returns `401 Unauthorized` for the AgenticOrg C6Z Shopify Admin token. Step 6 is independently blocked because Grantex returns `422 tenant_not_provisioned` for the AgenticOrg-configured internal token.
+
+Do not proceed to closed merchant pilot or public preview until both blockers are resolved and the full vertical is re-run.
+
+## Launch Status Labels
+
+- Internal runtime demo: blocked in production until the real vertical completes.
+- Closed merchant pilot: blocked until Shopify sync and AgenticOrg-to-Grantex authority issuance pass with the configured production credentials.
+- Public OACP preview: blocked. Public discovery remains disabled and OACP is not externally published.

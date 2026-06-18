@@ -139,23 +139,30 @@ The repo already has important foundations:
 | MCP/native agent surface | `merchant.get_profile`, `catalog.search`, `catalog.get_item`, `inventory.check`, `cart.create`, `checkout.create`, `payment.create_intent`, `payment.get_status`. | Correct agent surface; public discovery remains fail-closed. |
 | Docs navigation | Commerce V1 docs group exists in `docs/docs.json`. | Updated by this PRD pass to include this implementation PRD. |
 | Deploy workflow guard | Auth-service and portal deploy workflows have path filters for runtime paths. | Docs-only changes should not trigger Grantex deploy workflows, but CI still runs broad validation. |
-| OACP artifact foundation | C6W3-C6W9 internal helpers, tests, and docs define artifact families, adapter previews, commitment boundaries, prepared envelopes, evidence reconciliation, eligibility packets, and dry-run verifier results. | Internal only; no runtime execution, public protocol publication, certification, or production readiness. |
+| OACP artifact foundation | C6W3-C6Z internal helpers, tests, docs, authority route, verifier, and AgenticOrg runtime handoff foundations define artifact families, adapter previews, commitment boundaries, prepared envelopes, evidence reconciliation, eligibility packets, dry-run verifier results, authority requests, cache use, buyer answers, MCP bridge, and capability checks. | Internal only; the 2026-06-18 production vertical is blocked by Shopify token and Grantex tenant-token provisioning issues; no execution, public protocol publication, certification, or production readiness. |
 
-### 2.1 Current OACP Status Through C6W9
+### 2.1 Current OACP Status Through C6Z
 
-The current OACP implementation is a strong internal contract foundation, not a
-live commerce product:
+The current OACP implementation is a strong internal runtime foundation, not a
+live commerce product. The 2026-06-18 production closure run is blocked because
+the mounted AgenticOrg Shopify token returns `401 Unauthorized` and the
+AgenticOrg-configured Grantex token returns `422 tenant_not_provisioned`.
 
 - implemented: internal artifact schemas, public-safe fixtures, adapter
   previews, commitment boundary resolver, prepared envelopes, response
-  reconciliation, eligibility packets, and execution-controller dry-run
-  verifier;
+  reconciliation, eligibility packets, execution-controller dry-run verifier,
+  internal C6Z authority request route, artifact verifier, and non-enablement
+  flags;
 - implemented in both repos: Grantex authority helpers/tests/docs and
-  AgenticOrg local consumer helpers/tests/docs;
-- not implemented: public OACP spec site, public endpoint, production artifact
-  issuer, persistent artifact cache, live connector sync, provider-owned mandate
-  verification runtime, execution controller, order/fulfillment/refund runtime,
-  public discovery, or live checkout/payment;
+  AgenticOrg local consumer/runtime helpers/tests/docs, including seller-agent
+  packet creation, Shopify sync initiation, artifact cache, buyer answer, MCP
+  bridge, and Plural/Pine capability verifier paths;
+- blocked in production: successful Shopify read-only sync with the mounted
+  token and successful AgenticOrg-to-Grantex tenant provisioning for the
+  configured internal token;
+- not implemented or not enabled: public OACP spec site, public endpoint,
+  public discovery, execution controller, order/fulfillment/refund runtime, or
+  live checkout/payment;
 - still blocked: publication, certification, conformance, standards submission,
   production readiness claims, and any real merchant approval.
 
@@ -215,7 +222,7 @@ must not turn protocol adapters into transaction authority.
 
 | Surface | Relevant external idea | Grantex implementation requirement |
 | --- | --- | --- |
-| OACP artifacts | Internal trust profile for seller agents, buyer agents, merchant systems, and provider rails. | C6W3-C6W9 are internal only; artifacts preserve TTL, source/freshness, refusals, and non-enablement flags. |
+| OACP artifacts | Internal trust profile for seller agents, buyer agents, merchant systems, and provider rails. | C6W3-C6Z are internal only; artifacts preserve TTL, source/freshness, refusals, and non-enablement flags. |
 | Native Grantex API | First-party authority APIs for artifacts and policy. | Continue as authority surface, not as a mandatory toll booth for all non-binding cached interactions. |
 | MCP | Agent tool transport. UCP also lists MCP among supported transports. | Expose tools that consume artifacts and preserve refusal semantics. |
 | UCP-style capability profile | UCP discovery uses business/platform profiles, services, capabilities, negotiation, and transports such as REST, MCP, A2A, and embedded. See [UCP overview](https://ucp.dev/specification/overview/). | Publish profiles only from approved merchant capability state. Do not claim UCP certification until conformance tests exist. |
@@ -333,7 +340,8 @@ Grantex landing page planning blocks:
   refusal semantics, source/freshness, revocation, audit evidence.
 - Section 2: "What Grantex does not own" - seller agents, buyer chat runtime,
   merchant operational systems, provider mandate/payment execution.
-- Section 3: "OACP status" - internal C6W9 foundation, no public standard claim.
+- Section 3: "OACP status" - internal C6Z foundation, blocked production
+  vertical, no public standard claim.
 - Section 4: "Protocol adapters" - schema.org, UCP-style, ACP-style,
   AP2-style, A2A-style, MCP-style previews generated from artifacts.
 - Section 5: "Pending before live" - persistent cache, real connectors,
@@ -349,7 +357,7 @@ Blog series plan:
 | How AgenticOrg Seller Agents Connect Shopify, WooCommerce, And ERP | Merchants and integrators | Connector credential-custody choices and source/freshness flow. |
 | Provider-Owned Mandates In Agentic Commerce | Fintech and risk teams | Buyer mandate setup at provider rail, AgenticOrg verification, Grantex evidence refs. |
 | From schema.org To ACP To AP2: Adapter Previews Without Overclaiming | Standards and developers | OACP artifact -> adapter preview fan-out. |
-| What Still Blocks Autonomous Commerce | Leadership and operators | Gap map from C6W9 to live pilot. |
+| What Still Blocks Autonomous Commerce | Leadership and operators | Gap map from C6Z blocked production vertical to live pilot. |
 
 Avoid claims that imply:
 

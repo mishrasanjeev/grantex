@@ -26,7 +26,12 @@ rails own mandate and payment execution.
 
 ## Current Implementation Summary
 
-Internal OACP work is implemented through C6W9:
+Internal OACP work is implemented through C6Z, but the production C6Z vertical
+is not complete. The June 18, 2026 closure run found two production blockers:
+AgenticOrg Shopify Admin GraphQL sync returns `401 Unauthorized`, and the
+AgenticOrg-configured Grantex internal token returns `422 tenant_not_provisioned`.
+
+Implementation status:
 
 | Slice | Current result | Public posture |
 | --- | --- | --- |
@@ -37,6 +42,7 @@ Internal OACP work is implemented through C6W9:
 | C6W7 | Local response evidence reconciliation. | Reconciled only; no execution. |
 | C6W8 | Eligibility and audit-readiness packets. | Eligibility only; no approval. |
 | C6W9 | Dry-run verifier for future execution-controller contract shape. | Dry-run only; no readiness claim. |
+| C6Z | Runtime artifact authority route and AgenticOrg vertical wiring. | Route verified in isolation; full production vertical blocked. |
 
 ## Landing Page: Grantex
 
@@ -72,7 +78,9 @@ Required sections:
    - merchant systems;
    - provider/fintech rails.
 4. OACP implementation status
-   - C6W3 through C6W9 complete internally;
+   - C6W3 through C6Z complete internally;
+   - the 2026-06-18 production vertical is blocked on Shopify token validity
+     and AgenticOrg-to-Grantex tenant-token provisioning;
    - execution, live payments, public discovery, and standardization remain
      blocked.
 5. Protocol adapter previews
@@ -232,3 +240,5 @@ sequenceDiagram
   provider rails, merchant approval, or production readiness.
 - Landing pages include "internal preview" or "planning" posture until launch
   approval exists.
+- Grantex Commerce payment-control pilot wording is kept separate from OACP
+  runtime artifact protocol wording.
