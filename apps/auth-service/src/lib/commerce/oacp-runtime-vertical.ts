@@ -328,6 +328,7 @@ function payloadForFamily(
     public_discovery_publication_allowed: family === 'public_discovery_state' ? false : undefined,
     mandate_capability_status: family === 'mandate_capability' ? 'provider_owned_verification_required' : undefined,
     provider_execution_authority: family === 'mandate_capability' ? 'provider_owned_not_grantex_or_agenticorg' : undefined,
+    mandate_capability_ref: family === 'mandate_capability' ? 'provider:mandate_rail:capability:pending:redacted' : undefined,
     adapter_surfaces: family === 'protocol_adapter'
       ? [
         'schema_org_product_offer_jsonld',
@@ -341,6 +342,9 @@ function payloadForFamily(
       : undefined,
     adapter_claim_boundary: family === 'protocol_adapter'
       ? 'compatibility_mapping_only_no_certification_or_standardization_claim'
+      : undefined,
+    allowed_protocol_adapters: family === 'protocol_adapter'
+      ? ['schema.org', 'ucp_style', 'acp_style', 'ap2_style', 'a2a', 'mcp']
       : undefined,
     authority_request_status: family === 'authority_request_status' ? 'artifact_issuance_ready' : undefined,
     unsupported_capabilities: [
