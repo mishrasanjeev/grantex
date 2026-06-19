@@ -8,7 +8,7 @@ description: Plain-language buyer and seller flow for OACP agentic commerce with
 This guide explains how agentic commerce should work from the perspective of
 both sellers and buyers. It is documentation only. It does not enable production
 Commerce V1, public discovery, checkout/payment creation, live payments, live
-Plural, merchant approval, or a production allowlist.
+provider rails, merchant approval, or a production allowlist.
 
 ## Current OACP Runtime Closure Boundary
 
@@ -36,6 +36,15 @@ systems through approved connector custody. Grantex validates public-safe facts
 into signed OACP artifacts and policy decisions. Buyers start from their
 preferred agent or chat surface. Provider and fintech rails own mandate and
 payment execution.
+
+For the C6Z live-runtime path, AgenticOrg calls Grantex through
+`POST /v1/commerce/oacp/c6z/authority-requests`. Production should use the
+dedicated AgenticOrg C6Z authority service token, limited to that route and to
+tenant ids configured in `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`. Grantex
+issues the full C6Z artifact set: merchant profile, seller agent card,
+connector evidence, catalog snapshot, offer/price snapshot, inventory snapshot,
+policy scope, public-discovery state, mandate capability, protocol adapter, and
+authority-request status.
 
 ```mermaid
 flowchart TB

@@ -1,6 +1,7 @@
 import type postgres from 'postgres';
 import type { FastifyRequest } from 'fastify';
 import type { Redis } from 'ioredis';
+import { createHash } from 'node:crypto';
 import { hashApiKey } from '../hash.js';
 import { resolveMerchantApiKey, looksLikeMerchantApiKey } from './merchant-auth.js';
 import {
@@ -12,13 +13,16 @@ import {
 
 type Sql = ReturnType<typeof postgres>;
 
+export const C6Z_AUTHORITY_SERVICE_SCOPE = 'commerce.oacp.c6z.authority_requests.write';
+const C6Z_AUTHORITY_ROUTE_SUFFIX = '/oacp/c6z/authority-requests';
+
 export type CommerceCaller =
   | {
       kind: 'operator';
       developerId: string;
       developerName: string;
       tenantId: string;
-      /** null when no developer→tenant mapping exists (then tenantId === ''). */
+      /** null when no developer-to-tenant mapping exists (then tenantId === ''). */
       tenantStatus: 'active' | 'disabled' | null;
       isOwnerOfTenant: boolean;
       isPlatformAdmin: boolean;
@@ -83,7 +87,7 @@ async function loadDeveloperByApiKey(sql: Sql, token: string): Promise<Developer
 
 /**
  * Single JOIN that resolves the operator's default tenant + tenant
- * status + role. Returns null when no developer→tenant mapping exists
+ * status + role. Returns null when no developer-to-tenant mapping exists
  * (caller decides auto-provision vs 422). Returns status='disabled' so
  * the route preHandler can 403 without an extra round-trip.
  */
@@ -120,6 +124,34 @@ function isPlatformAdminToken(token: string): boolean {
   return diff === 0;
 }
 
+function timingSafeStringEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function tokenSha256(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
+function isC6ZAuthorityRoute(request: FastifyRequest): boolean {
+  if (request.method !== 'POST') return false;
+  const path = request.url.split('?')[0] ?? '';
+  return path.endsWith(C6Z_AUTHORITY_ROUTE_SUFFIX);
+}
+
+function isC6ZAuthorityServiceToken(request: FastifyRequest, token: string): boolean {
+  if (!isC6ZAuthorityRoute(request)) return false;
+  const rawToken = process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN'];
+  if (rawToken && rawToken.length >= 16 && timingSafeStringEqual(token, rawToken)) return true;
+  const expectedHash = process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN_SHA256'];
+  if (expectedHash && /^[a-f0-9]{64}$/i.test(expectedHash)) {
+    return timingSafeStringEqual(tokenSha256(token).toLowerCase(), expectedHash.toLowerCase());
+  }
+  return false;
+}
+
 /**
  * Single entry point for commerce route auth. Detects token shape and
  * dispatches to the appropriate resolver. Sets request.commerceCaller
@@ -143,6 +175,18 @@ export async function resolveCommerceCaller(
 
   // Order matters: check the most specific shapes first so an opaque
   // token doesn't accidentally match the operator fallback.
+  if (isC6ZAuthorityServiceToken(request, token)) {
+    return {
+      ok: true,
+      caller: {
+        kind: 'service',
+        serviceId: 'agenticorg_c6z_authority',
+        tenantId: process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_DEFAULT_TENANT'] ?? '',
+        scopes: [C6Z_AUTHORITY_SERVICE_SCOPE],
+      },
+    };
+  }
+
   if (looksLikeMerchantApiKey(token)) {
     const r = await resolveMerchantApiKey(sql, token);
     if (!r.ok) {
@@ -199,7 +243,7 @@ export async function resolveCommerceCaller(
     return { ok: false, failure: { status: 401, code: 'invalid_developer_key', message: 'Developer API key not recognized' } };
   }
   // Admin without a backing developer record: synthesize an operator caller
-  // marked as platform admin. The admin caller has no implicit tenant —
+  // marked as platform admin. The admin caller has no implicit tenant -
   // operator endpoints that require a tenant context must accept a
   // tenant_id parameter and validate the admin gate.
   if (isAdmin && !developer) {

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   issueC6ZInternalOacpArtifacts,
   validateC6ZSellerAuthorityRequest,
@@ -67,6 +67,7 @@ describe('C6Z Grantex runtime artifact authority', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await app.close();
   });
 
@@ -246,5 +247,56 @@ describe('C6Z Grantex runtime artifact authority', () => {
       no_payment_execution: true,
       no_public_discovery_enablement: true,
     });
+  });
+
+  it('accepts a tenant-allowlisted AgenticOrg authority service token for this endpoint only', async () => {
+    vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN', 'agenticorg-c6z-fixture-service-key');
+    vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS', 'cten_C6Z');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/oacp/c6z/authority-requests',
+      headers: { authorization: 'Bearer agenticorg-c6z-fixture-service-key' },
+      payload: {
+        now_iso: NOW,
+        request: authorityRequest(),
+        connector_evidence: connectorEvidence(),
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      route_kind: 'grantex_internal_c6z_authority_request',
+      status: 'artifact_issuance_ready',
+      artifact_count: 11,
+      allowed_to_execute: false,
+    });
+
+    const blocked = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/merchants/mch_C6Z',
+      headers: { authorization: 'Bearer agenticorg-c6z-fixture-service-key' },
+    });
+    expect(blocked.statusCode).toBe(401);
+    expect(blocked.json<{ error: { code: string } }>().error.code).toBe('invalid_developer_key');
+  });
+
+  it('rejects the authority service token when the tenant is not explicitly allowlisted', async () => {
+    vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN', 'agenticorg-c6z-fixture-service-key');
+    vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS', 'cten_OTHER');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/oacp/c6z/authority-requests',
+      headers: { authorization: 'Bearer agenticorg-c6z-fixture-service-key' },
+      payload: {
+        now_iso: NOW,
+        request: authorityRequest(),
+        connector_evidence: connectorEvidence(),
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe('service_tenant_not_allowed');
   });
 });

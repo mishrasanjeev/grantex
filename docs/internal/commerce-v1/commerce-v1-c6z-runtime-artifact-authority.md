@@ -24,6 +24,25 @@ The internal endpoint is:
 
 `POST /v1/commerce/oacp/c6z/authority-requests`
 
+It can be called by either:
+
+- an existing Grantex commerce operator token with a mapped active commerce tenant; or
+- the dedicated AgenticOrg C6Z authority service token, limited to this route and to
+  explicit tenant ids configured in `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`.
+
+For production AgenticOrg handoff, configure one of:
+
+- `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN`
+- `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN_SHA256`
+
+and always configure:
+
+- `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`
+
+The service token is intentionally not accepted on other commerce endpoints. It is not a
+merchant credential, provider credential, checkout credential, public-discovery credential,
+or general operator credential.
+
 It accepts:
 
 - tenant, merchant, and seller agent scope
@@ -58,6 +77,9 @@ C6Z issues internal artifacts for:
 - `offer_price_snapshot`
 - `inventory_snapshot`
 - `policy_scope`
+- `public_discovery_state`
+- `mandate_capability`
+- `protocol_adapter`
 - `authority_request_status`
 
 Each artifact includes tenant, merchant, seller agent, Shopify source evidence reference,
@@ -92,6 +114,9 @@ Focused tests cover:
 - accepted authority request validation
 - internal artifact issuance for all C6Z families
 - internal signature verification
+- eleven-family parity with AgenticOrg cache intake
+- dedicated AgenticOrg authority service-token acceptance for allowlisted tenants
+- proof that the service token is not a general commerce route credential
 - stale source evidence rejection
 - missing or mismatched scope rejection
 - raw connector payload and secret rejection
