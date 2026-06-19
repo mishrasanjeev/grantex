@@ -3,8 +3,10 @@
 import base64
 import json
 import time
+from types import SimpleNamespace
 
 import pytest
+from grantex import GrantexTokenError
 
 from grantex_a2a._server import create_a2a_auth_middleware, A2AAuthError
 from grantex_a2a._types import A2AAuthMiddlewareOptions
@@ -35,6 +37,42 @@ def _valid_payload(**overrides):
     }
     base.update(overrides)
     return base
+
+
+def _verified_grant_from_token(token: str, options) -> SimpleNamespace:
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(token.split(".")[1] + "=="))
+    except Exception as exc:
+        raise GrantexTokenError("invalid signature") from exc
+
+    if payload.get("exp", 0) < int(time.time()):
+        raise GrantexTokenError("Grant token expired")
+
+    required_scopes = options.required_scopes or []
+    scopes = list(payload.get("scp", []))
+    missing = [scope for scope in required_scopes if scope not in scopes]
+    if missing:
+        raise GrantexTokenError(
+            f"Grant token is missing required scopes: {', '.join(missing)}"
+        )
+
+    return SimpleNamespace(
+        grant_id=payload.get("grnt") or payload.get("jti", ""),
+        agent_did=payload.get("agt", ""),
+        principal_id=payload.get("sub", ""),
+        developer_id=payload.get("dev", ""),
+        scopes=tuple(scopes),
+        expires_at=payload.get("exp", 0),
+        delegation_depth=payload.get("delegationDepth"),
+    )
+
+
+@pytest.fixture(autouse=True)
+def _mock_verify_grant_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "grantex_a2a._server.verify_grant_token",
+        _verified_grant_from_token,
+    )
 
 
 def test_valid_token():

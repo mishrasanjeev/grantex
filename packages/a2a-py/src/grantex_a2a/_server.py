@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Dict
 
-from ._jwt import decode_jwt_payload, is_token_expired
+from grantex import GrantexTokenError, VerifyGrantTokenOptions, verify_grant_token
 from ._types import A2AAuthMiddlewareOptions, VerifiedGrant
 
 
@@ -46,35 +46,35 @@ def create_a2a_auth_middleware(
         token = auth_header[7:]
 
         try:
-            payload = decode_jwt_payload(token)
-        except (ValueError, Exception):
-            raise A2AAuthError(401, "Invalid grant token format")
+            grant = verify_grant_token(
+                token,
+                VerifyGrantTokenOptions(
+                    jwks_uri=options.jwks_uri,
+                    issuer=options.issuer,
+                    issuer_did=options.issuer_did,
+                    audience=options.audience,
+                    clock_tolerance=options.clock_tolerance,
+                    required_scopes=required_scopes,
+                ),
+            )
+        except GrantexTokenError as exc:
+            if "missing required scopes" in str(exc).lower():
+                raise A2AAuthError(403, str(exc)) from exc
+            raise A2AAuthError(401, f"Grant token verification failed: {exc}") from exc
 
-        if is_token_expired(payload):
-            raise A2AAuthError(401, "Grant token expired")
-
-        # Validate required scopes
-        if required_scopes:
-            token_scopes = set(payload.get("scp", []))
-            missing = [s for s in required_scopes if s not in token_scopes]
-            if missing:
-                raise A2AAuthError(
-                    403, f"Missing required scopes: {', '.join(missing)}"
-                )
-
-        exp = payload.get("exp")
-        expires_at = ""
-        if exp is not None:
-            expires_at = datetime.fromtimestamp(exp, tz=timezone.utc).isoformat()
+        expires_at = datetime.fromtimestamp(
+            grant.expires_at,
+            tz=timezone.utc,
+        ).isoformat()
 
         return VerifiedGrant(
-            grant_id=payload.get("grnt") or payload.get("jti", ""),
-            agent_did=payload.get("agt", ""),
-            principal_id=payload.get("sub", ""),
-            developer_id=payload.get("dev", ""),
-            scopes=payload.get("scp", []),
+            grant_id=grant.grant_id,
+            agent_did=grant.agent_did,
+            principal_id=grant.principal_id,
+            developer_id=grant.developer_id,
+            scopes=list(grant.scopes),
             expires_at=expires_at,
-            delegation_depth=payload.get("delegationDepth"),
+            delegation_depth=grant.delegation_depth,
         )
 
     return validate

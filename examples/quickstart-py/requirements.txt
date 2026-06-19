@@ -1,1 +1,3 @@
-grantex
+grantex>=0.3.11
+PyJWT>=2.13.0
+idna>=3.15

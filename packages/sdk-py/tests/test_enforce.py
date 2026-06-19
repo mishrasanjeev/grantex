@@ -707,7 +707,7 @@ class TestGrantexEnforcer:
         enforcer = GrantexEnforcer(client)
         import asyncio
 
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             enforcer(
                 connector="salesforce",
                 tool="create_lead",

@@ -10,12 +10,13 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 dependencies = [
+    "grantex>=0.3.0",
     "strands-agents>=0.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0",
+    "pytest>=9.0.3",
 ]
 
 [tool.hatch.build.targets.wheel]

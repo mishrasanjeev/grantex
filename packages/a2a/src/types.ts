@@ -145,6 +145,9 @@ export interface A2AGrantexClientOptions {
 export interface A2AAuthMiddlewareOptions {
   jwksUri: string;
   issuer?: string;
+  issuerDid?: string;
+  audience?: string;
+  clockTolerance?: number;
   requiredScopes?: string[];
 }
 

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
+from http.client import HTTPConnection, HTTPException, HTTPSConnection
 from typing import Any, Dict, Optional
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError
+from urllib.parse import urlparse
 
 from ._jwt import decode_jwt_payload, is_token_expired
 from ._types import (
@@ -38,7 +38,18 @@ class A2AGrantexClient:
     """
 
     def __init__(self, options: A2AGrantexClientOptions) -> None:
-        self._agent_url = options.agent_url.rstrip("/")
+        parsed_agent_url = urlparse(options.agent_url)
+        if (
+            parsed_agent_url.scheme not in {"http", "https"}
+            or not parsed_agent_url.netloc
+            or not parsed_agent_url.hostname
+        ):
+            raise ValueError("agent_url must be an absolute http(s) URL")
+        try:
+            parsed_agent_url.port
+        except ValueError as exc:
+            raise ValueError("agent_url has an invalid port") from exc
+        self._agent_url = parsed_agent_url
         self._grant_token = options.grant_token
         self._required_scope = options.required_scope
         self._request_id = 0
@@ -66,23 +77,29 @@ class A2AGrantexClient:
             request_body["params"] = params
 
         data = json.dumps(request_body).encode("utf-8")
-        req = Request(
-            self._agent_url,
-            data=data,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self._grant_token}",
-            },
-            method="POST",
-        )
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._grant_token}",
+        }
+        target = self._agent_url.path or "/"
+        if self._agent_url.query:
+            target = f"{target}?{self._agent_url.query}"
 
+        conn_cls = HTTPSConnection if self._agent_url.scheme == "https" else HTTPConnection
+        conn = conn_cls(self._agent_url.hostname, self._agent_url.port, timeout=30)
         try:
-            with urlopen(req, timeout=30) as resp:
-                return json.loads(resp.read().decode("utf-8"))  # type: ignore[no-any-return]
-        except HTTPError as e:
+            conn.request("POST", target, body=data, headers=headers)
+            resp = conn.getresponse()
+            raw_body = resp.read()
+            if resp.status >= 400:
+                raise RuntimeError(f"A2A request failed: {resp.status} {resp.reason}")
+            return json.loads(raw_body.decode("utf-8"))  # type: ignore[no-any-return]
+        except HTTPException as e:
             raise RuntimeError(
-                f"A2A request failed: {e.code} {e.reason}"
+                f"A2A request failed: {e}"
             ) from e
+        finally:
+            conn.close()
 
     def _parse_task(self, result: Any) -> A2ATask:
         status = A2ATaskStatus(state=result["status"]["state"])

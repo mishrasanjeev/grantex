@@ -5,7 +5,7 @@
  * attaches verified grant information to the request context.
  */
 
-import { decodeJwtPayload, isTokenExpired } from './_jwt.js';
+import { verifyGrantToken } from '@grantex/sdk';
 import type { A2AAuthMiddlewareOptions, VerifiedGrant } from './types.js';
 
 export interface A2ARequestContext {
@@ -22,16 +22,15 @@ export interface A2ARequestContext {
  * app.use(authMiddleware);
  * ```
  *
- * For full JWKS verification, use @grantex/sdk's tokens.verify().
- * This middleware performs offline JWT decode + expiration check
- * and optionally validates scopes.
+ * This middleware verifies the token signature and issuer against JWKS before
+ * trusting claims or enforcing scopes.
  */
 export function createA2AAuthMiddleware(options: A2AAuthMiddlewareOptions) {
   const { requiredScopes } = options;
 
-  return function a2aAuthMiddleware(
+  return async function a2aAuthMiddleware(
     req: { headers: Record<string, string | string[] | undefined> },
-  ): VerifiedGrant {
+  ): Promise<VerifiedGrant> {
     const authHeader = req.headers['authorization'];
     const headerValue = Array.isArray(authHeader) ? authHeader[0] : authHeader;
 
@@ -40,39 +39,37 @@ export function createA2AAuthMiddleware(options: A2AAuthMiddlewareOptions) {
     }
 
     const token = headerValue.slice(7);
-    let payload;
+    let grant;
     try {
-      payload = decodeJwtPayload(token);
-    } catch {
-      throw new A2AAuthError(401, 'Invalid grant token format');
-    }
-
-    if (isTokenExpired(payload)) {
-      throw new A2AAuthError(401, 'Grant token expired');
-    }
-
-    // Validate required scopes
-    if (requiredScopes && requiredScopes.length > 0) {
-      const tokenScopes = new Set(payload.scp ?? []);
-      const missing = requiredScopes.filter((s) => !tokenScopes.has(s));
-      if (missing.length > 0) {
-        throw new A2AAuthError(403, `Missing required scopes: ${missing.join(', ')}`);
+      grant = await verifyGrantToken(token, {
+        jwksUri: options.jwksUri,
+        ...(options.issuer !== undefined ? { issuer: options.issuer } : {}),
+        ...(options.issuerDid !== undefined ? { issuerDid: options.issuerDid } : {}),
+        ...(options.audience !== undefined ? { audience: options.audience } : {}),
+        ...(options.clockTolerance !== undefined ? { clockTolerance: options.clockTolerance } : {}),
+        ...(requiredScopes !== undefined ? { requiredScopes } : {}),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (/missing required scopes/i.test(message)) {
+        throw new A2AAuthError(403, message);
       }
+      throw new A2AAuthError(401, `Grant token verification failed: ${message}`);
     }
 
-    const grant: VerifiedGrant = {
-      grantId: payload.grnt ?? payload.jti ?? '',
-      agentDid: payload.agt ?? '',
-      principalId: payload.sub ?? '',
-      developerId: payload.dev ?? '',
-      scopes: payload.scp ?? [],
-      expiresAt: payload.exp ? new Date(payload.exp * 1000).toISOString() : '',
-      ...(payload.delegationDepth !== undefined
-        ? { delegationDepth: payload.delegationDepth }
+    const verified: VerifiedGrant = {
+      grantId: grant.grantId,
+      agentDid: grant.agentDid,
+      principalId: grant.principalId,
+      developerId: grant.developerId,
+      scopes: grant.scopes,
+      expiresAt: new Date(grant.expiresAt * 1000).toISOString(),
+      ...(grant.delegationDepth !== undefined
+        ? { delegationDepth: grant.delegationDepth }
         : {}),
     };
 
-    return grant;
+    return verified;
   };
 }
 

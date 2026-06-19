@@ -2,11 +2,13 @@ import type { Tool } from 'ai';
 import type { z } from 'zod';
 import type { ToolCallOptions } from '@ai-sdk/provider-utils';
 import { zodSchema } from 'ai';
+import { verifyGrantToken, type VerifyGrantTokenOptions } from '@grantex/sdk';
 import { decodeJwtPayload } from './_jwt.js';
 import { GrantexScopeError, type CreateGrantexToolOptions } from './types.js';
 
 /** Symbol key used to carry the tool name through to `withAuditLogging`. */
 export const TOOL_NAME_KEY = Symbol('grantex.toolName');
+const DEFAULT_JWKS_URI = 'https://api.grantex.dev/.well-known/jwks.json';
 
 /**
  * A Vercel AI `Tool` augmented with the Grantex tool name for audit logging.
@@ -25,9 +27,8 @@ export type GrantexTool<PARAMETERS extends z.ZodTypeAny, RESULT> = Tool<
 /**
  * Create a Vercel AI SDK tool with Grantex scope enforcement.
  *
- * Performs an **offline** scope check against the JWT `scp` claim at
- * construction time. Throws {@link GrantexScopeError} immediately if the
- * required scope is absent — before any LLM call can invoke the tool.
+ * Verifies the JWT signature and grant claims before each execution, then
+ * checks the verified `scp` claim for the required scope.
  *
  * The returned value is a standard Vercel AI `Tool` and can be used
  * directly in the `tools` map of `generateText` / `streamText`.
@@ -53,8 +54,8 @@ export type GrantexTool<PARAMETERS extends z.ZodTypeAny, RESULT> = Tool<
  * });
  * ```
  *
- * @throws {GrantexScopeError} if the grant token lacks `requiredScope`.
- * @throws {Error} if the grant token is not a valid JWT.
+ * @throws {GrantexScopeError} if the verified grant token lacks `requiredScope`.
+ * @throws {Error} if the grant token cannot be verified.
  */
 export function createGrantexTool<PARAMETERS extends z.ZodTypeAny, RESULT>(
   options: CreateGrantexToolOptions<PARAMETERS, RESULT>,
@@ -62,28 +63,20 @@ export function createGrantexTool<PARAMETERS extends z.ZodTypeAny, RESULT>(
   const { name, description, parameters, grantToken, requiredScope, execute } =
     options;
 
-  // Offline scope check — fail fast before any LLM call
-  let payload: Record<string, unknown>;
-  try {
-    payload = decodeJwtPayload(grantToken);
-  } catch (err) {
-    throw new Error(
-      `Grantex: could not decode grant token — ${(err as Error).message}`,
-    );
-  }
-
-  const scopes = Array.isArray(payload['scp'])
-    ? (payload['scp'] as string[])
-    : [];
-
-  if (!scopes.includes(requiredScope)) {
-    throw new GrantexScopeError(requiredScope, scopes);
-  }
-
   const vercelTool = {
     description,
     inputSchema: zodSchema(parameters),
-    execute,
+    execute: async (
+      args: z.infer<PARAMETERS>,
+      toolOptions: ToolCallOptions,
+    ): Promise<RESULT> => {
+      const grant = await verifyGrantToken(grantToken, buildVerifyOptions(options));
+      const scopes = grant.scopes;
+      if (!scopes.includes(requiredScope)) {
+        throw new GrantexScopeError(requiredScope, scopes);
+      }
+      return execute(args, toolOptions) as Promise<RESULT>;
+    },
   } as unknown as Tool<PARAMETERS, RESULT>;
 
   return Object.defineProperty(vercelTool, TOOL_NAME_KEY, {
@@ -102,4 +95,16 @@ export function createGrantexTool<PARAMETERS extends z.ZodTypeAny, RESULT>(
 export function getGrantScopes(grantToken: string): string[] {
   const payload = decodeJwtPayload(grantToken);
   return Array.isArray(payload['scp']) ? (payload['scp'] as string[]) : [];
+}
+
+function buildVerifyOptions<PARAMETERS extends z.ZodTypeAny, RESULT>(
+  options: CreateGrantexToolOptions<PARAMETERS, RESULT>,
+): VerifyGrantTokenOptions {
+  return {
+    jwksUri: options.jwksUri ?? DEFAULT_JWKS_URI,
+    ...(options.issuer !== undefined ? { issuer: options.issuer } : {}),
+    ...(options.issuerDid !== undefined ? { issuerDid: options.issuerDid } : {}),
+    ...(options.audience !== undefined ? { audience: options.audience } : {}),
+    ...(options.clockTolerance !== undefined ? { clockTolerance: options.clockTolerance } : {}),
+  };
 }

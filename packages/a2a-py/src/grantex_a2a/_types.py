@@ -115,6 +115,9 @@ class GrantexAgentCardOptions:
 class A2AAuthMiddlewareOptions:
     jwks_uri: str
     issuer: Optional[str] = None
+    issuer_did: Optional[str] = None
+    audience: Optional[str] = None
+    clock_tolerance: int = 0
     required_scopes: Optional[List[str]] = None
 
 

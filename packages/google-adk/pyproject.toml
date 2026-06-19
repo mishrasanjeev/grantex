@@ -35,7 +35,7 @@ Issues = "https://github.com/mishrasanjeev/grantex/issues"
 [project.optional-dependencies]
 adk = ["google-adk>=0.2.0"]
 dev = [
-    "pytest>=8.0",
+    "pytest>=9.0.3",
     "pytest-mock>=3.12",
 ]
 

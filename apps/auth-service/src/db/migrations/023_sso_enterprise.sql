@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS sso_connections (
   -- OIDC fields
   issuer_url      TEXT,
   client_id       TEXT,
-  client_secret   TEXT,
+  client_secret   TEXT, -- AES-256-GCM ciphertext from vault-crypto.encrypt()
 
   -- SAML fields
   idp_entity_id   TEXT,

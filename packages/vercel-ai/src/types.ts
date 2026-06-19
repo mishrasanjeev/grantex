@@ -23,6 +23,16 @@ export interface CreateGrantexToolOptions<
    * {@link GrantexScopeError} at construction time if the scope is missing.
    */
   grantToken: string;
+  /** JWKS URL used to verify the grant token. Defaults to https://api.grantex.dev/.well-known/jwks.json. */
+  jwksUri?: string;
+  /** Expected JWT issuer when it differs from the JWKS origin. */
+  issuer?: string;
+  /** did:web issuer used to derive the JWKS URL. */
+  issuerDid?: string;
+  /** Expected JWT audience. */
+  audience?: string;
+  /** Clock tolerance in seconds for token verification. */
+  clockTolerance?: number;
   /** The scope that must be present in the grant token's `scp` claim. */
   requiredScope: string;
   /** The tool implementation — receives the validated Zod-parsed args. */

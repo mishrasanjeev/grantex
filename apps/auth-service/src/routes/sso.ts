@@ -16,6 +16,7 @@ import {
 import { authenticateLdap, testLdapConnection, type LdapConfig } from '../lib/ldap.js';
 import { config } from '../config.js';
 import { getKeyPair } from '../lib/crypto.js';
+import { encrypt, decrypt } from '../lib/vault-crypto.js';
 import { assertValidRedirectUri, safeFetch, validateOutboundUrl } from '../lib/url-security.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -128,9 +129,76 @@ function validateOptionalRedirectUri(value: string, field: string): string | nul
   }
 }
 
+const SSO_SECRET_PREFIX = 'vault:v1:';
+
+function encryptSsoSecret(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  return `${SSO_SECRET_PREFIX}${encrypt(value)}`;
+}
+
+function isEncryptedSsoSecret(value: string | null): boolean {
+  return typeof value === 'string' && value.startsWith(SSO_SECRET_PREFIX);
+}
+
+function decryptSsoSecret(value: string | null, field = 'sso secret'): string | null {
+  if (!value) return null;
+  if (!isEncryptedSsoSecret(value)) {
+    throw new Error(`${field} is not encrypted; run the SSO secret backfill`);
+  }
+  return decrypt(value.slice(SSO_SECRET_PREFIX.length));
+}
+
+async function backfillLegacySsoSecrets(): Promise<void> {
+  const sql = getSql();
+  const legacySecretPattern = `${SSO_SECRET_PREFIX}%`;
+  const connectionRows = await sql<Array<{
+    id: string;
+    client_secret: string | null;
+    ldap_bind_password: string | null;
+  }>>`
+    SELECT id, client_secret, ldap_bind_password
+    FROM sso_connections
+    WHERE (client_secret IS NOT NULL AND client_secret <> '' AND client_secret NOT LIKE ${legacySecretPattern})
+       OR (ldap_bind_password IS NOT NULL AND ldap_bind_password <> '' AND ldap_bind_password NOT LIKE ${legacySecretPattern})
+  `;
+
+  for (const row of connectionRows) {
+    const nextClientSecret = row.client_secret && !isEncryptedSsoSecret(row.client_secret)
+      ? encryptSsoSecret(row.client_secret)
+      : row.client_secret;
+    const nextLdapBindPassword = row.ldap_bind_password && !isEncryptedSsoSecret(row.ldap_bind_password)
+      ? encryptSsoSecret(row.ldap_bind_password)
+      : row.ldap_bind_password;
+    await sql`
+      UPDATE sso_connections
+      SET client_secret = ${nextClientSecret},
+          ldap_bind_password = ${nextLdapBindPassword},
+          updated_at = NOW()
+      WHERE id = ${row.id}
+    `;
+  }
+
+  const configRows = await sql<Array<{ developer_id: string; client_secret: string | null }>>`
+    SELECT developer_id, client_secret
+    FROM sso_configs
+    WHERE client_secret IS NOT NULL AND client_secret <> '' AND client_secret NOT LIKE ${legacySecretPattern}
+  `;
+
+  for (const row of configRows) {
+    await sql`
+      UPDATE sso_configs
+      SET client_secret = ${encryptSsoSecret(row.client_secret)},
+          updated_at = NOW()
+      WHERE developer_id = ${row.developer_id}
+    `;
+  }
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────
 
 export async function ssoRoutes(app: FastifyInstance): Promise<void> {
+  await backfillLegacySsoSecrets();
+
   // ══════════════════════════════════════════════════════════════════════════
   // SSO Connections CRUD (API-key authenticated)
   // ══════════════════════════════════════════════════════════════════════════
@@ -193,6 +261,8 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
 
     const sql = getSql();
     const id = newSsoConnectionId();
+    const encryptedClientSecret = encryptSsoSecret(b.clientSecret);
+    const encryptedLdapBindPassword = encryptSsoSecret(b.ldapBindPassword);
 
     const rows = await sql<SsoConnectionRow[]>`
       INSERT INTO sso_connections (
@@ -205,10 +275,10 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         group_attribute, group_mappings, default_scopes
       ) VALUES (
         ${id}, ${request.developer.id}, ${b.name}, ${b.protocol},
-        ${b.issuerUrl ?? null}, ${b.clientId ?? null}, ${b.clientSecret ?? null},
+        ${b.issuerUrl ?? null}, ${b.clientId ?? null}, ${encryptedClientSecret},
         ${b.idpEntityId ?? null}, ${b.idpSsoUrl ?? null}, ${b.idpCertificate ?? null},
         ${b.spEntityId ?? null}, ${b.spAcsUrl ?? null},
-        ${b.ldapUrl ?? null}, ${b.ldapBindDn ?? null}, ${b.ldapBindPassword ?? null},
+        ${b.ldapUrl ?? null}, ${b.ldapBindDn ?? null}, ${encryptedLdapBindPassword},
         ${b.ldapSearchBase ?? null}, ${b.ldapSearchFilter ?? '(uid={{username}})'},
         ${b.ldapGroupSearchBase ?? null}, ${b.ldapGroupSearchFilter ?? '(member={{dn}})'},
         ${b.ldapTlsEnabled ?? false},
@@ -317,6 +387,12 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     if (urlErrors.length > 0) {
       return reply.status(400).send({ message: urlErrors.join('; '), code: 'BAD_REQUEST', requestId: request.id });
     }
+    const nextClientSecret = b.clientSecret !== undefined
+      ? encryptSsoSecret(b.clientSecret)
+      : cur.client_secret;
+    const nextLdapBindPassword = b.ldapBindPassword !== undefined
+      ? encryptSsoSecret(b.ldapBindPassword)
+      : cur.ldap_bind_password;
 
     const rows = await sql<SsoConnectionRow[]>`
       UPDATE sso_connections SET
@@ -324,7 +400,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         status          = ${b.status ?? cur.status},
         issuer_url      = ${b.issuerUrl ?? cur.issuer_url},
         client_id       = ${b.clientId ?? cur.client_id},
-        client_secret   = ${b.clientSecret ?? cur.client_secret},
+        client_secret   = ${nextClientSecret},
         idp_entity_id   = ${b.idpEntityId ?? cur.idp_entity_id},
         idp_sso_url     = ${b.idpSsoUrl ?? cur.idp_sso_url},
         idp_certificate = ${b.idpCertificate ?? cur.idp_certificate},
@@ -332,7 +408,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         sp_acs_url      = ${b.spAcsUrl ?? cur.sp_acs_url},
         ldap_url        = ${b.ldapUrl ?? cur.ldap_url},
         ldap_bind_dn    = ${b.ldapBindDn ?? cur.ldap_bind_dn},
-        ldap_bind_password = ${b.ldapBindPassword ?? cur.ldap_bind_password},
+        ldap_bind_password = ${nextLdapBindPassword},
         ldap_search_base   = ${b.ldapSearchBase ?? cur.ldap_search_base},
         ldap_search_filter = ${b.ldapSearchFilter ?? cur.ldap_search_filter},
         ldap_group_search_base   = ${b.ldapGroupSearchBase ?? cur.ldap_group_search_base},
@@ -429,7 +505,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     const ldapResult = await testLdapConnection({
       ldapUrl: conn.ldap_url!,
       bindDn: conn.ldap_bind_dn!,
-      bindPassword: conn.ldap_bind_password!,
+      bindPassword: decryptSsoSecret(conn.ldap_bind_password, 'sso_connections.ldap_bind_password')!,
       searchBase: conn.ldap_search_base!,
       searchFilter: conn.ldap_search_filter ?? '(uid={{username}})',
       tlsEnabled: conn.ldap_tls_enabled,
@@ -677,7 +753,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
           code,
           redirect_uri: effectiveRedirectUri ?? '',
           client_id: conn.client_id!,
-          client_secret: conn.client_secret!,
+          client_secret: decryptSsoSecret(conn.client_secret, 'sso_connections.client_secret')!,
         }).toString(),
       }, {
         allowedProtocols: ['https:', 'http:'],
@@ -880,7 +956,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       const ldapConfig: LdapConfig = {
         ldapUrl: conn.ldap_url!,
         bindDn: conn.ldap_bind_dn!,
-        bindPassword: conn.ldap_bind_password!,
+        bindPassword: decryptSsoSecret(conn.ldap_bind_password, 'sso_connections.ldap_bind_password')!,
         searchBase: conn.ldap_search_base!,
         searchFilter: conn.ldap_search_filter ?? '(uid={{username}})',
         ...(conn.ldap_group_search_base ? { groupSearchBase: conn.ldap_group_search_base } : {}),
@@ -963,9 +1039,10 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const sql = getSql();
+    const encryptedClientSecret = encryptSsoSecret(clientSecret);
     const rows = await sql<Array<Record<string, unknown>>>`
       INSERT INTO sso_configs (developer_id, issuer_url, client_id, client_secret, redirect_uri)
-      VALUES (${request.developer.id}, ${issuerUrl}, ${clientId}, ${clientSecret}, ${redirectUri})
+      VALUES (${request.developer.id}, ${issuerUrl}, ${clientId}, ${encryptedClientSecret}, ${redirectUri})
       ON CONFLICT (developer_id) DO UPDATE
         SET issuer_url    = EXCLUDED.issuer_url,
             client_id     = EXCLUDED.client_id,
@@ -1070,7 +1147,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
           code,
           redirect_uri: String(cfg['redirect_uri']),
           client_id: String(cfg['client_id']),
-          client_secret: String(cfg['client_secret']),
+          client_secret: decryptSsoSecret(String(cfg['client_secret']), 'sso_configs.client_secret')!,
         }).toString(),
       }, {
         allowedProtocols: ['https:', 'http:'],

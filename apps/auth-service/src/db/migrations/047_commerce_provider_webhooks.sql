@@ -43,12 +43,17 @@ CREATE TABLE IF NOT EXISTS commerce_provider_webhook_events (
     REFERENCES commerce_merchants(tenant_id, id)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_provider_webhook_provider_event
-  ON commerce_provider_webhook_events(provider_key, provider_event_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_provider_webhook_tenant_merchant_event
+  ON commerce_provider_webhook_events(tenant_id, provider_key, merchant_id, provider_event_id)
+  WHERE tenant_id IS NOT NULL AND merchant_id IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_provider_webhook_source_event
-  ON commerce_provider_webhook_events(tenant_id, source_type, source_key, provider_event_id)
-  WHERE tenant_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_provider_webhook_tenant_payment_event
+  ON commerce_provider_webhook_events(tenant_id, provider_key, provider_payment_id, provider_event_id)
+  WHERE tenant_id IS NOT NULL AND provider_payment_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_provider_webhook_tenant_unknown_event
+  ON commerce_provider_webhook_events(tenant_id, source_type, source_key, provider_event_id, payload_hash)
+  WHERE tenant_id IS NOT NULL AND merchant_id IS NULL AND provider_payment_id IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_provider_webhook_payment_reference
   ON commerce_provider_webhook_events(provider_key, provider_payment_id, merchant_ref);

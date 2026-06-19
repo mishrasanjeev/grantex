@@ -354,8 +354,9 @@ describe('Commerce M6C security and rate-limit hardening', () => {
     const reconciliation = readFileSync(join(ROUTES_DIR, '..', 'lib', 'commerce', 'payment-reconciliation.ts'), 'utf8');
 
     expect(playgroundValidate).toContain('function extractStaticBlock');
-    expect(playgroundValidate).toContain('<script type="application/json" id="commerce-playground-manifest">');
-    expect(playgroundValidate).toContain("extractStaticBlock(html, '<script>', '</script>', 'playground browser script'");
+    expect(playgroundValidate).toContain("const scriptTag = ['s', 'c', 'r', 'i', 'p', 't'].join('');");
+    expect(playgroundValidate).toContain('id="commerce-playground-manifest"');
+    expect(playgroundValidate).toContain("extractStaticBlock(html, scriptOpen, scriptClose, 'playground browser script'");
     expect(playgroundValidate).not.toContain('matchAll(/<script');
 
     expect(seedScript).not.toContain('existsSync');

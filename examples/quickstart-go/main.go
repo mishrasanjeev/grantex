@@ -68,8 +68,8 @@ func main() {
 	fmt.Println("Scopes:", strings.Join(token.Scopes, ", "))
 
 	// ── 4. Verify the token offline ────────────────────────────────────
-	verified, err := grantex.VerifyGrantToken(ctx, token.GrantToken, grantex.VerifyGrantTokenParams{
-		JWKSURI:        baseURL + "/.well-known/jwks.json",
+	verified, err := grantex.VerifyGrantToken(ctx, token.GrantToken, grantex.VerifyOptions{
+		JwksURI:        baseURL + "/.well-known/jwks.json",
 		RequiredScopes: []string{"calendar:read"},
 	})
 	if err != nil {
@@ -81,7 +81,7 @@ func main() {
 	fmt.Println("  scopes:     ", strings.Join(verified.Scopes, ", "))
 
 	// ── 5. Log an audit entry ──────────────────────────────────────────
-	entry, err := client.Audit.Log(ctx, grantex.AuditLogParams{
+	entry, err := client.Audit.Log(ctx, grantex.LogAuditParams{
 		AgentID:  agent.ID,
 		GrantID:  token.GrantID,
 		Action:   "calendar.read",

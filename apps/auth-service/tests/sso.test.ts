@@ -47,6 +47,7 @@ import {
   verifyIdToken,
   parseSamlResponse,
 } from '../src/lib/sso.js';
+import { encrypt } from '../src/lib/vault-crypto.js';
 import { setSafeFetchForTests } from '../src/lib/url-security.js';
 import { signSsoState } from '../src/routes/sso.js';
 
@@ -55,6 +56,10 @@ const mockedVerifyIdToken = vi.mocked(verifyIdToken);
 const mockedParseSamlResponse = vi.mocked(parseSamlResponse);
 
 let app: FastifyInstance;
+
+function encryptedSsoSecret(value: string): string {
+  return `vault:v1:${encrypt(value)}`;
+}
 
 beforeAll(async () => {
   app = await buildTestApp();
@@ -99,7 +104,7 @@ const OIDC_CONNECTION_ROW = {
   status: 'active',
   issuer_url: 'https://idp.example.com',
   client_id: 'client_abc',
-  client_secret: 'secret_xyz',
+  client_secret: encryptedSsoSecret('secret_xyz'),
   idp_entity_id: null,
   idp_sso_url: null,
   idp_certificate: null,
@@ -136,7 +141,7 @@ const SSO_CONFIG_ROW = {
   developer_id: 'dev_TEST',
   issuer_url: 'https://idp.example.com',
   client_id: 'client_abc',
-  client_secret: 'secret_xyz',
+  client_secret: encryptedSsoSecret('secret_xyz'),
   redirect_uri: 'https://app.grantex.dev/sso/callback',
   created_at: '2026-02-27T00:00:00Z',
   updated_at: '2026-02-27T00:00:00Z',
@@ -166,7 +171,7 @@ const LDAP_CONNECTION_ROW = {
   client_secret: null,
   ldap_url: 'ldap://ldap.corp.com:389',
   ldap_bind_dn: 'cn=admin,dc=corp,dc=com',
-  ldap_bind_password: 'admin-secret',
+  ldap_bind_password: encryptedSsoSecret('admin-secret'),
   ldap_search_base: 'ou=people,dc=corp,dc=com',
   ldap_search_filter: '(uid={{username}})',
   ldap_group_search_base: 'ou=groups,dc=corp,dc=com',
@@ -174,6 +179,10 @@ const LDAP_CONNECTION_ROW = {
   ldap_tls_enabled: false,
   domains: ['corp.com'],
 };
+
+function flattenedSqlCalls(): string {
+  return JSON.stringify(sqlMock.mock.calls);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SSO Connections CRUD
@@ -208,6 +217,8 @@ describe('POST /v1/sso/connections', () => {
     expect(body.issuerUrl).toBe('https://idp.example.com');
     expect(body.domains).toEqual(['corp.com']);
     expect(body.jitProvisioning).toBe(true);
+    expect(flattenedSqlCalls()).not.toContain('secret_xyz');
+    expect(flattenedSqlCalls()).toContain('vault:v1:');
   });
 
   it('creates a SAML connection and returns 201', async () => {
@@ -848,6 +859,8 @@ describe('POST /v1/sso/config (legacy)', () => {
 
     expect(res.statusCode).toBe(201);
     expect(res.json().issuerUrl).toBe('https://idp.example.com');
+    expect(flattenedSqlCalls()).not.toContain('secret_xyz');
+    expect(flattenedSqlCalls()).toContain('vault:v1:');
   });
 
   it('returns 400 when required fields missing', async () => {
@@ -1000,6 +1013,8 @@ describe('POST /v1/sso/connections (LDAP)', () => {
     expect(body.protocol).toBe('ldap');
     expect(body.ldapUrl).toBe('ldap://ldap.corp.com:389');
     expect(body.ldapSearchBase).toBe('ou=people,dc=corp,dc=com');
+    expect(flattenedSqlCalls()).not.toContain('admin-secret');
+    expect(flattenedSqlCalls()).toContain('vault:v1:');
   });
 
   it('returns 400 when LDAP missing required fields', async () => {

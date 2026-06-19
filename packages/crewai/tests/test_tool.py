@@ -39,7 +39,7 @@ def test_create_tool_raises_permission_error_for_missing_scope() -> None:
 
 
 def test_create_tool_raises_for_invalid_jwt() -> None:
-    with pytest.raises(ValueError, match="Could not decode grant_token"):
+    with pytest.raises(ValueError, match="Could not verify grant_token"):
         create_grantex_tool(
             name="t",
             description="d",

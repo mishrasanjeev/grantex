@@ -5,10 +5,14 @@ import { z } from 'zod';
 vi.mock('ai', () => ({
   zodSchema: (schema: unknown) => schema,
 }));
+vi.mock('@grantex/sdk', () => ({
+  verifyGrantToken: vi.fn(),
+}));
 
 import { createGrantexTool, getGrantScopes } from '../src/tool.js';
 import { GrantexScopeError } from '../src/types.js';
 import { TOOL_NAME_KEY } from '../src/tool.js';
+import { verifyGrantToken, type VerifiedGrant } from '@grantex/sdk';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -37,10 +41,27 @@ const TOKEN_WITH_READ = makeToken(['data:read', 'data:write']);
 const TOKEN_EMPTY = makeToken([]);
 
 const PARAMS = z.object({ url: z.string() });
+function makeGrant(scopes: string[]): VerifiedGrant {
+  return {
+    tokenId: 'tok_01',
+    grantId: 'grnt_01',
+    principalId: 'user_01',
+    agentDid: 'did:grantex:ag_TEST',
+    developerId: 'dev_TEST',
+    scopes,
+    issuedAt: 1,
+    expiresAt: 9999999999,
+  };
+}
 
 // ─── createGrantexTool ────────────────────────────────────────────────────────
 
 describe('createGrantexTool', () => {
+  beforeEach(() => {
+    vi.mocked(verifyGrantToken).mockReset();
+    vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant(['data:read', 'data:write']));
+  });
+
   it('returns a tool with the correct shape', () => {
     const t = createGrantexTool({
       name: 'fetch_data',
@@ -57,30 +78,33 @@ describe('createGrantexTool', () => {
     expect(t[TOOL_NAME_KEY]).toBe('fetch_data');
   });
 
-  it('throws GrantexScopeError when required scope is missing', () => {
-    expect(() =>
-      createGrantexTool({
-        name: 'admin_tool',
-        description: 'Admin action.',
-        parameters: PARAMS,
-        grantToken: TOKEN_EMPTY,
-        requiredScope: 'admin:all',
-        execute: async () => 'ok',
-      }),
-    ).toThrowError(GrantexScopeError);
+  it('throws GrantexScopeError when required scope is missing', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant([]));
+    const tool = createGrantexTool({
+      name: 'admin_tool',
+      description: 'Admin action.',
+      parameters: PARAMS,
+      grantToken: TOKEN_EMPTY,
+      requiredScope: 'admin:all',
+      execute: async () => 'ok',
+    });
+    await expect(tool.execute({ url: 'https://example.com' }, { toolCallId: 'tc_01', messages: [] }))
+      .rejects.toThrowError(GrantexScopeError);
   });
 
-  it('GrantexScopeError includes the missing scope name', () => {
+  it('GrantexScopeError includes the missing scope name', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant([]));
+    const tool = createGrantexTool({
+      name: 'tool',
+      description: 'tool',
+      parameters: PARAMS,
+      grantToken: TOKEN_EMPTY,
+      requiredScope: 'billing:write',
+      execute: async () => 'ok',
+    });
     let caught: unknown;
     try {
-      createGrantexTool({
-        name: 'tool',
-        description: 'tool',
-        parameters: PARAMS,
-        grantToken: TOKEN_EMPTY,
-        requiredScope: 'billing:write',
-        execute: async () => 'ok',
-      });
+      await tool.execute({ url: 'https://example.com' }, { toolCallId: 'tc_01', messages: [] });
     } catch (err) {
       caught = err;
     }
@@ -89,17 +113,20 @@ describe('createGrantexTool', () => {
     expect((caught as GrantexScopeError).grantedScopes).toEqual([]);
   });
 
-  it('throws a plain Error for an invalid JWT', () => {
-    expect(() =>
-      createGrantexTool({
-        name: 'tool',
-        description: 'tool',
-        parameters: PARAMS,
-        grantToken: 'not-a-jwt',
-        requiredScope: 'data:read',
-        execute: async () => 'ok',
-      }),
-    ).toThrow('could not decode grant token');
+  it('rejects an invalid JWT before calling execute', async () => {
+    const execute = vi.fn().mockResolvedValue('ok');
+    vi.mocked(verifyGrantToken).mockRejectedValue(new Error('invalid signature'));
+    const tool = createGrantexTool({
+      name: 'tool',
+      description: 'tool',
+      parameters: PARAMS,
+      grantToken: 'not-a-jwt',
+      requiredScope: 'data:read',
+      execute,
+    });
+    await expect(tool.execute({ url: 'https://example.com' }, { toolCallId: 'tc_01', messages: [] }))
+      .rejects.toThrow('invalid signature');
+    expect(execute).not.toHaveBeenCalled();
   });
 
   it('execute delegates to the user function', async () => {
@@ -114,6 +141,9 @@ describe('createGrantexTool', () => {
 
     const result = await t.execute({ name: 'Alice' }, { toolCallId: 'tc_01', messages: [] });
     expect(result).toBe('Hello, Alice!');
+    expect(verifyGrantToken).toHaveBeenCalledWith(TOKEN_WITH_READ, {
+      jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+    });
   });
 });
 

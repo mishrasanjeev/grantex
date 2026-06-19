@@ -238,10 +238,37 @@ async function insertWebhookEvent(
       ${input.receivedAt}::timestamptz,
       ${input.processingStatus === 'received' ? null : input.receivedAt}::timestamptz
     )
-    ON CONFLICT (provider_key, provider_event_id) DO NOTHING
+    ON CONFLICT DO NOTHING
     RETURNING id
   `;
   return rows[0]?.id ?? null;
+}
+
+async function findExistingWebhookEvent(
+  sql: Sql,
+  input: {
+    providerKey: ProviderKey;
+    eventId: string;
+    paymentIntent: PaymentIntentForWebhookRow | null;
+    parsed: ParsedWebhookPayload;
+  },
+): Promise<ExistingWebhookRow | null> {
+  if (!input.paymentIntent) return null;
+  const rows = await sql<ExistingWebhookRow[]>`
+    SELECT id, payment_intent_id, processing_status
+      FROM commerce_provider_webhook_events
+     WHERE provider_key = ${input.providerKey}
+       AND provider_event_id = ${input.eventId}
+       AND tenant_id = ${input.paymentIntent.tenant_id}
+       AND (
+         payment_intent_id = ${input.paymentIntent.id}
+         OR merchant_id = ${input.paymentIntent.merchant_id}
+         OR provider_payment_id = ${input.parsed.provider_payment_id ?? null}
+         OR merchant_ref = ${input.parsed.merchant_ref ?? null}
+       )
+     LIMIT 1
+  `;
+  return rows[0] ?? null;
 }
 
 async function updateWebhookEventStatus(
@@ -567,19 +594,31 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
         throw err;
       }
 
+      const parsed: ParsedWebhookPayload = {
+        event_id: providerEvent.event_id,
+        event_type: providerEvent.event_type,
+      };
+      if (providerEvent.merchant_ref !== undefined) parsed.merchant_ref = providerEvent.merchant_ref;
+      if (providerEvent.provider_payment_id !== undefined) parsed.provider_payment_id = providerEvent.provider_payment_id;
+      if (providerEvent.status !== undefined) parsed.status = providerEvent.status;
       const sql = getSql();
-      const existingRows = await sql<ExistingWebhookRow[]>`
-        SELECT id, payment_intent_id, processing_status
-          FROM commerce_provider_webhook_events
-         WHERE provider_key = ${providerKey}
-           AND provider_event_id = ${providerEvent.event_id}
-         LIMIT 1
-      `;
-      const existing = existingRows[0];
+      const paymentIntent = await findPaymentIntentForWebhook(sql, {
+        providerKey,
+        providerPaymentId: parsed.provider_payment_id,
+        merchantRef: parsed.merchant_ref,
+      });
+      const existing = await findExistingWebhookEvent(sql, {
+        providerKey,
+        eventId: providerEvent.event_id,
+        paymentIntent,
+        parsed,
+      });
       if (existing) {
         commerceCriticalFlowTotal.labels('provider_webhook.process', 'duplicate', '').inc();
         request.log.info(commerceLogContext({
           requestId: request.id,
+          tenantId: paymentIntent?.tenant_id,
+          merchantId: paymentIntent?.merchant_id,
           providerKey,
           webhookEventId: existing.id,
           webhookProviderEventIdRef: hashedReference(providerEvent.event_id, 'provider_event'),
@@ -595,19 +634,6 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
           },
         });
       }
-
-      const parsed: ParsedWebhookPayload = {
-        event_id: providerEvent.event_id,
-        event_type: providerEvent.event_type,
-      };
-      if (providerEvent.merchant_ref !== undefined) parsed.merchant_ref = providerEvent.merchant_ref;
-      if (providerEvent.provider_payment_id !== undefined) parsed.provider_payment_id = providerEvent.provider_payment_id;
-      if (providerEvent.status !== undefined) parsed.status = providerEvent.status;
-      const paymentIntent = await findPaymentIntentForWebhook(sql, {
-        providerKey,
-        providerPaymentId: parsed.provider_payment_id,
-        merchantRef: parsed.merchant_ref,
-      });
 
       const response = await sql.begin(async (_tx) => {
         const tx = _tx as unknown as TxSql;

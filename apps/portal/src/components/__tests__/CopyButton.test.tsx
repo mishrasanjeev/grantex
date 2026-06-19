@@ -35,11 +35,18 @@ describe('CopyButton', () => {
 
   it('reverts back to Copy after 2 seconds', async () => {
     vi.useFakeTimers();
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+
     render(<CopyButton text="token" />);
-    // Use fireEvent to avoid userEvent + fake timers conflict
-    fireEvent.click(screen.getByText('Copy'));
-    // Flush microtasks from clipboard promise
-    await vi.advanceTimersByTimeAsync(0);
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Copy'));
+      await Promise.resolve();
+    });
+
     expect(screen.getByText('Copied!')).toBeInTheDocument();
 
     act(() => {

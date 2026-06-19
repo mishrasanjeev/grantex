@@ -30,6 +30,10 @@ dist/
 build/
 .tmp/
 
+# VVAH scan outputs
+security-scan/
+checkpoints/
+
 # Firebase
 .firebase/
 web/dashboard/

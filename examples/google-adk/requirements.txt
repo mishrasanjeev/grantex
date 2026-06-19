@@ -1,2 +1,4 @@
-grantex
+grantex>=0.3.11
 grantex-adk
+PyJWT>=2.13.0
+idna>=3.15
