@@ -69,6 +69,19 @@ Start with the [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx), the
 
 The TypeScript SDK now exposes the live-pilot control plane as `grantex.commerce.*`, including public merchant profile lookup, catalog search, cart creation, Commerce Passport consent/exchange, payment intent creation, checkout handoff, provider credential metadata, webhook source management, and operator health checks. Commerce write calls that mutate carts or payments accept `idempotencyKey` and send it as the required `Idempotency-Key` header.
 
+## OACP Authority For AgenticOrg Runtime
+
+For the Shopify-to-AgenticOrg OACP runtime, Grantex owns trust authority,
+protocol/policy governance, canonical artifact issuance, signing,
+verification, and protocol-adapter mapping rules. AgenticOrg owns seller
+onboarding, Shopify read-only connector runtime, buyer/seller agents, artifact
+cache, buyer channels, and Pine Labs Plural/P3P capability verification.
+
+The C6Z authority endpoint issues or refuses the 11 required OACP artifact
+families for allowlisted AgenticOrg tenants. It is not a merchant connector,
+buyer-session relay, checkout service, or payment toll booth. See
+[`docs/guides/oacp-runtime-authority-and-adapter-mappings.md`](docs/guides/oacp-runtime-authority-and-adapter-mappings.md).
+
 ## Current Development Snapshot
 
 The latest repository changelog currently tops out at v0.3.11. Package versions are being reconciled across SDKs and adapters; use [COMPATIBILITY.md](COMPATIBILITY.md) as the current source of truth for package-specific versions.

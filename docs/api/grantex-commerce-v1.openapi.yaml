@@ -898,7 +898,7 @@ components:
       additionalProperties: false
       description: >-
         C6J schema.org JSON-LD preview generated from Grantex canonical
-        merchant/catalog/readiness state. It is preview-only and does not
+        merchant/catalog/readiness state. It is a sandbox compatibility preview and does not
         publish schema.org data, enable public discovery, enable production
         Commerce V1, create checkout/payment paths, enable live payments,
         enable live Plural, expose provider credentials, write production
@@ -1027,7 +1027,7 @@ components:
         C6K UCP-style capability profile preview generated from Grantex
         canonical merchant/catalog/readiness state. It uses only the
         Grantex-owned namespace `dev.grantex.commerce.discovery.preview`.
-        It is preview-only metadata and does not publish UCP capabilities,
+        It is sandbox compatibility metadata and does not publish UCP capabilities,
         use `dev.ucp.*`, claim UCP certification, enable public discovery,
         enable production Commerce V1, create checkout/payment paths, enable
         live payments, enable live Plural, expose provider credentials, write
@@ -1169,7 +1169,7 @@ components:
       description: >-
         C6L ACP-style cart and checkout shape preview generated from Grantex
         canonical cart, checkout, passport, consent, policy, and payment
-        foundations. It is sandbox-only, preview-only metadata. It does not
+        foundations. It is sandbox-only compatibility metadata. It does not
         publish ACP capabilities, claim ACP certification, enable public
         checkout, enable production Commerce V1, create checkout/payment
         paths, enable live payments, enable live Plural, call providers, expose
@@ -3805,7 +3805,7 @@ paths:
       x-milestone: C6D
       description: >-
         Requests human review of the tenant-scoped sandbox read-only discovery
-        preview only after C5Z, C6A, C6B, and C6C prerequisites pass. This
+        preview review after C5Z, C6A, C6B, and C6C prerequisites pass. This
         request is not approval and does not enable public discovery, production
         Commerce V1, checkout/payment creation, live payments, live Plural,
         provider credentials, or production allowlists. Blocked attempts write
@@ -4085,7 +4085,7 @@ paths:
       x-implemented: true
       x-milestone: C6J
       description: >-
-        Returns a tenant-scoped, sandbox-only, preview-only schema.org JSON-LD
+        Returns a tenant-scoped, sandbox-only compatibility schema.org JSON-LD
         adapter output generated from Grantex canonical merchant/catalog/readiness
         evidence. Operators and owning merchants can inspect the safe Product,
         Offer, MerchantReturnPolicy, and OfferShippingDetails shape where
@@ -4120,7 +4120,7 @@ paths:
       x-implemented: true
       x-milestone: C6K
       description: >-
-        Returns a tenant-scoped, sandbox-only, preview-only UCP-style
+        Returns a tenant-scoped, sandbox-only compatibility UCP-style
         capability profile generated from Grantex canonical
         merchant/catalog/readiness evidence. The profile uses the Grantex-owned
         namespace `dev.grantex.commerce.discovery.preview` only. Operators and
@@ -4155,7 +4155,7 @@ paths:
       x-implemented: true
       x-milestone: C6L
       description: >-
-        Returns a tenant-scoped, sandbox-only, preview-only ACP-style cart and
+        Returns a tenant-scoped, sandbox-only compatibility ACP-style cart and
         checkout shape generated from Grantex canonical cart, payment intent,
         consent, Commerce Passport, and policy evidence. Operators and owning
         merchants can inspect how Grantex cart and checkout concepts map to a
@@ -4191,7 +4191,7 @@ paths:
       x-implemented: true
       x-milestone: C6M
       description: >-
-        Returns a tenant-scoped, sandbox-only, preview-only AP2-style evidence
+        Returns a tenant-scoped, sandbox-only compatibility AP2-style evidence
         package generated from Grantex Commerce Passport, consent record, policy
         decision, cart snapshot hash, amount cap, merchant state, agent identity,
         audit reference, and idempotency evidence. The package is deterministic

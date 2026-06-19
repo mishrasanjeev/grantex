@@ -997,7 +997,7 @@ AgenticOrg docs:
 | Seller Commerce Agent onboarding | No full self-serve agent onboarding packet | AgenticOrg primary, Grantex intake | P0 |
 | Merchant connector evidence | No tight Shopify/WooCommerce/ERP evidence-to-artifact path | Both | P0 |
 | Mandate capability evidence | No clean provider-owned mandate evidence profile | Both plus provider | P0 |
-| Protocol adapters | Internal preview only, not real adapter surfaces | Grantex primary, AgenticOrg render/use | P0 |
+| Protocol adapters | Historical preview classification; current canonical adapter mappings are governed in docs/guides/oacp-runtime-authority-and-adapter-mappings.md | Grantex primary, AgenticOrg render/use | P0 |
 | Revocation propagation | Needs artifact revocation and cache invalidation | Both | P0 |
 | Payment path isolation | Generic payment tools risk confusion | AgenticOrg | P0 |
 | Channel packs | Chat/WhatsApp/Telegram/third-party agent UX not fully specified | AgenticOrg | P1 |

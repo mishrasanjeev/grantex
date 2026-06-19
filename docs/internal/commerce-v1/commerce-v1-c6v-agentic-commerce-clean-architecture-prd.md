@@ -480,7 +480,7 @@ Grantex docs that likely need terminology correction:
 - Build spec sections that imply Grantex directly owns all merchant ERP integration execution.
 - Payment sections that over-emphasize Grantex-created checkout instead of provider-owned mandates and optional Grantex capability evidence.
 - Runtime sections that imply every buyer/seller agent transaction must route through Grantex.
-- Protocol sections that need "adapter preview only" and "not certified" language.
+- Protocol sections that need "adapter compatibility mapping boundary" and "not certified" language.
 
 AgenticOrg docs that likely need correction:
 

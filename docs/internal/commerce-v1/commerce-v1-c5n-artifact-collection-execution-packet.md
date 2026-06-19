@@ -1,6 +1,6 @@
 # Commerce V1 C5N Artifact Collection Execution Packet
 
-Status: planning only
+Status: historical planning artifact; superseded by the current OACP authority mapping guide in docs/guides/oacp-runtime-authority-and-adapter-mappings.md.
 Date: 2026-05-26
 Scope: human-facing real merchant artifact collection packet for Commerce V1
 read-only discovery intake

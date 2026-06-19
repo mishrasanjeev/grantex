@@ -1,6 +1,6 @@
 # Commerce V1 OACP Landing Page And Blog Plan
 
-Status: internal planning only.
+Status: historical internal planning artifact; superseded by the current OACP authority mapping guide in docs/guides/oacp-runtime-authority-and-adapter-mappings.md.
 
 This plan updates the public narrative for Open Agentic Commerce Protocol work
 without publishing a protocol, claiming a standard, enabling public discovery,

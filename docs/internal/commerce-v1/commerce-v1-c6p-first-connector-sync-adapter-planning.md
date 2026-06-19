@@ -11,7 +11,7 @@ Base:
   `docs/internal/commerce-v1/commerce-v1-c6og-release-rehearsal-status-launch-gap-assessment.md`
 
 C6P plans the first connector sync adapter without enabling runtime sync. This
-packet is internal preview planning only. It is sandbox-only, non-live,
+packet is a historical internal planning artifact. It is sandbox-only, non-live,
 non-publication, non-certifying, and non-enabling. It does not add routes,
 migrations, portal UI, production configuration, secrets, credentials, provider
 credentials, public discovery, checkout or payment behavior, live payment

@@ -491,9 +491,9 @@ in V1 form; others are future gaps.
 | CommerceSettlement/Payout | Grantex | Seller payment reporting. | Gap. |
 | CommerceAuditEvent | Grantex | Append-only evidence. | Foundation exists. |
 | CommerceAgentSession | AgenticOrg/Grantex boundary | Buyer-agent session attribution and channel state. | C6I channel-neutral session orchestration merged; live channels pending. |
-| OacpArtifact | Grantex authority, AgenticOrg cache | Signed or signature-ready public-safe artifact scoped to tenant, merchant, seller agent, and buyer agent. | Internal C6W3-C6Z foundation merged; Grantex issuer route and AgenticOrg cache exist, but production handoff is blocked by Shopify token and Grantex tenant provisioning issues. |
-| OacpProtocolAdapterPreview | Grantex authority, AgenticOrg consumer | schema.org/UCP-style/ACP-style/AP2-style/A2A/MCP preview derived from artifacts. | Internal C6W4 foundation merged; public adapter publication pending. |
-| OacpPreparedEnvelope | Grantex authority, AgenticOrg consumer | Prepared-only request envelope for buyer/source/merchant/provider confirmation. | Internal C6W6 foundation merged; runtime handoff pending. |
+| OacpArtifact | Grantex authority, AgenticOrg cache | Signed or signature-ready public-safe artifact scoped to tenant, merchant, seller agent, and buyer agent. | C6Z authority route issues/refuses all 11 families; AgenticOrg caches and evaluates them for buyer-safe use. |
+| OacpProtocolAdapterPreview | Grantex authority, AgenticOrg consumer | schema.org/UCP-style/ACP-style/AP2-style/A2A/MCP preview derived from artifacts. | Grantex `protocol_adapter` artifacts now carry mapping governance; AgenticOrg generates runtime adapter payloads from cached artifacts. Public certification/publication remains pending. |
+| OacpPreparedEnvelope | Grantex authority, AgenticOrg consumer | Prepared-only request envelope for buyer/source/merchant/provider confirmation. | AgenticOrg purchase preparation now returns a non-executing handoff or exact blocker after OACP/provider checks. |
 | OacpReconciliation | AgenticOrg local runtime, Grantex rules | Local/cached response-evidence reconciliation result. | Internal C6W7 foundation merged; production persistence pending. |
 | OacpEligibilityPacket | AgenticOrg local runtime, Grantex rules | Non-executing eligibility/audit packet. | Internal C6W8 foundation merged; execution controller still absent. |
 | OacpDryRunVerification | Grantex rules, AgenticOrg consumer | Contract dry-run over eligibility packet. | Internal C6W9 foundation merged; execution remains blocked. |
@@ -552,8 +552,8 @@ in V1 form; others are future gaps.
 | Phase | Goal | Deliverables | Guardrail |
 | --- | --- | --- | --- |
 | 1. Consolidated PRD and docs alignment | One source of truth. | This PRD, docs nav, overview links, AgenticOrg pointers. Status: merged. | Docs-only. |
-| 2. Seller sandbox onboarding | Merchant can prepare without engineers. | AgenticOrg Seller Commerce Agent workflow plus Grantex authority review. Status: planning/docs/runtime foundations exist; full self-serve runtime remains pending. | No live enablement. |
-| 3. Catalog connector MVP | Merchant data enters the OACP artifact path. | CSV/manual readiness and C6N connector registry foundation merged; AgenticOrg C6Z seller-agent sync path exists, but the 2026-06-18 Shopify production probe is blocked by `401 Unauthorized`. | No automatic live publish. |
+| 2. Seller sandbox onboarding | Merchant can prepare without engineers. | AgenticOrg Seller Commerce Agent onboarding packet and dashboard path with Grantex authority review. Status: runtime implemented for Shopify merchant onboarding. | No live enablement. |
+| 3. Catalog connector MVP | Merchant data enters the OACP artifact path. | AgenticOrg Shopify read-only Admin GraphQL sync stores public-safe product, variant, image, price, inventory, status, and source evidence refs. | No automatic live publish. |
 | 4. Public-safe preview | Merchant sees what agents can see. | Catalog/profile preview, schema.org draft, readiness score, and protocol previews merged through C6J-C6M. | Fail-closed until approved. |
 | 5. Buyer web/mobile channel | First controllable buyer launch. | C6H and C6I merged for channel-neutral read-only session; hosted widget/app pending. | Read-only first. |
 | 6. ChatGPT/Claude MCP | Major AI chat surfaces. | Channel-neutral response model merged; remote MCP/app connector pending. | Respect platform write limits. |
@@ -564,7 +564,7 @@ in V1 form; others are future gaps.
 | 11. Order/fulfillment backbone | Operational paid flow. | Order, shipment, pickup/delivery, cancellation. | Required before broad checkout. |
 | 12. Return/refund request | Safe post-purchase support. | Request, eligibility, manual approval, audit. | No automatic refund execution. |
 | 13. Settlement/payout reporting | Seller finance visibility. | Reconciliation and payout read model. | No raw provider payloads. |
-| 14. OACP hardening | Platform interoperability. | C6W3-C6Z internal artifact, adapter, commitment-boundary, envelope, reconciliation, eligibility, dry-run verifier, authority route, cache, and bridge foundations are merged; production closure is blocked on Shopify and Grantex tenant-token provisioning. | No submission, publication, certification, or execution claims without explicit approval and evidence. |
+| 14. OACP hardening | Platform interoperability. | C6W3-C6Z artifacts, adapter governance, commitment boundary, authority route, AgenticOrg cache/bridges, and purchase-preparation blockers are implemented. Real merchant launch still requires valid Shopify access, tenant allowlisting, channel approvals, and provider approvals. | No submission, publication, certification, or execution claims without explicit approval and evidence. |
 | 15. Controlled pilot | Minimal real launch. | One merchant, category, channel, provider, geography, rollback owner. | Separate explicit approval. |
 
 Current sequencing decision:

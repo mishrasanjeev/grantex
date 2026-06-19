@@ -1,6 +1,9 @@
 # Commerce V1 OACP Final Launch Evidence
 
-Status: local internal authority proof complete; production C6Z vertical blocked by external credentials/provisioning.
+Status: historical 2026-06-18 launch evidence. Superseded by the 2026-06-19
+runtime vertical updates; see
+`docs/guides/oacp-runtime-authority-and-adapter-mappings.md` and the
+AgenticOrg onboarding runbook for current steps.
 
 Evidence date: 2026-06-18.
 

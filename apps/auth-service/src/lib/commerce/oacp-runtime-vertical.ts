@@ -346,6 +346,63 @@ function payloadForFamily(
     allowed_protocol_adapters: family === 'protocol_adapter'
       ? ['schema.org', 'ucp_style', 'acp_style', 'ap2_style', 'a2a', 'mcp']
       : undefined,
+    adapter_mapping_profile: family === 'protocol_adapter'
+      ? {
+        canonical_source: 'grantex_signed_oacp_artifacts',
+        generated_by: 'agenticorg_runtime_from_cached_artifacts',
+        external_certification_status: 'compatibility_mapping_only_not_publicly_certified',
+        required_artifact_families: [
+          'merchant_profile',
+          'seller_agent_card',
+          'connector_evidence',
+          'catalog_snapshot',
+          'offer_price_snapshot',
+          'inventory_snapshot',
+          'policy_scope',
+          'public_discovery_state',
+          'mandate_capability',
+          'protocol_adapter',
+          'authority_request_status',
+        ],
+        surface_contracts: [
+          {
+            surface: 'schema_org_product_offer_jsonld',
+            source_artifact_families: ['catalog_snapshot', 'offer_price_snapshot', 'inventory_snapshot'],
+            prohibited_outputs: ['checkout execution', 'payment execution', 'order creation'],
+          },
+          {
+            surface: 'ucp_style_capability_profile',
+            source_artifact_families: ['seller_agent_card', 'policy_scope', 'protocol_adapter'],
+            prohibited_outputs: ['capability certification claim', 'public publication claim'],
+          },
+          {
+            surface: 'acp_style_commerce_interaction_profile',
+            source_artifact_families: ['policy_scope', 'catalog_snapshot', 'offer_price_snapshot', 'inventory_snapshot'],
+            prohibited_outputs: ['final commitment claim', 'stock reservation claim'],
+          },
+          {
+            surface: 'ap2_style_mandate_payment_evidence_profile',
+            source_artifact_families: ['mandate_capability', 'policy_scope', 'authority_request_status'],
+            prohibited_outputs: ['provider execution claim', 'payment success claim'],
+          },
+          {
+            surface: 'a2a_agent_card_task_metadata',
+            source_artifact_families: ['seller_agent_card', 'protocol_adapter'],
+            prohibited_outputs: ['unsupported task execution'],
+          },
+          {
+            surface: 'mcp_tool_manifest_resource_metadata',
+            source_artifact_families: ['seller_agent_card', 'catalog_snapshot', 'protocol_adapter'],
+            prohibited_outputs: ['write tool exposure'],
+          },
+          {
+            surface: 'openapi_buyer_safe_bridge_schema',
+            source_artifact_families: ['seller_agent_card', 'policy_scope', 'protocol_adapter'],
+            prohibited_outputs: ['payment or order operation exposure'],
+          },
+        ],
+      }
+      : undefined,
     authority_request_status: family === 'authority_request_status' ? 'artifact_issuance_ready' : undefined,
     unsupported_capabilities: [
       'checkout_payment_execution',

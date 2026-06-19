@@ -74,11 +74,11 @@ function readPlanning() {
 }
 
 describe('C6P first connector sync adapter planning packet', () => {
-  it('documents planning-only status and required sections', () => {
+  it('documents historical planning status and required sections', () => {
     const planning = readPlanning();
 
     expect(planning).toContain('Status: planned as an internal safe-foundation packet.');
-    expect(planning).toContain('internal preview planning only');
+    expect(planning).toContain('historical internal planning artifact');
     expect(planning).toContain('sandbox-only');
     expect(planning).toContain('non-live');
     expect(planning).toContain('non-publication');

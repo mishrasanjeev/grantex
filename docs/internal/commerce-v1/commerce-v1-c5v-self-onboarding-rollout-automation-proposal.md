@@ -1,6 +1,6 @@
 # Commerce V1 C5V Self-Onboarding Rollout Automation Proposal
 
-Status: planning only
+Status: historical planning artifact; superseded by the current OACP authority mapping guide in docs/guides/oacp-runtime-authority-and-adapter-mappings.md.
 Date: 2026-05-26
 Scope: future rollout automation proposal for merchant self-onboarding
 read-only Commerce discovery
