@@ -1,6 +1,6 @@
 # Commerce V1 C5Q Self-Onboarding API And Data Model Proposal
 
-Status: planning only
+Status: historical planning artifact; superseded by the current OACP authority mapping guide in docs/guides/oacp-runtime-authority-and-adapter-mappings.md.
 Date: 2026-05-26
 Scope: conceptual API and data model proposal for future merchant
 self-onboarding for read-only Commerce discovery

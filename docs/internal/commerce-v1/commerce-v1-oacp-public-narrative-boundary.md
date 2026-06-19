@@ -2,7 +2,7 @@
 
 Status: canonical wording boundary, internal only.
 
-Last updated: 2026-06-18.
+Last updated: 2026-06-19.
 
 ## Allowed Positioning
 
@@ -12,8 +12,8 @@ Use this wording:
 - "AgenticOrg is the buyer and seller AI-agent runtime."
 - "Merchant systems remain operational systems of record."
 - "Provider and fintech rails own mandate and payment execution."
-- "OACP artifacts support non-binding agent answers when cache, freshness, revocation, and scope checks pass."
-- "The C6Z production vertical is currently blocked by Shopify credential and Grantex tenant-mapping issues."
+- "OACP artifacts support buyer answers and prepared handoffs when cache, freshness, revocation, and scope checks pass."
+- "The AgenticOrg Shopify OACP runtime path exists; real merchant launch still requires valid Shopify access, Grantex tenant allowlisting, channel approvals, and provider approvals."
 
 ## Disallowed Positioning
 
@@ -30,4 +30,4 @@ Do not say or imply:
 
 Grantex Commerce payment-control work and the OACP runtime artifact protocol are separate.
 
-The Grantex payment-control pilot may discuss Commerce V1 runtime, consent, Commerce Passport, payment intent, webhook intake, reconciliation, and audit only inside that pilot scope. It must not be reused as proof that the C6Z AgenticOrg-to-Grantex OACP artifact vertical has completed.
+The Grantex payment-control pilot may discuss Commerce V1 runtime, consent, Commerce Passport, payment intent, webhook intake, reconciliation, and audit-log only inside that pilot scope. It must not be reused as proof that the C6Z AgenticOrg-to-Grantex OACP artifact vertical has completed.

@@ -15,7 +15,7 @@ This slice does not make discovery public. It only documents and tests the state
 | `hidden` | No public discovery path is visible. | Hidden/refused. |
 | `draft` | Merchant or metadata is being prepared. | Hidden/refused. |
 | `sandbox_review` | Sandbox read-only review is in progress. | Hidden/refused. |
-| `approved_for_sandbox_preview` | Internal sandbox preview evidence is complete enough for controlled review. | Internal preview only; not public discovery. |
+| `approved_for_sandbox_preview` | Internal sandbox preview evidence is complete enough for controlled review. | Internal historical preview state; not public discovery. |
 | `blocked` | A gate failed or a reviewer blocked progress. | Hidden/refused. |
 | `rejected` | Reviewer rejected the state. | Hidden/refused. |
 | `expired` | Evidence or review state is no longer fresh. | Hidden/refused. |
@@ -62,7 +62,7 @@ Rollback must be available before any future public exposure. A rollback from ei
 Allowed wording:
 
 - "This merchant is not available for public discovery."
-- "This is an internal sandbox preview only."
+- "This is an internal sandbox historical preview state."
 - "Public discovery is not enabled for this merchant."
 
 Unsafe wording:

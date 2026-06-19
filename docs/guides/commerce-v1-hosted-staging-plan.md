@@ -1,6 +1,6 @@
 # Grantex Commerce V1 Hosted Staging Plan
 
-Status: planning only for M9. Do not deploy from this document during M9.
+Status: historical M9 staging artifact; superseded by the current OACP authority mapping guide in docs/guides/oacp-runtime-authority-and-adapter-mappings.md. Do not deploy from this historical document.
 
 This plan defines the hosted staging target for Grantex Commerce V1 so AgenticOrg can run the Commerce Sales Agent against real hosted sandbox endpoints before any production enablement. It intentionally excludes production config changes, live payment credentials, live Plural, production data, and production Commerce V1 rollout.
 

@@ -149,14 +149,17 @@ The repo already has important foundations:
 | MCP/native agent surface | `merchant.get_profile`, `catalog.search`, `catalog.get_item`, `inventory.check`, `cart.create`, `checkout.create`, `payment.create_intent`, `payment.get_status`. | Correct agent surface; public discovery remains fail-closed. |
 | Docs navigation | Commerce V1 docs group exists in `docs/docs.json`. | Updated by this PRD pass to include this implementation PRD. |
 | Deploy workflow guard | Auth-service and portal deploy workflows have path filters for runtime paths. | Docs-only changes should not trigger Grantex deploy workflows, but CI still runs broad validation. |
-| OACP artifact foundation | C6W3-C6Z internal helpers, tests, docs, authority route, verifier, and AgenticOrg runtime handoff foundations define artifact families, adapter previews, commitment boundaries, prepared envelopes, evidence reconciliation, eligibility packets, dry-run verifier results, authority requests, cache use, buyer answers, MCP bridge, and capability checks. | Internal only; the 2026-06-18 production vertical is blocked by Shopify token and Grantex tenant-token provisioning issues; no execution, public protocol publication, certification, or production readiness. |
+| OACP artifact foundation | C6W3-C6Z internal helpers, tests, docs, authority route, verifier, and AgenticOrg runtime handoff foundations define artifact families, adapter mappings, commitment boundaries, prepared envelopes, evidence reconciliation, eligibility packets, dry-run verifier results, authority requests, cache use, buyer answers, MCP/OpenAPI/A2A/WhatsApp/Telegram bridges, and capability checks. | Runtime implemented for the Shopify read-only OACP vertical; still no checkout/payment/order/mandate execution, public protocol publication, external certification, or live provider claim. |
 
 ### 2.1 Current OACP Status Through C6Z
 
-The current OACP implementation is a strong internal runtime foundation, not a
-live commerce product. The 2026-06-18 production closure run is blocked because
-the mounted AgenticOrg Shopify token returns `401 Unauthorized` and the
-AgenticOrg-configured Grantex token returns `422 tenant_not_provisioned`.
+The current OACP implementation is a non-executing runtime vertical, not a
+live checkout product. The 2026-06-18 production closure run was blocked
+because the then-mounted AgenticOrg Shopify token returned `401 Unauthorized`
+and the AgenticOrg-configured Grantex token returned `422 tenant_not_provisioned`.
+AgenticOrg now has merchant-scoped Shopify credential storage, adapter payload
+generation, bridge routes, and purchase-preparation blockers; a real merchant
+launch still requires valid external credentials and tenant allowlisting.
 
 - implemented: internal artifact schemas, public-safe fixtures, adapter
   previews, commitment boundary resolver, prepared envelopes, response
@@ -334,7 +337,7 @@ Before any real merchant pilot, all of these must be true:
 ## 10. Public Landing Page And Blog Plan
 
 Use this as the safe public positioning once product/web owners approve landing
-page updates. This PRD update is planning only; it does not publish the pages.
+page updates. This older PRD section is historical; it did not publish the pages.
 
 > Grantex Commerce helps merchants prepare for agentic commerce by connecting
 > approved merchant facts, policies, and source evidence into signed OACP

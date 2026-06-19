@@ -135,7 +135,21 @@ describe('C6Z Grantex runtime artifact authority', () => {
     expect(result.artifacts.find((artifact) => artifact.artifact_family === 'protocol_adapter')?.payload)
       .toMatchObject({
         adapter_claim_boundary: 'compatibility_mapping_only_no_certification_or_standardization_claim',
+        adapter_mapping_profile: {
+          canonical_source: 'grantex_signed_oacp_artifacts',
+          generated_by: 'agenticorg_runtime_from_cached_artifacts',
+          external_certification_status: 'compatibility_mapping_only_not_publicly_certified',
+        },
       });
+    expect(
+      result.artifacts.find((artifact) => artifact.artifact_family === 'protocol_adapter')
+        ?.payload.adapter_mapping_profile,
+    ).toMatchObject({
+      surface_contracts: expect.arrayContaining([
+        expect.objectContaining({ surface: 'schema_org_product_offer_jsonld' }),
+        expect.objectContaining({ surface: 'openapi_buyer_safe_bridge_schema' }),
+      ]),
+    });
   });
 
   it('fails closed for stale evidence, missing scope, secrets, raw payloads, and execution targets', () => {

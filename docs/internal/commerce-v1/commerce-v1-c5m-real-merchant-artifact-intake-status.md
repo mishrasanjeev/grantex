@@ -1,6 +1,6 @@
 # Commerce V1 C5M Real Merchant Artifact Intake Status
 
-Status: planning only
+Status: historical planning artifact; superseded by the current OACP authority mapping guide in docs/guides/oacp-runtime-authority-and-adapter-mappings.md.
 Date: 2026-05-26
 Scope: current repo-safe status for real merchant artifact collection
 Production changes made by this status record: none

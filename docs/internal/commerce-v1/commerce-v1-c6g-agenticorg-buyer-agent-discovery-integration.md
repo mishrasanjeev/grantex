@@ -34,7 +34,7 @@ introduced.
 - `POST /v1/commerce/merchants/{merchant_id}/agenticorg-buyer-discovery-handoff-withdraw`
 
 Operators and owning merchants can inspect the preview. Trusted CommerceAgent
-callers can read the preview only after an operator records the sandbox handoff
+callers can read the historical preview state after an operator records the sandbox handoff
 request and current blockers remain absent.
 
 Handoff request and withdrawal are operator-only. CommerceAgent callers cannot

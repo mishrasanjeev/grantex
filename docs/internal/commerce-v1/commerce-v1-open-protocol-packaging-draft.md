@@ -63,7 +63,7 @@ refusal and must not call providers or merchant systems.
 
 Source: Grantex C6J.
 
-The schema.org adapter is packaged as preview-only JSON-LD generated from
+The schema.org adapter is packaged as historical-preview JSON-LD generated from
 canonical Grantex merchant, catalog, and readiness state. It may include only
 safe Product, Offer, MerchantReturnPolicy, and OfferShippingDetails fields when
 evidence exists.
@@ -103,7 +103,7 @@ Controls remain blocked:
 Source: Grantex C6L.
 
 The ACP-style package maps cart and checkout concepts to existing Grantex
-sandbox foundations. It is a shape preview only. It does not create payment
+sandbox foundations. It is a shape historical preview state. It does not create payment
 intents, checkout links, public checkout sessions, provider calls, live payment
 flows, refunds, returns, or fulfillment actions.
 
@@ -196,7 +196,7 @@ Controls remain blocked:
 
 Every packaged artifact must include or inherit these facts:
 
-- preview-only
+- historical-preview
 - sandbox-only where runtime state is involved
 - tenant-scoped
 - Grantex-grounded
@@ -276,5 +276,5 @@ Task: Plan Agentic Commerce C6O conformance fixtures and first real connector sy
 
 Do not deploy, run cloud commands, create cloud resources, change production config, touch secrets, enable public discovery, enable production Commerce V1, enable checkout/payment creation, enable live payments, call providers, call merchant private APIs from AgenticOrg, or claim certification.
 
-Use the merged C6I-C6N base: AgenticOrg PR #718 and Grantex PRs #511-#515. Define C6O reviewable slices for preview conformance fixtures, schema/manifest validators, and the first safe real connector sync adapter plan. Keep all artifacts sandbox-only, preview-only, non-live, non-publication, and non-certifying. For connector sync, start with metadata, dry-run, stale/conflict blockers, tenant boundaries, credential redaction, and test doubles before any live merchant-system call.
+Use the merged C6I-C6N base: AgenticOrg PR #718 and Grantex PRs #511-#515. Define C6O reviewable slices for preview conformance fixtures, schema/manifest validators, and the first safe real connector sync adapter plan. Keep all artifacts sandbox-only, historical-preview, non-live, non-publication, and non-certifying. For connector sync, start with metadata, dry-run, stale/conflict blockers, tenant boundaries, credential redaction, and test doubles before any live merchant-system call.
 ```

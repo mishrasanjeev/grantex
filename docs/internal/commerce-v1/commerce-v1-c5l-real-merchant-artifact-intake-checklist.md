@@ -1,6 +1,6 @@
 # Commerce V1 C5L Real Merchant Artifact Intake Checklist
 
-Status: planning only
+Status: historical planning artifact; superseded by the current OACP authority mapping guide in docs/guides/oacp-runtime-authority-and-adapter-mappings.md.
 Date: 2026-05-26
 Scope: real human merchant artifact intake checklist before any future
 Commerce V1 read-only discovery allowlist or config proposal
