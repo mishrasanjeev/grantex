@@ -1,5 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('@grantex/sdk', () => ({
+  verifyGrantToken: vi.fn(),
+}));
+
 import { createGrantexFunction } from '../src/function.js';
+import { verifyGrantToken, type VerifiedGrant } from '@grantex/sdk';
 
 /** Build a minimal JWT-shaped token with the given scp claim. */
 function makeToken(scp: string[]): string {
@@ -14,8 +20,26 @@ const PARAMS = {
   required: ['date'],
 };
 
+function makeGrant(scopes: string[]): VerifiedGrant {
+  return {
+    tokenId: 'tok_01',
+    grantId: 'grnt_01',
+    principalId: 'user_1',
+    agentDid: 'did:grantex:ag_TEST',
+    developerId: 'dev_TEST',
+    scopes,
+    issuedAt: 1,
+    expiresAt: 9999999999,
+  };
+}
+
 describe('createGrantexFunction', () => {
+  beforeEach(() => {
+    vi.mocked(verifyGrantToken).mockReset();
+  });
+
   it('executes func when agent holds the required scope', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant(['calendar:read']));
     const fn = vi.fn().mockResolvedValue({ events: [] });
     const gfn = createGrantexFunction({
       name: 'list_events',
@@ -30,9 +54,13 @@ describe('createGrantexFunction', () => {
 
     expect(result).toEqual({ events: [] });
     expect(fn).toHaveBeenCalledWith({ date: '2024-01-15' });
+    expect(verifyGrantToken).toHaveBeenCalledWith(makeToken(['calendar:read']), {
+      jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+    });
   });
 
   it('throws before calling func when agent lacks the required scope', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant(['profile:read']));
     const fn = vi.fn();
     const gfn = createGrantexFunction({
       name: 'list_events',
@@ -48,6 +76,7 @@ describe('createGrantexFunction', () => {
   });
 
   it('error message includes granted scopes for easier debugging', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant(['profile:read']));
     const gfn = createGrantexFunction({
       name: 'send_email',
       description: 'Send an email',
@@ -81,6 +110,7 @@ describe('createGrantexFunction', () => {
   });
 
   it('throws on a malformed grant token', async () => {
+    vi.mocked(verifyGrantToken).mockRejectedValue(new Error('invalid signature'));
     const gfn = createGrantexFunction({
       name: 'list_events',
       description: 'List calendar events',

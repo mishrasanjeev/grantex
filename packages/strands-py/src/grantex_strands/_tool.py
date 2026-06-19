@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from grantex import GrantexTokenError, VerifyGrantTokenOptions, verify_grant_token
+
 from ._jwt import decode_jwt_payload
 from ._errors import ScopeViolationError
+
+DEFAULT_JWKS_URI = "https://api.grantex.dev/.well-known/jwks.json"
 
 
 def create_grantex_tool(
@@ -18,6 +22,11 @@ def create_grantex_tool(
     client: Any = None,
     connector: str | None = None,
     online: bool = False,
+    jwks_uri: str = DEFAULT_JWKS_URI,
+    issuer: str | None = None,
+    issuer_did: str | None = None,
+    audience: str | None = None,
+    clock_tolerance: int = 0,
 ) -> Any:
     """Create a Strands-compatible tool with Grantex scope enforcement.
 
@@ -74,37 +83,52 @@ def create_grantex_tool(
     """
     from strands import tool as strands_tool  # type: ignore[import-not-found]
 
-    if online:
-        # Online mode: use client.enforce() for full verification
-        if client is None:
-            raise ValueError("online=True requires a 'client' (Grantex instance)")
-        if connector is None:
-            raise ValueError("online=True requires a 'connector' name")
+    verify_options = VerifyGrantTokenOptions(
+        jwks_uri=jwks_uri,
+        issuer=issuer,
+        issuer_did=issuer_did,
+        audience=audience,
+        clock_tolerance=clock_tolerance,
+    )
 
-        result = client.enforce(grant_token, connector, name)
-        allowed = result.allowed if hasattr(result, "allowed") else result.get("allowed")
-        if not allowed:
-            reason = result.reason if hasattr(result, "reason") else result.get("reason", "")
-            raise PermissionError(
-                f"Grant token scope check failed for tool '{name}' on "
-                f"connector '{connector}': {reason}"
-            )
-    else:
-        # Offline mode: decode JWT and check scp claim directly
+    def _verify_required_scope() -> None:
+        if online:
+            result = client.enforce(grant_token, connector, name)
+            allowed = result.allowed if hasattr(result, "allowed") else result.get("allowed")
+            if not allowed:
+                reason = result.reason if hasattr(result, "reason") else result.get("reason", "")
+                raise PermissionError(
+                    f"Grant token scope check failed for tool '{name}' on "
+                    f"connector '{connector}': {reason}"
+                )
+            return
+
         try:
-            payload = decode_jwt_payload(grant_token)
-        except Exception as exc:
-            raise ValueError(f"Could not decode grant_token: {exc}") from exc
-
-        scopes: list[str] = payload.get("scp", [])
+            grant = verify_grant_token(
+                grant_token,
+                verify_options,
+            )
+        except GrantexTokenError as exc:
+            raise ValueError(f"Could not verify grant_token: {exc}") from exc
+        scopes = list(grant.scopes)
         if required_scope not in scopes:
             raise PermissionError(
                 f"Grant token is missing required scope '{required_scope}'. "
                 f"Granted scopes: {scopes}"
             )
 
+    if online:
+        # Online mode: use client.enforce() for full verification.
+        if client is None:
+            raise ValueError("online=True requires a 'client' (Grantex instance)")
+        if connector is None:
+            raise ValueError("online=True requires a 'connector' name")
+
+    _verify_required_scope()
+
     # Wrap func so the Strands decorator sees a proper function
     def _wrapper(**kwargs: Any) -> str:
+        _verify_required_scope()
         return func(**kwargs)
 
     _wrapper.__name__ = name

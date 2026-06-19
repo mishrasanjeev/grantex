@@ -4,10 +4,12 @@ import base64
 import json
 import sys
 import types
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from grantex import GrantexTokenError
 
 
 # ─── Minimal crewai stub ─────────────────────────────────────────────────────
@@ -74,6 +76,22 @@ def make_grant_token(scopes: list[str], extra: dict[str, Any] | None = None) -> 
         payload_data.update(extra)
     payload = _b64url(json.dumps(payload_data).encode())
     return f"{header}.{payload}.fakesignature"
+
+
+def _verified_grant_from_token(token: str) -> SimpleNamespace:
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(token.split(".")[1] + "=="))
+    except Exception as exc:
+        raise GrantexTokenError("invalid signature") from exc
+    return SimpleNamespace(scopes=tuple(payload.get("scp", [])))
+
+
+@pytest.fixture(autouse=True)
+def _mock_verify_grant_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "grantex_crewai._tool.verify_grant_token",
+        lambda token, _options: _verified_grant_from_token(token),
+    )
 
 
 # ─── Mock Grantex client ──────────────────────────────────────────────────────

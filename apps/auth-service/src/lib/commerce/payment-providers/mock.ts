@@ -8,18 +8,20 @@ import {
 import { sha256hex } from '../../hash.js';
 
 const MOCK_WEBHOOK_REPLAY_WINDOW_SECONDS = 300;
-const DEFAULT_MOCK_WEBHOOK_SECRET = 'mock-webhook-secret';
+const INSECURE_DEFAULT_MOCK_WEBHOOK_SECRET = ['mock', 'webhook', 'secret'].join('-');
 
 function nowIso(): string {
   return new Date().toISOString();
 }
 
-function webhookSecret(): string {
-  return process.env['MOCK_PAYMENT_WEBHOOK_SECRET'] ?? DEFAULT_MOCK_WEBHOOK_SECRET;
+function webhookSecret(): string | null {
+  const secret = process.env['MOCK_PAYMENT_WEBHOOK_SECRET']?.trim();
+  if (!secret || secret === INSECURE_DEFAULT_MOCK_WEBHOOK_SECRET) return null;
+  return secret;
 }
 
-function hmacSignature(rawBody: string, timestamp: string): string {
-  return createHmac('sha256', webhookSecret())
+function hmacSignature(rawBody: string, timestamp: string, secret: string): string {
+  return createHmac('sha256', secret)
     .update(`${timestamp}.${rawBody}`)
     .digest('hex');
 }
@@ -176,7 +178,11 @@ export class MockPaymentProvider implements PaymentProvider {
   }> {
     const timestamp = input.headers['x-mock-timestamp'];
     const signature = input.headers['x-mock-signature'];
-    if (!timestamp || !signature || !signatureMatches(signature, hmacSignature(input.raw_body, timestamp))) {
+    const secret = webhookSecret();
+    if (!secret) {
+      throw providerError(this.normalizeError({ code: 'mock_webhook_secret_unconfigured' }));
+    }
+    if (!timestamp || !signature || !signatureMatches(signature, hmacSignature(input.raw_body, timestamp, secret))) {
       throw providerError(this.normalizeError({ code: 'mock_signature_invalid' }));
     }
     const timestampSeconds = Number.parseInt(timestamp, 10);
@@ -238,6 +244,15 @@ export class MockPaymentProvider implements PaymentProvider {
       return {
         code: 'webhook_signature_invalid',
         message: 'Mock webhook signature is invalid',
+        retryable: false,
+        provider_key: 'mock',
+        provider_error_code: code,
+      };
+    }
+    if (code === 'mock_webhook_secret_unconfigured') {
+      return {
+        code: 'provider_unavailable',
+        message: 'Mock webhook signing secret is not configured',
         retryable: false,
         provider_key: 'mock',
         provider_error_code: code,

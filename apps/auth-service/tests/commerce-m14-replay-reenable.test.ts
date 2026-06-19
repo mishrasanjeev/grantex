@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { authHeader, buildTestApp, sqlMock } from './helpers.js';
 import { seedCommerceContext, TEST_COMMERCE_TENANT_ID } from './commerce-helpers.js';
@@ -23,10 +23,20 @@ const PROVIDER_PAYMENT_ID = `mock_pay_${PAYMENT_INTENT}`;
 const WEBHOOK_EVENT = 'cwh_M14';
 const PROVIDER_EVENT = 'evt_M14';
 const POLICY_ID = 'cpol_M14';
-const MOCK_WEBHOOK_SECRET = ['mock', 'webhook', 'secret'].join('-');
+const MOCK_WEBHOOK_SECRET = 'test-m14-mock-webhook-secret-not-a-default';
+const PREVIOUS_MOCK_WEBHOOK_SECRET = process.env['MOCK_PAYMENT_WEBHOOK_SECRET'];
 
 beforeAll(async () => {
+  process.env['MOCK_PAYMENT_WEBHOOK_SECRET'] = MOCK_WEBHOOK_SECRET;
   app = await buildTestApp();
+});
+
+afterAll(() => {
+  if (PREVIOUS_MOCK_WEBHOOK_SECRET === undefined) {
+    delete process.env['MOCK_PAYMENT_WEBHOOK_SECRET'];
+  } else {
+    process.env['MOCK_PAYMENT_WEBHOOK_SECRET'] = PREVIOUS_MOCK_WEBHOOK_SECRET;
+  }
 });
 
 function paymentIntent(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -152,8 +162,8 @@ function flattenedSqlCalls(): string {
 describe('M14 provider webhook replay', () => {
   it('stores encrypted replay payload only for future valid mock provider events', async () => {
     const payload = webhookPayload({ event_id: 'evt_STORE_PAYLOAD' });
-    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([paymentIntent()]);
+    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{ id: 'cwh_STORE_PAYLOAD' }]);
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_RECEIVED', occurred_at: new Date().toISOString() }]);

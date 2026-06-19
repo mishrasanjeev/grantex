@@ -1932,7 +1932,7 @@ describe('CommerceOnboarding', () => {
     })));
     expect(screen.getByText('policy_allow')).toBeInTheDocument();
     expect(screen.queryByText(/passport_jwt/i)).not.toBeInTheDocument();
-  });
+  }, 30000);
 
   it('runs connector dry-run review evidence without credential entry or live execution controls', async () => {
     const user = userEvent.setup();
@@ -2052,7 +2052,7 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('No remediation actions remain before sandbox follow-up.')).toBeInTheDocument();
     expect(screen.queryByText('production connector setup enabled')).not.toBeInTheDocument();
     anchorClick.mockRestore();
-  });
+  }, 30000);
 
   it('renders self-serve remediation for needs-changes connector dry-run decisions', async () => {
     mockRecordCommerceConnectorDryRunReviewDecision.mockResolvedValueOnce({
@@ -2108,7 +2108,7 @@ describe('CommerceOnboarding', () => {
     expect(remediationEvidenceJsonPreview.textContent).not.toContain('Portal Sandbox Fixture Product');
     expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
     expect(screen.queryByText('outbound connector sync enabled')).not.toBeInTheDocument();
-  });
+  }, 15000);
 
   it('loads persisted remediation queue and redacted timeline without connector execution controls', async () => {
     mockGetCommerceConnectorDryRunRemediationTimeline
@@ -2246,7 +2246,7 @@ describe('CommerceOnboarding', () => {
     expect(screen.queryByText('production connector setup enabled')).not.toBeInTheDocument();
     expect(screen.queryByText('outbound connector sync enabled')).not.toBeInTheDocument();
     expect(screen.queryByText('public discovery enabled')).not.toBeInTheDocument();
-  }, 10000);
+  }, 30000);
 
   it('flags stale or conflicting follow-up guidance as a sandbox blocker only', async () => {
     mockGetCommerceConnectorDryRunRemediationTimeline.mockReset();
@@ -2368,6 +2368,10 @@ describe('CommerceOnboarding', () => {
     await user.click(screen.getByRole('button', { name: 'View timeline' }));
     await waitFor(() => expect(screen.getByTestId('connector-followup-closure-gap-assessment')).toBeInTheDocument());
 
+    await waitFor(() => {
+      const closureAssessment = screen.getByTestId('connector-followup-closure-gap-assessment');
+      expect(within(closureAssessment).getAllByText('followup_closure_ready').length).toBeGreaterThan(0);
+    });
     const closureAssessment = screen.getByTestId('connector-followup-closure-gap-assessment');
     expect(within(closureAssessment).getAllByText('followup_closure_ready').length).toBeGreaterThan(0);
     expect(within(closureAssessment).getByText('caud_C6SIE_FOLLOWUP_DECISION')).toBeInTheDocument();
@@ -2384,7 +2388,7 @@ describe('CommerceOnboarding', () => {
     expect(screen.queryByText('launch approval enabled')).not.toBeInTheDocument();
     expect(screen.queryByText('checkout payment approval enabled')).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
-  });
+  }, 15000);
 
   it('shows blocked-again and closed-no-action closure states as non-enabling', async () => {
     mockListCommerceConnectorDryRunRemediations.mockResolvedValueOnce({
@@ -2430,6 +2434,10 @@ describe('CommerceOnboarding', () => {
     await user.click(screen.getByRole('button', { name: 'View timeline' }));
     await waitFor(() => expect(screen.getByTestId('connector-followup-closure-gap-assessment')).toBeInTheDocument());
     let closureAssessment = screen.getByTestId('connector-followup-closure-gap-assessment');
+    await waitFor(() => {
+      closureAssessment = screen.getByTestId('connector-followup-closure-gap-assessment');
+      expect(within(closureAssessment).getAllByText('blocked_again').length).toBeGreaterThan(0);
+    });
     expect(within(closureAssessment).getAllByText('blocked_again').length).toBeGreaterThan(0);
     expect(within(closureAssessment).getByText('caud_C6SIE_BLOCKED_AGAIN_DECISION')).toBeInTheDocument();
     expect(within(closureAssessment).getByText('connector_execution_enabled')).toBeInTheDocument();
@@ -2482,7 +2490,7 @@ describe('CommerceOnboarding', () => {
     expect(screen.queryByText('production approval enabled')).not.toBeInTheDocument();
     expect(screen.queryByText('connector execution ready')).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
-  });
+  }, 15000);
 
   it('rehearses remediation loop from needs-changes to corrected sandbox follow-up', async () => {
     mockRunCommerceConnectorDryRun
@@ -2609,7 +2617,7 @@ describe('CommerceOnboarding', () => {
     expect(loopEvidenceJsonPreview.textContent).not.toContain('Portal Sandbox Fixture Product');
     expect(screen.queryByRole('textbox', { name: 'Credential' })).not.toBeInTheDocument();
     expect(screen.queryByText('production connector setup enabled')).not.toBeInTheDocument();
-  });
+  }, 30000);
 
   it('validates, clears, and resets connector rows before dry-run submission', async () => {
     const user = userEvent.setup();

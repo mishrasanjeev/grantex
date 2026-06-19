@@ -5,7 +5,10 @@
 # Install only what you need — sections are labeled.
 
 # ─── Core SDK ────────────────────────────────────────────────────────────────
-grantex==0.3.8                    # Python SDK (httpx, PyJWT, cryptography)
+grantex==0.3.11                   # Python SDK (httpx, PyJWT, cryptography)
+PyJWT>=2.13.0                     # JWT verification fixes
+idna>=3.15                        # IDNA validation fixes
+cryptography>=48.0.1              # RSA/Ed25519 key operations
 
 # ─── Framework Integrations (install as needed) ─────────────────────────────
 grantex-fastapi>=0.1.3            # FastAPI middleware (requires: fastapi>=0.100.0)
@@ -17,15 +20,16 @@ grantex-gemma>=0.1.0              # Offline auth for Gemma on-device agents
 
 # ─── SDK Runtime Dependencies (installed automatically with grantex) ────────
 # httpx>=0.27.0                   # HTTP client (async + sync)
-# PyJWT>=2.8.0                    # JWT decoding
-# cryptography>=42.0.0            # RSA/Ed25519 key operations
+# PyJWT>=2.13.0                   # JWT decoding
+# idna>=3.15                      # IDNA validation
+# cryptography>=48.0.1            # RSA/Ed25519 key operations
 
 # ─── FastAPI Integration Dependencies ────────────────────────────────────────
 # fastapi>=0.100.0                # Required by grantex-fastapi
 # uvicorn>=0.20.0                 # ASGI server for FastAPI
 
 # ─── Development / Testing ──────────────────────────────────────────────────
-# pytest>=8.0.0                   # Test runner
+# pytest>=9.0.3                   # Test runner
 # pytest-mock>=3.14.0             # Mock support
 # pytest-asyncio>=0.23.0          # Async test support
 # respx>=0.22.0                   # httpx mock library

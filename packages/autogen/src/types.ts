@@ -29,6 +29,16 @@ export interface GrantexFunctionOptions<T extends Record<string, unknown>> {
   parameters: JsonSchema;
   /** Grantex grant token obtained from the token exchange. */
   grantToken: string;
+  /** JWKS URL used to verify the grant token. Defaults to https://api.grantex.dev/.well-known/jwks.json. */
+  jwksUri?: string;
+  /** Expected JWT issuer when it differs from the JWKS origin. */
+  issuer?: string;
+  /** did:web issuer used to derive the JWKS URL. */
+  issuerDid?: string;
+  /** Expected JWT audience. */
+  audience?: string;
+  /** Clock tolerance in seconds for token verification. */
+  clockTolerance?: number;
   /** Scope the agent must hold to invoke this function (e.g. `'calendar:read'`). */
   requiredScope: string;
   /** The function implementation. Receives typed args, returns any JSON-serialisable value. */
@@ -39,14 +49,14 @@ export interface GrantexFunctionOptions<T extends Record<string, unknown>> {
  * A Grantex-authorized function in OpenAI function-calling format.
  *
  * - `definition` — pass this to the LLM (inside a `tools` array)
- * - `execute(args)` — call after the LLM selects the tool; enforces scope offline
+ * - `execute(args)` — call after the LLM selects the tool; verifies token and scope
  */
 export interface GrantexFunction<T extends Record<string, unknown>> {
   /** OpenAI function-calling tool definition for passing to the LLM. */
   readonly definition: OpenAIFunctionTool;
   /**
    * Execute the function with the given arguments.
-   * Verifies the required scope offline before calling `func`.
+   * Verifies the grant token and required scope before calling `func`.
    * Throws if the agent does not hold the required scope.
    */
   execute(args: T): Promise<unknown>;

@@ -68,11 +68,13 @@ config:
   port: "3001"
   host: "0.0.0.0"
 
-# External PostgreSQL connection string (required)
+# External PostgreSQL connection string (required). Stored in the generated
+# Kubernetes Secret unless existingSecret is set.
 externalDatabase:
   url: ""
 
-# External Redis connection string (required)
+# External Redis connection string (required). Stored in the generated
+# Kubernetes Secret unless existingSecret is set.
 externalRedis:
   url: ""
 
@@ -80,8 +82,8 @@ externalRedis:
 # Ignored when existingSecret is set.
 rsaPrivateKey: ""
 
-# Name of an existing Secret containing RSA_PRIVATE_KEY (and optionally
-# DATABASE_URL / REDIS_URL). When set, rsaPrivateKey is ignored.
+# Name of an existing Secret containing DATABASE_URL, REDIS_URL, and optionally
+# RSA_PRIVATE_KEY. When set, generated Secret values are ignored.
 existingSecret: ""
 
 livenessProbe:

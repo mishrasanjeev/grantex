@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -18,10 +18,20 @@ const MERCHANT = 'mch_WEBHOOK';
 const AGENT = 'cag_WEBHOOK';
 const PAYMENT_INTENT = 'cpi_WEBHOOK';
 const PROVIDER_PAYMENT_ID = `mock_pay_${PAYMENT_INTENT}`;
-const MOCK_WEBHOOK_SECRET = 'mock-webhook-secret';
+const MOCK_WEBHOOK_SECRET = 'test-mock-webhook-secret-not-a-default';
+const PREVIOUS_MOCK_WEBHOOK_SECRET = process.env['MOCK_PAYMENT_WEBHOOK_SECRET'];
 
 beforeAll(async () => {
+  process.env['MOCK_PAYMENT_WEBHOOK_SECRET'] = MOCK_WEBHOOK_SECRET;
   app = await buildTestApp();
+});
+
+afterAll(() => {
+  if (PREVIOUS_MOCK_WEBHOOK_SECRET === undefined) {
+    delete process.env['MOCK_PAYMENT_WEBHOOK_SECRET'];
+  } else {
+    process.env['MOCK_PAYMENT_WEBHOOK_SECRET'] = PREVIOUS_MOCK_WEBHOOK_SECRET;
+  }
 });
 
 function paymentIntentRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -76,8 +86,8 @@ function signedHeaders(payload: Record<string, unknown>, timestamp = Math.floor(
 }
 
 function primeWebhookTransition(targetStatus: 'paid' | 'failed' | 'expired'): void {
-  sqlMock.mockResolvedValueOnce([]);
   sqlMock.mockResolvedValueOnce([paymentIntentRow()]);
+  sqlMock.mockResolvedValueOnce([]);
   sqlMock.mockResolvedValueOnce([webhookEventRow()]);
   sqlMock.mockResolvedValueOnce([]);
   sqlMock.mockResolvedValueOnce([{ id: 'caud_WEBHOOK_RECEIVED', occurred_at: new Date().toISOString() }]);
@@ -153,6 +163,7 @@ describe('Commerce provider webhook route', () => {
 
   it('duplicate webhook event id is idempotently accepted without a second transition', async () => {
     const payload = webhookPayload({ event_id: 'evt_DUPLICATE', status: 'paid' });
+    sqlMock.mockResolvedValueOnce([paymentIntentRow()]);
     sqlMock.mockResolvedValueOnce([webhookEventRow({ id: 'cwh_DUPLICATE', processing_status: 'processed' })]);
 
     const res = await app.inject({
@@ -214,8 +225,8 @@ describe('Commerce provider webhook route', () => {
 
   it('unsupported provider event is recorded and ignored safely', async () => {
     const payload = webhookPayload({ event_id: 'evt_UNSUPPORTED', event_type: 'payment.refunded', status: 'paid' });
-    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([paymentIntentRow()]);
+    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([webhookEventRow({ id: 'cwh_UNSUPPORTED' })]);
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_WEBHOOK_RECEIVED', occurred_at: new Date().toISOString() }]);
@@ -238,8 +249,8 @@ describe('Commerce provider webhook route', () => {
 
   it('invalid payment transition is rejected and audited', async () => {
     const payload = webhookPayload({ event_id: 'evt_INVALID_TRANSITION', status: 'paid' });
-    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([paymentIntentRow({ status: 'authorized' })]);
+    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([webhookEventRow({ id: 'cwh_INVALID_TRANSITION' })]);
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{ id: 'caud_WEBHOOK_RECEIVED', occurred_at: new Date().toISOString() }]);
@@ -287,7 +298,6 @@ describe('Commerce provider webhook route', () => {
       status: 'paid',
     });
     sqlMock.mockResolvedValueOnce([]);
-    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([webhookEventRow({ id: 'cwh_CROSS_TENANT', payment_intent_id: null })]);
     sqlMock.mockResolvedValueOnce([]);
 
@@ -309,7 +319,8 @@ describe('Commerce provider webhook route', () => {
     expect(content).toContain('commerce_provider_webhook_events');
     expect(content).toContain('provider_event_id');
     expect(content).toContain('payload_hash');
-    expect(content).toContain('uq_provider_webhook_provider_event');
+    expect(content).toContain('uq_provider_webhook_tenant_merchant_event');
+    expect(content).not.toContain('uq_provider_webhook_provider_event');
     expect(content).not.toContain('raw_payload JSONB');
   });
 

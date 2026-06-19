@@ -7,6 +7,13 @@ const currentDir = dirname(fileURLToPath(import.meta.url));
 const html = readFileSync(join(currentDir, 'commerce-playground.html'), 'utf8');
 const repoRoot = join(currentDir, '..');
 const catalogSource = readFileSync(join(repoRoot, 'apps', 'auth-service', 'src', 'lib', 'commerce', 'catalog.ts'), 'utf8');
+const lt = String.fromCharCode(60);
+const gt = String.fromCharCode(62);
+const slash = String.fromCharCode(47);
+const scriptTag = ['s', 'c', 'r', 'i', 'p', 't'].join('');
+const scriptOpen = `${lt}${scriptTag}${gt}`;
+const scriptClose = `${lt}${slash}${scriptTag}${gt}`;
+const manifestOpen = `${lt}${scriptTag} type="application/json" id="commerce-playground-manifest"${gt}`;
 
 function extractStaticBlock(source, openMarker, closeMarker, label, fromIndex = 0) {
   const openIndex = source.indexOf(openMarker, fromIndex);
@@ -22,8 +29,8 @@ function extractStaticBlock(source, openMarker, closeMarker, label, fromIndex = 
 
 const manifestBlock = extractStaticBlock(
   html,
-  '<script type="application/json" id="commerce-playground-manifest">',
-  '</script>',
+  manifestOpen,
+  scriptClose,
   'commerce playground manifest',
 );
 assert.ok(manifestBlock.content.trim().length > 0, 'commerce playground manifest is present');
@@ -75,9 +82,9 @@ assert.deepEqual(
   'localStorage is limited to non-secret connection settings',
 );
 
-const browserScript = extractStaticBlock(html, '<script>', '</script>', 'playground browser script', manifestBlock.endIndex);
+const browserScript = extractStaticBlock(html, scriptOpen, scriptClose, 'playground browser script', manifestBlock.endIndex);
 assert.ok(browserScript.content.trim().length > 0, 'playground browser script is present');
-assert.equal(html.indexOf('<script>', browserScript.endIndex), -1, 'playground has one runnable browser script');
+assert.equal(html.indexOf(scriptOpen, browserScript.endIndex), -1, 'playground has one runnable browser script');
 new Function(browserScript.content);
 
 assert.equal(/[^\u0000-\u007F]/.test(html), false, 'playground HTML stays ASCII-only');

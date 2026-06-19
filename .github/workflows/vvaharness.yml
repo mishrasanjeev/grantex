@@ -1,0 +1,90 @@
+name: Visa Vulnerability Agentic Harness
+
+on:
+  workflow_dispatch:
+    inputs:
+      stop_after:
+        description: Optional VVAH stage to stop after for scoped runs
+        required: false
+        default: ""
+        type: string
+      skip_preflight:
+        description: Skip VVAH backend preflight
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  vvaharness:
+    name: VVAH scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@2.1.183
+
+      - name: Install VVAH
+        run: python -m pip install "git+https://github.com/visa/visa-vulnerability-agentic-harness.git@dc7d77665497e9fca41012e5f375def41241eb59"
+
+      - name: Run VVAH
+        shell: bash
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          args=(
+            scan
+            --repo "$GITHUB_WORKSPACE"
+            --repo-name grantex
+            --application-id grantex
+            --workspace "$RUNNER_TEMP/vvaharness"
+            --step1-config "$GITHUB_WORKSPACE/security/vvaharness-step1.yaml"
+          )
+
+          if [[ "${{ inputs.skip_preflight }}" == "true" ]]; then
+            args+=(--skip-preflight)
+          fi
+
+          if [[ -n "${{ inputs.stop_after }}" ]]; then
+            args+=(--stop-after "${{ inputs.stop_after }}")
+          fi
+
+          vvaharness "${args[@]}"
+
+      - name: Normalize SARIF path
+        if: always()
+        shell: bash
+        run: |
+          latest="$(ls -t security-scan/*_report.sarif 2>/dev/null | head -n 1 || true)"
+          if [[ -n "$latest" ]]; then
+            cp "$latest" security-scan/vvaharness.sarif
+          fi
+
+      - name: Upload VVAH artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vvaharness-security-scan
+          path: |
+            security-scan/**
+            checkpoints/**
+          if-no-files-found: ignore
+
+      - name: Upload VVAH SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: security-scan/vvaharness.sarif
+        continue-on-error: true

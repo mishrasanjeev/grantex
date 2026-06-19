@@ -5,9 +5,14 @@ import type { Grantex } from '@grantex/sdk';
 vi.mock('ai', () => ({
   zodSchema: (schema: unknown) => schema,
 }));
+vi.mock('@grantex/sdk', () => ({
+  verifyGrantToken: vi.fn(),
+}));
 
 import { createGrantexTool } from '../src/tool.js';
 import { withAuditLogging } from '../src/audit.js';
+import { GrantexScopeError } from '../src/types.js';
+import { verifyGrantToken, type VerifiedGrant } from '@grantex/sdk';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -29,6 +34,19 @@ const TOKEN = makeToken(['data:read']);
 const PARAMS = z.object({ item: z.string() });
 const EXEC_OPTIONS = { toolCallId: 'tc_01', messages: [] as never[] };
 
+function makeGrant(scopes: string[]): VerifiedGrant {
+  return {
+    tokenId: 'tok_01',
+    grantId: 'grnt_01',
+    principalId: 'user_01',
+    agentDid: 'did:grantex:ag_TEST',
+    developerId: 'dev_TEST',
+    scopes,
+    issuedAt: 1,
+    expiresAt: 9999999999,
+  };
+}
+
 function makeClient() {
   return {
     audit: { log: vi.fn().mockResolvedValue(undefined) },
@@ -49,6 +67,11 @@ function baseTool(execute: (args: { item: string }) => Promise<string>) {
 // ─── withAuditLogging ─────────────────────────────────────────────────────────
 
 describe('withAuditLogging', () => {
+  beforeEach(() => {
+    vi.mocked(verifyGrantToken).mockReset();
+    vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant(['data:read']));
+  });
+
   it('calls execute and logs success', async () => {
     const client = makeClient();
     const t = withAuditLogging(baseTool(async ({ item }) => `done:${item}`), client, {
@@ -122,18 +145,21 @@ describe('withAuditLogging', () => {
     expect(wrapped.inputSchema).toBe(original.inputSchema);
   });
 
-  it('does not log when scope check fails at construction', () => {
+  it('does not log before execution when the scope check fails', async () => {
     const client = makeClient();
-    expect(() =>
-      createGrantexTool({
-        name: 'restricted',
-        description: 'restricted',
-        parameters: PARAMS,
-        grantToken: makeToken([]),
-        requiredScope: 'data:read',
-        execute: async () => 'ok',
-      }),
-    ).toThrow();
+    vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant([]));
+    const tool = createGrantexTool({
+      name: 'restricted',
+      description: 'restricted',
+      parameters: PARAMS,
+      grantToken: makeToken([]),
+      requiredScope: 'data:read',
+      execute: async () => 'ok',
+    });
+
+    await expect(tool.execute({ item: 'widget' }, EXEC_OPTIONS)).rejects.toThrow(
+      GrantexScopeError,
+    );
     expect(client.audit.log).not.toHaveBeenCalled();
   });
 });

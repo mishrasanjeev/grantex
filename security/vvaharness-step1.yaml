@@ -1,0 +1,50 @@
+# VVAH Step-1 overlay for Grantex.
+#
+# Keep the agentic scan focused on first-party code, deployment/configuration,
+# and executable examples. Dependency lockfiles are covered by npm/pip audits.
+exclude_dirs:
+  - .git
+  - .tmp
+  - .mypy_cache
+  - .pytest_cache
+  - __pycache__
+  - node_modules
+  - dist
+  - build
+  - coverage
+  - checkpoints
+  - security-scan
+  - playwright-report
+  - test-results
+
+exclude_exts:
+  - .png
+  - .jpg
+  - .jpeg
+  - .gif
+  - .webp
+  - .ico
+  - .pdf
+
+exclude_globs:
+  - "**/package-lock.json"
+  - "docs/api-reference/**"
+  - "docs/blog/**"
+  - "docs/internal/**"
+  - "docs/ietf-draft/**"
+  - "docs/**/*.md"
+  - "docs/**/*.mdx"
+  - "web/llms*.txt"
+  - "web/sitemap.xml"
+  - "web/**/*.png"
+  - "assets/**/*.png"
+  - "assets/**/*.svg"
+
+max_file_kb: 512
+
+config_dedup:
+  enabled: true
+  min_cluster_size: 5
+  keep_per_top_dir: true
+  promote_on_secret_hit: true
+  promote_on_insecure_value: true

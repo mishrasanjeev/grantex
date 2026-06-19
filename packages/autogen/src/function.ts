@@ -1,5 +1,7 @@
-import { decodeJwtPayload } from './_jwt.js';
+import { verifyGrantToken, type VerifyGrantTokenOptions } from '@grantex/sdk';
 import type { GrantexFunction, GrantexFunctionOptions, OpenAIFunctionTool } from './types.js';
+
+const DEFAULT_JWKS_URI = 'https://api.grantex.dev/.well-known/jwks.json';
 
 /**
  * Create a Grantex-authorized function in OpenAI function-calling format.
@@ -43,17 +45,29 @@ export function createGrantexFunction<T extends Record<string, unknown>>(
   return {
     definition,
     async execute(args: T): Promise<unknown> {
-      const payload = decodeJwtPayload(grantToken);
-      const scopes = payload['scp'];
+      const grant = await verifyGrantToken(grantToken, buildVerifyOptions(options));
+      const scopes = grant.scopes;
 
-      if (!Array.isArray(scopes) || !(scopes as string[]).includes(requiredScope)) {
+      if (!scopes.includes(requiredScope)) {
         throw new Error(
           `Grantex: agent is not authorized for scope '${requiredScope}'. ` +
-            `Granted scopes: ${Array.isArray(scopes) ? (scopes as string[]).join(', ') : 'none'}.`,
+            `Granted scopes: ${scopes.join(', ') || 'none'}.`,
         );
       }
 
       return func(args);
     },
+  };
+}
+
+function buildVerifyOptions<T extends Record<string, unknown>>(
+  options: GrantexFunctionOptions<T>,
+): VerifyGrantTokenOptions {
+  return {
+    jwksUri: options.jwksUri ?? DEFAULT_JWKS_URI,
+    ...(options.issuer !== undefined ? { issuer: options.issuer } : {}),
+    ...(options.issuerDid !== undefined ? { issuerDid: options.issuerDid } : {}),
+    ...(options.audience !== undefined ? { audience: options.audience } : {}),
+    ...(options.clockTolerance !== undefined ? { clockTolerance: options.clockTolerance } : {}),
   };
 }

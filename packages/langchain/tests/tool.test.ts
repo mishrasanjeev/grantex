@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock @langchain/core/tools before importing our module so DynamicTool is replaced
 // with a minimal stub that just stores name, description, and func.
@@ -23,8 +23,12 @@ vi.mock('@langchain/core/tools', () => ({
     }
   },
 }));
+vi.mock('@grantex/sdk', () => ({
+  verifyGrantToken: vi.fn(),
+}));
 
 import { createGrantexTool } from '../src/tool.js';
+import { verifyGrantToken, type VerifiedGrant } from '@grantex/sdk';
 
 /** Build a minimal JWT-shaped token with the given scp claim. */
 function makeToken(scp: string[]): string {
@@ -33,8 +37,26 @@ function makeToken(scp: string[]): string {
   return `eyJhbGciOiJSUzI1NiJ9.${b64}.fakesig`;
 }
 
+function makeGrant(scopes: string[]): VerifiedGrant {
+  return {
+    tokenId: 'tok_01',
+    grantId: 'grnt_01',
+    principalId: 'user_1',
+    agentDid: 'did:grantex:ag_TEST',
+    developerId: 'dev_TEST',
+    scopes,
+    issuedAt: 1,
+    expiresAt: 9999999999,
+  };
+}
+
 describe('createGrantexTool', () => {
+  beforeEach(() => {
+    vi.mocked(verifyGrantToken).mockReset();
+  });
+
   it('invokes func when agent holds the required scope', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant(['calendar:read', 'profile:read']));
     const fn = vi.fn().mockResolvedValue('calendar events');
     const tool = createGrantexTool({
       name: 'read_calendar',
@@ -48,9 +70,13 @@ describe('createGrantexTool', () => {
 
     expect(result).toBe('calendar events');
     expect(fn).toHaveBeenCalledWith('show today');
+    expect(verifyGrantToken).toHaveBeenCalledWith(makeToken(['calendar:read', 'profile:read']), {
+      jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+    });
   });
 
   it('throws before calling func when agent lacks the required scope', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant(['profile:read']));
     const fn = vi.fn();
     const tool = createGrantexTool({
       name: 'read_calendar',
@@ -65,6 +91,7 @@ describe('createGrantexTool', () => {
   });
 
   it('error message includes granted scopes for easier debugging', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant(['profile:read']));
     const tool = createGrantexTool({
       name: 'write_email',
       description: 'Send an email',
@@ -90,6 +117,7 @@ describe('createGrantexTool', () => {
   });
 
   it('throws on a malformed grant token', async () => {
+    vi.mocked(verifyGrantToken).mockRejectedValue(new Error('invalid signature'));
     const tool = createGrantexTool({
       name: 'read_calendar',
       description: 'Read calendar',

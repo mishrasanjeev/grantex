@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS sso_configs (
   developer_id  TEXT PRIMARY KEY REFERENCES developers(id) ON DELETE CASCADE,
   issuer_url    TEXT NOT NULL,
   client_id     TEXT NOT NULL,
-  client_secret TEXT NOT NULL,
+  client_secret TEXT NOT NULL, -- AES-256-GCM ciphertext from vault-crypto.encrypt()
   redirect_uri  TEXT NOT NULL,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()

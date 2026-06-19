@@ -3,12 +3,13 @@ package grantex
 import (
 	"bytes"
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -169,12 +170,22 @@ func (h *httpClient) retryDelay(attempt int, lastErr error) time.Duration {
 
 	exp := math.Pow(2, float64(attempt))
 	delay := time.Duration(float64(retryBaseDelay) * exp)
-	jitter := time.Duration(rand.Int63n(int64(retryBaseDelay)))
-	delay += jitter
+	delay += secureJitter(retryBaseDelay)
 	if delay > retryMaxDelay {
 		delay = retryMaxDelay
 	}
 	return delay
+}
+
+func secureJitter(max time.Duration) time.Duration {
+	if max <= 0 {
+		return 0
+	}
+	n, err := cryptorand.Int(cryptorand.Reader, big.NewInt(int64(max)))
+	if err != nil {
+		return 0
+	}
+	return time.Duration(n.Int64())
 }
 
 // doOnce executes a single HTTP request (no retries).
