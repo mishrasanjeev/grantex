@@ -41,11 +41,11 @@ read_calendar = create_grantex_tool(
 # Pass read_calendar into your Strands agent tools list.
 ```
 
-If the grant token does not include the required scope, `create_grantex_tool` raises `PermissionError` immediately and the tool is not created.
+If the verified grant token does not include the required scope, `create_grantex_tool` raises `PermissionError` immediately and the tool is not created.
 
 ## Enforcement Modes
 
-Offline mode is the default. It decodes the grant token payload and checks the `scp` claim without a network call:
+Verified mode is the default. It verifies the grant token against JWKS and checks the verified `scp` claim:
 
 ```python
 tool = create_grantex_tool(
@@ -85,6 +85,9 @@ Creates a Strands-compatible tool with Grantex scope enforcement.
 | `grant_token` | `str` | JWT grant token from Grantex |
 | `required_scope` | `str` | Scope that must be present in the token |
 | `func` | `Callable[..., str]` | Function to wrap |
+| `jwks_uri` | `str` | JWKS URL used to verify the grant token |
+| `issuer`, `issuer_did`, `audience` | `str \| None` | Optional JWT claim validation settings |
+| `clock_tolerance` | `int` | Clock tolerance in seconds for token verification |
 | `client` | `Any` | Grantex client instance for online mode |
 | `connector` | `str \| None` | Connector name for online mode |
 | `online` | `bool` | Use `client.enforce()` instead of offline JWT scope checking |
@@ -96,6 +99,7 @@ Returns the scopes embedded in a grant token. Invalid tokens return an empty lis
 ## Requirements
 
 - Python 3.11+
+- `grantex >= 0.3.12`
 - `strands-agents >= 0.1`
 
 ## Grantex Ecosystem

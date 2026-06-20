@@ -4,15 +4,32 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grantex-strands"
-version = "0.1.0"
+version = "0.1.1"
 description = "Grantex scope enforcement for Strands Agents SDK"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
+keywords = ["grantex", "strands", "ai-agents", "authorization", "oauth", "tools", "scope-enforcement", "delegated-auth", "agent-permissions"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries",
+]
 dependencies = [
-    "grantex>=0.3.0",
+    "grantex>=0.3.12",
     "strands-agents>=0.1",
 ]
+
+[project.urls]
+Homepage = "https://grantex.dev"
+Documentation = "https://docs.grantex.dev"
+Repository = "https://github.com/mishrasanjeev/grantex"
+Issues = "https://github.com/mishrasanjeev/grantex/issues"
 
 [project.optional-dependencies]
 dev = [

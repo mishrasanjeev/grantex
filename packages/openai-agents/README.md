@@ -41,13 +41,13 @@ from agents import Agent
 agent = Agent(name="assistant", tools=[tool])
 ```
 
-If the grant token doesn't include the required scope, `create_grantex_tool` raises a `PermissionError` immediately — the tool is never created.
+If the verified grant token doesn't include the required scope, `create_grantex_tool` raises a `PermissionError` immediately and the tool is never created.
 
 ## API reference
 
 ### `create_grantex_tool()`
 
-Creates an OpenAI Agents SDK `FunctionTool` with offline scope enforcement.
+Creates an OpenAI Agents SDK `FunctionTool` with JWKS-backed grant token verification.
 
 | Parameter | Type | Description |
 |---|---|---|
@@ -56,6 +56,9 @@ Creates an OpenAI Agents SDK `FunctionTool` with offline scope enforcement.
 | `grant_token` | `str` | JWT grant token from Grantex |
 | `required_scope` | `str` | Scope that must be present in the token |
 | `func` | `Callable[..., str]` | The function to wrap |
+| `jwks_uri` | `str` | JWKS URL used to verify the grant token |
+| `issuer`, `issuer_did`, `audience` | `str | None` | Optional JWT claim validation settings |
+| `clock_tolerance` | `int` | Clock tolerance in seconds for token verification |
 
 ### `get_tool_scopes()`
 
@@ -68,7 +71,7 @@ Decodes the payload of a JWT without verifying the signature. Useful for inspect
 ## Requirements
 
 - Python 3.9+
-- `grantex >= 0.1.0`
+- `grantex >= 0.3.12`
 - `openai-agents >= 0.0.3` (peer dependency)
 
 ## Grantex Ecosystem

@@ -160,7 +160,7 @@ from ._webhook import verify_webhook_signature
 from .manifest import ToolManifest, Permission, EnforceResult
 from ._fastapi import GrantexEnforcer
 
-__version__ = "0.3.11"
+__version__ = "0.3.12"
 
 __all__ = [
     # Main client
