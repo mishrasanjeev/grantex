@@ -127,7 +127,10 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
       };
 
       // Generate Ed25519 key pair for offline audit signing
-      const auditKeyPair = await jose.generateKeyPair('EdDSA', { crv: 'Ed25519' });
+      const auditKeyPair = await jose.generateKeyPair('EdDSA', {
+        crv: 'Ed25519',
+        extractable: true,
+      });
       const auditPublicJwk = await jose.exportJWK(auditKeyPair.publicKey);
       const auditPrivateJwk = await jose.exportJWK(auditKeyPair.privateKey);
 

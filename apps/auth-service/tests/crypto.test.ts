@@ -29,7 +29,10 @@ describe('initKeys with RSA_PRIVATE_KEY', () => {
     const originalAuto = config.autoGenerateKeys;
 
     // Generate an RSA key and export as PKCS8 PEM
-    const { privateKey } = await generateKeyPair('RS256', { modulusLength: 2048 });
+    const { privateKey } = await generateKeyPair('RS256', {
+      modulusLength: 2048,
+      extractable: true,
+    });
     const pem = await exportPKCS8(privateKey);
 
     // Temporarily set config to use RSA PEM path

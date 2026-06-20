@@ -14,7 +14,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { generateKeyPair, exportJWK, SignJWT, type KeyLike, type JWK } from 'jose';
+import { generateKeyPair, exportJWK, SignJWT, type CryptoKey as KeyLike, type JWK } from 'jose';
 import { sqlMock, mockRedis, buildTestApp } from './helpers.js';
 
 let app: FastifyInstance;
@@ -60,7 +60,7 @@ describe('authPlugin bypass — commerce routes must skip global developer-key a
   });
 
   it('agent JWT (3-segment) reaches commerce resolver (not rejected as opaque developer key)', async () => {
-    const { privateKey, publicKey } = await generateKeyPair('ES256');
+    const { privateKey, publicKey } = await generateKeyPair('ES256', { extractable: true });
     const jwk = await exportJWK(publicKey) as JWK;
     const now = Math.floor(Date.now() / 1000);
     const jwt = await new SignJWT({ tenant_id: 'cten_X' })

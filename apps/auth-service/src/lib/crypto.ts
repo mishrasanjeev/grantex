@@ -6,7 +6,7 @@ import {
   SignJWT,
   jwtVerify,
   decodeJwt,
-  type KeyLike,
+  type CryptoKey as KeyLike,
 } from 'jose';
 import { config } from '../config.js';
 
@@ -60,7 +60,7 @@ function buildKid(): string {
 export async function initKeys(): Promise<void> {
   if (config.rsaPrivateKey) {
     const pem = config.rsaPrivateKey.replace(/\\n/g, '\n');
-    const privateKey = await importPKCS8(pem, 'RS256');
+    const privateKey = await importPKCS8(pem, 'RS256', { extractable: true });
 
     // Extract public key by exporting the private key as JWK, then re-importing
     // only the public components (n, e) via Node's crypto module + importSPKI
@@ -84,6 +84,7 @@ export async function initKeys(): Promise<void> {
   if (config.autoGenerateKeys) {
     const { privateKey, publicKey } = await generateKeyPair('RS256', {
       modulusLength: 2048,
+      extractable: true,
     });
     _keyPair = { privateKey, publicKey, kid: buildKid() };
     return;
@@ -183,7 +184,7 @@ function buildEdKid(): string {
 export async function initEdKey(): Promise<void> {
   if (config.ed25519PrivateKey) {
     const pem = config.ed25519PrivateKey.replace(/\\n/g, '\n');
-    const privateKey = await importPKCS8(pem, 'EdDSA');
+    const privateKey = await importPKCS8(pem, 'EdDSA', { extractable: true });
     const jwk = await exportJWK(privateKey);
     if (!jwk.crv || !jwk.x) throw new Error('Cannot extract Ed25519 public key components');
     const { createPublicKey } = await import('node:crypto');
@@ -198,7 +199,10 @@ export async function initEdKey(): Promise<void> {
   }
 
   // Auto-generate Ed25519 key pair
-  const { privateKey, publicKey } = await generateKeyPair('EdDSA', { crv: 'Ed25519' });
+  const { privateKey, publicKey } = await generateKeyPair('EdDSA', {
+    crv: 'Ed25519',
+    extractable: true,
+  });
   _edKeyPair = { privateKey, publicKey, kid: buildEdKid() };
 }
 

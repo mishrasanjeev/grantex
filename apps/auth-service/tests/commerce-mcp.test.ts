@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { generateKeyPair, exportJWK, SignJWT, type KeyLike, type JWK } from 'jose';
+import { generateKeyPair, exportJWK, SignJWT, type CryptoKey as KeyLike, type JWK } from 'jose';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,7 +40,7 @@ let publicJwk: JWK;
 
 beforeAll(async () => {
   app = await buildTestApp();
-  const kp = await generateKeyPair('ES256');
+  const kp = await generateKeyPair('ES256', { extractable: true });
   privateKey = kp.privateKey;
   publicJwk = { ...(await exportJWK(kp.publicKey)), kid: KID, alg: 'ES256', use: 'sig' };
 });

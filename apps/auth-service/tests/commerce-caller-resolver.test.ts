@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { generateKeyPair, exportJWK, SignJWT, type KeyLike, type JWK, type JWTPayload } from 'jose';
+import { generateKeyPair, exportJWK, SignJWT, type CryptoKey as KeyLike, type JWK, type JWTPayload } from 'jose';
 import { authHeader, sqlMock, mockRedis, TEST_DEVELOPER, TEST_ADMIN_API_KEY, buildTestApp } from './helpers.js';
 import { TEST_COMMERCE_TENANT_ID } from './commerce-helpers.js';
 
@@ -136,7 +136,7 @@ describe('Commerce caller resolver — agent JWT assertion', () => {
   let agentKp: { privateKey: KeyLike; publicKey: KeyLike };
   let agentJwk: JWK;
   beforeAll(async () => {
-    agentKp = await generateKeyPair('ES256');
+    agentKp = await generateKeyPair('ES256', { extractable: true });
     agentJwk = await exportJWK(agentKp.publicKey) as JWK;
   });
 
@@ -275,7 +275,7 @@ describe('Commerce caller resolver — agent JWT temporal claims and replay scop
   let agentKp: { privateKey: KeyLike; publicKey: KeyLike };
   let agentJwk: JWK;
   beforeAll(async () => {
-    agentKp = await generateKeyPair('ES256');
+    agentKp = await generateKeyPair('ES256', { extractable: true });
     agentJwk = await exportJWK(agentKp.publicKey) as JWK;
   });
 

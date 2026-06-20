@@ -86,7 +86,10 @@ describe('signWithEd25519', () => {
 describe('initEdKey with PEM import', () => {
   it('initializes Ed25519 key pair from a PKCS8 PEM private key', async () => {
     // Generate a fresh Ed25519 key pair and export the private key as PEM
-    const { privateKey: generatedPrivate } = await generateKeyPair('EdDSA', { crv: 'Ed25519' });
+    const { privateKey: generatedPrivate } = await generateKeyPair('EdDSA', {
+      crv: 'Ed25519',
+      extractable: true,
+    });
     const pem = await exportPKCS8(generatedPrivate);
 
     // Set the config to use the PEM import path
