@@ -6,12 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## v0.3.12 / Integration SDK verification releases (2026-06-20)
 
+### Added
+- Added `@grantex/strands` 0.1.0, a TypeScript Strands Agents SDK integration with JWKS-backed grant verification, optional `client.enforce()` mode, and 9 Vitest coverage cases.
+
 ### Security
 - Python SDK `grantex` 0.3.12 tightens published dependency floors for token verification libraries.
 - A2A, AutoGen, LangChain, Vercel AI, CrewAI, Google ADK, OpenAI Agents, and Strands integrations now verify grant tokens against JWKS before enforcing scopes.
 
 ### Releases
-- Publishable patch releases prepared: `@grantex/a2a` 0.1.3, `grantex-a2a` 0.1.3, `@grantex/autogen` 0.1.6, `@grantex/langchain` 0.1.7, `@grantex/vercel-ai` 0.1.6, `grantex-crewai` 0.1.6, `grantex-adk` 0.1.5, and `grantex-openai-agents` 0.1.5.
+- Publishable patch releases prepared: `@grantex/a2a` 0.1.3, `grantex-a2a` 0.1.3, `@grantex/autogen` 0.1.6, `@grantex/langchain` 0.1.7, `@grantex/vercel-ai` 0.1.6, `@grantex/strands` 0.1.0, `grantex-crewai` 0.1.6, `grantex-adk` 0.1.5, and `grantex-openai-agents` 0.1.5.
 - `grantex-strands` 0.1.1 prepared as the corrected PyPI release with verification docs and project metadata.
 
 ## v0.3.11 (2026-06-14)
