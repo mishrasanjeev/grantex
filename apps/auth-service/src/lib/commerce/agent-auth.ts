@@ -3,7 +3,7 @@ import {
   decodeProtectedHeader,
   decodeJwt,
   importJWK,
-  type KeyLike,
+  type CryptoKey as KeyLike,
   type JWTPayload,
 } from 'jose';
 import type postgres from 'postgres';

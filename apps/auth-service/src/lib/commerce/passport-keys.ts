@@ -1,4 +1,4 @@
-import { generateKeyPair, exportJWK, importJWK, type KeyLike, type JWK } from 'jose';
+import { generateKeyPair, exportJWK, importJWK, type CryptoKey as KeyLike, type JWK } from 'jose';
 import type postgres from 'postgres';
 import { encrypt, decrypt } from '../vault-crypto.js';
 import { newCommercePassportKid } from './ids.js';
@@ -160,7 +160,7 @@ export async function findPublicKeyJwkByKid(
  * concurrent caller can't create two active keys.
  */
 async function insertNewActiveKey(sql: Sql): Promise<ActiveCommercePassportSigner> {
-  const { privateKey, publicKey } = await generateKeyPair('ES256');
+  const { privateKey, publicKey } = await generateKeyPair('ES256', { extractable: true });
   const publicJwk = await exportJWK(publicKey);
   const privateJwk = await exportJWK(privateKey);
   const kid = newCommercePassportKid();

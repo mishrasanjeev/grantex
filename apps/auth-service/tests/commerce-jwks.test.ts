@@ -8,7 +8,7 @@ beforeAll(async () => { app = await buildTestApp(); });
 
 describe('GET /.well-known/jwks.json — RS256 platform + ES256 commerce coexist', () => {
   it('serves both the platform RS256 key and any active commerce ES256 keys', async () => {
-    const { publicKey } = await generateKeyPair('ES256');
+    const { publicKey } = await generateKeyPair('ES256', { extractable: true });
     const ecJwk = await exportJWK(publicKey);
     // The buildJwks extension queries listCommercePassportKeysForJwks
     // which selects status IN ('active','retired'). Prime two keys: one

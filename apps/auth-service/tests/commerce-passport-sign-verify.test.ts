@@ -19,7 +19,7 @@ import {
   exportJWK,
   importJWK,
   SignJWT,
-  type KeyLike,
+  type CryptoKey as KeyLike,
   type JWK,
 } from 'jose';
 import { sqlMock, mockRedis } from './helpers.js';
@@ -44,7 +44,7 @@ let activeKid: string;
 let activePublicJwk: JWK;
 
 async function setupActiveKey(): Promise<void> {
-  activeKp = await generateKeyPair('ES256');
+  activeKp = await generateKeyPair('ES256', { extractable: true });
   const jwk = await exportJWK(activeKp.publicKey);
   activeKid = 'commerce-passport-20260503-aabbccdd';
   activePublicJwk = { ...jwk, kid: activeKid, alg: 'ES256', use: 'sig' } as JWK;

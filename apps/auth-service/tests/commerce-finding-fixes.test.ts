@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import {
-  generateKeyPair, exportJWK, SignJWT, type KeyLike, type JWK,
+  generateKeyPair, exportJWK, SignJWT, type CryptoKey as KeyLike, type JWK,
 } from 'jose';
 import { sqlMock, mockRedis, buildTestApp, authHeader, TEST_DEVELOPER, TEST_ADMIN_API_KEY } from './helpers.js';
 import { signPrincipalSessionToken } from '../src/lib/crypto.js';
@@ -31,7 +31,7 @@ describe('Finding 2 — caller matrix enforcement', () => {
   let agentKp: { privateKey: KeyLike; publicKey: KeyLike };
   let agentJwk: JWK;
   beforeAll(async () => {
-    agentKp = await generateKeyPair('ES256');
+    agentKp = await generateKeyPair('ES256', { extractable: true });
     agentJwk = await exportJWK(agentKp.publicKey) as JWK;
   });
   async function agentJwt(): Promise<string> {
@@ -148,7 +148,7 @@ describe('Finding 4 — exchange recomputes presented_payload_hash and rejects m
   let agentKp: { privateKey: KeyLike; publicKey: KeyLike };
   let agentJwk: JWK;
   beforeAll(async () => {
-    agentKp = await generateKeyPair('ES256');
+    agentKp = await generateKeyPair('ES256', { extractable: true });
     agentJwk = await exportJWK(agentKp.publicKey) as JWK;
   });
   async function agentJwt(): Promise<string> {
@@ -209,7 +209,7 @@ describe('Finding 3 — exchange is single-use', () => {
   let agentKp: { privateKey: KeyLike; publicKey: KeyLike };
   let agentJwk: JWK;
   beforeAll(async () => {
-    agentKp = await generateKeyPair('ES256');
+    agentKp = await generateKeyPair('ES256', { extractable: true });
     agentJwk = await exportJWK(agentKp.publicKey) as JWK;
   });
   async function agentJwt(): Promise<string> {
@@ -295,8 +295,8 @@ describe('Finding 5 — key rotation', () => {
   let jwkA: JWK; let jwkB: JWK;
 
   beforeAll(async () => {
-    kpA = await generateKeyPair('ES256');
-    kpB = await generateKeyPair('ES256');
+    kpA = await generateKeyPair('ES256', { extractable: true });
+    kpB = await generateKeyPair('ES256', { extractable: true });
     jwkA = await exportJWK(kpA.publicKey) as JWK;
     jwkB = await exportJWK(kpB.publicKey) as JWK;
   });
@@ -437,7 +437,7 @@ describe('Finding 1 (round 2) — max passport lifetime + retired-key window', (
   let kid: string;
   let publicJwk: JWK;
   beforeAll(async () => {
-    kp = await generateKeyPair('ES256');
+    kp = await generateKeyPair('ES256', { extractable: true });
     publicJwk = await exportJWK(kp.publicKey) as JWK;
     kid = 'commerce-passport-20260601-aaaa1111';
   });
@@ -611,7 +611,7 @@ describe('Finding 3 (round 2) — disabled tenant blocks merchant/agent/consent/
   });
 
   it('agent JWT for disabled tenant → 403 tenant_disabled', async () => {
-    const kp = await generateKeyPair('ES256');
+    const kp = await generateKeyPair('ES256', { extractable: true });
     const jwk = await exportJWK(kp.publicKey) as JWK;
     const now = Math.floor(Date.now() / 1000);
     const jwt = await new SignJWT({ tenant_id: 'cten_DISABLED' })
@@ -667,7 +667,7 @@ describe('Finding 3 (round 2) — disabled tenant blocks merchant/agent/consent/
   });
 
   it('passport exchange for disabled tenant → 403 tenant_disabled (before signing)', async () => {
-    const kp = await generateKeyPair('ES256');
+    const kp = await generateKeyPair('ES256', { extractable: true });
     const jwk = await exportJWK(kp.publicKey) as JWK;
     const now = Math.floor(Date.now() / 1000);
     const agentJwt = await new SignJWT({ tenant_id: 'cten_T' })
@@ -742,7 +742,7 @@ describe('Finding 3 (round 2) — disabled tenant blocks merchant/agent/consent/
 
 describe('Finding 4 (round 2) — product GET no existence leak', () => {
   it('agent caller without merchant_id -> 422 before any product SQL', async () => {
-    const kp = await generateKeyPair('ES256');
+    const kp = await generateKeyPair('ES256', { extractable: true });
     const jwk = await exportJWK(kp.publicKey) as JWK;
     const now = Math.floor(Date.now() / 1000);
     const jwt = await new SignJWT({ tenant_id: TEST_COMMERCE_TENANT_ID })

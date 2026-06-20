@@ -4,7 +4,7 @@ import {
   importJWK,
   decodeProtectedHeader,
   decodeJwt,
-  type KeyLike,
+  type CryptoKey as KeyLike,
   type JWTPayload,
   type JWK,
 } from 'jose';
