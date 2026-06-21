@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import postgres from '../apps/auth-service/node_modules/postgres/src/index.js';
-import {
-  SignJWT,
-  exportJWK,
-  generateKeyPair,
-  importJWK,
-} from '../apps/auth-service/node_modules/jose/dist/node/esm/index.js';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
 const migrationsDir = join(repoRoot, 'apps', 'auth-service', 'src', 'db', 'migrations');
+const requireFromAuthService = createRequire(join(repoRoot, 'apps', 'auth-service', 'package.json'));
+const postgres = requireFromAuthService('postgres');
+const {
+  SignJWT,
+  exportJWK,
+  generateKeyPair,
+  importJWK,
+} = await import(pathToFileURL(requireFromAuthService.resolve('jose')).href);
 
 const LOCAL_VAULT_KEY_HEX = '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f';
 const AGENT_API_KEY = 'grtx_agent_local_pilot_seed_00000000000000000001';
