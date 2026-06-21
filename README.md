@@ -122,7 +122,7 @@ go get github.com/mishrasanjeev/grantex-go  # Go
 npm install -g @grantex/cli     # CLI
 ```
 
-> **28 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, Strands Agents SDK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. The latest changelog reports 3,536 tests across 28 packages; GitHub Actions is the source of truth for current pass/fail status. Fully self-hostable. Apache 2.0.
+> **29 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, Strands Agents SDK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. The changelog and GitHub Actions are the source of truth for current pass/fail status. Fully self-hostable. Apache 2.0.
 
 ---
 
@@ -1269,7 +1269,7 @@ result = grantex.enforce(grant_token=token, connector="my-crm", tool="delete_acc
 **Bring your own manifests:** define inline, load from JSON files, load from a directory, or auto-generate from source code via CLI.
 **53 pre-built manifests included:** Salesforce, HubSpot, Jira, Stripe, SAP, S3, Gmail, Slack, GitHub, and 44 more — use as-is or as a starting point.
 
-**Framework helpers:** `wrapTool()` wraps LangChain tools with automatic scope enforcement. `create_grantex_tool()` covers OpenAI Agents SDK, Google ADK, and Strands Agents SDK tools. `enforceMiddleware()` adds one-line enforcement to Express/Fastify routes. FastAPI uses the `GrantexEnforcer` dependency.
+**Framework helpers:** `wrapTool()` wraps LangChain tools with automatic scope enforcement. `createGrantexTool()` covers TypeScript agent framework helpers including Strands Agents SDK. `create_grantex_tool()` covers Python OpenAI Agents SDK, Google ADK, and Strands Agents SDK tools. `enforceMiddleware()` adds one-line enforcement to Express/Fastify routes. FastAPI uses the `GrantexEnforcer` dependency.
 
 See the [Scope Enforcement Guide](https://docs.grantex.dev/guides/scope-enforcement) for full documentation.
 
@@ -1365,7 +1365,8 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **CrewAI** | `grantex-crewai` | `pip install grantex-crewai` | ✅ Shipped |
 | **OpenAI Agents SDK** | `grantex-openai-agents` | `pip install grantex-openai-agents` | ✅ Shipped |
 | **Google ADK** | `grantex-adk` | `pip install grantex-adk` | ✅ Shipped |
-| **Strands Agents SDK** | `grantex-strands` | `pip install grantex-strands` | ✅ Shipped |
+| **Strands Agents SDK (TypeScript)** | `@grantex/strands` | `npm install @grantex/strands` | ✅ Shipped |
+| **Strands Agents SDK (Python)** | `grantex-strands` | `pip install grantex-strands` | ✅ Shipped |
 | **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | ✅ Shipped |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | ✅ Shipped |
 | **TypeScript SDK** | `@grantex/sdk` | `npm install @grantex/sdk` | ✅ Shipped |

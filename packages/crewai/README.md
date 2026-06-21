@@ -46,7 +46,7 @@ tool = create_grantex_tool(
 # the "data:read" scope, create_grantex_tool raises immediately
 ```
 
-The tool performs an **offline** scope check at creation time by decoding the JWT's `scp` claim. No network call is needed — if the required scope is missing, a `PermissionError` is raised before the tool is ever used.
+The tool verifies the grant token against JWKS at creation time and before each run, then checks the verified `scp` claim. If the required scope is missing, a `PermissionError` is raised before the wrapped function runs.
 
 ## Audit logging
 
@@ -90,6 +90,11 @@ create_grantex_tool(
     required_scope: str,
     func: Callable[..., str],
     args_schema: type[BaseModel] | None = None,
+    jwks_uri: str = "https://api.grantex.dev/.well-known/jwks.json",
+    issuer: str | None = None,
+    issuer_did: str | None = None,
+    audience: str | None = None,
+    clock_tolerance: int = 0,
 ) -> BaseTool
 ```
 
@@ -103,10 +108,13 @@ Creates a CrewAI `BaseTool` with Grantex scope enforcement.
 | `required_scope` | Scope that must be present in the token's `scp` claim |
 | `func` | The function to execute when the tool is called |
 | `args_schema` | Optional Pydantic `BaseModel` describing tool inputs |
+| `jwks_uri` | JWKS URL used to verify the grant token |
+| `issuer`, `issuer_did`, `audience` | Optional JWT claim validation settings |
+| `clock_tolerance` | Clock tolerance in seconds for token verification |
 
 **Raises:**
 - `PermissionError` — if the grant token doesn't contain `required_scope`
-- `ValueError` — if the grant token can't be decoded
+- `ValueError` — if the grant token can't be verified
 - `ImportError` — if `crewai` is not installed
 
 ### `with_audit_logging`
@@ -141,7 +149,7 @@ Returns the scopes embedded in a grant token. Purely offline — no network call
 ## Requirements
 
 - Python 3.9+
-- [grantex](https://pypi.org/project/grantex/) >= 0.1.0
+- [grantex](https://pypi.org/project/grantex/) >= 0.3.12
 - [crewai](https://pypi.org/project/crewai/) >= 0.28.0 (peer dependency)
 
 ## Links

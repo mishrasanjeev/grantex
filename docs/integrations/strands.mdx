@@ -1,0 +1,64 @@
+---
+title: "Strands Agents SDK"
+sidebarTitle: "Strands"
+description: "Scope-enforced tools for Strands Agents SDK in TypeScript and Python."
+---
+
+## TypeScript Install
+
+```bash
+npm install @grantex/strands @grantex/sdk @strands-agents/sdk zod
+```
+
+## TypeScript Quick Start
+
+```typescript
+import { Agent } from '@strands-agents/sdk';
+import { createGrantexTool } from '@grantex/strands';
+import { z } from 'zod';
+
+const readCalendar = createGrantexTool({
+  name: 'read_calendar',
+  description: 'Read upcoming calendar events',
+  inputSchema: z.object({
+    date: z.string(),
+  }),
+  grantToken,
+  requiredScope: 'calendar:read',
+  callback: async ({ date }) => getCalendarEvents(date),
+});
+
+const agent = new Agent({
+  tools: [readCalendar],
+});
+```
+
+The TypeScript helper verifies the grant token against JWKS before each tool invocation and checks the verified `scp` claim. Set `online: true` with a Grantex client and `connector` to delegate enforcement to `client.enforce()`.
+
+## Python Install
+
+```bash
+pip install grantex-strands strands-agents
+```
+
+## Python Quick Start
+
+```python
+from grantex_strands import create_grantex_tool
+
+read_calendar = create_grantex_tool(
+    name="read_calendar",
+    description="Read upcoming calendar events",
+    grant_token=grant_token,
+    required_scope="calendar:read",
+    func=get_calendar_events,
+)
+```
+
+The Python helper verifies the grant token against JWKS and raises `PermissionError` if the required scope is missing.
+
+## Requirements
+
+- Node.js 18+ for `@grantex/strands`
+- Python 3.11+ for `grantex-strands`
+- Strands Agents SDK for the language you use
