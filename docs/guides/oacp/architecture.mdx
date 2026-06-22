@@ -1,0 +1,52 @@
+---
+title: OACP Architecture
+description: The Grantex view of the OACP four-party architecture.
+---
+
+# OACP Architecture
+
+Canonical end-to-end flow: [OACP authority overview](./overview).
+
+OACP separates facts, authority, runtime behavior, and payment rails so no agent has to invent commerce state.
+
+```mermaid
+flowchart TD
+  shopify[Shopify and merchant systems] -->|catalog, price, inventory, policy facts| agenticSeller[AgenticOrg Seller Commerce Agent]
+  agenticSeller -->|redacted connector evidence| grantex[Grantex OACP authority]
+  grantex -->|signed/internal artifacts or refusals| cache[AgenticOrg OACP cache]
+  cache --> buyerAgent[AgenticOrg buyer agent]
+  buyerAgent --> web[Web]
+  buyerAgent --> mcp[MCP clients]
+  buyerAgent --> openapi[OpenAPI clients]
+  buyerAgent --> a2a[A2A card]
+  buyerAgent --> wa[WhatsApp]
+  buyerAgent --> tg[Telegram]
+  buyerAgent -->|capability check only| pine[Pine Labs Plural/P3P]
+  pine -->|redacted evidence ref| cache
+```
+
+## Responsibilities
+
+| Party | Owns | Does not own |
+| --- | --- | --- |
+| Merchant systems | Catalog, price, inventory, order, policy, support, and source timestamps. | OACP artifact policy. |
+| AgenticOrg | Seller and buyer agents, Shopify connector runtime, cache, buyer channels, and capability verification. | Canonical OACP authority or payment rail execution. |
+| Grantex | Policy, trust, artifacts, verification, and adapter authority. | Merchant connector runtime, buyer sessions, orders, or payments. |
+| Provider rails | Mandate and payment execution, provider status, settlement, and provider webhooks. | OACP trust authority or buyer-agent answers. |
+
+## Why Grantex Is Not In Every Loop
+
+Grantex signs and verifies authority artifacts. AgenticOrg can answer non-binding questions from valid cached artifacts until TTL, revocation, or policy state requires refresh. This reduces latency and avoids making Grantex a relay for every buyer question while preserving a hard boundary for commitment requests.
+
+## Failure Shape
+
+```mermaid
+flowchart LR
+  request[Buyer request] --> classify{Commitment?}
+  classify -->|No| cache{Valid cached artifacts?}
+  cache -->|Yes| answer[Answer with source and freshness]
+  cache -->|No| refresh[Refresh or refuse]
+  classify -->|Yes| handoff{Provider and merchant approval present?}
+  handoff -->|Yes| prepare[Prepare handoff only]
+  handoff -->|No| refuse[Refuse with blocker]
+```

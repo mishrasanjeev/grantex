@@ -1,0 +1,34 @@
+---
+title: How OACP Maps To Schema.org, UCP, ACP, AP2, A2A, And MCP
+description: Protocol partner explainer for OACP compatibility mappings.
+---
+
+# How OACP Maps To Schema.org, UCP, ACP, AP2, A2A, And MCP
+
+Canonical end-to-end flow: [OACP authority overview](../overview).
+
+OACP is the canonical internal trust artifact. Protocol adapters are compatibility mappings derived from OACP, not official external approval.
+
+```mermaid
+flowchart TD
+  canonical[Canonical OACP artifacts] --> schema[Schema.org JSON-LD]
+  canonical --> ucp[UCP-style profile]
+  canonical --> acp[ACP-style commerce profile]
+  canonical --> ap2[AP2-style evidence profile]
+  canonical --> a2a[A2A metadata]
+  canonical --> mcp[MCP metadata]
+```
+
+## Compatibility Vs Official Approval
+
+| Term | Meaning |
+| --- | --- |
+| Compatibility mapping | Deterministic field lineage from OACP artifacts to a known shape. |
+| Official approval | External program review and acceptance. Not claimed here. |
+
+## Partner Review Questions
+
+- Which OACP artifact family is the canonical source?
+- Which source refs and freshness labels must be visible?
+- Which fields are unsupported because they imply execution?
+- Which external program evidence is required before public claims change?

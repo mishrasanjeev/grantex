@@ -1,5 +1,9 @@
 # OACP Runtime Authority And Adapter Mappings
 
+Canonical docs now start at `docs/guides/oacp/overview.mdx`. This page is
+retained as an implementation note for the C6Z authority route and adapter
+mapping payloads.
+
 Grantex is the OACP trust, protocol, policy, artifact signing, verification,
 and adapter-governance authority. AgenticOrg is the buyer/seller agent runtime
 that operates Shopify connector sync, artifact cache, buyer channels, and

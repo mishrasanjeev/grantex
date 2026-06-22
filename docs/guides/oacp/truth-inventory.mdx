@@ -1,0 +1,38 @@
+---
+title: OACP Truth Inventory
+description: Evidence-backed inventory of what is implemented, gated, missing, or stale across the current OACP split.
+---
+
+# OACP Truth Inventory
+
+Canonical end-to-end flow: [OACP authority overview](./overview).
+
+This inventory is based on the Grantex C6Z authority route, OACP artifact libraries, adapter preview helpers, and tests in `apps/auth-service`.
+
+## Truth Table
+
+| Category | Grantex reality | Owner/action |
+| --- | --- | --- |
+| Implemented runtime | C6Z authority endpoint under commerce auth; allowlisted AgenticOrg service-token access; internal artifact issuance; artifact safety checks; TTL and signature metadata; adapter mapping payloads; cache/offline verifier helpers. | Grantex keeps tests and guard scans current. |
+| Implemented docs only | Historical Commerce V1 PRDs, launch plans, C6 review reports, and publication drafts. | Mark as historical where they conflict with this architecture. |
+| Implemented but not broad launch | Commerce V1 payment-control pilot code and Plural sandbox/UAT-compatible adapter paths exist separately from the AgenticOrg OACP runtime split. | Keep separate from OACP authority docs. |
+| Requires credentials or approval | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN`, `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`, merchant/AgenticOrg tenant approval, production key custody, provider rail approval, and external channel approvals. | Ops owner must collect evidence before public claims. |
+| Missing | Public standards approval, broad external protocol partner program, universal buyer-surface rollout, order/payment/mandate execution through OACP artifacts. | Treat as pending runtime/product gaps. |
+| Stale/confusing docs | Older copy that says Grantex is the merchant connector runtime or payment-control loop for every buyer interaction. | Supersede with OACP authority docs and link here. |
+
+## Evidence Pointers
+
+- Route: `apps/auth-service/src/routes/commerce-oacp-runtime.ts`
+- Artifact logic: `apps/auth-service/src/lib/commerce/oacp-runtime-vertical.ts`
+- Trust helpers: `apps/auth-service/src/lib/commerce/oacp-trust-artifacts.ts`
+- Adapter previews: `schemaorg-preview.ts`, `ucp-capability-preview.ts`, `acp-checkout-preview.ts`, `ap2-evidence-preview.ts`
+- Tests: `apps/auth-service/tests/commerce-c6z-runtime-artifact-authority.test.ts` and `commerce-c6w4-oacp-adapter-previews.test.ts`
+
+## Pending Runtime Gaps
+
+| Gap | Owner | Action |
+| --- | --- | --- |
+| External protocol approval | Grantex + partners | Create a public partner review process and evidence checklist before making official status claims. |
+| AgenticOrg production tenant rollout | AgenticOrg + Grantex | Allowlist tenant, rotate service token, verify source evidence intake, and run authority request smoke. |
+| Provider rail execution | Pine Labs Plural/P3P + merchant + AgenticOrg | Complete provider-owned approval, webhook, rollback, and human review path. Grantex stores only non-sensitive evidence refs where needed. |
+| Buyer-surface approvals | AgenticOrg + channel owners | Verify WhatsApp, Telegram, MCP, OpenAPI, A2A, and web policies before public launch. |

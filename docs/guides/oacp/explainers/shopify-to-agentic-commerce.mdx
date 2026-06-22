@@ -1,0 +1,47 @@
+---
+title: Move Your Shopify Store To Agentic Commerce
+description: Merchant explainer for bringing Shopify into AgenticOrg with Grantex OACP authority.
+---
+
+# Move Your Shopify Store To Agentic Commerce
+
+Canonical end-to-end flow: [OACP authority overview](../overview).
+
+This page is for merchants evaluating a Seller Commerce Agent in AgenticOrg.
+
+## Steps
+
+1. Create a Seller Commerce Agent in AgenticOrg.
+2. Connect Shopify with read-only Admin API access or an approved OAuth flow.
+3. Run a read-only sync for catalog, variants, price, inventory, and source timestamps.
+4. Let AgenticOrg submit redacted evidence to Grantex.
+5. Grantex issues OACP artifacts or exact blockers.
+6. AgenticOrg caches artifacts and exposes buyer-safe channels.
+7. Purchase requests are prepared for approved provider/merchant handoff or refused.
+
+```mermaid
+flowchart LR
+  merchant[Merchant] --> agent[Seller Commerce Agent]
+  agent --> shopify[Read-only Shopify sync]
+  shopify --> grantex[Grantex authority]
+  grantex --> cache[AgenticOrg cache]
+  cache --> buyer[Buyer channels]
+```
+
+## Requirements
+
+| Requirement | Owner |
+| --- | --- |
+| Shopify read-only credential or OAuth install | Merchant + AgenticOrg |
+| AgenticOrg tenant and seller agent id | AgenticOrg |
+| Grantex tenant allowlist and service token | Grantex |
+| Provider capability configuration | AgenticOrg + Pine Labs Plural/P3P |
+| Channel approvals | AgenticOrg + channel owners |
+
+## Expected Timeline
+
+Local demo can be run after credentials and allowlisting. Public channel launch requires source evidence review, provider capability evidence, channel webhook approval, rollback owner, and operator signoff.
+
+## What Agents Can Say
+
+Buyer agents can answer product questions with source and freshness labels. They cannot promise payment, order, shipping, refund, mandate, or stock-hold success unless the merchant/provider system actually executed it.

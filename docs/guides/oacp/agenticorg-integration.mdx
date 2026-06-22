@@ -1,0 +1,54 @@
+---
+title: OACP Integration Guide For AgenticOrg
+description: How AgenticOrg requests and consumes Grantex OACP authority artifacts.
+---
+
+# OACP Integration Guide For AgenticOrg
+
+Canonical end-to-end flow: [OACP authority overview](./overview).
+
+AgenticOrg calls Grantex only when it needs authority artifacts or verification. It does not route every buyer message through Grantex.
+
+## Runtime Flow
+
+```mermaid
+sequenceDiagram
+  participant M as Merchant
+  participant A as AgenticOrg
+  participant G as Grantex
+  M->>A: Create Seller Commerce Agent and connect Shopify
+  A->>A: Read-only Shopify sync and redacted evidence
+  A->>G: POST /v1/commerce/oacp/c6z/authority-requests
+  G-->>A: Signed/internal OACP artifacts or blockers
+  A->>A: Cache artifacts by tenant, merchant, seller, buyer scope
+  A-->>M: Runtime ready, refresh needed, or blocker
+```
+
+## Request Contract
+
+AgenticOrg sends:
+
+- tenant, merchant, seller agent, and source identifiers;
+- requested OACP artifact families;
+- source observed timestamp;
+- public-safe connector evidence;
+- no raw Shopify credential, raw provider payload, checkout URL, or payment URL.
+
+Grantex returns:
+
+- `201 artifact_issuance_ready` with artifact families when ready;
+- `202 received` when connector evidence is still required;
+- `422` when the request is private, stale, executable, or otherwise unsafe.
+
+## Required Configuration
+
+| Config | Owner | Purpose |
+| --- | --- | --- |
+| `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` | Grantex + AgenticOrg | Service-token auth for authority requests. |
+| `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` | Grantex | Tenant allowlist. |
+| Shopify credential custody | AgenticOrg + merchant | Read-only source evidence generation. |
+| Provider capability config | AgenticOrg + provider | Capability evidence checks outside Grantex. |
+
+## Failure Handling
+
+If Grantex is unavailable, AgenticOrg may answer non-binding buyer questions from valid cached artifacts. Commitment-bound requests must refresh, prepare no execution, or refuse.

@@ -33,54 +33,31 @@
 
 </div>
 
-## Agentic Commerce V1 (live pilot)
+## OACP Authority For Agentic Commerce
 
-Grantex Commerce V1 is the live-pilot consent, Commerce Passport, policy, audit, and payment-control layer for agentic checkout. It lets commerce agents use an approved Shopify merchant profile, create carts, request user consent, receive a scoped Commerce Passport, and create provider-neutral payment intents without giving the agent direct access to payment providers.
+Grantex is the OACP protocol, trust, policy, artifact, verification, and adapter authority for agentic commerce. AgenticOrg owns buyer and seller AI-agent runtime, merchant onboarding, Shopify connector runtime, buyer sessions, channel bridges, OACP cache, and provider-owned Pine Labs Plural/P3P capability verification.
 
-> Production Commerce V1 is live for the approved Shopify pilot merchant `mch_shopify_mgx0n6_22` from `mgx0n6-22.myshopify.com`. The runtime live-readiness gate is complete, ops health is green, and Plural webhook intake is deployed at `https://api.grantex.dev/v1/webhooks/providers/plural`. Plural credentials currently authenticate against Plural UAT-compatible rails, so public docs do not claim production Plural settlement.
+Merchant systems such as Shopify remain the source of record. Provider rails own mandate and payment execution. Grantex signs and verifies artifacts; it is not a merchant connector runtime or a toll booth for every buyer and seller message.
 
 ```mermaid
 flowchart LR
-  user[User] --> agent[AgenticOrg Commerce Sales Agent]
-  agent --> gx[Grantex Commerce REST/MCP]
-  gx --> consent[Consent and Passport]
-  gx --> policy[Policy, amount caps, audit]
-  gx --> catalog[Catalog, cart, inventory]
-  gx --> provider[Provider-neutral payment intent]
-  provider --> mock[Mock provider verified in smoke]
-  provider --> plural[Plural hosted-checkout adapter]
-  plural --> webhook[Signed Plural webhook intake]
+  merchant[Shopify and merchant systems] --> agentic[AgenticOrg buyer and seller runtime]
+  agentic -->|redacted authority request| grantex[Grantex OACP authority]
+  grantex -->|OACP artifacts or blockers| agentic
+  agentic --> buyer[Buyer surfaces]
+  agentic -->|capability check| provider[Pine Labs Plural/P3P]
 ```
 
 | Area | Current posture |
 | --- | --- |
-| Internal sandbox | Implemented for synthetic catalog, consent, passport, cart, payment, webhook, and audit flows. |
-| Temporary Option A smoke | Verified with mock provider and cleaned-up smoke resources. |
-| Shopify pilot merchant | Live profile imported from `mgx0n6-22.myshopify.com` as `mch_shopify_mgx0n6_22`, with 5 products and 5 variants available through Grantex catalog search. |
-| Plural hosted-checkout adapter | Implemented behind the provider abstraction for token, checkout order, status polling, and HMAC webhook verification; configured with stored credentials that authenticate against the Plural UAT-compatible endpoint. |
-| AgenticOrg real-staging handoff | Verified through Grantex-only tools with redacted fixture handling. |
-| Hosted AgenticOrg discovery | Verified in temporary API-only hosted smoke. |
-| Production discovery | Available for the approved Commerce V1 runtime merchant profile through `/.well-known/grantex-commerce`. |
-| Live-readiness gate | Complete for the approved pilot; feature flags alone remain insufficient and missing evidence returns `live_readiness_blocked`. |
-| Live checkout/payments | Enabled for the approved Commerce V1 live-pilot control-plane path, with consent, policy, passport, idempotency, webhook, reconciliation, and audit controls. |
-| Plural production settlement claim | Not claimed; the current credentials validate against Plural UAT-compatible rails. |
+| Grantex C6Z authority route | Implemented at `POST /v1/commerce/oacp/c6z/authority-requests` for allowlisted AgenticOrg tenants. |
+| Artifact families | 11 internal OACP families are issued or refused: merchant profile, seller agent card, connector evidence, catalog, price, inventory, policy, public discovery state, mandate capability, protocol adapter, and request status. |
+| Protocol adapters | Schema.org, UCP-style, ACP-style, AP2-style, A2A, MCP, and OpenAPI mappings are compatibility mappings derived from OACP artifacts. |
+| AgenticOrg runtime | Seller onboarding, Shopify sync, cache, buyer Q&A, bridges, and provider capability verification live in AgenticOrg. |
+| Payment/order execution | Outside OACP artifact authority. Provider and merchant systems must execute and confirm; agents must not invent success. |
+| Historical Commerce V1 docs | Retained for context, but superseded for the AgenticOrg OACP runtime split. |
 
-Start with the [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx), then use the [developer guide](docs/guides/commerce-v1-developer-guide.mdx), [merchant/operator guide](docs/guides/commerce-v1-merchant-operator-guide.mdx), and [operations guide](docs/guides/commerce-v1-operations.mdx). The public education page is `web/commerce.html`, the end-to-end launch story is in [the Shopify OACP live-flow blog](docs/blog/shopify-oacp-commerce-live-flow.mdx), and the guard model is in [the Commerce live-readiness gate blog](docs/blog/commerce-live-readiness-gate.mdx).
-
-The TypeScript SDK now exposes the live-pilot control plane as `grantex.commerce.*`, including public merchant profile lookup, catalog search, cart creation, Commerce Passport consent/exchange, payment intent creation, checkout handoff, provider credential metadata, webhook source management, and operator health checks. Commerce write calls that mutate carts or payments accept `idempotencyKey` and send it as the required `Idempotency-Key` header.
-
-## OACP Authority For AgenticOrg Runtime
-
-For the Shopify-to-AgenticOrg OACP runtime, Grantex owns trust authority,
-protocol/policy governance, canonical artifact issuance, signing,
-verification, and protocol-adapter mapping rules. AgenticOrg owns seller
-onboarding, Shopify read-only connector runtime, buyer/seller agents, artifact
-cache, buyer channels, and Pine Labs Plural/P3P capability verification.
-
-The C6Z authority endpoint issues or refuses the 11 required OACP artifact
-families for allowlisted AgenticOrg tenants. It is not a merchant connector,
-buyer-session relay, checkout service, or payment toll booth. See
-[`docs/guides/oacp-runtime-authority-and-adapter-mappings.md`](docs/guides/oacp-runtime-authority-and-adapter-mappings.md).
+Start with the [OACP authority overview](docs/guides/oacp/overview.mdx), [truth inventory](docs/guides/oacp/truth-inventory.mdx), [AgenticOrg integration guide](docs/guides/oacp/agenticorg-integration.mdx), and [operator runbook](docs/guides/oacp/operator-runbook.mdx). The older [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx) remains historical/contextual and should not be used to imply that Grantex owns AgenticOrg merchant connector runtime.
 
 ## Current Development Snapshot
 
