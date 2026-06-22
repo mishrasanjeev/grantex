@@ -71,7 +71,30 @@
             ]
           },
           {
-            "group": "Agentic Commerce V1",
+            "group": "OACP Authority",
+            "pages": [
+              "guides/oacp/overview",
+              "guides/oacp/truth-inventory",
+              "guides/oacp/architecture",
+              "guides/oacp/artifact-authority",
+              "guides/oacp/protocol-adapter",
+              "guides/oacp/policy-governance",
+              "guides/oacp/merchant-source-of-record",
+              "guides/oacp/buyer-safety-freshness",
+              "guides/oacp/provider-payment-boundary",
+              "guides/oacp/agenticorg-integration",
+              "guides/oacp/operator-runbook",
+              "guides/oacp/launch-readiness",
+              "guides/oacp/explainers/shopify-to-agentic-commerce",
+              "guides/oacp/explainers/buyer-agent-safety",
+              "guides/oacp/explainers/developer-artifacts-bridges",
+              "guides/oacp/explainers/protocol-partner-mappings",
+              "guides/oacp/explainers/provider-owned-payment-evidence",
+              "guides/oacp/explainers/launch-rollback-runbook"
+            ]
+          },
+          {
+            "group": "Agentic Commerce V1 (Historical)",
             "pages": [
               "guides/commerce-v1-overview",
               "guides/commerce-v1-agentic-commerce-prd",
@@ -719,6 +742,14 @@
           {
             "group": "Posts",
             "pages": [
+              "blog/oacp-shopify-merchant-agentic-commerce-seller",
+              "blog/oacp-keeps-buyer-agents-honest",
+              "blog/oacp-buyer-surfaces-chatgpt-claude-gemini-perplexity-whatsapp-telegram",
+              "blog/oacp-maps-to-protocols",
+              "blog/grantex-not-transaction-toll-booth",
+              "blog/pine-labs-plural-p3p-oacp",
+              "blog/source-freshness-trust-ai-commerce",
+              "blog/buyer-journey-prepared-purchase-handoff",
               "blog/shopify-oacp-commerce-live-flow",
               "blog/commerce-live-readiness-gate",
               "blog/dpdp-act-ai-agents",

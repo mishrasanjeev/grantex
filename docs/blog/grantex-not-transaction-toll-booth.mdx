@@ -1,0 +1,49 @@
+---
+title: Why Grantex Is Not A Transaction Toll Booth
+description: Why OACP authority signs artifacts without relaying every buyer and seller interaction.
+---
+
+# Why Grantex Is Not A Transaction Toll Booth
+
+## Summary
+
+Grantex is the OACP authority, not a relay for every buyer message. Valid cached artifacts let AgenticOrg answer non-binding questions while commitment requests remain gated.
+
+## Target Audience
+
+Architects, operators, and platform buyers.
+
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+  agentic[AgenticOrg runtime] -->|authority refresh| grantex[Grantex]
+  grantex -->|artifacts| cache[AgenticOrg cache]
+  cache -->|valid non-binding answer| buyer[Buyer]
+  buyer -->|commitment request| prep[Purchase preparation]
+  prep -->|provider/merchant approval needed| provider[Provider and merchant systems]
+```
+
+## End-To-End Flow
+
+Grantex signs the trust artifact. AgenticOrg stores a scoped cache. Buyer questions use the cache until freshness or revocation fails. Purchase requests must use approved merchant/provider/channel paths and cannot be converted into success by cache alone.
+
+## What Is Implemented Now
+
+The authority endpoint issues/refuses artifacts. AgenticOrg cache and bridge routes consume them for Q&A and prepared handoff.
+
+## What Requires External Approval Or Config
+
+Public tenant launch, provider rail execution, and channel rollout.
+
+## Failure Modes
+
+- Cache used past TTL.
+- Commitment request treated like a discovery request.
+- Grantex outage misunderstood as permission to execute.
+
+## Safe User Wording Examples
+
+- "Grantex signed the source artifact; AgenticOrg answered from valid cache."
+- "A valid cache supports discovery, not payment authority."
+- "This request needs provider or merchant approval before execution."

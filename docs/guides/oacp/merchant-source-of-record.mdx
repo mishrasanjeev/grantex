@@ -1,0 +1,30 @@
+---
+title: OACP Merchant Source Of Record
+description: Why Shopify and merchant systems remain authoritative in OACP.
+---
+
+# OACP Merchant-System Source Of Record
+
+Canonical end-to-end flow: [OACP authority overview](./overview).
+
+OACP does not move commerce truth into Grantex. Shopify, merchant OMS, inventory systems, policy stores, support systems, and payment providers remain operational systems of record.
+
+```mermaid
+flowchart LR
+  shopify[Shopify catalog, price, inventory] --> evidence[AgenticOrg public-safe evidence]
+  evidence --> grantex[Grantex authority]
+  grantex --> artifact[OACP artifact with source and freshness]
+  artifact --> cache[AgenticOrg cache]
+  cache --> buyer[Buyer answer with labels]
+```
+
+## Source Rules
+
+- Product names, descriptions, variants, images, prices, and inventory come from Shopify or the merchant-approved source.
+- Grantex validates evidence shape and policy, not the raw private connector payload.
+- AgenticOrg stores public-safe artifact refs and freshness labels, not raw Shopify secrets.
+- If source evidence is stale or conflicting, buyer answers must refresh or refuse.
+
+## Pending Runtime Gap
+
+Multi-system conflict resolution across Shopify, ERP, OMS, WMS, support, and provider records needs explicit source precedence policy before broad launch.

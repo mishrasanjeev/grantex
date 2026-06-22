@@ -179,6 +179,13 @@ function c6qDryRunPayload(overrides: Record<string, unknown> = {}): Record<strin
   };
 }
 
+function freshC6qDryRunPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return c6qDryRunPayload({
+    source_snapshot_at: new Date().toISOString(),
+    ...overrides,
+  });
+}
+
 describe('C6R sandbox connector dry-run service', () => {
   it('normalizes the C6Q fake fixture into a capped public-safe preview', () => {
     const prepared = prepareConnectorDryRun(c6qDryRunPayload({ preview_limit: 2 }), NOW);
@@ -307,7 +314,7 @@ describe('C6R connector dry-run routes', () => {
       method: 'POST',
       url: `/v1/commerce/merchants/${MERCHANT}/connectors/dry-run`,
       headers: authHeader(),
-      payload: c6qDryRunPayload(),
+      payload: freshC6qDryRunPayload(),
     });
 
     expect(res.statusCode).toBe(201);
@@ -407,7 +414,7 @@ describe('C6R connector dry-run routes', () => {
       method: 'POST',
       url: `/v1/commerce/merchants/${MERCHANT}/connectors/dry-run`,
       headers: authHeader(),
-      payload: c6qDryRunPayload(),
+      payload: freshC6qDryRunPayload(),
     });
 
     expect(res.statusCode).toBe(409);

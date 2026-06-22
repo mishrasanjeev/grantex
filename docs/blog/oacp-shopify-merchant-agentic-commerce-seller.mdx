@@ -1,0 +1,59 @@
+---
+title: How A Shopify Merchant Becomes An Agentic Commerce Seller
+description: The Grantex authority view of Shopify onboarding through AgenticOrg and OACP artifacts.
+---
+
+# How A Shopify Merchant Becomes An Agentic Commerce Seller
+
+## Summary
+
+A Shopify merchant becomes an agentic commerce seller through AgenticOrg seller onboarding, read-only Shopify sync, Grantex OACP authority artifacts, and buyer-safe cache consumption.
+
+## Target Audience
+
+Merchants, AgenticOrg operators, and Grantex reviewers.
+
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+  merchant[Merchant] --> agentic[AgenticOrg Seller Commerce Agent]
+  agentic --> shopify[Read-only Shopify sync]
+  shopify --> evidence[Redacted source evidence]
+  evidence --> grantex[Grantex OACP authority]
+  grantex --> artifacts[OACP artifacts or blockers]
+  artifacts --> cache[AgenticOrg cache]
+  cache --> buyers[Buyer surfaces]
+```
+
+## End-To-End Flow
+
+1. Merchant creates a Seller Commerce Agent in AgenticOrg.
+2. AgenticOrg stores Shopify credential custody outside Grantex.
+3. AgenticOrg syncs public-safe catalog, price, image, and inventory evidence.
+4. AgenticOrg requests Grantex C6Z authority artifacts.
+5. Grantex issues or refuses OACP artifacts.
+6. AgenticOrg caches artifacts and answers buyer questions with labels.
+7. Purchase intent becomes a prepared provider/merchant handoff or blocker.
+
+## What Is Implemented Now
+
+Grantex has the C6Z authority route, internal artifact issuance, adapter mapping, artifact verification helpers, and focused tests. AgenticOrg owns seller onboarding, Shopify sync, cache intake, buyer Q&A, bridge endpoints, and Plural/Pine capability verification.
+
+## What Requires External Approval Or Config
+
+Merchant Shopify credentials, AgenticOrg tenant allowlist, provider rail approval, channel webhook approvals, and partner review for any public program claim.
+
+## Failure Modes
+
+- Shopify credentials missing or invalid.
+- Source evidence stale.
+- Tenant not allowlisted.
+- Artifact scope requests private or executable authority.
+- Provider capability evidence missing or stale.
+
+## Safe User Wording Examples
+
+- "This answer is based on a Shopify snapshot authorized by Grantex."
+- "I can prepare a review handoff, but no payment or order was created."
+- "The source evidence is stale. I need a refresh before continuing."

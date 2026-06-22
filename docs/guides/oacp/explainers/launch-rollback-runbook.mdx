@@ -1,0 +1,36 @@
+---
+title: Launch And Rollback Runbook
+description: Operator explainer for OACP launch, smoke tests, monitoring, and rollback.
+---
+
+# Launch And Rollback Runbook
+
+Canonical end-to-end flow: [OACP authority overview](../overview).
+
+## Launch Smoke
+
+```mermaid
+flowchart TD
+  creds[Verify credentials] --> shopify[Run Shopify read-only sync]
+  shopify --> authority[Request Grantex artifacts]
+  authority --> cache[Cache and verify artifacts]
+  cache --> ask[Ask buyer question]
+  ask --> purchase[Ask purchase request]
+  purchase --> result[Prepared handoff or blocker]
+```
+
+## Monitor
+
+- Authority request rate, refusal code mix, and tenant allowlist changes.
+- Artifact TTL and stale-cache refusals.
+- Adapter mapping errors.
+- Provider capability verifier status.
+- Channel webhook failures.
+
+## Rollback
+
+1. Remove tenant allowlist in Grantex.
+2. Rotate the service token if needed.
+3. Ask AgenticOrg to stop refresh and mark artifacts stale.
+4. Disable public buyer channels.
+5. Keep audit/export material for review.
