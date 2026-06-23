@@ -7,16 +7,19 @@ description: How OACP treats Pine Labs Plural/P3P and other payment rails.
 
 Canonical end-to-end flow: [OACP authority overview](./overview).
 
-Pine Labs Plural/P3P and other provider rails own mandate setup, payment execution, provider status, settlement, and provider webhooks. Grantex does not execute provider rails in the AgenticOrg OACP runtime split.
+Pine Labs Plural/P3P, POS systems, and other provider rails own mandate setup, payment execution, provider status, settlement, receipt evidence, and provider webhooks. Grantex does not execute provider or POS rails in the AgenticOrg OACP runtime split.
 
 ```mermaid
 flowchart LR
   buyer[Buyer intent] --> agentic[AgenticOrg purchase preparation]
   agentic --> cache[OACP cache checks]
   agentic --> verifier[Plural/Pine capability verifier]
+  agentic --> pos[Offline POS handoff packet]
   verifier --> ref[Redacted capability evidence ref]
+  pos --> posref[Redacted POS/provider evidence ref]
   cache --> result{All checks pass?}
   ref --> result
+  posref --> result
   result -->|Yes| prepared[Prepared provider-owned handoff]
   result -->|No| blocker[Exact blocker]
 ```
@@ -27,10 +30,11 @@ flowchart LR
 | --- | --- |
 | Mandate setup | Provider-owned. OACP may carry non-sensitive capability evidence refs. |
 | Payment capture | Provider-owned and outside artifact issuance. |
+| POS handoff | AgenticOrg-owned orchestration; POS/provider-owned confirmation. |
 | Checkout/order success | Must come from merchant/provider systems, never from an agent guess. |
 | Raw secrets | Not stored in OACP artifacts. |
 | Evidence | Redacted refs and freshness only. |
 
 ## Pending Runtime Gap
 
-Provider-owned execution can only be added after merchant, provider, legal, security, operations, channel, rollback, and observability approval. Until then, docs must say prepared handoff or blocker.
+Provider-owned or POS-owned execution can only be added after merchant, provider/POS, legal, security, operations, channel, rollback, and observability approval. Until then, docs must say prepared handoff, POS accepted pending staff/payment confirmation, or blocker.

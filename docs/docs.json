@@ -82,6 +82,7 @@
               "guides/oacp/merchant-source-of-record",
               "guides/oacp/buyer-safety-freshness",
               "guides/oacp/provider-payment-boundary",
+              "guides/oacp/pos-bridge-boundary",
               "guides/oacp/agenticorg-integration",
               "guides/oacp/operator-runbook",
               "guides/oacp/launch-readiness",

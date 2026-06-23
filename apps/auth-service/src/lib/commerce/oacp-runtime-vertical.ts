@@ -324,11 +324,23 @@ function payloadForFamily(
     price_snapshot_refs: family === 'offer_price_snapshot' ? evidence.price_snapshot_refs : undefined,
     inventory_snapshot_refs: family === 'inventory_snapshot' ? evidence.inventory_snapshot_refs : undefined,
     requested_authority_scope: family === 'policy_scope' ? request.requested_authority_scope : undefined,
+    offline_pos_bridge_boundary: family === 'policy_scope'
+      ? 'agenticorg_orchestrates_handoff_pos_or_provider_owns_execution'
+      : undefined,
+    offline_pos_evidence_refs_allowed: family === 'policy_scope'
+      ? true
+      : undefined,
     public_discovery_state: family === 'public_discovery_state' ? 'disabled' : undefined,
     public_discovery_publication_allowed: family === 'public_discovery_state' ? false : undefined,
     mandate_capability_status: family === 'mandate_capability' ? 'provider_owned_verification_required' : undefined,
     provider_execution_authority: family === 'mandate_capability' ? 'provider_owned_not_grantex_or_agenticorg' : undefined,
     mandate_capability_ref: family === 'mandate_capability' ? 'provider:mandate_rail:capability:pending:redacted' : undefined,
+    offline_pos_confirmation_authority: family === 'mandate_capability'
+      ? 'pos_or_payment_provider_callback_required_not_grantex'
+      : undefined,
+    offline_pos_evidence_ref: family === 'mandate_capability'
+      ? 'pos:provider_or_simulator:handoff_or_receipt:pending:redacted'
+      : undefined,
     adapter_surfaces: family === 'protocol_adapter'
       ? [
         'schema_org_product_offer_jsonld',
@@ -383,7 +395,7 @@ function payloadForFamily(
           {
             surface: 'ap2_style_mandate_payment_evidence_profile',
             source_artifact_families: ['mandate_capability', 'policy_scope', 'authority_request_status'],
-            prohibited_outputs: ['provider execution claim', 'payment success claim'],
+            prohibited_outputs: ['provider execution claim', 'settled-payment claim', 'POS paid-state claim'],
           },
           {
             surface: 'a2a_agent_card_task_metadata',
@@ -398,9 +410,14 @@ function payloadForFamily(
           {
             surface: 'openapi_buyer_safe_bridge_schema',
             source_artifact_families: ['seller_agent_card', 'policy_scope', 'protocol_adapter'],
-            prohibited_outputs: ['payment or order operation exposure'],
+            prohibited_outputs: ['payment, order, or POS operation exposure'],
           },
         ],
+        offline_pos_bridge_mapping: {
+          source_artifact_families: ['policy_scope', 'catalog_snapshot', 'offer_price_snapshot', 'inventory_snapshot', 'mandate_capability'],
+          allowed_refs: ['offline_pos_handoff_packet_ref', 'provider_pos_evidence_ref', 'receipt_evidence_ref'],
+          prohibited_outputs: ['POS transaction execution', 'POS payment capture', 'POS order success claim'],
+        },
       }
       : undefined,
     authority_request_status: family === 'authority_request_status' ? 'artifact_issuance_ready' : undefined,
@@ -409,6 +426,9 @@ function payloadForFamily(
       'order_creation',
       'inventory_hold',
       'live_provider_execution',
+      'offline_pos_transaction_execution',
+      'pos_order_creation',
+      'pos_payment_capture',
       'public_discovery_publication',
     ],
     allowed_to_execute: false,
@@ -430,6 +450,9 @@ function artifactSafety(family: C6ZArtifactFamily) {
       'refund_execution',
       'return_execution',
       'shipping_execution',
+      'offline_pos_transaction_execution',
+      'pos_order_creation',
+      'pos_payment_capture',
       'public_discovery_publication',
     ],
     commitment_allowed: false,

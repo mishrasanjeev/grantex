@@ -21,6 +21,7 @@ sequenceDiagram
   A->>G: POST /v1/commerce/oacp/c6z/authority-requests
   G-->>A: Signed/internal OACP artifacts or blockers
   A->>A: Cache artifacts by tenant, merchant, seller, buyer scope
+  A->>A: Prepare purchase or Offline POS handoff without execution
   A-->>M: Runtime ready, refresh needed, or blocker
 ```
 
@@ -33,6 +34,7 @@ AgenticOrg sends:
 - source observed timestamp;
 - public-safe connector evidence;
 - no raw Shopify credential, raw provider payload, checkout URL, or payment URL.
+- no raw POS payload, raw payment payload, order-created claim, or POS paid-state claim.
 
 Grantex returns:
 
@@ -48,7 +50,8 @@ Grantex returns:
 | `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` | Grantex | Tenant allowlist. |
 | Shopify credential custody | AgenticOrg + merchant | Read-only source evidence generation. |
 | Provider capability config | AgenticOrg + provider | Capability evidence checks outside Grantex. |
+| POS provider approval | AgenticOrg + merchant + POS/payment provider | Verified callback/evidence refs for Offline POS Bridge reconciliation. |
 
 ## Failure Handling
 
-If Grantex is unavailable, AgenticOrg may answer non-binding buyer questions from valid cached artifacts. Commitment-bound requests must refresh, prepare no execution, or refuse.
+If Grantex is unavailable, AgenticOrg may answer non-binding buyer questions from valid cached artifacts. Commitment-bound or POS-bound requests must refresh, prepare no execution, use only valid cached policy when risk permits, or refuse.

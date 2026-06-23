@@ -131,6 +131,12 @@ describe('C6Z Grantex runtime artifact authority', () => {
       .toMatchObject({
         mandate_capability_status: 'provider_owned_verification_required',
         provider_execution_authority: 'provider_owned_not_grantex_or_agenticorg',
+        offline_pos_confirmation_authority: 'pos_or_payment_provider_callback_required_not_grantex',
+      });
+    expect(result.artifacts.find((artifact) => artifact.artifact_family === 'policy_scope')?.payload)
+      .toMatchObject({
+        offline_pos_bridge_boundary: 'agenticorg_orchestrates_handoff_pos_or_provider_owns_execution',
+        offline_pos_evidence_refs_allowed: true,
       });
     expect(result.artifacts.find((artifact) => artifact.artifact_family === 'protocol_adapter')?.payload)
       .toMatchObject({
@@ -139,7 +145,15 @@ describe('C6Z Grantex runtime artifact authority', () => {
           canonical_source: 'grantex_signed_oacp_artifacts',
           generated_by: 'agenticorg_runtime_from_cached_artifacts',
           external_certification_status: 'compatibility_mapping_only_not_publicly_certified',
+          offline_pos_bridge_mapping: {
+            prohibited_outputs: expect.arrayContaining(['POS transaction execution', 'POS payment capture', 'POS order success claim']),
+          },
         },
+        unsupported_capabilities: expect.arrayContaining([
+          'offline_pos_transaction_execution',
+          'pos_order_creation',
+          'pos_payment_capture',
+        ]),
       });
     expect(
       result.artifacts.find((artifact) => artifact.artifact_family === 'protocol_adapter')
@@ -148,6 +162,10 @@ describe('C6Z Grantex runtime artifact authority', () => {
       surface_contracts: expect.arrayContaining([
         expect.objectContaining({ surface: 'schema_org_product_offer_jsonld' }),
         expect.objectContaining({ surface: 'openapi_buyer_safe_bridge_schema' }),
+        expect.objectContaining({
+          surface: 'ap2_style_mandate_payment_evidence_profile',
+          prohibited_outputs: expect.arrayContaining(['POS paid-state claim']),
+        }),
       ]),
     });
   });
