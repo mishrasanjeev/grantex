@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Grantex OACP Authority</title>
-  <meta name="description" content="Grantex is the protocol, trust, policy, and artifact authority for OACP agentic commerce. AgenticOrg runs buyer and seller agents; merchant and provider systems remain authoritative." />
+  <meta name="description" content="Grantex is the protocol, trust, policy, and artifact authority for OACP agentic commerce. AgenticOrg runs buyer and seller agents; merchant, POS, and provider systems remain authoritative." />
   <style>
     :root {
       color-scheme: light;
@@ -162,9 +162,9 @@
         <h1>Protocol, trust, policy, artifact authority for agentic commerce.</h1>
         <p>
           Grantex is the OACP authority layer. AgenticOrg runs buyer and seller
-          AI agents. Shopify and merchant systems remain source of record.
-          Pine Labs Plural/P3P and other provider rails own mandate and payment
-          execution.
+          AI agents. Shopify, POS, and merchant systems remain source of record.
+          Pine Labs Plural/P3P, POS, and other provider rails own mandate,
+          payment, and in-store execution.
         </p>
         <div class="actions">
           <a class="button primary" href="https://docs.grantex.dev/guides/oacp/overview">Read OACP docs</a>
@@ -187,10 +187,10 @@
     <div class="wrap">
       <h2>Four-party architecture</h2>
       <div class="diagram" aria-label="OACP architecture diagram">
-        <div class="node"><h3>Merchant systems</h3><p>Shopify, OMS, inventory, policy, support, and order systems keep operational truth.</p></div>
-        <div class="node"><h3>AgenticOrg runtime</h3><p>Seller Commerce Agent onboarding, Shopify sync, buyer sessions, channel bridges, and OACP cache.</p></div>
+        <div class="node"><h3>Merchant and POS systems</h3><p>Shopify, POS, OMS, inventory, policy, support, and order systems keep operational truth.</p></div>
+        <div class="node"><h3>AgenticOrg runtime</h3><p>Seller Commerce Agent onboarding, Shopify sync, buyer sessions, channel bridges, OACP cache, and Offline POS handoff orchestration.</p></div>
         <div class="node"><h3>Grantex authority</h3><p>Trust, policy, canonical OACP artifacts, artifact verification, and protocol adapters.</p></div>
-        <div class="node"><h3>Provider rails</h3><p>Pine Labs Plural/P3P owns mandate and payment rail execution and provider status.</p></div>
+        <div class="node"><h3>Provider and POS rails</h3><p>Pine Labs Plural/P3P, POS, and payment providers own mandate, payment, receipt, and final transaction status.</p></div>
       </div>
     </div>
   </section>
@@ -244,11 +244,11 @@
         </p>
       </div>
       <div class="card">
-        <h3>Payment and order boundary</h3>
+        <h3>Payment, POS, and order boundary</h3>
         <p>
-          Final payment, mandate, checkout, order, stock hold, refund, return,
-          and shipment execution requires the approved provider, merchant, and
-          channel path. OACP artifacts do not invent success.
+          Final payment, mandate, checkout, POS confirmation, order, stock hold,
+          refund, return, and shipment execution requires the approved provider,
+          merchant, POS, and channel path. OACP artifacts do not invent success.
         </p>
       </div>
     </div>
@@ -262,13 +262,13 @@
         tenants, caches returned OACP artifacts, and exposes buyer surfaces with
         source and freshness labels.
       </p>
-      <p><a href="https://docs.grantex.dev/guides/oacp/agenticorg-integration">Open the AgenticOrg integration guide</a></p>
+      <p><a href="https://docs.grantex.dev/guides/oacp/agenticorg-integration">Open the AgenticOrg integration guide</a> - <a href="https://docs.grantex.dev/guides/oacp/pos-bridge-boundary">Read the Offline POS Bridge boundary</a></p>
     </div>
   </section>
 
   <footer>
     <div class="wrap">
-      <p style="margin:0;">No raw Shopify credentials, provider secrets, card data, bank data, checkout URLs, payment URLs, or private merchant payloads are represented on this page.</p>
+      <p style="margin:0;">No raw Shopify credentials, POS payloads, provider secrets, card data, bank data, checkout URLs, payment URLs, or private merchant payloads are represented on this page.</p>
     </div>
   </footer>
 </body>
