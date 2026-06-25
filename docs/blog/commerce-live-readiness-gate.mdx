@@ -1,47 +1,49 @@
 ---
-title: "Why Grantex Commerce Live Mode Needs a Readiness Gate"
-description: "How Grantex separates sandbox checkout evidence from live payment authorization for agentic commerce."
+title: "Why OACP Commerce Needs A Readiness Gate"
+description: "How Grantex separates OACP authority evidence from live payment, provider, POS, and merchant execution."
 date: "2026-06-14"
 authors:
   - name: "Sanjeev Mishra"
 ---
 
 Agentic commerce needs more than a working demo. A commerce agent can search a
-catalog, prepare a cart, ask for consent, and create a mock payment intent, but
-that does not prove the system is ready to touch live payment rails.
+catalog, prepare a handoff, ask for consent, and verify provider capability
+metadata, but that does not prove the system is ready to touch live payment,
+bank, POS, order, refund, or fulfillment rails.
 
-Grantex Commerce V1 now treats that distinction as a runtime boundary. Sandbox
-evidence can prove the control plane works. Live mode needs a separate
-readiness gate, and the approved Shopify live pilot now runs behind that gate.
+This article is retained as a readiness-boundary note. The current OACP split is
+that AgenticOrg owns merchant self-service runtime and buyer/seller agent
+channels, while Grantex owns OACP authority and artifact verification. Merchant
+configuration, including Shopify today and future WooCommerce/ERP/bank/provider
+refs, is not by itself live execution approval.
 
-## What Works Today
+## What Works Today In The Current OACP Split
 
-The current Commerce V1 evidence covers the path from closed-beta validation to
-the approved Shopify live pilot:
+The current OACP runtime path covers:
 
-- Grantex-controlled catalog, cart, consent, Commerce Passport, policy, audit,
-  webhook, and mock-provider flows.
-- AgenticOrg handoff through Grantex-only commerce tools.
-- Shopify and other merchant-system connectors as metadata foundations, not
-  credentialed production sync or direct private API execution.
-- Plural behind the provider abstraction, including token, hosted-checkout,
-  status, and signed webhook handling. The current stored credentials validate
-  against Plural UAT-compatible rails, so production Plural settlement is not
-  claimed.
-- OACP trust-artifact foundations for describing commerce capability and policy
-  without turning those artifacts into payment authority.
+- AgenticOrg merchant self-service config scoped by tenant, merchant, and seller
+  agent.
+- Shopify read-only Admin GraphQL runtime sync when the merchant provides valid
+  credentials.
+- WooCommerce, ERP, PIM, OMS, WMS, custom API, bank-owned rail, fintech rail,
+  and custom provider setup as pending-adapter config, not fake-live support.
+- Grantex OACP authority requests, signed/internal artifact issuance or refusal,
+  artifact verification, and protocol adapter governance.
+- AgenticOrg OACP cache and buyer-channel answers with source/freshness labels.
+- Plural/Pine provider-owned capability verification where configured, without
+  claiming payment execution.
+- Offline POS handoff packets and verified confirmation evidence refs without
+  Grantex executing POS transactions.
 
-That was enough for controlled sandbox validation. The live-pilot promotion
-added a named Shopify merchant, machine-readable live acknowledgements,
-production ops health, stored secrets, the Plural webhook route, and hosted OACP
-E2E evidence before live mode was enabled.
+That is enough to prepare buyer-safe answers and handoffs. It is not a claim
+that every merchant, channel, provider, bank, POS, or order path is live.
 
 ## Why Flags Are Not Enough
 
-Live payment execution depends on legal language, provider contracts, webhook
-signature behavior, India data-residency review, final user confirmation,
-merchant support ownership, append-only audit verification, incident runbooks,
-and rollback ownership.
+Live payment or order execution depends on legal language, provider or bank
+contracts, webhook signature behavior, data-residency review, final buyer
+confirmation, merchant support ownership, audit verification, incident runbooks,
+monitoring, and rollback ownership.
 
 Those are not just deployment details. They are part of the safety model.
 
@@ -50,37 +52,37 @@ snapshot reports only safe values: booleans, requirement keys, env names, and
 blocker strings. It does not carry passports, bearer tokens, provider secrets,
 raw payloads, DB URLs, Redis URLs, or webhook secrets.
 
-If any readiness acknowledgement is missing, live provider paths fail closed
-with `live_readiness_blocked`.
+If any readiness acknowledgement is missing, provider, bank, POS, or merchant
+execution paths must fail closed with a precise blocker.
 
 ## The Required Evidence
 
-The live-readiness gate requires acknowledgements for legal approval, provider
-contract confirmation, Plural sandbox E2E completion, webhook signature
-confirmation, India data residency, final user confirmation text, named pilot
-merchant approval, hosted OACP E2E evidence, production secret review,
-append-only audit verification, operator runbook approval, and rollback owner
-assignment.
+The readiness gate requires acknowledgements for legal approval, provider or
+bank contract confirmation, sandbox E2E completion, webhook signature
+confirmation, data residency, final user confirmation text, merchant approval,
+OACP E2E evidence, production secret review, audit verification, operator
+runbook approval, support ownership, and rollback owner assignment.
 
 This keeps the release posture clear:
 
-- Sandbox and mock-provider evidence can continue.
-- Public docs and demos must distinguish the approved Shopify live pilot from
-  broader provider settlement or certification claims.
-- AgenticOrg must keep using Grantex-only commerce tools.
-- Shopify and Plural remain controlled integrations, not shortcuts around the
-  Grantex consent, policy, and audit layer.
-- Live mode starts only after the evidence packet and runtime snapshot both
-  clear.
+- Shopify runtime sync can continue when credentials are valid.
+- Future WooCommerce/ERP/bank/provider configs can be saved as pending-adapter
+  setup without implying live support.
+- Public docs and demos must distinguish OACP authority evidence from provider
+  settlement, bank authorization, POS confirmation, channel approval, or
+  certification claims.
+- AgenticOrg must preserve OACP artifacts, source/freshness labels, and
+  fail-closed blockers across buyer channels.
+- Execution starts only after the evidence packet, provider/bank/POS approval,
+  and runtime readiness snapshot all clear.
 
 ## Current Status
 
-As of June 14, 2026, Commerce V1 is live for the approved Shopify pilot merchant
-`mch_shopify_mgx0n6_22` from `mgx0n6-22.myshopify.com`. The live-readiness
-snapshot is complete, ops health reports no blockers, catalog search returns
-the imported Shopify products, and Plural webhook intake reaches signature
-validation at `https://api.grantex.dev/v1/webhooks/providers/plural`.
+As of June 25, 2026, the current public OACP posture is not a broad live-payment
+or live-order claim. AgenticOrg owns merchant self-service config and Shopify
+runtime sync; Grantex owns authority artifacts; provider, bank, POS, and
+merchant systems own execution. Public wording must keep those owners separate.
 
-That is deliberately scoped. The boundary between "the Grantex live control
-plane is running" and "a payment provider has certified production settlement"
-must stay visible in code, tests, docs, and operations.
+That boundary must stay visible in code, tests, docs, and operations: "OACP
+authority artifacts are available" is different from "a merchant/provider/bank
+has approved live execution."

@@ -7,7 +7,7 @@ description: Why OACP authority signs artifacts without relaying every buyer and
 
 ## Summary
 
-Grantex is the OACP authority, not a relay for every buyer message. Valid cached artifacts let AgenticOrg answer non-binding questions while commitment requests remain gated.
+Grantex is the OACP authority, not a relay for every buyer message. Valid cached artifacts let AgenticOrg answer non-binding questions while commitment requests remain gated by merchant, provider, bank, POS, and channel evidence.
 
 ## Target Audience
 
@@ -26,15 +26,15 @@ flowchart LR
 
 ## End-To-End Flow
 
-Grantex signs the trust artifact. AgenticOrg stores a scoped cache. Buyer questions use the cache until freshness or revocation fails. Purchase requests must use approved merchant/provider/channel paths and cannot be converted into success by cache alone.
+Grantex signs the trust artifact. AgenticOrg stores a scoped cache. Buyer questions use the cache until freshness or revocation fails. Purchase requests must use approved merchant/provider/bank/POS/channel paths and cannot be converted into success by cache alone.
 
 ## What Is Implemented Now
 
-The authority endpoint issues/refuses artifacts. AgenticOrg cache and bridge routes consume them for Q&A and prepared handoff.
+The authority endpoint issues/refuses artifacts. AgenticOrg cache and bridge routes consume them for Q&A and prepared handoff. AgenticOrg merchant config records Shopify runtime setup plus WooCommerce/ERP/bank/custom provider pending-adapter intent without making Grantex the config owner.
 
 ## What Requires External Approval Or Config
 
-Public tenant launch, provider rail execution, and channel rollout.
+Public tenant launch, provider or bank rail execution, POS callback approval, and channel rollout.
 
 ## Failure Modes
 

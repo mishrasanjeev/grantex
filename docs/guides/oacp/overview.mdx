@@ -7,19 +7,19 @@ description: The canonical Grantex overview for Open Agentic Commerce Protocol a
 
 This is the canonical Grantex OACP page. The canonical end-to-end flow starts here and links to the AgenticOrg runtime guide from the integration page.
 
-OACP is the trust and interoperability layer for agentic commerce. Grantex owns the protocol, trust, policy, artifact, verification, and protocol-adapter authority. AgenticOrg owns the buyer and seller AI-agent runtime, Shopify connector runtime, buyer sessions, channel bridges, OACP cache, and provider-owned mandate capability verification.
+OACP is the trust and interoperability layer for agentic commerce. Grantex owns the protocol, trust, policy, artifact, verification, and protocol-adapter authority. AgenticOrg owns the buyer and seller AI-agent runtime, merchant self-service configuration, Shopify connector runtime, future connector setup intent, buyer sessions, channel bridges, OACP cache, and provider-owned mandate capability verification.
 
-Merchant systems such as Shopify and POS systems remain the source of record. Pine Labs Plural/P3P, POS systems, and other provider rails own mandate, payment, and in-store execution. Grantex must not become a toll booth for every buyer and seller interaction.
+Merchant systems such as Shopify, future WooCommerce/ERP sources, and POS systems remain the source of record. Pine Labs Plural/P3P, bank-owned rails, POS systems, and other provider rails own mandate, payment, and in-store execution. Grantex must not become a toll booth for every buyer and seller interaction.
 
 ## Four-Party Architecture
 
 ```mermaid
 flowchart LR
-  merchant[Merchant systems: Shopify, OMS, inventory, policy] --> agentic[AgenticOrg seller and buyer runtime]
+  merchant[Merchant systems: Shopify, future WooCommerce/ERP, OMS, inventory, policy] --> agentic[AgenticOrg seller and buyer runtime]
   agentic -->|authority request with redacted evidence| grantex[Grantex OACP authority]
   grantex -->|signed internal artifacts and blockers| agentic
   agentic -->|buyer answer from valid cache| buyer[Buyer surfaces]
-  agentic -->|capability or POS handoff only| provider[Pine Labs Plural/P3P, POS, or payment rail]
+  agentic -->|capability or POS handoff only| provider[Pine Labs Plural/P3P, bank, POS, or payment rail]
   provider -->|redacted capability or POS evidence ref| agentic
 ```
 
@@ -35,7 +35,7 @@ flowchart LR
 
 ## What Grantex Does Not Own
 
-Grantex does not own Shopify runtime credentials, merchant onboarding UX, buyer sessions, WhatsApp or Telegram webhooks, MCP/OpenAPI client sessions, AgenticOrg artifact cache storage, Offline POS Bridge orchestration, final checkout execution, POS transaction execution, order creation, stock holds, mandate setup, payment capture, refund execution, or provider settlement.
+Grantex does not own Shopify runtime credentials, WooCommerce/ERP connector credentials, merchant onboarding UX, buyer sessions, WhatsApp or Telegram webhooks, MCP/OpenAPI client sessions, AgenticOrg artifact cache storage, Offline POS Bridge orchestration, final checkout execution, POS transaction execution, order creation, stock holds, mandate setup, payment capture, refund execution, or provider/bank settlement.
 
 ## Runtime Reality
 
@@ -44,7 +44,7 @@ Grantex does not own Shopify runtime credentials, merchant onboarding UX, buyer 
 | Implemented runtime | `POST /v1/commerce/oacp/c6z/authority-requests`, internal artifact issuance, verifier helpers, adapter preview helpers, and OACP guard tests. |
 | Implemented docs only | Historical Commerce V1 planning and C6 audit/review reports remain useful as internal history but are superseded for the public OACP split. |
 | Requires external credentials or approval | AgenticOrg service token and tenant allowlist, merchant Shopify access, channel approvals, and provider rail approval. |
-| Missing | Public standards program approval, universal channel launch, live POS provider approval, and broad payment/order execution. |
+| Missing | Public standards program approval, universal channel launch, live POS provider approval, non-Shopify source adapters, bank/custom payment adapters, and broad payment/order execution. |
 | Stale/confusing documentation | Older Commerce V1 pages that frame Grantex as the merchant control plane are historical; use this OACP group for the current authority narrative. |
 
 ## Artifact Families
@@ -58,6 +58,7 @@ AgenticOrg may continue non-binding product questions and comparison from valid 
 ## Related Pages
 
 - [Architecture](./architecture)
+- [Merchant self-service config](./merchant-self-service-config)
 - [Artifact authority](./artifact-authority)
 - [Offline POS Bridge boundary](./pos-bridge-boundary)
 - [AgenticOrg integration guide](./agenticorg-integration)

@@ -11,7 +11,9 @@ OACP separates facts, authority, runtime behavior, and payment rails so no agent
 
 ```mermaid
 flowchart TD
-  shopify[Shopify and merchant systems] -->|catalog, price, inventory, policy facts| agenticSeller[AgenticOrg Seller Commerce Agent]
+  config[AgenticOrg merchant config] --> agenticSeller[AgenticOrg Seller Commerce Agent]
+  shopify[Shopify and merchant systems] -->|catalog, price, inventory, policy facts| agenticSeller
+  future[WooCommerce/ERP/bank/provider refs] -->|pending-adapter config only| config
   agenticSeller -->|redacted connector evidence| grantex[Grantex OACP authority]
   grantex -->|signed/internal artifacts or refusals| cache[AgenticOrg OACP cache]
   cache --> buyerAgent[AgenticOrg buyer agent]
@@ -19,10 +21,11 @@ flowchart TD
   buyerAgent --> mcp[MCP clients]
   buyerAgent --> openapi[OpenAPI clients]
   buyerAgent --> a2a[A2A card]
+  buyerAgent --> search[Public catalog/search when enabled]
   buyerAgent --> wa[WhatsApp]
   buyerAgent --> tg[Telegram]
-  buyerAgent -->|capability check only| pine[Pine Labs Plural/P3P]
-  pine -->|redacted evidence ref| cache
+  buyerAgent -->|capability check only| provider[Pine Labs Plural/P3P, bank/POS/provider rails]
+  provider -->|redacted evidence ref| cache
 ```
 
 ## Responsibilities
@@ -30,9 +33,9 @@ flowchart TD
 | Party | Owns | Does not own |
 | --- | --- | --- |
 | Merchant systems | Catalog, price, inventory, order, policy, support, and source timestamps. | OACP artifact policy. |
-| AgenticOrg | Seller and buyer agents, Shopify connector runtime, cache, buyer channels, and capability verification. | Canonical OACP authority or payment rail execution. |
+| AgenticOrg | Merchant self-service config, Seller and buyer agents, Shopify connector runtime, pending-adapter setup refs, cache, buyer channels, public publishing, POS handoff orchestration, and capability verification. | Canonical OACP authority or payment/bank/POS rail execution. |
 | Grantex | Policy, trust, artifacts, verification, and adapter authority. | Merchant connector runtime, buyer sessions, orders, or payments. |
-| Provider rails | Mandate and payment execution, provider status, settlement, and provider webhooks. | OACP trust authority or buyer-agent answers. |
+| Provider/bank/POS rails | Mandate and payment execution, provider status, settlement, receipt evidence, and provider webhooks. | OACP trust authority or buyer-agent answers. |
 
 ## Why Grantex Is Not In Every Loop
 

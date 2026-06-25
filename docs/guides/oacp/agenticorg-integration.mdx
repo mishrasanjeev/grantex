@@ -16,7 +16,8 @@ sequenceDiagram
   participant M as Merchant
   participant A as AgenticOrg
   participant G as Grantex
-  M->>A: Create Seller Commerce Agent and connect Shopify
+  M->>A: Save merchant config and create Seller Commerce Agent
+  A->>A: Store source/channel/provider/POS refs
   A->>A: Read-only Shopify sync and redacted evidence
   A->>G: POST /v1/commerce/oacp/c6z/authority-requests
   G-->>A: Signed/internal OACP artifacts or blockers
@@ -30,6 +31,7 @@ sequenceDiagram
 AgenticOrg sends:
 
 - tenant, merchant, seller agent, and source identifiers;
+- merchant self-service config refs for source connector, buyer channels, provider-owned payment rails, public publishing, and POS metadata;
 - requested OACP artifact families;
 - source observed timestamp;
 - public-safe connector evidence;
@@ -67,7 +69,8 @@ Those outputs must include source and freshness labels, must not expose Shopify 
 | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` | Grantex + AgenticOrg | Service-token auth for authority requests. |
 | `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` | Grantex | Tenant allowlist. |
 | Shopify credential custody | AgenticOrg + merchant | Read-only source evidence generation. |
-| Provider capability config | AgenticOrg + provider | Capability evidence checks outside Grantex. |
+| Future connector config | AgenticOrg + merchant | WooCommerce, ERP, PIM, OMS, WMS, and custom API setup intent; not live until adapters exist. |
+| Provider capability config | AgenticOrg + provider or bank | Capability evidence checks outside Grantex. |
 | POS provider approval | AgenticOrg + merchant + POS/payment provider | Verified callback/evidence refs for Offline POS Bridge reconciliation. |
 
 ## Failure Handling

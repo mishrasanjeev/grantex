@@ -77,6 +77,7 @@
               "guides/oacp/truth-inventory",
               "guides/oacp/architecture",
               "guides/oacp/artifact-authority",
+              "guides/oacp/merchant-self-service-config",
               "guides/oacp/protocol-adapter",
               "guides/oacp/policy-governance",
               "guides/oacp/merchant-source-of-record",
@@ -744,6 +745,7 @@
             "group": "Posts",
             "pages": [
               "blog/oacp-shopify-merchant-agentic-commerce-seller",
+              "blog/oacp-merchant-self-service-config",
               "blog/oacp-keeps-buyer-agents-honest",
               "blog/oacp-buyer-surfaces-chatgpt-claude-gemini-perplexity-whatsapp-telegram",
               "blog/oacp-maps-to-protocols",

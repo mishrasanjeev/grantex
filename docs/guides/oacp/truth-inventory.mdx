@@ -13,11 +13,11 @@ This inventory is based on the Grantex C6Z authority route, OACP artifact librar
 
 | Category | Grantex reality | Owner/action |
 | --- | --- | --- |
-| Implemented runtime | C6Z authority endpoint under commerce auth; allowlisted AgenticOrg service-token access; internal artifact issuance; artifact safety checks; TTL and signature metadata; adapter mapping payloads; cache/offline verifier helpers; POS handoff evidence-ref boundary in policy/mandate/protocol artifacts. | Grantex keeps tests and guard scans current. |
+| Implemented runtime | C6Z authority endpoint under commerce auth; allowlisted AgenticOrg service-token access; internal artifact issuance; artifact safety checks; TTL and signature metadata; adapter mapping payloads; cache/offline verifier helpers; POS handoff evidence-ref boundary in policy/mandate/protocol artifacts. AgenticOrg owns implemented tenant/merchant/seller scoped commerce config and Shopify runtime sync. | Grantex keeps tests and guard scans current. |
 | Implemented docs only | Historical Commerce V1 PRDs, launch plans, C6 review reports, and publication drafts. | Mark as historical where they conflict with this architecture. |
 | Implemented but not broad launch | Commerce V1 payment-control pilot code and Plural sandbox/UAT-compatible adapter paths exist separately from the AgenticOrg OACP runtime split. | Keep separate from OACP authority docs. |
-| Requires credentials or approval | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN`, `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`, merchant/AgenticOrg tenant approval, production key custody, provider rail approval, and external channel approvals. | Ops owner must collect evidence before public claims. |
-| Missing | Public standards approval, broad external protocol partner program, universal buyer-surface rollout, live POS provider approval, and order/payment/mandate/POS execution through OACP artifacts. | Treat as pending runtime/product gaps. |
+| Requires credentials or approval | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN`, `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`, merchant/AgenticOrg tenant approval, production key custody, provider or bank rail approval, POS callback approval, and external channel approvals. | Ops owner must collect evidence before public claims. |
+| Missing | Public standards approval, broad external protocol partner program, universal buyer-surface rollout, live non-Shopify source adapters, live bank/custom provider adapters, live POS provider approval, and order/payment/mandate/POS execution through OACP artifacts. | Treat as pending runtime/product gaps. |
 | Stale/confusing docs | Older copy that says Grantex is the merchant connector runtime or payment-control loop for every buyer interaction. | Supersede with OACP authority docs and link here. |
 
 ## Evidence Pointers
@@ -34,5 +34,6 @@ This inventory is based on the Grantex C6Z authority route, OACP artifact librar
 | --- | --- | --- |
 | External protocol approval | Grantex + partners | Create a public partner review process and evidence checklist before making official status claims. |
 | AgenticOrg production tenant rollout | AgenticOrg + Grantex | Allowlist tenant, rotate service token, verify source evidence intake, and run authority request smoke. |
-| Provider rail execution | Pine Labs Plural/P3P + merchant + AgenticOrg | Complete provider-owned approval, webhook, rollback, and human review path. Grantex stores only non-sensitive evidence refs where needed. |
+| Non-Shopify source adapters | AgenticOrg + merchants | Keep WooCommerce, ERP, PIM, OMS, WMS, and custom API configs as pending adapter until connector code, source precedence, tests, and approvals exist. |
+| Provider or bank rail execution | Pine Labs Plural/P3P, banks, fintech/custom providers + merchant + AgenticOrg | Complete provider-owned approval, webhook, rollback, and human review path. Grantex stores only non-sensitive evidence refs where needed. |
 | Buyer-surface approvals | AgenticOrg + channel owners | Verify WhatsApp, Telegram, MCP, OpenAPI, A2A, and web policies before public launch. |
