@@ -7,11 +7,12 @@ description: Why Shopify and merchant systems remain authoritative in OACP.
 
 Canonical end-to-end flow: [OACP authority overview](./overview).
 
-OACP does not move commerce truth into Grantex. Shopify, merchant OMS, inventory systems, policy stores, support systems, and payment providers remain operational systems of record.
+OACP does not move commerce truth into Grantex. Shopify, future WooCommerce/ERP/PIM/OMS/WMS sources, merchant inventory systems, policy stores, support systems, POS systems, banks, and payment providers remain operational systems of record.
 
 ```mermaid
 flowchart LR
   shopify[Shopify catalog, price, inventory] --> evidence[AgenticOrg public-safe evidence]
+  future[WooCommerce/ERP/PIM/OMS/WMS/custom API pending adapter] --> intent[AgenticOrg config intent]
   evidence --> grantex[Grantex authority]
   grantex --> artifact[OACP artifact with source and freshness]
   artifact --> cache[AgenticOrg cache]
@@ -21,10 +22,12 @@ flowchart LR
 ## Source Rules
 
 - Product names, descriptions, variants, images, prices, and inventory come from Shopify or the merchant-approved source.
+- Shopify is the current runtime-supported source connector.
+- WooCommerce, ERP, PIM, OMS, WMS, and custom API source configs are merchant-owned setup intent until approved adapters exist.
 - Grantex validates evidence shape and policy, not the raw private connector payload.
 - AgenticOrg stores public-safe artifact refs and freshness labels, not raw Shopify secrets.
 - If source evidence is stale or conflicting, buyer answers must refresh or refuse.
 
 ## Pending Runtime Gap
 
-Multi-system conflict resolution across Shopify, ERP, OMS, WMS, support, and provider records needs explicit source precedence policy before broad launch.
+Multi-system conflict resolution across Shopify, WooCommerce, ERP, OMS, WMS, support, bank/provider, and POS records needs explicit source precedence policy before broad launch.

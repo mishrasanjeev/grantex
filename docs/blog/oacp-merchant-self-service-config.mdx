@@ -1,0 +1,45 @@
+---
+title: Merchant Self-Service Config Without Moving Commerce Truth Into Grantex
+description: How AgenticOrg lets merchants configure sources, channels, provider rails, public publishing, and Offline POS while Grantex remains OACP authority.
+date: "2026-06-25"
+authors:
+  - name: "Sanjeev Mishra"
+---
+
+Agentic commerce needs merchant-controlled setup. A Shopify store, a future WooCommerce storefront, an ERP-backed catalog, a bank-owned mandate rail, and an offline POS terminal all have different operational owners. OACP should describe the trust boundary between those systems; it should not move every setting or every buyer turn into Grantex.
+
+## The Split
+
+AgenticOrg owns the merchant self-service runtime. A merchant operator can configure source connectors, buyer channels, provider-owned payment rails, public catalog publishing, and Offline POS metadata during Seller Commerce Agent onboarding or later from the same settings surface.
+
+Grantex owns OACP authority. It receives redacted authority requests, signs or refuses artifacts, verifies TTL/source/freshness/scope, and governs protocol adapter mappings. It does not store Shopify tokens, WooCommerce keys, ERP credentials, bank secrets, payment URLs, raw provider callbacks, or POS transaction payloads.
+
+```mermaid
+flowchart LR
+  merchant[Merchant operator] --> agentic[AgenticOrg config]
+  agentic --> source[Shopify runtime sync or pending adapter refs]
+  source --> evidence[Public-safe evidence]
+  evidence --> grantex[Grantex OACP authority]
+  grantex --> artifacts[Artifacts or blockers]
+  artifacts --> cache[AgenticOrg buyer channels]
+```
+
+## What Is Runtime-Supported Now
+
+Shopify is the current runtime source connector. AgenticOrg can use read-only Shopify Admin GraphQL sync, reconcile webhook-triggered refresh state, request OACP artifacts, and answer buyers from cache with source/freshness labels.
+
+Pine Labs Plural/P3P is the current provider-owned mandate capability verifier where credentials are configured. Capability evidence is not payment execution.
+
+## What Is Configurable But Not Live
+
+WooCommerce, ERP, PIM, OMS, WMS, custom APIs, bank-owned rails, fintech rails, and custom providers can be saved as merchant intent. Those configs are valuable because they show what the merchant wants to connect, but they remain pending adapter until approved connector code, sandbox tests, webhook verification, source precedence policy, and rollout approval exist.
+
+## Public Catalog And Search
+
+AgenticOrg can publish seller profile pages, product pages, buyer-safe catalog JSON, Schema.org JSON-LD, sitemap, and llms.txt only when the merchant enables public publishing and cached artifacts are fresh enough. Grantex may sign public discovery-state artifacts; it does not host the catalog pages.
+
+## Safe Claim
+
+The safe claim is simple: merchants can configure their own commerce runtime in AgenticOrg; Grantex remains the OACP trust authority; Shopify is runtime-supported; future sources and bank/provider rails are adapter-ready but non-executing until approved.
+
+No OACP certification, UCP/ACP/AP2 approval, IETF/NIST acceptance, universal channel launch, live payment execution, live order creation, or live POS settlement is implied by merchant configuration.

@@ -35,17 +35,17 @@
 
 ## OACP Authority For Agentic Commerce
 
-Grantex is the OACP protocol, trust, policy, artifact, verification, and adapter authority for agentic commerce. AgenticOrg owns buyer and seller AI-agent runtime, merchant onboarding, Shopify connector runtime, buyer sessions, channel bridges, OACP cache, and provider-owned Pine Labs Plural/P3P capability verification.
+Grantex is the OACP protocol, trust, policy, artifact, verification, and adapter authority for agentic commerce. AgenticOrg owns buyer and seller AI-agent runtime, merchant self-service onboarding, Shopify connector runtime, future merchant connector setup intent, buyer sessions, channel bridges, OACP cache, and provider-owned capability verification.
 
-Merchant systems such as Shopify and POS systems remain the source of record. Provider, POS, and payment rails own mandate, payment, and in-store execution. Grantex signs and verifies artifacts; it is not a merchant connector runtime or a toll booth for every buyer and seller message.
+Merchant systems such as Shopify, future WooCommerce/ERP sources, POS systems, and provider systems remain the source of record. Provider, bank, POS, and payment rails own mandate, payment, and in-store execution. Grantex signs and verifies artifacts; it is not a merchant connector runtime or a toll booth for every buyer and seller message.
 
 ```mermaid
 flowchart LR
-  merchant[Shopify and merchant systems] --> agentic[AgenticOrg buyer and seller runtime]
+  merchant[Shopify, future ERP/WooCommerce, POS, provider systems] --> agentic[AgenticOrg buyer and seller runtime]
   agentic -->|redacted authority request| grantex[Grantex OACP authority]
   grantex -->|OACP artifacts or blockers| agentic
   agentic --> buyer[Buyer surfaces]
-  agentic -->|capability check| provider[Pine Labs Plural/P3P]
+  agentic -->|capability check or handoff| provider[Pine Labs Plural/P3P, bank/POS/provider rails]
 ```
 
 | Area | Current posture |
@@ -53,11 +53,11 @@ flowchart LR
 | Grantex C6Z authority route | Implemented at `POST /v1/commerce/oacp/c6z/authority-requests` for allowlisted AgenticOrg tenants. |
 | Artifact families | 11 internal OACP families are issued or refused: merchant profile, seller agent card, connector evidence, catalog, price, inventory, policy, public discovery state, mandate capability, protocol adapter, and request status. |
 | Protocol adapters | Schema.org, UCP-style, ACP-style, AP2-style, A2A, MCP, and OpenAPI mappings are compatibility mappings derived from OACP artifacts. |
-| AgenticOrg runtime | Seller onboarding, Shopify sync, cache, buyer Q&A, bridges, and provider capability verification live in AgenticOrg. |
+| AgenticOrg runtime | Merchant self-service config, Seller onboarding, Shopify sync, future connector/provider intent capture, cache, buyer Q&A, bridges, and provider capability verification live in AgenticOrg. |
 | Payment/order/POS execution | Outside OACP artifact authority. Provider, POS, and merchant systems must execute and confirm; agents must not invent success. |
 | Historical Commerce V1 docs | Retained for context, but superseded for the AgenticOrg OACP runtime split. |
 
-Start with the [OACP authority overview](docs/guides/oacp/overview.mdx), [truth inventory](docs/guides/oacp/truth-inventory.mdx), [AgenticOrg integration guide](docs/guides/oacp/agenticorg-integration.mdx), [POS bridge boundary](docs/guides/oacp/pos-bridge-boundary.mdx), and [operator runbook](docs/guides/oacp/operator-runbook.mdx). The older [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx) remains historical/contextual and should not be used to imply that Grantex owns AgenticOrg merchant connector runtime.
+Start with the [OACP authority overview](docs/guides/oacp/overview.mdx), [merchant self-service config boundary](docs/guides/oacp/merchant-self-service-config.mdx), [truth inventory](docs/guides/oacp/truth-inventory.mdx), [AgenticOrg integration guide](docs/guides/oacp/agenticorg-integration.mdx), [POS bridge boundary](docs/guides/oacp/pos-bridge-boundary.mdx), and [operator runbook](docs/guides/oacp/operator-runbook.mdx). The older [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx) remains historical/contextual and should not be used to imply that Grantex owns AgenticOrg merchant connector runtime.
 
 ## Current Development Snapshot
 

@@ -12,7 +12,8 @@ Canonical end-to-end flow: [OACP authority overview](./overview).
 ```mermaid
 flowchart TD
   start[Start] --> token[Verify service token and tenant allowlist]
-  token --> request[Submit fixture authority request]
+  token --> config[Confirm AgenticOrg merchant config is tenant/merchant/seller scoped]
+  config --> request[Submit fixture authority request]
   request --> artifact[Confirm 11 artifact families or expected blocker]
   artifact --> verify[Run artifact verifier checks]
   verify --> adapters[Inspect adapter mapping payload]
@@ -29,6 +30,7 @@ flowchart TD
 | Adapter tests pass | `npm --prefix apps/auth-service test -- commerce-c6w4-oacp-adapter-previews.test.ts` |
 | Conformance gate | `node scripts/commerce-c6oe-preview-conformance-gate.mjs --mode pr` |
 | Guardrail scan | Search changed docs for stale or overclaim wording. |
+| Merchant config boundary | Confirm Shopify is runtime-supported and WooCommerce/ERP/bank/custom provider configs are pending-adapter unless approved. |
 
 ## Rollback
 
