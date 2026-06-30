@@ -112,11 +112,45 @@ describe('C6Z Grantex runtime artifact authority', () => {
       expect(artifact.envelope.seller_agent_id).toBe('seller_C6Z');
       expect(artifact.payload).toMatchObject({
         source_system: 'shopify',
+        source_lineage: {
+          source_system: 'shopify',
+          connector_mode: 'read_only',
+          connector_evidence_id: 'shopify_evidence_C6Z',
+          raw_shopify_payload_stored_by_grantex: false,
+          raw_provider_payload_stored_by_grantex: false,
+        },
+        freshness: {
+          source_observed_at: '2026-06-14T03:25:00.000Z',
+          status_at_issuance: 'fresh',
+          stale_behavior: 'refuse_final_commitment_or_require_refresh',
+        },
+        revocation_posture: {
+          revocation_status_url: 'internal:oacp:c6z:revocation:cten_C6Z:mch_C6Z',
+          status_at_issuance: 'not_revoked',
+          stale_or_unreachable_behavior: 'treat_as_not_authorized_for_commitment',
+        },
+        signature_metadata: {
+          issuer: 'grantex_internal_oacp_authority',
+          issuer_key_id: 'kid_c6z_internal_demo',
+          algorithm: 'ES256',
+          payload_hash_algorithm: 'sha256',
+          detached_jws_required: true,
+          signature_value_in_payload: false,
+        },
         allowed_to_execute: false,
         no_payment_execution: true,
         no_public_discovery_enablement: true,
         non_authoritative_for_transaction: true,
       });
+      expect(artifact.payload.ttl_seconds).toBeGreaterThan(0);
+      expect(artifact.payload.non_sensitive_evidence_refs).toEqual(expect.arrayContaining([
+        'agenticorg:shopify:evidence:c6z_001:redacted',
+      ]));
+      expect(artifact.payload.blocked_capabilities).toEqual(expect.arrayContaining([
+        'checkout_payment_execution',
+        'offline_pos_transaction_execution',
+        'pos_payment_capture',
+      ]));
       expect(artifact.verifier_status).toMatchObject({
         valid: true,
         status: 'valid',

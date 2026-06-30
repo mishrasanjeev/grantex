@@ -51,13 +51,13 @@ flowchart LR
 | Area | Current posture |
 | --- | --- |
 | Grantex C6Z authority route | Implemented at `POST /v1/commerce/oacp/c6z/authority-requests` for allowlisted AgenticOrg tenants. |
-| Artifact families | 11 internal OACP families are issued or refused: merchant profile, seller agent card, connector evidence, catalog, price, inventory, policy, public discovery state, mandate capability, protocol adapter, and request status. |
+| Artifact families | 11 internal OACP families are issued or refused with source lineage, TTL, freshness, revocation posture, blocked capabilities, non-sensitive evidence refs, and signature metadata. |
 | Protocol adapters | Schema.org, UCP-style, ACP-style, AP2-style, A2A, MCP, and OpenAPI mappings are compatibility mappings derived from OACP artifacts. |
 | AgenticOrg runtime | Merchant self-service config, Seller onboarding, Shopify sync, future connector/provider intent capture, cache, buyer Q&A, bridges, and provider capability verification live in AgenticOrg. |
 | Payment/order/POS execution | Outside OACP artifact authority. Provider, POS, and merchant systems must execute and confirm; agents must not invent success. |
 | Historical Commerce V1 docs | Retained for context, but superseded for the AgenticOrg OACP runtime split. |
 
-Start with the [OACP authority overview](docs/guides/oacp/overview.mdx), [merchant self-service config boundary](docs/guides/oacp/merchant-self-service-config.mdx), [truth inventory](docs/guides/oacp/truth-inventory.mdx), [AgenticOrg integration guide](docs/guides/oacp/agenticorg-integration.mdx), [POS bridge boundary](docs/guides/oacp/pos-bridge-boundary.mdx), and [operator runbook](docs/guides/oacp/operator-runbook.mdx). The older [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx) remains historical/contextual and should not be used to imply that Grantex owns AgenticOrg merchant connector runtime.
+Start with the [OACP runtime launch closure PRD](docs/guides/oacp/runtime-launch-closure-prd.mdx), [OACP authority overview](docs/guides/oacp/overview.mdx), [merchant self-service config boundary](docs/guides/oacp/merchant-self-service-config.mdx), [truth inventory](docs/guides/oacp/truth-inventory.mdx), [AgenticOrg integration guide](docs/guides/oacp/agenticorg-integration.mdx), [POS bridge boundary](docs/guides/oacp/pos-bridge-boundary.mdx), and [operator runbook](docs/guides/oacp/operator-runbook.mdx). The older [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx) remains historical/contextual and should not be used to imply that Grantex owns AgenticOrg merchant connector runtime.
 
 ## Current Development Snapshot
 

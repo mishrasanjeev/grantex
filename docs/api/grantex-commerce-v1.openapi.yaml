@@ -60,6 +60,7 @@ tags:
   - name: Webhooks
   - name: Connectors
   - name: Well-Known
+  - name: OACP
 
 components:
   securitySchemes:
@@ -3611,6 +3612,114 @@ security:
   - developerApiKey: []
 
 paths:
+  # =====================================================================
+  # OACP C6Z runtime authority path
+  # =====================================================================
+
+  /v1/commerce/oacp/c6z/authority-requests:
+    post:
+      tags: [OACP]
+      summary: AgenticOrg C6Z authority request
+      description: >-
+        Canonical AgenticOrg-to-Grantex authority path for Shopify-backed OACP
+        artifacts. The route accepts allowlisted AgenticOrg service callers or
+        operators, validates redacted read-only connector evidence, and returns
+        11 signed/internal OACP artifact families or an exact refusal. Grantex
+        does not store raw Shopify payloads, raw provider payloads, payment
+        credentials, connector secrets, checkout links, payment links, or POS
+        execution payloads.
+      security:
+        - developerApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request]
+              properties:
+                now_iso: { type: string, format: date-time }
+                request:
+                  type: object
+                  required:
+                    - tenant_id
+                    - merchant_id
+                    - seller_agent_id
+                    - merchant_display_name
+                    - commerce_categories
+                    - connector_choice
+                    - connector_mode
+                    - requested_authority_scope
+                    - artifact_cache_scope
+                    - source_freshness_policy
+                    - source_evidence_ref
+                    - source_observed_at
+                    - no_payment_execution
+                    - no_public_discovery_enablement
+                  properties:
+                    request_id: { type: string }
+                    tenant_id: { type: string }
+                    merchant_id: { type: string }
+                    seller_agent_id: { type: string }
+                    merchant_display_name: { type: string }
+                    commerce_categories:
+                      type: array
+                      items: { type: string }
+                    connector_choice: { type: string, enum: [shopify] }
+                    connector_mode: { type: string, enum: [read_only] }
+                    requested_authority_scope:
+                      type: array
+                      items: { type: string }
+                    artifact_cache_scope:
+                      type: object
+                      required: [tenant_id, merchant_id, seller_agent_id]
+                      properties:
+                        tenant_id: { type: string }
+                        merchant_id: { type: string }
+                        seller_agent_id: { type: string }
+                    source_freshness_policy:
+                      type: object
+                      required: [max_age_seconds]
+                      properties:
+                        max_age_seconds: { type: integer, minimum: 1, maximum: 900 }
+                    source_evidence_ref: { type: string }
+                    source_observed_at: { type: string, format: date-time }
+                    no_payment_execution: { type: boolean, const: true }
+                    no_public_discovery_enablement: { type: boolean, const: true }
+                connector_evidence:
+                  type: object
+                  properties:
+                    evidence_id: { type: string }
+                    tenant_id: { type: string }
+                    merchant_id: { type: string }
+                    seller_agent_id: { type: string }
+                    source_system: { type: string, enum: [shopify] }
+                    source_evidence_ref: { type: string }
+                    source_observed_at: { type: string, format: date-time }
+                    product_count: { type: integer, minimum: 0 }
+                    variant_count: { type: integer, minimum: 0 }
+                    currency: { type: string }
+                    catalog_sample_refs:
+                      type: array
+                      items: { type: string }
+                    price_snapshot_refs:
+                      type: array
+                      items: { type: string }
+                    inventory_snapshot_refs:
+                      type: array
+                      items: { type: string }
+                    no_payment_execution: { type: boolean, const: true }
+                    no_public_discovery_enablement: { type: boolean, const: true }
+      responses:
+        "201":
+          description: 11 artifact families issued for AgenticOrg cache intake.
+        "202":
+          description: Authority request accepted but connector evidence is required before issuance.
+        "403":
+          description: AgenticOrg service token is not allowlisted for the tenant.
+        "422":
+          description: Request is unsafe, stale, malformed, private, or executable.
+
   # =====================================================================
   # M1 — implemented
   # =====================================================================
