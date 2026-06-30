@@ -1628,7 +1628,7 @@ describe('CommerceSettings', () => {
   it('loads merchant settings, provider status, and redacted credential metadata', async () => {
     const user = userEvent.setup();
     r(<CommerceSettings />);
-    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    fireEvent.change(screen.getByLabelText('Merchant ID'), { target: { value: 'mch_1' } });
     await user.click(screen.getByRole('button', { name: 'Load settings' }));
     await waitFor(() => expect(screen.getByText('Grantex Store')).toBeInTheDocument());
     expect(screen.getByText('cpcred_1')).toBeInTheDocument();
@@ -1640,7 +1640,7 @@ describe('CommerceSettings', () => {
   it('validates credentials and confirms emergency disable', async () => {
     const user = userEvent.setup();
     r(<CommerceSettings />);
-    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    fireEvent.change(screen.getByLabelText('Merchant ID'), { target: { value: 'mch_1' } });
     await user.click(screen.getByRole('button', { name: 'Load settings' }));
     await waitFor(() => expect(screen.getByText('cpcred_1')).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: 'Validate' }));
@@ -2022,7 +2022,7 @@ describe('CommerceOnboarding', () => {
     expect(createObjectURL).toHaveBeenCalled();
     expect(anchorClick).toHaveBeenCalled();
 
-    await user.type(screen.getByLabelText('Review request note'), 'Public-safe sandbox evidence.');
+    fireEvent.change(screen.getByLabelText('Review request note'), { target: { value: 'Public-safe sandbox evidence.' } });
     await user.click(screen.getByRole('button', { name: 'Request dry-run review' }));
     await waitFor(() => expect(mockRequestCommerceConnectorDryRunReview).toHaveBeenCalledWith('mch_1', 'cdry_C6SB', {
       requestNote: 'Public-safe sandbox evidence.',
@@ -2074,7 +2074,7 @@ describe('CommerceOnboarding', () => {
     await waitFor(() => expect(mockRequestCommerceConnectorDryRunReview).toHaveBeenCalled());
 
     await user.selectOptions(screen.getByLabelText('Review decision'), 'needs_changes');
-    await user.type(screen.getByLabelText('Decision note'), 'Fix category mapping and rerun the local sandbox dry-run.');
+    fireEvent.change(screen.getByLabelText('Decision note'), { target: { value: 'Fix category mapping and rerun the local sandbox dry-run.' } });
     await user.click(screen.getByRole('button', { name: 'Record dry-run review decision' }));
     await waitFor(() => expect(mockRecordCommerceConnectorDryRunReviewDecision).toHaveBeenCalledWith('mch_1', 'cdry_C6SB', {
       decision: 'needs_changes',
@@ -2118,7 +2118,7 @@ describe('CommerceOnboarding', () => {
     const user = userEvent.setup();
     r(<CommerceOnboarding />);
 
-    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    fireEvent.change(screen.getByLabelText('Merchant ID'), { target: { value: 'mch_1' } });
     await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
     await waitFor(() => expect(screen.getByText('Persisted remediation queue')).toBeInTheDocument());
 
@@ -2148,10 +2148,10 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('connector_remediation_followup_review_requested')).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText('Triage status'), 'waiting_on_merchant');
-    await user.type(screen.getByLabelText('Assigned operator reference'), 'ops.c6sib');
-    await user.type(screen.getByLabelText('Internal triage note'), 'Internal sandbox triage note must stay operator-only.');
-    await user.type(screen.getByLabelText('Merchant-visible follow-up summary'), 'Please rerun the sandbox dry-run after fixing category mapping.');
-    await user.type(screen.getByLabelText('Triage next step'), 'Attach the corrected sandbox dry-run evidence.');
+    fireEvent.change(screen.getByLabelText('Assigned operator reference'), { target: { value: 'ops.c6sib' } });
+    fireEvent.change(screen.getByLabelText('Internal triage note'), { target: { value: 'Internal sandbox triage note must stay operator-only.' } });
+    fireEvent.change(screen.getByLabelText('Merchant-visible follow-up summary'), { target: { value: 'Please rerun the sandbox dry-run after fixing category mapping.' } });
+    fireEvent.change(screen.getByLabelText('Triage next step'), { target: { value: 'Attach the corrected sandbox dry-run evidence.' } });
     await user.click(screen.getByRole('button', { name: 'Record operator triage' }));
     await waitFor(() => expect(mockRecordCommerceConnectorDryRunRemediationTriage).toHaveBeenCalledWith('mch_1', 'cdrem_C6SG', {
       triageStatus: 'waiting_on_merchant',
@@ -2285,7 +2285,7 @@ describe('CommerceOnboarding', () => {
     const user = userEvent.setup();
     r(<CommerceOnboarding />);
 
-    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    fireEvent.change(screen.getByLabelText('Merchant ID'), { target: { value: 'mch_1' } });
     await user.click(screen.getByRole('button', { name: 'Load onboarding' }));
     await waitFor(() => expect(screen.getByText('Persisted remediation queue')).toBeInTheDocument());
 
@@ -2551,7 +2551,7 @@ describe('CommerceOnboarding', () => {
 
     await user.click(screen.getByRole('button', { name: 'Run connector dry-run' }));
     await waitFor(() => expect(mockRunCommerceConnectorDryRun).toHaveBeenCalledTimes(1));
-    await user.type(screen.getByLabelText('Review request note'), 'Public-safe sandbox evidence.');
+    fireEvent.change(screen.getByLabelText('Review request note'), { target: { value: 'Public-safe sandbox evidence.' } });
     await user.click(screen.getByRole('button', { name: 'Request dry-run review' }));
     await waitFor(() => expect(mockRequestCommerceConnectorDryRunReview).toHaveBeenCalledTimes(1));
 
@@ -2657,7 +2657,7 @@ describe('CommerceOnboarding', () => {
     expect(screen.getAllByText('public_discovery_enabled').length).toBeGreaterThan(0);
     expect(screen.getAllByText('checkout_payment_enabled').length).toBeGreaterThan(0);
 
-    await user.type(screen.getByLabelText('Proposal note'), 'Sandbox evidence package.');
+    fireEvent.change(screen.getByLabelText('Proposal note'), { target: { value: 'Sandbox evidence package.' } });
     await user.click(screen.getByRole('button', { name: 'Create proposal' }));
     await waitFor(() => expect(mockCreateCommerceMerchantReadOnlyDiscoveryRolloutProposal).toHaveBeenCalledWith('mch_1', {
       proposalNote: 'Sandbox evidence package.',
@@ -2672,7 +2672,7 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('aud_dry_run')).toBeInTheDocument();
     expect(screen.queryByText(/public discovery enabled/i)).not.toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Handoff note'), 'Sandbox buyer-agent handoff evidence.');
+    fireEvent.change(screen.getByLabelText('Handoff note'), { target: { value: 'Sandbox buyer-agent handoff evidence.' } });
     await user.click(screen.getByRole('button', { name: 'Request AgenticOrg handoff' }));
     await waitFor(() => expect(mockRequestCommerceMerchantAgenticOrgBuyerDiscoveryHandoff).toHaveBeenCalledWith('mch_1', {
       handoffNote: 'Sandbox buyer-agent handoff evidence.',
@@ -2702,11 +2702,10 @@ describe('CommerceCatalog', () => {
   it('lists products and patches selected product/variant fields', async () => {
     const user = userEvent.setup();
     r(<CommerceCatalog />);
-    await user.type(screen.getByLabelText('Merchant ID'), 'mch_1');
+    fireEvent.change(screen.getByLabelText('Merchant ID'), { target: { value: 'mch_1' } });
     await user.click(screen.getByRole('button', { name: 'Load catalog' }));
     await waitFor(() => expect(screen.getByText('Acme Toaster')).toBeInTheDocument());
-    await user.clear(screen.getByLabelText('Title'));
-    await user.type(screen.getByLabelText('Title'), 'Acme Toaster Pro');
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Acme Toaster Pro' } });
     await user.click(screen.getByRole('button', { name: 'Save product' }));
     await waitFor(() => expect(mockUpdateCommerceProduct).toHaveBeenCalledWith('TOASTER-V1', expect.objectContaining({
       title: 'Acme Toaster Pro',
