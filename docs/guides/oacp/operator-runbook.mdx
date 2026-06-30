@@ -5,7 +5,18 @@ description: Grantex operator runbook for authority requests, cache safety, laun
 
 # OACP Operator Runbook
 
-Canonical end-to-end flow: [OACP authority overview](./overview).
+Canonical end-to-end flow: [OACP authority overview](./overview). Launch closure source of truth: [OACP Runtime Launch Closure PRD](./runtime-launch-closure-prd).
+
+## Provision AgenticOrg Authority Access
+
+1. Store `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` through the production secret path.
+2. Add the AgenticOrg tenant id to `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`.
+3. Deploy or restart the Grantex auth service with both values available.
+4. Submit a fixture `POST /v1/commerce/oacp/c6z/authority-requests` for that tenant.
+5. Confirm `artifact_count = 11`, or record the exact refusal/blocker.
+6. To roll back, remove the tenant id from `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` and rotate the token if there is any suspicion of exposure.
+
+Never put Shopify tokens, provider credentials, payment credentials, raw provider payloads, checkout links, raw POS callbacks, or webhook secrets in Grantex artifacts or logs.
 
 ## Smoke Tests
 
@@ -26,6 +37,8 @@ flowchart TD
 | Check | Command or evidence |
 | --- | --- |
 | Authority route exists | `apps/auth-service/src/routes/commerce-oacp-runtime.ts` |
+| AgenticOrg tenant allowlist | `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` contains only approved tenant ids |
+| AgenticOrg service token | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` is present only via secret manager |
 | Artifact tests pass | `npm --prefix apps/auth-service test -- commerce-c6z-runtime-artifact-authority.test.ts` |
 | Adapter tests pass | `npm --prefix apps/auth-service test -- commerce-c6w4-oacp-adapter-previews.test.ts` |
 | Conformance gate | `node scripts/commerce-c6oe-preview-conformance-gate.mjs --mode pr` |

@@ -121,6 +121,16 @@ const FAMILY_TTL_SECONDS: Record<C6ZArtifactFamily, number> = {
   protocol_adapter: 24 * 60 * 60,
   authority_request_status: 15 * 60,
 };
+const BLOCKED_RUNTIME_CAPABILITIES = [
+  'checkout_payment_execution',
+  'order_creation',
+  'inventory_hold',
+  'live_provider_execution',
+  'offline_pos_transaction_execution',
+  'pos_order_creation',
+  'pos_payment_capture',
+  'public_discovery_publication',
+] as const;
 const PRIVATE_VALUE_MARKERS = [
   'access_token',
   'api_key',
@@ -169,6 +179,19 @@ function isoAfter(value: string, seconds: number): string {
 
 function stableId(parts: readonly string[]): string {
   return parts.join(':').replace(/[^a-zA-Z0-9:_-]/g, '_');
+}
+
+function revocationStatusUrl(request: C6ZSellerAuthorityRequest): string {
+  return `internal:oacp:c6z:revocation:${request.tenant_id}:${request.merchant_id}`;
+}
+
+function nonSensitiveEvidenceRefs(evidence: C6ZConnectorEvidence): string[] {
+  return [
+    evidence.source_evidence_ref,
+    ...evidence.catalog_sample_refs,
+    ...evidence.price_snapshot_refs,
+    ...evidence.inventory_snapshot_refs,
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0);
 }
 
 function containsUnsafeValue(value: unknown): boolean {
@@ -308,6 +331,7 @@ function payloadForFamily(
   request: C6ZSellerAuthorityRequest,
   evidence: C6ZConnectorEvidence,
 ): Record<string, unknown> {
+  const ttlSeconds = FAMILY_TTL_SECONDS[family];
   return {
     artifact_family: family,
     tenant_id: request.tenant_id,
@@ -316,6 +340,39 @@ function payloadForFamily(
     source_system: 'shopify',
     source_evidence_ref: evidence.source_evidence_ref,
     source_observed_at: evidence.source_observed_at,
+    source_lineage: {
+      source_system: 'shopify',
+      connector_mode: 'read_only',
+      connector_evidence_id: evidence.evidence_id,
+      source_evidence_ref: evidence.source_evidence_ref,
+      source_observed_at: evidence.source_observed_at,
+      merchant_system_source_of_record: true,
+      raw_shopify_payload_stored_by_grantex: false,
+      raw_provider_payload_stored_by_grantex: false,
+    },
+    ttl_seconds: ttlSeconds,
+    freshness: {
+      source_observed_at: evidence.source_observed_at,
+      max_source_age_seconds: MAX_SOURCE_AGE_SECONDS,
+      requested_max_age_seconds: request.source_freshness_policy.max_age_seconds,
+      status_at_issuance: 'fresh',
+      stale_behavior: 'refuse_final_commitment_or_require_refresh',
+    },
+    revocation_posture: {
+      revocation_status_url: revocationStatusUrl(request),
+      status_at_issuance: 'not_revoked',
+      stale_or_unreachable_behavior: 'treat_as_not_authorized_for_commitment',
+    },
+    blocked_capabilities: [...BLOCKED_RUNTIME_CAPABILITIES],
+    non_sensitive_evidence_refs: nonSensitiveEvidenceRefs(evidence),
+    signature_metadata: {
+      issuer: ISSUER,
+      issuer_key_id: ISSUER_KEY_ID,
+      algorithm: 'ES256',
+      payload_hash_algorithm: 'sha256',
+      detached_jws_required: true,
+      signature_value_in_payload: false,
+    },
     merchant_display_name: family === 'merchant_profile' ? request.merchant_display_name : undefined,
     commerce_categories: family === 'merchant_profile' ? request.commerce_categories : undefined,
     product_count: ['catalog_snapshot', 'connector_evidence'].includes(family) ? evidence.product_count : undefined,
@@ -421,16 +478,7 @@ function payloadForFamily(
       }
       : undefined,
     authority_request_status: family === 'authority_request_status' ? 'artifact_issuance_ready' : undefined,
-    unsupported_capabilities: [
-      'checkout_payment_execution',
-      'order_creation',
-      'inventory_hold',
-      'live_provider_execution',
-      'offline_pos_transaction_execution',
-      'pos_order_creation',
-      'pos_payment_capture',
-      'public_discovery_publication',
-    ],
+    unsupported_capabilities: [...BLOCKED_RUNTIME_CAPABILITIES],
     allowed_to_execute: false,
     no_payment_execution: true,
     no_public_discovery_enablement: true,
@@ -511,7 +559,7 @@ export function issueC6ZInternalOacpArtifacts(input: {
       expires_at: isoAfter(input.now_iso, FAMILY_TTL_SECONDS[family]),
       source_observed_at: input.evidence.source_observed_at,
       policy_version: POLICY_VERSION,
-      revocation_status_url: `internal:oacp:c6z:revocation:${input.request.tenant_id}:${input.request.merchant_id}`,
+      revocation_status_url: revocationStatusUrl(input.request),
       payload,
       safety: artifactSafety(family),
       issuer_key: issuerKey,
