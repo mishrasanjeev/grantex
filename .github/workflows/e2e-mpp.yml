@@ -89,15 +89,20 @@ jobs:
           echo "Agent: $AGENT_ID"
 
           echo "=== Authorize ==="
-          AUTH_REQ=$(curl -sf -X POST "$API/v1/authorize" \
+          AUTH_JSON=$(curl -sf -X POST "$API/v1/authorize" \
             -H "$AUTH_H" -H "Content-Type: application/json" \
-            -d "{\"agentId\":\"$AGENT_ID\",\"principalId\":\"user_ci_e2e\",\"scopes\":[\"payments:mpp:inference\",\"payments:mpp:compute\"],\"expiresIn\":\"1h\"}" | jq -r '.authRequestId')
+            -d "{\"agentId\":\"$AGENT_ID\",\"principalId\":\"user_ci_e2e\",\"scopes\":[\"payments:mpp:inference\",\"payments:mpp:compute\"],\"expiresIn\":\"1h\"}")
+          AUTH_REQ=$(echo "$AUTH_JSON" | jq -r '.authRequestId')
+          CODE=$(echo "$AUTH_JSON" | jq -r '.code // empty')
           echo "Auth: $AUTH_REQ"
 
-          echo "=== Approve ==="
-          CODE=$(curl -sf -X POST "$API/v1/consent/$AUTH_REQ/approve" \
-            -H "Content-Type: application/json" -d '{}' | jq -r '.code')
-          echo "Code: $CODE"
+          if [ -z "$CODE" ]; then
+            echo "=== Approve ==="
+            CODE=$(curl -sf -X POST "$API/v1/consent/$AUTH_REQ/approve" \
+              -H "Content-Type: application/json" -d '{}' | jq -r '.code // empty')
+          fi
+          [ -n "$CODE" ] || { echo "FAIL: missing authorization code"; exit 1; }
+          echo "Code: ${CODE:0:8}..."
 
           echo "=== Exchange token ==="
           GRANT_ID=$(curl -sf -X POST "$API/v1/token" \
@@ -173,14 +178,21 @@ jobs:
             body: JSON.stringify({ agentId: agent.agentId, principalId: 'user_sig_e2e', scopes: ['payments:mpp:inference'], expiresIn: '1h' }),
           })).json();
 
-          const consent = await (await fetch(`${API}/v1/consent/${auth.authRequestId}/approve`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
-          })).json();
+          let code = auth.code;
+          if (!code) {
+            const consent = await (await fetch(`${API}/v1/consent/${auth.authRequestId}/approve`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+            })).json();
+            code = consent.code;
+          }
+          if (!code) {
+            throw new Error('missing authorization code');
+          }
 
           const token = await (await fetch(`${API}/v1/token`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: consent.code, agentId: agent.agentId }),
+            body: JSON.stringify({ code, agentId: agent.agentId }),
           })).json();
 
           const passport = await (await fetch(`${API}/v1/passport/issue`, {

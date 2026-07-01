@@ -173,9 +173,9 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
 
       const sql = getSql();
 
-      // Look up auth request to get principal and developer
+      // Look up auth request to get principal and developer.
       const arRows = await sql`
-        SELECT ar.principal_id, ar.developer_id, d.fido_required
+        SELECT ar.principal_id, ar.developer_id, d.fido_required, d.mode
         FROM auth_requests ar
         JOIN developers d ON d.id = ar.developer_id
         WHERE ar.id = ${authRequestId} AND ar.status = 'pending' AND ar.expires_at > NOW()
@@ -185,7 +185,8 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ message: 'Auth request not found or expired', code: 'NOT_FOUND', requestId: request.id });
       }
 
-      if (!ar['fido_required']) {
+      const requiresPrincipalVerification = ar['fido_required'] || ar['mode'] !== 'sandbox';
+      if (!requiresPrincipalVerification) {
         return reply.status(400).send({ message: 'FIDO not required for this developer', code: 'BAD_REQUEST', requestId: request.id });
       }
 

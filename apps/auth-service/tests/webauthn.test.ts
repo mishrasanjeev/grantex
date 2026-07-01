@@ -282,12 +282,13 @@ describe('POST /v1/webauthn/assert/options', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 400 when FIDO not required for developer', async () => {
-    // Auth request lookup — fido_required is false
+  it('returns 400 when FIDO is not required for a sandbox developer', async () => {
+    // Auth request lookup - sandbox requests do not need FIDO.
     sqlMock.mockResolvedValueOnce([{
       principal_id: 'user_123',
       developer_id: 'dev_TEST',
       fido_required: false,
+      mode: 'sandbox',
     }]);
 
     const res = await app.inject({
@@ -301,11 +302,12 @@ describe('POST /v1/webauthn/assert/options', () => {
   });
 
   it('returns 400 when principal has no FIDO credentials', async () => {
-    // Auth request lookup — fido_required is true
+    // Auth request lookup - fido_required is true
     sqlMock.mockResolvedValueOnce([{
       principal_id: 'user_123',
       developer_id: 'dev_TEST',
       fido_required: true,
+      mode: 'live',
     }]);
     // Credentials lookup — empty
     sqlMock.mockResolvedValueOnce([]);
@@ -326,6 +328,38 @@ describe('POST /v1/webauthn/assert/options', () => {
       principal_id: 'user_123',
       developer_id: 'dev_TEST',
       fido_required: true,
+      mode: 'live',
+    }]);
+    // Credentials lookup
+    sqlMock.mockResolvedValueOnce([{
+      credential_id: 'bW9jay1jcmVk',
+      public_key: 'AQIDBA',
+      counter: 5,
+      transports: ['internal'],
+    }]);
+    // Insert challenge
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webauthn/assert/options',
+      payload: { authRequestId: 'areq_test' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.challengeId).toBeDefined();
+    expect(body.publicKey).toBeDefined();
+    expect(body.publicKey.challenge).toBeDefined();
+  });
+
+  it('returns assertion options for live principal verification even when FIDO is not explicitly required', async () => {
+    // Auth request lookup
+    sqlMock.mockResolvedValueOnce([{
+      principal_id: 'user_123',
+      developer_id: 'dev_TEST',
+      fido_required: false,
+      mode: 'live',
     }]);
     // Credentials lookup
     sqlMock.mockResolvedValueOnce([{
