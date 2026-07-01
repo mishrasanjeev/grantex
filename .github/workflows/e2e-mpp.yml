@@ -17,7 +17,6 @@ jobs:
 
     env:
       PROD_URL: https://api.grantex.dev
-      GRANTEX_API_KEY: ${{ secrets.E2E_API_KEY }}
 
     steps:
       - name: Checkout
@@ -62,6 +61,18 @@ jobs:
           HTTP=$(curl -so /dev/null -w "%{http_code}" "$PROD_URL/v1/trust-registry/did:web:unknown-e2e.org")
           echo "Unknown org: HTTP $HTTP"
           [ "$HTTP" = "404" ] || exit 1
+
+      - name: Provision sandbox E2E API key
+        run: |
+          SIGNUP=$(curl -sf -X POST "$PROD_URL/v1/signup" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"MPP CI E2E ${GITHUB_RUN_ID}\",\"mode\":\"sandbox\"}")
+          MODE=$(echo "$SIGNUP" | jq -r '.mode')
+          [ "$MODE" = "sandbox" ] || { echo "FAIL: expected sandbox developer, got $MODE"; exit 1; }
+          API_KEY=$(echo "$SIGNUP" | jq -r '.apiKey // empty')
+          [ -n "$API_KEY" ] || { echo "FAIL: signup response did not include apiKey"; exit 1; }
+          echo "::add-mask::$API_KEY"
+          echo "GRANTEX_API_KEY=$API_KEY" >> "$GITHUB_ENV"
 
       - name: Test DNS verify — no TXT record
         run: |
