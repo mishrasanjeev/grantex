@@ -5,24 +5,22 @@
  */
 
 import * as ed from '@noble/ed25519';
-import { importJWK, SignJWT, jwtVerify, type JWK, type KeyLike } from 'jose';
+import { importJWK, SignJWT, jwtVerify, type JWK } from 'jose';
 import { publicKeyToDID, didToPublicKey } from './did.js';
 import type { Ed25519KeyPair } from './types.js';
 
 // noble/ed25519 v2 requires sha-512; use the Web Crypto shim.
 // @ts-ignore — @noble/hashes exports sha2 with .js extension in its package.json exports map
 import { sha512 } from '@noble/hashes/sha2.js';
-ed.etc.sha512Sync = (...m: Uint8Array[]) => {
-  const h = sha512.create();
-  for (const msg of m) h.update(msg);
-  return h.digest();
-};
+ed.hashes.sha512 = sha512;
+
+type ImportedJwkKey = Awaited<ReturnType<typeof importJWK>>;
 
 /**
  * Generate a fresh Ed25519 key pair.
  */
 export function generateKeyPair(): Ed25519KeyPair {
-  const privateKey = ed.utils.randomPrivateKey();
+  const privateKey = ed.utils.randomSecretKey();
   const publicKey = ed.getPublicKey(privateKey);
   const did = publicKeyToDID(publicKey);
   return { privateKey, publicKey, did };
@@ -62,7 +60,7 @@ export function publicKeyToJWK(publicKey: Uint8Array): JWK {
 /**
  * Import a private JWK into a KeyLike for jose signing.
  */
-export async function importPrivateKey(privateKey: Uint8Array, publicKey: Uint8Array): Promise<KeyLike | Uint8Array> {
+export async function importPrivateKey(privateKey: Uint8Array, publicKey: Uint8Array): Promise<ImportedJwkKey> {
   const jwk = privateKeyToJWK(privateKey, publicKey);
   return importJWK(jwk, 'EdDSA');
 }
@@ -70,7 +68,7 @@ export async function importPrivateKey(privateKey: Uint8Array, publicKey: Uint8A
 /**
  * Import a public JWK into a KeyLike for jose verification.
  */
-export async function importPublicKey(publicKey: Uint8Array): Promise<KeyLike | Uint8Array> {
+export async function importPublicKey(publicKey: Uint8Array): Promise<ImportedJwkKey> {
   const jwk = publicKeyToJWK(publicKey);
   return importJWK(jwk, 'EdDSA');
 }
@@ -78,7 +76,7 @@ export async function importPublicKey(publicKey: Uint8Array): Promise<KeyLike | 
 /**
  * Import a public key from a DID for verification.
  */
-export async function importPublicKeyFromDID(did: string): Promise<KeyLike | Uint8Array> {
+export async function importPublicKeyFromDID(did: string): Promise<ImportedJwkKey> {
   const publicKey = didToPublicKey(did);
   return importPublicKey(publicKey);
 }
@@ -114,7 +112,5 @@ export async function verifyJWT(
 // ---------------------------------------------------------------------------
 
 function uint8ToBase64url(bytes: Uint8Array): string {
-  let binary = '';
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return Buffer.from(bytes).toString('base64url');
 }

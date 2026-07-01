@@ -14,6 +14,7 @@ exclude_dirs:
   - coverage
   - checkpoints
   - security-scan
+  - security-remediation
   - playwright-report
   - test-results
 

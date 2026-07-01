@@ -11,7 +11,7 @@
  *   grantex-x402 inspect <token>                 Alias for decode
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import { generateKeyPair } from './crypto.js';
 import { issueGDT } from './gdt.js';
 import { verifyGDT, decodeGDT } from './verify.js';
@@ -56,7 +56,7 @@ Verify options:
   --currency <USDC|USDT>      Currency (default: USDC)
 
 Examples:
-  grantex-x402 keygen > keys.json
+  grantex-x402 keygen --out keys.json
   grantex-x402 issue --agent did:key:z6Mk... --scope weather:read --limit 10 --expiry 24h --key principal.key
   grantex-x402 verify eyJ... --resource weather:read --amount 0.001
   grantex-x402 revoke 550e8400-e29b-41d4-a716-446655440000
@@ -106,13 +106,14 @@ async function cmdKeygen(): Promise<void> {
   };
 
   const outFile = getFlag('out');
-  if (outFile) {
-    writeFileSync(outFile, JSON.stringify(output, null, 2));
-    console.log(`Key pair written to ${outFile}`);
-    console.log(`DID: ${keyPair.did}`);
-  } else {
-    console.log(JSON.stringify(output, null, 2));
+  if (!outFile) {
+    console.error('Refusing to print a private key to stdout. Use: grantex-x402 keygen --out <path>');
+    process.exit(1);
   }
+
+  writePrivateFileSync(outFile, JSON.stringify(output, null, 2) + '\n');
+  console.log(`Key pair written to ${outFile}`);
+  console.log(`DID: ${keyPair.did}`);
 }
 
 async function cmdIssue(): Promise<void> {
@@ -247,6 +248,15 @@ function hexToBytes(hex: string): Uint8Array {
     bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
   }
   return bytes;
+}
+
+function writePrivateFileSync(filePath: string, content: string): void {
+  writeFileSync(filePath, content, { encoding: 'utf8', mode: 0o600 });
+  try {
+    chmodSync(filePath, 0o600);
+  } catch {
+    // Best effort on filesystems that do not support POSIX modes.
+  }
 }
 
 main().catch((err) => {

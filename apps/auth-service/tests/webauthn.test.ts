@@ -534,8 +534,8 @@ describe('POST /v1/consent/:id/approve (FIDO enforcement)', () => {
     expect(res.json().code).toBe('FIDO_REQUIRED');
   });
 
-  it('allows approval when FIDO not required', async () => {
-    // UPDATE succeeds (FIDO not required, so WHERE clause passes)
+  it('allows approval for sandbox requests without FIDO', async () => {
+    // UPDATE succeeds (sandbox mode satisfies the consent decision gate)
     sqlMock.mockResolvedValueOnce([{ id: 'areq_test', code: 'TESTCODE', redirect_uri: null, state: null }]);
 
     const res = await app.inject({

@@ -5,11 +5,13 @@ import * as path from 'node:path';
 const mockReadFile = vi.fn();
 const mockWriteFile = vi.fn();
 const mockMkdir = vi.fn();
+const mockChmod = vi.fn();
 
 vi.mock('node:fs/promises', () => ({
   readFile: (...args: unknown[]) => mockReadFile(...args),
   writeFile: (...args: unknown[]) => mockWriteFile(...args),
   mkdir: (...args: unknown[]) => mockMkdir(...args),
+  chmod: (...args: unknown[]) => mockChmod(...args),
 }));
 
 import { resolveConfig, loadConfig, saveConfig, defaultConfigPath } from '../src/config.js';
@@ -105,6 +107,7 @@ describe('loadConfig', () => {
 describe('saveConfig', () => {
   it('creates directory and writes config file', async () => {
     mockMkdir.mockResolvedValue(undefined);
+    mockChmod.mockResolvedValue(undefined);
     mockWriteFile.mockResolvedValue(undefined);
     const config: CliConfig = { baseUrl: 'http://localhost:3000', apiKey: 'test-key' };
 
@@ -112,12 +115,14 @@ describe('saveConfig', () => {
 
     expect(mockMkdir).toHaveBeenCalledWith(
       path.dirname('/home/user/.grantex/config.json'),
-      { recursive: true },
+      { recursive: true, mode: 0o700 },
     );
+    expect(mockChmod).toHaveBeenCalledWith(path.dirname('/home/user/.grantex/config.json'), 0o700);
     expect(mockWriteFile).toHaveBeenCalledWith(
       '/home/user/.grantex/config.json',
       JSON.stringify(config, null, 2) + '\n',
-      'utf8',
+      { encoding: 'utf8', mode: 0o600 },
     );
+    expect(mockChmod).toHaveBeenCalledWith('/home/user/.grantex/config.json', 0o600);
   });
 });

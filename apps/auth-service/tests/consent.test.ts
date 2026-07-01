@@ -125,7 +125,7 @@ describe('GET /v1/consent/:id', () => {
 });
 
 describe('POST /v1/consent/:id/approve', () => {
-  it('returns code and redirect info on success', async () => {
+  it('returns code and redirect info on sandbox or principal-verified success', async () => {
     sqlMock.mockResolvedValueOnce([{
       id: 'areq_TEST01',
       code: 'AUTHCODE123',
@@ -167,6 +167,7 @@ describe('POST /v1/consent/:id/approve', () => {
 
   it('returns 410 when expired or already processed', async () => {
     sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'POST',
@@ -192,6 +193,25 @@ describe('POST /v1/consent/:id/approve', () => {
 
     expect(res.statusCode).toBe(200);
   });
+
+  it('blocks live approval without principal verification', async () => {
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{
+      fido_required: false,
+      mode: 'live',
+      fido_verified: false,
+      status: 'pending',
+      expires_at: FUTURE,
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/consent/areq_TEST01/approve',
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ code: string }>().code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
+  });
 });
 
 describe('POST /v1/consent/:id/deny', () => {
@@ -214,6 +234,7 @@ describe('POST /v1/consent/:id/deny', () => {
   });
 
   it('returns 404 when not found or already processed', async () => {
+    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
@@ -238,5 +259,23 @@ describe('POST /v1/consent/:id/deny', () => {
     });
 
     expect(res.statusCode).toBe(200);
+  });
+
+  it('blocks live denial without principal verification', async () => {
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{
+      mode: 'live',
+      fido_verified: false,
+      status: 'pending',
+      expires_at: FUTURE,
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/consent/areq_TEST01/deny',
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ code: string }>().code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
   });
 });
