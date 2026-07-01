@@ -251,12 +251,10 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         WHERE id = ${request.params.id}
           AND status = 'pending'
           AND expires_at > NOW()
-          AND (
-            NOT EXISTS (
-              SELECT 1 FROM developers d
-              WHERE d.id = auth_requests.developer_id AND d.fido_required = TRUE
-            )
-            OR fido_verified = TRUE
+          AND EXISTS (
+            SELECT 1 FROM developers d
+            WHERE d.id = auth_requests.developer_id
+              AND (d.mode = 'sandbox' OR auth_requests.fido_verified = TRUE)
           )
         RETURNING id, code, redirect_uri, state
       `;
@@ -265,19 +263,27 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
       if (!row) {
         // Distinguish FIDO_REQUIRED from expired/processed
         const fidoCheck = await sql`
-          SELECT d.fido_required, ar.fido_verified, ar.status, ar.expires_at
+          SELECT d.fido_required, d.mode, ar.fido_verified, ar.status, ar.expires_at
           FROM auth_requests ar
           JOIN developers d ON d.id = ar.developer_id
           WHERE ar.id = ${request.params.id}
         `;
         const fc = fidoCheck[0];
-        if (fc && fc['fido_required'] && !fc['fido_verified']
-            && fc['status'] === 'pending' && new Date(fc['expires_at'] as string) > new Date()) {
-          return reply.status(403).send({
-            message: 'FIDO verification required before approval',
-            code: 'FIDO_REQUIRED',
-            requestId: request.id,
-          });
+        if (fc && fc['status'] === 'pending' && new Date(fc['expires_at'] as string) > new Date()) {
+          if (fc['fido_required'] && !fc['fido_verified']) {
+            return reply.status(403).send({
+              message: 'FIDO verification required before approval',
+              code: 'FIDO_REQUIRED',
+              requestId: request.id,
+            });
+          }
+          if (fc['mode'] !== 'sandbox' && !fc['fido_verified']) {
+            return reply.status(403).send({
+              message: 'Principal verification required before approval',
+              code: 'PRINCIPAL_VERIFICATION_REQUIRED',
+              requestId: request.id,
+            });
+          }
         }
         return reply.status(410).send({ message: 'Auth request expired or already processed', code: 'GONE', requestId: request.id });
       }
@@ -301,11 +307,31 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         SET status = 'denied'
         WHERE id = ${request.params.id}
           AND status = 'pending'
+          AND EXISTS (
+            SELECT 1 FROM developers d
+            WHERE d.id = auth_requests.developer_id
+              AND (d.mode = 'sandbox' OR auth_requests.fido_verified = TRUE)
+          )
         RETURNING id, redirect_uri, state
       `;
 
       const row = rows[0];
       if (!row) {
+        const proofCheck = await sql`
+          SELECT d.mode, ar.fido_verified, ar.status, ar.expires_at
+          FROM auth_requests ar
+          JOIN developers d ON d.id = ar.developer_id
+          WHERE ar.id = ${request.params.id}
+        `;
+        const pc = proofCheck[0];
+        if (pc && pc['status'] === 'pending' && new Date(pc['expires_at'] as string) > new Date()
+            && pc['mode'] !== 'sandbox' && !pc['fido_verified']) {
+          return reply.status(403).send({
+            message: 'Principal verification required before denial',
+            code: 'PRINCIPAL_VERIFICATION_REQUIRED',
+            requestId: request.id,
+          });
+        }
         return reply.status(404).send({ message: 'Auth request not found or already processed', code: 'NOT_FOUND', requestId: request.id });
       }
 

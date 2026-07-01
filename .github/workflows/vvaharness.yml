@@ -4,10 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       stop_after:
-        description: Optional VVAH stage to stop after for scoped runs
+        description: VVAH stage to stop after. Defaults to s9 for detection-only runs.
         required: false
-        default: ""
+        default: "s9"
         type: string
+      full_pipeline:
+        description: Run the full VVAH remediation and validation pipeline. This may edit the checked-out source in the runner.
+        required: false
+        default: false
+        type: boolean
       skip_preflight:
         description: Skip VVAH backend preflight
         required: false
@@ -27,6 +32,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -37,7 +44,7 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code@2.1.183
 
       - name: Install VVAH
-        run: python -m pip install "git+https://github.com/visa/visa-vulnerability-agentic-harness.git@dc7d77665497e9fca41012e5f375def41241eb59"
+        run: python -m pip install "git+https://github.com/visa/visa-vulnerability-agentic-harness.git@b19901585ddb94efb23917ef252847a568bba315"
 
       - name: Run VVAH
         shell: bash
@@ -57,7 +64,7 @@ jobs:
             args+=(--skip-preflight)
           fi
 
-          if [[ -n "${{ inputs.stop_after }}" ]]; then
+          if [[ "${{ inputs.full_pipeline }}" != "true" && -n "${{ inputs.stop_after }}" ]]; then
             args+=(--stop-after "${{ inputs.stop_after }}")
           fi
 
@@ -79,6 +86,7 @@ jobs:
           name: vvaharness-security-scan
           path: |
             security-scan/**
+            security-remediation/**
             checkpoints/**
           if-no-files-found: ignore
 

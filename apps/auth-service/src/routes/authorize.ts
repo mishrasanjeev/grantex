@@ -203,6 +203,14 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
 
   // POST /v1/authorize/:id/approve (internal/test endpoint)
   app.post<{ Params: { id: string } }>('/v1/authorize/:id/approve', async (request, reply) => {
+    if (request.developer.mode !== 'sandbox') {
+      return reply.status(403).send({
+        message: 'Live authorization requests must be approved through the consent flow',
+        code: 'CONSENT_REQUIRED',
+        requestId: request.id,
+      });
+    }
+
     const sql = getSql();
     const code = ulid();
 
@@ -226,6 +234,14 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
 
   // POST /v1/authorize/:id/deny
   app.post<{ Params: { id: string } }>('/v1/authorize/:id/deny', async (request, reply) => {
+    if (request.developer.mode !== 'sandbox') {
+      return reply.status(403).send({
+        message: 'Live authorization requests must be denied through the consent flow',
+        code: 'CONSENT_REQUIRED',
+        requestId: request.id,
+      });
+    }
+
     const sql = getSql();
 
     const rows = await sql`

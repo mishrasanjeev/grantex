@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, unlinkSync, existsSync, readFileSync } from 'node:fs';
+import { writeFileSync, unlinkSync, existsSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateKeyPair } from '../src/crypto.js';
@@ -9,14 +9,15 @@ import { issueGDT } from '../src/gdt.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const cwd = join(__dirname, '..');
 
-function run(args: string, env?: Record<string, string>): { stdout: string; exitCode: number } {
+function run(args: string | string[], env?: Record<string, string>): { stdout: string; exitCode: number } {
   try {
-    const stdout = execFileSync('npx', ['tsx', 'src/cli.ts', ...args.split(/\s+/).filter(Boolean)], {
+    const argv = Array.isArray(args) ? args : args.split(/\s+/).filter(Boolean);
+    const tsxCli = join(cwd, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+    const stdout = execFileSync(process.execPath, [tsxCli, 'src/cli.ts', ...argv], {
       cwd,
       encoding: 'utf8',
       env: { ...process.env, ...env },
       timeout: 30000,
-      shell: true,
     });
     return { stdout, exitCode: 0 };
   } catch (err: unknown) {
@@ -55,26 +56,24 @@ describe('CLI', () => {
   });
 
   describe('keygen', () => {
-    it('generates a key pair as JSON', () => {
-      const { stdout, exitCode } = run('keygen');
-      expect(exitCode).toBe(0);
-
-      const keys = JSON.parse(stdout);
-      expect(keys.did).toMatch(/^did:key:z6Mk/);
-      expect(keys.publicKey).toHaveLength(64); // 32 bytes hex
-      expect(keys.privateKey).toHaveLength(64);
+    it('refuses to print private keys to stdout', () => {
+      const { exitCode } = run('keygen');
+      expect(exitCode).toBe(1);
     });
 
     it('writes to file with --out flag', () => {
       const outFile = join(cwd, '__test_keys.json');
       try {
-        const { exitCode, stdout } = run(`keygen --out ${outFile}`);
+        const { exitCode, stdout } = run(['keygen', '--out', outFile]);
         expect(exitCode).toBe(0);
         expect(stdout).toContain('Key pair written');
         expect(existsSync(outFile)).toBe(true);
 
         const keys = JSON.parse(readFileSync(outFile, 'utf8'));
         expect(keys.did).toMatch(/^did:key:z6Mk/);
+        if (process.platform !== 'win32') {
+          expect(statSync(outFile).mode & 0o777).toBe(0o600);
+        }
       } finally {
         if (existsSync(outFile)) unlinkSync(outFile);
       }
@@ -99,7 +98,7 @@ describe('CLI', () => {
 
     it('issues a GDT with all required flags', () => {
       const { stdout, exitCode } = run(
-        `issue --agent ${agent.did} --scope weather:read --limit 10 --expiry 24h --key ${keyFile}`,
+        ['issue', '--agent', agent.did, '--scope', 'weather:read', '--limit', '10', '--expiry', '24h', '--key', keyFile],
       );
       expect(exitCode).toBe(0);
       expect(stdout.trim().split('.')).toHaveLength(3); // JWT format
@@ -107,7 +106,7 @@ describe('CLI', () => {
 
     it('issues with multiple scopes', () => {
       const { stdout, exitCode } = run(
-        `issue --agent ${agent.did} --scope weather:read,news:read --limit 10 --expiry 24h --key ${keyFile}`,
+        ['issue', '--agent', agent.did, '--scope', 'weather:read,news:read', '--limit', '10', '--expiry', '24h', '--key', keyFile],
       );
       expect(exitCode).toBe(0);
       expect(stdout.trim().split('.')).toHaveLength(3);

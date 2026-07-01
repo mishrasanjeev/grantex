@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write
 
     services:
       postgres:
@@ -42,6 +41,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -92,6 +93,7 @@ jobs:
           target: 'http://localhost:3001'
           rules_file_name: '.zap/rules.tsv'
           cmd_options: '-a'
+          allow_issue_writing: false
 
       - name: Upload auth service log
         if: always()
@@ -117,6 +119,8 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: OWASP ZAP Full Scan
         uses: zaproxy/action-full-scan@v0.13.0

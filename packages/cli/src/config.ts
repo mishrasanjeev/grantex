@@ -21,8 +21,14 @@ export async function loadConfig(configPath: string): Promise<CliConfig | null> 
 }
 
 export async function saveConfig(configPath: string, config: CliConfig): Promise<void> {
-  await fs.mkdir(path.dirname(configPath), { recursive: true });
-  await fs.writeFile(configPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
+  const configDir = path.dirname(configPath);
+  await fs.mkdir(configDir, { recursive: true, mode: 0o700 });
+  await fs.chmod(configDir, 0o700).catch(() => {});
+  await fs.writeFile(configPath, JSON.stringify(config, null, 2) + '\n', {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
+  await fs.chmod(configPath, 0o600).catch(() => {});
 }
 
 /**

@@ -209,8 +209,22 @@ describe('POST /v1/authorize — sandbox mode', () => {
 });
 
 describe('POST /v1/authorize/:id/approve', () => {
-  it('approves a pending request and returns code', async () => {
+  it('blocks live developer keys from bypassing principal consent', async () => {
     seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize/areq_TEST/approve',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ code: string }>().code).toBe('CONSENT_REQUIRED');
+    expect(sqlMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('approves a pending sandbox request and returns code', async () => {
+    seedSandboxAuth();
     sqlMock.mockResolvedValueOnce([{
       id: 'areq_TEST',
       status: 'approved',
@@ -230,7 +244,7 @@ describe('POST /v1/authorize/:id/approve', () => {
   });
 
   it('returns 404 when request not found', async () => {
-    seedAuth();
+    seedSandboxAuth();
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
@@ -309,8 +323,22 @@ describe('POST /v1/authorize — policy engine', () => {
 });
 
 describe('POST /v1/authorize/:id/deny', () => {
-  it('denies a pending request', async () => {
+  it('blocks live developer keys from denying principal consent requests', async () => {
     seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize/areq_TEST/deny',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ code: string }>().code).toBe('CONSENT_REQUIRED');
+    expect(sqlMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('denies a pending sandbox request', async () => {
+    seedSandboxAuth();
     sqlMock.mockResolvedValueOnce([{ id: 'areq_TEST', status: 'denied' }]);
 
     const res = await app.inject({
@@ -325,7 +353,7 @@ describe('POST /v1/authorize/:id/deny', () => {
   });
 
   it('returns 404 when request not found', async () => {
-    seedAuth();
+    seedSandboxAuth();
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
