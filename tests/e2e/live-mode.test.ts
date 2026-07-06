@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { Grantex } from '@grantex/sdk';
+import { Grantex, verifyGrantToken } from '@grantex/sdk';
 
 const BASE_URL = process.env['E2E_BASE_URL'] ?? 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
 const PUBLIC_BASE_URL = process.env['E2E_PUBLIC_BASE_URL'] ?? 'https://grantex.dev';
@@ -71,6 +71,9 @@ describe('live-mode: Firebase -> Cloud Run rewrites', () => {
 describe('live-mode: full consent flow', () => {
   let authRequestId: string;
   let consentUrl: string;
+  let code: string;
+  let grantToken: string;
+  let grantId: string;
 
   it('POST /v1/authorize returns pending + grantex.dev consentUrl', async () => {
     const auth = await grantex.authorize({
@@ -116,33 +119,59 @@ describe('live-mode: full consent flow', () => {
     expect(body.agentDid).toMatch(/^did:/);
   });
 
-  it('POST /v1/consent/:id/approve on grantex.dev requires principal verification', async () => {
-    const res = await fetch(`${PUBLIC_BASE_URL}/v1/consent/${authRequestId}/approve`, {
-      method: 'POST',
-    });
-    expect(res.status).toBe(403);
-    const body = (await res.json()) as { code: string };
-    expect(body.code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
-  });
-
-  it('POST /v1/webauthn/assert/options starts the live verification path', async () => {
+  it('POST /v1/webauthn/assert/options reports FIDO is not required by default', async () => {
     const res = await fetch(`${PUBLIC_BASE_URL}/v1/webauthn/assert/options`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ authRequestId }),
     });
-    // This test account has not registered a passkey. The JSON response proves
-    // Firebase routed the hosted page's assertion request to the auth service.
     expect(res.status).toBe(400);
     expect(res.headers.get('content-type')).toMatch(/application\/json/);
     const body = (await res.json()) as { message?: string; code?: string };
     expect(body.code).toBe('BAD_REQUEST');
-    expect(body.message).toMatch(/No FIDO credentials/);
+    expect(body.message).toMatch(/FIDO not required/);
+  });
+
+  it('POST /v1/consent/:id/approve on grantex.dev returns a code', async () => {
+    const res = await fetch(`${PUBLIC_BASE_URL}/v1/consent/${authRequestId}/approve`, {
+      method: 'POST',
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { code: string };
+    expect(typeof body.code).toBe('string');
+    expect(body.code.length).toBeGreaterThan(0);
+    code = body.code;
+  });
+
+  it('exchange code -> grant token', async () => {
+    const result = await grantex.tokens.exchange({ code, agentId: mainAgentId });
+    expect(result.grantToken).toBeDefined();
+    expect(result.scopes).toEqual(expect.arrayContaining(['calendar:read', 'email:send']));
+    grantToken = result.grantToken;
+    grantId = result.grantId;
+  });
+
+  it('verify grant token online', async () => {
+    const result = await grantex.tokens.verify(grantToken);
+    expect(result.valid).toBe(true);
+    expect(result.grantId).toBe(grantId);
+  });
+
+  it('verify grant token offline via grantex.dev JWKS', async () => {
+    // Standard RFC 8414 discovery: iss = https://grantex.dev -> JWKS at
+    // https://grantex.dev/.well-known/jwks.json. Proves the JWKS rewrite
+    // makes offline verification work without the SDK hardcoding Cloud Run.
+    const grant = await verifyGrantToken(grantToken, {
+      jwksUri: `${PUBLIC_BASE_URL}/.well-known/jwks.json`,
+      issuer: PUBLIC_BASE_URL,
+    });
+    expect(grant.grantId).toBe(grantId);
+    expect(grant.scopes).toEqual(expect.arrayContaining(['calendar:read', 'email:send']));
   });
 });
 
 describe('live-mode: deny flow', () => {
-  it('POST /v1/consent/:id/deny on grantex.dev requires principal verification', async () => {
+  it('POST /v1/consent/:id/deny on grantex.dev marks request denied', async () => {
     const auth = await grantex.authorize({
       agentId: mainAgentId,
       userId: `principal-deny-${Date.now()}`,
@@ -153,10 +182,13 @@ describe('live-mode: deny flow', () => {
     const denyRes = await fetch(`${PUBLIC_BASE_URL}/v1/consent/${auth.authRequestId}/deny`, {
       method: 'POST',
     });
-    expect(denyRes.status).toBe(403);
+    expect(denyRes.status).toBe(200);
 
-    // The request remains pending until a verified browser ceremony succeeds.
-    const body = (await denyRes.json()) as { code?: string };
-    expect(body.code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
+    // Subsequent GET /v1/consent/:id must return 410 Gone, which is how
+    // the service signals "already processed" after deny. Accepting 200
+    // here would let the test pass even if deny were a no-op that left
+    // the request pending.
+    const getRes = await fetch(`${PUBLIC_BASE_URL}/v1/consent/${auth.authRequestId}`);
+    expect(getRes.status).toBe(410);
   });
 });

@@ -353,7 +353,7 @@ describe('POST /v1/webauthn/assert/options', () => {
     expect(body.publicKey.challenge).toBeDefined();
   });
 
-  it('returns assertion options for live principal verification even when FIDO is not explicitly required', async () => {
+  it('returns 400 when FIDO is not required for a live developer', async () => {
     // Auth request lookup
     sqlMock.mockResolvedValueOnce([{
       principal_id: 'user_123',
@@ -361,15 +361,6 @@ describe('POST /v1/webauthn/assert/options', () => {
       fido_required: false,
       mode: 'live',
     }]);
-    // Credentials lookup
-    sqlMock.mockResolvedValueOnce([{
-      credential_id: 'bW9jay1jcmVk',
-      public_key: 'AQIDBA',
-      counter: 5,
-      transports: ['internal'],
-    }]);
-    // Insert challenge
-    sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
       method: 'POST',
@@ -377,11 +368,8 @@ describe('POST /v1/webauthn/assert/options', () => {
       payload: { authRequestId: 'areq_test' },
     });
 
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.challengeId).toBeDefined();
-    expect(body.publicKey).toBeDefined();
-    expect(body.publicKey.challenge).toBeDefined();
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('FIDO not required');
   });
 
   it('does not require auth (public endpoint)', async () => {

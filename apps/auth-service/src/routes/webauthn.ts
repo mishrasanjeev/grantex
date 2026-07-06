@@ -185,8 +185,7 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ message: 'Auth request not found or expired', code: 'NOT_FOUND', requestId: request.id });
       }
 
-      const requiresPrincipalVerification = ar['fido_required'] || ar['mode'] !== 'sandbox';
-      if (!requiresPrincipalVerification) {
+      if (!ar['fido_required']) {
         return reply.status(400).send({ message: 'FIDO not required for this developer', code: 'BAD_REQUEST', requestId: request.id });
       }
 

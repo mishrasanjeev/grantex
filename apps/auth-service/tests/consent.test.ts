@@ -203,10 +203,10 @@ describe('POST /v1/consent/:id/approve', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it('blocks live approval without principal verification', async () => {
+  it('blocks approval when FIDO is required but not verified', async () => {
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{
-      fido_required: false,
+      fido_required: true,
       mode: 'live',
       fido_verified: false,
       status: 'pending',
@@ -219,13 +219,13 @@ describe('POST /v1/consent/:id/approve', () => {
     });
 
     expect(res.statusCode).toBe(403);
-    expect(res.json<{ code: string }>().code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
+    expect(res.json<{ code: string }>().code).toBe('FIDO_REQUIRED');
   });
 
   it('approves a live request after WebAuthn assertion verification', async () => {
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{
-      fido_required: false,
+      fido_required: true,
       mode: 'live',
       fido_verified: false,
       status: 'pending',
@@ -237,12 +237,12 @@ describe('POST /v1/consent/:id/approve', () => {
       url: '/v1/consent/areq_TEST01/approve',
     });
     expect(firstApprove.statusCode).toBe(403);
-    expect(firstApprove.json<{ code: string }>().code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
+    expect(firstApprove.json<{ code: string }>().code).toBe('FIDO_REQUIRED');
 
     sqlMock.mockResolvedValueOnce([{
       principal_id: 'user_123',
       developer_id: 'dev_TEST',
-      fido_required: false,
+      fido_required: true,
       mode: 'live',
     }]);
     sqlMock.mockResolvedValueOnce([{
@@ -362,10 +362,10 @@ describe('POST /v1/consent/:id/deny', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it('blocks live denial without principal verification', async () => {
+  it('blocks denial when FIDO is required but not verified', async () => {
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{
-      mode: 'live',
+      fido_required: true,
       fido_verified: false,
       status: 'pending',
       expires_at: FUTURE,
@@ -377,6 +377,6 @@ describe('POST /v1/consent/:id/deny', () => {
     });
 
     expect(res.statusCode).toBe(403);
-    expect(res.json<{ code: string }>().code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
+    expect(res.json<{ code: string }>().code).toBe('FIDO_REQUIRED');
   });
 });
