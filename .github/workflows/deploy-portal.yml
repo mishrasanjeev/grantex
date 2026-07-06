@@ -83,3 +83,16 @@ jobs:
           check "/consent?req=smoke-test" "Authorization Request"
           check "/.well-known/jwks.json" "\"keys\""
           check "/.well-known/did.json" "\"id\""
+
+          echo "--- POST $BASE/v1/webauthn/assert/options"
+          webauthn_body=$(curl -sS -L --fail-with-body --max-time 20 \
+            -H "Content-Type: application/json" \
+            -d '{"authRequestId":"areq_missing_rewrite_smoke"}' \
+            "$BASE/v1/webauthn/assert/options" || true)
+          if ! grep -q '"code":"NOT_FOUND"' <<<"$webauthn_body"; then
+            echo "FAIL: /v1/webauthn/assert/options did not return auth-service JSON"
+            echo "---- response head ----"
+            head -c 500 <<<"$webauthn_body"
+            exit 1
+          fi
+          echo "OK"

@@ -74,6 +74,15 @@ const CONSENT_HTML = `<!DOCTYPE html>
     el.innerHTML = '<div class="error-msg">' + esc(msg) + '</div>';
   }
 
+  function showStatus(title, msg) {
+    el.innerHTML =
+      '<div class="status-screen">' +
+        '<div class="status-icon">&#128274;</div>' +
+        '<h2>' + esc(title) + '</h2>' +
+        '<p>' + esc(msg) + '</p>' +
+      '</div>';
+  }
+
   function formatExpiry(isoStr) {
     const diff = Math.floor((new Date(isoStr) - Date.now()) / 1000);
     if (diff <= 0) return { text: 'Expired', expired: true };
@@ -81,6 +90,128 @@ const CONSENT_HTML = `<!DOCTYPE html>
     const m = Math.floor((diff % 3600) / 60);
     if (h > 0) return { text: 'Expires in ' + h + 'h ' + m + 'm', expired: false };
     return { text: 'Expires in ' + m + 'm', expired: false };
+  }
+
+  async function postJson(url, payload) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async function responseMessage(res, fallback) {
+    try {
+      const body = await res.json();
+      return body && body.message ? body.message : fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function base64urlToBuffer(value) {
+    const normalized = String(value).replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes.buffer;
+  }
+
+  function bufferToBase64url(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+    return btoa(binary).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/g, '');
+  }
+
+  function browserPublicKeyOptions(publicKey) {
+    const options = Object.assign({}, publicKey);
+    options.challenge = base64urlToBuffer(publicKey.challenge);
+    if (Array.isArray(publicKey.allowCredentials)) {
+      options.allowCredentials = publicKey.allowCredentials.map(function(credential) {
+        return Object.assign({}, credential, { id: base64urlToBuffer(credential.id) });
+      });
+    }
+    return options;
+  }
+
+  function assertionToJson(assertion) {
+    const response = {
+      clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
+      authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
+      signature: bufferToBase64url(assertion.response.signature),
+    };
+    if (assertion.response.userHandle) {
+      response.userHandle = bufferToBase64url(assertion.response.userHandle);
+    }
+    return {
+      id: assertion.id,
+      rawId: bufferToBase64url(assertion.rawId),
+      type: assertion.type,
+      response: response,
+      authenticatorAttachment: assertion.authenticatorAttachment || undefined,
+    };
+  }
+
+  async function verifyPrincipalPresence() {
+    if (!window.PublicKeyCredential || !navigator.credentials || !navigator.credentials.get) {
+      throw new Error('This approval requires a passkey, but this browser does not support passkeys.');
+    }
+
+    showStatus('Passkey required', 'Follow your browser prompt to verify this approval.');
+
+    const optionsRes = await postJson('/v1/webauthn/assert/options', { authRequestId: reqId });
+    if (!optionsRes.ok) {
+      throw new Error(await responseMessage(optionsRes, 'Could not start passkey verification.'));
+    }
+    const optionsBody = await optionsRes.json();
+    const assertion = await navigator.credentials.get({
+      publicKey: browserPublicKeyOptions(optionsBody.publicKey),
+    });
+    if (!assertion) {
+      throw new Error('Passkey verification was cancelled.');
+    }
+
+    const verifyRes = await postJson('/v1/webauthn/assert/verify', {
+      challengeId: optionsBody.challengeId,
+      response: assertionToJson(assertion),
+    });
+    if (!verifyRes.ok) {
+      throw new Error(await responseMessage(verifyRes, 'Passkey verification failed.'));
+    }
+  }
+
+  async function approveRequest(allowVerificationRetry) {
+    const res = await fetch('/v1/consent/' + encodeURIComponent(reqId) + '/approve', { method: 'POST' });
+    if (res.status === 410) { showError('This request has expired or was already processed.'); return; }
+    if (res.status === 404) { showError('Authorization request not found.'); return; }
+    if (res.status === 403) {
+      let body = {};
+      try { body = await res.json(); } catch (e) {}
+      if (allowVerificationRetry && (body.code === 'FIDO_REQUIRED' || body.code === 'PRINCIPAL_VERIFICATION_REQUIRED')) {
+        await verifyPrincipalPresence();
+        return approveRequest(false);
+      }
+      showError(body.message || 'Approval requires additional verification.');
+      return;
+    }
+    if (!res.ok) { showError(await responseMessage(res, 'Failed to approve. Please try again.')); return; }
+
+    const body = await res.json();
+    if (body.redirectUri) {
+      const url = new URL(body.redirectUri);
+      url.searchParams.set('code', body.code);
+      if (body.state) url.searchParams.set('state', body.state);
+      location.href = url.toString();
+    } else {
+      el.innerHTML =
+        '<div class="status-screen">' +
+          '<div class="status-icon">&#10003;</div>' +
+          '<h2>Approved</h2>' +
+          '<p>You have granted access. You may close this window.</p>' +
+        '</div>';
+    }
   }
 
   if (!reqId) { showError('Missing request ID'); return; }
@@ -121,26 +252,9 @@ const CONSENT_HTML = `<!DOCTYPE html>
     this.disabled = true;
     document.getElementById('btn-deny').disabled = true;
     try {
-      const res = await fetch('/v1/consent/' + encodeURIComponent(reqId) + '/approve', { method: 'POST' });
-      if (res.status === 410) { showError('This request has expired or was already processed.'); return; }
-      if (res.status === 404) { showError('Authorization request not found.'); return; }
-      if (!res.ok) { showError('Failed to approve. Please try again.'); return; }
-      const body = await res.json();
-      if (body.redirectUri) {
-        const url = new URL(body.redirectUri);
-        url.searchParams.set('code', body.code);
-        if (body.state) url.searchParams.set('state', body.state);
-        location.href = url.toString();
-      } else {
-        el.innerHTML =
-          '<div class="status-screen">' +
-            '<div class="status-icon">&#10003;</div>' +
-            '<h2>Approved</h2>' +
-            '<p>You have granted access. You may close this window.</p>' +
-          '</div>';
-      }
+      await approveRequest(true);
     } catch (e) {
-      showError('Network error. Please try again.');
+      showError(e && e.message ? e.message : 'Network error. Please try again.');
     }
   });
 

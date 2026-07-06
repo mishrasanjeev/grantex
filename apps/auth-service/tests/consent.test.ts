@@ -46,6 +46,15 @@ describe('GET /consent', () => {
     expect(res.body).toContain('function esc(value)');
     expect(res.body).toContain("replace(/</g, '&lt;')");
   });
+
+  it('includes hosted passkey approval wiring for live consent requests', async () => {
+    const res = await app.inject({ method: 'GET', url: '/consent?req=areq_TEST01' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('/v1/webauthn/assert/options');
+    expect(res.body).toContain('/v1/webauthn/assert/verify');
+    expect(res.body).toContain('navigator.credentials.get');
+    expect(res.body).toContain('PRINCIPAL_VERIFICATION_REQUIRED');
+  });
 });
 
 describe('GET /v1/consent/:id', () => {
@@ -211,6 +220,98 @@ describe('POST /v1/consent/:id/approve', () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.json<{ code: string }>().code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
+  });
+
+  it('approves a live request after WebAuthn assertion verification', async () => {
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{
+      fido_required: false,
+      mode: 'live',
+      fido_verified: false,
+      status: 'pending',
+      expires_at: FUTURE,
+    }]);
+
+    const firstApprove = await app.inject({
+      method: 'POST',
+      url: '/v1/consent/areq_TEST01/approve',
+    });
+    expect(firstApprove.statusCode).toBe(403);
+    expect(firstApprove.json<{ code: string }>().code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
+
+    sqlMock.mockResolvedValueOnce([{
+      principal_id: 'user_123',
+      developer_id: 'dev_TEST',
+      fido_required: false,
+      mode: 'live',
+    }]);
+    sqlMock.mockResolvedValueOnce([{
+      credential_id: 'bW9jay1jcmVkLWlk',
+      public_key: 'AQIDBA',
+      counter: 5,
+      transports: ['internal'],
+    }]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const options = await app.inject({
+      method: 'POST',
+      url: '/v1/webauthn/assert/options',
+      payload: { authRequestId: 'areq_TEST01' },
+    });
+    expect(options.statusCode).toBe(200);
+    const optionsBody = options.json<{ challengeId: string }>();
+    expect(optionsBody.challengeId).toBeDefined();
+
+    sqlMock.mockResolvedValueOnce([{
+      challenge: 'mock-auth-challenge-base64url',
+      principal_id: 'user_123',
+      developer_id: 'dev_TEST',
+      auth_request_id: 'areq_TEST01',
+    }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{
+      id: 'cred_DB',
+      credential_id: 'bW9jay1jcmVkLWlk',
+      public_key: 'AQIDBA',
+      counter: 5,
+      transports: ['internal'],
+    }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const verify = await app.inject({
+      method: 'POST',
+      url: '/v1/webauthn/assert/verify',
+      payload: {
+        challengeId: optionsBody.challengeId,
+        response: {
+          id: 'bW9jay1jcmVkLWlk',
+          rawId: 'bW9jay1jcmVkLWlk',
+          type: 'public-key',
+          response: {
+            clientDataJSON: 'Y2xpZW50',
+            authenticatorData: 'YXV0aA',
+            signature: 'c2ln',
+          },
+        },
+      },
+    });
+    expect(verify.statusCode).toBe(200);
+    expect(verify.json<{ verified: boolean }>().verified).toBe(true);
+
+    sqlMock.mockResolvedValueOnce([{
+      id: 'areq_TEST01',
+      code: 'AUTHCODE_VERIFIED',
+      redirect_uri: 'https://example.com/callback',
+      state: 'xyz',
+    }]);
+
+    const secondApprove = await app.inject({
+      method: 'POST',
+      url: '/v1/consent/areq_TEST01/approve',
+    });
+    expect(secondApprove.statusCode).toBe(200);
+    expect(secondApprove.json<{ code: string }>().code).toBe('AUTHCODE_VERIFIED');
   });
 });
 
