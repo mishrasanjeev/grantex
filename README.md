@@ -509,6 +509,7 @@ client.webauthn.delete_credential(credential_id)
 | `POST` | `/v1/webauthn/assert/options` | Generate assertion options for consent |
 | `POST` | `/v1/webauthn/assert/verify` | Verify assertion during consent |
 | `PATCH` | `/v1/me` | Update developer settings (FIDO config) |
+- [JMT x402 Agent Tools](https://jmt-x402-proxy.jmthomasofficial.workers.dev) — 25 paid x402 endpoints on Base mainnet: web search, AI analysis, crypto/stock data, SEC filings, company intel, news, sentiment, macro dashboard. $0.001-$0.15/call USDC. Local LLM-powered.
 
 </details>
 
