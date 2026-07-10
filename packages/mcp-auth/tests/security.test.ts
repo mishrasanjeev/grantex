@@ -13,7 +13,7 @@ const TEST_REDIRECT_URI = 'https://app.example.com/callback';
 const TEST_VERIFIER = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
 const TEST_CHALLENGE = createHash('sha256').update(TEST_VERIFIER).digest('base64url');
 
-let rsaPrivateKey: jose.KeyLike;
+let rsaPrivateKey: jose.CryptoKey;
 let rsaPublicJwk: jose.JWK;
 let hmacSecret: Uint8Array;
 let jwksServer: Server;

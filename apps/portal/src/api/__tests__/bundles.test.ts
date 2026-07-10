@@ -82,14 +82,30 @@ describe('bundles', () => {
 
   it('createBundle sends POST /v1/consent-bundles with params', async () => {
     const params = { agentId: 'a1', userId: 'u1', scopes: ['read', 'write'] };
-    const resp = { bundle: { id: 'cb2' }, grantToken: 'tok', jwks: {}, auditKey: 'ak' };
-    ok(resp);
+    const resp = { bundleId: 'cb2', grantToken: 'tok', jwksSnapshot: {}, offlineAuditKey: {} };
+    ok({ data: resp });
     const result = await createBundle(params);
     expect(result).toEqual(resp);
     const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/consent-bundles');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(params);
+  });
+
+  it('createBundle accepts the documented top-level response', async () => {
+    const params = { agentId: 'a1', userId: 'u1', scopes: ['read'] };
+    const resp = {
+      bundleId: 'cb2',
+      grantToken: 'tok',
+      jwksSnapshot: { keys: [], fetchedAt: 'now', validUntil: 'later' },
+      offlineAuditKey: { publicKey: 'pub', privateKey: 'priv', algorithm: 'Ed25519' },
+      checkpointAt: 1,
+      syncEndpoint: '/v1/audit/offline-sync',
+      offlineExpiresAt: 'later',
+    };
+    ok(resp);
+
+    await expect(createBundle(params)).resolves.toEqual(resp);
   });
 
   it('createBundle throws on 400', async () => {
@@ -137,13 +153,13 @@ describe('bundles', () => {
 
   // ── getRevocationStatus ───────────────────────────────────────────────
 
-  it('getRevocationStatus sends GET /v1/consent-bundles/:id/revocation', async () => {
-    const status = { bundleId: 'cb1', revoked: false, revokedAt: null, propagated: false };
-    ok(status);
+  it('getRevocationStatus sends GET /v1/consent-bundles/:id/revocation-status', async () => {
+    const status = { bundleId: 'cb1', status: 'active', revokedAt: null, revokedBy: null, grantRevoked: false, checkpointAt: 1 };
+    ok({ data: status });
     const result = await getRevocationStatus('cb1');
     expect(result).toEqual(status);
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3000/v1/consent-bundles/cb1/revocation',
+      'http://localhost:3000/v1/consent-bundles/cb1/revocation-status',
       expect.objectContaining({ method: 'GET' }),
     );
   });

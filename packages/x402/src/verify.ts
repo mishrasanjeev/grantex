@@ -57,7 +57,14 @@ export async function verifyGDT(token: string, context: VerifyContext): Promise<
   const exp = decoded['exp'] as number | undefined;
   const vc = decoded['vc'] as VCPayload | undefined;
 
-  if (!iss || !sub || !jti) {
+  if (
+    typeof iss !== 'string' ||
+    iss.length === 0 ||
+    typeof sub !== 'string' ||
+    sub.length === 0 ||
+    typeof jti !== 'string' ||
+    jti.length === 0
+  ) {
     return fail('Invalid GDT: missing required claims (iss, sub, jti)');
   }
 
@@ -65,7 +72,7 @@ export async function verifyGDT(token: string, context: VerifyContext): Promise<
     agentDID: sub,
     principalDID: iss,
     tokenId: jti,
-    expiresAt: exp ? new Date(exp * 1000).toISOString() : '',
+    expiresAt: formatEpochSeconds(exp),
   };
 
   // Step 1: Validate issuer DID format
@@ -85,6 +92,16 @@ export async function verifyGDT(token: string, context: VerifyContext): Promise<
     return fail(`Signature verification failed: ${msg}`, partial);
   }
 
+  const iat = decoded['iat'];
+  if (
+    !Number.isSafeInteger(exp) ||
+    !Number.isSafeInteger(iat) ||
+    (iat as number) < 0 ||
+    (iat as number) > Math.floor(Date.now() / 1000) + 30
+  ) {
+    return fail('Invalid GDT: exp and iat must be valid integer timestamps', partial);
+  }
+
   // Step 3: Check revocation
   const registry = getRevocationRegistry();
   if (await registry.isRevoked(jti)) {
@@ -93,20 +110,43 @@ export async function verifyGDT(token: string, context: VerifyContext): Promise<
   }
 
   // Step 4: Validate VC structure
-  if (!vc || !vc.credentialSubject) {
+  if (!vc || typeof vc !== 'object' || !vc.credentialSubject) {
     return fail('Invalid GDT: missing vc.credentialSubject', partial);
   }
 
   const credSub = vc.credentialSubject;
+  if (credSub.id !== sub) {
+    return fail('Invalid GDT: credentialSubject.id must match the JWT subject', partial);
+  }
+  if (
+    typeof credSub.paymentChain !== 'string' ||
+    credSub.paymentChain.length === 0 ||
+    !Array.isArray(credSub.delegationChain) ||
+    credSub.delegationChain.some(
+      (did) => typeof did !== 'string' || !did.startsWith('did:'),
+    )
+  ) {
+    return fail('Invalid GDT: malformed paymentChain or delegationChain', partial);
+  }
   const grantedScopes = credSub.scope;
-  if (!Array.isArray(grantedScopes) || grantedScopes.length === 0) {
+  if (
+    !Array.isArray(grantedScopes) ||
+    grantedScopes.length === 0 ||
+    grantedScopes.some((scope) => typeof scope !== 'string' || scope.length === 0)
+  ) {
     return fail('Invalid GDT: credentialSubject.scope must be a non-empty array', partial);
   }
 
   partial.scopes = grantedScopes;
 
-  if (!Number.isFinite(context.amount) || context.amount < 0) {
+  if (!context || !Number.isFinite(context.amount) || context.amount < 0) {
     return fail('Invalid request amount: must be a finite non-negative number', partial);
+  }
+  if (typeof context.resource !== 'string' || context.resource.length === 0) {
+    return fail('Invalid request resource: must be a non-empty string', partial);
+  }
+  if (context.currency !== 'USDC' && context.currency !== 'USDT') {
+    return fail('Invalid request currency: must be USDC or USDT', partial);
   }
 
   // Step 5: Check scope match
@@ -123,8 +163,14 @@ export async function verifyGDT(token: string, context: VerifyContext): Promise<
 
   // Step 6: Check spend limit
   const spendLimit = credSub.spendLimit;
-  if (!spendLimit) {
-    return fail('Invalid GDT: missing spendLimit in credentialSubject', partial);
+  if (
+    !spendLimit ||
+    !Number.isFinite(spendLimit.amount) ||
+    spendLimit.amount <= 0 ||
+    (spendLimit.currency !== 'USDC' && spendLimit.currency !== 'USDT') ||
+    !['1h', '24h', '7d', '30d'].includes(spendLimit.period)
+  ) {
+    return fail('Invalid GDT: malformed spendLimit in credentialSubject', partial);
   }
 
   if (context.currency !== spendLimit.currency) {
@@ -173,7 +219,7 @@ export async function verifyGDT(token: string, context: VerifyContext): Promise<
     remainingLimit,
     tokenId: jti,
     scopes: grantedScopes,
-    expiresAt: exp ? new Date(exp * 1000).toISOString() : '',
+    expiresAt: new Date(exp! * 1000).toISOString(),
   };
 }
 
@@ -208,6 +254,12 @@ function scopeMatches(requested: string, granted: string[]): boolean {
     }
   }
   return false;
+}
+
+function formatEpochSeconds(value: unknown): string {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) return '';
+  const date = new Date((value as number) * 1000);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : '';
 }
 
 // ---------------------------------------------------------------------------

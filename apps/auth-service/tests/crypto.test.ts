@@ -390,5 +390,7 @@ describe('parseExpiresIn', () => {
   it('throws on invalid format', () => {
     expect(() => parseExpiresIn('1x')).toThrow();
     expect(() => parseExpiresIn('abc')).toThrow();
+    expect(() => parseExpiresIn('0s')).toThrow();
+    expect(() => parseExpiresIn('999999999999999999999d')).toThrow();
   });
 });

@@ -96,6 +96,19 @@ describe('Authorization escalation prevention', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it('accepts the case-insensitive Bearer authentication scheme', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/agents',
+      headers: { authorization: authHeader().authorization!.replace('Bearer', 'bearer') },
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
+
   // ── Agent ownership checks on authorize ──────────────────────────────────
 
   it('cannot create auth request for agent not owned by developer', async () => {
@@ -274,6 +287,7 @@ describe('Authorization escalation prevention', () => {
 
   it('agent creation blocked when plan limit reached', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                  // advisory quota lock
     sqlMock.mockResolvedValueOnce([{ plan: 'free' }]); // subscription
     sqlMock.mockResolvedValueOnce([{ count: '500' }]); // agent count equals free limit (500)
 

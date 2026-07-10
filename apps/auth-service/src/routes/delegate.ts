@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getSql } from '../db/client.js';
+import { getSql, type TxSql } from '../db/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
 import { emitEvent } from '../lib/events.js';
@@ -17,11 +17,26 @@ interface DelegateBody {
 export async function delegateRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/grants/delegate
   app.post<{ Body: DelegateBody }>('/v1/grants/delegate', async (request, reply) => {
-    const { parentGrantToken, subAgentId, scopes, expiresIn = '1h' } = request.body;
+    const body = (request.body ?? {}) as Partial<DelegateBody>;
+    const { parentGrantToken, subAgentId, scopes, expiresIn = '1h' } = body;
 
     if (!parentGrantToken || !subAgentId || !scopes?.length) {
       return reply.status(400).send({
         message: 'parentGrantToken, subAgentId, and scopes are required',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    if (scopes.length > 100 || scopes.some((scope) => typeof scope !== 'string' || scope.length === 0 || scope.length > 256)) {
+      return reply.status(400).send({
+        message: 'scopes must contain 1 to 100 non-empty strings of at most 256 characters',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    if (body.credentialFormat !== undefined && !['jwt', 'vc-jwt', 'both'].includes(body.credentialFormat)) {
+      return reply.status(400).send({
+        message: 'credentialFormat must be jwt, vc-jwt, or both',
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
@@ -84,7 +99,16 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Compute expiry: min(parent exp, now + expiresIn)
-    const expiresSeconds = parseExpiresIn(expiresIn);
+    let expiresSeconds: number;
+    try {
+      expiresSeconds = parseExpiresIn(expiresIn);
+    } catch {
+      return reply.status(400).send({
+        message: 'Invalid expiresIn format. Use e.g. "1h", "30m", or "1d".',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
     const now = Date.now();
     const requestedExpiry = now + expiresSeconds * 1000;
     const parentExpiry = parentExp * 1000;
@@ -96,35 +120,10 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
     const refreshId = newRefreshTokenId();
     const delegationDepth = parentDepth + 1;
 
-    // Insert grant with parent link
-    await sql`
-      INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at, parent_grant_id, delegation_depth)
-      VALUES (
-        ${grantId},
-        ${subAgentId},
-        ${parentClaims.sub},
-        ${developerId},
-        ${scopes},
-        ${expiresAt},
-        ${parentGrnt},
-        ${delegationDepth}
-      )
-    `;
-
-    // Insert grant token
-    await sql`
-      INSERT INTO grant_tokens (jti, grant_id, expires_at)
-      VALUES (${jti}, ${grantId}, ${expiresAt})
-    `;
-
-    // Insert refresh token — cannot outlive the underlying grant.
     const refreshExpiresAt = new Date(Math.min(now + 30 * 86400 * 1000, expiresAt.getTime()));
-    await sql`
-      INSERT INTO refresh_tokens (id, grant_id, expires_at)
-      VALUES (${refreshId}, ${grantId}, ${refreshExpiresAt})
-    `;
 
-    // Sign JWT with delegation claims
+    // Sign before committing any database state, then persist all related rows
+    // in one transaction so a failed insert cannot leave a partial grant.
     const jwt = await signGrantToken({
       sub: parentClaims['sub'] as string,
       agt: subAgent['did'] as string,
@@ -137,10 +136,59 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       parentGrnt,
       delegationDepth,
     });
+    let parentStillActive = false;
+    await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
+      // Serialize against cascade revocation. If revocation wins the lock,
+      // this query re-checks the updated row and no child is created. If
+      // delegation wins, the revoker waits and its recursive CTE sees this
+      // newly inserted child.
+      const lockedParent = await tx`
+        SELECT id
+        FROM grants
+        WHERE id = ${parentGrnt}
+          AND developer_id = ${developerId}
+          AND status = 'active'
+          AND expires_at > NOW()
+        FOR UPDATE
+      `;
+      if (!lockedParent[0]) return;
+      parentStillActive = true;
+
+      await tx`
+        INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at, parent_grant_id, delegation_depth)
+        VALUES (
+          ${grantId},
+          ${subAgentId},
+          ${parentClaims.sub},
+          ${developerId},
+          ${scopes},
+          ${expiresAt},
+          ${parentGrnt},
+          ${delegationDepth}
+        )
+      `;
+      await tx`
+        INSERT INTO grant_tokens (jti, grant_id, expires_at)
+        VALUES (${jti}, ${grantId}, ${expiresAt})
+      `;
+      await tx`
+        INSERT INTO refresh_tokens (id, grant_id, expires_at)
+        VALUES (${refreshId}, ${grantId}, ${refreshExpiresAt})
+      `;
+    });
+    if (!parentStillActive) {
+      return reply.status(400).send({
+        message: 'Parent grant is no longer active',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
 
     // VC-JWT issuance (optional)
     let verifiableCredential: string | undefined;
-    const { credentialFormat } = request.body;
+    const { credentialFormat } = body;
     if (credentialFormat === 'vc-jwt' || credentialFormat === 'both') {
       try {
         const vcResult = await issueAgentGrantVC({
@@ -183,6 +231,7 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       expiresAt: expiresAt.toISOString(),
       scopes,
       grantId,
+      refreshToken: refreshId,
       ...(verifiableCredential !== undefined ? { verifiableCredential } : {}),
     });
   });

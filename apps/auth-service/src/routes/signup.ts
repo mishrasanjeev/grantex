@@ -15,9 +15,17 @@ export async function signupRoutes(app: FastifyInstance): Promise<void> {
     '/v1/signup',
     { config: { skipAuth: true, rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request, reply) => {
-      const { name, email, mode: requestedMode } = request.body;
-      if (!name) {
-        return reply.status(400).send({ message: 'name is required', code: 'BAD_REQUEST', requestId: request.id });
+      const body = (request.body ?? {}) as Partial<SignupBody>;
+      const { name, mode: requestedMode } = body;
+      if (typeof name !== 'string' || name.trim().length === 0 || name.length > 200) {
+        return reply.status(400).send({ message: 'name must be 1 to 200 characters', code: 'BAD_REQUEST', requestId: request.id });
+      }
+      if (requestedMode !== undefined && requestedMode !== 'live' && requestedMode !== 'sandbox') {
+        return reply.status(400).send({ message: 'mode must be live or sandbox', code: 'BAD_REQUEST', requestId: request.id });
+      }
+      const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : body.email;
+      if (email !== undefined && (email.length === 0 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+        return reply.status(400).send({ message: 'email must be a valid address', code: 'BAD_REQUEST', requestId: request.id });
       }
 
       const mode = requestedMode === 'sandbox' ? 'sandbox' : 'live';
@@ -25,7 +33,7 @@ export async function signupRoutes(app: FastifyInstance): Promise<void> {
       const sql = getSql();
 
       if (email) {
-        const existing = await sql`SELECT id FROM developers WHERE email = ${email} LIMIT 1`;
+        const existing = await sql`SELECT id FROM developers WHERE LOWER(email) = ${email} LIMIT 1`;
         if (existing.length > 0) {
           return reply.status(409).send({ message: 'A developer with this email already exists', code: 'CONFLICT', requestId: request.id });
         }
@@ -35,11 +43,19 @@ export async function signupRoutes(app: FastifyInstance): Promise<void> {
       const apiKey = generateApiKey(mode);
       const keyHash = hashApiKey(apiKey);
 
-      const rows = await sql`
-        INSERT INTO developers (id, name, email, api_key_hash, mode)
-        VALUES (${id}, ${name}, ${email ?? null}, ${keyHash}, ${mode})
-        RETURNING id, name, email, mode, created_at
-      `;
+      let rows;
+      try {
+        rows = await sql`
+          INSERT INTO developers (id, name, email, api_key_hash, mode)
+          VALUES (${id}, ${name.trim()}, ${email ?? null}, ${keyHash}, ${mode})
+          RETURNING id, name, email, mode, created_at
+        `;
+      } catch (error) {
+        if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
+          return reply.status(409).send({ message: 'A developer with this email already exists', code: 'CONFLICT', requestId: request.id });
+        }
+        throw error;
+      }
 
       return reply.status(201).send({
         developerId: rows[0]!['id'],

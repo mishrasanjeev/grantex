@@ -3,7 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SettingsPage } from '../settings/SettingsPage';
 
-const mockLogin = vi.fn();
+const mockReplaceApiKey = vi.fn();
+const mockUpdateDeveloper = vi.fn();
 const mockShow = vi.fn();
 const mockRotateKey = vi.fn();
 const mockSetApiKey = vi.fn();
@@ -16,7 +17,7 @@ const developer = {
 };
 
 vi.mock('../../store/auth', () => ({
-  useAuth: () => ({ developer, apiKey: 'gx_live_xxx', login: mockLogin }),
+  useAuth: () => ({ developer, apiKey: 'gx_live_xxx', replaceApiKey: mockReplaceApiKey, updateDeveloper: mockUpdateDeveloper }),
 }));
 vi.mock('../../store/toast', () => ({ useToast: () => ({ show: mockShow }) }));
 vi.mock('../../api/auth', () => ({ rotateKey: () => mockRotateKey() }));
@@ -45,11 +46,11 @@ describe('SettingsPage', () => {
 
   it('rotates API key successfully', async () => {
     mockRotateKey.mockResolvedValueOnce({ apiKey: 'gx_live_new456' });
-    mockLogin.mockResolvedValueOnce(undefined);
     const user = userEvent.setup();
     render(<SettingsPage />);
     await user.click(screen.getByRole('button', { name: 'Rotate Key' }));
     await waitFor(() => expect(mockRotateKey).toHaveBeenCalled());
+    expect(mockReplaceApiKey).toHaveBeenCalledWith('gx_live_new456');
     expect(mockShow).toHaveBeenCalledWith('API key rotated successfully', 'success');
     expect(screen.getByText('gx_live_new456')).toBeInTheDocument();
   });
@@ -75,6 +76,7 @@ describe('SettingsPage', () => {
     await user.click(screen.getByText('Require FIDO2 for consent flows'));
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(mockApiPatch).toHaveBeenCalledWith('/v1/me', { fidoRequired: true, fidoRpName: '' }));
+    expect(mockUpdateDeveloper).toHaveBeenCalledWith({ fidoRequired: true, fidoRpName: '' });
     expect(mockShow).toHaveBeenCalledWith('FIDO2 settings saved', 'success');
   });
 

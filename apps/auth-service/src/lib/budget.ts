@@ -68,46 +68,47 @@ export async function debitBudget(
   description?: string,
   metadata?: Record<string, unknown>,
 ): Promise<{ remaining: string; transactionId: string }> {
-  // Atomic debit — race-condition safe via WHERE clause.
-  // Joins grants so a revoked or expired grant cannot be debited even
-  // if a budget_allocations row still exists.
-  const rows = await sql`
-    UPDATE budget_allocations ba
-    SET remaining_budget = remaining_budget - ${amount},
-        updated_at = NOW()
-    FROM grants g
-    WHERE ba.grant_id = ${grantId}
-      AND ba.developer_id = ${developerId}
-      AND ba.remaining_budget >= ${amount}
-      AND g.id = ba.grant_id
-      AND g.status = 'active'
-      AND g.expires_at > NOW()
-    RETURNING ba.id, ba.initial_budget, ba.remaining_budget
-  `;
-
-  if (rows.length === 0) {
-    // Disambiguate: missing entirely, dead, or just out of funds?
-    const grantCheck = await sql<{ status: string; expires_at: Date }[]>`
-      SELECT status, expires_at FROM grants
-      WHERE id = ${grantId} AND developer_id = ${developerId}
-    `;
-    const g = grantCheck[0];
-    if (!g) {
-      throw new GrantNotFoundError(grantId);
-    }
-    if (g.status !== 'active' || new Date(g.expires_at) <= new Date()) {
-      throw new GrantInactiveError(grantId);
-    }
-    throw new InsufficientBudgetError(grantId);
-  }
-
-  const alloc = rows[0]!;
   const txId = newBudgetTransactionId();
+  let alloc: Record<string, unknown> | undefined;
 
-  await sql`
-    INSERT INTO budget_transactions (id, grant_id, allocation_id, amount, description, metadata)
-    VALUES (${txId}, ${grantId}, ${alloc['id'] as string}, ${amount}, ${description ?? null}, ${JSON.stringify(metadata ?? {})})
-  `;
+  // The balance update and its ledger row are one unit. Without a transaction,
+  // an INSERT failure permanently reduced the balance with no audit trail.
+  await sql.begin(async (_tx) => {
+    const tx = _tx as unknown as ReturnType<typeof postgres>;
+    const rows = await tx`
+      UPDATE budget_allocations ba
+      SET remaining_budget = remaining_budget - ${amount},
+          updated_at = NOW()
+      FROM grants g
+      WHERE ba.grant_id = ${grantId}
+        AND ba.developer_id = ${developerId}
+        AND ba.remaining_budget >= ${amount}
+        AND g.id = ba.grant_id
+        AND g.status = 'active'
+        AND g.expires_at > NOW()
+      RETURNING ba.id, ba.initial_budget, ba.remaining_budget
+    `;
+
+    if (rows.length === 0) {
+      const grantCheck = await tx<{ status: string; expires_at: Date }[]>`
+        SELECT status, expires_at FROM grants
+        WHERE id = ${grantId} AND developer_id = ${developerId}
+      `;
+      const grant = grantCheck[0];
+      if (!grant) throw new GrantNotFoundError(grantId);
+      if (grant.status !== 'active' || new Date(grant.expires_at) <= new Date()) {
+        throw new GrantInactiveError(grantId);
+      }
+      throw new InsufficientBudgetError(grantId);
+    }
+
+    alloc = rows[0] as Record<string, unknown>;
+    await tx`
+      INSERT INTO budget_transactions (id, grant_id, allocation_id, amount, description, metadata)
+      VALUES (${txId}, ${grantId}, ${alloc['id'] as string}, ${amount}, ${description ?? null}, ${JSON.stringify(metadata ?? {})})
+    `;
+  });
+  if (!alloc) throw new Error('Budget debit returned no allocation');
 
   // Check thresholds and emit events
   const initial = parseFloat(alloc['initial_budget'] as string);

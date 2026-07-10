@@ -18,7 +18,12 @@ export async function errorsPlugin(app: FastifyInstance): Promise<void> {
       'INTERNAL_ERROR';
 
     void reply.status(statusCode).send({
-      message: error.message || 'An unexpected error occurred',
+      // Unexpected failures may contain SQL text, provider responses, hostnames,
+      // or other operational details. Keep those in the structured server log
+      // above and return a stable public message to the caller.
+      message: statusCode >= 500
+        ? 'An unexpected error occurred'
+        : (error.message || 'Request failed'),
       code,
       requestId,
     });

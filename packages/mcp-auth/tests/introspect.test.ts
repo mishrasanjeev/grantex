@@ -11,7 +11,7 @@ const TEST_CLIENT_ID = 'test-client-id';
 const TEST_CLIENT_SECRET = 'test-secret';
 
 // Generate an RSA key pair for signing test JWTs
-let rsaPrivateKey: jose.KeyLike;
+let rsaPrivateKey: jose.CryptoKey;
 let rsaPublicJwk: jose.JWK;
 let jwksServer: Server;
 let jwksPort: number;

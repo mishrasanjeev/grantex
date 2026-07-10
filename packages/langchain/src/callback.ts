@@ -25,6 +25,8 @@ export interface GrantexAuditHandlerOptions {
  * const handler = new GrantexAuditHandler({
  *   client: grantex,
  *   agentId: myAgent.id,
+ *   agentDid: myAgent.did,
+ *   principalId: authRequest.principalId,
  *   grantToken: tokenResponse.grantToken,
  * });
  *

@@ -2,7 +2,7 @@
 
 from typing import Any, Callable, Optional
 
-from fastapi import Depends, Request
+from fastapi import Request
 from fastapi.responses import JSONResponse
 from grantex import GrantexTokenError, VerifiedGrant, VerifyGrantTokenOptions, verify_grant_token
 

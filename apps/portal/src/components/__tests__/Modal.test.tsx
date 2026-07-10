@@ -21,6 +21,7 @@ describe('Modal', () => {
     );
     expect(screen.getByText('My Modal')).toBeInTheDocument();
     expect(screen.getByText('Modal body')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'My Modal' })).toHaveAttribute('aria-modal', 'true');
   });
 
   it('calls onClose when the close button is clicked', async () => {
@@ -31,8 +32,7 @@ describe('Modal', () => {
         <p>Body</p>
       </Modal>,
     );
-    // The close button contains the x character
-    const closeBtn = screen.getByText('×');
+    const closeBtn = screen.getByRole('button', { name: 'Close Close Me' });
     await user.click(closeBtn);
     expect(onClose).toHaveBeenCalledTimes(1);
   });

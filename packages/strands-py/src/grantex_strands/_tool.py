@@ -7,7 +7,6 @@ from typing import Any, Callable
 from grantex import GrantexTokenError, VerifyGrantTokenOptions, verify_grant_token
 
 from ._jwt import decode_jwt_payload
-from ._errors import ScopeViolationError
 
 DEFAULT_JWKS_URI = "https://api.grantex.dev/.well-known/jwks.json"
 
@@ -81,7 +80,7 @@ def create_grantex_tool(
         ValueError: if the grant token cannot be decoded (offline) or if
                     client/connector are missing (online).
     """
-    from strands import tool as strands_tool  # type: ignore[import-not-found]
+    from strands import tool as strands_tool
 
     verify_options = VerifyGrantTokenOptions(
         jwks_uri=jwks_uri,

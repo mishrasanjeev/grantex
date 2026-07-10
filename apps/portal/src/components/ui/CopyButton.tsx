@@ -18,6 +18,7 @@ export function CopyButton({ text, className }: CopyButtonProps) {
 
   return (
     <button
+      type="button"
       onClick={copy}
       className={cn(
         'inline-flex items-center gap-1 px-2 py-1 text-xs font-mono rounded border transition-colors',

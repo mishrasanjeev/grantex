@@ -8,7 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@grantex/sdk": "^0.1.1",
+    "@grantex/sdk": "^0.3.11",
     "next": "^15.5.18",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

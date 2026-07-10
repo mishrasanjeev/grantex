@@ -31,9 +31,9 @@ const alerts = [
 ];
 
 const metrics = {
-  totalAlerts: 5, openAlerts: 2,
+  window: '24h', total: 5,
+  byStatus: { open: 2, acknowledged: 1, resolved: 2 },
   bySeverity: { critical: 1, high: 0, medium: 0, low: 1 },
-  byRule: {}, recentActivity: [{ date: '2026-03-01', count: 2 }],
 };
 
 function r() { return render(<MemoryRouter><AnomalyList /></MemoryRouter>); }
@@ -65,7 +65,7 @@ describe('AnomalyList', () => {
 
   it('renders metrics cards', async () => {
     r();
-    await waitFor(() => expect(screen.getByText('Open Alerts by Severity')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Alerts by Severity (24h)')).toBeInTheDocument());
     expect(screen.getAllByText('Critical').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Total open')).toBeInTheDocument();
   });

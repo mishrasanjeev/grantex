@@ -79,6 +79,11 @@ describe('Button', () => {
     expect(btn).toHaveAttribute('aria-label', 'Submit form');
   });
 
+  it('defaults to type="button" so it does not submit a surrounding form', () => {
+    render(<form><Button>Action</Button></form>);
+    expect(screen.getByRole('button')).toHaveAttribute('type', 'button');
+  });
+
   it('renders as an inline-flex element', () => {
     render(<Button>Flex</Button>);
     expect(screen.getByRole('button')).toHaveClass('inline-flex');

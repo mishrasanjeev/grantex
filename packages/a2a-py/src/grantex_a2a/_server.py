@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Callable, Dict
 
 from grantex import GrantexTokenError, VerifyGrantTokenOptions, verify_grant_token
 from ._types import A2AAuthMiddlewareOptions, VerifiedGrant
@@ -19,7 +19,7 @@ class A2AAuthError(Exception):
 
 def create_a2a_auth_middleware(
     options: A2AAuthMiddlewareOptions,
-):
+) -> Callable[[Dict[str, str]], VerifiedGrant]:
     """Create middleware that validates Grantex grant tokens.
 
     Returns a callable that takes a request headers dict and returns

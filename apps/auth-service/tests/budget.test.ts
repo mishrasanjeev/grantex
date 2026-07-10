@@ -156,6 +156,7 @@ describe('POST /v1/budget/debit', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toHaveProperty('remaining');
     expect(res.json()).toHaveProperty('transactionId');
+    expect(sqlMock.begin).toHaveBeenCalledTimes(1);
   });
 
   it('returns 402 when insufficient budget', async () => {

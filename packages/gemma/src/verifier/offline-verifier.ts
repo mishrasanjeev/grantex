@@ -1,6 +1,6 @@
 import * as jose from 'jose';
 import type { JWKSSnapshot } from './jwks-cache.js';
-import { importKeyByKid } from './jwks-cache.js';
+import { importKeyByKid, isSnapshotExpired } from './jwks-cache.js';
 import { enforceScopes } from './scope-enforcer.js';
 import {
   OfflineVerificationError,
@@ -65,8 +65,25 @@ export function createOfflineVerifier(
     onScopeViolation = 'throw',
   } = options;
 
+  if (!Number.isFinite(clockSkewSeconds) || clockSkewSeconds < 0) {
+    throw new RangeError('clockSkewSeconds must be a finite non-negative number');
+  }
+  if (
+    maxDelegationDepth !== undefined &&
+    (!Number.isSafeInteger(maxDelegationDepth) || maxDelegationDepth < 0)
+  ) {
+    throw new RangeError('maxDelegationDepth must be a non-negative safe integer');
+  }
+
   return {
     async verify(token: string): Promise<VerifiedGrant> {
+      if (isSnapshotExpired(jwksSnapshot)) {
+        throw new OfflineVerificationError(
+          'JWKS snapshot has expired or has an invalid validUntil timestamp',
+          'JWKS_SNAPSHOT_EXPIRED',
+        );
+      }
+
       /* ---- Decode header (unverified) to get kid + alg ---------- */
       let header: jose.ProtectedHeaderParameters;
       try {
@@ -109,6 +126,7 @@ export function createOfflineVerifier(
         const result = await jose.jwtVerify(token, key, {
           algorithms: ['RS256'],
           clockTolerance: clockSkewSeconds,
+          requiredClaims: ['exp'],
         });
         payload = result.payload;
       } catch (err) {
@@ -137,19 +155,29 @@ export function createOfflineVerifier(
       }
 
       /* ---- Extract Grantex-specific claims ---------------------- */
-      const scopes = Array.isArray(payload['scp'])
-        ? (payload['scp'] as string[])
-        : [];
-      const agentDID = (payload['agt'] as string) ?? '';
-      const principalDID = (payload['sub'] as string) ?? '';
-      const jti = (payload['jti'] as string) ?? '';
-      const grantId = (payload['grnt'] as string) ?? jti;
-      const depth =
-        typeof payload['delegationDepth'] === 'number'
-          ? (payload['delegationDepth'] as number)
-          : 0;
-      const exp = payload['exp'] as number | undefined;
-      const expiresAt = new Date((exp ?? 0) * 1000);
+      const rawScopes = payload['scp'];
+      if (
+        rawScopes !== undefined &&
+        (!Array.isArray(rawScopes) || rawScopes.some((scope) => typeof scope !== 'string'))
+      ) {
+        throw invalidClaim('scp', 'an array of strings');
+      }
+      const scopes = (rawScopes ?? []) as string[];
+      const agentDID = optionalStringClaim(payload, 'agt');
+      const principalDID = optionalStringClaim(payload, 'sub');
+      const jti = optionalStringClaim(payload, 'jti');
+      const grantId = optionalStringClaim(payload, 'grnt') || jti;
+
+      const rawDepth = payload['delegationDepth'];
+      if (
+        rawDepth !== undefined &&
+        (!Number.isSafeInteger(rawDepth) || (rawDepth as number) < 0)
+      ) {
+        throw invalidClaim('delegationDepth', 'a non-negative safe integer');
+      }
+      const depth = (rawDepth as number | undefined) ?? 0;
+      const exp = payload.exp!;
+      const expiresAt = new Date(exp * 1000);
 
       /* ---- Scope enforcement ------------------------------------ */
       if (requireScopes && requireScopes.length > 0) {
@@ -185,4 +213,20 @@ export function createOfflineVerifier(
       };
     },
   };
+}
+
+function optionalStringClaim(payload: jose.JWTPayload, name: string): string {
+  const value = payload[name];
+  if (value === undefined) return '';
+  if (typeof value !== 'string') {
+    throw invalidClaim(name, 'a string');
+  }
+  return value;
+}
+
+function invalidClaim(name: string, expected: string): OfflineVerificationError {
+  return new OfflineVerificationError(
+    `Invalid ${name} claim: expected ${expected}`,
+    'INVALID_CLAIM',
+  );
 }

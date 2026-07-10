@@ -46,6 +46,10 @@ describe('POST /v1/grants/delegate', () => {
     sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
     // Sub-agent lookup
     sqlMock.mockResolvedValueOnce([SUB_AGENT]);
+    // Shared delegate/revoke advisory lock
+    sqlMock.mockResolvedValueOnce([]);
+    // Parent grant lock/re-check inside child insert transaction
+    sqlMock.mockResolvedValueOnce([{ id: 'grnt_PARENT01' }]);
     // INSERT grants
     sqlMock.mockResolvedValueOnce([]);
     // INSERT grant_tokens
@@ -75,6 +79,8 @@ describe('POST /v1/grants/delegate', () => {
     expect(typeof body.grantToken).toBe('string');
     expect(body.scopes).toEqual(['read']);
     expect(typeof body.grantId).toBe('string');
+    expect(typeof (body as { refreshToken?: string }).refreshToken).toBe('string');
+    expect(sqlMock.begin).toHaveBeenCalledTimes(1);
 
     // Verify delegation claims
     const claims = decodeJwt(body.grantToken);
@@ -82,6 +88,31 @@ describe('POST /v1/grants/delegate', () => {
     expect(claims['parentAgt']).toBe(TEST_AGENT.did);
     expect(claims['parentGrnt']).toBe('grnt_PARENT01');
     expect(claims['delegationDepth']).toBe(1);
+  });
+
+  it('does not create a child when the parent is revoked before the insert transaction', async () => {
+    seedAuth();
+    mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
+    sqlMock.mockResolvedValueOnce([SUB_AGENT]);
+    sqlMock.mockResolvedValueOnce([]); // shared delegate/revoke advisory lock
+    sqlMock.mockResolvedValueOnce([]); // locked parent re-check no longer active
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/delegate',
+      headers: authHeader(),
+      payload: {
+        parentGrantToken: parentToken,
+        subAgentId: SUB_AGENT.id,
+        scopes: ['read'],
+        expiresIn: '1h',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('no longer active');
+    expect(sqlMock).toHaveBeenCalledTimes(5);
   });
 
   it('returns 400 when requested scopes exceed parent scopes', async () => {
@@ -217,12 +248,39 @@ describe('POST /v1/grants/delegate', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('returns 400 for an invalid expiresIn instead of leaking a 500', async () => {
+    seedAuth();
+    mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
+    sqlMock.mockResolvedValueOnce([SUB_AGENT]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/delegate',
+      headers: authHeader(),
+      payload: {
+        parentGrantToken: parentToken,
+        subAgentId: SUB_AGENT.id,
+        scopes: ['read'],
+        expiresIn: 'later',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('BAD_REQUEST');
+    expect(sqlMock.begin).not.toHaveBeenCalled();
+  });
+
   it('includes verifiableCredential when credentialFormat is vc-jwt', async () => {
     seedAuth();
     mockRedis.get.mockResolvedValue(null);
     sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
     // Sub-agent lookup
     sqlMock.mockResolvedValueOnce([SUB_AGENT]);
+    // Shared delegate/revoke advisory lock
+    sqlMock.mockResolvedValueOnce([]);
+    // Parent grant lock/re-check
+    sqlMock.mockResolvedValueOnce([{ id: 'grnt_PARENT01' }]);
     // INSERT grants
     sqlMock.mockResolvedValueOnce([]);
     // INSERT grant_tokens
@@ -278,6 +336,10 @@ describe('POST /v1/grants/delegate', () => {
     sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
     // Sub-agent lookup
     sqlMock.mockResolvedValueOnce([SUB_AGENT]);
+    // Shared delegate/revoke advisory lock
+    sqlMock.mockResolvedValueOnce([]);
+    // Parent grant lock/re-check
+    sqlMock.mockResolvedValueOnce([{ id: 'grnt_PARENT01' }]);
     // INSERT grants
     sqlMock.mockResolvedValueOnce([]);
     // INSERT grant_tokens
@@ -333,6 +395,10 @@ describe('POST /v1/grants/delegate', () => {
     sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
     // Sub-agent lookup
     sqlMock.mockResolvedValueOnce([SUB_AGENT]);
+    // Shared delegate/revoke advisory lock
+    sqlMock.mockResolvedValueOnce([]);
+    // Parent grant lock/re-check
+    sqlMock.mockResolvedValueOnce([{ id: 'grnt_PARENT01' }]);
     // INSERT grants
     sqlMock.mockResolvedValueOnce([]);
     // INSERT grant_tokens

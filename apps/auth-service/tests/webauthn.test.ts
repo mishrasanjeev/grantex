@@ -134,10 +134,8 @@ describe('POST /v1/webauthn/register/verify', () => {
 
   it('creates credential on successful registration', async () => {
     seedAuth();
-    // Challenge lookup
+    // Atomically claim challenge
     sqlMock.mockResolvedValueOnce([{ challenge: 'mock-challenge', principal_id: 'user_123' }]);
-    // Consume challenge
-    sqlMock.mockResolvedValueOnce([]);
     // Insert credential
     sqlMock.mockResolvedValueOnce([]);
 
@@ -158,6 +156,10 @@ describe('POST /v1/webauthn/register/verify', () => {
     expect(body.principalId).toBe('user_123');
     expect(body.deviceName).toBe('My YubiKey');
     expect(body.backedUp).toBe(true);
+
+    const claimSql = (sqlMock.mock.calls[1]?.[0] as TemplateStringsArray).join(' ');
+    expect(claimSql).toContain('UPDATE webauthn_challenges');
+    expect(claimSql).toContain('consumed = FALSE');
   });
 });
 
@@ -419,15 +421,13 @@ describe('POST /v1/webauthn/assert/verify', () => {
   });
 
   it('returns verified: true on successful assertion', async () => {
-    // Challenge lookup
+    // Atomically claim challenge
     sqlMock.mockResolvedValueOnce([{
       challenge: 'mock-auth-challenge',
       principal_id: 'user_123',
       developer_id: 'dev_TEST',
       auth_request_id: 'areq_test',
     }]);
-    // Consume challenge
-    sqlMock.mockResolvedValueOnce([]);
     // Credential lookup
     sqlMock.mockResolvedValueOnce([{
       id: 'cred_1',
@@ -436,8 +436,8 @@ describe('POST /v1/webauthn/assert/verify', () => {
       counter: 5,
       transports: ['internal'],
     }]);
-    // Update counter
-    sqlMock.mockResolvedValueOnce([]);
+    // Conditional counter update
+    sqlMock.mockResolvedValueOnce([{ id: 'cred_1' }]);
     // Update auth request fido_verified
     sqlMock.mockResolvedValueOnce([]);
 
@@ -452,6 +452,39 @@ describe('POST /v1/webauthn/assert/verify', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().verified).toBe(true);
+
+    const claimSql = (sqlMock.mock.calls[0]?.[0] as TemplateStringsArray).join(' ');
+    expect(claimSql).toContain('UPDATE webauthn_challenges');
+    expect(claimSql).toContain('consumed = FALSE');
+  });
+
+  it('rejects an assertion when its credential counter changed concurrently', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      challenge: 'mock-auth-challenge',
+      principal_id: 'user_123',
+      developer_id: 'dev_TEST',
+      auth_request_id: 'areq_test',
+    }]);
+    sqlMock.mockResolvedValueOnce([{
+      id: 'cred_1',
+      credential_id: 'bW9jay1jcmVk',
+      public_key: 'AQIDBA',
+      counter: 5,
+      transports: ['internal'],
+    }]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webauthn/assert/verify',
+      payload: {
+        challengeId: 'wac_test',
+        response: { id: 'bW9jay1jcmVk', rawId: 'bW9jay1jcmVk', type: 'public-key', response: { clientDataJSON: '', authenticatorData: '', signature: '' }, clientExtensionResults: {} },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('counter changed');
   });
 });
 

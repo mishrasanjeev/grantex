@@ -50,6 +50,18 @@ describe('Table', () => {
     expect(onRowClick).toHaveBeenCalledWith(sampleData[0]);
   });
 
+  it('activates clickable rows from the keyboard', async () => {
+    const onRowClick = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Table columns={columns} data={sampleData} rowKey={(r) => r.id} onRowClick={onRowClick} />,
+    );
+    const row = screen.getByText('Alice').closest('tr')!;
+    row.focus();
+    await user.keyboard('{Enter}');
+    expect(onRowClick).toHaveBeenCalledWith(sampleData[0]);
+  });
+
   it('applies cursor-pointer class when onRowClick is provided', () => {
     const onRowClick = vi.fn();
     render(

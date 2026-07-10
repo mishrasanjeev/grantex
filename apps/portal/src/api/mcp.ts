@@ -49,9 +49,18 @@ interface McpServerWire extends Omit<McpServer, 'id'> {
   serverId: string;
 }
 
+interface McpCertificationWire extends Omit<McpCertification, 'id'> {
+  certificationId: string;
+}
+
 function normalizeServer(w: McpServerWire): McpServer {
   const { serverId, ...rest } = w;
   return { id: serverId, ...rest };
+}
+
+function normalizeCertification(w: McpCertificationWire): McpCertification {
+  const { certificationId, ...rest } = w;
+  return { id: certificationId, ...rest };
 }
 
 export async function listMcpServers(params?: ListMcpServersParams): Promise<McpServer[]> {
@@ -75,10 +84,17 @@ export async function createMcpServer(params: CreateMcpServerParams): Promise<Mc
   return normalizeServer(res);
 }
 
-export function applyForCertification(serverId: string, level: string): Promise<McpCertification> {
-  return api.post<McpCertification>(`/v1/mcp/servers/${encodeURIComponent(serverId)}/certify`, { level });
+export async function applyForCertification(serverId: string, level: string): Promise<McpCertification> {
+  const res = await api.post<McpCertificationWire>('/v1/mcp/certification/apply', {
+    serverId,
+    requestedLevel: level,
+  });
+  return normalizeCertification(res);
 }
 
-export function getCertification(certId: string): Promise<McpCertification> {
-  return api.get<McpCertification>(`/v1/mcp/certifications/${encodeURIComponent(certId)}`);
+export async function getCertification(certId: string): Promise<McpCertification> {
+  const res = await api.get<McpCertificationWire>(
+    `/v1/mcp/certification/${encodeURIComponent(certId)}`,
+  );
+  return normalizeCertification(res);
 }

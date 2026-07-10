@@ -75,10 +75,13 @@ describe('BundleForm', () => {
 
   it('shows success result after bundle creation', async () => {
     mockCreateBundle.mockResolvedValueOnce({
-      bundle: { id: 'bnd-new' },
+      bundleId: 'bnd-new',
       grantToken: 'jwt-token-xyz',
-      jwks: { keys: [] },
-      auditKey: 'audit-key-secret',
+      jwksSnapshot: { keys: [], fetchedAt: '2026-01-01', validUntil: '2026-01-02' },
+      offlineAuditKey: { publicKey: {}, privateKey: { d: 'audit-key-secret' }, algorithm: 'Ed25519' },
+      checkpointAt: 1,
+      syncEndpoint: '/v1/audit/offline-sync',
+      offlineExpiresAt: '2026-01-02',
     });
     const user = userEvent.setup();
     r();
@@ -94,7 +97,7 @@ describe('BundleForm', () => {
     await waitFor(() => expect(screen.getByText('Review Bundle')).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: 'Issue Bundle' }));
     await waitFor(() => expect(screen.getByText('Bundle Issued')).toBeInTheDocument());
-    expect(screen.getByText('audit-key-secret')).toBeInTheDocument();
+    expect(screen.getByText(/audit-key-secret/)).toBeInTheDocument();
     expect(mockShow).toHaveBeenCalledWith('Bundle issued successfully', 'success');
   });
 

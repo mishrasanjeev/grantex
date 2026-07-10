@@ -40,10 +40,16 @@ export async function checkActiveGrantToken(
   }
 
   const redis = getRedis();
-  const [tokenRevoked, grantRevoked] = await Promise.all([
+  const [tokenRevocationResult, grantRevocationResult] = await Promise.allSettled([
     redis.get(`revoked:tok:${claims.jti}`),
     redis.get(`revoked:grant:${claims.grnt}`),
   ]);
+  const tokenRevoked = tokenRevocationResult.status === 'fulfilled'
+    ? tokenRevocationResult.value
+    : null;
+  const grantRevoked = grantRevocationResult.status === 'fulfilled'
+    ? grantRevocationResult.value
+    : null;
 
   if (tokenRevoked || grantRevoked) {
     return { ok: false, reason: 'revoked' };

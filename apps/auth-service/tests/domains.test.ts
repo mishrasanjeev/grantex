@@ -58,6 +58,47 @@ describe('POST /v1/domains', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('returns 400 for a missing JSON body', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/domains',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects URLs and IP addresses as custom domains', async () => {
+    for (const domain of ['https://api.example.com', '127.0.0.1']) {
+      seedAuth();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/domains',
+        headers: authHeader(),
+        payload: { domain },
+      });
+      expect(res.statusCode).toBe(400);
+    }
+  });
+
+  it('normalizes case and a trailing DNS dot', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ plan: 'enterprise' }]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/domains',
+      headers: authHeader(),
+      payload: { domain: 'API.Example.COM.' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().domain).toBe('api.example.com');
+  });
+
   it('returns 409 for duplicate domain', async () => {
     seedAuth();
     // Subscription query
@@ -74,6 +115,22 @@ describe('POST /v1/domains', () => {
 
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe('CONFLICT');
+  });
+
+  it('does not disguise unexpected database failures as duplicates', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ plan: 'enterprise' }]);
+    sqlMock.mockRejectedValueOnce(new Error('database unavailable'));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/domains',
+      headers: authHeader(),
+      payload: { domain: 'api.example.com' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json().code).toBe('INTERNAL_ERROR');
   });
 });
 

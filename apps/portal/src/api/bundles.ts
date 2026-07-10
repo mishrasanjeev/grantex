@@ -39,18 +39,35 @@ export interface CreateBundleParams {
   devicePlatform?: string;
 }
 
+export interface JwksSnapshot {
+  keys: Record<string, unknown>[];
+  fetchedAt: string;
+  validUntil: string;
+}
+
+export interface OfflineAuditKey {
+  publicKey: string;
+  privateKey: string;
+  algorithm: string;
+}
+
 export interface CreateBundleResponse {
-  bundle: ConsentBundle;
+  bundleId: string;
   grantToken: string;
-  jwks: Record<string, unknown>;
-  auditKey: string;
+  jwksSnapshot: JwksSnapshot;
+  offlineAuditKey: OfflineAuditKey;
+  checkpointAt: number;
+  syncEndpoint: string;
+  offlineExpiresAt: string;
 }
 
 export interface RevocationStatus {
   bundleId: string;
-  revoked: boolean;
+  status: 'active' | 'revoked' | 'expired';
   revokedAt: string | null;
-  propagated: boolean;
+  revokedBy: string | null;
+  grantRevoked: boolean;
+  checkpointAt: number | null;
 }
 
 export async function listBundles(params?: { status?: string; agentId?: string }): Promise<ConsentBundle[]> {
@@ -66,8 +83,12 @@ export function getBundle(bundleId: string): Promise<ConsentBundle> {
   return api.get<ConsentBundle>(`/v1/consent-bundles/${encodeURIComponent(bundleId)}`);
 }
 
-export function createBundle(params: CreateBundleParams): Promise<CreateBundleResponse> {
-  return api.post<CreateBundleResponse>('/v1/consent-bundles', params);
+export async function createBundle(params: CreateBundleParams): Promise<CreateBundleResponse> {
+  const res = await api.post<CreateBundleResponse | { data: CreateBundleResponse }>(
+    '/v1/consent-bundles',
+    params,
+  );
+  return 'data' in res ? res.data : res;
 }
 
 export function revokeBundle(bundleId: string): Promise<void> {
@@ -81,6 +102,9 @@ export async function getBundleAuditEntries(bundleId: string): Promise<OfflineAu
   return res.entries;
 }
 
-export function getRevocationStatus(bundleId: string): Promise<RevocationStatus> {
-  return api.get<RevocationStatus>(`/v1/consent-bundles/${encodeURIComponent(bundleId)}/revocation`);
+export async function getRevocationStatus(bundleId: string): Promise<RevocationStatus> {
+  const res = await api.get<{ data: RevocationStatus }>(
+    `/v1/consent-bundles/${encodeURIComponent(bundleId)}/revocation-status`,
+  );
+  return res.data;
 }

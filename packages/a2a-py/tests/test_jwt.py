@@ -4,6 +4,8 @@ import base64
 import json
 import time
 
+import pytest
+
 from grantex_a2a._jwt import decode_jwt_payload, is_token_expired
 
 
@@ -63,6 +65,13 @@ def test_decode_too_few_parts():
         pass
 
 
+def test_decode_rejects_non_object_payload():
+    token = _make_token(["not", "an", "object"])
+
+    with pytest.raises(ValueError, match="expected a JSON object"):
+        decode_jwt_payload(token)
+
+
 def test_token_not_expired():
     payload = {"exp": int(time.time()) + 3600}
     assert is_token_expired(payload) is False
@@ -80,3 +89,9 @@ def test_token_no_exp():
 def test_token_expired_exactly_now():
     payload = {"exp": int(time.time())}
     assert is_token_expired(payload) is True
+
+
+@pytest.mark.parametrize("exp", ["tomorrow", True, []])
+def test_token_rejects_non_numeric_exp(exp):
+    with pytest.raises(ValueError, match="expected a number"):
+        is_token_expired({"exp": exp})

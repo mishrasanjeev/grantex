@@ -268,7 +268,6 @@ describe('POST /v1/consent/:id/approve', () => {
       developer_id: 'dev_TEST',
       auth_request_id: 'areq_TEST01',
     }]);
-    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{
       id: 'cred_DB',
       credential_id: 'bW9jay1jcmVkLWlk',
@@ -276,7 +275,7 @@ describe('POST /v1/consent/:id/approve', () => {
       counter: 5,
       transports: ['internal'],
     }]);
-    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ id: 'cred_DB' }]);
     sqlMock.mockResolvedValueOnce([]);
 
     const verify = await app.inject({

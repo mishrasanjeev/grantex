@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import { CedarBackend } from '../src/lib/backends/cedar.js';
 import type { PolicyEvalContext } from '../src/lib/policy-backend.js';
 import { sqlMock } from './setup.js';
+import { setSafeFetchForTests } from '../src/lib/url-security.js';
 
 const ctx: PolicyEvalContext = {
   agentId: 'ag_1',
@@ -13,6 +14,11 @@ const ctx: PolicyEvalContext = {
 describe('CedarBackend', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    setSafeFetchForTests(async (url, init) => fetch(url, init));
+  });
+
+  afterEach(() => {
+    setSafeFetchForTests(null);
   });
 
   it('sends correct request to Cedar', async () => {
@@ -74,7 +80,7 @@ describe('CedarBackend', () => {
     expect(decision.reason).toBe('policy0; policy1');
   });
 
-  it('returns null with reason on HTTP error (no fallback)', async () => {
+  it('fails closed on HTTP error (no fallback)', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: false,
       status: 503,
@@ -82,16 +88,16 @@ describe('CedarBackend', () => {
 
     const backend = new CedarBackend('http://cedar:8180', false);
     const decision = await backend.evaluate(ctx);
-    expect(decision.effect).toBeNull();
+    expect(decision.effect).toBe('deny');
     expect(decision.reason).toContain('503');
   });
 
-  it('returns null with reason on network error (no fallback)', async () => {
+  it('fails closed on network error (no fallback)', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
     const backend = new CedarBackend('http://cedar:8180', false);
     const decision = await backend.evaluate(ctx);
-    expect(decision.effect).toBeNull();
+    expect(decision.effect).toBe('deny');
     expect(decision.reason).toBe('Cedar unavailable');
   });
 
@@ -112,6 +118,30 @@ describe('CedarBackend', () => {
     const body = JSON.parse(vi.mocked(fetch).mock.calls[0]![1]!.body as string);
     expect(body.resource.id).toBe('grnt_1');
     expect(body.context.delegationDepth).toBe(2);
+  });
+
+  it('fails closed on an unknown Cedar decision', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ decision: 'Maybe' }),
+    } as Response);
+
+    const decision = await new CedarBackend('http://cedar:8180', false).evaluate(ctx);
+
+    expect(decision.effect).toBe('deny');
+    expect(decision.reason).toContain('invalid decision');
+  });
+
+  it('fails closed when Cedar returns malformed JSON', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => { throw new SyntaxError('bad json'); },
+    } as unknown as Response);
+
+    const decision = await new CedarBackend('http://cedar:8180', false).evaluate(ctx);
+
+    expect(decision.effect).toBe('deny');
+    expect(decision.reason).toContain('invalid JSON');
   });
 
   it('uses "pending" as resource id when no grant', async () => {

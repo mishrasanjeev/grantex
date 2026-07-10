@@ -349,6 +349,29 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data });
   });
 
+  // GET /v1/anomaly/alerts/:alertId — fetch one alert
+  app.get<{ Params: { alertId: string } }>(
+    '/v1/anomaly/alerts/:alertId',
+    async (request, reply) => {
+      const sql = getSql();
+      const rows = await sql`
+        SELECT id, type, severity, status, rule_id, rule_name, agent_id,
+               description, context, metadata, detected_at, acknowledged_at, resolved_at
+        FROM anomalies
+        WHERE id = ${request.params.alertId}
+          AND developer_id = ${request.developer.id}
+      `;
+      if (!rows[0]) {
+        return reply.status(404).send({
+          message: 'Alert not found',
+          code: 'NOT_FOUND',
+          requestId: request.id,
+        });
+      }
+      return reply.send(toAlertResponse(rows[0] as Record<string, unknown>));
+    },
+  );
+
   // POST /v1/anomaly/alerts/:alertId/acknowledge — acknowledge an alert
   app.post<{ Params: { alertId: string }; Body: { note?: string } }>(
     '/v1/anomaly/alerts/:alertId/acknowledge',
@@ -554,6 +577,54 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({ rules: [...builtIn, ...custom] });
   });
+
+  // PATCH /v1/anomaly/rules/:ruleId — enable or disable a custom rule.
+  // The route parameter is the database id returned by list/create; built-in
+  // rules have no persisted override and are intentionally immutable.
+  app.patch<{ Params: { ruleId: string }; Body: { enabled?: boolean } }>(
+    '/v1/anomaly/rules/:ruleId',
+    async (request, reply) => {
+      const enabled = request.body?.enabled;
+      if (typeof enabled !== 'boolean') {
+        return reply.status(400).send({
+          message: 'enabled must be a boolean',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+
+      const sql = getSql();
+      const rows = await sql`
+        UPDATE anomaly_rules
+        SET enabled = ${enabled}
+        WHERE id = ${request.params.ruleId}
+          AND developer_id = ${request.developer.id}
+        RETURNING id, rule_id, name, description, condition, severity,
+                  alert_channels, enabled, created_at
+      `;
+      const row = rows[0] as Record<string, unknown> | undefined;
+      if (!row) {
+        return reply.status(404).send({
+          message: 'Rule not found',
+          code: 'NOT_FOUND',
+          requestId: request.id,
+        });
+      }
+
+      return reply.send({
+        id: row['id'],
+        ruleId: row['rule_id'],
+        name: row['name'],
+        description: row['description'] ?? null,
+        condition: row['condition'],
+        severity: row['severity'],
+        alertChannels: row['alert_channels'] ?? [],
+        enabled: row['enabled'],
+        builtIn: false,
+        createdAt: row['created_at'],
+      });
+    },
+  );
 
   // DELETE /v1/anomaly/rules/:ruleId — delete a custom rule
   app.delete<{ Params: { ruleId: string } }>(

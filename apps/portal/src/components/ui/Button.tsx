@@ -20,9 +20,10 @@ const sizes = {
   md: 'px-4 py-2 text-sm',
 };
 
-export function Button({ variant = 'primary', size = 'md', className, ...props }: ButtonProps) {
+export function Button({ variant = 'primary', size = 'md', className, type = 'button', ...props }: ButtonProps) {
   return (
     <button
+      type={type}
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-md font-semibold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
         variants[variant],

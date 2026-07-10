@@ -67,8 +67,16 @@ export async function POST() {
 
     // Store agentId and state in cookies for the callback to use
     const cookieStore = await cookies();
-    cookieStore.set('grantex_agent_id', agentId, { path: '/', maxAge: 600, httpOnly: false, sameSite: 'lax' });
-    cookieStore.set('grantex_state', state, { path: '/', maxAge: 600, httpOnly: false, sameSite: 'lax' });
+    const cookieOptions = {
+      path: '/',
+      maxAge: 600,
+      httpOnly: true,
+      sameSite: 'lax' as const,
+      secure: APP_URL.startsWith('https://'),
+    };
+    cookieStore.set('grantex_agent_id', agentId, cookieOptions);
+    cookieStore.set('grantex_agent_did', agent.did, cookieOptions);
+    cookieStore.set('grantex_state', state, cookieOptions);
 
     // The auth service returns consentUrl using its JWT_ISSUER (grantex.dev),
     // but the consent UI is served by the auth service itself. Replace the

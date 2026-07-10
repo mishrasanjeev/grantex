@@ -115,6 +115,34 @@ describe('GET /v1/webhooks/:id/deliveries', () => {
     expect(res.json().pageSize).toBe(100);
   });
 
+  it('rejects malformed pagination values', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: 'wh_01' }]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/webhooks/wh_01/deliveries?page=abc',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('BAD_REQUEST');
+  });
+
+  it('rejects unknown delivery statuses', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: 'wh_01' }]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/webhooks/wh_01/deliveries?status=unknown',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('BAD_REQUEST');
+  });
+
   it('returns empty deliveries array when none exist', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ id: 'wh_01' }]);

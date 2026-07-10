@@ -14,6 +14,48 @@ function optional(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
 
+export function parseIntegerSetting(
+  name: string,
+  value: string,
+  min: number,
+  max: number,
+): number {
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${name} must be an integer between ${min} and ${max}`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    throw new Error(`${name} must be an integer between ${min} and ${max}`);
+  }
+  return parsed;
+}
+
+function integerSetting(name: string, fallback: string, min: number, max: number): number {
+  return parseIntegerSetting(name, optional(name, fallback), min, max);
+}
+
+const POLICY_BACKENDS = ['builtin', 'opa', 'cedar'] as const;
+type PolicyBackendName = (typeof POLICY_BACKENDS)[number];
+
+export function parsePolicyBackend(value: string): PolicyBackendName {
+  if (!(POLICY_BACKENDS as readonly string[]).includes(value)) {
+    throw new Error(`POLICY_BACKEND must be one of: ${POLICY_BACKENDS.join(', ')}`);
+  }
+  return value as PolicyBackendName;
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:')
+      && parsed.hostname.length > 0
+      && !parsed.username
+      && !parsed.password;
+  } catch {
+    return false;
+  }
+}
+
 function isValidVaultEncryptionKey(value: string): boolean {
   if (/^[0-9a-fA-F]{64}$/.test(value)) return true;
   if (!/^[A-Za-z0-9+/]{43}={0,2}$/.test(value)) return false;
@@ -21,7 +63,7 @@ function isValidVaultEncryptionKey(value: string): boolean {
 }
 
 export const config = {
-  port: parseInt(optional('PORT', '3001'), 10),
+  port: integerSetting('PORT', '3001', 1, 65_535),
   host: optional('HOST', '0.0.0.0'),
   databaseUrl: required('DATABASE_URL'),
   redisUrl: required('REDIS_URL'),
@@ -58,11 +100,11 @@ export const config = {
     || process.env['NODE_ENV'] !== 'production',
   ldapTlsRejectUnauthorized: process.env['LDAP_TLS_REJECT_UNAUTHORIZED'] !== 'false',
   // Policy backend ('builtin' | 'opa' | 'cedar')
-  policyBackend: optional('POLICY_BACKEND', 'builtin') as 'builtin' | 'opa' | 'cedar',
+  policyBackend: parsePolicyBackend(optional('POLICY_BACKEND', 'builtin')),
   opaUrl: process.env['OPA_URL'] ?? null,
-  opaFallbackToBuiltin: process.env['OPA_FALLBACK_TO_BUILTIN'] !== 'false',
+  opaFallbackToBuiltin: process.env['OPA_FALLBACK_TO_BUILTIN'] === 'true',
   cedarUrl: process.env['CEDAR_URL'] ?? null,
-  cedarFallbackToBuiltin: process.env['CEDAR_FALLBACK_TO_BUILTIN'] !== 'false',
+  cedarFallbackToBuiltin: process.env['CEDAR_FALLBACK_TO_BUILTIN'] === 'true',
   // Usage metering
   usageMeteringEnabled: process.env['USAGE_METERING_ENABLED'] === 'true',
   // Email (Resend)
@@ -106,8 +148,13 @@ export const config = {
   pluralLiveEnabled: process.env['PLURAL_LIVE_ENABLED'] === 'true',
   commerceLiveModeEnabled: process.env['COMMERCE_LIVE_MODE_ENABLED'] === 'true',
   commerceReconciliationWorkerEnabled: process.env['COMMERCE_RECONCILIATION_WORKER_ENABLED'] === 'true',
-  commerceReconciliationIntervalMs: parseInt(optional('COMMERCE_RECONCILIATION_INTERVAL_MS', '300000'), 10),
-  commerceReconciliationLimit: parseInt(optional('COMMERCE_RECONCILIATION_LIMIT', '50'), 10),
+  commerceReconciliationIntervalMs: integerSetting(
+    'COMMERCE_RECONCILIATION_INTERVAL_MS',
+    '300000',
+    1,
+    2_147_483_647,
+  ),
+  commerceReconciliationLimit: integerSetting('COMMERCE_RECONCILIATION_LIMIT', '50', 1, 1_000),
 } as const;
 
 if (!config.rsaPrivateKey && !config.autoGenerateKeys) {
@@ -122,30 +169,42 @@ if (!config.rsaPrivateKey && !config.autoGenerateKeys) {
  * any required value is missing.
  */
 export function validateConfig(): void {
-  const missing: string[] = [];
+  const errors: string[] = [];
 
-  if (!config.databaseUrl) missing.push('DATABASE_URL');
-  if (!config.redisUrl) missing.push('REDIS_URL');
+  if (!config.databaseUrl) errors.push('DATABASE_URL is required');
+  if (!config.redisUrl) errors.push('REDIS_URL is required');
   if (!config.rsaPrivateKey && !config.autoGenerateKeys) {
-    missing.push('RSA_PRIVATE_KEY (or AUTO_GENERATE_KEYS=true)');
+    errors.push('RSA_PRIVATE_KEY is required (or AUTO_GENERATE_KEYS=true outside production)');
   }
-  if (!config.jwtIssuer) missing.push('JWT_ISSUER');
+  if (!config.jwtIssuer) errors.push('JWT_ISSUER is required');
   if (config.metricsEnabled && config.metricsRequireAuth && !config.metricsApiKey) {
-    missing.push('METRICS_API_KEY');
+    errors.push('METRICS_API_KEY is required');
   }
   if (process.env['NODE_ENV'] === 'production' && !config.adminApiKey) {
-    missing.push('ADMIN_API_KEY');
+    errors.push('ADMIN_API_KEY is required');
   }
   if (process.env['NODE_ENV'] === 'production' && !config.vaultEncryptionKey) {
-    missing.push('VAULT_ENCRYPTION_KEY');
+    errors.push('VAULT_ENCRYPTION_KEY is required');
+  }
+  if (process.env['NODE_ENV'] === 'production' && !config.rsaPrivateKey) {
+    errors.push('RSA_PRIVATE_KEY is required in production; AUTO_GENERATE_KEYS is development-only');
+  }
+  if (process.env['NODE_ENV'] === 'production' && (config.seedApiKey || config.seedSandboxKey)) {
+    errors.push('SEED_API_KEY and SEED_SANDBOX_KEY must not be configured in production');
   }
   if (config.vaultEncryptionKey && !isValidVaultEncryptionKey(config.vaultEncryptionKey)) {
-    missing.push('VAULT_ENCRYPTION_KEY (must be 32-byte hex or base64)');
+    errors.push('VAULT_ENCRYPTION_KEY must be 32-byte hex or base64');
+  }
+  if (config.policyBackend === 'opa' && (!config.opaUrl || !isHttpUrl(config.opaUrl))) {
+    errors.push('OPA_URL must be a valid HTTP or HTTPS URL when POLICY_BACKEND=opa');
+  }
+  if (config.policyBackend === 'cedar' && (!config.cedarUrl || !isHttpUrl(config.cedarUrl))) {
+    errors.push('CEDAR_URL must be a valid HTTP or HTTPS URL when POLICY_BACKEND=cedar');
   }
 
-  if (missing.length > 0) {
+  if (errors.length > 0) {
     console.error(
-      `[config] Fatal: missing required configuration: ${missing.join(', ')}`,
+      `[config] Fatal: invalid configuration: ${errors.join(', ')}`,
     );
     process.exit(1);
   }

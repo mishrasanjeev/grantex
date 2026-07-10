@@ -17,6 +17,7 @@ export function ToastContainer() {
       {toasts.map((toast) => (
         <div
           key={toast.id}
+          role={toast.type === 'error' ? 'alert' : 'status'}
           className={cn(
             'px-4 py-3 rounded-lg border text-sm text-gx-text shadow-lg max-w-sm animate-[slideIn_0.2s_ease-out]',
             typeStyles[toast.type],
@@ -25,6 +26,8 @@ export function ToastContainer() {
           <div className="flex items-center justify-between gap-3">
             <span>{toast.message}</span>
             <button
+              type="button"
+              aria-label="Dismiss notification"
               onClick={() => dismiss(toast.id)}
               className="text-gx-muted hover:text-gx-text transition-colors shrink-0"
             >

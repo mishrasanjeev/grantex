@@ -10,7 +10,7 @@ import type { McpAuthConfig } from '../src/types.js';
 const TEST_CLIENT_ID = 'test-client-id';
 const TEST_CLIENT_SECRET = 'test-secret';
 
-let rsaPrivateKey: jose.KeyLike;
+let rsaPrivateKey: jose.CryptoKey;
 let rsaPublicJwk: jose.JWK;
 let jwksServer: Server;
 let jwksPort: number;

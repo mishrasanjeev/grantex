@@ -59,7 +59,11 @@ export async function processUsageRollup(
   redis: Redis,
   newUsageDailyId: () => string,
 ): Promise<number> {
-  const date = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const dates = [
+    now.toISOString().slice(0, 10),
+    new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+  ];
 
   // Get all developers with active usage
   const rows = await sql<{ id: string }[]>`
@@ -68,12 +72,17 @@ export async function processUsageRollup(
 
   let count = 0;
   for (const row of rows) {
-    try {
-      await rollupDeveloper(sql, redis, row.id, date, newUsageDailyId());
-      count++;
-    } catch {
-      // Best-effort per developer
+    let succeeded = true;
+    for (const date of dates) {
+      try {
+        await rollupDeveloper(sql, redis, row.id, date, newUsageDailyId());
+      } catch {
+        // A failure for one date must not prevent the other date from being
+        // persisted. The next hourly pass will retry both days.
+        succeeded = false;
+      }
     }
+    if (succeeded) count++;
   }
 
   return count;
@@ -89,11 +98,16 @@ export function startUsageRollupWorker(
   newUsageDailyId: () => string,
   intervalMs = 3600_000, // 1 hour
 ): () => void {
+  let running = false;
   const timer = setInterval(async () => {
+    if (running) return;
+    running = true;
     try {
       await processUsageRollup(sql, redis, newUsageDailyId);
     } catch {
       // Log but don't crash
+    } finally {
+      running = false;
     }
   }, intervalMs);
 

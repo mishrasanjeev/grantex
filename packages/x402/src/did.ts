@@ -100,10 +100,18 @@ export function didToPublicKey(did: string): Uint8Array {
     throw new Error(`Unsupported DID format: ${did}. Only did:key is supported.`);
   }
 
-  const multicodecKey = base58btcDecode(did.slice(9)); // skip "did:key:z" (9 chars)
+  const encoded = did.slice(9); // skip "did:key:z" (9 chars)
+  if (encoded.length > 64) {
+    throw new Error('DID encoding is too long for an Ed25519 public key');
+  }
+  const multicodecKey = base58btcDecode(encoded);
 
   if (multicodecKey[0] !== 0xed || multicodecKey[1] !== 0x01) {
     throw new Error('DID does not encode an Ed25519 public key');
+  }
+
+  if (multicodecKey.length !== ED25519_MULTICODEC.length + 32) {
+    throw new Error('DID does not encode a 32-byte Ed25519 public key');
   }
 
   return multicodecKey.slice(2);

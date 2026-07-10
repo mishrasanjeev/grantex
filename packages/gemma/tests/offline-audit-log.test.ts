@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
@@ -120,7 +120,8 @@ describe('OfflineAuditLog', () => {
     });
 
     // Write enough entries to exceed limit
-    await log.append(sampleEntry);
+    const first = await log.append(sampleEntry);
+    await log.markSynced(first.seq);
     await log.append(sampleEntry);
 
     // After rotation, the old file should be renamed
@@ -128,6 +129,29 @@ describe('OfflineAuditLog', () => {
     const files = await readdir(tmpDir);
     const backups = files.filter((f) => f.endsWith('.bak'));
     expect(backups.length).toBeGreaterThanOrEqual(1);
+    const currentSegment = await log.entries();
+    expect(currentSegment).toHaveLength(1);
+    expect(currentSegment[0]!.seq).toBe(2);
+    expect(currentSegment[0]!.prevHash).toBe(first.hash);
+
+    const rotatedSegment = (await readFile(join(tmpDir, backups[0]!), 'utf-8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(verifyChain([...rotatedSegment, ...currentSegment])).toEqual({ valid: true });
+    expect(await log.unsyncedCount()).toBe(1);
+
+    // Simulate a process stop after rename and before the first append to the
+    // new segment. The persisted head must retain the server chain anchor.
+    await rm(logPath);
+    const recoveredLog = createOfflineAuditLog({
+      signingKey,
+      logPath,
+      maxSizeMB: 0.0001,
+    });
+    const recovered = await recoveredLog.append(sampleEntry);
+    expect(recovered.seq).toBe(2);
+    expect(recovered.prevHash).toBe(first.hash);
   });
 
   it('syncs entries to endpoint in batches', async () => {

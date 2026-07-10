@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, cast
 
 
 def decode_jwt_payload(token: str) -> Dict[str, Any]:
@@ -31,7 +31,10 @@ def decode_jwt_payload(token: str) -> Dict[str, Any]:
         payload += "=" * padding
 
     decoded = base64.urlsafe_b64decode(payload)
-    return json.loads(decoded)  # type: ignore[no-any-return]
+    decoded_payload: object = json.loads(decoded)
+    if not isinstance(decoded_payload, dict):
+        raise ValueError("Invalid JWT payload: expected a JSON object")
+    return cast(Dict[str, Any], decoded_payload)
 
 
 def is_token_expired(payload: Dict[str, Any]) -> bool:
@@ -46,4 +49,6 @@ def is_token_expired(payload: Dict[str, Any]) -> bool:
     exp = payload.get("exp")
     if exp is None:
         return False
-    return time.time() >= exp
+    if isinstance(exp, bool) or not isinstance(exp, (int, float)):
+        raise ValueError("Invalid JWT exp claim: expected a number")
+    return time.time() >= float(exp)

@@ -66,6 +66,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
       {/* Sidebar */}
       <aside
+        aria-label="Primary navigation"
         className={cn(
           'fixed left-0 top-0 bottom-0 w-56 bg-gx-surface border-r border-gx-border flex flex-col z-50 transition-transform duration-200 lg:translate-x-0',
           open ? 'translate-x-0' : '-translate-x-full',
@@ -76,6 +77,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             grant<span className="text-gx-text">ex</span>
           </a>
           <button
+            type="button"
+            aria-label="Close navigation menu"
             onClick={onClose}
             className="lg:hidden text-gx-muted hover:text-gx-text transition-colors"
           >

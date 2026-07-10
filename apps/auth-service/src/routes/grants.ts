@@ -56,8 +56,11 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
 
   // POST /v1/grants/verify
   app.post<{ Body: { token: string } }>('/v1/grants/verify', async (request, reply) => {
-    const { token } = request.body;
-    if (!token) {
+    const body = request.body;
+    const token = typeof body === 'object' && body !== null && !Array.isArray(body)
+      ? body.token
+      : undefined;
+    if (typeof token !== 'string' || token.length === 0) {
       return reply.status(400).send({ message: 'token is required', code: 'BAD_REQUEST', requestId: request.id });
     }
 

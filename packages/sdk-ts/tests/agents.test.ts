@@ -3,6 +3,7 @@ import { Grantex } from '../src/client.js';
 
 const MOCK_AGENT = {
   id: 'ag_01',
+  agentId: 'ag_01',
   did: 'did:grantex:ag_01',
   name: 'travel-booker',
   description: 'Books travel',
@@ -56,6 +57,24 @@ describe('AgentsClient', () => {
     expect(url).toMatch(/\/v1\/agents\/ag_01$/);
   });
 
+  it('normalizes the API agentId field to the SDK id alias', async () => {
+    const { id: _legacyId, ...apiAgent } = MOCK_AGENT;
+    vi.stubGlobal('fetch', makeFetch(200, apiAgent));
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    const agent = await grantex.agents.get('ag_01');
+
+    expect(agent.id).toBe('ag_01');
+    expect(agent.agentId).toBe('ag_01');
+  });
+
+  it('rejects conflicting agent identifiers from the API', async () => {
+    vi.stubGlobal('fetch', makeFetch(200, { ...MOCK_AGENT, agentId: 'ag_other' }));
+    const grantex = new Grantex({ apiKey: 'test_key' });
+
+    await expect(grantex.agents.get('ag_01')).rejects.toThrow('conflicting id');
+  });
+
   it('list() GETs /v1/agents', async () => {
     const listResponse = { agents: [MOCK_AGENT] };
     vi.stubGlobal('fetch', makeFetch(200, listResponse));
@@ -64,6 +83,16 @@ describe('AgentsClient', () => {
     const result = await grantex.agents.list();
 
     expect(result.agents).toHaveLength(1);
+  });
+
+  it('normalizes agentId for every list result', async () => {
+    const { id: _legacyId, ...apiAgent } = MOCK_AGENT;
+    vi.stubGlobal('fetch', makeFetch(200, { agents: [apiAgent] }));
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    const result = await grantex.agents.list();
+
+    expect(result.agents[0]).toMatchObject({ id: 'ag_01', agentId: 'ag_01' });
   });
 
   it('update() POSTs to /v1/agents/:id', async () => {

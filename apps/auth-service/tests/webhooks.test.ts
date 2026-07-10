@@ -19,6 +19,7 @@ const MOCK_WEBHOOK_ROW = {
 describe('POST /v1/webhooks', () => {
   it('creates a webhook and returns secret', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);               // advisory lock
     sqlMock.mockResolvedValueOnce([]);              // subscription lookup → free plan
     sqlMock.mockResolvedValueOnce([{ count: '0' }]); // webhook count → 0
     sqlMock.mockResolvedValueOnce([]);               // INSERT
@@ -47,10 +48,12 @@ describe('POST /v1/webhooks', () => {
     expect(typeof body.secret).toBe('string');
     expect(body.secret.length).toBeGreaterThan(0);
     expect(body.createdAt).toBeDefined();
+    expect(sqlMock.begin).toHaveBeenCalledTimes(1);
   });
 
   it('returns 402 when plan webhook limit is reached', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                 // advisory lock
     sqlMock.mockResolvedValueOnce([{ plan: 'free' }]); // subscription → free plan
     sqlMock.mockResolvedValueOnce([{ count: '30' }]);   // 30 webhooks already (free limit)
 
@@ -86,6 +89,31 @@ describe('POST /v1/webhooks', () => {
       url: '/v1/webhooks',
       headers: authHeader(),
       payload: { url: 'https://example.com/hooks', events: [] },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 400 for a missing JSON body', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webhooks',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 400 when events are not strings', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webhooks',
+      headers: authHeader(),
+      payload: { url: 'https://example.com/hooks', events: [42] },
     });
 
     expect(res.statusCode).toBe(400);

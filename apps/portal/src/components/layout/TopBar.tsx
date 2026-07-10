@@ -11,6 +11,8 @@ export function TopBar({ onMenuClick }: TopBarProps) {
   return (
     <header className="h-14 border-b border-gx-border bg-gx-surface/80 backdrop-blur-sm flex items-center justify-between px-6">
       <button
+        type="button"
+        aria-label="Open navigation menu"
         onClick={onMenuClick}
         className="lg:hidden text-gx-muted hover:text-gx-text transition-colors"
       >
@@ -29,6 +31,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
           </>
         )}
         <button
+          type="button"
           onClick={logout}
           className="text-sm text-gx-muted hover:text-gx-text transition-colors"
         >

@@ -10,6 +10,7 @@ import { incrementUsage } from '../lib/usage.js';
 import { parseExpiresIn } from '../lib/crypto.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
 import { assertValidRedirectUri } from '../lib/url-security.js';
+import { isValidPkceChallenge } from '../lib/pkce.js';
 
 const AUTHORIZE_MAX_PER_MINUTE = 10;
 const AUTHORIZE_WINDOW_SECONDS = 60;
@@ -34,7 +35,11 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
   // still caps unauthenticated abuse.
   app.post<{ Body: AuthorizeBody }>('/v1/authorize', async (request, reply) => {
     const endTimer = authorizeDuration.startTimer();
-    const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h', audience, codeChallenge, codeChallengeMethod } = request.body;
+    const body = request.body;
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+      return reply.status(400).send({ message: 'Request body must be a JSON object', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h', audience, codeChallenge, codeChallengeMethod } = body;
 
     const rl = await checkRateLimit(
       `authorize:${request.developer.id}`,
@@ -53,7 +58,9 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    if (!agentId || !principalId || !scopes?.length) {
+    if (typeof agentId !== 'string' || agentId.length === 0 || agentId.length > 256
+        || typeof principalId !== 'string' || principalId.length === 0 || principalId.length > 256
+        || !Array.isArray(scopes) || scopes.length === 0) {
       return reply.status(400).send({
         message: 'agentId, principalId, and scopes are required',
         code: 'BAD_REQUEST',
@@ -61,13 +68,16 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    if (scopes.some(s => typeof s !== 'string' || s.length > 256 || s.length === 0)) {
+    if (scopes.some(s => typeof s !== 'string' || s.length > 256 || s.trim().length === 0)) {
       return reply.status(400).send({ message: 'Invalid scope format', code: 'BAD_REQUEST', requestId: request.id });
     }
     if (scopes.length > 100) {
       return reply.status(400).send({ message: 'Too many scopes (max 100)', code: 'BAD_REQUEST', requestId: request.id });
     }
-    if (redirectUri) {
+    if (redirectUri !== undefined) {
+      if (typeof redirectUri !== 'string' || redirectUri.length === 0 || redirectUri.length > 2048) {
+        return reply.status(400).send({ message: 'Invalid redirectUri', code: 'BAD_REQUEST', requestId: request.id });
+      }
       try {
         assertValidRedirectUri(redirectUri);
       } catch (err) {
@@ -78,14 +88,26 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
         });
       }
     }
-    if (state !== undefined && state.length > 1024) {
+    if (state !== undefined && (typeof state !== 'string' || state.length > 1024)) {
       return reply.status(400).send({ message: 'state must be 1024 characters or fewer', code: 'BAD_REQUEST', requestId: request.id });
     }
+    if (audience !== undefined && (typeof audience !== 'string' || audience.length === 0 || audience.length > 1024)) {
+      return reply.status(400).send({ message: 'audience must be a non-empty string of at most 1024 characters', code: 'BAD_REQUEST', requestId: request.id });
+    }
 
-    // Validate PKCE params — only S256 is supported
-    if (codeChallenge && codeChallengeMethod !== 'S256') {
+    // PKCE parameters are a pair. S256 challenges are fixed-length base64url digests.
+    const hasCodeChallenge = codeChallenge !== undefined;
+    const hasCodeChallengeMethod = codeChallengeMethod !== undefined;
+    if (hasCodeChallenge !== hasCodeChallengeMethod) {
       return reply.status(400).send({
-        message: 'codeChallengeMethod must be S256',
+        message: 'codeChallenge and codeChallengeMethod must be provided together',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    if (hasCodeChallenge && (codeChallengeMethod !== 'S256' || !isValidPkceChallenge(codeChallenge))) {
+      return reply.status(400).send({
+        message: 'codeChallengeMethod must be S256 and codeChallenge must be a valid S256 digest',
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
@@ -250,6 +272,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       WHERE id = ${request.params.id}
         AND developer_id = ${request.developer.id}
         AND status = 'pending'
+        AND expires_at > NOW()
       RETURNING id, status
     `;
 

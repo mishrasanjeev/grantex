@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getSql } from '../db/client.js';
+import { getSql, type TxSql } from '../db/client.js';
 import { newAgentId } from '../lib/ids.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 
@@ -16,15 +16,24 @@ interface UpdateAgentBody {
   status?: string;
 }
 
+const VALID_AGENT_STATUSES = new Set(['active', 'suspended']);
+
 export async function agentsRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/agents
   app.post<{ Body: RegisterAgentBody }>('/v1/agents', async (request, reply) => {
-    const { name, description = '', scopes = [] } = request.body;
-    if (!name) {
+    const body = request.body as unknown;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return reply.status(400).send({ message: 'name is required', code: 'BAD_REQUEST', requestId: request.id });
     }
+    const { name, description = '', scopes = [] } = body as Partial<RegisterAgentBody>;
+    if (typeof name !== 'string' || name.trim().length === 0) {
+      return reply.status(400).send({ message: 'name is required', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    if (typeof description !== 'string') {
+      return reply.status(400).send({ message: 'description must be a string', code: 'BAD_REQUEST', requestId: request.id });
+    }
 
-    if (scopes.some(s => typeof s !== 'string' || s.length > 256 || s.length === 0)) {
+    if (!Array.isArray(scopes) || scopes.some(s => typeof s !== 'string' || s.length > 256 || s.length === 0)) {
       return reply.status(400).send({ message: 'Invalid scope format', code: 'BAD_REQUEST', requestId: request.id });
     }
     if (scopes.length > 100) {
@@ -34,37 +43,52 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     const sql = getSql();
     const developerId = request.developer.id;
 
-    // Enforce plan agent limit
-    const subRows = await sql<{ plan: string }[]>`
-      SELECT plan FROM subscriptions WHERE developer_id = ${developerId}
-    `;
-    const planName = subRows[0]?.plan ?? 'free';
-    const plan = isPlanName(planName) ? planName : 'free';
-    const agentLimit = PLAN_LIMITS[plan].agents;
+    const id = newAgentId();
+    const did = `did:grantex:${id}`;
+    let limitExceeded: { plan: string; limit: number } | undefined;
+    let createdRow: Record<string, unknown> | undefined;
 
-    const countRows = await sql<{ count: string }[]>`
-      SELECT COUNT(*) AS count FROM agents WHERE developer_id = ${developerId}
-    `;
-    const agentCount = parseInt(countRows[0]?.count ?? '0', 10);
+    // The plan check and insert must be one serialized operation. Otherwise
+    // parallel requests can each observe space and exceed the agent quota.
+    await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 2))`;
 
-    if (agentCount >= agentLimit) {
+      const subRows = await tx<{ plan: string }[]>`
+        SELECT plan FROM subscriptions WHERE developer_id = ${developerId}
+      `;
+      const planName = subRows[0]?.plan ?? 'free';
+      const plan = isPlanName(planName) ? planName : 'free';
+      const agentLimit = PLAN_LIMITS[plan].agents;
+
+      const countRows = await tx<{ count: string }[]>`
+        SELECT COUNT(*) AS count FROM agents WHERE developer_id = ${developerId}
+      `;
+      const agentCount = parseInt(countRows[0]?.count ?? '0', 10);
+      if (agentCount >= agentLimit) {
+        limitExceeded = { plan, limit: agentLimit };
+        return;
+      }
+
+      const rows = await tx`
+        INSERT INTO agents (id, did, developer_id, name, description, scopes)
+        VALUES (${id}, ${did}, ${developerId}, ${name.trim()}, ${description}, ${scopes})
+        RETURNING id, did, developer_id, name, description, scopes, status, created_at, updated_at
+      `;
+      createdRow = rows[0];
+    });
+
+    if (limitExceeded) {
       return reply.status(402).send({
-        message: `Plan limit reached: ${plan} plan allows ${agentLimit} agent(s). Upgrade at /v1/billing/checkout`,
+        message: `Plan limit reached: ${limitExceeded.plan} plan allows ${limitExceeded.limit} agent(s). Upgrade at /v1/billing/checkout`,
         code: 'PLAN_LIMIT_EXCEEDED',
         requestId: request.id,
       });
     }
-
-    const id = newAgentId();
-    const did = `did:grantex:${id}`;
-
-    const rows = await sql`
-      INSERT INTO agents (id, did, developer_id, name, description, scopes)
-      VALUES (${id}, ${did}, ${developerId}, ${name}, ${description}, ${scopes})
-      RETURNING id, did, developer_id, name, description, scopes, status, created_at, updated_at
-    `;
-
-    return reply.status(201).send(toAgentResponse(rows[0]!));
+    if (!createdRow) {
+      throw new Error('Agent insert did not return a row');
+    }
+    return reply.status(201).send(toAgentResponse(createdRow));
   });
 
   // GET /v1/agents
@@ -97,14 +121,27 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
   // PATCH /v1/agents/:id
   app.patch<{ Params: { id: string }; Body: UpdateAgentBody }>('/v1/agents/:id', async (request, reply) => {
     const sql = getSql();
-    const { name, description, scopes, status } = request.body;
+    const body = request.body as unknown;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return reply.status(400).send({ message: 'No fields to update', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    const { name, description, scopes, status } = body as UpdateAgentBody;
 
     if (name === undefined && description === undefined && scopes === undefined && status === undefined) {
       return reply.status(400).send({ message: 'No fields to update', code: 'BAD_REQUEST', requestId: request.id });
     }
+    if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
+      return reply.status(400).send({ message: 'name must be a non-empty string', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    if (description !== undefined && typeof description !== 'string') {
+      return reply.status(400).send({ message: 'description must be a string', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    if (status !== undefined && (typeof status !== 'string' || !VALID_AGENT_STATUSES.has(status))) {
+      return reply.status(400).send({ message: 'status must be active or suspended', code: 'BAD_REQUEST', requestId: request.id });
+    }
 
     if (scopes !== undefined) {
-      if (scopes.some(s => typeof s !== 'string' || s.length > 256 || s.length === 0)) {
+      if (!Array.isArray(scopes) || scopes.some(s => typeof s !== 'string' || s.length > 256 || s.length === 0)) {
         return reply.status(400).send({ message: 'Invalid scope format', code: 'BAD_REQUEST', requestId: request.id });
       }
       if (scopes.length > 100) {
@@ -116,7 +153,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     const rows = await sql`
       UPDATE agents
       SET
-        name        = COALESCE(${name ?? null}, name),
+        name        = COALESCE(${name?.trim() ?? null}, name),
         description = COALESCE(${description ?? null}, description),
         scopes      = COALESCE(${scopes ?? null}, scopes),
         status      = COALESCE(${status ?? null}, status),
@@ -145,15 +182,19 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
     }
 
-    // Cascade delete: dependents first, then agent
-    const grantSubquery = sql`SELECT id FROM grants WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
-    await sql`DELETE FROM budget_transactions WHERE grant_id IN (${grantSubquery})`;
-    await sql`DELETE FROM budget_allocations WHERE grant_id IN (${grantSubquery})`;
-    await sql`DELETE FROM refresh_tokens WHERE grant_id IN (${grantSubquery})`;
-    await sql`DELETE FROM grant_tokens WHERE grant_id IN (${grantSubquery})`;
-    await sql`DELETE FROM grants WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
-    await sql`DELETE FROM auth_requests WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
-    await sql`DELETE FROM agents WHERE id = ${agentId} AND developer_id = ${developerId}`;
+    // Cascade delete as one transaction so an intermediate FK/DB failure
+    // cannot leave a half-deleted agent graph.
+    await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      const grantSubquery = tx`SELECT id FROM grants WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
+      await tx`DELETE FROM budget_transactions WHERE grant_id IN (${grantSubquery})`;
+      await tx`DELETE FROM budget_allocations WHERE grant_id IN (${grantSubquery})`;
+      await tx`DELETE FROM refresh_tokens WHERE grant_id IN (${grantSubquery})`;
+      await tx`DELETE FROM grant_tokens WHERE grant_id IN (${grantSubquery})`;
+      await tx`DELETE FROM grants WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
+      await tx`DELETE FROM auth_requests WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
+      await tx`DELETE FROM agents WHERE id = ${agentId} AND developer_id = ${developerId}`;
+    });
 
     return reply.status(204).send();
   });

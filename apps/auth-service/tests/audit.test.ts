@@ -28,6 +28,7 @@ describe('POST /v1/audit/log', () => {
   it('creates an audit entry with hash', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([]);                  // subscription lookup → free plan
+    sqlMock.mockResolvedValueOnce([]);                  // advisory chain lock
     sqlMock.mockResolvedValueOnce([{ count: '0' }]);    // audit entry count → 0
     // Previous hash query
     sqlMock.mockResolvedValueOnce([]); // no previous entry
@@ -61,11 +62,15 @@ describe('POST /v1/audit/log', () => {
     expect(typeof body.hash).toBe('string');
     expect(body.status).toBe('success');
     expect(body.entryId).toBe(auditEntry.id);
+    expect(sqlMock.begin).toHaveBeenCalledTimes(1);
+    const allSql = sqlMock.mock.calls.map((call) => (call[0] as TemplateStringsArray).join(' ')).join('\n');
+    expect(allSql).toContain('pg_advisory_xact_lock');
   });
 
   it('returns 402 when plan audit entry limit is reached', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ plan: 'free' }]);   // subscription → free plan
+    sqlMock.mockResolvedValueOnce([]);                    // advisory chain lock
     sqlMock.mockResolvedValueOnce([{ count: '20000' }]); // audit count → at limit
 
     const res = await app.inject({
@@ -88,6 +93,7 @@ describe('POST /v1/audit/log', () => {
   it('includes previousHash in chain when prior entry exists', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([]);                    // subscription lookup
+    sqlMock.mockResolvedValueOnce([]);                    // advisory chain lock
     sqlMock.mockResolvedValueOnce([{ count: '0' }]);      // audit count
     // Previous hash query returns an entry
     sqlMock.mockResolvedValueOnce([{ hash: 'previous_hash_value' }]);

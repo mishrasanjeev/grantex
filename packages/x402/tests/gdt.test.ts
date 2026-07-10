@@ -358,23 +358,13 @@ describe('GDT issuance and verification', () => {
       expect(result.error).toContain('Invalid JWT');
     });
 
-    it('rejects a token signed by a different key', async () => {
+    it('rejects issuance when principalDID belongs to a different key', async () => {
       const otherPrincipal = generateKeyPair();
-      // Issue a token but claim it's from a different principal
-      const token = await issueGDT({
+      await expect(issueGDT({
         ...baseParams,
         signingKey: otherPrincipal.privateKey,
         principalDID: principal.did, // claim it's from principal but sign with other key
-      });
-
-      const result = await verifyGDT(token, {
-        resource: 'weather:read',
-        amount: 0.001,
-        currency: 'USDC',
-      });
-
-      expect(result.valid).toBe(false);
-      expect(result.error).toContain('Signature verification failed');
+      })).rejects.toThrow('principalDID must match');
     });
 
     it('rejects empty string', async () => {

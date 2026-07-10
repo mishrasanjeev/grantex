@@ -61,7 +61,10 @@ export interface UpdateAgentParams {
 }
 
 export interface Agent {
+  /** Stable SDK identifier (normalized from the API's `agentId` field). */
   id: string;
+  /** Identifier as named by the HTTP API. Equal to `id`. */
+  agentId: string;
   did: string;
   name: string;
   description: string;

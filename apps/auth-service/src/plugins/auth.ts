@@ -27,7 +27,10 @@ async function authenticateRequest(
   reply: FastifyReply,
 ): Promise<void> {
   const authHeader = request.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const match = typeof authHeader === 'string'
+    ? /^Bearer[ \t]+([^\s]+)$/i.exec(authHeader)
+    : null;
+  if (!match) {
     await reply.status(401).send({
       message: 'Missing or invalid Authorization header',
       code: 'UNAUTHORIZED',
@@ -36,7 +39,7 @@ async function authenticateRequest(
     return;
   }
 
-  const apiKey = authHeader.slice(7);
+  const apiKey = match[1]!;
   if (apiKey.length < 16 || apiKey.length > 512) {
     await reply.status(401).send({
       message: 'Invalid API key',

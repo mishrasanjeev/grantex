@@ -166,7 +166,9 @@ describe('BaseAdapter', () => {
 
       expect(logger).toHaveBeenCalledWith({
         agentId: MOCK_GRANT.agentDid,
+        agentDid: MOCK_GRANT.agentDid,
         grantId: MOCK_GRANT.grantId,
+        principalId: MOCK_GRANT.principalId,
         action: 'test:action',
         status: 'success',
       });

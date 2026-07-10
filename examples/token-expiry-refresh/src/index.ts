@@ -34,6 +34,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function parseDurationSeconds(value: string): number {
+  const match = /^(\d+)([smhd])$/i.exec(value.trim());
+  if (!match) {
+    throw new Error(`TOKEN_TTL must be a duration such as 10s, 5m, 2h, or 1d (received ${value})`);
+  }
+  const amount = Number(match[1]);
+  const unit = match[2]!.toLowerCase();
+  const multiplier = { s: 1, m: 60, h: 3600, d: 86400 }[unit];
+  return amount * multiplier!;
+}
+
 async function main(): Promise<void> {
   const grantex = new Grantex({ apiKey: API_KEY, baseUrl: BASE_URL });
 
@@ -88,8 +99,7 @@ async function main(): Promise<void> {
   console.log('Online verification:  valid =', onlineCheck.valid);
 
   // ── 4. Wait for expiry ─────────────────────────────────────────
-  const ttlSeconds = parseInt(TOKEN_TTL.replace(/[^0-9]/g, ''), 10);
-  const waitMs = (ttlSeconds + 2) * 1000;  // wait TTL + 2s buffer
+  const ttlSeconds = parseDurationSeconds(TOKEN_TTL);
 
   console.log(`\n--- Waiting ${ttlSeconds + 2}s for token to expire ---`);
   for (let i = ttlSeconds + 2; i > 0; i--) {

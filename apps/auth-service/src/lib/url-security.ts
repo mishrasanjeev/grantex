@@ -48,6 +48,7 @@ const LOCAL_HOSTNAMES = new Set([
 ]);
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+export const MAX_OUTBOUND_RESPONSE_BYTES = 2 * 1024 * 1024;
 let safeFetchOverride: SafeFetchOverride | null = null;
 
 export function setSafeFetchForTests(override: SafeFetchOverride | null): void {
@@ -196,7 +197,18 @@ export async function resolvePinnedOutboundTarget(
 }
 
 function createPinnedLookup(target: PinnedOutboundTarget) {
-  return (_hostname: string, _options: unknown, callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void): void => {
+  return (_hostname: string, options: unknown, callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void): void => {
+    // Newer Node HTTP agents request lookup({ all: true }) and expect the
+    // array callback overload. Returning the legacy single-address shape in
+    // that mode produces `Invalid IP address: undefined` before connect.
+    if (typeof options === 'object' && options !== null && (options as { all?: boolean }).all) {
+      const allCallback = callback as unknown as (
+        err: NodeJS.ErrnoException | null,
+        addresses: ResolvedOutboundAddress[],
+      ) => void;
+      allCallback(null, [{ address: target.address, family: target.family }]);
+      return;
+    }
     callback(null, target.address, target.family);
   };
 }
@@ -276,15 +288,48 @@ export async function safeFetch(
       timeout: DEFAULT_REQUEST_TIMEOUT_MS,
     }, (res) => {
       const chunks: Buffer[] = [];
+      let totalBytes = 0;
+      let settled = false;
+
+      const fail = (error: Error): void => {
+        if (settled) return;
+        settled = true;
+        res.destroy();
+        reject(error);
+      };
+
+      const contentLength = res.headers['content-length'];
+      if (typeof contentLength === 'string' && /^\d+$/.test(contentLength)) {
+        const declaredBytes = Number(contentLength);
+        if (!Number.isSafeInteger(declaredBytes) || declaredBytes > MAX_OUTBOUND_RESPONSE_BYTES) {
+          fail(new Error(`Outbound response exceeds ${MAX_OUTBOUND_RESPONSE_BYTES} byte limit`));
+          return;
+        }
+      }
+
       res.on('data', (chunk: Buffer | string) => {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        if (settled) return;
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        totalBytes += buffer.length;
+        if (totalBytes > MAX_OUTBOUND_RESPONSE_BYTES) {
+          fail(new Error(`Outbound response exceeds ${MAX_OUTBOUND_RESPONSE_BYTES} byte limit`));
+          return;
+        }
+        chunks.push(buffer);
       });
       res.on('end', () => {
+        if (settled) return;
+        settled = true;
         resolve(new Response(Buffer.concat(chunks), {
           status: res.statusCode ?? 502,
           statusText: res.statusMessage ?? '',
           headers: responseHeaders(res.headers),
         }));
+      });
+      res.on('error', (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
       });
     });
 

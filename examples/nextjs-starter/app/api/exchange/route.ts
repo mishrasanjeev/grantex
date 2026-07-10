@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Grantex } from '@grantex/sdk';
+import { cookies } from 'next/headers';
 
 const ALLOWED_HOSTS = [
   'https://grantex-auth-dd4mtrt2gq-uc.a.run.app',
@@ -31,14 +32,31 @@ export async function POST(request: NextRequest) {
 
   const gx = new Grantex({ apiKey: API_KEY, baseUrl });
 
-  const body = await request.json() as { code?: string; agentId?: string };
-  const { code, agentId } = body;
+  let body: { code?: string; state?: string };
+  try {
+    body = await request.json() as { code?: string; state?: string };
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+  const { code, state } = body;
 
-  if (!code || !agentId) {
-    return NextResponse.json({ error: 'code and agentId are required' }, { status: 400 });
+  if (!code || !state) {
+    return NextResponse.json({ error: 'code and state are required' }, { status: 400 });
   }
 
   try {
+    const cookieStore = await cookies();
+    const agentId = cookieStore.get('grantex_agent_id')?.value;
+    const agentDid = cookieStore.get('grantex_agent_did')?.value;
+    const expectedState = cookieStore.get('grantex_state')?.value;
+
+    if (!agentId || !agentDid || !expectedState) {
+      return NextResponse.json({ error: 'Authorization session expired; restart the demo' }, { status: 400 });
+    }
+    if (state !== expectedState) {
+      return NextResponse.json({ error: 'State mismatch; authorization rejected' }, { status: 400 });
+    }
+
     // Exchange authorization code for grant token
     const token = await gx.tokens.exchange({ code, agentId });
 
@@ -47,7 +65,9 @@ export async function POST(request: NextRequest) {
     try {
       const auditEntry = await gx.audit.log({
         agentId,
+        agentDid,
         grantId: token.grantId,
+        principalId: 'demo-user',
         action: 'demo.token_exchanged',
         status: 'success',
         metadata: { source: 'nextjs-starter' },
@@ -56,6 +76,10 @@ export async function POST(request: NextRequest) {
     } catch {
       // Audit logging is non-critical for the demo
     }
+
+    cookieStore.delete('grantex_agent_id');
+    cookieStore.delete('grantex_agent_did');
+    cookieStore.delete('grantex_state');
 
     return NextResponse.json({
       grantToken: token.grantToken,

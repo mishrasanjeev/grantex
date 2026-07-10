@@ -47,6 +47,11 @@ describe('startWebhookDeliveryWorker', () => {
       }),
       undefined,
     );
+    const claimSql = (sqlMock.mock.calls[0]?.[0] as TemplateStringsArray).join(' ');
+    expect(claimSql).toContain('FOR UPDATE SKIP LOCKED');
+    expect(claimSql).toContain('UPDATE webhook_deliveries');
+    expect(claimSql).toContain("INTERVAL '2 minutes'");
+    expect(sqlMock.mock.calls[0]?.slice(1)).toContain(20);
 
     clearInterval(timer);
   });
@@ -73,6 +78,8 @@ describe('startWebhookDeliveryWorker', () => {
 
     const timer = startWebhookDeliveryWorker(sqlMock as never, 60_000);
     await vi.advanceTimersByTimeAsync(0);
+
+    expect(sqlMock.mock.calls[1]?.slice(1)).toContain('30 seconds');
 
     clearInterval(timer);
   });
@@ -160,6 +167,32 @@ describe('startWebhookDeliveryWorker', () => {
 
     await vi.advanceTimersByTimeAsync(30_000);
     expect(sqlMock).toHaveBeenCalledTimes(2);
+
+    clearInterval(timer);
+  });
+
+  it('does not overlap polling cycles while a delivery batch is still running', async () => {
+    let resolveFetch!: (response: Response) => void;
+    sqlMock.mockResolvedValueOnce([pendingDelivery]);
+    mockSafeFetch.mockImplementationOnce(() => new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    }));
+
+    const timer = startWebhookDeliveryWorker(sqlMock as never, 1_000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sqlMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sqlMock).toHaveBeenCalledTimes(1);
+
+    sqlMock.mockResolvedValueOnce([]); // Mark delivered
+    resolveFetch(new Response('', { status: 200 }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sqlMock).toHaveBeenCalledTimes(2);
+
+    sqlMock.mockResolvedValueOnce([]); // Next interval claim
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sqlMock).toHaveBeenCalledTimes(3);
 
     clearInterval(timer);
   });

@@ -5,7 +5,7 @@ import * as jose from 'jose';
 import { requireMcpAuth } from '../src/middleware/express.js';
 import type { McpAuthRequest } from '../src/middleware/express.js';
 
-let rsaPrivateKey: jose.KeyLike;
+let rsaPrivateKey: jose.CryptoKey;
 let rsaPublicJwk: jose.JWK;
 let jwksServer: Server;
 let jwksPort: number;

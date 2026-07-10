@@ -6,11 +6,13 @@ import { emitEvent } from '../lib/events.js';
 import {
   discoverOidcProvider,
   verifyIdToken,
+  generateSamlAuthorizeUrl,
   parseSamlResponse,
   resolveConnection,
   mapGroupsToScopes,
   jitProvision,
   createSsoSession,
+  type SamlConnectionOptions,
   type SsoConnectionRow,
 } from '../lib/sso.js';
 import { authenticateLdap, testLdapConnection, type LdapConfig } from '../lib/ldap.js';
@@ -35,13 +37,17 @@ function getSsoHmacKey(): string {
 
 /** Create an HMAC-signed SSO state parameter. */
 export function signSsoState(payload: Record<string, unknown>): string {
-  const statePayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const statePayload = Buffer.from(JSON.stringify({
+    ...payload,
+    iat: Math.floor(Date.now() / 1000),
+    nonce: crypto.randomBytes(16).toString('base64url'),
+  })).toString('base64url');
   const stateSignature = crypto.createHmac('sha256', getSsoHmacKey()).update(statePayload).digest('base64url');
   return `${statePayload}.${stateSignature}`;
 }
 
 /** Verify and decode an HMAC-signed SSO state parameter. Returns null if invalid. */
-function verifySsoState(state: string): Record<string, unknown> | null {
+export function verifySsoState(state: string): Record<string, unknown> | null {
   const dotIdx = state.indexOf('.');
   if (dotIdx === -1) return null;
   const payload = state.slice(0, dotIdx);
@@ -52,7 +58,14 @@ function verifySsoState(state: string): Record<string, unknown> | null {
   const expectedBuf = Buffer.from(expectedSig);
   if (sigBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(sigBuf, expectedBuf)) return null;
   try {
-    return JSON.parse(Buffer.from(payload, 'base64url').toString()) as Record<string, unknown>;
+    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString()) as Record<string, unknown>;
+    const issuedAt = decoded['iat'];
+    const now = Math.floor(Date.now() / 1000);
+    if (typeof issuedAt !== 'number' || !Number.isSafeInteger(issuedAt)
+      || issuedAt > now + 60 || now - issuedAt > 10 * 60) {
+      return null;
+    }
+    return decoded;
   } catch {
     return null;
   }
@@ -102,6 +115,27 @@ function validateSsoHttpUrl(value: string, field: string): string | null {
   } catch (err) {
     return `${field}: ${err instanceof Error ? err.message : 'invalid URL'}`;
   }
+}
+
+function samlConnectionOptions(conn: SsoConnectionRow): SamlConnectionOptions {
+  if (
+    !conn.idp_certificate
+    || !conn.idp_entity_id
+    || !conn.idp_sso_url
+    || !conn.sp_entity_id
+    || !conn.sp_acs_url
+  ) {
+    throw new Error('SSO connection is missing required SAML settings');
+  }
+  return {
+    connectionId: conn.id,
+    idpCertificate: conn.idp_certificate,
+    idpEntityId: conn.idp_entity_id,
+    idpSsoUrl: conn.idp_sso_url,
+    spEntityId: conn.sp_entity_id,
+    spAcsUrl: conn.sp_acs_url,
+    ...(conn.group_attribute ? { groupAttribute: conn.group_attribute } : {}),
+  };
 }
 
 function validateLdapUrl(value: string, tlsEnabled: boolean): string | null {
@@ -242,8 +276,15 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     if (b.protocol === 'oidc' && (!b.issuerUrl || !b.clientId || !b.clientSecret)) {
       return reply.status(400).send({ message: 'OIDC connections require issuerUrl, clientId, and clientSecret', code: 'BAD_REQUEST', requestId: request.id });
     }
-    if (b.protocol === 'saml' && (!b.idpEntityId || !b.idpSsoUrl || !b.idpCertificate)) {
-      return reply.status(400).send({ message: 'SAML connections require idpEntityId, idpSsoUrl, and idpCertificate', code: 'BAD_REQUEST', requestId: request.id });
+    if (
+      b.protocol === 'saml'
+      && (!b.idpEntityId || !b.idpSsoUrl || !b.idpCertificate || !b.spEntityId || !b.spAcsUrl)
+    ) {
+      return reply.status(400).send({
+        message: 'SAML connections require idpEntityId, idpSsoUrl, idpCertificate, spEntityId, and spAcsUrl',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
     }
     if (b.protocol === 'ldap' && (!b.ldapUrl || !b.ldapBindDn || !b.ldapBindPassword || !b.ldapSearchBase)) {
       return reply.status(400).send({ message: 'LDAP connections require ldapUrl, ldapBindDn, ldapBindPassword, and ldapSearchBase', code: 'BAD_REQUEST', requestId: request.id });
@@ -653,24 +694,16 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       }
 
       if (conn.protocol === 'saml') {
-        // SAML: return the IdP SSO URL for redirect binding
-        const samlRequest = Buffer.from(
-          `<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"` +
-          ` ID="_${conn.id}"` +
-          ` Version="2.0"` +
-          ` IssueInstant="${new Date().toISOString()}"` +
-          ` AssertionConsumerServiceURL="${conn.sp_acs_url ?? ''}"` +
-          ` Destination="${conn.idp_sso_url}"` +
-          `>` +
-          `<saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">${conn.sp_entity_id ?? ''}</saml:Issuer>` +
-          `</samlp:AuthnRequest>`,
-        ).toString('base64');
-
-        const samlUrl = new URL(conn.idp_sso_url!);
-        samlUrl.searchParams.set('SAMLRequest', samlRequest);
-        samlUrl.searchParams.set('RelayState', state);
-
-        return reply.send({ authorizeUrl: samlUrl.toString(), protocol: 'saml', connectionId: conn.id });
+        try {
+          const authorizeUrl = await generateSamlAuthorizeUrl(samlConnectionOptions(conn), state);
+          return reply.send({ authorizeUrl, protocol: 'saml', connectionId: conn.id });
+        } catch {
+          return reply.status(502).send({
+            message: 'SAML login initialization failed',
+            code: 'SSO_ERROR',
+            requestId: request.id,
+          });
+        }
       }
 
       // LDAP: no redirect flow — return connection info for direct credential submission
@@ -725,6 +758,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         WHERE id = ${stateData.connectionId}
           AND developer_id = ${stateData.org}
           AND protocol = 'oidc'
+          AND status = 'active'
       `;
       if (!rows[0]) {
         return reply.status(404).send({ message: 'SSO connection not found', code: 'NOT_FOUND' });
@@ -860,6 +894,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         WHERE id = ${stateData.connectionId}
           AND developer_id = ${stateData.org}
           AND protocol = 'saml'
+          AND status = 'active'
       `;
       if (!rows[0]) {
         return reply.status(404).send({ message: 'SSO connection not found', code: 'NOT_FOUND' });
@@ -869,11 +904,12 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       // Parse and verify SAML response
       let attributes;
       try {
-        attributes = parseSamlResponse(SAMLResponse, conn.idp_certificate!);
-      } catch (err) {
+        attributes = await parseSamlResponse(SAMLResponse, samlConnectionOptions(conn));
+      } catch {
         return reply.status(502).send({
-          message: err instanceof Error ? err.message : 'SAML verification failed',
+          message: 'SAML response verification failed',
           code: 'SSO_ERROR',
+          requestId: request.id,
         });
       }
 
@@ -947,6 +983,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         WHERE id = ${connectionId}
           AND developer_id = ${org}
           AND protocol = 'ldap'
+          AND status = 'active'
       `;
       if (!rows[0]) {
         return reply.status(404).send({ message: 'LDAP connection not found', code: 'NOT_FOUND' });

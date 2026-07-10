@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { isIP } from 'node:net';
+import { domainToASCII } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { verifyDomainDns } from '../lib/domains.js';
@@ -6,12 +8,17 @@ import { verifyDomainDns } from '../lib/domains.js';
 export async function domainsRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/domains — register a custom domain
   app.post<{ Body: { domain: string } }>('/v1/domains', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const { domain } = request.body;
+    const body = request.body as unknown;
+    const domain = normalizeDomain(
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as { domain?: unknown }).domain
+        : undefined,
+    );
     const developerId = request.developer.id;
 
     if (!domain) {
       return reply.status(400).send({
-        message: 'domain is required',
+        message: 'domain must be a valid DNS hostname',
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
@@ -39,12 +46,15 @@ export async function domainsRoutes(app: FastifyInstance): Promise<void> {
         INSERT INTO custom_domains (id, developer_id, domain, verification_token)
         VALUES (${id}, ${developerId}, ${domain}, ${verificationToken})
       `;
-    } catch {
-      return reply.status(409).send({
-        message: 'Domain already registered',
-        code: 'CONFLICT',
-        requestId: request.id,
-      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        return reply.status(409).send({
+          message: 'Domain already registered',
+          code: 'CONFLICT',
+          requestId: request.id,
+        });
+      }
+      throw error;
     }
 
     return reply.status(201).send({
@@ -141,4 +151,28 @@ export async function domainsRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.status(204).send();
   });
+}
+
+function normalizeDomain(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const candidate = value.trim().toLowerCase().replace(/\.$/, '');
+  if (!candidate || candidate.length > 253 || isIP(candidate) !== 0) return null;
+
+  const ascii = domainToASCII(candidate);
+  if (!ascii || ascii.length > 253 || ascii.includes('..')) return null;
+  const labels = ascii.split('.');
+  if (labels.length < 2) return null;
+  if (labels.some(label =>
+    label.length === 0 ||
+    label.length > 63 ||
+    !/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)
+  )) {
+    return null;
+  }
+  return ascii;
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null &&
+    'code' in error && (error as { code?: unknown }).code === '23505';
 }

@@ -76,7 +76,7 @@ describe('CopyButton', () => {
 
   it('renders as a button element', () => {
     render(<CopyButton text="val" />);
-    expect(screen.getByRole('button')).toBeInTheDocument();
+    expect(screen.getByRole('button')).toHaveAttribute('type', 'button');
   });
 
   it('uses extra-small text size', () => {

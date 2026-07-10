@@ -22,7 +22,7 @@ vi.mock('../../store/toast', () => ({ useToast: () => ({ show: mockShow }) }));
 
 const rules = [
   { ruleId: 'builtin-1', name: 'Built-in Rule', description: 'Default', severity: 'high', enabled: true, builtin: true, condition: {} },
-  { ruleId: 'custom-1', name: 'Custom Rule', description: 'User-defined', severity: 'medium', enabled: true, builtin: false, condition: {} },
+  { id: 'rule-db-1', ruleId: 'custom-1', name: 'Custom Rule', description: 'User-defined', severity: 'medium', enabled: true, builtin: false, condition: {} },
 ];
 
 function r() { return render(<MemoryRouter><RuleBuilder /></MemoryRouter>); }
@@ -76,9 +76,8 @@ describe('RuleBuilder', () => {
     const user = userEvent.setup();
     r();
     await waitFor(() => expect(screen.getByText('Custom Rule')).toBeInTheDocument());
-    const toggleButtons = screen.getAllByTitle(/rule/);
-    await user.click(toggleButtons[0]!);
-    await waitFor(() => expect(mockToggleRule).toHaveBeenCalled());
+    await user.click(screen.getByRole('switch', { name: 'Disable Custom Rule' }));
+    await waitFor(() => expect(mockToggleRule).toHaveBeenCalledWith('rule-db-1', false));
   });
 
   it('displays severity badges', async () => {

@@ -104,21 +104,21 @@ describe('mcp', () => {
 
   // ── applyForCertification ─────────────────────────────────────────────
 
-  it('applyForCertification sends POST /v1/mcp/servers/:id/certify with level', async () => {
-    const cert = { id: 'cert-1', serverId: 's1', requestedLevel: 'gold', status: 'pending' };
+  it('applyForCertification uses the certification application contract', async () => {
+    const cert = { certificationId: 'cert-1', serverId: 's1', requestedLevel: 'gold', status: 'pending' };
     ok(cert);
     const result = await applyForCertification('s1', 'gold');
-    expect(result).toEqual(cert);
+    expect(result).toEqual({ id: 'cert-1', serverId: 's1', requestedLevel: 'gold', status: 'pending' });
     const [url, opts] = mockFetch.mock.calls[0]!;
-    expect(url).toBe('http://localhost:3000/v1/mcp/servers/s1/certify');
+    expect(url).toBe('http://localhost:3000/v1/mcp/certification/apply');
     expect(opts.method).toBe('POST');
-    expect(JSON.parse(opts.body)).toEqual({ level: 'gold' });
+    expect(JSON.parse(opts.body)).toEqual({ serverId: 's1', requestedLevel: 'gold' });
   });
 
-  it('applyForCertification encodes serverId', async () => {
-    ok({ id: 'cert-1' });
+  it('applyForCertification sends serverId in the JSON body', async () => {
+    ok({ certificationId: 'cert-1' });
     await applyForCertification('s/1', 'silver');
-    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/mcp/servers/s%2F1/certify');
+    expect(JSON.parse(mockFetch.mock.calls[0]![1].body)).toMatchObject({ serverId: 's/1' });
   });
 
   it('applyForCertification throws on error', async () => {
@@ -128,13 +128,13 @@ describe('mcp', () => {
 
   // ── getCertification ──────────────────────────────────────────────────
 
-  it('getCertification sends GET /v1/mcp/certifications/:id', async () => {
-    const cert = { id: 'cert-1', status: 'approved' };
+  it('getCertification sends GET /v1/mcp/certification/:id', async () => {
+    const cert = { certificationId: 'cert-1', status: 'approved' };
     ok(cert);
     const result = await getCertification('cert-1');
-    expect(result).toEqual(cert);
+    expect(result).toEqual({ id: 'cert-1', status: 'approved' });
     expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3000/v1/mcp/certifications/cert-1',
+      'http://localhost:3000/v1/mcp/certification/cert-1',
       expect.objectContaining({ method: 'GET' }),
     );
   });

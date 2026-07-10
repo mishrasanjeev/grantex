@@ -277,13 +277,19 @@ export function parseExpiresIn(expiresIn: string): number {
   if (!match) throw new Error(`Invalid expiresIn format: ${expiresIn}`);
   const [, amount, unit] = match;
   const n = parseInt(amount!, 10);
+  let multiplier: number;
   switch (unit) {
-    case 's': return n;
-    case 'm': return n * 60;
-    case 'h': return n * 3600;
-    case 'd': return n * 86400;
+    case 's': multiplier = 1; break;
+    case 'm': multiplier = 60; break;
+    case 'h': multiplier = 3600; break;
+    case 'd': multiplier = 86400; break;
     default: throw new Error(`Unknown unit: ${unit}`);
   }
+  const seconds = n * multiplier;
+  if (seconds <= 0 || !Number.isSafeInteger(seconds)) {
+    throw new Error(`Invalid expiresIn duration: ${expiresIn}`);
+  }
+  return seconds;
 }
 
 // ─── Principal session tokens ────────────────────────────────────────────────

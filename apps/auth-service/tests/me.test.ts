@@ -15,6 +15,8 @@ describe('GET /v1/me', () => {
       email: 'dev@example.com',
       mode: 'live',
       plan: 'pro',
+      fido_required: true,
+      fido_rp_name: 'Example RP',
       created_at: now,
     }]);
 
@@ -31,6 +33,8 @@ describe('GET /v1/me', () => {
     expect(body.email).toBe('dev@example.com');
     expect(body.mode).toBe('live');
     expect(body.plan).toBe('pro');
+    expect(body.fidoRequired).toBe(true);
+    expect(body.fidoRpName).toBe('Example RP');
     expect(body.createdAt).toBe(now);
   });
 

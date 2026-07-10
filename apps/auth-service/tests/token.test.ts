@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { buildTestApp, authHeader, seedAuth, sqlMock, TEST_AGENT, TEST_DEVELOPER } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 import { decodeJwt } from 'jose';
@@ -64,6 +64,51 @@ describe('POST /v1/token', () => {
     expect(claims['dev']).toBe(TEST_DEVELOPER.id);
     expect(claims['scp']).toEqual(['read', 'write']);
     expect(claims['grnt']).toBeDefined();
+  });
+
+  it('enforces the active-grant plan limit inside the issuance transaction', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([validAuthRequest]);
+    sqlMock.mockResolvedValueOnce([]); // issuance advisory lock
+    sqlMock.mockResolvedValueOnce([{ plan: 'free', count: '1000' }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token',
+      headers: authHeader(),
+      payload: { code: 'valid-code-123', agentId: TEST_AGENT.id },
+    });
+
+    expect(res.statusCode).toBe(402);
+    expect(res.json().code).toBe('PLAN_LIMIT_EXCEEDED');
+  });
+
+  it('does not consume the authorization code when JWT signing fails', async () => {
+    const crypto = await import('../src/lib/crypto.js');
+    const signer = vi.spyOn(crypto, 'signGrantToken').mockRejectedValueOnce(new Error('signer unavailable'));
+    try {
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([validAuthRequest]);
+      sqlMock.mockResolvedValueOnce([]); // issuance advisory lock
+      sqlMock.mockResolvedValueOnce([{ plan: 'free', count: '0' }]);
+      sqlMock.mockResolvedValueOnce([]); // INSERT grant (rolled back)
+      sqlMock.mockResolvedValueOnce([]); // budget lookup
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/token',
+        headers: authHeader(),
+        payload: { code: 'valid-code-123', agentId: TEST_AGENT.id },
+      });
+
+      expect(res.statusCode).toBe(500);
+      const sqlText = sqlMock.mock.calls
+        .map(([strings]) => Array.isArray(strings) ? strings.join('?') : String(strings))
+        .join('\n');
+      expect(sqlText).not.toContain('UPDATE auth_requests');
+    } finally {
+      signer.mockRestore();
+    }
   });
 
   it('returns 400 for invalid (not found) code', async () => {
@@ -132,6 +177,8 @@ describe('POST /v1/token', () => {
     sqlMock.mockResolvedValueOnce([]);  // INSERT refresh_tokens
     sqlMock.mockResolvedValueOnce([]);  // UPDATE auth_requests
     sqlMock.mockResolvedValueOnce([]);  // Budget check (no allocation)
+    sqlMock.mockResolvedValueOnce([]);  // Additional transactional issuance query
+    sqlMock.mockResolvedValueOnce([]);  // Additional transactional issuance query
     // VC issuance: getOrCreateStatusList SQL fails → catch block swallows error
     sqlMock.mockRejectedValueOnce(new Error('VC status list query failed'));
 

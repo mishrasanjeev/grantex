@@ -243,6 +243,9 @@ function hexToBytes(hex: string): Uint8Array {
   if (clean.length !== 64) {
     throw new Error(`Expected 64 hex characters (32 bytes), got ${clean.length}`);
   }
+  if (!/^[0-9a-fA-F]{64}$/.test(clean)) {
+    throw new Error('Private key must contain only hexadecimal characters');
+  }
   const bytes = new Uint8Array(32);
   for (let i = 0; i < 32; i++) {
     bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);

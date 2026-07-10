@@ -1,4 +1,4 @@
-import { type SelectHTMLAttributes } from 'react';
+import { useId, type SelectHTMLAttributes } from 'react';
 import { cn } from '../../lib/cn';
 
 interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
@@ -7,15 +7,18 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 }
 
 export function Select({ label, options, className, id, ...props }: SelectProps) {
+  const generatedId = useId();
+  const selectId = id ?? generatedId;
+
   return (
     <div>
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-gx-text mb-1.5">
+        <label htmlFor={selectId} className="block text-sm font-medium text-gx-text mb-1.5">
           {label}
         </label>
       )}
       <select
-        id={id}
+        id={selectId}
         className={cn(
           'w-full px-3 py-2 bg-gx-bg border border-gx-border rounded-md text-sm text-gx-text focus:outline-none focus:border-gx-accent transition-colors',
           className,

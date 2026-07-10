@@ -34,5 +34,6 @@ jobs:
             0BSD,
             MPL-2.0,
             Unlicense,
+            LicenseRef-scancode-unicode,
             LicenseRef-scancode-google-patent-license-golang
           comment-summary-in-pr: always

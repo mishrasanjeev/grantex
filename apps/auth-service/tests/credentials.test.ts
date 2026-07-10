@@ -308,6 +308,15 @@ describe('POST /v1/credentials/verify', () => {
     expect(res.json().code).toBe('BAD_REQUEST');
   });
 
+  it('returns 400 when the verification body is missing', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/credentials/verify',
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
   it('does not require authentication (skipAuth)', async () => {
     const vcJwt = await createSignedVcJwt();
     sqlMock.mockResolvedValueOnce([]);

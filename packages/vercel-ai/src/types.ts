@@ -1,5 +1,13 @@
+import type { Tool } from 'ai';
 import type { z } from 'zod';
-import type { ToolCallOptions } from '@ai-sdk/provider-utils';
+
+/** Tool execution context inferred from the installed AI SDK version. */
+export type GrantexToolExecutionOptions = NonNullable<Tool<unknown, unknown>['execute']> extends (
+  input: unknown,
+  options: infer OPTIONS,
+) => unknown
+  ? Partial<OPTIONS>
+  : never;
 
 // ─── createGrantexTool options ────────────────────────────────────────────────
 
@@ -38,7 +46,7 @@ export interface CreateGrantexToolOptions<
   /** The tool implementation — receives the validated Zod-parsed args. */
   execute: (
     args: z.infer<PARAMETERS>,
-    options: ToolCallOptions,
+    options: GrantexToolExecutionOptions,
   ) => PromiseLike<RESULT>;
 }
 

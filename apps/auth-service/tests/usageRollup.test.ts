@@ -34,7 +34,7 @@ describe('processUsageRollup', () => {
 
     expect(count).toBe(1);
     expect(sqlMock).toHaveBeenCalledTimes(2); // SELECT developers + INSERT
-    expect(mockRedis.get).toHaveBeenCalledTimes(3);
+    expect(mockRedis.get).toHaveBeenCalledTimes(6);
   });
 
   it('skips developers with zero usage', async () => {
@@ -50,6 +50,7 @@ describe('processUsageRollup', () => {
     expect(count).toBe(1); // count tracks processed developers, not skipped
     // Only SELECT developers, no INSERT because total=0
     expect(sqlMock).toHaveBeenCalledTimes(1);
+    expect(mockRedis.get).toHaveBeenCalledTimes(6);
   });
 
   it('handles per-developer errors gracefully', async () => {
@@ -97,6 +98,22 @@ describe('processUsageRollup', () => {
     expect(count).toBe(0);
     expect(mockRedis.get).not.toHaveBeenCalled();
   });
+
+  it('rolls both the current and previous UTC day', async () => {
+    vi.setSystemTime(new Date('2026-07-10T00:05:00.000Z'));
+    sqlMock.mockResolvedValueOnce([{ id: 'dev_1' }]);
+
+    await processUsageRollup(sqlMock as never, mockRedis as never, newId);
+
+    expect(mockRedis.get.mock.calls.map(([key]) => key)).toEqual([
+      'usage:dev_1:token_exchanges:2026-07-10',
+      'usage:dev_1:authorizations:2026-07-10',
+      'usage:dev_1:verifications:2026-07-10',
+      'usage:dev_1:token_exchanges:2026-07-09',
+      'usage:dev_1:authorizations:2026-07-09',
+      'usage:dev_1:verifications:2026-07-09',
+    ]);
+  });
 });
 
 describe('startUsageRollupWorker', () => {
@@ -137,6 +154,25 @@ describe('startUsageRollupWorker', () => {
     // Should not throw
     await vi.advanceTimersByTimeAsync(30_000);
 
+    cleanup();
+  });
+
+  it('does not overlap rollups when an earlier interval is still running', async () => {
+    let finishQuery!: () => void;
+    sqlMock.mockReturnValueOnce(new Promise<unknown[]>((resolve) => {
+      finishQuery = () => resolve([]);
+    }));
+
+    const cleanup = startUsageRollupWorker(sqlMock as never, mockRedis as never, newId, 30_000);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(sqlMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(sqlMock).toHaveBeenCalledTimes(1);
+
+    finishQuery();
+    await vi.advanceTimersByTimeAsync(0);
     cleanup();
   });
 });

@@ -51,6 +51,8 @@ const client = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
 const auditHandler = new GrantexAuditHandler({
   client,
   agentId: 'ag_01ABC...',
+  agentDid: 'did:key:z6Mk...',
+  principalId: 'user_01ABC...',
   grantToken,
 });
 
@@ -87,6 +89,8 @@ LangChain callback handler that writes tool invocations to the Grantex audit tra
 |--------|------|-------------|
 | `client` | `Grantex` | Authenticated SDK client |
 | `agentId` | `string` | Agent ID for audit attribution |
+| `agentDid` | `string` | Agent DID for audit attribution |
+| `principalId` | `string` | Principal that authorized the agent |
 | `grantToken` | `string` | JWT (grant ID extracted from `grnt` or `jti` claim) |
 
 ## Requirements

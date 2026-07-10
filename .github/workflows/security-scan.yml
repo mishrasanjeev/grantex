@@ -57,13 +57,22 @@ jobs:
       - name: Build auth service
         run: npm run build --prefix apps/auth-service
 
+      - name: Generate ephemeral CI signing key
+        run: |
+          openssl genrsa 2048 > "$RUNNER_TEMP/ci-rsa-private.pem"
+          {
+            echo 'RSA_PRIVATE_KEY<<GRANTEX_RSA_EOF'
+            cat "$RUNNER_TEMP/ci-rsa-private.pem"
+            echo 'GRANTEX_RSA_EOF'
+          } >> "$GITHUB_ENV"
+
       - name: Start auth service
         run: |
           nohup node apps/auth-service/dist/index.js > auth.log 2>&1 &
           echo $! > auth.pid
         env:
           NODE_ENV: production
-          AUTO_GENERATE_KEYS: 'true'
+          AUTO_GENERATE_KEYS: 'false'
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/grantex
           REDIS_URL: redis://localhost:6379
           PORT: '3001'

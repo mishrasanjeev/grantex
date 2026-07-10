@@ -181,4 +181,22 @@ describe('POST /v1/tokens/revoke', () => {
 
     expect(res.statusCode).toBe(404);
   });
+
+  it('returns success after the database revokes a token even if Redis is unavailable', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      jti: 'tok_CACHE_DOWN',
+      expires_at: new Date(Date.now() + 3600_000).toISOString(),
+    }]);
+    mockRedis.set.mockRejectedValueOnce(new Error('redis unavailable'));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/tokens/revoke',
+      headers: authHeader(),
+      payload: { jti: 'tok_CACHE_DOWN' },
+    });
+
+    expect(res.statusCode).toBe(204);
+  });
 });

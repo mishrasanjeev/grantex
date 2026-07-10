@@ -80,6 +80,7 @@ describe('Injection prevention', () => {
 
   it('XSS in agent name: stored safely in JSON response', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                    // advisory quota lock
     sqlMock.mockResolvedValueOnce([{ plan: 'pro' }]);   // subscription
     sqlMock.mockResolvedValueOnce([{ count: '0' }]);     // agent count
     const xssName = '<script>alert("XSS")</script>';
@@ -129,6 +130,7 @@ describe('Injection prevention', () => {
   it('path traversal in audit log metadata: treated as regular data', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ plan: 'free' }]); // subscription
+    sqlMock.mockResolvedValueOnce([]);                  // advisory chain lock
     sqlMock.mockResolvedValueOnce([{ count: '0' }]);    // audit count
     sqlMock.mockResolvedValueOnce([]);                   // last hash lookup
     sqlMock.mockResolvedValueOnce([{
@@ -224,6 +226,7 @@ describe('Injection prevention', () => {
 
   it('null bytes in string fields: handled safely', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                    // advisory quota lock
     sqlMock.mockResolvedValueOnce([{ plan: 'pro' }]);   // subscription
     sqlMock.mockResolvedValueOnce([{ count: '0' }]);     // agent count
     sqlMock.mockResolvedValueOnce([{
@@ -314,6 +317,7 @@ describe('Injection prevention', () => {
 
   it('Unicode surrogates in fields: handled safely', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{ plan: 'pro' }]);
     sqlMock.mockResolvedValueOnce([{ count: '0' }]);
     sqlMock.mockResolvedValueOnce([{

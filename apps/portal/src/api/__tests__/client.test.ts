@@ -180,4 +180,32 @@ describe('client', () => {
       expect(error.message).toBe('Bad Gateway');
     }
   });
+
+  it('preserves ApiError semantics when an error response contains JSON null', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      statusText: 'Service Unavailable',
+      json: () => Promise.resolve(null),
+    });
+    await expect(api.get('/v1/fail')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 503,
+      code: 'UNKNOWN',
+      message: 'Service Unavailable',
+    });
+  });
+
+  it('uses a string detail field when message is absent', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 422,
+      statusText: 'Unprocessable Entity',
+      json: () => Promise.resolve({ detail: 'Invalid request body' }),
+    });
+    await expect(api.post('/v1/fail')).rejects.toMatchObject({
+      status: 422,
+      message: 'Invalid request body',
+    });
+  });
 });

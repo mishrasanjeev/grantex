@@ -24,7 +24,7 @@ describe('errorsPlugin', () => {
     expect(res.statusCode).toBe(500);
     const body = res.json();
     expect(body.code).toBe('INTERNAL_ERROR');
-    expect(body.message).toBe('Something broke');
+    expect(body.message).toBe('An unexpected error occurred');
     expect(body.requestId).toBeDefined();
 
     await app.close();
@@ -168,6 +168,7 @@ describe('errorsPlugin', () => {
 
     expect(res.statusCode).toBe(500);
     expect(res.json().code).toBe('INTERNAL_ERROR');
+    expect(res.json().message).toBe('An unexpected error occurred');
 
     await app.close();
   });

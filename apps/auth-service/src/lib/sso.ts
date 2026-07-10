@@ -4,9 +4,16 @@
  * mapping, domain-based connection resolution, and session management.
  */
 import * as jose from 'jose';
-import { createVerify } from 'node:crypto';
-import crypto from 'node:crypto';
+import { X509Certificate } from 'node:crypto';
+import {
+  SAML,
+  ValidateInResponseTo,
+  type CacheItem,
+  type CacheProvider,
+  type Profile,
+} from '@node-saml/node-saml';
 import { getSql } from '../db/client.js';
+import { getRedis } from '../redis/client.js';
 import { newSsoSessionId, newScimUserId } from './ids.js';
 import { config } from '../config.js';
 import { safeFetch, validateOutboundUrl } from './url-security.js';
@@ -173,140 +180,216 @@ export function clearJwksCache(): void {
 
 // ── SAML 2.0 Response parsing ─────────────────────────────────────────────
 
+const SAML_REQUEST_TTL_MS = 10 * 60_000;
+const SAML_RESPONSE_MAX_BASE64_BYTES = 1_048_576;
+const SAML_BEARER_CONFIRMATION = 'urn:oasis:names:tc:SAML:2.0:cm:bearer';
+
+export interface SamlConnectionOptions {
+  connectionId: string;
+  idpCertificate: string;
+  idpEntityId: string;
+  idpSsoUrl: string;
+  spEntityId: string;
+  spAcsUrl: string;
+  groupAttribute?: string;
+}
+
 /**
- * Parse a base64-encoded SAML Response, verify the signature against the
- * IdP certificate, and extract user attributes.
- *
- * Supports the most common SAML assertion format with X.509 certificate-based
- * signatures.
+ * Redis-backed, consume-on-read request cache for SAML InResponseTo checks.
+ * Node-SAML reads the request ID twice during validation, so the value is
+ * consumed atomically from Redis and retained only in this validator instance.
  */
-export function parseSamlResponse(
-  samlResponseB64: string,
-  idpCertificate: string,
-): SamlAttributes {
-  // Limit input size to prevent ReDoS on large payloads (1 MB max)
-  if (samlResponseB64.length > 1_048_576) {
-    throw new Error('SAML Response exceeds maximum size');
+class RedisSamlRequestCache implements CacheProvider {
+  readonly #prefix: string;
+  readonly #consumed = new Map<string, string>();
+
+  constructor(connectionId: string) {
+    this.#prefix = 'saml:req:' + connectionId + ':';
   }
 
-  const xml = Buffer.from(samlResponseB64, 'base64').toString('utf-8');
-
-  // Extract NameID (subject) — linear regex, no backtracking risk
-  const nameIdMatch = xml.match(/<(?:saml2?:)?NameID[^>]*>([^<]+)<\/(?:saml2?:)?NameID>/);
-  if (!nameIdMatch) {
-    throw new Error('SAML Response missing NameID');
-  }
-
-  // Verify the signature exists — linear regex
-  const sigValueMatch = xml.match(
-    /<(?:ds:)?SignatureValue[^>]*>([^<]+)<\/(?:ds:)?SignatureValue>/,
-  );
-  if (!sigValueMatch) {
-    throw new Error('SAML Response missing signature');
-  }
-
-  // Verify signature using the IdP certificate
-  const certPem = idpCertificate.includes('BEGIN CERTIFICATE')
-    ? idpCertificate
-    : `-----BEGIN CERTIFICATE-----\n${idpCertificate}\n-----END CERTIFICATE-----`;
-
-  try {
-    const x509 = new crypto.X509Certificate(certPem);
-    if (new Date(x509.validTo) < new Date()) {
-      throw new Error('IdP certificate has expired');
+  async saveAsync(key: string, value: string): Promise<CacheItem | null> {
+    if (!isSafeSamlRequestId(key)) {
+      throw new Error('Refusing to cache an invalid SAML request ID');
     }
-  } catch (err) {
-    if (err instanceof Error && err.message.includes('expired')) throw err;
+    const stored = await getRedis().set(
+      this.#prefix + key,
+      value,
+      'PX',
+      SAML_REQUEST_TTL_MS,
+      'NX',
+    );
+    if (stored !== 'OK') throw new Error('Unable to persist SAML request state');
+    return { value, createdAt: Date.now() };
+  }
+
+  async getAsync(key: string): Promise<string | null> {
+    if (!isSafeSamlRequestId(key)) return null;
+    const consumed = this.#consumed.get(key);
+    if (consumed !== undefined) return consumed;
+    const value = await getRedis().getdel(this.#prefix + key);
+    if (value !== null) this.#consumed.set(key, value);
+    return value;
+  }
+
+  async removeAsync(key: string | null): Promise<string | null> {
+    if (key === null || !isSafeSamlRequestId(key)) return null;
+    const consumed = this.#consumed.get(key);
+    if (consumed !== undefined) {
+      this.#consumed.delete(key);
+      return consumed;
+    }
+    return getRedis().getdel(this.#prefix + key);
+  }
+}
+
+function isSafeSamlRequestId(value: string): boolean {
+  return /^[A-Za-z0-9_-]{1,256}$/.test(value);
+}
+
+function normalizeIdpCertificate(idpCertificate: string): string {
+  if (idpCertificate.includes('BEGIN CERTIFICATE')) return idpCertificate;
+  const compact = idpCertificate.replace(/\s/g, '');
+  return '-----BEGIN CERTIFICATE-----\n' + compact + '\n-----END CERTIFICATE-----';
+}
+
+function validateIdpCertificate(idpCertificate: string): void {
+  let x509: X509Certificate;
+  try {
+    x509 = new X509Certificate(normalizeIdpCertificate(idpCertificate));
+  } catch {
     throw new Error('Invalid IdP certificate');
   }
+  const now = Date.now();
+  if (Date.parse(x509.validFrom) > now) throw new Error('IdP certificate is not yet valid');
+  if (Date.parse(x509.validTo) <= now) throw new Error('IdP certificate has expired');
+}
 
-  // Verify the SignedInfo digest using the IdP certificate
-  // Use indexOf+indexOf instead of regex with [\s\S]*? to avoid ReDoS
-  const signedInfoStart = xml.indexOf('<SignedInfo');
-  const dsSignedInfoStart = xml.indexOf('<ds:SignedInfo');
-  const siStart = signedInfoStart >= 0 ? signedInfoStart : dsSignedInfoStart;
+function createSamlClient(options: SamlConnectionOptions): SAML {
+  return new SAML({
+    callbackUrl: options.spAcsUrl,
+    entryPoint: options.idpSsoUrl,
+    issuer: options.spEntityId,
+    audience: options.spEntityId,
+    idpCert: normalizeIdpCertificate(options.idpCertificate),
+    wantAssertionsSigned: true,
+    wantAuthnResponseSigned: false,
+    validateInResponseTo: ValidateInResponseTo.always,
+    requestIdExpirationPeriodMs: SAML_REQUEST_TTL_MS,
+    cacheProvider: new RedisSamlRequestCache(options.connectionId),
+    acceptedClockSkewMs: 60_000,
+    maxAssertionAgeMs: SAML_REQUEST_TTL_MS,
+    identifierFormat: null,
+    signatureAlgorithm: 'sha256',
+    digestAlgorithm: 'sha256',
+  });
+}
 
-  if (siStart < 0) {
-    throw new Error('SAML Response missing SignedInfo');
+/** Generate a standards-compliant Redirect-binding AuthnRequest. */
+export async function generateSamlAuthorizeUrl(
+  options: SamlConnectionOptions,
+  relayState: string,
+): Promise<string> {
+  return createSamlClient(options).getAuthorizeUrlAsync(relayState, undefined, {});
+}
+
+/**
+ * Validate a POST-binding SAML response and extract attributes only from the
+ * verified assertion. Request IDs are one-time Redis values, preventing replay
+ * across service replicas.
+ */
+export async function parseSamlResponse(
+  samlResponseB64: string,
+  options: SamlConnectionOptions,
+): Promise<SamlAttributes> {
+  if (samlResponseB64.length > SAML_RESPONSE_MAX_BASE64_BYTES) {
+    throw new Error('SAML Response exceeds maximum size');
+  }
+  validateIdpCertificate(options.idpCertificate);
+
+  const { profile, loggedOut } = await createSamlClient(options)
+    .validatePostResponseAsync({ SAMLResponse: samlResponseB64 });
+  if (loggedOut || profile === null) throw new Error('SAML Response missing assertion');
+  if (profile.issuer !== options.idpEntityId) throw new Error('SAML issuer mismatch');
+  if (!profile.nameID) throw new Error('SAML Response missing NameID');
+  if (!hasExpectedBearerRecipient(profile, options.spAcsUrl)) {
+    throw new Error('SAML assertion recipient mismatch');
   }
 
-  const siEndTag = xml.indexOf('</SignedInfo>', siStart);
-  const dsSiEndTag = xml.indexOf('</ds:SignedInfo>', siStart);
-  const siEnd = siEndTag >= 0
-    ? siEndTag + '</SignedInfo>'.length
-    : (dsSiEndTag >= 0 ? dsSiEndTag + '</ds:SignedInfo>'.length : -1);
-
-  if (siEnd <= siStart) {
-    throw new Error('SAML Response missing SignedInfo');
-  }
-
-  const signedInfoXml = xml.slice(siStart, siEnd);
-  const signatureValue = Buffer.from(sigValueMatch[1]!.replace(/\s/g, ''), 'base64');
-  const verifier = createVerify('RSA-SHA256');
-  verifier.update(signedInfoXml);
-  const valid = verifier.verify(certPem, signatureValue);
-  if (!valid) {
-    throw new Error('SAML Response signature verification failed');
-  }
-
-  // Extract attributes
-  const attributes: SamlAttributes = {
-    sub: nameIdMatch[1]!,
-  };
-
-  // Use a helper to extract SAML attribute values by name — avoids ReDoS-prone [\s\S]*? patterns
-  const extractAttrValue = (attrName: string): string | undefined => {
-    const idx = xml.indexOf(`Name="${attrName}"`);
-    if (idx < 0) return undefined;
-    const afterAttr = xml.indexOf('<', idx + attrName.length + 7);
-    if (afterAttr < 0) return undefined;
-    const valueTagEnd = xml.indexOf('>', afterAttr);
-    if (valueTagEnd < 0) return undefined;
-    const valueStart = valueTagEnd + 1;
-    const valueEnd = xml.indexOf('<', valueStart);
-    if (valueEnd < 0) return undefined;
-    const value = xml.slice(valueStart, valueEnd).trim();
-    return value || undefined;
-  };
-
-  // Extract email
-  const email = extractAttrValue('email')
-    ?? extractAttrValue('http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress');
-  if (email) attributes.email = email;
-
-  // Extract name / displayName
-  const name = extractAttrValue('displayName')
-    ?? extractAttrValue('http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name');
-  if (name) attributes.name = name;
-
-  // Extract groups — use indexOf-based iteration instead of regex with [\s\S]*?
-  const groups: string[] = [];
-  for (const groupAttrName of [
-    'group', 'groups',
+  const email = firstProfileString(profile, [
+    'email',
+    'mail',
+    'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress',
+    'urn:oid:0.9.2342.19200300.100.1.3',
+  ]);
+  const name = firstProfileString(profile, [
+    'displayName',
+    'name',
+    'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name',
+  ]);
+  const groupKeys = [
+    ...(options.groupAttribute ? [options.groupAttribute] : []),
+    'group',
+    'groups',
     'http://schemas.microsoft.com/ws/2008/06/identity/claims/group',
     'http://schemas.microsoft.com/ws/2008/06/identity/claims/groups',
-  ]) {
-    let searchFrom = 0;
-    while (true) {
-      const idx = xml.indexOf(`Name="${groupAttrName}"`, searchFrom);
-      if (idx < 0) break;
-      const val = extractAttrValue(groupAttrName);
-      if (val) groups.push(val);
-      searchFrom = idx + 1;
+  ];
+  const groups = [...new Set(groupKeys.flatMap((key) => profileStrings(profile[key])))];
+
+  return {
+    sub: profile.nameID,
+    ...(email !== undefined ? { email } : {}),
+    ...(name !== undefined ? { name } : {}),
+    ...(groups.length > 0 ? { groups } : {}),
+  };
+}
+
+function firstProfileString(profile: Profile, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = profileStrings(profile[key])[0];
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
+function profileStrings(value: unknown): string[] {
+  const values = Array.isArray(value) ? value : [value];
+  return values
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function hasExpectedBearerRecipient(profile: Profile, expectedRecipient: string): boolean {
+  const assertionDocument = profile.getAssertion?.();
+  const assertion = asRecord(assertionDocument?.['Assertion']);
+  for (const subjectValue of asArray(assertion?.['Subject'])) {
+    const subject = asRecord(subjectValue);
+    for (const confirmationValue of asArray(subject?.['SubjectConfirmation'])) {
+      const confirmation = asRecord(confirmationValue);
+      const confirmationAttributes = asRecord(confirmation?.['$']);
+      if (confirmationAttributes?.['Method'] !== SAML_BEARER_CONFIRMATION) continue;
+      for (const dataValue of asArray(confirmation?.['SubjectConfirmationData'])) {
+        const data = asRecord(dataValue);
+        const attributes = asRecord(data?.['$']);
+        if (
+          attributes?.['Recipient'] === expectedRecipient
+          && typeof attributes['InResponseTo'] === 'string'
+          && attributes['InResponseTo'].length > 0
+        ) return true;
+      }
     }
   }
-  if (groups.length > 0) attributes.groups = groups;
+  return false;
+}
 
-  // Check assertion conditions (NotOnOrAfter) — linear regex
-  const conditionsMatch = xml.match(/NotOnOrAfter="([^"]+)"/);
-  if (conditionsMatch) {
-    const notOnOrAfter = new Date(conditionsMatch[1]!);
-    if (notOnOrAfter < new Date()) {
-      throw new Error('SAML assertion has expired');
-    }
-  }
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
 
-  return attributes;
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
 // ── Domain-based connection resolution ────────────────────────────────────
