@@ -77,7 +77,9 @@ jobs:
           project_id: ${{ env.PROJECT_ID }}
           # Remove legacy seed keys that may still exist on the Cloud Run
           # service; production configuration rejects them at startup.
-          flags: '--remove-env-vars=SEED_API_KEY,SEED_SANDBOX_KEY'
+          # These are Secret Manager-backed variables on the existing service,
+          # so --remove-env-vars alone cannot remove them.
+          flags: '--remove-env-vars=SEED_API_KEY,SEED_SANDBOX_KEY --remove-secrets=SEED_API_KEY,SEED_SANDBOX_KEY'
 
       - name: Print deployed URL
         run: |
