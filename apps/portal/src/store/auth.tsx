@@ -8,6 +8,8 @@ interface AuthState {
   developer: Developer | null;
   loading: boolean;
   login: (key: string) => Promise<void>;
+  replaceApiKey: (key: string) => void;
+  updateDeveloper: (updates: Partial<Developer>) => void;
   logout: () => void;
 }
 
@@ -20,13 +22,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [developer, setDeveloper] = useState<Developer | null>(null);
   const [loading, setLoading] = useState(!!sessionStorage.getItem(STORAGE_KEY));
 
-  const login = useCallback(async (key: string) => {
+  const replaceApiKey = useCallback((key: string) => {
     setApiKey(key);
-    const dev = await getMe();
     sessionStorage.setItem(STORAGE_KEY, key);
     setKey(key);
-    setDeveloper(dev);
   }, []);
+
+  const updateDeveloper = useCallback((updates: Partial<Developer>) => {
+    setDeveloper((current) => current ? { ...current, ...updates } : current);
+  }, []);
+
+  const login = useCallback(async (key: string) => {
+    const previousKey = apiKey;
+    setApiKey(key);
+    try {
+      const dev = await getMe();
+      replaceApiKey(key);
+      setDeveloper(dev);
+    } catch (error) {
+      setApiKey(previousKey);
+      throw error;
+    }
+  }, [apiKey, replaceApiKey]);
 
   const logout = useCallback(() => {
     sessionStorage.removeItem(STORAGE_KEY);
@@ -53,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ apiKey, developer, loading, login, logout }}>
+    <AuthContext.Provider value={{ apiKey, developer, loading, login, replaceApiKey, updateDeveloper, logout }}>
       {children}
     </AuthContext.Provider>
   );

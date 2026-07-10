@@ -95,8 +95,11 @@ export async function credentialsRoutes(app: FastifyInstance): Promise<void> {
     '/v1/credentials/verify',
     { config: { skipAuth: true, rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request, reply) => {
-      const { credential } = request.body;
-      if (!credential) {
+      const body = request.body as unknown;
+      const credential = body && typeof body === 'object' && !Array.isArray(body)
+        ? (body as { credential?: unknown }).credential
+        : undefined;
+      if (typeof credential !== 'string' || credential.length === 0) {
         return reply.status(400).send({
           message: 'credential is required',
           code: 'BAD_REQUEST',
@@ -134,16 +137,31 @@ export async function credentialsRoutes(app: FastifyInstance): Promise<void> {
     '/v1/credentials/present',
     { config: { skipAuth: true, rateLimit: { max: 30, timeWindow: '1 minute' } } },
     async (request, reply) => {
-      const { sdJwt } = request.body;
-      if (!sdJwt) {
+      const body = request.body as unknown;
+      const input = body && typeof body === 'object' && !Array.isArray(body)
+        ? body as { sdJwt?: unknown; nonce?: unknown; audience?: unknown }
+        : {};
+      const { sdJwt, nonce, audience } = input;
+      if (typeof sdJwt !== 'string' || sdJwt.length === 0) {
         return reply.status(400).send({
           message: 'sdJwt is required',
           code: 'BAD_REQUEST',
           requestId: request.id,
         });
       }
+      if ((nonce !== undefined && typeof nonce !== 'string') ||
+          (audience !== undefined && typeof audience !== 'string')) {
+        return reply.status(400).send({
+          message: 'nonce and audience must be strings',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
 
-      const result = await verifySDJWT(sdJwt);
+      const result = await verifySDJWT(sdJwt, {
+        ...(nonce !== undefined ? { nonce } : {}),
+        ...(audience !== undefined ? { audience } : {}),
+      });
 
       if (result.valid) {
         const presentationId = newPresentationId();

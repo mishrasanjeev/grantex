@@ -1,12 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { getSql } from '../db/client.js';
+import { getSql, type TxSql } from '../db/client.js';
 import { newWebhookId } from '../lib/ids.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 import { config } from '../config.js';
 import { validateOutboundUrl } from '../lib/url-security.js';
 
 const VALID_EVENTS = new Set(['grant.created', 'grant.revoked', 'token.issued']);
+const VALID_DELIVERY_STATUSES = new Set(['pending', 'delivered', 'failed']);
 
 interface CreateWebhookBody {
   url: string;
@@ -16,9 +17,19 @@ interface CreateWebhookBody {
 export async function webhooksRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/webhooks
   app.post<{ Body: CreateWebhookBody }>('/v1/webhooks', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const { url, events } = request.body;
+    const body = request.body as unknown;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return reply.status(400).send({
+        message: 'url and events are required',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    const { url, events } = body as Partial<CreateWebhookBody>;
 
-    if (!url || !events || !Array.isArray(events) || events.length === 0) {
+    if (typeof url !== 'string' || url.length === 0 ||
+        !Array.isArray(events) || events.length === 0 ||
+        events.some(event => typeof event !== 'string')) {
       return reply.status(400).send({
         message: 'url and events are required',
         code: 'BAD_REQUEST',
@@ -51,34 +62,46 @@ export async function webhooksRoutes(app: FastifyInstance): Promise<void> {
     const developerId = request.developer.id;
     const sql = getSql();
 
-    // Enforce plan webhook limit
-    const subRows = await sql<{ plan: string }[]>`
-      SELECT plan FROM subscriptions WHERE developer_id = ${developerId}
-    `;
-    const planName = subRows[0]?.plan ?? 'free';
-    const plan = isPlanName(planName) ? planName : 'free';
-    const webhookLimit = PLAN_LIMITS[plan].webhooks;
+    const id = newWebhookId();
+    const secret = randomBytes(24).toString('hex');
+    let limitExceeded: { plan: string; limit: number } | undefined;
 
-    const countRows = await sql<{ count: string }[]>`
-      SELECT COUNT(*) AS count FROM webhooks WHERE developer_id = ${developerId}
-    `;
-    const webhookCount = parseInt(countRows[0]?.count ?? '0', 10);
+    // Serialize the count-and-insert sequence per developer. Without a lock,
+    // concurrent registrations can both observe the same count and exceed the
+    // subscription limit.
+    await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 1))`;
 
-    if (webhookCount >= webhookLimit) {
+      const subRows = await tx<{ plan: string }[]>`
+        SELECT plan FROM subscriptions WHERE developer_id = ${developerId}
+      `;
+      const planName = subRows[0]?.plan ?? 'free';
+      const plan = isPlanName(planName) ? planName : 'free';
+      const webhookLimit = PLAN_LIMITS[plan].webhooks;
+
+      const countRows = await tx<{ count: string }[]>`
+        SELECT COUNT(*) AS count FROM webhooks WHERE developer_id = ${developerId}
+      `;
+      const webhookCount = parseInt(countRows[0]?.count ?? '0', 10);
+      if (webhookCount >= webhookLimit) {
+        limitExceeded = { plan, limit: webhookLimit };
+        return;
+      }
+
+      await tx`
+        INSERT INTO webhooks (id, developer_id, url, events, secret)
+        VALUES (${id}, ${developerId}, ${url}, ${events}, ${secret})
+      `;
+    });
+
+    if (limitExceeded) {
       return reply.status(402).send({
-        message: `Plan limit reached: ${plan} plan allows ${webhookLimit} webhook(s). Upgrade at /v1/billing/checkout`,
+        message: `Plan limit reached: ${limitExceeded.plan} plan allows ${limitExceeded.limit} webhook(s). Upgrade at /v1/billing/checkout`,
         code: 'PLAN_LIMIT_EXCEEDED',
         requestId: request.id,
       });
     }
-
-    const id = newWebhookId();
-    const secret = randomBytes(24).toString('hex');
-
-    await sql`
-      INSERT INTO webhooks (id, developer_id, url, events, secret)
-      VALUES (${id}, ${developerId}, ${url}, ${events}, ${secret})
-    `;
 
     return reply.status(201).send({
       id,
@@ -127,10 +150,28 @@ export async function webhooksRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const query = request.query as Record<string, string>;
+    const query = request.query as Record<string, unknown>;
     const status = query['status'] ?? null;
-    const page = Math.max(1, parseInt(query['page'] ?? '1', 10));
-    const pageSize = Math.min(100, Math.max(1, parseInt(query['pageSize'] ?? '20', 10)));
+    if (status !== null && (typeof status !== 'string' || !VALID_DELIVERY_STATUSES.has(status))) {
+      return reply.status(400).send({
+        message: 'status must be one of: pending, delivered, failed',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
+    const parsedPage = Number(query['page'] ?? 1);
+    const parsedPageSize = Number(query['pageSize'] ?? 20);
+    if (!Number.isSafeInteger(parsedPage) || parsedPage < 1 || parsedPage > 1_000_000 ||
+        !Number.isSafeInteger(parsedPageSize) || parsedPageSize < 1) {
+      return reply.status(400).send({
+        message: 'page and pageSize must be positive integers',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    const page = parsedPage;
+    const pageSize = Math.min(100, parsedPageSize);
     const offset = (page - 1) * pageSize;
 
     const countRows = await sql<{ count: string }[]>`

@@ -22,6 +22,11 @@ describe('Select', () => {
     expect(screen.getByLabelText('Choose one')).toBeInTheDocument();
   });
 
+  it('associates a label when no explicit id is provided', () => {
+    render(<Select label="Generated ID" options={options} />);
+    expect(screen.getByLabelText('Generated ID')).toHaveAttribute('id');
+  });
+
   it('forwards id to select element', () => {
     render(<Select options={options} id="my-select" />);
     expect(document.getElementById('my-select')).toBeInTheDocument();

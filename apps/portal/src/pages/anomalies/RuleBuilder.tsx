@@ -57,8 +57,9 @@ export function RuleBuilder() {
   }, [show]);
 
   async function handleToggle(rule: AnomalyRule) {
+    if (!rule.id) return;
     try {
-      const updated = await toggleRule(rule.ruleId, !rule.enabled);
+      const updated = await toggleRule(rule.id, !rule.enabled);
       setRules((prev) =>
         prev.map((r) => (r.ruleId === rule.ruleId ? updated : r)),
       );
@@ -69,10 +70,10 @@ export function RuleBuilder() {
   }
 
   async function handleDelete() {
-    if (!deleteTarget) return;
+    if (!deleteTarget?.id) return;
     setDeleting(true);
     try {
-      await deleteRule(deleteTarget.ruleId);
+      await deleteRule(deleteTarget.id);
       setRules((prev) => prev.filter((r) => r.ruleId !== deleteTarget.ruleId));
       show('Rule deleted', 'success');
       setDeleteTarget(null);
@@ -202,7 +203,6 @@ export function RuleBuilder() {
                   <RuleCard
                     key={rule.ruleId}
                     rule={rule}
-                    onToggle={() => handleToggle(rule)}
                   />
                 ))}
               </div>
@@ -417,7 +417,7 @@ function RuleCard({
   onDelete,
 }: {
   rule: AnomalyRule;
-  onToggle: () => void;
+  onToggle?: () => void;
   onDelete?: () => void;
 }) {
   return (
@@ -437,19 +437,25 @@ function RuleCard({
 
         <div className="flex items-center gap-3 flex-shrink-0">
           {/* Toggle */}
-          <button
-            onClick={onToggle}
-            className={`relative w-10 h-5 rounded-full transition-colors ${
-              rule.enabled ? 'bg-gx-accent' : 'bg-gx-border'
-            }`}
-            title={rule.enabled ? 'Disable rule' : 'Enable rule'}
-          >
-            <span
-              className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                rule.enabled ? 'translate-x-5' : 'translate-x-0.5'
+          {onToggle && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={rule.enabled}
+              aria-label={`${rule.enabled ? 'Disable' : 'Enable'} ${rule.name}`}
+              onClick={onToggle}
+              className={`relative w-10 h-5 rounded-full transition-colors ${
+                rule.enabled ? 'bg-gx-accent' : 'bg-gx-border'
               }`}
-            />
-          </button>
+              title={rule.enabled ? 'Disable rule' : 'Enable rule'}
+            >
+              <span
+                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                  rule.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          )}
 
           {/* Delete (custom only) */}
           {onDelete && (

@@ -12,7 +12,6 @@ from ._types import (
     A2AGrantexClientOptions,
     A2ATask,
     A2ATaskStatus,
-    A2AMessage,
     A2APart,
     TaskSendParams,
     TaskGetParams,
@@ -39,10 +38,11 @@ class A2AGrantexClient:
 
     def __init__(self, options: A2AGrantexClientOptions) -> None:
         parsed_agent_url = urlparse(options.agent_url)
+        hostname = parsed_agent_url.hostname
         if (
             parsed_agent_url.scheme not in {"http", "https"}
             or not parsed_agent_url.netloc
-            or not parsed_agent_url.hostname
+            or hostname is None
         ):
             raise ValueError("agent_url must be an absolute http(s) URL")
         try:
@@ -50,6 +50,7 @@ class A2AGrantexClient:
         except ValueError as exc:
             raise ValueError("agent_url has an invalid port") from exc
         self._agent_url = parsed_agent_url
+        self._hostname = hostname
         self._grant_token = options.grant_token
         self._required_scope = options.required_scope
         self._request_id = 0
@@ -61,6 +62,10 @@ class A2AGrantexClient:
             raise ValueError("Grant token is expired")
         if self._required_scope:
             scopes = payload.get("scp", [])
+            if not isinstance(scopes, list) or not all(
+                isinstance(scope, str) for scope in scopes
+            ):
+                raise ValueError("Grant token scp claim must be a list of strings")
             if self._required_scope not in scopes:
                 raise ValueError(
                     f"Grant token missing required scope: {self._required_scope}"
@@ -86,7 +91,7 @@ class A2AGrantexClient:
             target = f"{target}?{self._agent_url.query}"
 
         conn_cls = HTTPSConnection if self._agent_url.scheme == "https" else HTTPConnection
-        conn = conn_cls(self._agent_url.hostname, self._agent_url.port, timeout=30)
+        conn = conn_cls(self._hostname, self._agent_url.port, timeout=30)
         try:
             conn.request("POST", target, body=data, headers=headers)
             resp = conn.getresponse()

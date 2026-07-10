@@ -14,6 +14,11 @@ describe('Input', () => {
     expect(screen.getByLabelText('Username')).toBeInTheDocument();
   });
 
+  it('associates a label when no explicit id is provided', () => {
+    render(<Input label="Generated ID" />);
+    expect(screen.getByLabelText('Generated ID')).toHaveAttribute('id');
+  });
+
   it('renders hint text alongside the label', () => {
     render(<Input label="API Key" hint="starts with gx_" id="apikey" />);
     expect(screen.getByText('(starts with gx_)')).toBeInTheDocument();
@@ -45,7 +50,10 @@ describe('Input', () => {
 
   it('renders error message when error prop is provided', () => {
     render(<Input error="This field is required" placeholder="err" />);
-    expect(screen.getByText('This field is required')).toBeInTheDocument();
+    const input = screen.getByPlaceholderText('err');
+    const error = screen.getByText('This field is required');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAttribute('aria-describedby', error.id);
   });
 
   it('applies error border style when error prop is set', () => {

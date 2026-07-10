@@ -138,8 +138,8 @@ export function BundleForm() {
             <div>
               <dt className="text-xs text-gx-muted">Bundle ID</dt>
               <dd className="flex items-center gap-2 mt-0.5">
-                <code className="text-sm font-mono text-gx-accent2">{result.bundle.id}</code>
-                <CopyButton text={result.bundle.id} />
+                <code className="text-sm font-mono text-gx-accent2">{result.bundleId}</code>
+                <CopyButton text={result.bundleId} />
               </dd>
             </div>
 
@@ -160,16 +160,16 @@ export function BundleForm() {
               <dd className="mt-0.5">
                 <div className="flex items-start gap-2">
                   <pre className="text-xs font-mono text-gx-text whitespace-pre-wrap break-all bg-gx-bg border border-gx-border rounded p-2 flex-1 max-h-32 overflow-y-auto">
-                    {JSON.stringify(result.jwks, null, 2)}
+                    {JSON.stringify(result.jwksSnapshot, null, 2)}
                   </pre>
-                  <CopyButton text={JSON.stringify(result.jwks, null, 2)} />
+                  <CopyButton text={JSON.stringify(result.jwksSnapshot, null, 2)} />
                 </div>
               </dd>
             </div>
 
             <div>
               <dt className="flex items-center gap-2 text-xs text-gx-muted">
-                Audit Signing Key
+                Offline Audit Key
                 <Badge variant="warning">shown once</Badge>
               </dt>
               <dd className="mt-1">
@@ -179,9 +179,9 @@ export function BundleForm() {
                   </p>
                   <div className="flex items-start gap-2">
                     <code className="text-xs font-mono text-gx-text break-all bg-gx-bg border border-gx-border rounded p-2 flex-1">
-                      {result.auditKey}
+                      {JSON.stringify(result.offlineAuditKey, null, 2)}
                     </code>
-                    <CopyButton text={result.auditKey} />
+                    <CopyButton text={JSON.stringify(result.offlineAuditKey, null, 2)} />
                   </div>
                 </div>
               </dd>
@@ -192,7 +192,7 @@ export function BundleForm() {
         <div className="flex gap-3">
           <Button
             size="sm"
-            onClick={() => navigate(`/dashboard/bundles/${result.bundle.id}`)}
+            onClick={() => navigate(`/dashboard/bundles/${result.bundleId}`)}
           >
             View Bundle
           </Button>

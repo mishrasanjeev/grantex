@@ -198,26 +198,27 @@ async function main(): Promise<void> {
   // ── 7. Hash chain integrity check ─────────────────────────────
   console.log('\n--- Hash Chain Integrity Check ---');
 
-  // Check each agent's audit chain separately (chains are per-developer)
+  // The service maintains one chain per developer, not one chain per agent.
+  // Fetch the unfiltered sequence so links through other agents are retained.
+  const chainEntries = [...(await grantex.audit.list()).entries]
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()) as AuditEntry[];
   let chainValid = true;
-  for (const [agentName, entries] of [['data-reader', auditA.entries], ['notifier', auditB.entries]] as const) {
-    const typed = entries as AuditEntry[];
-    for (let i = 1; i < typed.length; i++) {
-      const current = typed[i]!;
-      const previous = typed[i - 1]!;
-      if (current.prevHash !== previous.hash) {
-        console.log(`  BROKEN at entry ${i}: prevHash mismatch for ${agentName}`);
-        chainValid = false;
-      }
+  for (let i = 1; i < chainEntries.length; i++) {
+    const current = chainEntries[i]!;
+    const previous = chainEntries[i - 1]!;
+    if (current.prevHash !== previous.hash) {
+      console.log(`  BROKEN at entry ${i}: prevHash does not match the previous developer entry`);
+      chainValid = false;
+      break;
     }
   }
 
   if (chainValid) {
     console.log('  All hash chains verified: integrity PASSED');
-    console.log(`  Chain length: ${allEntries.length} entries`);
-    if (allEntries.length > 0) {
-      console.log(`  First hash: ${allEntries[0]!.hash.slice(0, 16)}...`);
-      console.log(`  Last hash:  ${allEntries[allEntries.length - 1]!.hash.slice(0, 16)}...`);
+    console.log(`  Chain length: ${chainEntries.length} entries`);
+    if (chainEntries.length > 0) {
+      console.log(`  First hash: ${chainEntries[0]!.hash.slice(0, 16)}...`);
+      console.log(`  Last hash:  ${chainEntries[chainEntries.length - 1]!.hash.slice(0, 16)}...`);
     }
   }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { sqlMock } from './setup.js';
+import { mockRedis, sqlMock } from './setup.js';
 import {
   mapGroupsToScopes,
   clearDiscoveryCache,
@@ -253,20 +253,45 @@ describe('discoverOidcProvider', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('parseSamlResponse', () => {
-  it('throws when NameID is missing', async () => {
-    const { parseSamlResponse } = await import('../src/lib/sso.js');
-    const samlXml = '<Response><Assertion></Assertion></Response>';
-    const b64 = Buffer.from(samlXml).toString('base64');
+  const options = {
+    connectionId: 'sso_TEST',
+    idpCertificate: 'not-a-certificate',
+    idpEntityId: 'https://idp.example.com',
+    idpSsoUrl: 'https://idp.example.com/sso',
+    spEntityId: 'urn:grantex:test',
+    spAcsUrl: 'https://app.example.com/sso/callback/saml',
+  };
 
-    expect(() => parseSamlResponse(b64, 'cert')).toThrow('SAML Response missing NameID');
+  it('rejects an invalid IdP certificate before parsing assertions', async () => {
+    const { parseSamlResponse } = await import('../src/lib/sso.js');
+    const b64 = Buffer.from('<Response/>').toString('base64');
+
+    await expect(parseSamlResponse(b64, options)).rejects.toThrow('Invalid IdP certificate');
   });
 
-  it('throws when signature is missing', async () => {
+  it('rejects oversized responses before XML parsing', async () => {
     const { parseSamlResponse } = await import('../src/lib/sso.js');
-    const samlXml = '<Response><Assertion><saml:NameID>user@test.com</saml:NameID></Assertion></Response>';
-    const b64 = Buffer.from(samlXml).toString('base64');
 
-    expect(() => parseSamlResponse(b64, 'cert')).toThrow('SAML Response missing signature');
+    await expect(
+      parseSamlResponse('A'.repeat(1_048_577), options),
+    ).rejects.toThrow('SAML Response exceeds maximum size');
+  });
+
+  it('generates a request and persists its one-time request ID', async () => {
+    const { generateSamlAuthorizeUrl } = await import('../src/lib/sso.js');
+
+    const url = await generateSamlAuthorizeUrl(options, 'signed-relay-state');
+
+    expect(url).toContain('https://idp.example.com/sso?');
+    expect(url).toContain('SAMLRequest=');
+    expect(url).toContain('RelayState=signed-relay-state');
+    expect(mockRedis.set).toHaveBeenCalledWith(
+      expect.stringMatching(/^saml:req:sso_TEST:_/),
+      expect.any(String),
+      'PX',
+      600_000,
+      'NX',
+    );
   });
 });
 

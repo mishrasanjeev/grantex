@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { listRecentEvents } from '../../api/events';
+import { useState, useEffect } from 'react';
+import { subscribeToEvents } from '../../api/events';
 import type { EventRecord } from '../../api/events';
 import { useToast } from '../../store/toast';
 import { Card } from '../../components/ui/Card';
@@ -8,8 +8,6 @@ import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Badge } from '../../components/ui/Badge';
 import { timeAgo } from '../../lib/format';
-
-const POLL_INTERVAL = 10_000;
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'danger';
 
@@ -48,37 +46,38 @@ export function EventList() {
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [paused, setPaused] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [connected, setConnected] = useState(false);
   const { show } = useToast();
-
-  const fetchEvents = useCallback(() => {
-    listRecentEvents()
-      .then(setEvents)
-      .catch(() => show('Failed to load events', 'error'))
-      .finally(() => setLoading(false));
-  }, [show]);
-
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
 
   useEffect(() => {
     if (paused) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+      setConnected(false);
       return;
     }
 
-    intervalRef.current = setInterval(fetchEvents, POLL_INTERVAL);
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
+    const controller = new AbortController();
+    setConnected(false);
+    void subscribeToEvents({
+      signal: controller.signal,
+      onOpen: () => {
+        setConnected(true);
+        setLoading(false);
+      },
+      onEvent: (event) => {
+        setEvents((current) => [event, ...current].slice(0, 100));
+      },
+    }).catch(() => {
+      if (!controller.signal.aborted) {
+        setConnected(false);
+        setLoading(false);
+        show('Failed to connect to event stream', 'error');
       }
+    });
+
+    return () => {
+      controller.abort();
     };
-  }, [paused, fetchEvents]);
+  }, [paused, show]);
 
   if (loading) return <Spinner />;
 
@@ -87,7 +86,7 @@ export function EventList() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold text-gx-text">Events</h1>
-          {!paused && (
+          {connected && !paused && (
             <span className="flex items-center gap-1.5 text-xs text-gx-accent font-medium">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gx-accent opacity-75" />
@@ -98,6 +97,7 @@ export function EventList() {
           )}
         </div>
         <button
+          type="button"
           onClick={() => setPaused((p) => !p)}
           className="px-3 py-1.5 text-xs rounded-md font-medium transition-colors bg-gx-surface border border-gx-border text-gx-muted hover:text-gx-text"
         >

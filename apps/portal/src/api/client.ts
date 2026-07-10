@@ -40,8 +40,17 @@ async function request<T>(
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ message: res.statusText, code: 'UNKNOWN' }));
-    throw new ApiError(res.status, err.code ?? 'UNKNOWN', err.message ?? res.statusText);
+    const payload: unknown = await res.json().catch(() => null);
+    const err = payload && typeof payload === 'object'
+      ? payload as Record<string, unknown>
+      : {};
+    const code = typeof err['code'] === 'string' ? err['code'] : 'UNKNOWN';
+    const message = typeof err['message'] === 'string'
+      ? err['message']
+      : typeof err['detail'] === 'string'
+        ? err['detail']
+        : res.statusText;
+    throw new ApiError(res.status, code, message);
   }
 
   if (res.status === 204) return undefined as T;

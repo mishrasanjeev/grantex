@@ -8,9 +8,18 @@ export function shouldRefresh(bundle: ConsentBundle): boolean {
   const expiresAtMs = new Date(bundle.offlineExpiresAt).getTime();
   // Use checkpointAt as the "created" baseline (last sync = start of window).
   const checkpointMs = bundle.checkpointAt;
+  const now = Date.now();
   const totalTTL = expiresAtMs - checkpointMs;
-  const remaining = expiresAtMs - Date.now();
+  const remaining = expiresAtMs - now;
 
+  if (
+    !Number.isFinite(expiresAtMs) ||
+    !Number.isFinite(checkpointMs) ||
+    checkpointMs <= 0 ||
+    checkpointMs > now
+  ) {
+    return true;
+  }
   if (totalTTL <= 0) return true;
   return remaining / totalTTL < 0.2;
 }

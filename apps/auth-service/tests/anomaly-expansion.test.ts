@@ -110,6 +110,35 @@ describe('GET /v1/anomaly/alerts', () => {
   });
 });
 
+describe('GET /v1/anomaly/alerts/:alertId', () => {
+  it('returns one owned alert', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([ALERT_ROW]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/anomaly/alerts/anm_ALERT01',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().alertId).toBe('anm_ALERT01');
+  });
+
+  it('returns 404 instead of exposing another developer alert', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/anomaly/alerts/anm_OTHER',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 // ─── POST /v1/anomaly/alerts/:alertId/acknowledge ───────────────────────────
 
 describe('POST /v1/anomaly/alerts/:alertId/acknowledge', () => {
@@ -335,6 +364,41 @@ describe('GET /v1/anomaly/rules', () => {
     const body = res.json<{ rules: Array<{ ruleId: string; builtIn: boolean }> }>();
     expect(body.rules).toHaveLength(10);
     expect(body.rules.every((r) => r.builtIn)).toBe(true);
+  });
+});
+
+describe('PATCH /v1/anomaly/rules/:ruleId', () => {
+  it('toggles a custom rule by its database id', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ ...CUSTOM_RULE_ROW, enabled: false }]);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/anomaly/rules/arule_01',
+      headers: authHeader(),
+      payload: { enabled: false },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      id: 'arule_01',
+      ruleId: 'CUSTOM-001',
+      enabled: false,
+      builtIn: false,
+    });
+  });
+
+  it('rejects non-boolean enabled values', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/anomaly/rules/arule_01',
+      headers: authHeader(),
+      payload: { enabled: 'false' },
+    });
+
+    expect(res.statusCode).toBe(400);
   });
 });
 

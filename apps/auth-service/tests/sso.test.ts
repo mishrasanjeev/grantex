@@ -16,7 +16,10 @@ vi.mock('../src/lib/sso.js', () => ({
     name: 'Alice Smith',
     groups: ['Engineering'],
   }),
-  parseSamlResponse: vi.fn().mockReturnValue({
+  generateSamlAuthorizeUrl: vi.fn().mockResolvedValue(
+    'https://login.microsoftonline.com/tenant-id/saml2?SAMLRequest=mock&RelayState=mock',
+  ),
+  parseSamlResponse: vi.fn().mockResolvedValue({
     sub: 'saml_user_01',
     email: 'bob@corp.com',
     name: 'Bob Jones',
@@ -49,7 +52,7 @@ import {
 } from '../src/lib/sso.js';
 import { encrypt } from '../src/lib/vault-crypto.js';
 import { setSafeFetchForTests } from '../src/lib/url-security.js';
-import { signSsoState } from '../src/routes/sso.js';
+import { signSsoState, verifySsoState } from '../src/routes/sso.js';
 
 const mockedResolveConnection = vi.mocked(resolveConnection);
 const mockedVerifyIdToken = vi.mocked(verifyIdToken);
@@ -75,7 +78,7 @@ afterEach(() => {
     name: 'Alice Smith',
     groups: ['Engineering'],
   });
-  mockedParseSamlResponse.mockReset().mockReturnValue({
+  mockedParseSamlResponse.mockReset().mockResolvedValue({
     sub: 'saml_user_01',
     email: 'bob@corp.com',
     name: 'Bob Jones',
@@ -603,6 +606,18 @@ describe('POST /sso/callback/oidc', () => {
   let state: string;
   beforeAll(() => { state = signSsoState({ org: 'dev_TEST', connectionId: 'sso_CONN01' }); });
 
+  it('rejects signed state after its ten-minute lifetime', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-07-10T00:00:00Z'));
+      const shortLivedState = signSsoState({ org: 'dev_TEST', connectionId: 'sso_CONN01' });
+      vi.setSystemTime(new Date('2026-07-10T00:11:00Z'));
+      expect(verifySsoState(shortLivedState)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('exchanges code, verifies ID token, creates session', async () => {
     sqlMock.mockResolvedValueOnce([OIDC_CONNECTION_ROW]); // SELECT connection
 
@@ -821,9 +836,9 @@ describe('POST /sso/callback/saml', () => {
 
   it('returns 502 when SAML verification fails', async () => {
     sqlMock.mockResolvedValueOnce([SAML_CONNECTION_ROW]);
-    mockedParseSamlResponse.mockImplementationOnce(() => {
-      throw new Error('SAML Response signature verification failed');
-    });
+    mockedParseSamlResponse.mockRejectedValueOnce(
+      new Error('SAML Response signature verification failed'),
+    );
 
     const res = await app.inject({
       method: 'POST',
@@ -832,7 +847,7 @@ describe('POST /sso/callback/saml', () => {
       payload: { SAMLResponse: 'abc', RelayState: relayState },
     });
     expect(res.statusCode).toBe(502);
-    expect(res.json().message).toBe('SAML Response signature verification failed');
+    expect(res.json().message).toBe('SAML response verification failed');
   });
 });
 

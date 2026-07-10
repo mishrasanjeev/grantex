@@ -1,10 +1,9 @@
 import type { Tool } from 'ai';
 import type { z } from 'zod';
-import type { ToolCallOptions } from '@ai-sdk/provider-utils';
 import { zodSchema } from 'ai';
 import { verifyGrantToken, type VerifyGrantTokenOptions } from '@grantex/sdk';
 import { decodeJwtPayload } from './_jwt.js';
-import { GrantexScopeError, type CreateGrantexToolOptions } from './types.js';
+import { GrantexScopeError, type CreateGrantexToolOptions, type GrantexToolExecutionOptions } from './types.js';
 
 /** Symbol key used to carry the tool name through to `withAuditLogging`. */
 export const TOOL_NAME_KEY = Symbol('grantex.toolName');
@@ -19,7 +18,7 @@ export type GrantexTool<PARAMETERS extends z.ZodTypeAny, RESULT> = Tool<
 > & {
   execute: (
     args: z.infer<PARAMETERS>,
-    options: ToolCallOptions,
+    options: GrantexToolExecutionOptions,
   ) => PromiseLike<RESULT>;
   readonly [TOOL_NAME_KEY]: string;
 };
@@ -68,7 +67,7 @@ export function createGrantexTool<PARAMETERS extends z.ZodTypeAny, RESULT>(
     inputSchema: zodSchema(parameters),
     execute: async (
       args: z.infer<PARAMETERS>,
-      toolOptions: ToolCallOptions,
+      toolOptions: GrantexToolExecutionOptions,
     ): Promise<RESULT> => {
       const grant = await verifyGrantToken(grantToken, buildVerifyOptions(options));
       const scopes = grant.scopes;

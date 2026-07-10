@@ -64,7 +64,9 @@ export abstract class BaseAdapter {
     try {
       await this.auditLogger({
         agentId: grant.agentDid,
+        agentDid: grant.agentDid,
         grantId: grant.grantId,
+        principalId: grant.principalId,
         action,
         status,
         ...(metadata !== undefined ? { metadata } : {}),

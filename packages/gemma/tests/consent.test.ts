@@ -106,7 +106,7 @@ describe('bundle-refresh', () => {
       const newBundle = makeBundleFixture({ bundleId: 'bnd_refreshed' });
 
       const originalFetch = globalThis.fetch;
-      const fetchSpy = vi.fn(async () =>
+      const fetchSpy = vi.fn(async (_url: string | URL, _init?: RequestInit) =>
         new Response(JSON.stringify(newBundle), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -122,8 +122,8 @@ describe('bundle-refresh', () => {
 
         const [url, init] = fetchSpy.mock.calls[0]!;
         expect(url).toBe('https://api.grantex.dev/v1/consent-bundles/bnd_01/refresh');
-        expect((init as RequestInit).method).toBe('POST');
-        expect((init as RequestInit).headers).toEqual(
+        expect(init!.method).toBe('POST');
+        expect(init!.headers).toEqual(
           expect.objectContaining({
             Authorization: 'Bearer test-api-key',
           }),

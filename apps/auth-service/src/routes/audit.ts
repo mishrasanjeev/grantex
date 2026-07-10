@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getSql } from '../db/client.js';
+import { getSql, type TxSql } from '../db/client.js';
 import { newAuditEntryId } from '../lib/ids.js';
 import { computeAuditHash } from '../lib/hash.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
@@ -17,11 +17,26 @@ interface AuditLogBody {
 export async function auditRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/audit/log
   app.post<{ Body: AuditLogBody }>('/v1/audit/log', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const { agentId, agentDid, grantId, principalId, action, metadata = {}, status = 'success' } = request.body;
+    const body = (request.body ?? {}) as Partial<AuditLogBody>;
+    const { agentId, agentDid, grantId, principalId, action, metadata = {}, status = 'success' } = body;
 
     if (!agentId || !agentDid || !grantId || !principalId || !action) {
       return reply.status(400).send({
         message: 'agentId, agentDid, grantId, principalId, and action are required',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    if (!['success', 'failure', 'blocked'].includes(status)) {
+      return reply.status(400).send({
+        message: 'status must be success, failure, or blocked',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
+      return reply.status(400).send({
+        message: 'metadata must be an object',
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
@@ -38,56 +53,68 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
     const plan = isPlanName(planName) ? planName : 'free';
     const auditLimit = PLAN_LIMITS[plan].auditEntries;
 
-    const countRows = await sql<{ count: string }[]>`
-      SELECT COUNT(*) AS count FROM audit_entries WHERE developer_id = ${developerId}
-    `;
-    const auditCount = parseInt(countRows[0]?.count ?? '0', 10);
+    let limitExceeded = false;
+    let createdRow: Record<string, unknown> | undefined;
+    await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      // Serialise chain heads per developer, including the empty-chain case
+      // where SELECT ... FOR UPDATE has no row to lock.
+      await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 0))`;
 
-    if (auditCount >= auditLimit) {
+      const countRows = await tx<{ count: string }[]>`
+        SELECT COUNT(*) AS count FROM audit_entries WHERE developer_id = ${developerId}
+      `;
+      const auditCount = parseInt(countRows[0]?.count ?? '0', 10);
+      if (auditCount >= auditLimit) {
+        limitExceeded = true;
+        return;
+      }
+
+      const lastRows = await tx`
+        SELECT hash FROM audit_entries
+        WHERE developer_id = ${developerId}
+        ORDER BY timestamp DESC, id DESC
+        LIMIT 1
+      `;
+      const prevHash = lastRows[0] ? (lastRows[0]['hash'] as string) : null;
+
+      const id = newAuditEntryId();
+      const timestamp = new Date().toISOString();
+      const hash = computeAuditHash({
+        id,
+        agentId,
+        agentDid,
+        grantId,
+        principalId,
+        developerId,
+        action,
+        metadata,
+        timestamp,
+        prevHash,
+        status,
+      });
+
+      const rows = await tx`
+        INSERT INTO audit_entries (id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status)
+        VALUES (
+          ${id}, ${agentId}, ${agentDid}, ${grantId}, ${principalId},
+          ${developerId}, ${action}, ${JSON.stringify(metadata)}, ${hash},
+          ${prevHash}, ${timestamp}, ${status}
+        )
+        RETURNING id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status
+      `;
+      createdRow = rows[0] as Record<string, unknown> | undefined;
+    });
+
+    if (limitExceeded) {
       return reply.status(402).send({
         message: `Plan limit reached: ${plan} plan allows ${auditLimit} audit entries. Upgrade at /v1/billing/checkout`,
         code: 'PLAN_LIMIT_EXCEEDED',
         requestId: request.id,
       });
     }
-
-    // Get last audit entry hash for chain
-    const lastRows = await sql`
-      SELECT hash FROM audit_entries
-      WHERE developer_id = ${developerId}
-      ORDER BY timestamp DESC
-      LIMIT 1
-    `;
-    const prevHash = lastRows[0] ? (lastRows[0]['hash'] as string) : null;
-
-    const id = newAuditEntryId();
-    const timestamp = new Date().toISOString();
-
-    const hash = computeAuditHash({
-      id,
-      agentId,
-      agentDid,
-      grantId,
-      principalId,
-      developerId,
-      action,
-      metadata,
-      timestamp,
-      prevHash,
-      status,
-    });
-
-    const rows = await sql`
-      INSERT INTO audit_entries (id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status)
-      VALUES (
-        ${id}, ${agentId}, ${agentDid}, ${grantId}, ${principalId},
-        ${developerId}, ${action}, ${JSON.stringify(metadata)}, ${hash},
-        ${prevHash}, ${timestamp}, ${status}
-      )
-      RETURNING id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status
-    `;
-
-    return reply.status(201).send(toAuditResponse(rows[0]!));
+    if (!createdRow) throw new Error('Audit entry insert returned no row');
+    return reply.status(201).send(toAuditResponse(createdRow));
   });
 
   // GET /v1/audit/entries

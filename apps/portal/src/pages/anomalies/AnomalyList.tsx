@@ -126,10 +126,6 @@ export function AnomalyList() {
   const openMedium = metrics?.bySeverity?.medium ?? 0;
   const openLow = metrics?.bySeverity?.low ?? 0;
 
-  // Build sparkline data (last 14 days)
-  const activityData = metrics?.recentActivity ?? [];
-  const maxActivity = Math.max(...activityData.map((d) => d.count), 1);
-
   return (
     <div>
       {/* Header */}
@@ -152,7 +148,9 @@ export function AnomalyList() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         {/* Severity counts */}
         <Card className="col-span-1">
-          <h3 className="text-sm font-medium text-gx-muted mb-4">Open Alerts by Severity</h3>
+          <h3 className="text-sm font-medium text-gx-muted mb-4">
+            Alerts by Severity ({metrics?.window ?? '24h'})
+          </h3>
           <div className="space-y-3">
             {[
               { label: 'Critical', count: openCritical, color: severityColors.critical },
@@ -180,48 +178,31 @@ export function AnomalyList() {
           <div className="mt-4 pt-4 border-t border-gx-border flex items-center justify-between">
             <span className="text-sm text-gx-muted">Total open</span>
             <span className="text-xl font-bold text-gx-text font-mono">
-              {metrics?.openAlerts ?? 0}
+              {metrics?.byStatus.open ?? 0}
             </span>
           </div>
         </Card>
 
-        {/* Activity sparkline */}
+        {/* Status breakdown */}
         <Card className="col-span-1 lg:col-span-2">
-          <h3 className="text-sm font-medium text-gx-muted mb-4">Recent Activity (14 days)</h3>
-          <div className="flex items-end gap-1 h-24">
-            {activityData.length === 0 ? (
-              <p className="text-sm text-gx-muted self-center w-full text-center">
-                No recent activity data
-              </p>
-            ) : (
-              activityData.map((day, i) => (
-                <div
-                  key={i}
-                  className="flex-1 rounded-sm transition-all hover:opacity-80"
-                  style={{
-                    height: `${Math.max((day.count / maxActivity) * 100, 4)}%`,
-                    background:
-                      day.count === 0
-                        ? 'var(--gx-border, #30363d)'
-                        : day.count > maxActivity * 0.7
-                          ? severityColors.high
-                          : 'var(--gx-accent, #3fb950)',
-                    minHeight: '4px',
-                  }}
-                  title={`${day.date}: ${day.count} alerts`}
-                />
-              ))
-            )}
-          </div>
-          <div className="flex justify-between mt-2 text-xs text-gx-muted">
-            <span>{activityData[0]?.date ?? ''}</span>
-            <span>{activityData[activityData.length - 1]?.date ?? ''}</span>
+          <h3 className="text-sm font-medium text-gx-muted mb-4">Status ({metrics?.window ?? '24h'})</h3>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Open', count: metrics?.byStatus.open ?? 0 },
+              { label: 'Acknowledged', count: metrics?.byStatus.acknowledged ?? 0 },
+              { label: 'Resolved', count: metrics?.byStatus.resolved ?? 0 },
+            ].map((item) => (
+              <div key={item.label} className="rounded-md border border-gx-border bg-gx-bg p-4 text-center">
+                <div className="text-2xl font-bold font-mono text-gx-text">{item.count}</div>
+                <div className="mt-1 text-xs text-gx-muted">{item.label}</div>
+              </div>
+            ))}
           </div>
           <div className="mt-3 pt-3 border-t border-gx-border">
             <span className="text-sm text-gx-muted">
-              Total alerts (all time):{' '}
+              Total alerts ({metrics?.window ?? '24h'}):{' '}
               <span className="font-mono font-bold text-gx-text">
-                {metrics?.totalAlerts ?? 0}
+                {metrics?.total ?? 0}
               </span>
             </span>
           </div>

@@ -93,6 +93,31 @@ describe('POST /v1/billing/checkout', () => {
 
     expect(res.statusCode).toBe(400);
   });
+
+  it('returns 400 when the checkout body is missing', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/checkout',
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects non-HTTP checkout redirect URLs', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/checkout',
+      headers: authHeader(),
+      payload: {
+        plan: 'pro',
+        successUrl: 'javascript:alert(1)',
+        cancelUrl: 'https://app.example.com/cancel',
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 describe('POST /v1/billing/portal', () => {
@@ -143,6 +168,17 @@ describe('POST /v1/billing/portal (error path)', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('BAD_REQUEST');
+  });
+
+  it('rejects non-HTTP portal return URLs', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/billing/portal',
+      headers: authHeader(),
+      payload: { returnUrl: 'data:text/html,unsafe' },
+    });
+    expect(res.statusCode).toBe(400);
   });
 });
 

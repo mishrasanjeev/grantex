@@ -143,13 +143,17 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/billing/checkout
   // ----------------------------------------------------------------
   app.post<{ Body: CheckoutBody }>('/v1/billing/checkout', async (request, reply) => {
-    const { plan, successUrl, cancelUrl } = request.body;
+    const body = request.body as unknown;
+    const { plan, successUrl, cancelUrl } =
+      body && typeof body === 'object' && !Array.isArray(body)
+        ? body as Partial<CheckoutBody>
+        : {};
 
     if (!plan || !['pro', 'enterprise'].includes(plan)) {
       return reply.status(400).send({ message: "plan must be 'pro' or 'enterprise'", code: 'BAD_REQUEST', requestId: request.id });
     }
-    if (!successUrl || !cancelUrl) {
-      return reply.status(400).send({ message: 'successUrl and cancelUrl are required', code: 'BAD_REQUEST', requestId: request.id });
+    if (!isRedirectUrl(successUrl) || !isRedirectUrl(cancelUrl)) {
+      return reply.status(400).send({ message: 'successUrl and cancelUrl must be absolute HTTP(S) URLs', code: 'BAD_REQUEST', requestId: request.id });
     }
 
     const priceId = plan === 'pro' ? config.stripePricePro : config.stripePriceEnterprise;
@@ -180,9 +184,12 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/billing/portal
   // ----------------------------------------------------------------
   app.post<{ Body: PortalBody }>('/v1/billing/portal', async (request, reply) => {
-    const { returnUrl } = request.body;
-    if (!returnUrl) {
-      return reply.status(400).send({ message: 'returnUrl is required', code: 'BAD_REQUEST', requestId: request.id });
+    const body = request.body as unknown;
+    const returnUrl = body && typeof body === 'object' && !Array.isArray(body)
+      ? (body as Partial<PortalBody>).returnUrl
+      : undefined;
+    if (!isRedirectUrl(returnUrl)) {
+      return reply.status(400).send({ message: 'returnUrl must be an absolute HTTP(S) URL', code: 'BAD_REQUEST', requestId: request.id });
     }
 
     const sql = getSql();
@@ -208,4 +215,15 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.status(201).send({ portalUrl: session.url });
   });
+}
+
+function isRedirectUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 2048) return false;
+  try {
+    const parsed = new URL(value);
+    return (parsed.protocol === 'https:' || parsed.protocol === 'http:') &&
+      Boolean(parsed.hostname) && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
 }

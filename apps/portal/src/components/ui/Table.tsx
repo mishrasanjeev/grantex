@@ -38,6 +38,14 @@ export function Table<T>({ columns, data, rowKey, onRowClick }: TableProps<T>) {
                 onRowClick ? 'cursor-pointer hover:bg-gx-bg/50 transition-colors' : ''
               }`}
               onClick={() => onRowClick?.(row)}
+              tabIndex={onRowClick ? 0 : undefined}
+              onKeyDown={onRowClick ? (event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onRowClick(row);
+                }
+              } : undefined}
             >
               {columns.map((col) => (
                 <td key={col.key} className={`py-3 pr-4 ${col.className ?? ''}`}>

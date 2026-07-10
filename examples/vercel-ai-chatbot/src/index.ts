@@ -32,7 +32,7 @@ const API_KEY = process.env['GRANTEX_API_KEY'] ?? 'sandbox-api-key-local';
 async function getGrantToken(
   grantex: Grantex,
   agentId: string,
-): Promise<{ grantToken: string; grantId: string }> {
+): Promise<{ grantToken: string; grantId: string; principalId: string }> {
   const authRequest = await grantex.authorize({
     agentId,
     userId: 'test-user-001',
@@ -42,7 +42,8 @@ async function getGrantToken(
   const code = (authRequest as unknown as Record<string, unknown>)['code'] as string;
   if (!code) throw new Error('No code returned — use the sandbox API key.');
 
-  return grantex.tokens.exchange({ code, agentId });
+  const tokenResponse = await grantex.tokens.exchange({ code, agentId });
+  return { ...tokenResponse, principalId: authRequest.principalId };
 }
 
 async function main(): Promise<void> {
@@ -56,7 +57,7 @@ async function main(): Promise<void> {
   });
   console.log('Agent registered:', agent.id);
 
-  const { grantToken, grantId } = await getGrantToken(grantex, agent.id);
+  const { grantToken, grantId, principalId } = await getGrantToken(grantex, agent.id);
   console.log('Grant token received, grantId:', grantId);
 
   // ── 2. Create scoped tools with Zod schemas ───────────────────────
@@ -101,12 +102,16 @@ async function main(): Promise<void> {
   // ── 3. Wrap with audit logging ─────────────────────────────────────
   const auditedCalendar = withAuditLogging(calendarTool, grantex, {
     agentId: agent.id,
+    agentDid: agent.did,
     grantId,
+    principalId,
   });
 
   const auditedEmail = withAuditLogging(emailTool, grantex, {
     agentId: agent.id,
+    agentDid: agent.did,
     grantId,
+    principalId,
   });
 
   console.log('Audit logging attached');

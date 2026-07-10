@@ -73,6 +73,37 @@ describe('PKCE — POST /v1/authorize', () => {
     expect(res.statusCode).toBe(400);
     expect(res.json<{ message: string }>().message).toContain('S256');
   });
+
+  it('rejects incomplete or malformed PKCE parameters', async () => {
+    seedAuth();
+    const missingMethod = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        principalId: 'user_123',
+        scopes: ['read'],
+        codeChallenge: 'a'.repeat(43),
+      },
+    });
+    expect(missingMethod.statusCode).toBe(400);
+
+    seedAuth();
+    const malformedDigest = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        principalId: 'user_123',
+        scopes: ['read'],
+        codeChallenge: 'not-a-sha256-digest',
+        codeChallengeMethod: 'S256',
+      },
+    });
+    expect(malformedDigest.statusCode).toBe(400);
+  });
 });
 
 describe('PKCE — POST /v1/token', () => {

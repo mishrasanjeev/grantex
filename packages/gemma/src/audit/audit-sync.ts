@@ -46,6 +46,10 @@ export async function syncAuditLog(
     bundleId,
   } = options;
 
+  if (!Number.isSafeInteger(batchSize) || batchSize <= 0) {
+    throw new RangeError('batchSize must be a positive safe integer');
+  }
+
   const allEntries = await auditLog.entries();
   // Filter to unsynced (we check after markSynced via the log itself).
   // Since the log exposes unsyncedCount + markSynced based on seq,
@@ -109,6 +113,11 @@ export async function syncAuditLog(
         }
       }
     }
+
+    // The sync marker represents a contiguous prefix. If an earlier batch
+    // fails, uploading a later batch and advancing the marker would silently
+    // discard the failed entries on the next sync.
+    if (!success) break;
   }
 
   return {

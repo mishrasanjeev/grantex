@@ -16,6 +16,7 @@ import { CopyButton } from '../../components/ui/CopyButton';
 import { ScopePills } from '../../components/ui/ScopePills';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { formatDateTime, truncateId, timeAgo } from '../../lib/format';
+import { API_BASE_URL } from '../../lib/constants';
 
 const statusVariant: Record<string, 'success' | 'danger' | 'warning'> = {
   active: 'success',
@@ -381,11 +382,11 @@ export function BundleDetail() {
           variant="secondary"
           size="sm"
           onClick={() => {
-            const url = `/v1/bundles/${encodeURIComponent(bundle.id)}/jwks`;
-            window.open(url, '_blank');
+            const url = new URL('/.well-known/jwks.json', API_BASE_URL).toString();
+            window.open(url, '_blank', 'noopener,noreferrer');
           }}
         >
-          Download JWKS
+          View Current JWKS
         </Button>
       </div>
 

@@ -66,6 +66,36 @@ describe('POST /v1/token/refresh', () => {
     expect(claims['grnt']).toBe('grnt_EXISTING');
   });
 
+  it('preserves audience, budget, and delegation constraints on refresh', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      ...validRefreshRow,
+      audience: 'https://resource.example',
+      remaining_budget: '42.50',
+      parent_grant_id: 'grnt_PARENT',
+      parent_agent_did: 'did:grantex:ag_PARENT',
+      delegation_depth: 2,
+    }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'ref_EXISTING' }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token/refresh',
+      headers: authHeader(),
+      payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const claims = decodeJwt(res.json<{ grantToken: string }>().grantToken);
+    expect(claims.aud).toBe('https://resource.example');
+    expect(claims['bdg']).toBe(42.5);
+    expect(claims['parentGrnt']).toBe('grnt_PARENT');
+    expect(claims['parentAgt']).toBe('did:grantex:ag_PARENT');
+    expect(claims['delegationDepth']).toBe(2);
+  });
+
   it('returns 400 when the refresh token was consumed concurrently', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([validRefreshRow]);

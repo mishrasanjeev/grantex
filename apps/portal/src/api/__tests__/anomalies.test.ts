@@ -81,27 +81,27 @@ describe('anomalies', () => {
 
   // ── Alerts: listAlerts ────────────────────────────────────────────────
 
-  it('listAlerts without params sends GET /v1/anomalies/alerts', async () => {
-    ok({ alerts: [{ alertId: 'al1' }], total: 1 });
+  it('listAlerts without params sends GET /v1/anomaly/alerts', async () => {
+    ok({ data: [{ alertId: 'al1' }] });
     const result = await listAlerts();
     expect(result).toEqual([{ alertId: 'al1' }]);
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/anomalies/alerts', expect.objectContaining({ method: 'GET' }));
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/anomaly/alerts', expect.objectContaining({ method: 'GET' }));
   });
 
   it('listAlerts with status param', async () => {
-    ok({ alerts: [], total: 0 });
+    ok({ data: [] });
     await listAlerts({ status: 'open' });
-    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/anomalies/alerts?status=open');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/anomaly/alerts?status=open');
   });
 
   it('listAlerts with severity param', async () => {
-    ok({ alerts: [], total: 0 });
+    ok({ data: [] });
     await listAlerts({ severity: 'critical' });
-    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/anomalies/alerts?severity=critical');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/anomaly/alerts?severity=critical');
   });
 
   it('listAlerts with both params', async () => {
-    ok({ alerts: [], total: 0 });
+    ok({ data: [] });
     await listAlerts({ status: 'open', severity: 'high' });
     const url = mockFetch.mock.calls[0]![0];
     expect(url).toContain('status=open');
@@ -115,11 +115,11 @@ describe('anomalies', () => {
 
   // ── Alerts: getAlert ──────────────────────────────────────────────────
 
-  it('getAlert sends GET /v1/anomalies/alerts/:id', async () => {
+  it('getAlert sends GET /v1/anomaly/alerts/:id', async () => {
     ok({ alertId: 'al1' });
     const result = await getAlert('al1');
     expect(result).toEqual({ alertId: 'al1' });
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/anomalies/alerts/al1', expect.objectContaining({ method: 'GET' }));
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/anomaly/alerts/al1', expect.objectContaining({ method: 'GET' }));
   });
 
   it('getAlert throws on 404', async () => {
@@ -133,7 +133,7 @@ describe('anomalies', () => {
     ok(undefined);
     await acknowledgeAlert('al1');
     const [url, opts] = mockFetch.mock.calls[0]!;
-    expect(url).toBe('http://localhost:3000/v1/anomalies/alerts/al1/acknowledge');
+    expect(url).toBe('http://localhost:3000/v1/anomaly/alerts/al1/acknowledge');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual({});
   });
@@ -151,7 +151,7 @@ describe('anomalies', () => {
     ok(undefined);
     await resolveAlert('al1');
     const [url, opts] = mockFetch.mock.calls[0]!;
-    expect(url).toBe('http://localhost:3000/v1/anomalies/alerts/al1/resolve');
+    expect(url).toBe('http://localhost:3000/v1/anomaly/alerts/al1/resolve');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual({});
   });
@@ -164,18 +164,18 @@ describe('anomalies', () => {
 
   // ── Metrics ───────────────────────────────────────────────────────────
 
-  it('getMetrics without params sends GET /v1/anomalies/metrics', async () => {
-    const metrics = { totalAlerts: 5, openAlerts: 2 };
+  it('getMetrics without params sends GET /v1/anomaly/metrics', async () => {
+    const metrics = { window: '24h', total: 5, byStatus: { open: 2 }, bySeverity: {} };
     ok(metrics);
     const result = await getMetrics();
     expect(result).toEqual(metrics);
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/anomalies/metrics', expect.objectContaining({ method: 'GET' }));
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/anomaly/metrics', expect.objectContaining({ method: 'GET' }));
   });
 
   it('getMetrics with agentId param', async () => {
     ok({ totalAlerts: 0 });
     await getMetrics('agent-1');
-    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/anomalies/metrics?agentId=agent-1');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/anomaly/metrics?agentId=agent-1');
   });
 
   it('getMetrics with both agentId and window', async () => {
@@ -188,10 +188,10 @@ describe('anomalies', () => {
 
   // ── Rules: listRules ──────────────────────────────────────────────────
 
-  it('listRules sends GET /v1/anomalies/rules and unwraps .rules', async () => {
-    ok({ rules: [{ ruleId: 'r1', name: 'Rule 1' }] });
+  it('listRules sends GET /v1/anomaly/rules and normalizes builtIn', async () => {
+    ok({ rules: [{ ruleId: 'r1', name: 'Rule 1', builtIn: true }] });
     const result = await listRules();
-    expect(result).toEqual([{ ruleId: 'r1', name: 'Rule 1' }]);
+    expect(result).toEqual([{ ruleId: 'r1', name: 'Rule 1', builtin: true }]);
   });
 
   it('listRules throws on error', async () => {
@@ -201,44 +201,48 @@ describe('anomalies', () => {
 
   // ── Rules: createRule ─────────────────────────────────────────────────
 
-  it('createRule sends POST /v1/anomalies/rules with body', async () => {
+  it('createRule sends POST /v1/anomaly/rules and maps channels', async () => {
     const data = {
       ruleId: 'r2',
       name: 'New Rule',
       description: 'Desc',
       severity: 'high',
       condition: { threshold: 10 },
+      channels: ['channel-1'],
     };
     ok({ ...data, builtin: false, enabled: true });
     await createRule(data);
     const [url, opts] = mockFetch.mock.calls[0]!;
-    expect(url).toBe('http://localhost:3000/v1/anomalies/rules');
+    expect(url).toBe('http://localhost:3000/v1/anomaly/rules');
     expect(opts.method).toBe('POST');
-    expect(JSON.parse(opts.body)).toEqual(data);
+    expect(JSON.parse(opts.body)).toEqual({
+      ruleId: 'r2', name: 'New Rule', description: 'Desc', severity: 'high',
+      condition: { threshold: 10 }, alertChannels: ['channel-1'],
+    });
   });
 
   // ── Rules: toggleRule ─────────────────────────────────────────────────
 
-  it('toggleRule sends PATCH /v1/anomalies/rules/:id with enabled', async () => {
+  it('toggleRule sends PATCH /v1/anomaly/rules/:id with enabled', async () => {
     ok({ ruleId: 'r1', enabled: false });
     await toggleRule('r1', false);
     const [url, opts] = mockFetch.mock.calls[0]!;
-    expect(url).toBe('http://localhost:3000/v1/anomalies/rules/r1');
+    expect(url).toBe('http://localhost:3000/v1/anomaly/rules/r1');
     expect(opts.method).toBe('PATCH');
     expect(JSON.parse(opts.body)).toEqual({ enabled: false });
   });
 
   // ── Rules: deleteRule ─────────────────────────────────────────────────
 
-  it('deleteRule sends DELETE /v1/anomalies/rules/:id', async () => {
+  it('deleteRule sends DELETE /v1/anomaly/rules/:id', async () => {
     noContent();
     await deleteRule('r1');
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/anomalies/rules/r1', expect.objectContaining({ method: 'DELETE' }));
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/anomaly/rules/r1', expect.objectContaining({ method: 'DELETE' }));
   });
 
   // ── Channels: listChannels ────────────────────────────────────────────
 
-  it('listChannels sends GET /v1/anomalies/channels and unwraps', async () => {
+  it('listChannels sends GET /v1/anomaly/channels and unwraps', async () => {
     ok({ channels: [{ id: 'ch1', type: 'slack' }] });
     const result = await listChannels();
     expect(result).toEqual([{ id: 'ch1', type: 'slack' }]);
@@ -246,22 +250,22 @@ describe('anomalies', () => {
 
   // ── Channels: createChannel ───────────────────────────────────────────
 
-  it('createChannel sends POST /v1/anomalies/channels', async () => {
+  it('createChannel sends POST /v1/anomaly/channels', async () => {
     const data = { type: 'slack', name: 'alerts', config: { url: 'https://hooks.slack.com/x' }, severities: ['critical'] };
     ok({ id: 'ch2', ...data, enabled: true });
     await createChannel(data);
     const [url, opts] = mockFetch.mock.calls[0]!;
-    expect(url).toBe('http://localhost:3000/v1/anomalies/channels');
+    expect(url).toBe('http://localhost:3000/v1/anomaly/channels');
     expect(opts.method).toBe('POST');
     expect(JSON.parse(opts.body)).toEqual(data);
   });
 
   // ── Channels: deleteChannel ───────────────────────────────────────────
 
-  it('deleteChannel sends DELETE /v1/anomalies/channels/:id', async () => {
+  it('deleteChannel sends DELETE /v1/anomaly/channels/:id', async () => {
     noContent();
     await deleteChannel('ch1');
-    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/anomalies/channels/ch1', expect.objectContaining({ method: 'DELETE' }));
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/anomaly/channels/ch1', expect.objectContaining({ method: 'DELETE' }));
   });
 
   it('deleteChannel throws on error', async () => {

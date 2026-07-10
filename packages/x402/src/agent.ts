@@ -47,20 +47,13 @@ async function stubPaymentHandler(details: X402PaymentDetails): Promise<string> 
  * Parse x402 payment details from a 402 response.
  */
 function parsePaymentDetails(response: Response): X402PaymentDetails {
-  // Try JSON body first, fall back to headers
-  const amount = parseFloat(
-    response.headers.get(HEADERS.PAYMENT_AMOUNT) ?? '0',
-  );
-  const currency = (response.headers.get(HEADERS.PAYMENT_CURRENCY) ?? 'USDC') as 'USDC' | 'USDT';
+  const amount = Number(response.headers.get(HEADERS.PAYMENT_AMOUNT));
+  const currency = response.headers.get(HEADERS.PAYMENT_CURRENCY) ?? 'USDC';
   const recipientAddress = response.headers.get(HEADERS.PAYMENT_RECIPIENT) ?? '';
   const chain = response.headers.get(HEADERS.PAYMENT_CHAIN) ?? 'base';
   const memo = response.headers.get('X-Payment-Memo') ?? undefined;
 
-  if (!recipientAddress) {
-    throw new Error('402 response missing X-Payment-Recipient header');
-  }
-
-  return { amount, currency, recipientAddress, chain, ...(memo !== undefined ? { memo } : {}) };
+  return validatePaymentDetails({ amount, currency, recipientAddress, chain, memo });
 }
 
 /**
@@ -86,16 +79,17 @@ export function createX402Agent(config: X402AgentConfig = {}) {
    * Fetch a URL with x402 payment and GDT authorization handling.
    */
   async function x402Fetch(url: string | URL, options: X402FetchOptions = {}): Promise<Response> {
-    const gdt = options.gdt ?? config.gdt;
+    const { gdt: requestGdt, ...requestOptions } = options;
+    const gdt = requestGdt ?? config.gdt;
 
     // Build headers
-    const headers = new Headers(options.headers);
+    const headers = new Headers(requestOptions.headers);
     if (gdt) {
       headers.set(HEADERS.GDT, gdt);
     }
 
     // Initial request
-    const response = await fetch(url, { ...options, headers });
+    const response = await fetch(url, { ...requestOptions, headers });
 
     // If not 402, return as-is
     if (response.status !== 402) {
@@ -104,27 +98,41 @@ export function createX402Agent(config: X402AgentConfig = {}) {
 
     // Parse payment details from 402 response
     let paymentDetails: X402PaymentDetails;
-    try {
-      // Try to parse from JSON body first
-      const contentType = response.headers.get('content-type') ?? '';
-      if (contentType.includes('application/json')) {
-        const body = await response.json() as Record<string, unknown>;
-        paymentDetails = {
-          amount: (body['amount'] as number) ?? 0,
-          currency: ((body['currency'] as string) ?? 'USDC') as 'USDC' | 'USDT',
-          recipientAddress: (body['recipientAddress'] as string) ?? '',
-          chain: (body['chain'] as string) ?? 'base',
-          ...(body['memo'] !== undefined ? { memo: body['memo'] as string } : {}),
-        };
-
-        if (!paymentDetails.recipientAddress) {
-          paymentDetails = parsePaymentDetails(response);
-        }
-      } else {
-        paymentDetails = parsePaymentDetails(response);
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      let parsed: unknown;
+      try {
+        parsed = await response.json();
+      } catch {
+        // Invalid JSON can still use the standard x402 response headers.
+        parsed = undefined;
       }
-    } catch {
+
+      if (parsed === undefined) {
+        paymentDetails = parsePaymentDetails(response);
+      } else {
+        if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new Error('402 response contains invalid JSON payment details');
+        }
+        const body = parsed as Record<string, unknown>;
+        paymentDetails = body['recipientAddress']
+          ? validatePaymentDetails({
+              amount: body['amount'],
+              currency: body['currency'] ?? 'USDC',
+              recipientAddress: body['recipientAddress'],
+              chain: body['chain'] ?? 'base',
+              memo: body['memo'],
+            })
+          : parsePaymentDetails(response);
+      }
+    } else {
       paymentDetails = parsePaymentDetails(response);
+    }
+
+    // Execute payment before recording a successful payment event.
+    const paymentProof = await paymentHandler(paymentDetails);
+    if (typeof paymentProof !== 'string' || paymentProof.length === 0) {
+      throw new Error('Payment handler returned an empty or invalid payment proof');
     }
 
     // Log payment event
@@ -148,20 +156,44 @@ export function createX402Agent(config: X402AgentConfig = {}) {
       // Audit logging should never break the payment flow
     }
 
-    // Execute payment
-    const paymentProof = await paymentHandler(paymentDetails);
-
     // Retry with payment proof + GDT
-    const retryHeaders = new Headers(options.headers);
+    const retryHeaders = new Headers(requestOptions.headers);
     if (gdt) {
       retryHeaders.set(HEADERS.GDT, gdt);
     }
     retryHeaders.set(HEADERS.PAYMENT_PROOF, paymentProof);
 
-    return fetch(url, { ...options, headers: retryHeaders });
+    return fetch(url, { ...requestOptions, headers: retryHeaders });
   }
 
   return { fetch: x402Fetch };
+}
+
+function validatePaymentDetails(details: Record<string, unknown>): X402PaymentDetails {
+  const { amount, currency, recipientAddress, chain, memo } = details;
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+    throw new Error('402 response must specify a finite positive payment amount');
+  }
+  if (currency !== 'USDC' && currency !== 'USDT') {
+    throw new Error('402 response specifies an unsupported payment currency');
+  }
+  if (typeof recipientAddress !== 'string' || recipientAddress.length === 0) {
+    throw new Error('402 response missing X-Payment-Recipient header or recipientAddress field');
+  }
+  if (typeof chain !== 'string' || chain.length === 0) {
+    throw new Error('402 response missing a payment chain');
+  }
+  if (memo !== undefined && typeof memo !== 'string') {
+    throw new Error('402 response contains an invalid payment memo');
+  }
+
+  return {
+    amount,
+    currency,
+    recipientAddress,
+    chain,
+    ...(memo !== undefined ? { memo } : {}),
+  };
 }
 
 /**

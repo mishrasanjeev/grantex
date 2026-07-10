@@ -60,18 +60,20 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
       const sql = getSql();
       const developerId = request.developer.id;
 
-      // Look up and consume challenge
+      // Claim the challenge atomically. A separate SELECT followed by UPDATE
+      // lets two concurrent requests both observe consumed = FALSE and replay
+      // the same registration ceremony.
       const challengeRows = await sql`
-        SELECT challenge, principal_id FROM webauthn_challenges
+        UPDATE webauthn_challenges
+        SET consumed = TRUE
         WHERE id = ${challengeId} AND developer_id = ${developerId}
           AND ceremony_type = 'registration' AND consumed = FALSE AND expires_at > NOW()
+        RETURNING challenge, principal_id
       `;
       const challengeRow = challengeRows[0];
       if (!challengeRow) {
         return reply.status(400).send({ message: 'Invalid or expired challenge', code: 'BAD_REQUEST', requestId: request.id });
       }
-
-      await sql`UPDATE webauthn_challenges SET consumed = TRUE WHERE id = ${challengeId}`;
 
       const verification = await verifyRegResponse(response, challengeRow['challenge'] as string);
       if (!verification.verified || !verification.registrationInfo) {
@@ -236,17 +238,18 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
 
       const sql = getSql();
 
-      // Look up challenge
+      // Claim the challenge atomically so a concurrent replay cannot verify
+      // against the same assertion challenge.
       const challengeRows = await sql`
-        SELECT challenge, principal_id, developer_id, auth_request_id FROM webauthn_challenges
+        UPDATE webauthn_challenges
+        SET consumed = TRUE
         WHERE id = ${challengeId} AND ceremony_type = 'assertion' AND consumed = FALSE AND expires_at > NOW()
+        RETURNING challenge, principal_id, developer_id, auth_request_id
       `;
       const challengeRow = challengeRows[0];
       if (!challengeRow) {
         return reply.status(400).send({ message: 'Invalid or expired challenge', code: 'BAD_REQUEST', requestId: request.id });
       }
-
-      await sql`UPDATE webauthn_challenges SET consumed = TRUE WHERE id = ${challengeId}`;
 
       // Find the credential being used
       const credentialId = response.id;
@@ -275,17 +278,32 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
       }
 
       // Update counter and last_used_at
-      await sql`
+      const counterRows = await sql`
         UPDATE webauthn_credentials
         SET counter = ${verification.authenticationInfo.newCounter}, last_used_at = NOW()
         WHERE id = ${credRow['id'] as string}
+          AND counter = ${Number(credRow['counter'])}
+        RETURNING id
       `;
+      if (!counterRows[0]) {
+        return reply.status(400).send({
+          message: 'Credential counter changed; start a new assertion',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
 
       // Mark auth request as FIDO verified
       const authRequestId = challengeRow['auth_request_id'] as string;
       if (authRequestId) {
         await sql`
-          UPDATE auth_requests SET fido_verified = TRUE WHERE id = ${authRequestId}
+          UPDATE auth_requests
+          SET fido_verified = TRUE
+          WHERE id = ${authRequestId}
+            AND principal_id = ${challengeRow['principal_id'] as string}
+            AND developer_id = ${challengeRow['developer_id'] as string}
+            AND status = 'pending'
+            AND expires_at > NOW()
         `;
       }
 

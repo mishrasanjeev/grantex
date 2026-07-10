@@ -12,6 +12,15 @@ export default defineConfig({
     environment: 'node',
     globals: false,
     setupFiles: ['./tests/setup.ts'],
+    // Every test file initializes an RSA key pair and a Fastify instance.
+    // Letting Vitest fan out to the host CPU count causes those startup hooks
+    // to exceed their timeouts under contention (while the same suites pass
+    // individually). Keep enough parallelism for speed without false failures.
+    maxWorkers: 2,
+    // A small set of commerce conformance tests spawn several child Node
+    // processes. On a loaded Windows CI host one case can exceed Vitest's
+    // 5-second default despite completing in well under a second in isolation.
+    testTimeout: 10_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],

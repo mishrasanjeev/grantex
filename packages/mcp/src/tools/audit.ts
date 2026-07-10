@@ -12,7 +12,7 @@ export function registerAuditTools(server: McpServer, grantex: Grantex): void {
       grantId: z.string().describe('Grant ID authorizing the action'),
       principalId: z.string().describe('Principal ID (user) that granted authorization'),
       action: z.string().describe('Action name (e.g. "read_email", "send_message")'),
-      metadata: z.record(z.unknown()).optional().describe('Additional context'),
+      metadata: z.record(z.string(), z.unknown()).optional().describe('Additional context'),
       status: z.enum(['success', 'failure', 'blocked']).optional().describe('Outcome status'),
     },
     async ({ agentId, agentDid, grantId, principalId, action, metadata, status }) => {

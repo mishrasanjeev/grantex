@@ -7,8 +7,11 @@ import { incrementUsage } from '../lib/usage.js';
 export async function tokensRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/tokens/verify
   app.post<{ Body: { token: string } }>('/v1/tokens/verify', async (request, reply) => {
-    const { token } = request.body;
-    if (!token) {
+    const body = request.body;
+    const token = typeof body === 'object' && body !== null && !Array.isArray(body)
+      ? body.token
+      : undefined;
+    if (typeof token !== 'string' || token.length === 0) {
       return reply.status(400).send({ message: 'token is required', code: 'BAD_REQUEST', requestId: request.id });
     }
 
@@ -36,7 +39,13 @@ export async function tokensRoutes(app: FastifyInstance): Promise<void> {
 
   // POST /v1/tokens/revoke
   app.post<{ Body: { jti: string } }>('/v1/tokens/revoke', async (request, reply) => {
-    const { jti } = request.body;
+    const body = request.body;
+    const jti = typeof body === 'object' && body !== null && !Array.isArray(body)
+      ? body.jti
+      : undefined;
+    if (typeof jti !== 'string' || jti.length === 0 || jti.length > 512) {
+      return reply.status(400).send({ message: 'jti is required', code: 'BAD_REQUEST', requestId: request.id });
+    }
     const sql = getSql();
 
     const rows = await sql`
@@ -59,7 +68,12 @@ export async function tokensRoutes(app: FastifyInstance): Promise<void> {
     const redis = getRedis();
     const expiresAt = new Date(row['expires_at'] as string);
     const ttl = Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
-    await redis.set(`revoked:tok:${jti}`, '1', 'EX', ttl);
+    try {
+      await redis.set(`revoked:tok:${jti}`, '1', 'EX', ttl);
+    } catch {
+      // The database flag is authoritative; a cache outage must not make an
+      // already-committed revocation appear to have failed.
+    }
 
     return reply.status(204).send();
   });

@@ -80,8 +80,6 @@ describe('WebAuthn Security', () => {
         developer_id: 'dev_TEST',
         auth_request_id: 'areq_test',
       }]);
-      // Consume challenge
-      sqlMock.mockResolvedValueOnce([]);
       // Credential lookup — not found
       sqlMock.mockResolvedValueOnce([]);
 
@@ -128,8 +126,6 @@ describe('WebAuthn Security', () => {
         developer_id: 'dev_TEST',
         auth_request_id: 'areq_test',
       }]);
-      // Consume challenge
-      sqlMock.mockResolvedValueOnce([]);
       // Credential lookup
       sqlMock.mockResolvedValueOnce([{
         id: 'cred_1',
@@ -172,8 +168,6 @@ describe('WebAuthn Security', () => {
         challenge: 'valid-reg-challenge',
         principal_id: 'user_123',
       }]);
-      // Consume challenge
-      sqlMock.mockResolvedValueOnce([]);
 
       const res = await app.inject({
         method: 'POST',
@@ -203,8 +197,6 @@ describe('WebAuthn Security', () => {
         developer_id: 'dev_TEST',
         auth_request_id: null,
       }]);
-      // Consume challenge
-      sqlMock.mockResolvedValueOnce([]);
       // Credential lookup
       sqlMock.mockResolvedValueOnce([{
         id: 'cred_1',
@@ -214,7 +206,7 @@ describe('WebAuthn Security', () => {
         transports: ['internal'],
       }]);
       // Update counter
-      sqlMock.mockResolvedValueOnce([]);
+      sqlMock.mockResolvedValueOnce([{ id: 'cred_1' }]);
       // Note: no auth request update expected since auth_request_id is null
 
       const res = await app.inject({
@@ -232,8 +224,8 @@ describe('WebAuthn Security', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json().verified).toBe(true);
-      // Only 4 SQL calls (no auth request update)
-      expect(sqlMock).toHaveBeenCalledTimes(4);
+      // Only 3 SQL calls (no separate consume or auth request update)
+      expect(sqlMock).toHaveBeenCalledTimes(3);
     });
   });
 });

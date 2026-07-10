@@ -22,8 +22,10 @@ export interface JWKSSnapshot {
 export async function importKeyByKid(
   snapshot: JWKSSnapshot,
   kid: string,
-): Promise<jose.KeyLike | Uint8Array | null> {
-  const jwk = snapshot.keys.find((k) => k.kid === kid);
+): Promise<jose.CryptoKey | Uint8Array | null> {
+  const jwk = snapshot.keys.find(
+    (candidate) => candidate.kid === kid && candidate.alg === 'RS256',
+  );
   if (!jwk) return null;
   return jose.importJWK(jwk, 'RS256');
 }
@@ -32,5 +34,6 @@ export async function importKeyByKid(
  * Returns `true` when the snapshot has passed its `validUntil` timestamp.
  */
 export function isSnapshotExpired(snapshot: JWKSSnapshot): boolean {
-  return new Date(snapshot.validUntil).getTime() < Date.now();
+  const validUntil = Date.parse(snapshot.validUntil);
+  return !Number.isFinite(validUntil) || validUntil <= Date.now();
 }

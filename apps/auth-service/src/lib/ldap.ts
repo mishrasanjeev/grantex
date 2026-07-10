@@ -46,6 +46,19 @@ export function escapeLdapFilter(value: string): string {
     .replace(/\0/g, '\\00');
 }
 
+export function resolveLdapTransport(
+  url: URL,
+  tlsEnabled: boolean,
+): { tls: boolean; port: number } {
+  // The secure URL scheme is authoritative. A stale/omitted tlsEnabled flag
+  // must never downgrade an ldaps:// connection to plaintext LDAP.
+  const useTls = url.protocol === 'ldaps:' || tlsEnabled;
+  return {
+    tls: useTls,
+    port: Number(url.port || (useTls ? '636' : '389')),
+  };
+}
+
 /**
  * Authenticate a user via LDAP and return their attributes + groups.
  *
@@ -117,13 +130,13 @@ function createDefaultLdapClient(): LdapClient {
       if (url.protocol === 'ldap:' && !config.tlsEnabled && !appConfig.allowInsecureSsoUrls) {
         throw new Error('Insecure LDAP URLs are disabled; use LDAPS or enable SSO_ALLOW_INSECURE_URLS');
       }
-      const port = parseInt(url.port || (config.tlsEnabled ? '636' : '389'), 10);
+      const transport = resolveLdapTransport(url, config.tlsEnabled);
 
       // Helper: create a connected socket
       const connect = (): Promise<import('node:net').Socket> =>
         safeConnect(config.ldapUrl, {
-          port,
-          tls: config.tlsEnabled,
+          port: transport.port,
+          tls: transport.tls,
           rejectUnauthorized: appConfig.ldapTlsRejectUnauthorized,
           timeoutMs: 10_000,
           policy: {
@@ -208,11 +221,11 @@ function createDefaultLdapClient(): LdapClient {
         if (url.protocol === 'ldap:' && !config.tlsEnabled && !appConfig.allowInsecureSsoUrls) {
           throw new Error('Insecure LDAP URLs are disabled; use LDAPS or enable SSO_ALLOW_INSECURE_URLS');
         }
-        const port = parseInt(url.port || (config.tlsEnabled ? '636' : '389'), 10);
+        const transport = resolveLdapTransport(url, config.tlsEnabled);
 
         const socket = await safeConnect(config.ldapUrl, {
-          port,
-          tls: config.tlsEnabled,
+          port: transport.port,
+          tls: transport.tls,
           rejectUnauthorized: appConfig.ldapTlsRejectUnauthorized,
           timeoutMs: 5_000,
           policy: {

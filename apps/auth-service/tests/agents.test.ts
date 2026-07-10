@@ -11,6 +11,7 @@ beforeAll(async () => {
 describe('POST /v1/agents', () => {
   it('registers an agent and returns 201', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);               // advisory lock
     sqlMock.mockResolvedValueOnce([]);              // subscription lookup → free plan
     sqlMock.mockResolvedValueOnce([{ count: '0' }]); // agent count → 0
     sqlMock.mockResolvedValueOnce([TEST_AGENT]);     // INSERT
@@ -27,10 +28,12 @@ describe('POST /v1/agents', () => {
     expect(body.agentId).toBe(TEST_AGENT.id);
     expect(body.did).toBe(TEST_AGENT.did);
     expect(body.name).toBe(TEST_AGENT.name);
+    expect(sqlMock.begin).toHaveBeenCalledTimes(1);
   });
 
   it('returns 402 when plan agent limit is reached', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                 // advisory lock
     sqlMock.mockResolvedValueOnce([{ plan: 'free' }]); // subscription → free plan
     sqlMock.mockResolvedValueOnce([{ count: '500' }]);   // 500 agents already (free limit)
 
@@ -53,6 +56,31 @@ describe('POST /v1/agents', () => {
       url: '/v1/agents',
       headers: authHeader(),
       payload: { description: 'No name' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 400 for a missing JSON body', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/agents',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 400 when scopes is not an array', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/agents',
+      headers: authHeader(),
+      payload: { name: 'Agent', scopes: 'read' },
     });
 
     expect(res.statusCode).toBe(400);
@@ -175,6 +203,32 @@ describe('PATCH /v1/agents/:id', () => {
 
     expect(res.statusCode).toBe(400);
   });
+
+  it('rejects unsupported agent statuses', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/agents/${TEST_AGENT.id}`,
+      headers: authHeader(),
+      payload: { status: 'deleted' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects malformed patch scopes', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/agents/${TEST_AGENT.id}`,
+      headers: authHeader(),
+      payload: { scopes: 'read' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 describe('DELETE /v1/agents/:id', () => {
@@ -196,6 +250,7 @@ describe('DELETE /v1/agents/:id', () => {
     });
 
     expect(res.statusCode).toBe(204);
+    expect(sqlMock.begin).toHaveBeenCalledTimes(1);
   });
 
   it('returns 404 when agent not found', async () => {

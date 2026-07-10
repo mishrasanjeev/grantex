@@ -38,13 +38,18 @@ export function getPolicyBackend(): PolicyBackend {
 
   switch (config.policyBackend) {
     case 'opa':
-      backend = new OpaBackend(config.opaUrl!, config.opaFallbackToBuiltin);
+      if (!config.opaUrl) throw new Error('OPA_URL is required when POLICY_BACKEND=opa');
+      backend = new OpaBackend(config.opaUrl, config.opaFallbackToBuiltin);
       break;
     case 'cedar':
-      backend = new CedarBackend(config.cedarUrl!, config.cedarFallbackToBuiltin);
+      if (!config.cedarUrl) throw new Error('CEDAR_URL is required when POLICY_BACKEND=cedar');
+      backend = new CedarBackend(config.cedarUrl, config.cedarFallbackToBuiltin);
+      break;
+    case 'builtin':
+      backend = new BuiltinBackend();
       break;
     default:
-      backend = new BuiltinBackend();
+      throw new Error(`Unsupported policy backend: ${String(config.policyBackend)}`);
   }
 
   return backend;

@@ -58,6 +58,14 @@ describe('getPolicyBackend', () => {
     expect(MockBuiltinBackend).not.toHaveBeenCalled();
   });
 
+  it('rejects OPA configuration without an endpoint URL', () => {
+    mockConfig.policyBackend = 'opa';
+    mockConfig.opaUrl = null;
+
+    expect(() => getPolicyBackend()).toThrow(/OPA_URL/);
+    expect(MockOpaBackend).not.toHaveBeenCalled();
+  });
+
   it('returns Cedar backend when config.policyBackend is cedar', () => {
     mockConfig.policyBackend = 'cedar';
     mockConfig.cedarUrl = 'http://cedar:8080';
@@ -67,6 +75,21 @@ describe('getPolicyBackend', () => {
 
     expect(backend).toBeDefined();
     expect(MockCedarBackend).toHaveBeenCalledWith('http://cedar:8080', false);
+    expect(MockBuiltinBackend).not.toHaveBeenCalled();
+  });
+
+  it('rejects Cedar configuration without an endpoint URL', () => {
+    mockConfig.policyBackend = 'cedar';
+    mockConfig.cedarUrl = null;
+
+    expect(() => getPolicyBackend()).toThrow(/CEDAR_URL/);
+    expect(MockCedarBackend).not.toHaveBeenCalled();
+  });
+
+  it('rejects unknown backend names instead of silently using builtin', () => {
+    mockConfig.policyBackend = 'unexpected';
+
+    expect(() => getPolicyBackend()).toThrow(/Unsupported policy backend/);
     expect(MockBuiltinBackend).not.toHaveBeenCalled();
   });
 

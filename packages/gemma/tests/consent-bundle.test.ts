@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createCipheriv, randomBytes } from 'node:crypto';
 import { createConsentBundle, type ConsentBundle } from '../src/consent/consent-bundle.js';
 import { storeBundle, loadBundle } from '../src/consent/bundle-storage.js';
 import { refreshBundle, shouldRefresh } from '../src/consent/bundle-refresh.js';
@@ -87,10 +88,35 @@ describe('ConsentBundle', () => {
     // File should exist and be non-empty binary
     const raw = await readFile(path);
     expect(raw.length).toBeGreaterThan(0);
+    expect(raw.subarray(0, 4).toString()).toBe('GTXB');
 
     // Raw file should NOT contain plaintext bundle fields
     const rawStr = raw.toString('utf-8');
     expect(rawStr).not.toContain('bnd_01');
+  });
+
+  it('rejects empty encryption keys', async () => {
+    await expect(storeBundle(makeBundleFixture(), join(tmpDir, 'empty.enc'), ''))
+      .rejects.toThrow('non-empty');
+  });
+
+  it('loads bundles written by the legacy encrypted-file format', async () => {
+    const bundle = makeBundleFixture();
+    const path = join(tmpDir, 'legacy.enc');
+    const passphrase = 'legacy-passphrase';
+    const key = Buffer.from(
+      'ab71969bd66356cadce46cb10a8d304a03c74e5beacd6fc715278e187751eb6b',
+      'hex',
+    );
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', key, iv);
+    const ciphertext = Buffer.concat([
+      cipher.update(Buffer.from(JSON.stringify(bundle))),
+      cipher.final(),
+    ]);
+    await writeFile(path, Buffer.concat([iv, cipher.getAuthTag(), ciphertext]));
+
+    await expect(loadBundle(path, passphrase)).resolves.toMatchObject({ bundleId: 'bnd_01' });
   });
 
   it('loads bundle from encrypted file', async () => {

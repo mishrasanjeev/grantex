@@ -114,6 +114,7 @@ describe('GET /v1/grants/:id', () => {
 describe('DELETE /v1/grants/:id (revoke)', () => {
   it('revokes grant and sets Redis key', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]); // shared delegate/revoke advisory lock
     sqlMock.mockResolvedValueOnce([TEST_GRANT]);
     // Cascade revocation — no descendants
     sqlMock.mockResolvedValueOnce([]);
@@ -125,6 +126,7 @@ describe('DELETE /v1/grants/:id (revoke)', () => {
     });
 
     expect(res.statusCode).toBe(204);
+    expect(sqlMock.begin).toHaveBeenCalledTimes(1);
     expect(mockRedis.set).toHaveBeenCalledWith(
       `revoked:grant:${TEST_GRANT.id}`,
       '1',
@@ -146,8 +148,26 @@ describe('DELETE /v1/grants/:id (revoke)', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('keeps a committed revocation successful when the Redis cache is unavailable', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]); // shared delegate/revoke advisory lock
+    sqlMock.mockResolvedValueOnce([TEST_GRANT]);
+    sqlMock.mockResolvedValueOnce([]);
+    mockRedis.set.mockRejectedValueOnce(new Error('redis unavailable'));
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/v1/grants/${TEST_GRANT.id}`,
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(sqlMock.begin).toHaveBeenCalledTimes(1);
+  });
+
   it('cascade-revokes descendants and sets Redis keys for each', async () => {
     seedAuth();
+    sqlMock.mockResolvedValueOnce([]); // shared delegate/revoke advisory lock
     // Parent grant revoked
     sqlMock.mockResolvedValueOnce([{
       ...TEST_GRANT,
@@ -258,6 +278,38 @@ describe('POST /v1/grants/verify', () => {
     expect(body.active).toBe(true);
     expect(typeof body.claims?.iat).toBe('number');
     expect(body.claims?.jti).toBe('tok_valid');
+  });
+
+  it('falls back to the authoritative database when Redis reads fail', async () => {
+    seedAuth();
+    mockRedis.get.mockRejectedValue(new Error('redis unavailable'));
+
+    const { signGrantToken } = await import('../src/lib/crypto.js');
+    const exp = Math.floor(Date.now() / 1000) + 3600;
+    const token = await signGrantToken({
+      sub: 'user_123',
+      agt: TEST_GRANT.agent_id,
+      dev: TEST_GRANT.developer_id,
+      scp: TEST_GRANT.scopes,
+      jti: 'tok_redis_fallback',
+      grnt: TEST_GRANT.id,
+      exp,
+    });
+    sqlMock.mockResolvedValueOnce([{
+      is_revoked: false,
+      expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      grant_status: 'active',
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/verify',
+      headers: authHeader(),
+      payload: { token },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().active).toBe(true);
   });
 
   it('returns active:false when the token belongs to a different developer', async () => {

@@ -156,6 +156,7 @@ describe('Auth store', () => {
     await waitFor(() => {
       expect(mockSetApiKey).toHaveBeenCalledWith('gx_live_test123');
       expect(mockGetMe).toHaveBeenCalled();
+      expect(mockSetApiKey).toHaveBeenLastCalledWith(null);
     });
   });
 

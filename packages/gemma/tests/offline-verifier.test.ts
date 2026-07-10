@@ -32,7 +32,7 @@ function makeSnapshot(keys: jose.JWK[]): JWKSSnapshot {
 
 /** Sign a JWT with the given claims. */
 async function signToken(
-  privateKey: jose.KeyLike,
+  privateKey: jose.CryptoKey,
   kid: string,
   claims: Record<string, unknown>,
   overrides?: { alg?: string },

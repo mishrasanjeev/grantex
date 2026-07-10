@@ -1,18 +1,26 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { getSql } from '../db/client.js';
+import { getSql, type TxSql } from '../db/client.js';
 import { sendEmail, verificationEmailHtml } from '../lib/email.js';
 import { config } from '../config.js';
 
 export async function verifyEmailRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/signup/verify — send verification email
   app.post<{ Body: { email: string } }>('/v1/signup/verify', async (request, reply) => {
-    const { email } = request.body;
+    const rawEmail = request.body?.email;
     const developerId = request.developer.id;
 
-    if (!email) {
+    if (typeof rawEmail !== 'string') {
       return reply.status(400).send({
         message: 'email is required',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    const email = rawEmail.trim().toLowerCase();
+    if (email.length === 0 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return reply.status(400).send({
+        message: 'email must be a valid address',
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
@@ -84,14 +92,14 @@ export async function verifyEmailRoutes(app: FastifyInstance): Promise<void> {
     // is always the address that was actually proven. Without this, a developer
     // could verify any mailbox while the canonical email field stayed unset or
     // pointed to a different address.
-    const verifiedEmail = row['email'] as string;
+    const verifiedEmail = (row['email'] as string).trim().toLowerCase();
     const developerId = row['developer_id'] as string;
 
     // Reject if another verified developer already owns this address — keeps
     // the application-level uniqueness invariant from signup intact.
     const conflicts = await sql`
       SELECT id FROM developers
-      WHERE email = ${verifiedEmail}
+      WHERE LOWER(email) = ${verifiedEmail}
         AND id != ${developerId}
         AND email_verified = TRUE
       LIMIT 1
@@ -104,15 +112,31 @@ export async function verifyEmailRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    await sql`
-      UPDATE email_verifications SET verified_at = NOW() WHERE id = ${row['id'] as string}
-    `;
-    await sql`
-      UPDATE developers
-      SET email_verified = TRUE,
-          email = ${verifiedEmail}
-      WHERE id = ${developerId}
-    `;
+    try {
+      await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        await tx`
+          UPDATE email_verifications
+          SET verified_at = NOW()
+          WHERE id = ${row['id'] as string}
+        `;
+        await tx`
+          UPDATE developers
+          SET email_verified = TRUE,
+              email = ${verifiedEmail}
+          WHERE id = ${developerId}
+        `;
+      });
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') {
+        return reply.status(409).send({
+          message: 'This email is already used by another account',
+          code: 'EMAIL_TAKEN',
+          requestId: request.id,
+        });
+      }
+      throw error;
+    }
 
     return reply.send({ message: 'Email verified successfully', email: verifiedEmail });
   });

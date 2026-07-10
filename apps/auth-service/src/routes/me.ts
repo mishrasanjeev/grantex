@@ -12,10 +12,12 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
       email: string | null;
       mode: string;
       plan: string | null;
+      fido_required: boolean;
+      fido_rp_name: string | null;
       created_at: string;
     }[]>`
       SELECT d.id, d.name, d.email, d.mode,
-             s.plan,
+             s.plan, d.fido_required, d.fido_rp_name,
              d.created_at
       FROM developers d
       LEFT JOIN subscriptions s ON s.developer_id = d.id
@@ -38,6 +40,8 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
       email: dev.email,
       mode: dev.mode,
       plan: dev.plan ?? 'free',
+      fidoRequired: dev.fido_required,
+      fidoRpName: dev.fido_rp_name,
       createdAt: dev.created_at,
     });
   });
@@ -48,10 +52,16 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const sql = getSql();
       const developerId = request.developer.id;
-      const { fidoRequired, fidoRpName } = request.body;
+      const { fidoRequired, fidoRpName } = request.body ?? {};
 
       if (fidoRequired === undefined && fidoRpName === undefined) {
         return reply.status(400).send({ message: 'No fields to update', code: 'BAD_REQUEST', requestId: request.id });
+      }
+      if (fidoRequired !== undefined && typeof fidoRequired !== 'boolean') {
+        return reply.status(400).send({ message: 'fidoRequired must be a boolean', code: 'BAD_REQUEST', requestId: request.id });
+      }
+      if (fidoRpName !== undefined && (typeof fidoRpName !== 'string' || fidoRpName.trim().length === 0 || fidoRpName.length > 100)) {
+        return reply.status(400).send({ message: 'fidoRpName must be 1 to 100 characters', code: 'BAD_REQUEST', requestId: request.id });
       }
 
       if (fidoRequired !== undefined && fidoRpName !== undefined) {

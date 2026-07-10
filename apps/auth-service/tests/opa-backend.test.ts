@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import { OpaBackend } from '../src/lib/backends/opa.js';
 import type { PolicyEvalContext } from '../src/lib/policy-backend.js';
 import { sqlMock } from './setup.js';
+import { setSafeFetchForTests } from '../src/lib/url-security.js';
 
 const ctx: PolicyEvalContext = {
   agentId: 'ag_1',
@@ -13,6 +14,11 @@ const ctx: PolicyEvalContext = {
 describe('OpaBackend', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    setSafeFetchForTests(async (url, init) => fetch(url, init));
+  });
+
+  afterEach(() => {
+    setSafeFetchForTests(null);
   });
 
   it('sends correct request to OPA', async () => {
@@ -77,7 +83,7 @@ describe('OpaBackend', () => {
     expect(decision.effect).toBeNull();
   });
 
-  it('returns null with reason on HTTP error (no fallback)', async () => {
+  it('fails closed on HTTP error (no fallback)', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: false,
       status: 500,
@@ -85,16 +91,16 @@ describe('OpaBackend', () => {
 
     const backend = new OpaBackend('http://opa:8181', false);
     const decision = await backend.evaluate(ctx);
-    expect(decision.effect).toBeNull();
+    expect(decision.effect).toBe('deny');
     expect(decision.reason).toContain('500');
   });
 
-  it('returns null with reason on network error (no fallback)', async () => {
+  it('fails closed on network error (no fallback)', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
     const backend = new OpaBackend('http://opa:8181', false);
     const decision = await backend.evaluate(ctx);
-    expect(decision.effect).toBeNull();
+    expect(decision.effect).toBe('deny');
     expect(decision.reason).toBe('OPA unavailable');
   });
 
@@ -118,6 +124,30 @@ describe('OpaBackend', () => {
     expect(body.input.time).toBe('14:30');
     expect(body.input.grant.id).toBe('grnt_1');
     expect(body.input.request.ip).toBe('1.2.3.4');
+  });
+
+  it('never treats a truthy non-boolean allow value as approval', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ result: { allow: 'false' } }),
+    } as Response);
+
+    const decision = await new OpaBackend('http://opa:8181', false).evaluate(ctx);
+
+    expect(decision.effect).toBe('deny');
+    expect(decision.reason).toContain('non-boolean');
+  });
+
+  it('fails closed when OPA returns malformed JSON', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => { throw new SyntaxError('bad json'); },
+    } as unknown as Response);
+
+    const decision = await new OpaBackend('http://opa:8181', false).evaluate(ctx);
+
+    expect(decision.effect).toBe('deny');
+    expect(decision.reason).toContain('invalid JSON');
   });
 
   it('falls back to builtin on network error when fallbackToBuiltin is true', async () => {

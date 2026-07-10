@@ -222,15 +222,13 @@ describe('Coverage gaps — verify.ts error messages', () => {
     expect(result.error).toBe('Token has been revoked');
   });
 
-  it('returns signature verification failed for wrong key', async () => {
+  it('rejects a principal DID that does not belong to the signing key', async () => {
     const attacker = generateKeyPair();
-    const token = await issueGDT({
+    await expect(issueGDT({
       agentDID: agent.did, scope: ['weather:read'],
       spendLimit: { amount: 10, currency: 'USDC', period: '24h' },
       expiry: '24h', signingKey: attacker.privateKey, principalDID: principal.did,
-    });
-    const result = await verifyGDT(token, { resource: 'weather:read', amount: 0.001, currency: 'USDC' });
-    expect(result.error).toContain('Signature verification failed');
+    })).rejects.toThrow('principalDID must match');
   });
 });
 

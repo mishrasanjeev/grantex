@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { buildTestApp, sqlMock, mockRedis } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -54,5 +54,27 @@ describe('GET /health', () => {
     expect(body.status).toBe('degraded');
     expect(body.database).toBe('error');
     expect(body.redis).toBe('error');
+  });
+
+  it('times out stalled dependency checks in parallel', async () => {
+    vi.useFakeTimers();
+    try {
+      const never = new Promise<never>(() => {});
+      sqlMock.mockReturnValueOnce(never);
+      mockRedis.ping.mockReturnValueOnce(never);
+
+      let settled = false;
+      const responsePromise = app.inject({ method: 'GET', url: '/health' });
+      responsePromise.then(() => { settled = true; }).catch(() => { settled = true; });
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(settled).toBe(true);
+
+      const res = await responsePromise;
+      expect(res.statusCode).toBe(503);
+      expect(res.json()).toEqual({ status: 'degraded', database: 'error', redis: 'error' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,7 +1,7 @@
 import type { Grantex } from '@grantex/sdk';
 import type { z } from 'zod';
 import { TOOL_NAME_KEY, type GrantexTool } from './tool.js';
-import type { AuditLoggingOptions } from './types.js';
+import type { AuditLoggingOptions, GrantexToolExecutionOptions } from './types.js';
 
 /**
  * Wrap a Grantex tool's `execute` function with audit logging.
@@ -13,7 +13,9 @@ import type { AuditLoggingOptions } from './types.js';
  * ```ts
  * const auditedTool = withAuditLogging(fetchTool, grantexClient, {
  *   agentId: 'ag_01HXYZ',
+ *   agentDid: 'did:key:z6Mk...',
  *   grantId: tokenResponse.grantId,
+ *   principalId: authRequest.principalId,
  * });
  *
  * // auditedTool is a drop-in replacement for fetchTool
@@ -34,7 +36,7 @@ export function withAuditLogging<PARAMETERS extends z.ZodTypeAny, RESULT>(
   const action = `tool:${toolName}`;
   const originalExecute = grantexTool.execute;
 
-  const wrappedExecute = (async (args: z.infer<PARAMETERS>, execOptions: import('@ai-sdk/provider-utils').ToolCallOptions) => {
+  const wrappedExecute = (async (args: z.infer<PARAMETERS>, execOptions: GrantexToolExecutionOptions) => {
     try {
       const result = await originalExecute(args, execOptions);
       await client.audit.log({

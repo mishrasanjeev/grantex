@@ -42,21 +42,8 @@ export default function CallbackPage() {
         return;
       }
 
-      // Read agentId and expected state from cookies
-      const cookies = Object.fromEntries(
-        document.cookie.split('; ').filter(Boolean).map((c) => c.split('=').map(decodeURIComponent))
-      );
-      const agentId = cookies['grantex_agent_id'];
-      const expectedState = cookies['grantex_state'];
-
-      if (!agentId) {
-        setError('Missing agent ID cookie — did you start from the home page?');
-        setLoading(false);
-        return;
-      }
-
-      if (state !== expectedState) {
-        setError('State mismatch — possible CSRF. Please restart the demo.');
+      if (!state) {
+        setError('Missing authorization state. Please restart the demo.');
         setLoading(false);
         return;
       }
@@ -66,7 +53,7 @@ export default function CallbackPage() {
         const exchangeRes = await fetch('/api/exchange', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, agentId }),
+          body: JSON.stringify({ code, state }),
         });
         const exchangeData = await exchangeRes.json();
 

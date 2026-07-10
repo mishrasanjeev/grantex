@@ -4,6 +4,7 @@
 
 import { createHash } from 'node:crypto';
 import { getSql } from '../db/client.js';
+import type { TxSql } from '../db/client.js';
 import { newPolicyBundleId } from './ids.js';
 
 export interface PolicyBundle {
@@ -41,18 +42,22 @@ export async function syncPolicyBundle(
   const sha256 = createHash('sha256').update(content).digest('hex');
   const id = newPolicyBundleId();
 
-  // Deactivate previous active bundle
-  if (activate) {
-    await sql`
-      UPDATE policy_bundles SET active = FALSE
-      WHERE developer_id = ${developerId} AND format = ${format} AND active = TRUE
-    `;
-  }
+  // Deactivation and replacement must be atomic. If the insert fails after a
+  // standalone UPDATE, the developer is left with no active policy bundle.
+  await sql.begin(async (_tx) => {
+    const tx = _tx as unknown as TxSql;
+    if (activate) {
+      await tx`
+        UPDATE policy_bundles SET active = FALSE
+        WHERE developer_id = ${developerId} AND format = ${format} AND active = TRUE
+      `;
+    }
 
-  await sql`
-    INSERT INTO policy_bundles (id, developer_id, format, version, sha256, content, file_count, active)
-    VALUES (${id}, ${developerId}, ${format}, ${version}, ${sha256}, ${content}, ${fileCount}, ${activate})
-  `;
+    await tx`
+      INSERT INTO policy_bundles (id, developer_id, format, version, sha256, content, file_count, active)
+      VALUES (${id}, ${developerId}, ${format}, ${version}, ${sha256}, ${content}, ${fileCount}, ${activate})
+    `;
+  });
 
   return {
     bundleId: id,

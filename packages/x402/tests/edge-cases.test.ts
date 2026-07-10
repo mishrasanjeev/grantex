@@ -138,18 +138,11 @@ describe('Edge cases', () => {
 
     it('rejects token with issuer DID pointing to different key', async () => {
       const attacker = generateKeyPair();
-      const token = await issueGDT({
+      await expect(issueGDT({
         ...baseParams,
         signingKey: attacker.privateKey,
         principalDID: principal.did, // claim to be principal but sign with attacker key
-      });
-
-      const result = await verifyGDT(token, {
-        resource: 'weather:read',
-        amount: 0.001,
-        currency: 'USDC',
-      });
-      expect(result.valid).toBe(false);
+      })).rejects.toThrow('principalDID must match');
     });
 
     it('rejects token with missing vc claim', async () => {

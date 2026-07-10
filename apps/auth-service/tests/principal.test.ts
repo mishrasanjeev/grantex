@@ -247,6 +247,8 @@ describe('DELETE /v1/principal/grants/:id', () => {
     const token = await makeSessionToken();
     // Ownership check
     sqlMock.mockResolvedValueOnce([TEST_GRANT]);
+    // revokeGrantCascade: transaction-scoped developer lock
+    sqlMock.mockResolvedValueOnce([]);
     // revokeGrantCascade: UPDATE grants (revoke root)
     sqlMock.mockResolvedValueOnce([TEST_GRANT]);
     // revokeGrantCascade: cascade descendants
@@ -259,6 +261,7 @@ describe('DELETE /v1/principal/grants/:id', () => {
     });
 
     expect(res.statusCode).toBe(204);
+    expect(sqlMock.begin).toHaveBeenCalledTimes(1);
     expect(mockRedis.set).toHaveBeenCalledWith(
       `revoked:grant:${TEST_GRANT.id}`,
       '1',

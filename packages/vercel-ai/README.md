@@ -68,7 +68,9 @@ const client = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
 
 const audited = withAuditLogging(readCalendar, client, {
   agentId: 'ag_01ABC...',
+  agentDid: 'did:key:z6Mk...',
   grantId: 'grnt_01XYZ...',
+  principalId: 'user_01ABC...',
 });
 
 // Use audited in place of readCalendar — logs success/failure automatically
@@ -102,7 +104,9 @@ Wraps a Grantex tool with audit logging.
 | Option | Type | Description |
 |--------|------|-------------|
 | `agentId` | `string` | Agent ID for audit attribution |
+| `agentDid` | `string` | Agent DID for audit attribution |
 | `grantId` | `string` | Grant ID for the session |
+| `principalId` | `string` | Principal that authorized the agent |
 | `toolName` | `string?` | Override tool name in audit entries |
 
 ### `GrantexScopeError`

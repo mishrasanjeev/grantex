@@ -35,18 +35,19 @@ export interface LangChainAuthOptions {
  * });
  * ```
  */
-export function withGrantexAuth<T extends Record<string, unknown>>(
+export function withGrantexAuth<T extends object>(
   tool: T,
   options: LangChainAuthOptions,
 ): T {
   const { verifier, auditLog, requiredScopes, grantToken } = options;
+  const toolRecord = tool as Record<string, unknown>;
 
   // LangChain StructuredTool uses `_call` internally, or `invoke`.
   const originalFn =
-    typeof tool['_call'] === 'function'
-      ? (tool['_call'] as (...args: unknown[]) => unknown)
-      : typeof tool['invoke'] === 'function'
-        ? (tool['invoke'] as (...args: unknown[]) => unknown)
+    typeof toolRecord['_call'] === 'function'
+      ? (toolRecord['_call'] as (...args: unknown[]) => unknown)
+      : typeof toolRecord['invoke'] === 'function'
+        ? (toolRecord['invoke'] as (...args: unknown[]) => unknown)
         : null;
 
   if (!originalFn) {
@@ -56,7 +57,7 @@ export function withGrantexAuth<T extends Record<string, unknown>>(
     );
   }
 
-  const fnKey = typeof tool['_call'] === 'function' ? '_call' : 'invoke';
+  const fnKey = typeof toolRecord['_call'] === 'function' ? '_call' : 'invoke';
 
   const wrapped = async (...args: unknown[]): Promise<unknown> => {
     // 1. Verify grant offline
@@ -65,7 +66,7 @@ export function withGrantexAuth<T extends Record<string, unknown>>(
       grant = await verifier.verify(grantToken);
     } catch (err) {
       await auditLog.append({
-        action: `tool:${String(tool['name'] ?? 'unknown')}`,
+        action: `tool:${String(toolRecord['name'] ?? 'unknown')}`,
         agentDID: '',
         grantId: '',
         scopes: requiredScopes,
@@ -83,7 +84,7 @@ export function withGrantexAuth<T extends Record<string, unknown>>(
       enforceScopes(grant.scopes, requiredScopes);
     } catch (err) {
       await auditLog.append({
-        action: `tool:${String(tool['name'] ?? 'unknown')}`,
+        action: `tool:${String(toolRecord['name'] ?? 'unknown')}`,
         agentDID: grant.agentDID,
         grantId: grant.grantId,
         scopes: grant.scopes,
@@ -99,7 +100,7 @@ export function withGrantexAuth<T extends Record<string, unknown>>(
       result = await originalFn.apply(tool, args);
     } catch (err) {
       await auditLog.append({
-        action: `tool:${String(tool['name'] ?? 'unknown')}`,
+        action: `tool:${String(toolRecord['name'] ?? 'unknown')}`,
         agentDID: grant.agentDID,
         grantId: grant.grantId,
         scopes: grant.scopes,
@@ -111,7 +112,7 @@ export function withGrantexAuth<T extends Record<string, unknown>>(
 
     // 4. Audit success
     await auditLog.append({
-      action: `tool:${String(tool['name'] ?? 'unknown')}`,
+      action: `tool:${String(toolRecord['name'] ?? 'unknown')}`,
       agentDID: grant.agentDID,
       grantId: grant.grantId,
       scopes: grant.scopes,
@@ -121,5 +122,23 @@ export function withGrantexAuth<T extends Record<string, unknown>>(
     return result;
   };
 
-  return { ...tool, [fnKey]: wrapped };
+  return cloneWithWrappedMethod(tool, fnKey, wrapped);
+}
+
+function cloneWithWrappedMethod<T extends object>(
+  tool: T,
+  fnKey: string,
+  wrapped: (...args: unknown[]) => Promise<unknown>,
+): T {
+  const clone = Object.create(Object.getPrototypeOf(tool)) as T;
+  const descriptors: PropertyDescriptorMap = Object.getOwnPropertyDescriptors(tool);
+  delete descriptors[fnKey];
+  Object.defineProperties(clone, descriptors);
+  Object.defineProperty(clone, fnKey, {
+    value: wrapped,
+    configurable: true,
+    enumerable: Object.prototype.propertyIsEnumerable.call(tool, fnKey),
+    writable: true,
+  });
+  return clone;
 }

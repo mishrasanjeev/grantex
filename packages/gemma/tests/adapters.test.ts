@@ -201,6 +201,28 @@ describe('Google ADK adapter — withGrantexAuth', () => {
     expect(wrapped.schema).toEqual({ type: 'object' });
   });
 
+  it('preserves class prototypes when wrapping ADK tools', async () => {
+    class ClassTool {
+      name = 'classTool';
+      async func(): Promise<string> {
+        return this.helper();
+      }
+      helper(): string {
+        return 'from-prototype';
+      }
+    }
+    const tool = new ClassTool();
+    const wrapped = withGoogleADKAuth(tool, {
+      verifier: makeVerifier(makeGrant()),
+      auditLog: makeAuditLog(),
+      requiredScopes: [],
+      grantToken: 'token',
+    });
+
+    expect(wrapped).toBeInstanceOf(ClassTool);
+    await expect(wrapped.func()).resolves.toBe('from-prototype');
+  });
+
   it('uses "unknown" as tool name in audit when name is absent', async () => {
     const grant = makeGrant();
     const verifier = makeVerifier(grant);
@@ -224,6 +246,29 @@ describe('Google ADK adapter — withGrantexAuth', () => {
 /* ------------------------------------------------------------------ */
 
 describe('LangChain adapter — withGrantexAuth', () => {
+  it('preserves inherited invoke behavior for class-based tools', async () => {
+    class ClassTool {
+      name = 'classTool';
+      async _call(input: string): Promise<string> {
+        return `called:${input}`;
+      }
+      async invoke(input: string): Promise<string> {
+        return this._call(input);
+      }
+    }
+    const verifier = makeVerifier(makeGrant());
+    const wrapped = withLangChainAuth(new ClassTool(), {
+      verifier,
+      auditLog: makeAuditLog(),
+      requiredScopes: [],
+      grantToken: 'token',
+    });
+
+    expect(wrapped).toBeInstanceOf(ClassTool);
+    await expect(wrapped.invoke('input')).resolves.toBe('called:input');
+    expect(verifier.verify).toHaveBeenCalledOnce();
+  });
+
   it('wraps a tool with a "_call" method', async () => {
     const grant = makeGrant();
     const verifier = makeVerifier(grant);

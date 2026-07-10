@@ -32,6 +32,7 @@ describe('POST /v1/policies/sync', () => {
     expect(body.version).toBe('1.0.0');
     expect(body.sha256).toBeDefined();
     expect(body.activated).toBe(true);
+    expect(sqlMock.begin).toHaveBeenCalledTimes(1);
   });
 
   it('returns 400 for missing fields', async () => {

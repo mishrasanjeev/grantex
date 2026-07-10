@@ -373,7 +373,7 @@ describe('verifySDJWT', () => {
 
     // Append KB-JWT to SD-JWT
     const withKb = sdJwt.replace(/~$/, '') + '~' + kbJwt + '~';
-    const result = await verifySDJWT(withKb);
+    const result = await verifySDJWT(withKb, { nonce: 'test-nonce-123' });
 
     expect(result.valid).toBe(false);
     expect(result.error).toBe('KB-JWT missing nonce or aud');
@@ -393,7 +393,7 @@ describe('verifySDJWT', () => {
     expect(result.error).toBe('Invalid KB-JWT format');
   });
 
-  it('accepts valid KB-JWT with nonce', async () => {
+  it('rejects an unverified KB-JWT with nonce', async () => {
     const { sdJwt } = await issueSDJWT(defaultParams);
 
     // Create a valid KB-JWT with nonce
@@ -404,11 +404,23 @@ describe('verifySDJWT', () => {
     const withKb = sdJwt.replace(/~$/, '') + '~' + kbJwt + '~';
     const result = await verifySDJWT(withKb);
 
-    expect(result.valid).toBe(true);
-    expect(result.disclosedClaims).toBeDefined();
+    expect(result.valid).toBe(false);
+    expect(result.error).toBe('KB-JWT holder signature verification is not supported');
   });
 
-  it('accepts valid KB-JWT with aud', async () => {
+  it('rejects a KB-JWT whose nonce does not match the verifier challenge', async () => {
+    const { sdJwt } = await issueSDJWT(defaultParams);
+    const kbHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'kb+jwt' })).toString('base64url');
+    const kbPayload = Buffer.from(JSON.stringify({ nonce: 'wrong-nonce' })).toString('base64url');
+    const withKb = sdJwt.replace(/~$/, '') + '~' + `${kbHeader}.${kbPayload}.~`;
+
+    const result = await verifySDJWT(withKb, { nonce: 'expected-nonce' });
+
+    expect(result.valid).toBe(false);
+    expect(result.error).toBe('KB-JWT nonce mismatch');
+  });
+
+  it('rejects an unverified KB-JWT with aud', async () => {
     const { sdJwt } = await issueSDJWT(defaultParams);
 
     // Create a valid KB-JWT with aud
@@ -417,9 +429,10 @@ describe('verifySDJWT', () => {
     const kbJwt = `${kbHeader}.${kbPayload}.`;
 
     const withKb = sdJwt.replace(/~$/, '') + '~' + kbJwt + '~';
-    const result = await verifySDJWT(withKb);
+    const result = await verifySDJWT(withKb, { audience: 'https://verifier.example.com' });
 
-    expect(result.valid).toBe(true);
+    expect(result.valid).toBe(false);
+    expect(result.error).toBe('KB-JWT holder signature verification is not supported');
   });
 
   it('treats parts with 2 dots but invalid JWT header as disclosures during verify', async () => {
@@ -670,6 +683,41 @@ describe('POST /v1/credentials/present', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('BAD_REQUEST');
+  });
+
+  it('returns 400 when the presentation body is missing', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/credentials/present',
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('requires a key-binding JWT when a nonce is requested', async () => {
+    const { sdJwt } = await issueSDJWT(defaultParams);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/credentials/present',
+      payload: { sdJwt, nonce: 'challenge-123' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().valid).toBe(false);
+    expect(res.json().error).toBe('Key-binding JWT required');
+  });
+
+  it('rejects non-string binding parameters', async () => {
+    const { sdJwt } = await issueSDJWT(defaultParams);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/credentials/present',
+      payload: { sdJwt, nonce: 42 },
+    });
+
+    expect(res.statusCode).toBe(400);
   });
 
   it('does not require authentication (skipAuth)', async () => {

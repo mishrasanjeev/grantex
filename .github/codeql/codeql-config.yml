@@ -7,3 +7,8 @@ name: "Grantex CodeQL Config"
 query-filters:
   - exclude:
       id: js/missing-rate-limiting
+  # The consent bundle retains SHA-256 key derivation solely to decrypt files
+  # written by the pre-scrypt format; changing it would make existing bundles
+  # unreadable. New bundles use scrypt in bundle-storage.ts.
+  - exclude:
+      id: js/insufficient-password-hash

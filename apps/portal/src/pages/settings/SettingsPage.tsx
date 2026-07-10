@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../../store/auth';
 import { rotateKey } from '../../api/auth';
-import { api, setApiKey } from '../../api/client';
+import { api } from '../../api/client';
 import { useToast } from '../../store/toast';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -10,7 +10,7 @@ import { Spinner } from '../../components/ui/Spinner';
 import { CopyButton } from '../../components/ui/CopyButton';
 
 export function SettingsPage() {
-  const { developer, apiKey, login } = useAuth();
+  const { developer, apiKey, replaceApiKey, updateDeveloper } = useAuth();
   const { show } = useToast();
   const [rotating, setRotating] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
@@ -23,10 +23,7 @@ export function SettingsPage() {
     try {
       const { apiKey: rotatedKey } = await rotateKey();
       setNewKey(rotatedKey);
-      // Update client and auth state with new key
-      setApiKey(rotatedKey);
-      sessionStorage.setItem('grantex_api_key', rotatedKey);
-      await login(rotatedKey);
+      replaceApiKey(rotatedKey);
       show('API key rotated successfully', 'success');
     } catch {
       show('Failed to rotate API key', 'error');
@@ -152,6 +149,7 @@ export function SettingsPage() {
                 setSavingFido(true);
                 try {
                   await api.patch('/v1/me', { fidoRequired, fidoRpName });
+                  updateDeveloper({ fidoRequired, fidoRpName });
                   show('FIDO2 settings saved', 'success');
                 } catch {
                   show('Failed to save FIDO2 settings', 'error');

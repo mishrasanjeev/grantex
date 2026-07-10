@@ -126,6 +126,16 @@ describe('sso', () => {
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/sso/connections/conn-1', expect.objectContaining({ method: 'DELETE' }));
   });
 
+  it('encodes connection ids in action paths', async () => {
+    noContent();
+    await deleteSsoConnection('conn/one');
+    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/sso/connections/conn%2Fone');
+
+    ok({ success: true });
+    await testSsoConnection('conn/two');
+    expect(mockFetch.mock.calls[1]![0]).toBe('http://localhost:3000/v1/sso/connections/conn%2Ftwo/test');
+  });
+
   it('deleteSsoConnection throws on error', async () => {
     err(404, 'NOT_FOUND', 'Connection not found');
     await expect(deleteSsoConnection('missing')).rejects.toThrow('Connection not found');

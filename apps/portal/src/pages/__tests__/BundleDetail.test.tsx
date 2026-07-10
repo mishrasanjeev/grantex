@@ -135,8 +135,15 @@ describe('BundleDetail', () => {
     await waitFor(() => expect(screen.getByText('Refresh Bundle')).toBeInTheDocument());
   });
 
-  it('has Download JWKS button', async () => {
+  it('opens the canonical current JWKS without exposing an opener', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const user = userEvent.setup();
     r();
-    await waitFor(() => expect(screen.getByText('Download JWKS')).toBeInTheDocument());
+    await user.click(await screen.findByRole('button', { name: 'View Current JWKS' }));
+    expect(open).toHaveBeenCalledWith(
+      expect.stringMatching(/\/\.well-known\/jwks\.json$/),
+      '_blank',
+      'noopener,noreferrer',
+    );
   });
 });

@@ -2768,7 +2768,7 @@ describe('CommerceWebhooks', () => {
       audit_event_id: 'aud_updated',
     });
     mockRotateCommerceWebhookSourceSecret.mockResolvedValue({
-      data: { ...webhookSource, webhook_secret: 'one-time-rotated-value' },
+      data: { ...webhookSource, source_key: 'shopify_sync', webhook_secret: 'one-time-rotated-value' },
       audit_event_id: 'aud_rotated',
     });
   });

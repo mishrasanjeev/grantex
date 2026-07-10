@@ -6,10 +6,11 @@ import { emitEvent } from '../lib/events.js';
 import { tokenExchangeTotal, tokenExchangeDuration } from '../lib/metrics.js';
 import { withSpan } from '../lib/tracing.js';
 import { GRANTEX_AGENT_ID, GRANTEX_GRANT_ID, GRANTEX_PRINCIPAL_ID, GRANTEX_SCOPES, GRANTEX_DEVELOPER_ID } from '../lib/traceAttributes.js';
-import { verifyPkceChallenge } from '../lib/pkce.js';
+import { isValidPkceVerifier, verifyPkceChallenge } from '../lib/pkce.js';
 import { incrementUsage } from '../lib/usage.js';
 import { issueAgentGrantVC } from '../lib/vc.js';
 import { issueSDJWT } from '../lib/sd-jwt.js';
+import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 
 interface TokenBody {
   code: string;
@@ -45,14 +46,26 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/token — stricter rate limit: 20/min
   app.post<{ Body: TokenBody }>('/v1/token', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const endTimer = tokenExchangeDuration.startTimer();
-    const { code, agentId, codeVerifier } = request.body;
+    const body = request.body;
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+      return reply.status(400).send({ message: 'Request body must be a JSON object', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    const { code, agentId, codeVerifier, credentialFormat } = body;
 
-    if (!code || !agentId) {
+    if (typeof code !== 'string' || code.length === 0 || code.length > 512
+        || typeof agentId !== 'string' || agentId.length === 0 || agentId.length > 256) {
       return reply.status(400).send({
         message: 'code and agentId are required',
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
+    }
+    if (codeVerifier !== undefined && typeof codeVerifier !== 'string') {
+      return reply.status(400).send({ message: 'codeVerifier must be a string', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    if (credentialFormat !== undefined
+        && !['jwt', 'vc-jwt', 'sd-jwt', 'both', 'agent-passport'].includes(credentialFormat)) {
+      return reply.status(400).send({ message: 'Invalid credentialFormat', code: 'BAD_REQUEST', requestId: request.id });
     }
 
     const sql = getSql();
@@ -61,6 +74,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     let authReq!: Record<string, unknown>;
     let expiresAt!: Date;
     let expTimestamp!: number;
+    let jwt!: string;
     const grantId = newGrantId();
     const jti = newTokenId();
     const refreshId = newRefreshTokenId();
@@ -77,7 +91,8 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           WHERE ar.code = ${code}
             AND ar.agent_id = ${agentId}
             AND ar.developer_id = ${developerId}
-          FOR UPDATE
+            AND a.status = 'active'
+          FOR UPDATE OF ar, a
         `;
 
         authReq = authRows[0] ?? routeError(400, 'Invalid code');
@@ -90,8 +105,11 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
 
         const storedChallenge = authReq['code_challenge'] as string | null;
         if (storedChallenge) {
-          if (!codeVerifier) {
+          if (codeVerifier === undefined) {
             routeError(400, 'codeVerifier is required for PKCE');
+          }
+          if (!isValidPkceVerifier(codeVerifier)) {
+            routeError(400, 'Invalid codeVerifier');
           }
           if (!verifyPkceChallenge(codeVerifier, storedChallenge)) {
             routeError(400, 'Invalid codeVerifier');
@@ -105,17 +123,70 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         // Refresh tokens cannot outlive the underlying grant.
         const refreshExpiresAt = new Date(Math.min(now + 30 * 86400 * 1000, expiresAt.getTime()));
 
+        // The plan limit must be enforced where the grant is actually created.
+        // Serializing issuance per developer closes the check-then-insert race and
+        // prevents many already-approved codes from exceeding the subscription.
+        await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 3))`;
+        const planRows = await tx`
+          SELECT
+            COALESCE((SELECT plan FROM subscriptions WHERE developer_id = ${developerId} LIMIT 1), 'free') AS plan,
+            (SELECT COUNT(*) FROM grants
+             WHERE developer_id = ${developerId} AND status = 'active' AND expires_at > NOW()) AS count
+        `;
+        const planName = (planRows[0]?.['plan'] as string | undefined) ?? 'free';
+        const plan = isPlanName(planName) ? planName : 'free';
+        const grantCount = Number(planRows[0]?.['count'] ?? 0);
+        const grantLimit = PLAN_LIMITS[plan].grants;
+        if (!Number.isSafeInteger(grantCount) || grantCount >= grantLimit) {
+          routeError(
+            402,
+            `Plan limit reached: ${plan} plan allows ${grantLimit} active grant(s)`,
+            'PLAN_LIMIT_EXCEEDED',
+          );
+        }
+
         await tx`
-          INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+          INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at, audience)
           VALUES (
             ${grantId},
             ${authReq['agent_id'] as string},
             ${authReq['principal_id'] as string},
             ${authReq['developer_id'] as string},
             ${authReq['scopes'] as string[]},
-            ${expiresAt}
+            ${expiresAt},
+            ${authReq['audience'] as string | null}
           )
         `;
+
+        const budgetRows = await tx`
+          SELECT remaining_budget FROM budget_allocations WHERE grant_id = ${grantId}
+        `;
+        const remainingBudget = budgetRows[0]?.['remaining_budget'];
+        const budgetAmount = remainingBudget !== undefined ? Number(remainingBudget) : undefined;
+        if (budgetAmount !== undefined && !Number.isFinite(budgetAmount)) {
+          routeError(500, 'Invalid budget allocation', 'INTERNAL_ERROR');
+        }
+
+        // Signing is part of the transaction boundary. A key/configuration
+        // failure must not consume the one-time code or persist unusable rows.
+        const audience = authReq['audience'] as string | null | undefined;
+        jwt = await withSpan('grantex.token.sign', {
+          [GRANTEX_AGENT_ID]: authReq['agent_did'] as string,
+          [GRANTEX_GRANT_ID]: grantId,
+          [GRANTEX_PRINCIPAL_ID]: authReq['principal_id'] as string,
+          [GRANTEX_DEVELOPER_ID]: developerId,
+          [GRANTEX_SCOPES]: authReq['scopes'] as string[],
+        }, () => signGrantToken({
+          sub: authReq['principal_id'] as string,
+          agt: authReq['agent_did'] as string,
+          dev: authReq['developer_id'] as string,
+          scp: authReq['scopes'] as string[],
+          jti,
+          grnt: grantId,
+          ...(audience ? { aud: audience } : {}),
+          ...(budgetAmount !== undefined ? { bdg: budgetAmount } : {}),
+          exp: expTimestamp,
+        }));
 
         await tx`
           INSERT INTO grant_tokens (jti, grant_id, expires_at)
@@ -144,35 +215,8 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       throw err;
     }
 
-    // Check for budget allocation
-    const budgetRows = await sql<{ remaining_budget: string }[]>`
-      SELECT remaining_budget FROM budget_allocations WHERE grant_id = ${grantId}
-    `;
-    const budgetAmount = budgetRows[0] ? parseFloat(budgetRows[0].remaining_budget) : undefined;
-
-    // Sign JWT (with optional tracing span)
-    const audience = authReq['audience'] as string | null | undefined;
-    const jwt = await withSpan('grantex.token.sign', {
-      [GRANTEX_AGENT_ID]: authReq['agent_did'] as string,
-      [GRANTEX_GRANT_ID]: grantId,
-      [GRANTEX_PRINCIPAL_ID]: authReq['principal_id'] as string,
-      [GRANTEX_DEVELOPER_ID]: developerId,
-      [GRANTEX_SCOPES]: authReq['scopes'] as string[],
-    }, () => signGrantToken({
-      sub: authReq['principal_id'] as string,
-      agt: authReq['agent_did'] as string,
-      dev: authReq['developer_id'] as string,
-      scp: authReq['scopes'] as string[],
-      jti,
-      grnt: grantId,
-      ...(audience ? { aud: audience } : {}),
-      ...(budgetAmount !== undefined ? { bdg: budgetAmount } : {}),
-      exp: expTimestamp,
-    }));
-
     // VC-JWT issuance (optional)
     let verifiableCredential: string | undefined;
-    const { credentialFormat } = request.body;
     if (credentialFormat === 'vc-jwt' || credentialFormat === 'both') {
       try {
         const vcResult = await issueAgentGrantVC({
@@ -253,9 +297,14 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
 
   // POST /v1/token/refresh — refresh a grant token (single-use rotation)
   app.post<{ Body: RefreshBody }>('/v1/token/refresh', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const { refreshToken, agentId } = request.body;
+    const body = request.body;
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+      return reply.status(400).send({ message: 'Request body must be a JSON object', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    const { refreshToken, agentId } = body;
 
-    if (!refreshToken || !agentId) {
+    if (typeof refreshToken !== 'string' || refreshToken.length === 0 || refreshToken.length > 512
+        || typeof agentId !== 'string' || agentId.length === 0 || agentId.length > 256) {
       return reply.status(400).send({
         message: 'refreshToken and agentId are required',
         code: 'BAD_REQUEST',
@@ -270,6 +319,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     let grantId!: string;
     let scopes!: string[];
     let grantExpiresAt!: Date;
+    let jwt!: string;
     const jti = newTokenId();
     const newRefreshId = newRefreshTokenId();
 
@@ -279,14 +329,20 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         const rows = await tx`
           SELECT rt.id AS refresh_id, rt.grant_id, rt.is_used, rt.expires_at AS refresh_expires_at,
                  g.agent_id, g.principal_id, g.developer_id, g.scopes, g.status AS grant_status,
-                 g.expires_at AS grant_expires_at,
-                 a.did AS agent_did
+                 g.expires_at AS grant_expires_at, g.audience,
+                 g.parent_grant_id, g.delegation_depth,
+                 a.did AS agent_did, parent_agent.did AS parent_agent_did,
+                 ba.remaining_budget
           FROM refresh_tokens rt
           JOIN grants g ON g.id = rt.grant_id
           JOIN agents a ON a.id = g.agent_id
+          LEFT JOIN grants parent_grant ON parent_grant.id = g.parent_grant_id
+          LEFT JOIN agents parent_agent ON parent_agent.id = parent_grant.agent_id
+          LEFT JOIN budget_allocations ba ON ba.grant_id = g.id
           WHERE rt.id = ${refreshToken}
             AND g.developer_id = ${developerId}
-          FOR UPDATE
+            AND a.status = 'active'
+          FOR UPDATE OF rt, g, a
         `;
 
         row = rows[0] ?? routeError(400, 'Invalid refresh token');
@@ -302,6 +358,9 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         if (row['grant_status'] === 'revoked') {
           routeError(400, 'Grant has been revoked');
         }
+        if (row['grant_status'] !== 'active') {
+          routeError(400, 'Grant is not active');
+        }
         if (new Date(row['grant_expires_at'] as string) <= new Date()) {
           routeError(400, 'Grant has expired');
         }
@@ -312,6 +371,35 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         const now = Date.now();
         // Refresh tokens cannot outlive the underlying grant.
         const refreshExpiresAt = new Date(Math.min(now + 30 * 86400 * 1000, grantExpiresAt.getTime()));
+
+        const remainingBudget = row['remaining_budget'];
+        const budgetAmount = remainingBudget !== null && remainingBudget !== undefined
+          ? Number(remainingBudget)
+          : undefined;
+        if (budgetAmount !== undefined && !Number.isFinite(budgetAmount)) {
+          routeError(500, 'Invalid budget allocation', 'INTERNAL_ERROR');
+        }
+        const audience = row['audience'] as string | null | undefined;
+        const parentGrnt = row['parent_grant_id'] as string | null | undefined;
+        const parentAgt = row['parent_agent_did'] as string | null | undefined;
+        const delegationDepth = Number(row['delegation_depth'] ?? 0);
+
+        // Sign before rotating the single-use refresh token. A signer failure
+        // rolls the transaction back and leaves the caller able to retry.
+        jwt = await signGrantToken({
+          sub: row['principal_id'] as string,
+          agt: row['agent_did'] as string,
+          dev: row['developer_id'] as string,
+          scp: scopes,
+          jti,
+          grnt: grantId,
+          ...(audience ? { aud: audience } : {}),
+          ...(budgetAmount !== undefined ? { bdg: budgetAmount } : {}),
+          ...(parentAgt ? { parentAgt } : {}),
+          ...(parentGrnt ? { parentGrnt } : {}),
+          ...(delegationDepth > 0 ? { delegationDepth } : {}),
+          exp: Math.floor(grantExpiresAt.getTime() / 1000),
+        });
 
         const updated = await tx`
           UPDATE refresh_tokens
@@ -344,18 +432,6 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       }
       throw err;
     }
-
-    // Sign JWT with same grant claims
-    const expTimestamp = Math.floor(grantExpiresAt.getTime() / 1000);
-    const jwt = await signGrantToken({
-      sub: row['principal_id'] as string,
-      agt: row['agent_did'] as string,
-      dev: row['developer_id'] as string,
-      scp: scopes,
-      jti,
-      grnt: grantId,
-      exp: expTimestamp,
-    });
 
     // Emit event (best-effort)
     const eventData = {

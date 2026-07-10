@@ -20,6 +20,8 @@ export function DateRangeFilter({ activeDays, onChange, className }: DateRangeFi
       {presets.map((p) => (
         <button
           key={p.label}
+          type="button"
+          aria-pressed={activeDays === p.days}
           onClick={() => onChange(p.days)}
           className={cn(
             'px-2.5 py-1 rounded text-xs font-medium transition-colors',

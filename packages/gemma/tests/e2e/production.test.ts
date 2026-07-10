@@ -50,7 +50,7 @@ function makeSnapshot(keys: jose.JWK[]): JWKSSnapshot {
 
 /** Sign a JWT with standard Grantex claims. */
 async function signGrantToken(
-  privateKey: jose.KeyLike,
+  privateKey: jose.CryptoKey,
   kid: string,
   claims: Record<string, unknown>,
 ): Promise<string> {
@@ -118,7 +118,7 @@ describe('Live Production', () => {
       expect(primaryKey).toBeDefined();
       expect(primaryKey!.kty).toBe('RSA');
     },
-    { timeout: 30_000 },
+    30_000,
   );
 
   it(
@@ -138,7 +138,7 @@ describe('Live Production', () => {
       expect(verifier).toBeDefined();
       expect(typeof verifier.verify).toBe('function');
     },
-    { timeout: 30_000 },
+    30_000,
   );
 
   it(
@@ -168,7 +168,7 @@ describe('Live Production', () => {
       expect(grant.expiresAt).toBeInstanceOf(Date);
       expect(grant.expiresAt.getTime()).toBeGreaterThan(Date.now());
     },
-    { timeout: 30_000 },
+    30_000,
   );
 
   it(
@@ -197,7 +197,7 @@ describe('Live Production', () => {
       // Should reject because kid "rogue-key" is not in production JWKS
       await expect(verifier.verify(token)).rejects.toThrow();
     },
-    { timeout: 30_000 },
+    30_000,
   );
 
   it(
@@ -215,7 +215,7 @@ describe('Live Production', () => {
         }),
       ).rejects.toThrow(); // Should throw a meaningful HTTP error, not crash
     },
-    { timeout: 30_000 },
+    30_000,
   );
 });
 

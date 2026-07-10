@@ -187,7 +187,10 @@ export async function issueSDJWT(params: SDJWTIssueParams): Promise<{
  * Accepts both full SD-JWTs (with all disclosures) and presentations
  * (with a subset of disclosures, optionally with a key-binding JWT).
  */
-export async function verifySDJWT(sdJwt: string): Promise<SDJWTVerifyResult> {
+export async function verifySDJWT(
+  sdJwt: string,
+  expectedBinding?: { nonce?: string; audience?: string },
+): Promise<SDJWTVerifyResult> {
   // Parse the SD-JWT format: <issuer-jwt>~<disclosure1>~...~<optional-kb-jwt>
   const parts = sdJwt.split('~');
   if (parts.length < 2) {
@@ -294,10 +297,43 @@ export async function verifySDJWT(sdJwt: string): Promise<SDJWTVerifyResult> {
     if (disclosure.claimName === '__proto__' || disclosure.claimName === 'constructor' || disclosure.claimName === 'prototype') {
       return { valid: false, ...vcIdFields, error: `Forbidden claim name: ${disclosure.claimName}` };
     }
-    disclosedClaims[disclosure.claimName] = disclosure.claimValue;
+    switch (disclosure.claimName) {
+      case 'id':
+        disclosedClaims.id = disclosure.claimValue;
+        break;
+      case 'type':
+        disclosedClaims.type = disclosure.claimValue;
+        break;
+      case 'principalId':
+        disclosedClaims.principalId = disclosure.claimValue;
+        break;
+      case 'developerId':
+        disclosedClaims.developerId = disclosure.claimValue;
+        break;
+      case 'grantId':
+        disclosedClaims.grantId = disclosure.claimValue;
+        break;
+      case 'scopes':
+        disclosedClaims.scopes = disclosure.claimValue;
+        break;
+      case 'delegationDepth':
+        disclosedClaims.delegationDepth = disclosure.claimValue;
+        break;
+      default:
+        return { valid: false, ...vcIdFields, error: 'Unsupported disclosure claim' };
+    }
   }
 
-  // If a key-binding JWT is present, verify it
+  if ((expectedBinding?.nonce !== undefined || expectedBinding?.audience !== undefined) &&
+      kbJwt === undefined) {
+    return { valid: false, ...vcIdFields, error: 'Key-binding JWT required' };
+  }
+
+  // A key-binding JWT is only meaningful after verifying its signature against
+  // a holder key bound by the issuer SD-JWT (normally via a cnf claim). Grantex
+  // does not issue holder-bound credentials yet, so parse binding claims for
+  // useful diagnostics but fail closed instead of accepting an unsigned or
+  // attacker-signed JWT as proof of possession.
   if (kbJwt !== undefined) {
     try {
       const kbDecoded = decodeJwt(kbJwt) as Record<string, unknown>;
@@ -305,6 +341,23 @@ export async function verifySDJWT(sdJwt: string): Promise<SDJWTVerifyResult> {
       if (!kbDecoded['nonce'] && !kbDecoded['aud']) {
         return { valid: false, ...vcIdFields, error: 'KB-JWT missing nonce or aud' };
       }
+      if (expectedBinding?.nonce !== undefined &&
+          kbDecoded['nonce'] !== expectedBinding.nonce) {
+        return { valid: false, ...vcIdFields, error: 'KB-JWT nonce mismatch' };
+      }
+      if (expectedBinding?.audience !== undefined) {
+        const aud = kbDecoded['aud'];
+        const matches = aud === expectedBinding.audience ||
+          (Array.isArray(aud) && aud.includes(expectedBinding.audience));
+        if (!matches) {
+          return { valid: false, ...vcIdFields, error: 'KB-JWT audience mismatch' };
+        }
+      }
+      return {
+        valid: false,
+        ...vcIdFields,
+        error: 'KB-JWT holder signature verification is not supported',
+      };
     } catch {
       return { valid: false, ...vcIdFields, error: 'Invalid KB-JWT format' };
     }

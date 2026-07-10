@@ -116,20 +116,11 @@ describe('Security tests', () => {
       const attacker = generateKeyPair();
 
       // Attacker signs with their own key but claims to be the principal
-      const token = await issueGDT({
+      await expect(issueGDT({
         ...baseParams,
         signingKey: attacker.privateKey,
         principalDID: principal.did,
-      });
-
-      const result = await verifyGDT(token, {
-        resource: 'weather:read',
-        amount: 0.001,
-        currency: 'USDC',
-      });
-
-      expect(result.valid).toBe(false);
-      expect(result.error).toContain('Signature verification failed');
+      })).rejects.toThrow('principalDID must match');
     });
 
     it('rejects a token with forged issuer DID', async () => {

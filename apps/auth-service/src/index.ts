@@ -7,8 +7,10 @@ import { getRedis } from './redis/client.js';
 import { buildApp } from './server.js';
 import { hashApiKey } from './lib/hash.js';
 import { newDeveloperId } from './lib/ids.js';
+import { newUsageDailyId } from './lib/ids.js';
 import { startWebhookDeliveryWorker, stopWebhookDeliveryWorker } from './workers/webhookDelivery.js';
 import { startAnomalyDetectionWorker, stopAnomalyDetectionWorker } from './workers/anomalyDetection.js';
+import { startUsageRollupWorker } from './workers/usageRollup.js';
 import {
   startCommercePaymentReconciliationWorker,
   stopCommercePaymentReconciliationWorker,
@@ -85,6 +87,9 @@ async function main() {
   // Start background workers after the server is listening
   startWebhookDeliveryWorker(sql);
   startAnomalyDetectionWorker(sql);
+  const stopUsageRollup = config.usageMeteringEnabled
+    ? startUsageRollupWorker(sql, redis, newUsageDailyId)
+    : null;
   if (config.commerceReconciliationWorkerEnabled) {
     startCommercePaymentReconciliationWorker(sql, {
       intervalMs: config.commerceReconciliationIntervalMs,
@@ -97,6 +102,7 @@ async function main() {
     app.log.info(`Received ${signal}, shutting down gracefully...`);
     stopWebhookDeliveryWorker();
     stopAnomalyDetectionWorker();
+    stopUsageRollup?.();
     stopCommercePaymentReconciliationWorker();
     await app.close();
     await closeRedis();

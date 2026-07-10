@@ -39,19 +39,20 @@ export interface GoogleADKAuthOptions {
  * });
  * ```
  */
-export function withGrantexAuth<T extends Record<string, unknown>>(
+export function withGrantexAuth<T extends object>(
   tool: T,
   options: GoogleADKAuthOptions,
 ): T {
   const { verifier, auditLog, requiredScopes, grantToken } = options;
+  const toolRecord = tool as Record<string, unknown>;
 
   // Google ADK tools typically have a `func` property or callable via `run`.
   // We wrap whichever is present.
   const originalFn =
-    typeof tool['func'] === 'function'
-      ? (tool['func'] as (...args: unknown[]) => unknown)
-      : typeof tool['run'] === 'function'
-        ? (tool['run'] as (...args: unknown[]) => unknown)
+    typeof toolRecord['func'] === 'function'
+      ? (toolRecord['func'] as (...args: unknown[]) => unknown)
+      : typeof toolRecord['run'] === 'function'
+        ? (toolRecord['run'] as (...args: unknown[]) => unknown)
         : null;
 
   if (!originalFn) {
@@ -61,7 +62,7 @@ export function withGrantexAuth<T extends Record<string, unknown>>(
     );
   }
 
-  const fnKey = typeof tool['func'] === 'function' ? 'func' : 'run';
+  const fnKey = typeof toolRecord['func'] === 'function' ? 'func' : 'run';
 
   const wrapped = async (...args: unknown[]): Promise<unknown> => {
     // 1. Verify grant offline
@@ -70,7 +71,7 @@ export function withGrantexAuth<T extends Record<string, unknown>>(
       grant = await verifier.verify(grantToken);
     } catch (err) {
       await auditLog.append({
-        action: `tool:${String(tool['name'] ?? 'unknown')}`,
+        action: `tool:${String(toolRecord['name'] ?? 'unknown')}`,
         agentDID: '',
         grantId: '',
         scopes: requiredScopes,
@@ -88,7 +89,7 @@ export function withGrantexAuth<T extends Record<string, unknown>>(
       enforceScopes(grant.scopes, requiredScopes);
     } catch (err) {
       await auditLog.append({
-        action: `tool:${String(tool['name'] ?? 'unknown')}`,
+        action: `tool:${String(toolRecord['name'] ?? 'unknown')}`,
         agentDID: grant.agentDID,
         grantId: grant.grantId,
         scopes: grant.scopes,
@@ -104,7 +105,7 @@ export function withGrantexAuth<T extends Record<string, unknown>>(
       result = await originalFn.apply(tool, args);
     } catch (err) {
       await auditLog.append({
-        action: `tool:${String(tool['name'] ?? 'unknown')}`,
+        action: `tool:${String(toolRecord['name'] ?? 'unknown')}`,
         agentDID: grant.agentDID,
         grantId: grant.grantId,
         scopes: grant.scopes,
@@ -116,7 +117,7 @@ export function withGrantexAuth<T extends Record<string, unknown>>(
 
     // 4. Audit success
     await auditLog.append({
-      action: `tool:${String(tool['name'] ?? 'unknown')}`,
+      action: `tool:${String(toolRecord['name'] ?? 'unknown')}`,
       agentDID: grant.agentDID,
       grantId: grant.grantId,
       scopes: grant.scopes,
@@ -126,6 +127,23 @@ export function withGrantexAuth<T extends Record<string, unknown>>(
     return result;
   };
 
-  // Return a shallow copy with the wrapped function.
-  return { ...tool, [fnKey]: wrapped };
+  return cloneWithWrappedMethod(tool, fnKey, wrapped);
+}
+
+function cloneWithWrappedMethod<T extends object>(
+  tool: T,
+  fnKey: string,
+  wrapped: (...args: unknown[]) => Promise<unknown>,
+): T {
+  const clone = Object.create(Object.getPrototypeOf(tool)) as T;
+  const descriptors: PropertyDescriptorMap = Object.getOwnPropertyDescriptors(tool);
+  delete descriptors[fnKey];
+  Object.defineProperties(clone, descriptors);
+  Object.defineProperty(clone, fnKey, {
+    value: wrapped,
+    configurable: true,
+    enumerable: Object.prototype.propertyIsEnumerable.call(tool, fnKey),
+    writable: true,
+  });
+  return clone;
 }

@@ -87,6 +87,21 @@ describe('POST /v1/signup', () => {
     expect(res.json().code).toBe('CONFLICT');
   });
 
+  it('maps a concurrent unique-email conflict to 409', async () => {
+    const app = await buildTestApp();
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockRejectedValueOnce(Object.assign(new Error('duplicate key'), { code: '23505' }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/signup',
+      payload: { name: 'Concurrent Signup', email: 'same@example.com' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('CONFLICT');
+  });
+
   it('does not require auth', async () => {
     const app = await buildTestApp();
     const now = new Date().toISOString();
@@ -107,6 +122,41 @@ describe('POST /v1/signup', () => {
     });
 
     expect(res.statusCode).toBe(201);
+  });
+
+  it('rejects an invalid mode instead of silently issuing a live key', async () => {
+    const app = await buildTestApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/signup',
+      payload: { name: 'Typo Mode', mode: 'sandox' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('mode');
+  });
+
+  it('normalizes email addresses before checking and storing them', async () => {
+    const app = await buildTestApp();
+    const now = new Date().toISOString();
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{
+      id: 'dev_new',
+      name: 'New Developer',
+      email: 'dev@example.com',
+      mode: 'live',
+      created_at: now,
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/signup',
+      payload: { name: 'New Developer', email: ' Dev@Example.COM ' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().email).toBe('dev@example.com');
+    expect(sqlMock.mock.calls.flat().some((value) => value === 'dev@example.com')).toBe(true);
   });
 });
 

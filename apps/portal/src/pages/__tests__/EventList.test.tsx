@@ -3,11 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EventList } from '../events/EventList';
 
-const mockListRecentEvents = vi.fn();
+const mockSubscribeToEvents = vi.fn();
 const mockShow = vi.fn();
 
 vi.mock('../../api/events', () => ({
-  listRecentEvents: () => mockListRecentEvents(),
+  subscribeToEvents: (options: unknown) => mockSubscribeToEvents(options),
 }));
 vi.mock('../../store/toast', () => ({ useToast: () => ({ show: mockShow }) }));
 
@@ -23,7 +23,11 @@ describe('EventList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    mockListRecentEvents.mockResolvedValue(events);
+    mockSubscribeToEvents.mockImplementation(({ onOpen, onEvent }) => {
+      onOpen();
+      events.forEach(onEvent);
+      return Promise.resolve();
+    });
   });
 
   afterEach(() => { vi.useRealTimers(); });
@@ -50,15 +54,18 @@ describe('EventList', () => {
   });
 
   it('shows empty state when no events', async () => {
-    mockListRecentEvents.mockResolvedValue([]);
+    mockSubscribeToEvents.mockImplementation(({ onOpen }) => {
+      onOpen();
+      return Promise.resolve();
+    });
     r();
     await waitFor(() => expect(screen.getByText('No events yet')).toBeInTheDocument());
   });
 
   it('shows error toast on load failure', async () => {
-    mockListRecentEvents.mockRejectedValue(new Error('fail'));
+    mockSubscribeToEvents.mockRejectedValue(new Error('fail'));
     r();
-    await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Failed to load events', 'error'));
+    await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Failed to connect to event stream', 'error'));
   });
 
   it('displays event payload', async () => {

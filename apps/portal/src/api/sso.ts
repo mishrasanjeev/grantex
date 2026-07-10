@@ -111,9 +111,9 @@ export function createSsoConnection(data: CreateConnectionData): Promise<SsoConn
 }
 
 export function deleteSsoConnection(id: string): Promise<void> {
-  return api.del(`/v1/sso/connections/${id}`);
+  return api.del(`/v1/sso/connections/${encodeURIComponent(id)}`);
 }
 
 export function testSsoConnection(id: string): Promise<TestResult> {
-  return api.post<TestResult>(`/v1/sso/connections/${id}/test`);
+  return api.post<TestResult>(`/v1/sso/connections/${encodeURIComponent(id)}/test`);
 }

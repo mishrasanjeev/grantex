@@ -17,6 +17,7 @@ export const sqlMock = Object.assign(vi.fn().mockResolvedValue([]), {
 
 export const mockRedis = {
   get: vi.fn().mockResolvedValue(null),
+  getdel: vi.fn().mockResolvedValue(null),
   set: vi.fn().mockResolvedValue('OK'),
   del: vi.fn().mockResolvedValue(1),
   publish: vi.fn().mockResolvedValue(0),
@@ -244,6 +245,7 @@ beforeEach(() => {
   sqlMock.json.mockReset();
   sqlMock.json.mockImplementation((value: unknown) => value);
   mockRedis.get.mockReset().mockResolvedValue(null);
+  mockRedis.getdel.mockReset().mockResolvedValue(null);
   mockRedis.set.mockReset().mockResolvedValue('OK');
   mockRedis.del.mockReset().mockResolvedValue(1);
   mockRedis.publish.mockReset().mockResolvedValue(0);

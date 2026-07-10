@@ -18,6 +18,7 @@ export interface AnomalyAlert {
 }
 
 export interface AnomalyRule {
+  id?: string;
   ruleId: string;
   name: string;
   description: string;
@@ -35,11 +36,20 @@ export interface AnomalyChannel {
 }
 
 export interface AnomalyMetrics {
-  totalAlerts: number;
-  openAlerts: number;
+  window: string;
+  total: number;
+  byStatus: { open: number; acknowledged: number; resolved: number };
   bySeverity: Record<string, number>;
-  byRule: Record<string, number>;
-  recentActivity: { date: string; count: number }[];
+}
+
+interface AnomalyRuleWire extends Omit<AnomalyRule, 'builtin'> {
+  builtIn?: boolean;
+  builtin?: boolean;
+}
+
+function normalizeRule(rule: AnomalyRuleWire): AnomalyRule {
+  const { builtIn, ...rest } = rule;
+  return { ...rest, builtin: builtIn ?? rule.builtin ?? false };
 }
 
 // ── Legacy anomaly functions ────────────────────────────────────────────────
@@ -67,24 +77,24 @@ export async function listAlerts(params?: {
   if (params?.status) query.set('status', params.status);
   if (params?.severity) query.set('severity', params.severity);
   const qs = query.toString();
-  const res = await api.get<{ alerts: AnomalyAlert[]; total: number }>(
-    `/v1/anomalies/alerts${qs ? `?${qs}` : ''}`,
+  const res = await api.get<{ data: AnomalyAlert[] }>(
+    `/v1/anomaly/alerts${qs ? `?${qs}` : ''}`,
   );
-  return res.alerts;
+  return res.data;
 }
 
 export async function getAlert(alertId: string): Promise<AnomalyAlert> {
-  return api.get<AnomalyAlert>(`/v1/anomalies/alerts/${encodeURIComponent(alertId)}`);
+  return api.get<AnomalyAlert>(`/v1/anomaly/alerts/${encodeURIComponent(alertId)}`);
 }
 
 export async function acknowledgeAlert(alertId: string, note?: string): Promise<void> {
-  await api.post(`/v1/anomalies/alerts/${encodeURIComponent(alertId)}/acknowledge`, {
+  await api.post(`/v1/anomaly/alerts/${encodeURIComponent(alertId)}/acknowledge`, {
     ...(note !== undefined ? { note } : {}),
   });
 }
 
 export async function resolveAlert(alertId: string, note?: string): Promise<void> {
-  await api.post(`/v1/anomalies/alerts/${encodeURIComponent(alertId)}/resolve`, {
+  await api.post(`/v1/anomaly/alerts/${encodeURIComponent(alertId)}/resolve`, {
     ...(note !== undefined ? { note } : {}),
   });
 }
@@ -96,14 +106,14 @@ export async function getMetrics(agentId?: string, window?: string): Promise<Ano
   if (agentId) query.set('agentId', agentId);
   if (window) query.set('window', window);
   const qs = query.toString();
-  return api.get<AnomalyMetrics>(`/v1/anomalies/metrics${qs ? `?${qs}` : ''}`);
+  return api.get<AnomalyMetrics>(`/v1/anomaly/metrics${qs ? `?${qs}` : ''}`);
 }
 
 // ── Rule functions ──────────────────────────────────────────────────────────
 
 export async function listRules(): Promise<AnomalyRule[]> {
-  const res = await api.get<{ rules: AnomalyRule[] }>('/v1/anomalies/rules');
-  return res.rules;
+  const res = await api.get<{ rules: AnomalyRuleWire[] }>('/v1/anomaly/rules');
+  return res.rules.map(normalizeRule);
 }
 
 export async function createRule(params: {
@@ -119,21 +129,27 @@ export async function createRule(params: {
   };
   channels?: string[];
 }): Promise<AnomalyRule> {
-  return api.post<AnomalyRule>('/v1/anomalies/rules', params);
+  const { channels, ...rest } = params;
+  const rule = await api.post<AnomalyRuleWire>('/v1/anomaly/rules', {
+    ...rest,
+    ...(channels !== undefined ? { alertChannels: channels } : {}),
+  });
+  return normalizeRule(rule);
 }
 
 export async function toggleRule(ruleId: string, enabled: boolean): Promise<AnomalyRule> {
-  return api.patch<AnomalyRule>(`/v1/anomalies/rules/${encodeURIComponent(ruleId)}`, { enabled });
+  const rule = await api.patch<AnomalyRuleWire>(`/v1/anomaly/rules/${encodeURIComponent(ruleId)}`, { enabled });
+  return normalizeRule(rule);
 }
 
 export async function deleteRule(ruleId: string): Promise<void> {
-  await api.del(`/v1/anomalies/rules/${encodeURIComponent(ruleId)}`);
+  await api.del(`/v1/anomaly/rules/${encodeURIComponent(ruleId)}`);
 }
 
 // ── Channel functions ───────────────────────────────────────────────────────
 
 export async function listChannels(): Promise<AnomalyChannel[]> {
-  const res = await api.get<{ channels: AnomalyChannel[] }>('/v1/anomalies/channels');
+  const res = await api.get<{ channels: AnomalyChannel[] }>('/v1/anomaly/channels');
   return res.channels;
 }
 
@@ -143,9 +159,9 @@ export async function createChannel(params: {
   config: Record<string, string>;
   severities: string[];
 }): Promise<AnomalyChannel> {
-  return api.post<AnomalyChannel>('/v1/anomalies/channels', params);
+  return api.post<AnomalyChannel>('/v1/anomaly/channels', params);
 }
 
 export async function deleteChannel(channelId: string): Promise<void> {
-  await api.del(`/v1/anomalies/channels/${encodeURIComponent(channelId)}`);
+  await api.del(`/v1/anomaly/channels/${encodeURIComponent(channelId)}`);
 }
