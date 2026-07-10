@@ -106,17 +106,14 @@ describe('Live Production', () => {
         expect(key).toHaveProperty('kid');
       }
 
-      // Expect at least one RSA key (RS256, kid: grantex-2026-04)
+      // Key IDs rotate; assert the stable signing-key contract instead.
       const rsaKeys = body.keys.filter(
         (k) => k.kty === 'RSA',
       );
       expect(rsaKeys.length).toBeGreaterThanOrEqual(1);
-
-      const primaryKey = body.keys.find(
-        (k) => k.kid === 'grantex-2026-04',
+      expect(rsaKeys).toContainEqual(
+        expect.objectContaining({ alg: 'RS256', use: 'sig' }),
       );
-      expect(primaryKey).toBeDefined();
-      expect(primaryKey!.kty).toBe('RSA');
     },
     30_000,
   );
