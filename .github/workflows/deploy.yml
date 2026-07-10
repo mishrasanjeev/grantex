@@ -75,6 +75,9 @@ jobs:
           image: ${{ env.IMAGE_BASE }}:${{ github.sha }}
           region: ${{ env.REGION }}
           project_id: ${{ env.PROJECT_ID }}
+          # Remove legacy seed keys that may still exist on the Cloud Run
+          # service; production configuration rejects them at startup.
+          flags: '--remove-env-vars=SEED_API_KEY,SEED_SANDBOX_KEY'
 
       - name: Print deployed URL
         run: |
