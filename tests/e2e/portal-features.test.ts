@@ -418,10 +418,12 @@ describe('Credentials', () => {
 // ─── Trust Registry ─────────────────────────────────────────────────────────
 
 describe('Trust Registry', () => {
-  it('gets grantex.dev org', async () => {
-    const { status, data } = await api('GET', '/v1/trust-registry/did:web:grantex.dev');
+  it('serves the public registry search', async () => {
+    const { status, data } = await api('GET', '/v1/registry/orgs?limit=1');
     expect(status).toBe(200);
-    expect((data as { trustLevel: string }).trustLevel).toBeTruthy();
+    const registry = data as { data: unknown[]; meta: { total: number } };
+    expect(Array.isArray(registry.data)).toBe(true);
+    expect(typeof registry.meta.total).toBe('number');
   });
 });
 
