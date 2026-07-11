@@ -1,6 +1,6 @@
 # Grantex Compatibility Matrix
 
-Last updated: 2026-07-10
+Last updated: 2026-07-11
 
 This repository currently uses package-specific versions. The public README should not be read as a monorepo-wide `v2.5` release. Repository versions can be ahead of package registries while an unreleased patch is under review, so the rows below distinguish those states.
 
@@ -10,8 +10,8 @@ This repository currently uses package-specific versions. The public README shou
 | --- | --- | --- |
 | Repository changelog | v0.3.12 | Latest top-level release entry in `CHANGELOG.md`. |
 | TypeScript SDK | @grantex/sdk 0.3.13 (unreleased) | Next repository patch; latest published version is 0.3.12. |
-| Python SDK | grantex 0.3.14 (unreleased) | Next repository patch; latest published version is 0.3.13. |
-| Go SDK | github.com/mishrasanjeev/grantex-go v0.1.10 (unreleased) | Next repository patch; latest published version is v0.1.9 (requires Go 1.26.1). |
+| Python SDK | grantex 0.3.14 | Published to PyPI on 2026-07-11. |
+| Go SDK | github.com/mishrasanjeev/grantex-go v0.1.10 | Published through the Go module proxy on 2026-07-11 (requires Go 1.26.1). |
 | OpenAPI | 0.3.12 | Aligned with the repository changelog and TypeScript SDK release line. |
 | MCP Auth | @grantex/mcp-auth 2.0.2 | Independently versioned package. |
 
@@ -22,8 +22,8 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 | # | Directory | Published name | Version | Status |
 | ---: | --- | --- | ---: | --- |
 | 1 | `packages/sdk-ts` | @grantex/sdk | 0.3.13 | Primary SDK (TypeScript); unreleased, latest published 0.3.12 |
-| 2 | `packages/sdk-py` | grantex | 0.3.14 | Primary SDK (Python); unreleased, latest published 0.3.13 |
-| 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.1.10 (Go 1.26.1) | Primary SDK (Go); unreleased, latest published v0.1.9 |
+| 2 | `packages/sdk-py` | grantex | 0.3.14 | Primary SDK (Python); published |
+| 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.1.10 (Go 1.26.1) | Primary SDK (Go); published |
 | 4 | `packages/cli` | @grantex/cli | 0.2.5 | Tooling |
 | 5 | `packages/mcp-auth` | @grantex/mcp-auth | 2.0.2 | Independently versioned |
 | 6 | `packages/mcp` | @grantex/mcp | 0.1.10 | Adapter |
