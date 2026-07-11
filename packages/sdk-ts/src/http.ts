@@ -1,7 +1,7 @@
 import { GrantexApiError, GrantexAuthError, GrantexNetworkError } from './errors.js';
 import type { RateLimit } from './types.js';
 
-const SDK_VERSION = '0.3.11';
+const SDK_VERSION = '0.3.13';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 500;

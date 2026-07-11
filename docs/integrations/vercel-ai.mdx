@@ -88,7 +88,7 @@ Throws `GrantexScopeError` if scope is missing.
 
 ### `getGrantScopes(grantToken)`
 
-Returns `string[]` of scopes from the token's `scp` claim (offline).
+Returns unverified `string[]` scopes decoded from the token's `scp` claim. Use this only for display or debugging; protected tool execution performs signature verification.
 
 ### `withAuditLogging(tool, client, options)`
 

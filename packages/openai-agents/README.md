@@ -8,7 +8,7 @@ Wrap any function with Grantex grant token verification so your agents can only 
 [![Python](https://img.shields.io/pypi/pyversions/grantex-openai-agents)](https://pypi.org/project/grantex-openai-agents/)
 [![License](https://img.shields.io/pypi/l/grantex-openai-agents)](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 
-> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+> **[Homepage](https://grantex.dev)** | **[Docs](https://docs.grantex.dev)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 

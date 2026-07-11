@@ -69,7 +69,7 @@
         "name": "How is Grantex different from OAuth 2.0?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "OAuth 2.0 was designed for human users granting access to apps. Grantex extends that model for AI agents with cryptographic agent identity (DID), delegation chains for multi-agent pipelines, action-level hash-chained audit trails, and sub-second revocation. If you know OAuth, Grantex will feel familiar — but it handles the cases OAuth was never designed for."
+          "text": "OAuth 2.0 was designed for human users granting access to apps. Grantex extends that model for AI agents with cryptographic agent identity (DID), delegation chains for multi-agent pipelines, action-level hash-chained audit trails, and central grant revocation. If you know OAuth, Grantex will feel familiar — but it handles the cases OAuth was never designed for."
         }
       },
       {
@@ -85,7 +85,7 @@
         "name": "Is Grantex open source?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Grantex is fully open source under the Apache 2.0 license. The protocol specification is public and frozen at v1.0. Verification is offline via JWKS — services never need to talk to Grantex servers. You can self-host your own auth server."
+          "text": "Yes. Grantex is fully open source under the Apache 2.0 license. The protocol specification is public and frozen at v1.0. Verification uses JWKS-backed signature checks, and services can cache signing keys after fetching them. You can self-host your own auth server."
         }
       },
       {
@@ -93,7 +93,7 @@
         "name": "How do I secure my AI agent with Grantex?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Install the SDK (npm install @grantex/sdk or pip install grantex), register your agent, create an authorization request with specific scopes, have the user approve via consent URL, and exchange the code for a signed JWT. The agent uses this token for all API calls, and any service can verify it offline. The entire flow takes about 10 lines of code."
+          "text": "Install the SDK (npm install @grantex/sdk or pip install grantex), register your agent, create an authorization request with specific scopes, have the user approve via consent URL, and exchange the code for a signed JWT. The agent uses this token for all API calls, and any service can verify its signature and claims with JWKS. The entire flow takes about 10 lines of code."
         }
       },
       {
@@ -101,7 +101,7 @@
         "name": "Can I revoke an AI agent's access?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Grantex supports real-time revocation that takes effect in under 1 second. You can revoke individual grants or all grants for an agent. Revoking a parent agent's grant automatically cascades to all delegated sub-agent grants."
+          "text": "Yes. Grantex can revoke individual grants or cascade revocation through delegated grants. Online consumers can check current grant state; consumers performing only local JWT verification must also use short token lifetimes or synchronized revocation data."
         }
       },
       {
@@ -117,7 +117,7 @@
         "name": "What are Verifiable Credentials in Grantex?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Grantex issues W3C Verifiable Credentials (VC-JWT) alongside standard grant tokens. VCs are portable, tamper-proof proofs of authorization that any third party can verify using the published DID document — no Grantex account required."
+          "text": "Grantex issues W3C Verifiable Credentials (VC-JWT) alongside standard grant tokens. VCs are portable, tamper-evident proofs of authorization that any third party can verify using the published DID document — no Grantex account required."
         }
       },
       {
@@ -133,7 +133,7 @@
         "name": "What is MPP agent identity?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "MPP (Machine Payments Protocol) defines how AI agents pay for services. Grantex adds the missing identity layer with AgentPassportCredential — a W3C VC 2.0 credential that lets merchants verify who authorized a payment, what the agent can buy, and spending limits. Verification takes under 50ms and works offline."
+          "text": "MPP (Machine Payments Protocol) defines how AI agents pay for services. Grantex adds the missing identity layer with AgentPassportCredential — a W3C VC 2.0 credential that lets merchants verify who authorized a payment, what the agent can buy, and spending limits. Verification runs locally with cached JWKS after signing keys have been obtained."
         }
       },
       {
@@ -141,7 +141,7 @@
         "name": "How does Grantex work with MPP machine payments?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "A human issues an AgentPassportCredential for their agent via Grantex. The agent attaches this credential as an X-Grantex-Passport header alongside standard MPP payment headers. Merchants verify the passport in under 50ms using cached JWKS — confirming the human principal, organization, allowed categories (inference, compute, data), and spending limits before fulfilling the request."
+          "text": "A human issues an AgentPassportCredential for their agent via Grantex. The agent attaches this credential as an X-Grantex-Passport header alongside standard MPP payment headers. Merchants verify the passport locally using cached JWKS — confirming the human principal, organization, allowed categories (inference, compute, data), and spending limits before fulfilling the request."
         }
       },
       {
@@ -149,23 +149,23 @@
         "name": "What is an AgentPassportCredential?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "An AgentPassportCredential is a W3C Verifiable Credential (VC 2.0) that binds agent identity, human delegation, MPP payment categories, and spending limits into a single offline-verifiable document. It includes the agent DID, human principal DID, organization DID, allowed MPP categories, max transaction amount, and StatusList2021 revocation."
+          "text": "An AgentPassportCredential is a W3C Verifiable Credential (VC 2.0) that binds agent identity, human delegation, MPP payment categories, and spending limits into a single signed document. It includes the agent DID, human principal DID, organization DID, allowed MPP categories, max transaction amount, and StatusList2021 revocation."
         }
       },
       {
         "@type": "Question",
-        "name": "Is Grantex compliant with the OWASP Agentic Top 10?",
+        "name": "How does Grantex address the OWASP Agentic Top 10?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Grantex addresses four of the ten OWASP Agentic Security Initiative risks: ASI-01 (agent goal hijacking) via scoped permissions, ASI-03 (identity and privilege abuse) via per-agent cryptographic identity, ASI-05 (privilege escalation) via delegation invariants, and ASI-10 (rogue agents) via instant cascading revocation."
+          "text": "Grantex provides technical controls relevant to four OWASP Agentic Security Initiative risks: ASI-01 (agent goal hijacking) via scoped permissions, ASI-03 (identity and privilege abuse) via per-agent cryptographic identity, ASI-05 (privilege escalation) via delegation invariants, and ASI-10 (rogue agents) via cascading grant revocation."
         }
       },
       {
         "@type": "Question",
-        "name": "Does Grantex help with EU AI Act compliance?",
+        "name": "What EU AI Act-related controls does Grantex provide?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Grantex provides technical controls that map to EU AI Act Articles 9 (risk management via budget controls and anomaly detection), 13 (transparency via human consent flows and Verifiable Credentials), and 14 (human oversight via principal dashboards, real-time event streaming, and one-click cascade revocation)."
+          "text": "Grantex provides technical controls that may support organizational work related to EU AI Act Articles 9 (risk management via budget controls and anomaly detection), 13 (transparency via human consent flows and Verifiable Credentials), and 14 (human oversight via principal dashboards, real-time event streaming, and one-click cascade revocation)."
         }
       },
       {
@@ -173,7 +173,7 @@
         "name": "How does Grantex compare to HashiCorp Vault for AI agents?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Grantex and HashiCorp Vault solve different problems. Vault manages secrets at rest — encryption, rotation, and access control. Grantex provides the agent identity layer: per-agent cryptographic identity, scoped tokens, human consent, instant revocation, and audit trails. They work together — Grantex's Credential Vault lets agents exchange grant tokens for upstream credentials without exposing master keys."
+          "text": "Grantex and HashiCorp Vault solve different problems. Vault manages secrets at rest — encryption, rotation, and access control. Grantex provides the agent identity layer: per-agent cryptographic identity, scoped tokens, human consent, central revocation, and audit trails. They work together — Grantex's Credential Vault lets agents exchange grant tokens for upstream credentials without exposing master keys."
         }
       }
     ]
@@ -188,7 +188,7 @@
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Any",
     "url": "https://grantex.dev/mpp-demo/",
-    "description": "Agent identity and delegation for the Machine Payments Protocol (MPP). Verifiable agent passports for agentic commerce with offline merchant verification in under 50ms.",
+    "description": "Agent identity and delegation for the Machine Payments Protocol (MPP). Verifiable agent passports for agentic commerce with local merchant verification using cached JWKS.",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "isPartOf": {
@@ -1063,7 +1063,7 @@
           <span style="background:#58a6ff;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">EXPANDED</span>
           <span style="color:var(--text);font-weight:600;">Anomaly Detection</span>
         </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">10 built-in rules, custom rule DSL, Slack/PagerDuty/Datadog alerts, real-time SSE streaming.</p>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Four SQL-backed activity checks, finding lifecycle APIs, and stored custom-rule and channel configuration.</p>
       </a>
 
       <a href="https://docs.grantex.dev/cli/verify" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -1071,12 +1071,12 @@
           <span style="background:#58a6ff;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">NEW</span>
           <span style="color:var(--text);font-weight:600;">grantex verify</span>
         </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">One command to inspect any grant token. Scopes, expiry, delegation chain, revocation status. Works offline.</p>
+        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">One command to inspect any grant token. Claims can be decoded locally; signature verification may retrieve JWKS, and live revocation checks require network access.</p>
       </a>
 
       <a href="https://docs.grantex.dev/guides/security-hardening" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="background:#f97583;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">v0.3.6</span>
+          <span style="background:#f97583;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">CURRENT</span>
           <span style="color:var(--text);font-weight:600;">Enterprise Hardening</span>
         </div>
         <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Rate limiting on every endpoint, HTTP security headers, SDK retry with backoff, structured logging, deep health checks, DB transactions, graceful shutdown.</p>
@@ -1084,7 +1084,7 @@
 
       <a href="#scope-enforcement" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="background:#f97583;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">v0.3.6</span>
+          <span style="background:#f97583;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">CURRENT</span>
           <span style="color:var(--text);font-weight:600;">Scope Enforcement</span>
         </div>
         <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">enforce() + wrapTool() + Express/FastAPI middleware. Define manifests for any connector, or use 53 pre-built ones. &lt;1ms per call.</p>
@@ -1097,10 +1097,10 @@
 <!-- ── Scope Enforcement ──────────────────────────────────────────────────── -->
 <section id="scope-enforcement" style="padding:64px 0;border-bottom:1px solid var(--border);">
   <div class="container">
-    <div class="section-label">New in v0.3.6</div>
+    <div class="section-label">Built in</div>
     <h2 class="section-title" style="font-size:clamp(24px,4vw,36px);">Scope Enforcement &mdash; Control What Agents Can Do</h2>
     <p class="section-sub" style="max-width:640px;margin:0 auto 40px;">
-      Enforce tool-level permissions on any connector you define. Bring your own manifests or use the 53 pre-built ones. Offline JWKS verification, &lt;1ms per call.
+      Enforce tool-level permissions on any connector you define. Bring your own manifests or use the 53 pre-built ones. Verification is local after key retrieval; reusable JWKS resolvers avoid repeat fetches while valid, but initial retrieval and rotation refreshes require network access.
     </p>
 
     <!-- Visual flow -->
@@ -1439,8 +1439,9 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
     <div class="section-label">Compliance</div>
     <h2 class="section-title">The regulatory pressure is already here</h2>
     <p class="section-sub">
-      OWASP, EU AI Act, and NIST now require agent-level identity, scoping, revocation,
-      and audit trails. Grantex covers every requirement.
+      OWASP guidance, the EU AI Act, and the NIST AI RMF all increase the focus on
+      identity, authorization, human oversight, and auditability. Grantex supplies
+      technical building blocks; each deployer remains responsible for its own compliance assessment.
     </p>
 
     <div class="cards">
@@ -1449,23 +1450,24 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <h3>Agentic Top 10 <span style="font-weight:400;color:var(--muted);font-size:13px;">&mdash; Dec 2025</span></h3>
         <p>
           ASI-01: Goal hijacking &middot; ASI-03: Identity abuse &middot; ASI-05: Privilege escalation &middot; ASI-10: Rogue agents.
-          Grantex addresses all four with scoped grants, per-agent DIDs, delegation invariants, and instant revocation.
+          Grantex supports relevant mitigations with scoped grants, per-agent DIDs, delegation invariants, and central revocation.
         </p>
       </div>
       <div class="card">
         <span class="card-icon" style="font-size:13px;font-family:var(--mono);color:var(--accent2);">EU AI ACT</span>
-        <h3>Binding Aug 2026</h3>
+        <h3>Phased application</h3>
         <p>
-          Art. 9: Risk management &middot; Art. 13: Transparency &middot; Art. 14: Human oversight.
-          Grantex provides consent flows, Verifiable Credentials, event streaming, and one-click revocation.
+          Application dates vary by obligation and system classification; consult the current
+          <a href="https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai">European Commission timeline</a>.
+          Grantex provides technical controls that may support risk, transparency, and oversight programs.
         </p>
       </div>
       <div class="card">
         <span class="card-icon" style="font-size:13px;font-family:var(--mono);color:var(--accent2);">NIST</span>
-        <h3>AI RMF + EO 14110 <span style="font-weight:400;color:var(--muted);font-size:13px;">&mdash; Active now</span></h3>
+        <h3>AI Risk Management Framework <span style="font-weight:400;color:var(--muted);font-size:13px;">&mdash; Voluntary guidance</span></h3>
         <p>
           Govern 1.1: Accountability &middot; Map 5.1: Attribution &middot; Measure 2.5: Audit trails.
-          Every grant token traces to a human principal. Every action is hash-chained and exportable.
+          Grant tokens can carry principal context, and configured audit integrations can produce hash-chained exportable records.
         </p>
       </div>
     </div>
@@ -1525,19 +1527,20 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
       <div class="flow-step">
         <div class="step-num">4</div>
         <div class="step-body">
-          <h3>Any service verifies offline</h3>
+          <h3>Any service verifies the token</h3>
           <p>
-            Present the token to any microservice. It verifies the RS256 signature
-            against the public JWKS without a network round-trip, or calls
+            Present the token to any microservice. It validates the RS256 signature
+            and claims using keys retrieved from the public JWKS endpoint, or calls
             <code style="font-family:var(--mono);color:var(--accent2)">POST /v1/tokens/verify</code> for
-            real-time revocation status.
+            the authorization service's current revocation status. Supported
+            integrations can reuse cached keys between verifications.
           </p>
         </div>
       </div>
       <div class="flow-step">
         <div class="step-num">5</div>
         <div class="step-body">
-          <h3>Revoke any time, instantly</h3>
+          <h3>Revoke grants centrally</h3>
           <p>
             Call <code style="font-family:var(--mono);color:var(--accent2)">POST /v1/tokens/revoke</code>.
             The JTI is blocklisted in Redis immediately. All sub-delegated tokens
@@ -1602,7 +1605,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
 <span class="cm">// 2. Exchange the authorization code for a grant token</span>
 <span class="kw">const</span> <span class="id">token</span> <span class="op">=</span> <span class="kw">await</span> <span class="id">grantex</span><span class="op">.</span><span class="id">tokens</span><span class="op">.</span><span class="fn">exchange</span><span class="op">({</span> <span class="id">code</span><span class="op">,</span> <span class="id">agentId</span><span class="op">:</span> <span class="str">'ag_01J...'</span> <span class="op">});</span>
 
-<span class="cm">// 3. Verify offline — no network call needed</span>
+<span class="cm">// 3. Verify locally (valid JWKS keys are reused; fetch and refresh may use network)</span>
 <span class="kw">const</span> <span class="id">grant</span> <span class="op">=</span> <span class="kw">await</span> <span class="fn">verifyGrantToken</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">grantToken</span><span class="op">,</span> <span class="op">{</span>
   <span class="id">jwksUri</span><span class="op">:</span> <span class="str">'https://api.grantex.dev/.well-known/jwks.json'</span><span class="op">,</span>
 <span class="op">});</span>
@@ -1723,7 +1726,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div style="flex:1;text-align:center;padding:0 12px;">
           <div style="font-size:36px;margin-bottom:8px;">&#x1F3EA;</div>
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">Merchant</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Verifies offline<br>in &lt;50ms via JWKS</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Verifies locally<br>with cached JWKS</div>
           <div style="margin-top:10px;background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.3);border-radius:6px;padding:6px 10px;">
             <div style="font-family:var(--mono);font-size:10px;color:var(--accent);">&#x2713; valid &middot; alice &middot; acme.com</div>
           </div>
@@ -1750,13 +1753,13 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         </div>
         <div class="card" style="border-left:3px solid var(--accent2);margin:0;">
           <span class="card-icon">&#x26A1;</span>
-          <h3>&lt;50ms Offline Verification</h3>
-          <p>Merchants verify via cached JWKS — signature, expiry, category, and amount in a single call. No API roundtrip.</p>
+          <h3>Local Verification</h3>
+          <p>Merchants verify locally — signature, expiry, category, and amount in a single call. A warm JWKS cache avoids repeat fetches; initial retrieval and refresh require network access.</p>
         </div>
         <div class="card" style="border-left:3px solid #d2a8ff;margin:0;">
           <span class="card-icon">&#x1F3E6;</span>
           <h3>Public Trust Registry</h3>
-          <p>Look up any org by DID — DNS-TXT, SOC 2, or manual verification. Public endpoint, no auth required.</p>
+          <p>Look up registered organizations by DID and inspect DNS-verified domain ownership. Public reads require no API key.</p>
         </div>
       </div>
       <!-- Right: code -->
@@ -1903,7 +1906,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="card" style="border-left:3px solid #6366f1;margin:0;">
           <span class="card-icon">&#x1F50D;</span>
           <h3>Full Audit Trail</h3>
-          <p>Every issuance, verification, and revocation is logged. Instant revocation for compromised agents. Compliance-ready export.</p>
+          <p>Issuance and verification events go to the configured audit logger. The default x402 logger and revocation registry are in-memory; production deployments can provide durable shared implementations.</p>
         </div>
       </div>
       <!-- Right: code -->
@@ -1929,6 +1932,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
 
 <span class="id">app</span><span class="op">.</span><span class="fn">use</span><span class="op">(</span><span class="str">'/api/weather'</span><span class="op">,</span> <span class="fn">x402Middleware</span><span class="op">({</span>
   <span class="id">requiredScopes</span><span class="op">:</span> <span class="op">[</span><span class="str">'weather:read'</span><span class="op">],</span>
+  <span class="id">requiredAmount</span><span class="op">:</span> <span class="num">0.001</span><span class="op">,</span>
   <span class="id">currency</span><span class="op">:</span> <span class="str">'USDC'</span><span class="op">,</span>
 <span class="op">}));</span>
 
@@ -2090,7 +2094,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <h3>Quickstart</h3>
         <p>
           Core authorization lifecycle &mdash; register agent, authorize, exchange code,
-          verify token offline, log audit entry, revoke.
+          verify the token locally using JWKS, log an audit entry, and revoke.
         </p>
         <div class="example-packages">
           <span class="example-pkg">@grantex/sdk</span>
@@ -2101,7 +2105,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="example-lang">Python</div>
         <h3>Quickstart</h3>
         <p>
-          Same core flow in Python &mdash; register, authorize, exchange, verify offline,
+          Same core flow in Python &mdash; register, authorize, exchange, verify locally using JWKS,
           audit, and revoke using the Python SDK.
         </p>
         <div class="example-packages">
@@ -2141,7 +2145,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="example-lang">Python</div>
         <h3>CrewAI Agent</h3>
         <p>
-          CrewAI tools with offline scope enforcement and audit logging.
+          CrewAI tools with local JWKS-backed scope enforcement and audit logging.
           Demonstrates PermissionError on unauthorized scopes.
         </p>
         <div class="example-packages">
@@ -2156,7 +2160,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <p>
           OpenAI Agents SDK tools with Grantex scope enforcement.
           Uses <code style="font-family:var(--mono);font-size:12px;">@function_tool</code>
-          decorator pattern with offline JWT scope checks.
+          decorator pattern with local JWT scope checks backed by retrieved JWKS keys.
         </p>
         <div class="example-packages">
           <span class="example-pkg">grantex</span>
@@ -2182,7 +2186,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <h3>Strands Agents</h3>
         <p>
           Strands tools with Grantex scope enforcement at creation time.
-          Supports offline JWT scope checks and online
+          Supports local JWKS-backed JWT scope checks and online
           <code style="font-family:var(--mono);font-size:12px;">client.enforce()</code>
           verification.
         </p>
@@ -2197,7 +2201,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <h3>Quickstart</h3>
         <p>
           Core authorization lifecycle in Go &mdash; register agent, authorize,
-          exchange code, verify token offline, log audit entry, revoke.
+          exchange code, verify the token locally using JWKS, log an audit entry, and revoke.
         </p>
         <div class="example-packages">
           <span class="example-pkg">grantex-go</span>
@@ -2364,7 +2368,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <h3>IETF Internet-Draft</h3>
         <p>
           The Grantex wire protocol is an open IETF Internet-Draft
-          (<code style="font-family:var(--mono)">draft-mishra-oauth-agent-grants-00</code>),
+          (<code style="font-family:var(--mono)">draft-mishra-oauth-agent-grants-01</code>),
           built on the OAuth 2.0 framework.
         </p>
         <div class="auditor">
@@ -2374,12 +2378,12 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
       </div>
       <div class="trust-card">
         <div class="trust-label">Testing</div>
-        <h3>3,536 Tests Reported In Changelog</h3>
+        <h3>Automated Test Coverage</h3>
         <p>
-          The repository changelog reports 3,536 tests across 28 packages.
+          The 29-package monorepo runs unit, integration, end-to-end, and security workflows.
           GitHub Actions is the source of truth for current pass/fail status.
         </p>
-        <div class="auditor">28 packages &middot; TypeScript, Python, Go</div>
+        <div class="auditor">29 packages &middot; Current status on GitHub Actions</div>
       </div>
     </div>
   </div>
@@ -2461,14 +2465,14 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
             <span class="check">&#x2713;</span>
             <div>
               <h4>Anomaly detection</h4>
-              <p>Pattern-based detection of unusual grant activity with real-time alerting.</p>
+              <p>Scheduled and on-demand checks for four implemented activity patterns, with lifecycle APIs for stored findings.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
               <h4>Compliance exports</h4>
-              <p>SOC 2 and GDPR-ready audit log exports in standard formats.</p>
+              <p>JSON exports of grant and audit records for internal control and evidence review.</p>
             </div>
           </div>
           <div class="enterprise-feature">
@@ -2496,7 +2500,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
             <span class="check">&#x2713;</span>
             <div>
               <h4><a href="https://docs.grantex.dev/guides/event-streaming" style="color:inherit;text-decoration:none;">Event Streaming</a></h4>
-              <p>Real-time SSE and WebSocket streams with Datadog, Splunk, S3, BigQuery, and Kafka destinations.</p>
+              <p>Real-time SSE and WebSocket streams; optional <code>@grantex/destinations</code> consumers can forward events to Datadog, Splunk, S3, BigQuery, or Kafka.</p>
             </div>
           </div>
           <div class="enterprise-feature">
@@ -2566,7 +2570,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
             <span class="check">&#x2713;</span>
             <div>
               <h4><a href="https://docs.grantex.dev/features/verifiable-credentials" style="color:inherit;text-decoration:none;">W3C Verifiable Credentials</a></h4>
-              <p>Portable, tamper-proof authorization proof in W3C VC-JWT format. Any verifier can validate using the published DID document — no Grantex account needed.</p>
+              <p>Portable, tamper-evident authorization proof in W3C VC-JWT format. Any verifier can validate using the published DID document — no Grantex account needed.</p>
             </div>
           </div>
           <div class="enterprise-feature">
@@ -2580,7 +2584,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
             <span class="check">&#x2713;</span>
             <div>
               <h4><a href="https://docs.grantex.dev/features/did-infrastructure" style="color:inherit;text-decoration:none;">DID Infrastructure</a></h4>
-              <p>W3C DID document at did:web:grantex.dev with RS256 and Ed25519 public keys for offline credential and token verification.</p>
+              <p>W3C DID document at did:web:grantex.dev with RS256 and Ed25519 public keys for local credential and token verification after key retrieval.</p>
             </div>
           </div>
           <div class="enterprise-feature">
@@ -2610,7 +2614,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <h3>Talk to us about your use case</h3>
         <p>
           We work directly with engineering and security teams to design the right
-          integration. Volume pricing and custom SLAs available.
+          integration. Contact us to discuss deployment, support, and service-level requirements.
         </p>
         <div id="contact-msg" class="contact-msg"></div>
         <form id="contact-form" class="contact-form" action="https://formspree.io/f/xqedjorr" method="POST">
@@ -2658,12 +2662,6 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
       </ul>
       <ul class="footer-links" aria-label="Legal and procurement">
-        <li><a href="https://docs.grantex.dev/compliance/privacy-policy">Privacy</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/terms-of-service">Terms</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/dpa">DPA</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/cookie-policy">Cookies</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/sub-processors">Sub-processors</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/data-residency">Data Residency</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/SECURITY.md">Security</a></li>
       </ul>
       <span class="footer-copy">&copy; 2026 Grantex</span>

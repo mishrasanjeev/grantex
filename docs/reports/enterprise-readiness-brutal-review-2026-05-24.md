@@ -179,7 +179,7 @@ These are claims-vs-reality, legal-risk, or broken-critical-path items. **Do not
 - **H-1** Stray planning docs at root: `agentic-org-scope-enforcement-fix.md` (1202 lines), `grantex-tool-manifest-and-enforcer.md` (1365 lines) — move to `docs/internal/` or delete.
 - **H-2** ROADMAP last updated March 2026 (today: 2026-05-24). Refresh. Items dated past today still listed as planned. `ROADMAP.md:119`.
 - **H-3** Add 7 enterprise buyer pages: SLA, Support Tiers, Pricing, Data Residency, BYOK, Audit Log Retention, Incident Response Runbook.
-- **H-4** Single canonical API URL. `quickstart.mdx:20` says `https://api.grantex.dev`; `openapi.yaml:29` says `https://grantex-auth-dd4mtrt2gq-uc.a.run.app` (Cloud Run internal); `api-reference/introduction.mdx:12` echoes the Cloud Run URL. Pick one. Set up `api.grantex.dev` as a stable alias if not already.
+- **H-4** Single canonical API URL. `quickstart.mdx:20` says `https://api.grantex.dev`; `openapi.yaml:29` says `https://api.grantex.dev` (Cloud Run internal); `api-reference/introduction.mdx:12` echoes the Cloud Run URL. Pick one. Set up `api.grantex.dev` as a stable alias if not already.
 - **H-5** Bump `docs/openapi.yaml:4` from `0.1.3` to whatever matches the SDK; add standardized error schema across every operation; fix missing `operationId`s; link Postman collection + environment from `docs.json` (currently orphaned).
 - **H-6** Consolidate contact emails. `CODE_OF_CONDUCT.md:11` says `sanjeev@grantex.dev`; `SECURITY.md:39` says `security@grantex.dev`. Pick canonical aliases and use them.
 - **H-7** Tweets/launch posts at root (`tweet-gemma.md`, `twitterposts.md`, `DEVTO_ARTICLE.md`, `LAUNCH_POSTS.md`) should be in `docs/marketing/` or deleted; they currently clutter the repo root.

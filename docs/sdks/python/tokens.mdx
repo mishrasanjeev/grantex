@@ -133,7 +133,9 @@ with Grantex(api_key="gx_live_...") as client:
 | `expires_at`| `str \| None`              | ISO 8601 expiration timestamp (if valid).        |
 
 <Note>
-For offline verification that does not require a network call to the Grantex API, use the standalone [`verify_grant_token()`](/sdks/python/offline-verification) function.
+For local signature-and-claim verification without the online revocation
+endpoint, use [`verify_grant_token()`](/sdks/python/offline-verification). The
+standalone helper still fetches the remote JWKS on every invocation.
 </Note>
 
 ## Revoke

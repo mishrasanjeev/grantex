@@ -74,5 +74,9 @@ Every action taken by an authorized agent is logged to an append-only, hash-chai
 
 - **Model-neutral** — Works with OpenAI, Anthropic, Google, Llama, Mistral. No single AI provider can credibly own the authorization layer for their competitors' agents.
 - **Framework-native** — First-class integrations for LangChain, AutoGen, CrewAI, Vercel AI, and more.
-- **Offline-verifiable** — Services verify tokens using published JWKS. Zero runtime dependency on Grantex infrastructure.
-- **Compliance-ready** — The EU AI Act, GDPR, and emerging US AI regulations will mandate auditable agent actions. Grantex provides this on day one.
+- **Locally verifiable** — Services verify signatures and claims with published
+  JWKS keys, without a per-token call to the Grantex verification API. The JWKS
+  endpoint must remain reachable whenever a verifier needs current keys.
+- **Compliance-supporting controls** — Audit, scope, consent, and revocation
+  features can provide evidence for applicable frameworks. They do not by
+  themselves determine legal compliance or a system's risk classification.

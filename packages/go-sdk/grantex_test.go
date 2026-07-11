@@ -67,6 +67,13 @@ func TestNewClientWithOptions(t *testing.T) {
 
 func TestAuthorize(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body AuthorizeParams
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if body.Audience != "https://mail.example.com" {
+			t.Errorf("expected audience in request body, got %q", body.Audience)
+		}
 		if r.URL.Path != "/v1/authorize" {
 			t.Errorf("expected /v1/authorize, got %s", r.URL.Path)
 		}
@@ -88,6 +95,7 @@ func TestAuthorize(t *testing.T) {
 
 	client := NewClient("test-key", WithBaseURL(server.URL))
 	result, err := client.Authorize(context.Background(), AuthorizeParams{
+		Audience:    "https://mail.example.com",
 		AgentID:     "agent-1",
 		PrincipalID: "user-1",
 		Scopes:      []string{"read:email"},

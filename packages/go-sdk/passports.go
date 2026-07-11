@@ -13,13 +13,13 @@ type PassportsService struct {
 
 // IssuePassportParams contains the parameters for issuing an agent passport.
 type IssuePassportParams struct {
-	AgentID               string              `json:"agentId"`
-	GrantID               string              `json:"grantId"`
-	AllowedMPPCategories  []string            `json:"allowedMPPCategories"`
-	MaxTransactionAmount  TransactionAmount   `json:"maxTransactionAmount"`
-	PaymentRails          []string            `json:"paymentRails,omitempty"`
-	ExpiresIn             string              `json:"expiresIn,omitempty"`
-	ParentPassportID      string              `json:"parentPassportId,omitempty"`
+	AgentID              string            `json:"agentId"`
+	GrantID              string            `json:"grantId"`
+	AllowedMPPCategories []string          `json:"allowedMPPCategories"`
+	MaxTransactionAmount TransactionAmount `json:"maxTransactionAmount"`
+	PaymentRails         []string          `json:"paymentRails,omitempty"`
+	ExpiresIn            string            `json:"expiresIn,omitempty"`
+	ParentPassportID     string            `json:"parentPassportId,omitempty"`
 }
 
 // TransactionAmount represents a monetary amount with currency.

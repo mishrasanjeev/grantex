@@ -88,7 +88,7 @@ Every consent created through the DPDP module produces a `DPDPConsentRecord`:
 
 1. **Created:** `dpdp.createConsentRecord()` creates the consent record and the underlying Grantex grant. The consent notice is stored and the data principal receives the withdrawal URL.
 2. **Active:** The agent operates with the granted scopes. All actions are logged in the audit trail linked to this consent.
-3. **Withdrawn:** The data principal clicks "Withdraw consent" in the portal or calls `dpdp.withdrawConsent()`. The grant is revoked instantly, sub-agents are cascade-revoked, and the withdrawal is logged.
+3. **Withdrawn:** Your authenticated application calls the withdrawal API or SDK method. The grant is revoked, delegated grants are cascade-revoked, and the withdrawal is logged. No separate DPDP end-user portal is included.
 4. **Expired:** The retention period lapses. Grantex auto-expires the consent and revokes the grant. Processing history is retained for audit purposes.
 
 ## Creating Consent Records
@@ -105,7 +105,6 @@ const dpdp = new DPDPClient({
     email: 'dpo@yourcompany.com',
   },
   defaultRetention: '90d',
-  grievanceSla: '72h',
 });
 
 const consent = await dpdp.createConsentRecord({
@@ -144,7 +143,6 @@ dpdp = DPDPClient(
     api_key=os.environ["GRANTEX_API_KEY"],
     dpo_contact={"name": "Data Protection Officer", "email": "dpo@yourcompany.com"},
     default_retention="90d",
-    grievance_sla="72h",
 )
 
 consent = dpdp.create_consent_record(CreateConsentParams(
@@ -202,7 +200,8 @@ console.log(adherence.violations); // []
 
 ### Viewing Consents
 
-Data principals can view their active consents through the portal or API:
+Your application can retrieve a data principal's active consents through the
+authenticated API or SDK and render its own end-user experience:
 
 ```typescript
 // Get all consents for a data principal
@@ -248,7 +247,6 @@ const grievance = await dpdp.submitGrievance({
 
 console.log(grievance.id);          // "grv_01HZ..."
 console.log(grievance.status);      // "open"
-console.log(grievance.slaDeadline); // ISO 8601 timestamp (72h from submission)
 ```
 
 ## Grievance Mechanism
@@ -257,11 +255,11 @@ The DPDP module includes a full grievance tracking system:
 
 | Feature | Description |
 |---------|-------------|
-| **Submission** | Data principals submit grievances through the portal or API |
-| **Routing** | Grievances are routed to the configured DPO contact via email and webhook |
-| **SLA tracking** | Each grievance has a deadline based on the configured `grievanceSla` |
+| **Submission** | Your authenticated application submits grievances through the API or SDK |
+| **Routing** | Your application is responsible for notifying and routing work to the configured contact |
+| **Deadline tracking** | Your application is responsible for regulatory response-deadline monitoring |
 | **Status updates** | DPO can update status: `open`, `investigating`, `resolved`, `escalated` |
-| **Escalation** | Overdue grievances can be escalated to the Data Protection Board |
+| **Escalation** | Your compliance process must implement any required escalation workflow |
 | **Audit trail** | All grievance actions are logged for regulatory inspection |
 
 ## Export Types
@@ -369,10 +367,9 @@ const pack = await dpdp.exportAudit({ framework: 'dpdp', format: 'json' });
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `apiKey` | `string` | *required* | Grantex API key |
-| `baseUrl` | `string` | `https://grantex-auth-dd4mtrt2gq-uc.a.run.app` | Auth service URL |
+| `baseUrl` | `string` | `https://api.grantex.dev` | Auth service URL |
 | `dpoContact` | `{ name, email }` | `undefined` | Data Protection Officer contact |
 | `defaultRetention` | `string` | `'90d'` | Default data retention period |
-| `grievanceSla` | `string` | `'72h'` | Grievance response deadline |
 | `autoExpire` | `boolean` | `true` | Auto-revoke grants when retention lapses |
 | `webhookUrl` | `string` | `undefined` | URL for consent lifecycle webhooks |
 
@@ -381,5 +378,5 @@ const pack = await dpdp.exportAudit({ framework: 'dpdp', format: 'json' });
 - [DPDP Act 2023 Compliance](/compliance/dpdp-act-2023) — detailed DPDP section mapping
 - [EU AI Act Compliance](/compliance/eu-ai-act) — EU AI Act article mapping
 - [Compliance Matrix](/guides/compliance-matrix) — cross-framework compliance mapping
-- [Principal Sessions](/sdks/typescript/principal-sessions) — data principal portal SDK
+- [Principal Sessions](/sdks/typescript/principal-sessions) — authenticated links for the core agent-permission dashboard; not a DPDP rights portal
 - [Blog: DPDP Act and AI Agents](/blog/dpdp-act-ai-agents) — what engineering teams need to know

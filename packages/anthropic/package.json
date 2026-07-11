@@ -1,6 +1,6 @@
 {
   "name": "@grantex/anthropic",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Anthropic SDK integration for the Grantex delegated authorization protocol",
   "homepage": "https://grantex.dev/for/anthropic",
   "bugs": {

@@ -58,7 +58,7 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - Human consent flow with plain-language UI
 - Offline token verification via JWKS (RS256 JWT)
 - Multi-agent delegation chains with scope narrowing
-- Real-time revocation (single grant or cascade)
+- Central grant revocation (single grant or cascade); local JWT consumers must synchronize revocation state or use short token lifetimes
 - Hash-chained audit trail
 - FIDO2/WebAuthn passkey-based consent
 - W3C Verifiable Credentials (VC-JWT) issuance
@@ -79,17 +79,17 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 2. Agent requests authorization for specific scopes → user sees consent UI
 3. User approves → authorization code returned via redirect
 4. Code exchanged for signed grant token (RS256 JWT)
-5. Any service verifies the token offline via JWKS
+5. A service validates the token using published JWKS; retrieving or refreshing keys may require a network call
 
 ## Compliance Coverage
 
 - OWASP Agentic Top 10 (Dec 2025): ASI-01 (goal hijacking), ASI-03 (identity abuse), ASI-05 (privilege escalation), ASI-10 (rogue agents)
-- EU AI Act (binding Aug 2026): Art. 9 (risk management), Art. 13 (transparency), Art. 14 (human oversight)
+- EU AI Act: phased application dates vary by obligation and system class; Grantex provides technical control mappings, not a conformity determination
 - NIST AI RMF + EO 14110: Govern 1.1 (accountability), Map 5.1 (attribution), Measure 2.5 (audit trails)
 - SOC 2 readiness control mapping published; formal third-party attestation is not published
 - Full compliance matrix: https://docs.grantex.dev/guides/compliance-matrix
 
-## Scope Enforcement (v0.3.7)
+## Scope Enforcement
 
 - `grantex.enforce(grant_token, connector, tool)` — verify JWT + check tool permission via manifest
 - `grantex.load_manifest(manifest)` / `load_manifests([...])` — load tool permission definitions
@@ -108,7 +108,7 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - Case study: AgenticOrg — 35 agents, 53 pre-built + 3 custom connectors, 339+ tools, all enforced
 - Custom manifests are the primary story — define manifests for any connector, no dependency on Grantex
 
-## Enterprise Hardening (v0.3.7)
+## Enterprise Hardening
 
 - SDK retry with exponential backoff + jitter in all 3 languages (configurable maxRetries, default 3)
 - Retries 429, 502, 503, 504 + network errors; respects Retry-After header
@@ -128,12 +128,12 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - Config validation on startup (exits if required vars missing)
 - Structured JSON logging via pino (zero console.log remaining)
 - Webhook retry with 20% jitter (prevents thundering herd)
-- Latest changelog reports 3,536 tests across 28 packages; GitHub Actions is the source of truth for pass/fail status
+- The monorepo contains 29 packages; GitHub Actions is the source of truth for current test status
 - Zero known vulnerabilities (npm audit, pip-audit, govulncheck all clean)
 
 ## SDK Parity
 
-All 3 SDKs (TypeScript 0.3.7, Python 0.3.8, Go v0.1.6) have:
+All 3 SDKs (TypeScript 0.3.12, Python 0.3.13, Go v0.1.9) have:
 - 21 resource services each (agents, tokens, grants, audit, anomalies, compliance, billing, policies, scim, sso, principal sessions, vault, budgets, events, usage, domains, webauthn, credentials, passports, webhooks, dpdp)
 - Offline JWT verification via JWKS
 - Retry with exponential backoff
@@ -152,7 +152,7 @@ All 3 SDKs (TypeScript 0.3.7, Python 0.3.8, Go v0.1.6) have:
 
 ## Comparisons
 
-- vs OAuth 2.0: Grantex adds cryptographic agent identity, delegation chains, action-level audit, and sub-second revocation
+- vs OAuth 2.0: Grantex adds cryptographic agent identity, delegation chains, action-level audit, and central grant revocation; offline consumers must synchronize revocation state or use short token lifetimes
 - vs API keys: Grantex provides per-agent scoping, user consent, delegation, and revocation granularity
 - vs MCP Auth: Grantex works across all frameworks, not just MCP; adds VCs, FIDO2, budgets, and delegation
 

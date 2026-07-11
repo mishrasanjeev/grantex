@@ -40,7 +40,7 @@ If the grant token doesn't include the required scope, `create_grantex_tool` rai
 
 ### `create_grantex_tool()`
 
-Creates an OpenAI Agents SDK `FunctionTool` with offline scope enforcement.
+Creates an OpenAI Agents SDK `FunctionTool` that verifies the token against the configured JWKS endpoint before enforcing scopes from verified claims.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -52,7 +52,7 @@ Creates an OpenAI Agents SDK `FunctionTool` with offline scope enforcement.
 
 ### `get_tool_scopes(grant_token)`
 
-Returns the scopes embedded in a grant token (offline, no network call).
+Returns unverified scopes decoded from a grant token. Use this only for display or debugging, never for authorization.
 
 ### `decode_jwt_payload(token)`
 

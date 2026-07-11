@@ -14,9 +14,9 @@ export interface GrantexClientOptions {
   apiKey?: string;
   /** Base URL for the Grantex API. Defaults to https://api.grantex.dev */
   baseUrl?: string;
-  /** Override the JWKS URL used for offline token verification. Defaults to `${baseUrl}/.well-known/jwks.json`. */
+  /** Override the JWKS URL used for local signature verification. The verifier retrieves keys from this URL. */
   jwksUri?: string;
-  /** Expected JWT issuer for offline token verification. Set this when tokens are issued for a canonical domain different from `baseUrl`. */
+  /** Expected JWT issuer for local signature verification. Set this when tokens use a canonical domain different from `baseUrl`. */
   issuer?: string;
   /** Request timeout in milliseconds. Defaults to 30000. */
   timeout?: number;
@@ -86,6 +86,8 @@ export interface AuthorizeParams {
   /** Your app's user identifier — mapped to principalId in the request body. */
   userId: string;
   scopes: string[];
+  /** Intended recipient of the grant token (`aud` claim). */
+  audience?: string;
   expiresIn?: string;
   redirectUri?: string;
   /** PKCE S256 code challenge (from generatePkce()) */
@@ -292,7 +294,7 @@ export interface VerifyGrantTokenOptions {
   jwksUri: string;
   requiredScopes?: string[];
   audience?: string;
-  /** Expected issuer URL. Defaults to the issuer derived from issuerDid or jwksUri. */
+  /** Expected issuer URL. Production JWKS uses https://grantex.dev; custom URLs derive the issuer from issuerDid or jwksUri. */
   issuer?: string;
   /** Resolve a did:web DID to derive the JWKS URL instead of using jwksUri directly */
   issuerDid?: string;

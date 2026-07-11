@@ -19,6 +19,7 @@ auth = client.authorize(AuthorizeParams(
     agent_id="agt_abc123",
     user_id="user_xyz",
     scopes=["files:read", "files:write"],
+    audience="https://api.example.com",
 ))
 
 # Redirect the user to the consent page
@@ -36,6 +37,7 @@ The `user_id` parameter is transparently mapped to `principalId` in the API requ
 | `agent_id`               | `str`            | Yes      | The ID of the agent requesting authorization.                 |
 | `user_id`                | `str`            | Yes      | The user (principal) being asked to grant permissions.        |
 | `scopes`                 | `list[str]`      | Yes      | The permission scopes being requested.                        |
+| `audience`               | `str \| None`    | No       | Intended token recipient, emitted as the grant token's `aud` claim. |
 | `expires_in`             | `str \| None`    | No       | How long the authorization request remains valid (e.g. `"1h"`). |
 | `redirect_uri`           | `str \| None`    | No       | URL to redirect the user after consent.                       |
 | `code_challenge`         | `str \| None`    | No       | PKCE code challenge (S256). See [PKCE](/sdks/python/pkce).    |

@@ -54,7 +54,7 @@ Client → Gateway (verify token + check scopes) → Upstream API
 ```
 
 1. **Route matching** — finds the first route matching the request method + path
-2. **Token verification** — extracts Bearer token and verifies offline via JWKS
+2. **Token verification** — extracts the Bearer token, resolves keys from the configured JWKS endpoint, and verifies signature and claims locally
 3. **Scope checking** — ensures the grant includes all required scopes
 4. **Proxy** — strips Authorization header, adds upstream headers + `X-Grantex-*` context, forwards to upstream
 5. **Response** — returns the upstream response to the client
@@ -64,7 +64,7 @@ Client → Gateway (verify token + check scopes) → Upstream API
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `upstream` | string | Yes | — | Base URL of the upstream API |
-| `jwksUri` | string | Yes | — | JWKS endpoint for offline verification |
+| `jwksUri` | string | Yes | — | JWKS endpoint used to retrieve keys for local signature verification |
 | `port` | number | No | 8080 | Listen port |
 | `upstreamHeaders` | object | No | — | Headers added to every upstream request |
 | `grantexApiKey` | string | No | — | API key for audit logging |
@@ -167,7 +167,7 @@ docker run -p 8080:8080 -v ./gateway.yaml:/etc/grantex/gateway.yaml grantex-gate
 
 ```yaml
 upstream: https://calendar-api.internal.svc
-jwksUri: https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json
+jwksUri: https://api.grantex.dev/.well-known/jwks.json
 port: 8080
 upstreamHeaders:
   X-Service-Key: "calendar-internal-key"

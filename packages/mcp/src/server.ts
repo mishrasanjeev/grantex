@@ -10,7 +10,7 @@ import { registerPrincipalSessionTools } from './tools/principal-sessions.js';
 export function buildServer(grantex: Grantex): McpServer {
   const server = new McpServer({
     name: 'grantex',
-    version: '0.1.0',
+    version: '0.1.10',
   });
 
   registerAgentTools(server, grantex);

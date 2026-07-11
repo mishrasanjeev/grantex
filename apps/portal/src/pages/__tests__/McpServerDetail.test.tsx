@@ -16,7 +16,7 @@ vi.mock('../../store/toast', () => ({ useToast: () => ({ show: mockShow }) }));
 
 const server = {
   id: 'mcp-1', name: 'Data Server', description: 'A data MCP server',
-  category: 'data', status: 'active', certified: false, certificationLevel: null,
+  category: 'data', status: 'active', certified: false, certificationPending: false, certificationLevel: null,
   certifiedAt: null, authEndpoint: 'https://auth.example.com/mcp',
   serverUrl: 'https://mcp.example.com', scopes: ['read', 'write'],
   weeklyActiveAgents: 142, stars: 87, npmPackage: null,
@@ -73,10 +73,8 @@ describe('McpServerDetail', () => {
     r();
     await waitFor(() => expect(screen.getByText('Weekly Agents')).toBeInTheDocument());
     expect(screen.getByText('Stars')).toBeInTheDocument();
-    // 142 (weekly agents) is also listed in the Active Clients sample table,
-    // so the numeric text can appear multiple times by design.
-    expect(screen.getAllByText('142').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('87').length).toBeGreaterThan(0);
+    expect(screen.getByText('142')).toBeInTheDocument();
+    expect(screen.getByText('87')).toBeInTheDocument();
   });
 
   it('shows certification section', async () => {
@@ -93,14 +91,35 @@ describe('McpServerDetail', () => {
     expect(screen.getByText('Apply for Gold')).toBeInTheDocument();
   });
 
+  it('restores persisted pending certification state after reload', async () => {
+    mockGetMcpServer.mockResolvedValueOnce({ ...server, certificationPending: true });
+    r();
+    await waitFor(() => expect(screen.getByText('Application Status')).toBeInTheDocument());
+    expect(screen.getByText('pending')).toBeInTheDocument();
+    expect(screen.queryByText('Apply for Bronze')).not.toBeInTheDocument();
+    expect(screen.queryByText('Apply for Silver')).not.toBeInTheDocument();
+    expect(screen.queryByText('Apply for Gold')).not.toBeInTheDocument();
+  });
+
   it('applies for certification on click', async () => {
-    mockApplyForCertification.mockResolvedValueOnce(undefined);
-    mockGetMcpServer.mockResolvedValueOnce(server).mockResolvedValueOnce({ ...server, certificationLevel: 'bronze' });
+    mockApplyForCertification.mockResolvedValueOnce({
+      id: 'cert-1',
+      serverId: 'mcp-1',
+      requestedLevel: 'bronze',
+      status: 'pending_conformance_test',
+      conformancePassed: 0,
+      conformanceTotal: 13,
+      createdAt: '2026-01-01T00:00:00Z',
+    });
     const user = userEvent.setup();
     r();
     await waitFor(() => expect(screen.getByText('Apply for Bronze')).toBeInTheDocument());
     await user.click(screen.getByText('Apply for Bronze'));
     await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Applied for bronze certification', 'success'));
+    expect(screen.getByText('Application Status')).toBeInTheDocument();
+    expect(screen.getByText('pending conformance test')).toBeInTheDocument();
+    expect(screen.getByText('Conformance Results')).toBeInTheDocument();
+    expect(screen.getByText('0 / 13')).toBeInTheDocument();
   });
 
   it('shows error toast on certification failure', async () => {
@@ -118,10 +137,10 @@ describe('McpServerDetail', () => {
     await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Failed to load MCP server', 'error'));
   });
 
-  it('shows Active Clients table', async () => {
+  it('does not render placeholder client telemetry', async () => {
     r();
-    // "Active Clients" appears as both a stat label and a section heading.
-    await waitFor(() => expect(screen.getAllByText('Active Clients').length).toBeGreaterThan(0));
-    expect(screen.getByText('data-pipeline-agent')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Data Server')).toBeInTheDocument());
+    expect(screen.queryByText('Active Clients')).not.toBeInTheDocument();
+    expect(screen.queryByText('data-pipeline-agent')).not.toBeInTheDocument();
   });
 });

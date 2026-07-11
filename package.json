@@ -1,6 +1,9 @@
 {
+  "name": "grantex",
+  "private": true,
   "devDependencies": {
     "@grantex/sdk": "file:packages/sdk-ts",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "yaml": "^2.9.0"
   }
 }

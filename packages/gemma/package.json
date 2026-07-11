@@ -1,6 +1,6 @@
 {
   "name": "@grantex/gemma",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Offline authorization adapter for Google Gemma on-device AI agents",
   "homepage": "https://grantex.dev/for/gemma",
   "bugs": {

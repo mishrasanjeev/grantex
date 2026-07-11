@@ -43,14 +43,14 @@ for rule in rules:
 
 ```bash cURL
 curl -H "Authorization: Bearer $GRANTEX_API_KEY" \
-  https://api.grantex.dev/v1/anomalies/rules
+  https://api.grantex.dev/v1/anomaly/rules
 ```
 </CodeGroup>
 
 You should see 10 built-in rules. All are enabled by default. To disable a rule you do not need:
 
 ```bash
-curl -X PATCH https://api.grantex.dev/v1/anomalies/rules/off_hours_activity \
+curl -X PATCH https://api.grantex.dev/v1/anomaly/rules/off_hours_activity \
   -H "Authorization: Bearer $GRANTEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"enabled": false}'
@@ -82,7 +82,7 @@ client.anomalies.create_channel(
 ```
 
 ```bash cURL
-curl -X POST https://api.grantex.dev/v1/anomalies/channels \
+curl -X POST https://api.grantex.dev/v1/anomaly/channels \
   -H "Authorization: Bearer $GRANTEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -201,7 +201,7 @@ Click any alert to see its full detail view: context data, timeline, and resolut
 
 ### No alerts are firing
 
-1. **Check that rules are enabled** -- `GET /v1/anomalies/rules` and verify `enabled: true`
+1. **Check that rules are enabled** -- `GET /v1/anomaly/rules` and verify `enabled: true`
 2. **Check that agents are active** -- Anomaly detection only monitors active agents
 3. **Check the time window** -- Rules only fire when the threshold is exceeded within the configured window
 4. **Verify grant activity** -- At least some authorization events must occur for rules to evaluate
@@ -210,7 +210,7 @@ Click any alert to see its full detail view: context data, timeline, and resolut
 
 1. **Verify the webhook URL** -- Test it with a manual `curl` POST
 2. **Check channel severities** -- The alert severity must match the channel's `severities` filter
-3. **Check channel status** -- `GET /v1/anomalies/channels` and verify `enabled: true`
+3. **Check channel status** -- `GET /v1/anomaly/channels` and verify `enabled: true`
 
 ### Too many false positives
 

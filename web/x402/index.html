@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Grantex x402 — Agent Spend Authorization for HTTP 402 Payment Flows</title>
 <meta name="description" content="Add authorization to x402 payment flows. Grantex Delegation Tokens prove which agent was authorized to spend, with scope, limits, and audit trails.">
-<link rel="canonical" href="https://grantex.dev/x402/">
+<link rel="canonical" href="https://grantex.dev/x402">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
 <!-- OpenGraph -->
 <meta property="og:title" content="Grantex x402 — Agent Spend Authorization for HTTP 402 Payment Flows">
 <meta property="og:description" content="Add authorization to x402 payment flows. Grantex Delegation Tokens prove which agent was authorized to spend, with scope, limits, and audit trails.">
-<meta property="og:url" content="https://grantex.dev/x402/">
+<meta property="og:url" content="https://grantex.dev/x402">
 <meta property="og:image" content="https://grantex.dev/og-image.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Grantex">
@@ -31,7 +31,7 @@
   "name": "Grantex x402",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "Any",
-  "url": "https://grantex.dev/x402/",
+  "url": "https://grantex.dev/x402",
   "description": "Add authorization to x402 payment flows. Grantex Delegation Tokens prove which agent was authorized to spend, with scope, limits, and audit trails.",
   "license": "https://www.apache.org/licenses/LICENSE-2.0",
   "author": { "@type": "Organization", "name": "Grantex", "url": "https://grantex.dev" }
@@ -215,6 +215,7 @@ footer .links{display:flex;gap:24px;justify-content:center;margin-bottom:12px}
 
 app.<span class="fn">use</span>(<span class="str">'/api/weather'</span>, <span class="fn">x402Middleware</span>({
   requiredScopes: [<span class="str">'weather:read'</span>],
+  requiredAmount: <span class="num">0.001</span>,
   currency: <span class="str">'USDC'</span>,
 }));
 
@@ -265,8 +266,8 @@ app.<span class="fn">get</span>(<span class="str">'/api/weather/forecast'</span>
 <div class="feature"><h3>W3C VC 2.0</h3><p>Standards-compliant Verifiable Credentials for interoperability.</p></div>
 <div class="feature"><h3>Ed25519 Signatures</h3><p>Fast, secure EdDSA cryptographic signatures. Offline verification.</p></div>
 <div class="feature"><h3>Spend Limits</h3><p>Per-period caps prevent wallet drain. $10/day, $100/week, etc.</p></div>
-<div class="feature"><h3>Instant Revocation</h3><p>Revoke a compromised agent's token immediately. Sub-second enforcement.</p></div>
-<div class="feature"><h3>Full Audit Trail</h3><p>Every issuance, verification, and rejection is logged. Exportable for compliance.</p></div>
+<div class="feature"><h3>Revocation Registry</h3><p>Verification checks token revocation. Use a shared registry when enforcement spans multiple processes or services.</p></div>
+<div class="feature"><h3>Pluggable Audit Trail</h3><p>Issuance, verification, rejection, and payment events go to the configured audit logger; the default logger is in-memory.</p></div>
 <div class="feature"><h3>Base L2 Native</h3><p>Built for USDC on Base L2. Pluggable payment handlers for any chain.</p></div>
 </div>
 </div>

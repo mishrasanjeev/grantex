@@ -77,7 +77,7 @@ const token = await grantex.tokens.exchange({
 console.log(token.grantToken);  // RS256 JWT
 console.log(token.scopes);      // ['calendar:read', 'payments:initiate:max_500']
 
-// 4. Verify the token offline (no Grantex dependency at runtime)
+// 4. Verify signature and claims locally after fetching the remote JWKS
 const grant = await verifyGrantToken(token.grantToken, {
   jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
   requiredScopes: ['calendar:read'],
@@ -123,7 +123,7 @@ These functions can be used without instantiating a `Grantex` client:
 
 | Export | Description | Reference |
 |---|---|---|
-| `verifyGrantToken()` | Offline JWT verification via JWKS | [Offline Verification](/sdks/typescript/offline-verification) |
+| `verifyGrantToken()` | Local JWT verification with a JWKS fetch per standalone call | [Offline Verification](/sdks/typescript/offline-verification) |
 | `generatePkce()` | Generate PKCE S256 challenge pairs | [PKCE](/sdks/typescript/pkce) |
 | `verifyWebhookSignature()` | Verify webhook payload signatures | [Webhooks](/sdks/typescript/webhooks) |
 

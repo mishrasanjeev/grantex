@@ -12,4 +12,4 @@ __all__ = [
     "require_scopes",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.1.5"

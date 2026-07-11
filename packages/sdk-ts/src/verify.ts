@@ -2,8 +2,43 @@ import { createRemoteJWKSet, jwtVerify, decodeJwt } from 'jose';
 import { GrantexTokenError } from './errors.js';
 import type { VerifiedGrant, VerifyGrantTokenOptions, GrantTokenPayload } from './types.js';
 
+const PRODUCTION_JWKS_URI = 'https://api.grantex.dev/.well-known/jwks.json';
+const PRODUCTION_ISSUER = 'https://grantex.dev';
+const MAX_REMOTE_JWKS_RESOLVERS = 64;
+
+type RemoteJwksResolver = ReturnType<typeof createRemoteJWKSet>;
+
+// A createRemoteJWKSet resolver owns JOSE's key cache, cooldown, and unknown-kid
+// refresh behavior. Reusing it is both faster and safer than rebuilding an
+// empty cache for every verification. The bounded LRU prevents tenant-provided
+// JWKS URLs from growing process memory without limit.
+const remoteJwksResolvers = new Map<string, RemoteJwksResolver>();
+
+function getRemoteJwksResolver(jwksUrl: URL): RemoteJwksResolver {
+  const cacheKey = jwksUrl.href;
+  const cached = remoteJwksResolvers.get(cacheKey);
+  if (cached !== undefined) {
+    remoteJwksResolvers.delete(cacheKey);
+    remoteJwksResolvers.set(cacheKey, cached);
+    return cached;
+  }
+
+  const resolver = createRemoteJWKSet(jwksUrl);
+  if (remoteJwksResolvers.size >= MAX_REMOTE_JWKS_RESOLVERS) {
+    const oldest = remoteJwksResolvers.keys().next().value as string | undefined;
+    if (oldest !== undefined) remoteJwksResolvers.delete(oldest);
+  }
+  remoteJwksResolvers.set(cacheKey, resolver);
+  return resolver;
+}
+
+/** @internal Clear process-level JWKS resolvers. Intended for deterministic tests. */
+export function clearRemoteJwksCache(): void {
+  remoteJwksResolvers.clear();
+}
+
 /**
- * Verify a Grantex grant token offline using the published JWKS.
+ * Verify a Grantex grant token locally using JWKS retrieved from the configured URI.
  * Algorithm is fixed to RS256 per SPEC §11 and cannot be overridden.
  *
  * @throws {GrantexTokenError} if the token is invalid, expired, or missing required scopes.
@@ -19,13 +54,20 @@ export async function verifyGrantToken(
     jwksUri = `https://${domain}/.well-known/jwks.json`;
     expectedIssuer ??= `https://${domain}`;
   }
+  const jwksUrl = new URL(jwksUri);
+  // Fragments are not sent in HTTP requests and therefore must not create
+  // duplicate cache entries for the same JWKS resource.
+  jwksUrl.hash = '';
   if (expectedIssuer === undefined) {
-    const jwksUrl = new URL(jwksUri);
-    expectedIssuer = jwksUrl.pathname.endsWith('/.well-known/jwks.json')
-      ? `${jwksUrl.origin}${jwksUrl.pathname.slice(0, -'/.well-known/jwks.json'.length)}`
-      : `${jwksUrl.origin}${jwksUrl.pathname.replace(/\/$/, '')}`;
+    if (jwksUrl.href.replace(/\/$/, '') === PRODUCTION_JWKS_URI) {
+      expectedIssuer = PRODUCTION_ISSUER;
+    } else {
+      expectedIssuer = jwksUrl.pathname.endsWith('/.well-known/jwks.json')
+        ? `${jwksUrl.origin}${jwksUrl.pathname.slice(0, -'/.well-known/jwks.json'.length)}`
+        : `${jwksUrl.origin}${jwksUrl.pathname.replace(/\/$/, '')}`;
+    }
   }
-  const jwks = createRemoteJWKSet(new URL(jwksUri));
+  const jwks = getRemoteJwksResolver(jwksUrl);
 
   let payload: GrantTokenPayload;
   try {

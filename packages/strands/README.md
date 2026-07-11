@@ -4,7 +4,7 @@
 
 Create Strands tools that verify Grantex grant tokens and enforce scopes before tool execution.
 
-> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+> **[Homepage](https://grantex.dev)** | **[Docs](https://docs.grantex.dev)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 

@@ -44,7 +44,7 @@ If the grant token doesn't include the required scope, `create_grantex_tool` rai
 
 ### `create_grantex_tool()`
 
-Creates a plain function with the correct `__name__` and `__doc__` for ADK tool discovery, with offline scope enforcement.
+Creates a plain function with the correct `__name__` and `__doc__` for ADK tool discovery. Before execution it verifies the token against the configured JWKS endpoint and enforces scopes from the verified claims.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -56,7 +56,7 @@ Creates a plain function with the correct `__name__` and `__doc__` for ADK tool 
 
 ### `get_tool_scopes(grant_token)`
 
-Returns the scopes embedded in a grant token (offline, no network call).
+Returns unverified scopes decoded from a grant token. Use this only for display or debugging, never for authorization.
 
 ### `decode_jwt_payload(token)`
 

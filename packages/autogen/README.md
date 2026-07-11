@@ -4,7 +4,7 @@ AutoGen / OpenAI function-calling integration for the [Grantex](https://grantex.
 
 Adds scope-enforced functions, a function registry, and audit logging for any agent using OpenAI-style function calling.
 
-> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+> **[Homepage](https://grantex.dev)** | **[Docs](https://docs.grantex.dev)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 
@@ -93,7 +93,7 @@ const audited = withAuditLogging(readCalendar, client, {
 
 ### `createGrantexFunction(options)`
 
-Creates a Grantex-authorized function with an OpenAI tool definition and scope-enforced executor.
+Creates a Grantex-authorized function with an OpenAI tool definition and a JWKS-verified, scope-enforced executor. Verification runs before each execution.
 
 | Option | Type | Description |
 |--------|------|-------------|
@@ -101,6 +101,9 @@ Creates a Grantex-authorized function with an OpenAI tool definition and scope-e
 | `description` | `string` | Description shown to the LLM |
 | `parameters` | `JsonSchema` | JSON Schema for function arguments |
 | `grantToken` | `string` | Grantex JWT from token exchange |
+| `jwksUri` | `string?` | JWKS URL; defaults to the Grantex production JWKS |
+| `issuer`, `issuerDid`, `audience` | `string?` | Optional JWT claim validation settings |
+| `clockTolerance` | `number?` | Clock tolerance in seconds |
 | `requiredScope` | `string` | Scope required to invoke this function |
 | `func` | `(args: T) => Promise<unknown>` | Function implementation |
 
@@ -126,7 +129,7 @@ Wraps a `GrantexFunction` with audit logging.
 ## Requirements
 
 - Node.js 18+
-- `@grantex/sdk` >= 0.1.0
+- `@grantex/sdk` >= 0.3.11
 
 ## Links
 

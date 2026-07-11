@@ -9,7 +9,7 @@ import httpx
 from ._errors import GrantexApiError, GrantexAuthError, GrantexNetworkError
 from ._types import RateLimit
 
-_SDK_VERSION = "0.3.11"
+_SDK_VERSION = "0.3.14"
 _DEFAULT_TIMEOUT = 30.0
 _DEFAULT_MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 0.5  # seconds

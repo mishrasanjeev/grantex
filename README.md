@@ -16,7 +16,7 @@
 [![PyPI](https://img.shields.io/pypi/v/grantex)](https://pypi.org/project/grantex/)
 [![npm downloads](https://img.shields.io/npm/dm/@grantex/sdk?label=npm%20downloads)](https://www.npmjs.com/package/@grantex/sdk)
 [![GitHub Stars](https://img.shields.io/github/stars/mishrasanjeev/grantex?style=social)](https://github.com/mishrasanjeev/grantex)
-[![Docs](https://img.shields.io/badge/docs-grantex.dev-3fb950)](https://grantex.dev/docs)
+[![Docs](https://img.shields.io/badge/docs-grantex.dev-3fb950)](https://docs.grantex.dev)
 [![MCP Server](https://img.shields.io/badge/MCP-Server-blue)](https://www.npmjs.com/package/@grantex/mcp)
 [![DPDP Mapping](https://img.shields.io/badge/DPDP-control%20mapping-informational)](https://grantex.dev/dpdp)
 [![EU AI Act Mapping](https://img.shields.io/badge/EU_AI_Act-control%20mapping-informational)](https://grantex.dev/dpdp)
@@ -61,7 +61,7 @@ Start with the [OACP runtime launch closure PRD](docs/guides/oacp/runtime-launch
 
 ## Current Development Snapshot
 
-The latest repository changelog currently tops out at v0.3.11. Package versions are being reconciled across SDKs and adapters; use [COMPATIBILITY.md](COMPATIBILITY.md) as the current source of truth for package-specific versions.
+The latest repository changelog currently tops out at v0.3.12. Use [COMPATIBILITY.md](COMPATIBILITY.md) as the source of truth for package-specific versions.
 
 - **@grantex/gemma**: Offline consent bundles and on-device verification examples
 - **MCP Auth Server**: OAuth 2.1 + PKCE for MCP servers, managed and self-hosted modes
@@ -88,7 +88,7 @@ const auth = await gx.authorize({ agentId: 'agent-123', userId: 'user-456', scop
 // 2. Exchange code for a scoped, signed JWT
 const { grantToken } = await gx.tokens.exchange({ code: auth.code, agentId: 'agent-123' });
 
-// 3. Verify anywhere — offline, no callback needed
+// 3. Verify locally using the issuer's published JWKS
 const grant = await verifyGrantToken(grantToken, { jwksUri: 'https://api.grantex.dev/.well-known/jwks.json' });
 console.log(grant.scopes); // ['calendar:read', 'email:send']
 ```
@@ -178,7 +178,7 @@ console.log(token.grantId);     // 'grnt_01HXYZ...'
 ### 4. Verify the token and use it
 
 ```typescript
-// Verify offline — no network call needed (uses published JWKS)
+// Verify locally after retrieving the issuer's published JWKS
 import { verifyGrantToken } from '@grantex/sdk';
 
 const grant = await verifyGrantToken(token.grantToken, {
@@ -195,10 +195,12 @@ await travelAgent.run({ grantToken: token.grantToken, task: 'Book cheapest fligh
 ### 5. Log every action
 
 ```typescript
-// Inside your agent — one line, zero overhead
+// Inside your agent — one audit API call
 await grantex.audit.log({
   agentId: agent.id,
+  agentDid: agent.did,
   grantId: token.grantId,
+  principalId: authRequest.principalId,
   action: 'payment.initiated',
   status: 'success',
   metadata: { amount: 420, currency: 'USD', merchant: 'Air India' },
@@ -212,7 +214,7 @@ await grantex.audit.log({
 import { verifyGrantToken } from '@grantex/sdk';
 
 const grant = await verifyGrantToken(token, {
-  jwksUri: 'https://grantex.dev/.well-known/jwks.json',  // or cache locally
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',  // or cache locally
   requiredScopes: ['payments:initiate'],
 });
 // Throws if token is expired, revoked, tampered, or missing required scopes
@@ -235,7 +237,9 @@ const session = await grantex.principalSessions.create({
 ## Python SDK
 
 ```python
-from grantex import Grantex, ExchangeTokenParams
+import os
+
+from grantex import Grantex, AuthorizeParams, ExchangeTokenParams
 
 client = Grantex(api_key=os.environ["GRANTEX_API_KEY"])
 
@@ -246,17 +250,17 @@ agent = client.agents.register(
 )
 
 # Authorize a user
-auth = client.authorize(
+auth = client.authorize(AuthorizeParams(
     agent_id=agent.id,
     user_id="user_abc123",
     scopes=["transactions:read", "payments:initiate:max_100"],
-)
+))
 # Redirect user to auth.consent_url — they approve in plain language
 
 # Exchange the authorization code for a grant token
 token = client.tokens.exchange(ExchangeTokenParams(code=code, agent_id=agent.id))
 
-# Verify the token offline — no network call needed
+# Verify locally after retrieving the issuer's published JWKS
 from grantex import verify_grant_token, VerifyGrantTokenOptions
 
 grant = verify_grant_token(token.grant_token, VerifyGrantTokenOptions(
@@ -267,7 +271,9 @@ print(grant.scopes)  # ('transactions:read', 'payments:initiate:max_100')
 # Log an action
 client.audit.log(
     agent_id=agent.id,
+    agent_did=agent.did,
     grant_id=token.grant_id,
+    principal_id=auth.principal_id,
     action="transaction.read",
     status="success",
     metadata={"account_last4": "4242"},
@@ -278,7 +284,7 @@ client.audit.log(
 
 ## The Grant Token
 
-Grantex tokens are standard JWTs (RS256) extended with agent-specific claims. Any service can verify them offline using the published JWKS — no dependency on Grantex at runtime:
+Grantex tokens are standard JWTs (RS256) extended with agent-specific claims. Any service can verify their signatures locally using the issuer's published JWKS. The provided verifiers retrieve those keys from the configured JWKS URL, so applications should account for network availability, caching, and key rotation:
 
 ```json
 {
@@ -486,12 +492,20 @@ await grantex.webauthn.deleteCredential(credentialId);
 
 ```python
 # Enable FIDO for your developer account
-client.update_settings(fido_required=True, fido_rp_name="My App")
+from grantex import UpdateDeveloperSettingsParams, WebAuthnRegistrationVerifyParams
+
+client.update_settings(UpdateDeveloperSettingsParams(
+    fido_required=True,
+    fido_rp_name="My App",
+))
 
 # Register a passkey (server-side portion)
 options = client.webauthn.register_options(principal_id="user_abc123")
 # Browser performs navigator.credentials.create() and sends response back
-result = client.webauthn.register_verify(challenge_id=options.challenge_id, response=credential_response)
+result = client.webauthn.register_verify(WebAuthnRegistrationVerifyParams(
+    challenge_id=options.challenge_id,
+    response=credential_response,
+))
 
 # List and manage credentials
 creds = client.webauthn.list_credentials("user_abc123")
@@ -509,7 +523,6 @@ client.webauthn.delete_credential(credential_id)
 | `POST` | `/v1/webauthn/assert/options` | Generate assertion options for consent |
 | `POST` | `/v1/webauthn/assert/verify` | Verify assertion during consent |
 | `PATCH` | `/v1/me` | Update developer settings (FIDO config) |
-- [JMT x402 Agent Tools](https://jmt-x402-proxy.jmthomasofficial.workers.dev) — 25 paid x402 endpoints on Base mainnet: web search, AI analysis, crypto/stock data, SEC filings, company intel, news, sentiment, macro dashboard. $0.001-$0.15/call USDC. Local LLM-powered.
 
 </details>
 
@@ -616,7 +629,7 @@ curl https://api.grantex.dev/.well-known/did.json
 
 ## MPP Agent Identity
 
-MPP (Machine Payments Protocol) defines how AI agents pay for services via HTTP 402 flows. Grantex adds the missing identity layer: an `AgentPassportCredential` (W3C VC 2.0) that lets any merchant verify *who* authorized a payment, *what* the agent is allowed to buy, and *how much* it can spend — all in <50ms, offline-capable.
+MPP (Machine Payments Protocol) defines how AI agents pay for services via HTTP 402 flows. Grantex adds the missing identity layer: an `AgentPassportCredential` (W3C VC 2.0) that lets any merchant verify *who* authorized a payment, *what* the agent is allowed to buy, and *how much* it can spend locally after retrieving the issuer's JWKS.
 
 ### Why Agent Passports?
 
@@ -631,11 +644,11 @@ Grantex passports are the open, standards-based answer: a W3C VC 2.0 credential 
 | **1. Issue** | Human | Issues `AgentPassportCredential` via Grantex — W3C VC 2.0, Ed25519 signed, with categories (`inference`, `compute`), spending limit (50 USDC), and expiry (24h) |
 | **2. Store** | Agent | Receives and stores the passport credential |
 | **3. Pay** | Agent | Makes MPP payment request with `Authorization: Payment` header + `X-Grantex-Passport: <base64url-credential>` header |
-| **4. Verify** | Merchant | Calls `verifyPassport()` — checks Ed25519 signature, expiry, categories, and amount limit in **<50ms** using cached JWKS (no API roundtrip) |
+| **4. Verify** | Merchant | Calls `verifyPassport()` — checks the Ed25519 signature, expiry, categories, and amount limit using a JWKS cache that refreshes periodically |
 | **5. Deliver** | Merchant | Returns the resource — knows the human principal, org, and full delegation chain |
 | **6. Audit** | System | Every issuance, verification, and revocation is logged. Revoke anytime via StatusList2021 bit-flip |
 
-> **Key insight**: The passport is a self-contained W3C VC — merchants verify it offline using cached JWKS. No API call to Grantex needed after the initial key fetch.
+> **Key insight**: The passport is a self-contained W3C VC. Merchants verify it locally using JWKS cached for one hour; the verifier fetches the keys initially and again when the cache expires.
 
 ### Credential Structure
 
@@ -749,11 +762,11 @@ const record = await lookupOrgTrust('did:web:acme.com');
 
 ### Revocation
 
-Revoking a passport flips a StatusList2021 bit — propagates instantly:
+Revoking a passport updates server-side status immediately. Local verifiers observe the change only after an online revocation check or status-data refresh, so cached results can lag:
 
 ```typescript
 await grantex.passports.revoke('urn:grantex:passport:01HXYZ...');
-// Subsequent verifyPassport() calls return PASSPORT_REVOKED
+// Revocation-aware verification rejects after checking refreshed status data
 ```
 
 ### Error Codes
@@ -1291,7 +1304,7 @@ curl -s -X POST http://localhost:3001/v1/token \
 
 For local development, the auth service also serves a lightweight dashboard at `http://localhost:3001/dashboard`.
 
-See the [self-hosting guide](https://grantex.dev/docs/guides/self-hosting) for production deployment guidance, or [`DEPLOYMENT.md`](DEPLOYMENT.md) for the complete deployment reference (system requirements, all 30 environment variables, Docker/Kubernetes/Cloud Run options, security checklist, monitoring). Python dependencies are in [`requirements.txt`](requirements.txt).
+See the [self-hosting guide](https://docs.grantex.dev/guides/self-hosting) for production deployment guidance, or [`DEPLOYMENT.md`](DEPLOYMENT.md) for the complete deployment reference (system requirements, environment variables, Docker/Kubernetes/Cloud Run options, security checklist, monitoring). Python dependencies are in [`requirements.txt`](requirements.txt).
 
 ---
 
@@ -1303,7 +1316,7 @@ Grantex is built as an **open protocol**, not a closed SaaS product. Here's why 
 
 **Framework-native.** First-class integrations for LangChain, AutoGen, CrewAI, OpenAI Agents SDK, Google ADK, Strands Agents SDK, and plain code. Install one package, get Grantex in your existing stack.
 
-**Offline-verifiable.** Services verify tokens using published JWKS — zero runtime dependency on Grantex infrastructure. Your agent works even if our servers are down.
+**Offline-verifiable signatures.** Services verify token signatures locally using published JWKS. Applications should plan for JWKS retrieval and key rotation; availability during an issuer outage depends on their verifier's cache behavior.
 
 **Compliance-oriented controls.** The EU AI Act, GDPR, and emerging US AI regulations will mandate auditable agent actions. Grantex provides technical controls that can support those programs from day one.
 
@@ -1358,6 +1371,10 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **Terraform Provider** | `terraform-provider-grantex` | `terraform { required_providers { grantex = { source = "mishrasanjeev/grantex" } } }` | ✅ Shipped |
 | **x402 Payment Protocol** | `@grantex/x402` | `npm install @grantex/x402` | ✅ Shipped |
 
+### Community x402 services
+
+- [JMT x402 Agent Tools](https://jmt-x402-proxy.jmthomasofficial.workers.dev) provides paid Base-mainnet tools for search, analysis, market data, filings, company intelligence, and news. Query its discovery endpoint for the current tool catalog and pricing.
+
 ### Framework Quick Examples
 
 **Express.js** — grant token verification + scope-based authorization:
@@ -1366,7 +1383,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 import express from 'express';
 import { requireGrantToken, requireScopes } from '@grantex/express';
 
-const JWKS_URI = 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json';
+const JWKS_URI = 'https://api.grantex.dev/.well-known/jwks.json';
 
 app.use('/api', requireGrantToken({ jwksUri: JWKS_URI }));
 app.get('/api/calendar', requireScopes('calendar:read'), (req, res) => {
@@ -1383,7 +1400,7 @@ from grantex_fastapi import GrantexAuth, GrantexFastAPIError, grantex_exception_
 
 app = FastAPI()
 app.add_exception_handler(GrantexFastAPIError, grantex_exception_handler)
-grantex = GrantexAuth(jwks_uri="https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json")
+grantex = GrantexAuth(jwks_uri="https://api.grantex.dev/.well-known/jwks.json")
 
 @app.get("/api/calendar")
 async def calendar(grant: VerifiedGrant = Depends(grantex.scopes("calendar:read"))):
@@ -1402,7 +1419,7 @@ const tool = createGrantexTool({
   requiredScope: 'calendar:read',
   func: async (input) => JSON.stringify(await getCalendarEvents(input)),
 });
-// Use with any LangChain agent — scope checked offline from JWT
+// Use with any LangChain agent — signature and scope checked locally using JWKS
 ```
 
 **Vercel AI SDK** — scope checked at construction time:
@@ -1502,7 +1519,7 @@ read_calendar = create_grantex_tool(
 **CLI** (90+ commands, all support `--json` for AI agent / scripting use):
 
 ```bash
-grantex config set --url https://grantex-auth-dd4mtrt2gq-uc.a.run.app --key YOUR_API_KEY
+grantex config set --url https://api.grantex.dev --key YOUR_API_KEY
 grantex me                                            # check identity
 grantex agents register --name "Bot" --description "..." --scopes email:read
 grantex authorize --agent ag_... --principal user@example.com --scopes email:read
@@ -1640,9 +1657,9 @@ Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRI
 | | |
 |---|---|
 | **OWASP** | Covers ASI-01, ASI-03, ASI-05, ASI-10 from the [Agentic Security Top 10](https://docs.grantex.dev/blog/owasp-agentic-top-10-compliance) (Dec 2025) |
-| **EU AI Act** | Art. 9 (risk management), Art. 13 (transparency), Art. 14 (human oversight) — binding Aug 2026 |
-| **NIST AI RMF** | Govern 1.1, Map 5.1, Measure 2.5 — NCCoE public comment filed |
-| **IETF** | Internet-Draft submitted to OAuth Working Group ([draft-mishra-oauth-agent-grants-01](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
+| **EU AI Act** | Technical control mapping only, not legal advice. Application is phased: transparency rules from Aug 2026, certain high-risk rules from Dec 2027, and product-integrated high-risk rules from Aug 2028 under the political agreement. See the [European Commission timeline](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai). |
+| **NIST AI RMF** | Govern 1.1, Map 5.1, Measure 2.5 — repository comment draft; no public submission receipt or endorsement |
+| **IETF** | Individual Internet-Draft -01 targeting OAuth Working Group discussion; not adopted or endorsed ([draft-mishra-oauth-agent-grants-01](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
 | **AuthZEN** | Conformance mapped |
 | **SOC 2** | Readiness control mapping published; formal third-party attestation not published |
 | **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, open, Apache 2.0 |
@@ -1677,7 +1694,7 @@ MCP solves tool connectivity — how agents access data and call functions. Gran
 The protocol spec is open (Apache 2.0). Grantex Inc. maintains a hosted reference implementation. Our goal is to contribute the spec to a neutral standards body (W3C, IETF, or CNCF) once it stabilizes.
 
 **Can I self-host?**  
-Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the complete guide or the [self-hosting docs](https://grantex.dev/docs/guides/self-hosting).
+Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the complete guide or the [self-hosting docs](https://docs.grantex.dev/guides/self-hosting).
 
 ---
 
@@ -1689,7 +1706,7 @@ Protocol specification and SDKs: [Apache 2.0](https://github.com/mishrasanjeev/g
 
 <div align="center">
 
-**[Docs](https://grantex.dev/docs)** · **[Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)** · **[Deploy](https://github.com/mishrasanjeev/grantex/blob/main/DEPLOYMENT.md)** · **[Dashboard](https://grantex.dev/dashboard)** · **[Discord](https://discord.gg/QuSk7AeBdg)** · **[Roadmap](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md)** · **[Contributing](https://grantex.dev/docs/community/contributing)** · **[GitHub](https://github.com/mishrasanjeev/grantex)**
+**[Docs](https://docs.grantex.dev)** · **[Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)** · **[Deploy](https://github.com/mishrasanjeev/grantex/blob/main/DEPLOYMENT.md)** · **[Dashboard](https://grantex.dev/dashboard)** · **[Discord](https://discord.gg/QuSk7AeBdg)** · **[Roadmap](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md)** · **[Contributing](https://docs.grantex.dev/community/contributing)** · **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 <br/>
 

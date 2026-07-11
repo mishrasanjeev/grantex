@@ -50,11 +50,12 @@ describe('BillingPage', () => {
     expect(screen.getByText('Enterprise')).toBeInTheDocument();
   });
 
-  it('shows plan prices', async () => {
+  it('does not advertise unconfigured paid-plan prices', async () => {
     r();
     await waitFor(() => expect(screen.getByText('$0')).toBeInTheDocument());
-    expect(screen.getByText('$49/mo')).toBeInTheDocument();
-    expect(screen.getByText('$249/mo')).toBeInTheDocument();
+    expect(screen.getAllByText('Price shown at checkout')).toHaveLength(2);
+    expect(screen.queryByText('$49/mo')).not.toBeInTheDocument();
+    expect(screen.queryByText('$249/mo')).not.toBeInTheDocument();
   });
 
   it('shows Current badge on active plan', async () => {

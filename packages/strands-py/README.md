@@ -8,7 +8,7 @@ Wrap Strands tool functions with Grantex grant token scope checks so agents only
 [![Python](https://img.shields.io/pypi/pyversions/grantex-strands)](https://pypi.org/project/grantex-strands/)
 [![License](https://img.shields.io/pypi/l/grantex-strands)](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 
-> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+> **[Homepage](https://grantex.dev)** | **[Docs](https://docs.grantex.dev)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 

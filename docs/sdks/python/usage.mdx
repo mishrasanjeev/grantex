@@ -1,18 +1,18 @@
 ---
 title: "Usage"
 sidebarTitle: "Usage"
-description: "Track API usage metrics for the current billing period and view historical usage."
+description: "Track current UTC-date API usage metrics and view daily usage history."
 ---
 
 ## Overview
 
-The `usage` client provides access to API usage metrics. Check your current billing period's usage and retrieve historical usage data broken down by day.
+The `usage` client provides daily API usage metrics. `current()` returns the current UTC date's counters; `history()` returns earlier daily counters.
 
 Access the usage client via `client.usage`.
 
 ## Current
 
-Get API usage metrics for the current billing period.
+Get API usage metrics for the current UTC date.
 
 ```python
 from grantex import Grantex
@@ -21,7 +21,7 @@ with Grantex(api_key="gx_live_...") as client:
     usage = client.usage.current()
 
     print(f"Developer: {usage.developer_id}")
-    print(f"Period: {usage.period}")
+    print(f"Date: {usage.period}")
     print(f"Token exchanges: {usage.token_exchanges}")
     print(f"Authorizations: {usage.authorizations}")
     print(f"Verifications: {usage.verifications}")
@@ -33,11 +33,11 @@ with Grantex(api_key="gx_live_...") as client:
 | Field              | Type  | Description                                           |
 |--------------------|-------|-------------------------------------------------------|
 | `developer_id`     | `str` | The developer organization ID.                        |
-| `period`           | `str` | The current billing period (e.g., `'2026-03'`).       |
-| `token_exchanges`  | `int` | Number of token exchange operations this period.      |
-| `authorizations`   | `int` | Number of authorization requests this period.         |
-| `verifications`    | `int` | Number of token verifications this period.            |
-| `total_requests`   | `int` | Total API requests across all endpoints this period.  |
+| `period`           | `str` | Current UTC date in `YYYY-MM-DD` form; the wire field name is retained for compatibility. |
+| `token_exchanges`  | `int` | Number of token exchange operations on this UTC date. |
+| `authorizations`   | `int` | Number of authorization requests on this UTC date.    |
+| `verifications`    | `int` | Number of token verifications on this UTC date.       |
+| `total_requests`   | `int` | Total API requests across all endpoints on this UTC date. |
 
 ## History
 
@@ -66,7 +66,7 @@ with Grantex(api_key="gx_live_...") as client:
 
 | Field     | Type              | Description                                                 |
 |-----------|-------------------|-------------------------------------------------------------|
-| `entries` | `list[UsageEntry]` | Daily usage entries, ordered from oldest to newest.         |
+| `entries` | `list[UsageEntry]` | Daily usage entries, ordered newest to oldest.              |
 
 ### UsageEntry
 
@@ -84,9 +84,9 @@ with Grantex(api_key="gx_live_...") as client:
 from grantex import Grantex
 
 with Grantex(api_key="gx_live_...") as client:
-    # Check current period usage
+    # Check current UTC-date usage
     current = client.usage.current()
-    print(f"Period: {current.period}")
+    print(f"Date: {current.period}")
     print(f"Total requests: {current.total_requests}")
     print(f"  Authorizations: {current.authorizations}")
     print(f"  Token exchanges: {current.token_exchanges}")

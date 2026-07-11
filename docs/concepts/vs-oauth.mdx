@@ -17,7 +17,7 @@ Grantex is built **on top of** OAuth 2.0 — not as a replacement, but as a purp
 | **Scope model** | Flat string scopes | Hierarchical scopes with a registry, scope constraints in policies, and time-bound restrictions |
 | **Agent-to-agent auth** | Not addressed | Sub-agent delegation with `parentAgt`, `parentGrnt`, and `delegationDepth` JWT claims |
 | **Compliance** | Bolted on | Built in — anomaly detection, policy engine, evidence packs |
-| **Offline verification** | Requires introspection endpoint | JWT-based with JWKS — verify tokens without network calls |
+| **Local verification** | Often uses an introspection endpoint for opaque tokens | JWT-based signature and claim verification after obtaining JWKS keys; standalone SDK helpers may fetch keys on each call |
 
 ## When to Use OAuth 2.0
 
@@ -39,7 +39,8 @@ Grantex is the right choice when:
 - You need a **tamper-evident audit trail** of every action agents take
 - **Compliance** requirements (SOC 2, HIPAA, GDPR) demand structured evidence of agent activity
 - Users need to **review and revoke** agent permissions through a self-service dashboard
-- You want **offline token verification** without hitting an introspection endpoint on every request
+- You want **local signature and claim verification** without hitting a token
+  introspection endpoint; JWKS retrieval and caching remain deployment concerns
 
 ## Using Both Together
 

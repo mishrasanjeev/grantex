@@ -1410,7 +1410,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"issuerUrl\": \"https://accounts.google.com\",\n  \"clientId\": \"your-client-id\",\n  \"clientSecret\": \"your-client-secret\",\n  \"redirectUri\": \"https://grantex-auth-dd4mtrt2gq-uc.a.run.app/sso/callback\"\n}"
+							"raw": "{\n  \"issuerUrl\": \"https://accounts.google.com\",\n  \"clientId\": \"your-client-id\",\n  \"clientSecret\": \"your-client-secret\",\n  \"redirectUri\": \"https://api.grantex.dev/sso/callback\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/v1/sso/config",

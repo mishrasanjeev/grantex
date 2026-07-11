@@ -43,6 +43,17 @@ export interface RegisterOrgParams {
   verificationMethod?: string;
 }
 
+export interface RegisterOrgResponse {
+  orgId: string;
+  did: string;
+  name: string;
+  trustLevel: string;
+  domain: string;
+  dnsRecordName: string;
+  verificationToken: string;
+  instructions?: string;
+}
+
 // ── API calls ────────────────────────────────────────────────────────────
 
 export async function searchRegistryOrgs(params?: {
@@ -64,8 +75,8 @@ export function getRegistryOrg(did: string): Promise<RegistryOrgDetail> {
   return api.get<RegistryOrgDetail>(`/v1/registry/orgs/${encodeURIComponent(did)}`);
 }
 
-export function registerOrg(params: RegisterOrgParams): Promise<RegistryOrgDetail> {
-  return api.post<RegistryOrgDetail>('/v1/registry/orgs', params);
+export function registerOrg(params: RegisterOrgParams): Promise<RegisterOrgResponse> {
+  return api.post<RegisterOrgResponse>('/v1/registry/orgs', params);
 }
 
 export function verifyOrgDns(orgId: string): Promise<{ verified: boolean }> {

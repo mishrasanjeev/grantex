@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Grantex Auth Service API
-  version: 0.1.3
+  version: 0.3.12
   description: |
     The Grantex Auth Service implements the Grantex delegated authorization protocol for AI agents.
     It provides agent registration, authorization flows, token management, audit logging, policy enforcement,
@@ -13,8 +13,8 @@ info:
     Public endpoints (health, JWKS, consent, SSO flow) require no authentication.
 
     ## Rate Limits
-    - **Global default**: 100 requests/minute
-    - **POST /v1/authorize**: 10 requests/minute
+    - **Global IP guard**: 500 requests/minute
+    - **POST /v1/authorize**: 10 requests/minute per developer
     - **POST /v1/token**: 20 requests/minute
     - **POST /v1/token/refresh**: 20 requests/minute
     - JWKS endpoint is allowlisted from rate limiting
@@ -26,8 +26,8 @@ info:
     url: https://grantex.dev
 
 servers:
-  - url: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
-    description: Production (Cloud Run)
+  - url: https://api.grantex.dev
+    description: Production (stable public API origin)
   - url: http://localhost:3001
     description: Local development (docker compose)
 
@@ -70,6 +70,24 @@ tags:
     description: W3C Verifiable Credential issuance, verification, and StatusList2021 revocation
   - name: DID
     description: W3C Decentralized Identifier (DID) document for credential verification
+  - name: Usage
+    description: Daily API usage metering
+  - name: Domains
+    description: Custom-domain registration and DNS verification
+  - name: Vault
+    description: Encrypted upstream credential storage and exchange
+  - name: Budgets
+    description: Per-grant budget allocations and debits
+  - name: DPDP
+    description: India DPDP consent, grievance, erasure, and export workflows
+  - name: Offline Authorization
+    description: Consent bundles and offline audit synchronization
+  - name: Passports
+    description: MPP agent passport issuance and lifecycle
+  - name: Trust Registry
+    description: Public organization directory and DNS ownership verification
+  - name: MCP Registry
+    description: MCP server directory and certification applications
 
 components:
   securitySchemes:
@@ -77,6 +95,15 @@ components:
       type: http
       scheme: bearer
       description: Developer API key
+    grantTokenAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Grantex grant token issued to an authorized agent
+    metricsBearerAuth:
+      type: http
+      scheme: bearer
+      description: METRICS_API_KEY bearer token (required by default in production)
     scimBearer:
       type: http
       scheme: bearer
@@ -1208,7 +1235,7 @@ paths:
       operationId: verifyToken
       tags: [Tokens]
       summary: Verify a grant token online
-      description: Server-side token verification. For offline verification, use the JWKS endpoint.
+      description: Server-side token verification with current revocation state. For local signature-and-claim verification, retrieve keys from the JWKS endpoint; standalone SDK helpers currently fetch JWKS per call.
       requestBody:
         required: true
         content:
@@ -3246,7 +3273,15 @@ paths:
       operationId: ldapCallback
       tags: [SSO]
       summary: LDAP Callback
-      description: Authenticate a user via LDAP bind and create an SSO session. Unlike OIDC and SAML which use browser redirects, LDAP authentication performs a direct bind against the directory server using the provided credentials. The user's attributes are read from the directory entry, groups are mapped to scopes, and JIT provisioning is applied if enabled.
+      description: >-
+        Authenticate a user with the current LDAP direct-bind preview and create
+        an SSO session. The built-in client binds the configured service account,
+        constructs a user DN from the configured filter and search base, then
+        binds that DN with the submitted password. It does not perform directory,
+        attribute, or group searches. The response has no email or display name,
+        uses an empty groups list, and therefore returns only configured default
+        scopes. JIT provisioning may still be applied when enabled. Validate the
+        exact DN convention against a staging directory.
       security: []
       requestBody:
         required: true
@@ -3257,7 +3292,7 @@ paths:
               properties:
                 username:
                   type: string
-                  description: The user's LDAP username (e.g. uid, sAMAccountName, or full DN)
+                  description: Username interpolated into the configured filter to construct the user DN; the preview does not search
                   example: alice
                 password:
                   type: string
@@ -3269,9 +3304,9 @@ paths:
                   example: sso_conn_03HX...
                 org:
                   type: string
-                  description: Optional organization identifier for domain-based routing
+                  description: Organization/developer identifier that owns the LDAP connection
                   example: dev_01HXYZ...
-              required: [username, password, connectionId]
+              required: [username, password, connectionId, org]
       responses:
         "200":
           description: SSO callback result with session and user info
@@ -3286,13 +3321,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "401":
-          description: LDAP bind failed (invalid credentials)
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "502":
-          description: LDAP server unreachable or connection error
+          description: LDAP authentication failed, including bind or connectivity errors
           content:
             application/json:
               schema:
@@ -4120,7 +4149,7 @@ paths:
             text/event-stream:
               schema:
                 type: string
-                description: Newline-delimited SSE events (`data: {JSON}\n\n`)
+                description: "Newline-delimited SSE events (`data: {JSON}\\n\\n`)"
         "429":
           description: Too many concurrent connections
           content:
@@ -5020,3 +5049,964 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+  /v1/usage:
+    get:
+      operationId: getCurrentUsage
+      tags: [Usage]
+      summary: Get usage for the current UTC date
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Daily usage counters
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [developerId, period, tokenExchanges, authorizations, verifications, totalRequests]
+                properties:
+                  developerId: { type: string }
+                  period: { type: string, format: date, description: Current UTC date; field name retained for compatibility }
+                  tokenExchanges: { type: integer, minimum: 0 }
+                  authorizations: { type: integer, minimum: 0 }
+                  verifications: { type: integer, minimum: 0 }
+                  totalRequests: { type: integer, minimum: 0 }
+
+  /v1/usage/history:
+    get:
+      operationId: getUsageHistory
+      tags: [Usage]
+      summary: Get newest-first daily usage history
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: days
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 90, default: 30 }
+      responses:
+        "200":
+          description: Daily usage entries ordered newest to oldest
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries]
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /v1/domains:
+    get:
+      operationId: listDomains
+      tags: [Domains]
+      summary: List custom domains
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Domain records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domains: { type: array, items: { type: object, additionalProperties: true } }
+    post:
+      operationId: createDomain
+      tags: [Domains]
+      summary: Register a custom domain
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain]
+              properties:
+                domain: { type: string, example: auth.example.com }
+      responses:
+        "201":
+          description: Domain and DNS verification challenge created
+        "409":
+          description: Domain already registered
+
+  /v1/domains/{id}/verify:
+    post:
+      operationId: verifyDomain
+      tags: [Domains]
+      summary: Verify a domain's DNS challenge
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Domain verified }
+        "400": { description: DNS verification failed }
+        "404": { description: Domain not found }
+
+  /v1/domains/{id}:
+    delete:
+      operationId: deleteDomain
+      tags: [Domains]
+      summary: Delete a custom domain
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Domain deleted }
+        "404": { description: Domain not found }
+
+  /v1/vault/credentials:
+    get:
+      operationId: listVaultCredentials
+      tags: [Vault]
+      summary: List credential metadata
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: principalId
+          in: query
+          schema: { type: string }
+        - name: service
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Credential metadata without raw tokens
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  credentials: { type: array, items: { type: object, additionalProperties: true } }
+    post:
+      operationId: storeVaultCredential
+      tags: [Vault]
+      summary: Store or update an encrypted credential
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [principalId, service, accessToken]
+              properties:
+                principalId: { type: string }
+                service: { type: string }
+                credentialType: { type: string, default: oauth2 }
+                accessToken: { type: string, writeOnly: true }
+                refreshToken: { type: string, writeOnly: true }
+                tokenExpiresAt: { type: string, format: date-time }
+                metadata: { type: object, additionalProperties: true }
+      responses:
+        "201": { description: Credential stored }
+
+  /v1/vault/credentials/{id}:
+    get:
+      operationId: getVaultCredential
+      tags: [Vault]
+      summary: Get credential metadata
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Credential metadata without raw tokens }
+        "404": { description: Credential not found }
+    delete:
+      operationId: deleteVaultCredential
+      tags: [Vault]
+      summary: Delete a stored credential
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Credential deleted }
+        "404": { description: Credential not found }
+
+  /v1/vault/credentials/exchange:
+    post:
+      operationId: exchangeVaultCredential
+      tags: [Vault]
+      summary: Exchange a grant token for an upstream credential
+      description: This endpoint authenticates with a Grantex grant token rather than a developer API key.
+      security:
+        - grantTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [service]
+              properties:
+                service: { type: string }
+      responses:
+        "200": { description: Decrypted upstream credential for the authorized service }
+        "403": { description: Grant does not authorize this service }
+
+  /v1/budget/allocations:
+    get:
+      operationId: listBudgetAllocations
+      tags: [Budgets]
+      summary: List budget allocations
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: Budget allocations }
+
+  /v1/budget/allocate:
+    post:
+      operationId: allocateBudget
+      tags: [Budgets]
+      summary: Allocate a budget to a grant
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grantId, initialBudget]
+              properties:
+                grantId: { type: string }
+                initialBudget: { type: number, exclusiveMinimum: 0 }
+                currency: { type: string, default: USD }
+      responses:
+        "201": { description: Budget allocated }
+
+  /v1/budget/debit:
+    post:
+      operationId: debitBudget
+      tags: [Budgets]
+      summary: Debit a grant budget atomically
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grantId, amount]
+              properties:
+                grantId: { type: string }
+                amount: { type: number, exclusiveMinimum: 0 }
+                description: { type: string }
+      responses:
+        "200": { description: Debit applied }
+        "402": { description: Insufficient remaining budget }
+        "404": { description: Budget allocation not found }
+        "409": { description: Conflicting debit state }
+
+  /v1/budget/balance/{grantId}:
+    get:
+      operationId: getBudgetBalance
+      tags: [Budgets]
+      summary: Get a grant's remaining budget
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: grantId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Current budget balance }
+        "404": { description: Budget allocation not found }
+
+  /v1/budget/transactions/{grantId}:
+    get:
+      operationId: listBudgetTransactions
+      tags: [Budgets]
+      summary: List budget transactions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: grantId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200": { description: Newest-first budget transactions }
+
+  /v1/dpdp/consent-records:
+    get:
+      operationId: listDpdpConsentRecords
+      tags: [DPDP]
+      summary: List DPDP consent records
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: dataPrincipalId
+          in: query
+          schema: { type: string }
+      responses:
+        "200": { description: Consent records and total count }
+    post:
+      operationId: createDpdpConsentRecord
+      tags: [DPDP]
+      summary: Create a DPDP consent record
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dataPrincipalId, purposes]
+              additionalProperties: true
+      responses:
+        "201": { description: Consent record created }
+
+  /v1/dpdp/consent-records/{recordId}:
+    get:
+      operationId: getDpdpConsentRecord
+      tags: [DPDP]
+      summary: Get a DPDP consent record
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Consent record }
+        "404": { description: Consent record not found }
+
+  /v1/dpdp/consent-records/{recordId}/withdraw:
+    post:
+      operationId: withdrawDpdpConsent
+      tags: [DPDP]
+      summary: Withdraw consent
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200": { description: Consent withdrawn }
+        "404": { description: Consent record not found }
+
+  /v1/dpdp/data-principals/{principalId}/records:
+    get:
+      operationId: listDpdpPrincipalRecords
+      tags: [DPDP]
+      summary: List all records for a data principal
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: principalId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Principal consent, grievance, export, and audit records }
+
+  /v1/dpdp/consent-notices:
+    post:
+      operationId: createDpdpConsentNotice
+      tags: [DPDP]
+      summary: Create a consent notice
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "201": { description: Consent notice created }
+
+  /v1/dpdp/grievances:
+    post:
+      operationId: fileDpdpGrievance
+      tags: [DPDP]
+      summary: File a grievance
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "202": { description: Grievance filed }
+
+  /v1/dpdp/grievances/{grievanceId}:
+    get:
+      operationId: getDpdpGrievance
+      tags: [DPDP]
+      summary: Get a grievance
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: grievanceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Grievance }
+        "404": { description: Grievance not found }
+
+  /v1/dpdp/exports:
+    post:
+      operationId: createDpdpExport
+      tags: [DPDP]
+      summary: Create a data export
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "201": { description: Export created }
+
+  /v1/dpdp/exports/{exportId}:
+    get:
+      operationId: getDpdpExport
+      tags: [DPDP]
+      summary: Get a data export
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: exportId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Export record and result when complete }
+        "404": { description: Export not found }
+
+  /v1/dpdp/data-principals/{principalId}/erasure:
+    post:
+      operationId: requestDpdpErasure
+      tags: [DPDP]
+      summary: Request data erasure
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: principalId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "201": { description: Erasure request created }
+
+  /v1/consent-bundles:
+    get:
+      operationId: listConsentBundles
+      tags: [Offline Authorization]
+      summary: List consent bundles
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, revoked, expired] }
+      responses:
+        "200": { description: Consent bundles owned by the developer }
+    post:
+      operationId: issueConsentBundle
+      tags: [Offline Authorization]
+      summary: Issue an offline consent bundle
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grantId]
+              additionalProperties: true
+      responses:
+        "201":
+          description: Bundle containing a grant token, JWKS snapshot, and offline audit key
+
+  /v1/consent-bundles/{bundleId}:
+    get:
+      operationId: getConsentBundle
+      tags: [Offline Authorization]
+      summary: Get a consent bundle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bundleId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Consent bundle }
+        "404": { description: Bundle not found }
+
+  /v1/consent-bundles/{bundleId}/audit:
+    get:
+      operationId: listConsentBundleAudit
+      tags: [Offline Authorization]
+      summary: List audit entries synchronized for a bundle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bundleId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Synchronized audit entries }
+
+  /v1/audit/offline-sync:
+    post:
+      operationId: syncOfflineAuditEntries
+      tags: [Offline Authorization]
+      summary: Synchronize signed offline audit entries
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bundleId, entries]
+              properties:
+                bundleId: { type: string }
+                entries: { type: array, items: { type: object, additionalProperties: true } }
+      responses:
+        "200": { description: Entries verified and synchronized }
+        "409": { description: Replay or sequence conflict }
+
+  /v1/consent-bundles/{bundleId}/revocation-status:
+    get:
+      operationId: getConsentBundleRevocationStatus
+      tags: [Offline Authorization]
+      summary: Check bundle revocation status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bundleId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Current bundle status }
+        "404": { description: Bundle not found }
+
+  /v1/consent-bundles/{bundleId}/refresh:
+    post:
+      operationId: refreshConsentBundle
+      tags: [Offline Authorization]
+      summary: Refresh an active consent bundle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bundleId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Refreshed bundle and rotated offline material }
+        "409": { description: Bundle cannot be refreshed }
+
+  /v1/consent-bundles/{bundleId}/revoke:
+    post:
+      operationId: revokeConsentBundle
+      tags: [Offline Authorization]
+      summary: Revoke a consent bundle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bundleId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Bundle revoked }
+        "404": { description: Bundle not found }
+
+  /v1/passport/issue:
+    post:
+      operationId: issueAgentPassport
+      tags: [Passports]
+      summary: Issue an MPP AgentPassportCredential
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agentId, grantId, principalId, allowedMPPCategories]
+              additionalProperties: true
+      responses:
+        "201": { description: Signed agent passport credential }
+
+  /v1/passports:
+    get:
+      operationId: listAgentPassports
+      tags: [Passports]
+      summary: List agent passports
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agentId
+          in: query
+          schema: { type: string }
+        - name: grantId
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200": { description: Agent passport records }
+
+  /v1/passport/{id}:
+    get:
+      operationId: getAgentPassport
+      tags: [Passports]
+      summary: Get an agent passport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Agent passport }
+        "404": { description: Passport not found }
+
+  /v1/passport/{id}/revoke:
+    post:
+      operationId: revokeAgentPassport
+      tags: [Passports]
+      summary: Revoke an agent passport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Passport revoked }
+        "404": { description: Passport not found }
+
+  /v1/registry/orgs:
+    get:
+      operationId: searchRegistryOrganizations
+      tags: [Trust Registry]
+      summary: Search public organization records
+      security: []
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: verified
+          in: query
+          schema: { type: boolean }
+        - name: badge
+          in: query
+          schema: { type: string }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200": { description: Public organization search results }
+    post:
+      operationId: registerRegistryOrganization
+      tags: [Trust Registry]
+      summary: Register an organization
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [did, name]
+              properties:
+                did: { type: string, example: "did:web:example.com" }
+                name: { type: string }
+                description: { type: string }
+                website: { type: string, format: uri }
+                contact: { type: object, additionalProperties: true }
+                requestVerification: { type: boolean, default: false }
+                verificationMethod: { type: string, enum: [dns-txt] }
+      responses:
+        "201": { description: Organization registered; includes the one-time DNS token }
+        "409": { description: DID already registered }
+
+  /v1/registry/orgs/{did}:
+    get:
+      operationId: getRegistryOrganization
+      tags: [Trust Registry]
+      summary: Get public organization detail
+      security: []
+      parameters:
+        - name: did
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Public organization detail }
+        "404": { description: Organization not found }
+
+  /v1/registry/orgs/{did}/jwks:
+    get:
+      operationId: getRegistryOrganizationJwks
+      tags: [Trust Registry]
+      summary: Get organization public keys
+      security: []
+      parameters:
+        - name: did
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: JSON Web Key Set }
+        "404": { description: Organization not found }
+
+  /v1/registry/orgs/{orgId}/verify-dns:
+    post:
+      operationId: verifyRegistryOrganizationDns
+      tags: [Trust Registry]
+      summary: Verify an organization's DNS TXT challenge
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          description: Registry organization ID or DID
+          schema: { type: string }
+      responses:
+        "200": { description: Organization verified }
+        "400": { description: DNS challenge not found or incorrect }
+        "404": { description: Organization not found }
+
+  /v1/mcp/servers:
+    get:
+      operationId: listMcpServers
+      tags: [MCP Registry]
+      summary: Search the public MCP server directory
+      security: []
+      parameters:
+        - name: certified
+          in: query
+          schema: { type: boolean }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [weekly_active_agents, stars] }
+      responses:
+        "200": { description: MCP server records }
+    post:
+      operationId: registerMcpServer
+      tags: [MCP Registry]
+      summary: Register an MCP server
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                serverUrl: { type: string, format: uri }
+                authEndpoint: { type: string, format: uri }
+                npmPackage: { type: string }
+                category: { type: string, default: other }
+                scopes:
+                  type: array
+                  items: { type: string }
+      responses:
+        "201": { description: MCP server registered }
+
+  /v1/mcp/servers/{serverId}:
+    get:
+      operationId: getMcpServer
+      tags: [MCP Registry]
+      summary: Get public MCP server detail
+      security: []
+      parameters:
+        - name: serverId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: MCP server detail
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [serverId, name, certificationPending]
+                properties:
+                  serverId: { type: string }
+                  name: { type: string }
+                  certificationPending:
+                    type: boolean
+                    description: Whether an active certification application already exists
+        "404": { description: MCP server not found }
+
+  /v1/mcp/certification/apply:
+    post:
+      operationId: applyForMcpCertification
+      tags: [MCP Registry]
+      summary: Submit an MCP certification application
+      description: Creates an application in pending_conformance_test status; submission is not approval.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [serverId, requestedLevel]
+              properties:
+                serverId: { type: string }
+                requestedLevel: { type: string, enum: [bronze, silver, gold] }
+      responses:
+        "202": { description: Application accepted }
+        "409": { description: An active application already exists (`CERTIFICATION_PENDING`) }
+
+  /v1/mcp/certification/{certId}:
+    get:
+      operationId: getMcpCertificationApplication
+      tags: [MCP Registry]
+      summary: Get certification application status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: certId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Certification application status and conformance results }
+        "404": { description: Application not found }
+
+  /metrics:
+    get:
+      operationId: getPrometheusMetrics
+      tags: [System]
+      summary: Get Prometheus metrics
+      description: |
+        Available when METRICS_ENABLED is true. This route bypasses developer
+        API-key authentication. When METRICS_REQUIRE_AUTH is true (the
+        production default), the bearer token must exactly match
+        METRICS_API_KEY.
+      security:
+        - metricsBearerAuth: []
+      responses:
+        "200":
+          description: Prometheus text exposition
+          content:
+            text/plain:
+              schema: { type: string }
+        "404": { description: Metrics are disabled }
+        "401": { description: Missing or invalid metrics bearer token }
+        "503": { description: Metrics authentication is required but METRICS_API_KEY is not configured }
+
+  /v1/webhooks/{id}/deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      tags: [Webhooks]
+      summary: List delivery attempts for a webhook
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, delivered, failed] }
+      responses:
+        "200": { description: Webhook delivery attempts, retry counts, and errors }
+        "404": { description: Webhook not found }
+
+  /v1/credentials/present:
+    post:
+      operationId: presentVerifiableCredential
+      tags: [Verifiable Credentials]
+      summary: Create a verifiable credential presentation
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sdJwt]
+              properties:
+                sdJwt: { type: string }
+                nonce: { type: string }
+                audience: { type: string }
+      responses:
+        "200": { description: Verifiable presentation }
+        "400": { description: Invalid presentation request }

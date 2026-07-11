@@ -29,13 +29,13 @@ All endpoints are protected by per-IP sliding-window rate limits powered by Redi
 
 | Endpoint | Limit | Window |
 |----------|-------|--------|
-| **All endpoints** (global default) | 100 req | 1 minute |
+| **All endpoints** (global IP guard) | 500 req | 1 minute |
 | `POST /v1/authorize` | 10 req | 1 minute |
 | `POST /v1/token` | 20 req | 1 minute |
 | `POST /v1/token/refresh` | 20 req | 1 minute |
 | `GET /.well-known/jwks.json` | **Exempt** | -- |
 
-When a client exceeds its limit, the API returns `429 Too Many Requests` with a `Retry-After` header indicating when the window resets. Every response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers.
+When a client exceeds its limit, the API returns `429 Too Many Requests`; `Retry-After` gives the minimum seconds to wait. Rate-limited responses expose `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). The allow-listed JWKS endpoint is exempt and need not include those headers.
 
 See the full [Rate Limits guide](/guides/rate-limits) for SDK integration examples and retry strategies.
 

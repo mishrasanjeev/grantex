@@ -17,7 +17,6 @@ import {
 } from './workers/commercePaymentReconciliation.js';
 import { closeSql } from './db/client.js';
 import { closeRedis } from './redis/client.js';
-import { seedTrustRegistry } from './db/seeds/trust-registry.js';
 
 async function main() {
   // Validate required environment variables before anything else
@@ -71,9 +70,6 @@ async function main() {
       console.log(`Seeded sandbox developer: id=${devId}`);
     }
   }
-
-  // Seed trust registry with demo orgs (idempotent)
-  await seedTrustRegistry();
 
   const app = await buildApp({ logger: true });
 

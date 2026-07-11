@@ -43,7 +43,7 @@ client.anomalies.toggle_rule("velocity_spike", enabled=True)
 ```
 
 ```bash cURL
-curl -X PATCH https://api.grantex.dev/v1/anomalies/rules/velocity_spike \
+curl -X PATCH https://api.grantex.dev/v1/anomaly/rules/velocity_spike \
   -H "Authorization: Bearer $GRANTEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"enabled": true}'
@@ -86,7 +86,7 @@ rule = client.anomalies.create_rule(
 ```
 
 ```bash cURL
-curl -X POST https://api.grantex.dev/v1/anomalies/rules \
+curl -X POST https://api.grantex.dev/v1/anomaly/rules \
   -H "Authorization: Bearer $GRANTEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -156,13 +156,13 @@ client.anomalies.resolve_alert(alerts[0].alert_id, note="False positive")
 
 ```bash cURL
 # Acknowledge
-curl -X POST https://api.grantex.dev/v1/anomalies/alerts/alert_01.../acknowledge \
+curl -X POST https://api.grantex.dev/v1/anomaly/alerts/alert_01.../acknowledge \
   -H "Authorization: Bearer $GRANTEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"note": "Investigating"}'
 
 # Resolve
-curl -X POST https://api.grantex.dev/v1/anomalies/alerts/alert_01.../resolve \
+curl -X POST https://api.grantex.dev/v1/anomaly/alerts/alert_01.../resolve \
   -H "Authorization: Bearer $GRANTEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"note": "False positive — test agent"}'
@@ -235,7 +235,7 @@ curl -N -H "Authorization: Bearer $GRANTEX_API_KEY" \
 Query aggregate anomaly metrics:
 
 ```bash
-GET /v1/anomalies/metrics?window=7d
+GET /v1/anomaly/metrics?window=7d
 ```
 
 Response:

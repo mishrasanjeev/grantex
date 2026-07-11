@@ -51,10 +51,9 @@ Include in your report:
 If a report contains exploit code, customer data, or other material you do not
 want to send in cleartext, request our PGP key by emailing
 `security@grantex.dev` with the subject **"PGP key request"** and we will reply
-with the current public key and its fingerprint within one business day. The
-fingerprint will also be posted at `https://grantex.dev/.well-known/security.asc`
-**(URL provisioning is TBD — until it is published, email is the source of
-truth).** Do not assume any key you find on a public key server is ours unless
+with the current public key and its fingerprint within one business day. No
+public PGP-key URL is currently published, so email is the source of truth.
+Do not assume any key you find on a public key server is ours unless
 the fingerprint matches what we emailed you.
 
 ### Response SLA
@@ -135,11 +134,10 @@ is on the roadmap but is not in place today, and we will not invent one.
 
 What we do offer:
 
-- **Hall of Thanks** — researchers who report a valid vulnerability and follow
-  this policy are credited by name (or anonymously, on request) at
-  `https://grantex.dev/security/thanks` and in the release notes for the
-  fix. **The page is provisioning-pending; until it is live we will keep an
-  internal list and migrate it once the page ships.** TBD.
+- **Researcher credit** — researchers who report a valid vulnerability and
+  follow this policy may be credited by name (or anonymously, on request) in
+  the release notes for the fix. No separate public Hall of Thanks page is
+  currently published.
 - **CVE assignment** — for qualifying issues we will request a CVE via the
   GitHub CNA and credit you in it.
 - **Swag** — Grantex stickers / shirt, on request, when shipping logistics

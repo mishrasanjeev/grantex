@@ -100,9 +100,18 @@ describe('registry', () => {
       name: 'New Org',
       contact: { security: 'sec@neworg.com' },
     };
-    ok({ ...params, verificationLevel: 'none', badges: [], agents: [] });
+    ok({
+      orgId: 'treg_123',
+      did: params.did,
+      name: params.name,
+      trustLevel: 'basic',
+      domain: 'neworg.com',
+      dnsRecordName: '_grantex-verify.neworg.com',
+      verificationToken: 'grantex-verify=token-123',
+    });
     const result = await registerOrg(params);
     expect(result.did).toBe('did:web:neworg.com');
+    expect(result.dnsRecordName).toBe('_grantex-verify.neworg.com');
     const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe('http://localhost:3000/v1/registry/orgs');
     expect(opts.method).toBe('POST');

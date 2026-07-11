@@ -1,6 +1,6 @@
 /**
  * Decode the payload section of a JWT without verifying the signature.
- * Used for offline scope checking — full verification is done at token issuance time.
+ * Used only to extract audit metadata. Never use this helper to authorize a call.
  */
 export function decodeJwtPayload(token: string): Record<string, unknown> {
   const parts = token.split('.');

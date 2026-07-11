@@ -85,25 +85,44 @@
 - [x] Policy-as-code git sync — bundle upload, versioning, webhook trigger
 - [x] Usage metering — Redis real-time counters, PostgreSQL rollup, API endpoints
 - [x] Self-service email verification (Resend API)
-- [x] Usage-based rate limiting (per-plan: Free=100, Pro=500, Enterprise=2000/min)
+- [x] Global, route-specific, and per-developer authorization rate-limit foundations
 - [x] Custom domains for Enterprise (DNS TXT verification)
 - [x] SDK updates: UsageClient + DomainsClient in both TS and Python SDKs
 
 ---
 
-## Later — v2.3
+### v2.3 Trust & Identity
+- [x] FIDO2/WebAuthn passkeys
+- [x] W3C Verifiable Credentials and DID infrastructure
+- [x] StatusList2021 credential revocation
+- [x] SD-JWT selective disclosure
+- [x] MPP AgentPassportCredential issuance and verification
+
+### v2.4 Enterprise SSO
+- [x] OIDC, SAML 2.0, and LDAP connection management
+- [x] OIDC discovery and JWKS-backed verification
+- [x] Domain-based routing and SSO enforcement
+- [x] JIT provisioning and group-to-scope mapping
+- [x] SSO session management
+
+---
+
+## Active and Planned Work
 
 ### Standards Engagement
-- [ ] NIST NCCoE public comment submission
+- [ ] Publish externally verifiable receipts/status for standards submissions and comments
 - [ ] OpenID AuthZEN working group participation
 - [ ] IETF draft revision with implementation report
 
 ### Managed Cloud
-- [ ] Hosted multi-tenant offering at `api.grantex.dev`
+- [x] Hosted service at `api.grantex.dev`
 - [ ] Usage-based pricing dashboard in portal
 - [ ] Custom domain SSL provisioning
 
-**Target: End of September 2026**
+### Rate Limiting
+- [ ] Enforce plan-specific authenticated throughput (the current service enforces global/route IP buckets plus a per-developer authorization bucket)
+
+Targets are assigned through public issues and release milestones rather than copied into this document.
 
 ---
 
@@ -116,4 +135,4 @@
 
 ---
 
-*Last updated: March 2026*
+*Last updated: July 2026*

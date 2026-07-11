@@ -1,8 +1,10 @@
-# NIST NCCoE Public Comment: AI Agent Authorization
+# Draft NIST NCCoE Public Comment: AI Agent Authorization
 
-**Submitted by:** Sanjeev Kumar, Grantex Project
+**Prepared by:** Sanjeev Kumar, Grantex Project
 **Date:** 2026-03-02
 **Subject:** Response to NCCoE AI Challenge Areas — Delegated Authorization for AI Agents
+
+**Publication status:** Repository draft. No public submission receipt or NIST response is attached; this document does not imply NIST acceptance or endorsement.
 **Contact:** mishra.sanjeev@gmail.com
 **Project:** https://github.com/mishrasanjeev/grantex
 
@@ -55,7 +57,7 @@ The Manage function allocates risk management resources. DAAP contributes throug
 |-----------------|-----------------|----------------|
 | MANAGE 1.1 — Risk treatment | Real-time grant revocation | `DELETE /v1/grants/:id` atomically revokes the grant and all descendant grants. Sub-second propagation. |
 | MANAGE 2.2 — Mechanisms to supersede | Token revocation + refresh rotation | Individual tokens revocable by JTI. Refresh tokens are single-use with automatic rotation. |
-| MANAGE 3.1 — Response plans | Event streaming + webhooks | Real-time SSE/WebSocket event streams for `grant.created`, `grant.revoked`, `token.issued`, `budget.threshold`, `budget.exhausted`. Webhooks with persistent retry for guaranteed delivery. |
+| MANAGE 3.1 — Response plans | Event streaming + webhooks | Real-time SSE/WebSocket event streams for `grant.created`, `grant.revoked`, `token.issued`, `budget.threshold`, `budget.exhausted`. Webhooks persist delivery attempts and retry failures with a finite cap. |
 | MANAGE 4.1 — Incident response | Cascade revocation + anomaly alerts | Revoking a parent grant atomically revokes all sub-agent grants. Anomaly detection surfaces high-severity behavioral deviations. |
 
 ### 3.4 Govern Function
@@ -74,17 +76,17 @@ The Govern function establishes organizational AI governance. DAAP contributes t
 ### 4.1 Reference Authorization Server
 
 - **Stack:** Fastify 5.x + PostgreSQL 16 + Redis 7, deployed on Google Cloud Run
-- **Production URL:** `https://grantex-auth-dd4mtrt2gq-uc.a.run.app`
-- **Test coverage:** ~362 automated tests
+- **Production URL:** `https://api.grantex.dev`
+- **Test coverage:** Automated unit, integration, conformance, security, and end-to-end suites run in CI; cite a specific workflow run rather than a hand-maintained count
 - **Source:** `apps/auth-service/` in the Grantex repository
 
 ### 4.2 SDK Coverage
 
-| SDK | Language | Version | Tests |
-|-----|----------|---------|-------|
-| `@grantex/sdk` | TypeScript | 0.2.0 | 106 |
-| `grantex` | Python | 0.2.0 | 105 |
-| `grantex-go` | Go | 0.1.2 | 106 |
+| SDK | Language | Release source |
+|-----|----------|----------------|
+| `@grantex/sdk` | TypeScript | npm package metadata |
+| `grantex` | Python | PyPI package metadata |
+| `grantex-go` | Go | Go module tags |
 
 ### 4.3 Framework Integrations
 
@@ -92,11 +94,11 @@ Production-ready integrations exist for: LangChain, Vercel AI, AutoGen, CrewAI, 
 
 ### 4.4 Conformance Suite
 
-The `@grantex/conformance` package (v0.1.4) provides automated validation of any DAAP-compliant server against all REQUIRED and OPTIONAL endpoints.
+The `@grantex/conformance` package provides automated validation of selected core and optional Grantex protocol suites. A report applies only to the tested package version, commit, configuration, and deployment.
 
 ### 4.5 IETF Submission
 
-The protocol is documented as an IETF Internet-Draft: `draft-mishra-oauth-agent-grants-01`, submitted to the OAuth Working Group.
+The protocol is documented as active individual Internet-Draft `draft-mishra-oauth-agent-grants-01`. Individual drafts are not IETF-endorsed standards and require working-group adoption before entering the working-group standards process.
 
 ## 5. Recommendations
 

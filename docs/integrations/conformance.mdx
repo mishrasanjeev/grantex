@@ -118,9 +118,18 @@ Enable these with `--include` to test optional protocol features:
 | `anomalies` | 3 | Anomaly detection and acknowledgement |
 | `compliance` | 4 | Compliance reporting and evidence export |
 
-## Programmatic API
+## Automation
 
-Use the conformance suite from your own code (e.g., integration tests):
+Invoke the CLI from CI and consume its JSON output:
+
+```bash
+npx @grantex/conformance \
+  --base-url http://localhost:3001 \
+  --api-key "$GRANTEX_API_KEY" \
+  --format json > conformance-results.json
+```
+
+The package also exports supported programmatic entry points:
 
 ```typescript
 import { runConformanceTests } from '@grantex/conformance/runner';
@@ -128,41 +137,15 @@ import { reportJson } from '@grantex/conformance/reporter';
 
 const report = await runConformanceTests({
   baseUrl: 'http://localhost:3001',
-  apiKey: 'sk_test_xxx',
+  apiKey: process.env.GRANTEX_API_KEY!,
   format: 'json',
   bail: false,
 });
 
-// report.summary = { total, passed, failed, skipped, durationMs }
 console.log(reportJson(report));
 ```
 
-The `ConformanceReport` object contains:
-
-```typescript
-{
-  suites: [{
-    name: string;
-    description: string;
-    optional: boolean;
-    tests: [{
-      name: string;
-      status: 'pass' | 'fail' | 'skip';
-      durationMs: number;
-      specRef: string;
-      error?: string;
-    }];
-    durationMs: number;
-  }];
-  summary: {
-    total: number;
-    passed: number;
-    failed: number;
-    skipped: number;
-    durationMs: number;
-  };
-}
-```
+The report contains suite results and a summary with total, passed, failed, skipped, and duration fields.
 
 ## Server Requirements
 

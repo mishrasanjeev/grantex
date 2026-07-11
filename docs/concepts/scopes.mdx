@@ -78,14 +78,17 @@ const grant = await verifyGrantToken(token, {
 
 ## Scope Enforcement in Integrations
 
-All framework integrations (LangChain, CrewAI, Vercel AI, etc.) perform offline scope checks by decoding the JWT's `scp` claim — no network call needed:
+Protected framework integrations (LangChain, CrewAI, Vercel AI, etc.) first
+verify the token signature and claims with the configured JWKS endpoint, then
+enforce the verified `scp` claim. Current standalone verifiers may fetch JWKS on
+each invocation; they do not merely trust an unverified decode.
 
 ```typescript
 // LangChain example
 const tool = createGrantexTool({
   name: 'read_calendar',
   grantToken,
-  requiredScope: 'calendar:read',  // checked offline from JWT
+  requiredScope: 'calendar:read',  // checked only after JWKS verification
   func: async (input) => getCalendarEvents(input),
 });
 ```

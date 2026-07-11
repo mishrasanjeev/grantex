@@ -2,7 +2,7 @@
 
 MCP server for AI agent authorization. 17 tools for managing agents, scoped tokens, grants, audit trails, and principal sessions — works with Claude Desktop, Cursor, and Windsurf.
 
-> **What is Grantex?** An open authorization protocol for AI agents (OAuth 2.0 for agents). Scoped delegation tokens, real-time revocation, and immutable audit trails. [Learn more](https://grantex.dev)
+> **What is Grantex?** An open authorization protocol for AI agents (OAuth 2.0 for agents). Scoped delegation tokens, server-side revocation, and immutable audit trails. [Learn more](https://grantex.dev)
 
 > **[Homepage](https://grantex.dev)** | **[Docs](https://docs.grantex.dev/integrations/mcp)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)** | **[Discord](https://discord.gg/QuSk7AeBdg)**
 
@@ -106,7 +106,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 | Tool | Description |
 |---|---|
 | `grantex_audit_list` | List audit entries with filters |
-| `grantex_audit_get` | Get a specific audit entry by ID |
+| `grantex_audit_log` | Log an agent action with its grant, principal, status, and metadata |
 
 ### Principal Sessions (1)
 | Tool | Description |
@@ -118,7 +118,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 - **Register agents** from Claude Desktop and manage their permissions conversationally
 - **Authorize agents** with specific scopes through the consent UI flow
 - **Inspect grants** to see what permissions an agent has and when they expire
-- **Revoke access** instantly when an agent misbehaves — cascades to all sub-agents
+- **Revoke access** in server state when an agent misbehaves — local enforcement requires a revocation check or refreshed status data
 - **Audit** what agents did — every action recorded with hash-chained integrity
 - **Delegate** from one agent to another with automatic scope narrowing
 
@@ -127,10 +127,10 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 Unlike API key or password-based MCP servers, Grantex provides:
 - **Scoped permissions** — agents get exactly the access they need, no more
 - **Human consent** — users approve what agents can do via a consent UI
-- **Real-time revocation** — revoke any agent's access in milliseconds
+- **Revocation controls** — server-side revocation takes effect immediately; local verifiers observe it after an online check or status refresh
 - **Delegation chains** — agent A can delegate to agent B with narrower scopes
 - **Audit trail** — every action logged with cryptographic integrity
-- **Offline verification** — any service can verify tokens via JWKS, no network call
+- **Local signature verification** — services verify with keys retrieved from JWKS; availability and rotation depend on their retrieval and cache strategy
 
 ## Grantex Ecosystem
 

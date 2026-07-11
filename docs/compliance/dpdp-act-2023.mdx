@@ -86,7 +86,10 @@ Each purpose in a consent record is a separate, specific scope. The consent UI s
 
 **Grantex implementation:**
 
-Every consent record includes a `withdrawUrl` that the data principal can visit to revoke consent. The data principal portal provides a one-click withdrawal button next to each active consent. Withdrawal triggers:
+Every consent record can be withdrawn through the authenticated DPDP API or SDK.
+Your application is responsible for presenting an accessible withdrawal control
+to the data principal; Grantex does not currently ship a separate DPDP portal or
+one-click withdrawal UI. Withdrawal triggers:
 
 1. Instant revocation of the underlying Grantex grant token
 2. Cascade revocation to all delegated sub-agent tokens
@@ -97,8 +100,7 @@ Every consent record includes a `withdrawUrl` that the data principal can visit 
 // Withdraw consent programmatically
 await dpdp.withdrawConsent(consentId);
 
-// Or the data principal clicks "Withdraw" in the portal
-// Same result: grant revoked, sub-agents revoked, audit logged
+// Expose this operation through your own authenticated end-user workflow
 ```
 
 ### Section 8 — Data Fiduciary Obligations
@@ -117,7 +119,10 @@ await dpdp.withdrawConsent(consentId);
 
 **Grantex implementation:**
 
-The data principal portal includes a grievance submission form that routes to the developer's configured DPO contact. Grievances are tracked with SLA timers per Section 13 requirements.
+The authenticated DPDP API and SDK can create and retrieve grievance records.
+Your application must provide the submission UI, notify or route work to the
+responsible contact, and implement any required response-deadline monitoring.
+Grantex does not currently provide a grievance form, DPO routing, or SLA timers.
 
 ### Section 11 — Data Principal Rights
 
@@ -125,12 +130,11 @@ The data principal portal includes a grievance submission form that routes to th
 
 **Grantex implementation:**
 
-The data principal portal provides:
-- **Access:** View all active consents, scopes, purposes, and processing history
-- **Correction:** Request corrections to personal data associated with consent records
-- **Erasure:** Withdraw consent and request deletion of processed data
-- **Portability:** Export consent records and audit history in machine-readable JSON
-- **Nomination:** Delegate rights management to another principal
+Grantex exposes authenticated APIs and SDK methods for listing consent records,
+withdrawing consent, requesting erasure, generating data exports, and filing
+grievances. The data fiduciary must integrate those operations into its own
+verified end-user workflow and implement rights not represented by a Grantex
+endpoint. There is no separate Grantex DPDP data-principal portal.
 
 ### Section 16 — Cross-Border Transfer
 
@@ -160,7 +164,6 @@ const dpdp = new DPDPClient({
     email: 'dpo@yourcompany.com',
   },
   defaultRetention: '90d',
-  grievanceSla: '72h',
 });
 ```
 

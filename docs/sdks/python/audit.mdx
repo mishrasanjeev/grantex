@@ -20,7 +20,9 @@ from grantex import Grantex
 with Grantex(api_key="gx_live_...") as client:
     entry = client.audit.log(
         agent_id="agt_abc123",
+        agent_did="did:grantex:agt_abc123",
         grant_id="grnt_xyz789",
+        principal_id="user_123",
         action="file.read",
         metadata={"path": "/documents/report.pdf", "size_bytes": 102400},
         status="success",
@@ -39,7 +41,9 @@ All parameters are keyword-only.
 | Parameter  | Type                    | Required | Default     | Description                              |
 |------------|-------------------------|----------|-------------|------------------------------------------|
 | `agent_id` | `str`                   | Yes      | --          | The agent that performed the action.     |
+| `agent_did` | `str`                  | Yes      | --          | The agent's decentralized identifier.    |
 | `grant_id` | `str`                   | Yes      | --          | The grant under which the action was performed. |
+| `principal_id` | `str`               | Yes      | --          | The principal on whose behalf the action ran. |
 | `action`   | `str`                   | Yes      | --          | A label for the action (e.g. `"file.read"`). |
 | `metadata` | `dict[str, Any] \| None`| No       | `None`      | Additional context about the action.     |
 | `status`   | `str`                   | No       | `"success"` | The outcome (`"success"`, `"failure"`, `"blocked"`). |
@@ -54,7 +58,7 @@ from grantex import Grantex, ListAuditParams
 with Grantex(api_key="gx_live_...") as client:
     # List all entries
     result = client.audit.list()
-    print(f"Total entries: {result.total}")
+    print(f"Entries returned: {len(result.entries)}")
 
     # List with filters
     result = client.audit.list(ListAuditParams(

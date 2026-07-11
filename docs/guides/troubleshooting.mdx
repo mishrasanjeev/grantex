@@ -22,7 +22,7 @@ If `verifyGrantToken()` or `tokens.verify()` returns invalid results, work throu
   </Step>
   <Step title="Verify the JWKS URI">
     Make sure you're using the correct JWKS endpoint for your environment:
-    - **Production:** `https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json`
+    - **Production:** `https://api.grantex.dev/.well-known/jwks.json`
     - **Self-hosted:** `https://your-domain/.well-known/jwks.json`
   </Step>
   <Step title="Check clock skew">
@@ -60,7 +60,9 @@ When you receive a `429 Too Many Requests` response:
 1. Read the `Retry-After` header for the minimum wait time
 2. Implement exponential backoff with jitter (see [Rate Limits guide](/guides/rate-limits))
 3. Reduce request frequency:
-   - **Use offline verification** instead of `POST /v1/tokens/verify` — the JWKS endpoint is exempt from rate limits
+   - **Use local JWKS-based verification** instead of `POST /v1/tokens/verify`
+     when a revocation lookup is not required. The standalone helpers still
+     fetch JWKS per call, but that endpoint is exempt from rate limits.
    - **Use webhooks** instead of polling for grant status changes
    - **Cache tokens** — don't re-exchange or re-verify tokens unnecessarily
 
@@ -68,7 +70,7 @@ When you receive a `429 Too Many Requests` response:
 
 | Endpoint | Limit |
 |----------|-------|
-| Global (all endpoints) | 100 req/min |
+| Global IP guard (all endpoints) | 500 req/min |
 | `POST /v1/authorize` | 10 req/min |
 | `POST /v1/token` | 20 req/min |
 | `POST /v1/token/refresh` | 20 req/min |

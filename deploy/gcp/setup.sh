@@ -102,10 +102,16 @@ gcloud sql databases create "${SQL_DB}" \
   --project="${PROJECT_ID}" || echo "Database may already exist."
 
 SQL_PASSWORD=$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 32)
-gcloud sql users create "${SQL_USER}" \
+if ! gcloud sql users create "${SQL_USER}" \
   --instance="${SQL_INSTANCE}" \
   --password="${SQL_PASSWORD}" \
-  --project="${PROJECT_ID}" || echo "User may already exist; password not updated."
+  --project="${PROJECT_ID}"; then
+  echo "    User already exists; rotating its password to keep Secret Manager in sync."
+  gcloud sql users set-password "${SQL_USER}" \
+    --instance="${SQL_INSTANCE}" \
+    --password="${SQL_PASSWORD}" \
+    --project="${PROJECT_ID}"
+fi
 
 echo ""
 echo "==> [7/17] Storing DB password in Secret Manager..."
@@ -163,13 +169,34 @@ for ROLE in "roles/cloudsql.client" "roles/secretmanager.secretAccessor" "roles/
 done
 
 echo ""
-echo "==> [12/17] Creating placeholder secrets in Secret Manager..."
-echo -n "REPLACE_ME" | gcloud secrets create grantex-rsa-private-key \
-  --replication-policy=automatic \
-  --data-file=- \
-  --project="${PROJECT_ID}" 2>/dev/null || \
-  echo "    Secret grantex-rsa-private-key already exists."
+echo "==> [12/17] Creating required production secrets and optional placeholders..."
+store_generated_secret_if_missing() {
+  local secret_name="$1"
+  local secret_value="$2"
 
+  if gcloud secrets describe "${secret_name}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+    echo "    Secret ${secret_name} already exists; leaving its current value unchanged."
+    return
+  fi
+
+  printf '%s' "${secret_value}" | gcloud secrets create "${secret_name}" \
+    --replication-policy=automatic \
+    --data-file=- \
+    --project="${PROJECT_ID}"
+}
+
+# Generate valid startup credentials instead of deploying known placeholders.
+# Existing secrets are never rotated by this idempotent setup script.
+RSA_PRIVATE_KEY_VALUE="$(openssl genrsa 2048 2>/dev/null)"
+store_generated_secret_if_missing grantex-rsa-private-key "${RSA_PRIVATE_KEY_VALUE}"
+unset RSA_PRIVATE_KEY_VALUE
+
+store_generated_secret_if_missing grantex-admin-api-key "$(openssl rand -hex 32)"
+store_generated_secret_if_missing grantex-vault-encryption-key "$(openssl rand -hex 32)"
+store_generated_secret_if_missing grantex-metrics-api-key "$(openssl rand -hex 32)"
+
+# Create an optional Stripe placeholder, but do not attach it to Cloud Run until
+# the operator replaces it with a real key.
 echo -n "REPLACE_ME" | gcloud secrets create grantex-stripe-secret-key \
   --replication-policy=automatic \
   --data-file=- \
@@ -214,7 +241,7 @@ gcloud run deploy "${CR_SERVICE}" \
   --vpc-connector="${CONNECTOR_NAME}" \
   --vpc-egress=all-traffic \
   --set-env-vars="HOST=0.0.0.0,JWT_ISSUER=https://grantex.dev,AUTO_GENERATE_KEYS=false,REDIS_URL=redis://${REDIS_HOST}:6379" \
-  --set-secrets="DATABASE_URL=grantex-db-password:latest,RSA_PRIVATE_KEY=grantex-rsa-private-key:latest,STRIPE_SECRET_KEY=grantex-stripe-secret-key:latest" \
+  --set-secrets="DATABASE_URL=grantex-db-password:latest,RSA_PRIVATE_KEY=grantex-rsa-private-key:latest,ADMIN_API_KEY=grantex-admin-api-key:latest,VAULT_ENCRYPTION_KEY=grantex-vault-encryption-key:latest,METRICS_API_KEY=grantex-metrics-api-key:latest" \
   --allow-unauthenticated \
   --project="${PROJECT_ID}" || echo "Cloud Run deploy failed — image may not exist yet. Push a build via GitHub Actions first."
 
@@ -233,8 +260,8 @@ echo "┌───────────────────────�
 echo "│  POST-PROVISIONING CHECKLIST                                            │"
 echo "├─────────────────────────────────────────────────────────────────────────┤"
 echo "│                                                                         │"
-echo "│  1. Populate secrets (CRITICAL — service will not start without these): │"
-echo "│     a) RSA private key:                                                 │"
+echo "│  1. Startup secrets were generated. To rotate the RSA private key:      │"
+echo "│     a) Generate and add a replacement RSA private key:                  │"
 echo "│        openssl genrsa -out rsa_private.pem 2048                        │"
 echo "│        gcloud secrets versions add grantex-rsa-private-key \\           │"
 echo "│          --data-file=rsa_private.pem --project=${PROJECT_ID}           │"
@@ -242,6 +269,7 @@ echo "│        rm rsa_private.pem                                             
 echo "│     b) Stripe secret key (from dashboard.stripe.com):                  │"
 echo "│        echo -n 'sk_live_...' | gcloud secrets versions add \\           │"
 echo "│          grantex-stripe-secret-key --data-file=- --project=${PROJECT_ID}│"
+echo "│        Then attach STRIPE_SECRET_KEY to the Cloud Run service.          │"
 echo "│                                                                         │"
 echo "│  2. Run DB migrations (see step 13 above).                              │"
 echo "│                                                                         │"

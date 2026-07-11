@@ -26,9 +26,8 @@ export interface CreateGrantexToolOptions<
   /** Zod schema describing the tool's input parameters. */
   parameters: PARAMETERS;
   /**
-   * A Grantex grant token (JWT). The token is decoded offline to verify
-   * that `requiredScope` appears in its `scp` claim. Throws
-   * {@link GrantexScopeError} at construction time if the scope is missing.
+   * A Grantex grant token (JWT). Its signature and claims are verified against
+   * JWKS before execution, then `requiredScope` is checked against `scp`.
    */
   grantToken: string;
   /** JWKS URL used to verify the grant token. Defaults to https://api.grantex.dev/.well-known/jwks.json. */

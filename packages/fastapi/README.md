@@ -20,7 +20,7 @@ from grantex_fastapi import GrantexAuth, GrantexFastAPIError, grantex_exception_
 app = FastAPI()
 app.add_exception_handler(GrantexFastAPIError, grantex_exception_handler)
 
-JWKS_URI = "https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json"
+JWKS_URI = "https://api.grantex.dev/.well-known/jwks.json"
 grantex = GrantexAuth(jwks_uri=JWKS_URI)
 
 # Verify token — grant is injected automatically
@@ -135,8 +135,8 @@ The `VerifiedGrant` dataclass contains:
 ## Requirements
 
 - Python 3.9+
-- FastAPI >= 0.100.0
-- `grantex` >= 0.1.0
+- FastAPI >= 0.115.0
+- `grantex` >= 0.3.6
 
 ## License
 

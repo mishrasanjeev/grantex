@@ -21,7 +21,10 @@ Published December 2025 — the first industry-standard threat taxonomy for auto
 
 ## EU AI Act
 
-Binding August 2026 — the world's first comprehensive AI regulation.
+The Act applies in phases. Current Commission guidance places transparency rules
+in August 2026, listed high-risk areas in December 2027, and product-integrated
+high-risk systems in August 2028. The controls below are technical mappings, not
+a determination that a deployment satisfies the regulation.
 
 | Article | Requirement | Grantex Control | Implementation |
 |---------|------------|----------------|----------------|
@@ -61,22 +64,22 @@ Grantex can generate a compliance evidence pack that bundles all relevant data f
 
 ```bash
 # Generate a compliance evidence pack via CLI
-grantex compliance export --format json --from 2026-01-01 --to 2026-03-28
+grantex compliance evidence-pack \
+  --since 2026-01-01 \
+  --until 2026-03-28 \
+  --framework all \
+  --output evidence.json
 
 # Or via API
-curl -X POST https://api.grantex.dev/v1/compliance/evidence \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"from": "2026-01-01", "to": "2026-03-28"}'
+curl "https://api.grantex.dev/v1/compliance/evidence-pack?since=2026-01-01&until=2026-03-28&framework=all" \
+  -H "Authorization: Bearer $API_KEY"
 ```
 
 The evidence pack includes:
-- All grants issued in the period
-- Token issuance and revocation events
-- Audit trail entries (hash-chained)
-- Agent registrations and delegation chains
-- Policy snapshots
-- Anomaly detection findings
+- Grant records issued in the selected period
+- Audit entries in the selected period, including hash-chain integrity results
+- Current policy records
+- Summary counts for agents, grants, audit outcomes, policies, and plan
 
 ## Evidence And Standards Mappings
 

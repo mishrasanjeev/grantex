@@ -10,11 +10,15 @@ from ._errors import GrantexTokenError
 from ._types import GrantTokenPayload, VerifiedGrant, VerifyGrantTokenOptions
 
 
+_PRODUCTION_JWKS_URI = "https://api.grantex.dev/.well-known/jwks.json"
+_PRODUCTION_ISSUER = "https://grantex.dev"
+
+
 def verify_grant_token(
     token: str,
     options: VerifyGrantTokenOptions,
 ) -> VerifiedGrant:
-    """Verify a Grantex grant token offline using the published JWKS.
+    """Verify a Grantex grant token locally using remotely retrieved JWKS.
 
     Algorithm is fixed to RS256 per SPEC §11 and cannot be overridden.
 
@@ -82,9 +86,12 @@ def verify_grant_token(
 
 
 def _derive_issuer_from_jwks_uri(jwks_uri: str) -> str:
-    """Mirror the TypeScript SDK: strip a trailing /.well-known/jwks.json,
-    otherwise use the origin + trimmed path."""
+    """Map the production JWKS alias to its canonical issuer; otherwise
+    mirror the TypeScript SDK's URL-derived issuer behavior."""
     from urllib.parse import urlparse
+
+    if jwks_uri.rstrip("/") == _PRODUCTION_JWKS_URI:
+        return _PRODUCTION_ISSUER
 
     parsed = urlparse(jwks_uri)
     origin = f"{parsed.scheme}://{parsed.netloc}"
@@ -106,23 +113,40 @@ def _fetch_signing_key(jwks_uri: str, kid: str | None) -> Any:
             f"Failed to fetch JWKS from {jwks_uri}: {exc}"
         ) from exc
 
-    keys: list[dict[str, Any]] = jwks.get("keys", [])
+    raw_keys = jwks.get("keys", [])
+    if not isinstance(raw_keys, list):
+        raise GrantexTokenError("JWKS keys must be an array")
+    keys: list[dict[str, Any]] = [
+        key for key in raw_keys if isinstance(key, dict)
+    ]
     if not keys:
         raise GrantexTokenError("JWKS contains no keys")
+    if kid is not None and (not isinstance(kid, str) or not kid):
+        raise GrantexTokenError("Grant token kid header must be a non-empty string")
 
     matched: dict[str, Any] | None = None
-    if kid:
-        for k in keys:
-            if k.get("kid") == kid:
-                matched = k
-                break
-
-    if matched is None:
-        # Fallback: first RSA key
-        for k in keys:
-            if k.get("kty") == "RSA":
-                matched = k
-                break
+    if kid is not None:
+        # A token that names a key must match that exact RSA key. Falling back
+        # to another key turns an unknown/stale kid into an ambiguous trust
+        # decision and differs from JOSE resolver behavior in the other SDKs.
+        matching_keys = [
+            key for key in keys
+            if key.get("kid") == kid and key.get("kty") == "RSA"
+        ]
+        if len(matching_keys) == 1:
+            matched = matching_keys[0]
+        elif len(matching_keys) > 1:
+            raise GrantexTokenError(
+                f"JWKS contains multiple RSA keys with kid={kid!r}"
+            )
+    else:
+        rsa_keys = [key for key in keys if key.get("kty") == "RSA"]
+        if len(rsa_keys) == 1:
+            matched = rsa_keys[0]
+        elif len(rsa_keys) > 1:
+            raise GrantexTokenError(
+                "Grant token header is missing kid and JWKS contains multiple RSA keys"
+            )
 
     if matched is None:
         raise GrantexTokenError(

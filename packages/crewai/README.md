@@ -8,7 +8,7 @@ Wrap any CrewAI tool with Grantex grant token verification so your agents can on
 [![Python](https://img.shields.io/pypi/pyversions/grantex-crewai)](https://pypi.org/project/grantex-crewai/)
 [![License](https://img.shields.io/pypi/l/grantex-crewai)](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 
-> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+> **[Homepage](https://grantex.dev)** | **[Docs](https://docs.grantex.dev)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 

@@ -56,7 +56,7 @@ for (const block of response.content) {
 
 ## Documentation
 
-Full docs at [grantex.dev/integrations/anthropic](https://grantex.dev/integrations/anthropic).
+Full docs at [docs.grantex.dev/integrations/anthropic](https://docs.grantex.dev/integrations/anthropic).
 
 ## License
 

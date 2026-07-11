@@ -80,11 +80,13 @@ console.log(authRequest.consentUrl);
 ```
 
 ```python Python
-auth = client.authorize(
+from grantex import AuthorizeParams
+
+auth = client.authorize(AuthorizeParams(
     agent_id=agent.id,
     user_id="user_abc123",
     scopes=["calendar:read", "payments:initiate:max_500"],
-)
+))
 
 # Redirect user to the consent page
 print(auth.consent_url)
@@ -172,7 +174,9 @@ grantex tokens verify <jwt>
 ```typescript TypeScript
 await grantex.audit.log({
   agentId: agent.id,
+  agentDid: agent.did,
   grantId: token.grantId,
+  principalId: 'user_abc123',
   action: 'payment.initiated',
   status: 'success',
   metadata: { amount: 420, currency: 'USD', merchant: 'Air India' },
@@ -182,7 +186,9 @@ await grantex.audit.log({
 ```python Python
 client.audit.log(
     agent_id=agent.id,
+    agent_did=agent.did,
     grant_id=token.grant_id,
+    principal_id="user_abc123",
     action="payment.initiated",
     status="success",
     metadata={"amount": 420, "currency": "USD", "merchant": "Air India"},

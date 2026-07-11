@@ -80,9 +80,13 @@ If your agents currently authenticate with static API keys and you log actions m
     Log actions automatically through the SDK:
     ```typescript
     await grantex.audit.log({
+      agentId,
+      agentDid,
+      principalId,
       grantId,
       action: 'calendar.event.created',
-      resource: `event:${eventId}`,
+      status: 'success',
+      metadata: { resource: `event:${eventId}` },
     });
     ```
   </Step>
@@ -135,20 +139,20 @@ If you already use OAuth 2.0 for agent authorization, Grantex extends the model 
     });
     ```
   </Step>
-  <Step title="Replace token introspection with offline verification">
+  <Step title="Replace token introspection with local JWKS verification">
     Before (OAuth introspection):
     ```
     POST /oauth/introspect  { token: "..." }
     ```
 
-    After (Grantex offline verification):
+    After (Grantex signature-and-claim verification):
     ```typescript
     import { verifyGrantToken } from '@grantex/sdk';
 
     const result = await verifyGrantToken(token, {
-      jwksUrl: 'https://your-auth-service.com/.well-known/jwks.json',
+      jwksUri: 'https://your-auth-service.com/.well-known/jwks.json',
     });
-    // No network call needed — JWT verified locally with JWKS
+    // Claims are verified locally after the standalone helper fetches JWKS
     ```
   </Step>
   <Step title="Add delegation support (optional)">
@@ -175,7 +179,7 @@ If you already use OAuth 2.0 for agent authorization, Grantex extends the model 
 ## Further Reading
 
 - [Quickstart](/quickstart) — Get running in 5 minutes
-- [Token Verification](/guides/token-verification) — Online and offline verification
+- [Token Verification](/guides/token-verification) — Online and local JWKS-based verification
 - [End-User Permissions](/guides/end-user-permissions) — Principal sessions and dashboard
 - [Express Middleware](/integrations/express) — Drop-in middleware for Node.js APIs
 - [FastAPI Middleware](/integrations/fastapi) — Drop-in middleware for Python APIs

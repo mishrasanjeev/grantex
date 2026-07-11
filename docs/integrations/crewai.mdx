@@ -36,7 +36,7 @@ tool = create_grantex_tool(
 # Use in a CrewAI agent
 ```
 
-The tool performs an **offline** scope check at creation time by decoding the JWT's `scp` claim. If the required scope is missing, a `PermissionError` is raised before the tool is ever used.
+Before each protected invocation, the tool verifies the token signature and claims with `verify_grant_token()`, using the configured JWKS endpoint, and checks the verified scopes. The verifier may contact that endpoint to resolve keys, so it must be reachable. Invalid tokens and missing scopes raise before the wrapped function runs.
 
 ## Audit Logging
 
@@ -105,7 +105,7 @@ with_audit_logging(
 
 ### `get_tool_scopes(grant_token)`
 
-Returns the scopes embedded in a grant token. Purely offline — no network call.
+Returns unverified scopes decoded from a grant token. Use this only for display or debugging, never for an authorization decision.
 
 ## Requirements
 

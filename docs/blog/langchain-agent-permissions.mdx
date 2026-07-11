@@ -86,7 +86,11 @@ const agent = createToolCallingAgent({
 });
 ```
 
-The scope check is **offline** — it reads the `scp` claim from the JWT directly, no network call needed. If a user's grant token only includes `contacts:read`, calling `delete_contact` throws a `PermissionError` before your function executes.
+Before checking `scp`, the wrapper verifies the JWT signature and claims with
+the configured JWKS endpoint. The current standalone verifier may fetch keys on
+each call, so this is not an unverified decode or a guaranteed network-free hot
+path. If a verified token only includes `contacts:read`, calling
+`delete_contact` throws before your function executes.
 
 ### Approach 2: `wrapTool` with Manifests — Manifest-Based Enforcement
 

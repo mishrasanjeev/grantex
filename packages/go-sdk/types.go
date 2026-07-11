@@ -75,6 +75,7 @@ type ListAgentsResponse struct {
 
 // AuthorizeParams are the parameters for creating an authorization request.
 type AuthorizeParams struct {
+	Audience            string   `json:"audience,omitempty"`
 	AgentID             string   `json:"agentId"`
 	PrincipalID         string   `json:"principalId"`
 	Scopes              []string `json:"scopes"`
@@ -306,17 +307,17 @@ type PortalResponse struct {
 
 // Policy represents an access policy.
 type Policy struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Effect        string   `json:"effect"`
-	Priority      int      `json:"priority"`
-	AgentID       *string  `json:"agentId"`
-	PrincipalID   *string  `json:"principalId"`
-	Scopes        []string `json:"scopes"`
-	TimeOfDayStart *string `json:"timeOfDayStart"`
-	TimeOfDayEnd   *string `json:"timeOfDayEnd"`
-	CreatedAt     string   `json:"createdAt"`
-	UpdatedAt     string   `json:"updatedAt"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Effect         string   `json:"effect"`
+	Priority       int      `json:"priority"`
+	AgentID        *string  `json:"agentId"`
+	PrincipalID    *string  `json:"principalId"`
+	Scopes         []string `json:"scopes"`
+	TimeOfDayStart *string  `json:"timeOfDayStart"`
+	TimeOfDayEnd   *string  `json:"timeOfDayEnd"`
+	CreatedAt      string   `json:"createdAt"`
+	UpdatedAt      string   `json:"updatedAt"`
 }
 
 // CreatePolicyParams are the parameters for creating a policy.
@@ -359,14 +360,14 @@ type ComplianceSummaryParams struct {
 
 // ComplianceSummary is the compliance overview.
 type ComplianceSummary struct {
-	GeneratedAt  string                       `json:"generatedAt"`
-	Since        *string                      `json:"since,omitempty"`
-	Until        *string                      `json:"until,omitempty"`
+	GeneratedAt  string                        `json:"generatedAt"`
+	Since        *string                       `json:"since,omitempty"`
+	Until        *string                       `json:"until,omitempty"`
 	Agents       ComplianceSummaryAgents       `json:"agents"`
 	Grants       ComplianceSummaryGrants       `json:"grants"`
 	AuditEntries ComplianceSummaryAuditEntries `json:"auditEntries"`
 	Policies     ComplianceSummaryPolicies     `json:"policies"`
-	Plan         string                       `json:"plan"`
+	Plan         string                        `json:"plan"`
 }
 
 // ComplianceSummaryAgents is agent stats in a compliance summary.
@@ -436,12 +437,12 @@ type EvidencePackParams struct {
 
 // EvidencePack is a compliance evidence package.
 type EvidencePack struct {
-	Meta           EvidencePackMeta    `json:"meta"`
-	Summary        ComplianceSummary   `json:"summary"`
-	Grants         []Grant             `json:"grants"`
-	AuditEntries   []AuditEntry        `json:"auditEntries"`
-	Policies       []Policy            `json:"policies"`
-	ChainIntegrity ChainIntegrity      `json:"chainIntegrity"`
+	Meta           EvidencePackMeta  `json:"meta"`
+	Summary        ComplianceSummary `json:"summary"`
+	Grants         []Grant           `json:"grants"`
+	AuditEntries   []AuditEntry      `json:"auditEntries"`
+	Policies       []Policy          `json:"policies"`
+	ChainIntegrity ChainIntegrity    `json:"chainIntegrity"`
 }
 
 // EvidencePackMeta is metadata for an evidence pack.
@@ -456,7 +457,7 @@ type EvidencePackMeta struct {
 // ChainIntegrity represents audit chain integrity check results.
 type ChainIntegrity struct {
 	Valid          bool    `json:"valid"`
-	CheckedEntries int    `json:"checkedEntries"`
+	CheckedEntries int     `json:"checkedEntries"`
 	FirstBrokenAt  *string `json:"firstBrokenAt"`
 }
 
@@ -707,19 +708,13 @@ type SsoConnectionTestResult struct {
 
 // SsoEnforcementParams are the parameters for configuring SSO enforcement.
 type SsoEnforcementParams struct {
-	Enforce      bool     `json:"enforce"`
-	ConnectionID string   `json:"connectionId,omitempty"`
-	GracePeriod  string   `json:"gracePeriod,omitempty"`
-	ExemptEmails []string `json:"exemptEmails,omitempty"`
+	Enforce bool `json:"enforce"`
 }
 
 // SsoEnforcementResponse is the response from setting SSO enforcement.
 type SsoEnforcementResponse struct {
-	Enforce      bool     `json:"enforce"`
-	ConnectionID string   `json:"connectionId"`
-	GracePeriod  string   `json:"gracePeriod,omitempty"`
-	ExemptEmails []string `json:"exemptEmails"`
-	UpdatedAt    string   `json:"updatedAt"`
+	Enforce     bool   `json:"enforce"`
+	DeveloperID string `json:"developerId"`
 }
 
 // SsoSession represents an active SSO session.
@@ -739,16 +734,15 @@ type ListSsoSessionsResponse struct {
 
 // SsoOidcCallbackParams are the parameters for handling an OIDC SSO callback.
 type SsoOidcCallbackParams struct {
-	Code         string `json:"code"`
-	State        string `json:"state"`
-	ConnectionID string `json:"connectionId,omitempty"`
+	Code        string `json:"code"`
+	State       string `json:"state"`
+	RedirectURI string `json:"redirect_uri,omitempty"`
 }
 
 // SsoSamlCallbackParams are the parameters for handling a SAML SSO callback.
 type SsoSamlCallbackParams struct {
-	SAMLResponse string `json:"samlResponse"`
-	RelayState   string `json:"relayState,omitempty"`
-	ConnectionID string `json:"connectionId,omitempty"`
+	SAMLResponse string `json:"SAMLResponse"`
+	RelayState   string `json:"RelayState"`
 }
 
 // SsoLdapCallbackParams are the parameters for handling an LDAP SSO callback.
@@ -761,14 +755,15 @@ type SsoLdapCallbackParams struct {
 
 // SsoCallbackResult is the result from an enterprise SSO callback (OIDC, SAML, or LDAP).
 type SsoCallbackResult struct {
-	Email        string            `json:"email"`
-	Name         string            `json:"name,omitempty"`
-	Sub          string            `json:"sub"`
-	DeveloperID  string            `json:"developerId"`
-	ConnectionID string            `json:"connectionId"`
-	Groups       []string          `json:"groups,omitempty"`
-	Attributes   map[string]string `json:"attributes,omitempty"`
-	SessionID    string            `json:"sessionId"`
+	SessionID    string   `json:"sessionId"`
+	Email        *string  `json:"email"`
+	Name         *string  `json:"name"`
+	Sub          *string  `json:"sub"`
+	Groups       []string `json:"groups"`
+	MappedScopes []string `json:"mappedScopes"`
+	PrincipalID  *string  `json:"principalId"`
+	DeveloperID  string   `json:"developerId"`
+	ExpiresAt    string   `json:"expiresAt"`
 }
 
 // --- Principal Sessions ---

@@ -1,14 +1,16 @@
 # IETF Internet-Draft: Delegated Agent Authorization Protocol (DAAP)
 
-**Draft name:** `draft-mishra-oauth-agent-grants-00`
+**Draft name:** `draft-mishra-oauth-agent-grants-01`
 **Target:** IETF OAuth Working Group (oauth@ietf.org)
-**Status:** Individual Submission — version 00
+**Status:** Active individual Internet-Draft — revision 01 (published March 2, 2026; expires September 3, 2026)
+
+Authoritative record: <https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/>. An individual Internet-Draft is not endorsed by the IETF and has no formal standards standing unless adopted and advanced through the IETF process.
 
 ---
 
 ## Document
 
-The Internet-Draft is in [`draft-mishra-oauth-agent-grants-00.md`](./draft-mishra-oauth-agent-grants-00.md), written in [kramdown-rfc2629](https://github.com/cabo/kramdown-rfc) format — a Markdown superset that compiles to RFC XML (RFC 7991) and from there to canonical IETF text and HTML.
+The Internet-Draft is in [`draft-mishra-oauth-agent-grants-01.md`](./draft-mishra-oauth-agent-grants-01.md), written in [kramdown-rfc2629](https://github.com/cabo/kramdown-rfc) format — a Markdown superset that compiles to RFC XML (RFC 7991) and from there to canonical IETF text and HTML.
 
 ---
 
@@ -25,19 +27,19 @@ pip install xml2rfc
 
 ```bash
 # Markdown → RFC XML
-kdrfc draft-mishra-oauth-agent-grants-00.md
+kdrfc draft-mishra-oauth-agent-grants-01.md
 
 # RFC XML → text (canonical IETF format)
-xml2rfc draft-mishra-oauth-agent-grants-00.xml --text
+xml2rfc draft-mishra-oauth-agent-grants-01.xml --text
 
 # RFC XML → HTML
-xml2rfc draft-mishra-oauth-agent-grants-00.xml --html
+xml2rfc draft-mishra-oauth-agent-grants-01.xml --html
 
 # RFC XML → PDF
-xml2rfc draft-mishra-oauth-agent-grants-00.xml --pdf
+xml2rfc draft-mishra-oauth-agent-grants-01.xml --pdf
 ```
 
-Output files: `draft-mishra-oauth-agent-grants-00.txt`, `.html`, `.pdf`.
+Output files: `draft-mishra-oauth-agent-grants-01.txt`, `.html`, `.pdf`.
 
 Alternatively, paste the XML into the [IETF Author Tools](https://author-tools.ietf.org/) web interface for a one-click render.
 
@@ -47,7 +49,7 @@ Alternatively, paste the XML into the [IETF Author Tools](https://author-tools.i
 
 1. Render the XML as above, or use `kdrfc` to produce the `.xml` file directly.
 2. Go to **https://datatracker.ietf.org/submit/**.
-3. Upload `draft-mishra-oauth-agent-grants-00.xml` (or `.txt`).
+3. Upload `draft-mishra-oauth-agent-grants-01.xml` (or `.txt`).
 4. The Datatracker will validate the document, assign a submission ID, and send a confirmation email to the address listed in the author block (`mishra.sanjeev@gmail.com`).
 5. Confirm the submission via the email link.
 
@@ -66,7 +68,7 @@ Post to the OAuth WG mailing list after the Datatracker submission is confirmed:
 
 Suggested subject line:
 ```
-[oauth] New individual draft: draft-mishra-oauth-agent-grants-00 (Delegated Agent Authorization Protocol)
+[oauth] New individual draft: draft-mishra-oauth-agent-grants-01 (Delegated Agent Authorization Protocol)
 ```
 
 ---
@@ -87,7 +89,7 @@ The expiry date is shown on the Datatracker page for the draft.
 
 | Stage | Action |
 |-------|--------|
-| Individual I-D | Submit `draft-mishra-oauth-agent-grants-00` to Datatracker ← **current** |
+| Individual I-D | Submit `draft-mishra-oauth-agent-grants-01` to Datatracker ← **current** |
 | WG adoption | Request adoption at an IETF meeting or on the mailing list after gathering support |
 | WG I-D | Rename to `draft-ietf-oauth-agent-grants-00` upon WG adoption |
 | WGLC | Working Group Last Call — two-week review period |

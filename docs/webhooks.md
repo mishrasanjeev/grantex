@@ -210,7 +210,7 @@ grantex.webhooks.delete(endpoint.id)
 ## Delivery Behaviour
 
 - Grantex delivers webhooks with a **10-second timeout** per request.
-- Delivery is **best-effort** — if your endpoint is unreachable, the event is not retried in the current version.
+- Failed deliveries are retried with exponential backoff (starting at 30 seconds) for up to five total attempts. After the final failure the delivery is marked `failed` and its last error remains available in delivery history.
 - Your endpoint should return **any 2xx status** to be considered successful.
 - Respond quickly (under 5s) and do heavy processing asynchronously.
 

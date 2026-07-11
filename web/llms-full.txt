@@ -13,9 +13,9 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - IETF Draft: https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/
 - License: Apache 2.0
 - Protocol Version: 1.0 (Final, frozen)
-- Tests: latest changelog reports 3,536 tests across 28 packages; GitHub Actions is the source of truth for pass/fail status
+- Tests: the monorepo contains 29 packages; GitHub Actions is the source of truth for current pass/fail status
 - SOC 2: readiness control mapping published; formal third-party attestation is not published
-- Production: Cloud Run at https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+- Production API: https://api.grantex.dev
 
 ---
 
@@ -161,7 +161,7 @@ Grantex tokens are standard JWTs (RS256) with agent-specific claims:
 | `agt` | Agent DID — cryptographically verifiable identity |
 | `dev` | Developer org that built the agent |
 | `scp` | Scopes granted — services should check these |
-| `jti` | Unique token ID — used for real-time revocation |
+| `jti` | Unique token ID — used for central revocation checks |
 | `grnt` | Grant record ID |
 | `aud` | Intended audience (optional) |
 | `bdg` | Remaining budget amount (optional, when budget allocated) |
@@ -253,7 +253,7 @@ AutoGen and OpenAI function-calling integration.
 ```
 npm install @grantex/mcp
 ```
-Model Context Protocol server with 13 tools for Claude Desktop, Cursor, and Windsurf.
+Model Context Protocol server with 17 tools for Claude Desktop, Cursor, and Windsurf.
 
 ### Express.js Middleware (`@grantex/express`)
 ```
@@ -324,7 +324,7 @@ grantex-conformance --base-url http://localhost:3001
 Passkey-based human presence verification during consent. When enabled, users authenticate with biometrics, security keys, or platform authenticators instead of clicking "approve". FIDO evidence is embedded in Verifiable Credentials as cryptographic proof of human presence — compatible with Mastercard Verifiable Intent.
 
 ### W3C Verifiable Credentials (VC-JWT)
-Issue portable, tamper-proof W3C VCs alongside standard JWTs. Types: `AgentGrantCredential` (direct grants) and `DelegatedGrantCredential` (delegated grants). Verification via published DID document at `did:web:grantex.dev`. Revocation via StatusList2021.
+Issue portable, tamper-evident W3C VCs alongside standard JWTs. Types: `AgentGrantCredential` (direct grants) and `DelegatedGrantCredential` (delegated grants). Verification via published DID document at `did:web:grantex.dev`. Revocation via StatusList2021.
 
 ### SD-JWT Selective Disclosure
 Privacy-preserving credential presentation. Holders choose which claims to disclose per verifier. Disclosable claims: principalId, developerId, scopes, agentId, grantId, issuedAt, expiresAt.
@@ -487,7 +487,7 @@ OAuth 2.0 was designed for human users granting access to apps. Grantex extends 
 - Cryptographic agent identity (DID) — OAuth has no concept of agent identity
 - Delegation chains for multi-agent pipelines — OAuth can't handle Agent A spawning Agent B
 - Action-level hash-chained audit trails — OAuth has no audit layer
-- Sub-second revocation — OAuth token revocation is not standardized for cascading delegation
+- Central grant revocation with cascading descendant updates — offline consumers must synchronize revocation state or use short token lifetimes
 - Budget controls — OAuth has no spending limits
 - Verifiable Credentials — OAuth tokens are not portable to systems outside the OAuth ecosystem
 

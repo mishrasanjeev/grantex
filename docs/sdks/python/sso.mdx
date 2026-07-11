@@ -1,12 +1,15 @@
 ---
 title: "SSO (OIDC + SAML + LDAP)"
 sidebarTitle: "SSO"
-description: "Enterprise single sign-on with multi-IdP connections, SAML 2.0, OIDC, LDAP, JIT provisioning, and domain-based enforcement using the Grantex Python SDK."
+description: "Enterprise OIDC and SAML single sign-on, plus the LDAP direct-bind preview, using the Grantex Python SDK."
 ---
 
 ## Overview
 
-The `sso` client provides enterprise-grade single sign-on for your developer organization. It supports multiple identity provider connections (OIDC, SAML 2.0, and LDAP), domain-based enforcement, JIT (just-in-time) provisioning, and session management. Compatible with Okta, Azure AD, Google Workspace, Auth0, OneLogin, PingFederate, OpenLDAP, FreeIPA, and any SAML 2.0, OIDC, or LDAP-compliant provider.
+The `sso` client manages OIDC and SAML 2.0 enterprise connections,
+domain-based enforcement, JIT provisioning, and sessions. It also exposes the
+current LDAP direct-bind preview; that preview is not a general LDAP directory
+integration and has the limitations documented below.
 
 Access the SSO client via `client.sso`.
 
@@ -420,7 +423,11 @@ Returns the same `SsoCallbackResponse` as `handle_oidc_callback()`.
 
 ### Handle LDAP Callback
 
-Authenticate a user via LDAP bind. Unlike OIDC and SAML which use browser redirects, LDAP authentication submits credentials directly. Grantex binds to the LDAP directory, verifies the user's password, reads their attributes and group memberships, maps groups to scopes, and provisions the user if JIT is enabled.
+Authenticate a user with the LDAP direct-bind preview. Unlike OIDC and SAML,
+credentials are submitted directly. The built-in client binds a service account,
+constructs a user DN from `ldap_search_filter` plus `ldap_search_base`, and binds
+that DN with the submitted password. It does not search entries, read attributes,
+or retrieve group memberships.
 
 ```python
 from grantex import SsoLdapCallbackParams
@@ -429,28 +436,36 @@ result = client.sso.handle_ldap_callback(SsoLdapCallbackParams(
     username="alice",
     password="user-password",
     connection_id="sso_conn_03HX...",
+    org="org_01HXYZ...",
 ))
 
-print(f"Email: {result.email}")               # 'alice@mycompany.com'
-print(f"Name: {result.name}")                 # 'Alice Smith'
+print(f"Email: {result.email}")               # None
+print(f"Name: {result.name}")                 # None
+print(f"Groups: {result.groups}")             # ()
+print(f"Mapped scopes: {result.mapped_scopes}") # default_scopes only
 print(f"Developer ID: {result.developer_id}") # 'dev_01HXYZ...'
-print(f"Connection: {result.connection_id}")  # 'sso_conn_03HX...'
-print(f"Provisioned: {result.provisioned}")   # True (if JIT-created)
+print(f"Session: {result.session_id}")        # 'ssosess_01HXYZ...'
 ```
 
 #### SsoLdapCallbackParams
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `username` | `str` | Yes | The user's LDAP username (e.g. uid, sAMAccountName, or full DN). |
+| `username` | `str` | Yes | Username interpolated into the configured filter to construct the user DN; the built-in preview does not search. |
 | `password` | `str` | Yes | The user's LDAP password for bind authentication. |
 | `connection_id` | `str` | Yes | The SSO connection ID for the LDAP directory. |
+| `org` | `str` | Yes | Organization/developer ID that owns the LDAP connection. |
 
 #### Response
 
-Returns the same `SsoCallbackResponse` as `handle_oidc_callback()`.
+Returns `SsoCallbackResult`. With the built-in LDAP client, `groups` is empty,
+`name` and `email` are `None`, and `mapped_scopes` therefore contains only
+configured default scopes.
 
-> **Note:** LDAP credentials are never stored by Grantex. They are used only for the bind operation and discarded immediately after authentication.
+> **Note:** LDAP credentials are never stored by Grantex. They are used only for
+> the bind operations and discarded after authentication. LDAP search,
+> attribute retrieval, group lookup/mapping, and broad provider compatibility
+> are not supported by the built-in preview client.
 
 ---
 

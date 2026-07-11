@@ -18,7 +18,7 @@ import { requireGrantToken, requireScopes } from '@grantex/express';
 
 const app = express();
 
-const JWKS_URI = 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json';
+const JWKS_URI = 'https://api.grantex.dev/.well-known/jwks.json';
 
 // Verify the grant token on every /api request
 app.use('/api', requireGrantToken({ jwksUri: JWKS_URI }));
@@ -165,7 +165,7 @@ app.get('/api/me', requireGrantToken({ jwksUri }), (req: GrantexRequest, res: Re
 
 - Node.js 18+
 - Express 4.18+
-- `@grantex/sdk` >= 0.1.0
+- `@grantex/sdk` >= 0.3.0
 
 ## License
 

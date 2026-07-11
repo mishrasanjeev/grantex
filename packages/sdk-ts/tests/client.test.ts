@@ -58,6 +58,7 @@ describe('Grantex client', () => {
         agentId: 'ag_1',
         userId: 'user_abc123',
         scopes: ['calendar:read'],
+        audience: 'https://calendar.example.com',
         expiresIn: '24h',
       });
 
@@ -65,6 +66,7 @@ describe('Grantex client', () => {
       const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
       const body = JSON.parse(init.body as string) as Record<string, unknown>;
       expect(body['principalId']).toBe('user_abc123');
+      expect(body['audience']).toBe('https://calendar.example.com');
       expect(body).not.toHaveProperty('userId');
     });
   });
@@ -308,7 +310,7 @@ describe('Grantex client', () => {
 
       const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
       const headers = init.headers as Record<string, string>;
-      expect(headers['User-Agent']).toBe('@grantex/sdk/0.3.11');
+      expect(headers['User-Agent']).toBe('@grantex/sdk/0.3.13');
     });
   });
 });

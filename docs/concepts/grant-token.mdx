@@ -6,7 +6,10 @@ description: "Grantex grant tokens are RS256-signed JWTs with agent-specific cla
 
 ## Overview
 
-Grantex tokens are standard JWTs (RS256) extended with agent-specific claims. Any service can verify them offline using the published JWKS — no dependency on Grantex at runtime.
+Grantex tokens are standard JWTs (RS256) extended with agent-specific claims.
+Any service can verify them locally using the published JWKS, without a
+per-token call to the Grantex verification API. Verifiers still need the public
+keys, fetched from the issuer and cached according to their SDK's behavior.
 
 ## Decoded Example
 
@@ -44,6 +47,11 @@ Grantex tokens are standard JWTs (RS256) extended with agent-specific claims. An
 | `grnt` | `string` | Grant record ID — links token to the persisted grant |
 | `aud` | `string?` | Intended audience (optional) — services should reject tokens with a mismatched `aud` |
 
+The hosted service publishes keys at
+`https://api.grantex.dev/.well-known/jwks.json`, but its canonical `iss` value is
+`https://grantex.dev`. Current SDKs recognize that stable JWKS alias
+automatically. Custom verifiers must validate the canonical issuer explicitly.
+
 ## Delegation Claims
 
 Present on tokens issued to sub-agents via `grants.delegate()`:
@@ -60,7 +68,9 @@ Grant tokens can be verified two ways:
 
 ### Offline (recommended)
 
-Verify the RS256 signature locally using the published JWKS. No network call to Grantex is needed — just fetch the public keys once and cache them.
+Verify the RS256 signature locally using the published JWKS. This avoids the
+online token-verification API, although the verifier may still need to retrieve
+the current public keys from the JWKS endpoint.
 
 <CodeGroup>
 ```typescript TypeScript

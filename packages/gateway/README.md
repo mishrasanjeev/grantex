@@ -50,7 +50,7 @@ Client → Gateway (verify token + check scopes) → Upstream API
 ```
 
 1. **Route matching** — finds the first route matching the request method + path
-2. **Token verification** — extracts Bearer token and verifies offline via JWKS
+2. **Token verification** — extracts the Bearer token and verifies it locally using keys retrieved from the configured JWKS endpoint
 3. **Scope checking** — ensures the grant includes all required scopes for the route
 4. **Proxy** — strips the Authorization header, adds upstream headers + `X-Grantex-*` context headers, forwards to upstream
 5. **Response** — returns the upstream response as-is
@@ -60,7 +60,7 @@ Client → Gateway (verify token + check scopes) → Upstream API
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `upstream` | string | Yes | Base URL of the upstream API |
-| `jwksUri` | string | Yes | JWKS endpoint for offline token verification |
+| `jwksUri` | string | Yes | JWKS endpoint used for local signature verification |
 | `port` | number | No | Listen port (default: 8080) |
 | `upstreamHeaders` | object | No | Headers added to every upstream request |
 | `grantexApiKey` | string | No | API key for audit logging |
@@ -118,7 +118,7 @@ docker run -p 8080:8080 -v ./gateway.yaml:/etc/grantex/gateway.yaml grantex-gate
 ## Requirements
 
 - Node.js 18+
-- `@grantex/sdk` >= 0.1.0
+- `@grantex/sdk` >= 0.3.0
 
 ## License
 

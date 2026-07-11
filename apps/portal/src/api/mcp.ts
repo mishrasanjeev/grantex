@@ -10,6 +10,7 @@ export interface McpServer {
   category: string;
   scopes: string[];
   certified: boolean;
+  certificationPending?: boolean;
   certificationLevel: string | null;
   certifiedAt: string | null;
   weeklyActiveAgents: number;

@@ -28,7 +28,7 @@ def create_a2a_auth_middleware(
     Usage with FastAPI::
 
         middleware = create_a2a_auth_middleware(
-            A2AAuthMiddlewareOptions(jwks_uri="https://grantex.dev/.well-known/jwks.json")
+            A2AAuthMiddlewareOptions(jwks_uri="https://api.grantex.dev/.well-known/jwks.json")
         )
 
         @app.post("/a2a")

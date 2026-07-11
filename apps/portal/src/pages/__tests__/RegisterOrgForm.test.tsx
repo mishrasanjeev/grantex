@@ -19,6 +19,22 @@ vi.mock('react-router-dom', async () => {
 
 function r() { return render(<MemoryRouter><RegisterOrgForm /></MemoryRouter>); }
 
+async function submitRegistration(did: string) {
+  const user = userEvent.setup();
+  r();
+  await user.type(screen.getByPlaceholderText('did:web:your-domain.com'), did);
+  await user.type(screen.getByPlaceholderText('Acme Corp'), 'Test Org');
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  await waitFor(() => expect(screen.getByText('Contact Information')).toBeInTheDocument());
+  await user.type(screen.getByPlaceholderText('security@your-domain.com'), 'sec@test.com');
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  await waitFor(() => expect(screen.getByText('Verification Method')).toBeInTheDocument());
+  await user.click(screen.getByRole('button', { name: 'Next' }));
+  await waitFor(() => expect(screen.getByText('Review & Submit')).toBeInTheDocument());
+  await user.click(screen.getByRole('button', { name: 'Register Organization' }));
+  await waitFor(() => expect(mockRegisterOrg).toHaveBeenCalled());
+}
+
 describe('RegisterOrgForm', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
@@ -71,13 +87,22 @@ describe('RegisterOrgForm', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await waitFor(() => expect(screen.getByText('DNS TXT Record')).toBeInTheDocument());
     expect(screen.getByText('Recommended')).toBeInTheDocument();
-    expect(screen.getByText('.well-known Endpoint')).toBeInTheDocument();
-    expect(screen.getByText('SOC 2 Attestation')).toBeInTheDocument();
-    expect(screen.getByText('Manual Review')).toBeInTheDocument();
+    expect(screen.queryByText('.well-known Endpoint')).not.toBeInTheDocument();
+    expect(screen.queryByText('SOC 2 Attestation')).not.toBeInTheDocument();
+    expect(screen.queryByText('Manual Review')).not.toBeInTheDocument();
   });
 
-  it('submits and navigates on success', async () => {
-    mockRegisterOrg.mockResolvedValueOnce(undefined);
+  it('submits and displays one-time DNS verification details on success', async () => {
+    mockRegisterOrg.mockResolvedValueOnce({
+      orgId: 'treg_123',
+      did: 'did:web:test.com',
+      name: 'Test Org',
+      trustLevel: 'basic',
+      domain: 'test.com',
+      dnsRecordName: '_grantex-verify.test.com',
+      verificationToken: 'grantex-verify=token-123',
+      instructions: 'Add the TXT record',
+    });
     const user = userEvent.setup();
     r();
     // Step 1
@@ -97,8 +122,14 @@ describe('RegisterOrgForm', () => {
     expect(screen.getByText('Test Org')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Register Organization' }));
     await waitFor(() => expect(mockRegisterOrg).toHaveBeenCalled());
-    expect(mockShow).toHaveBeenCalledWith('Organization registered successfully', 'success');
-    expect(mockNavigate).toHaveBeenCalledWith('/dashboard/registry');
+    expect(mockShow).toHaveBeenCalledWith('Organization registered. Add the DNS record to verify it.', 'success');
+    expect(await screen.findByText('Organization Registered')).toBeInTheDocument();
+    expect(screen.getByText('_grantex-verify.test.com')).toBeInTheDocument();
+    expect(screen.getByText('grantex-verify=token-123')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Continue to verification' })).toHaveAttribute(
+      'href',
+      '/dashboard/registry/did%3Aweb%3Atest.com',
+    );
   });
 
   it('shows error toast on submission failure', async () => {
@@ -120,6 +151,23 @@ describe('RegisterOrgForm', () => {
     await waitFor(() => expect(screen.getByText('Review & Submit')).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: 'Register Organization' }));
     await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Failed to register organization', 'error'));
+  });
+
+  it('uses the server-derived DNS name for a path-based did:web identifier', async () => {
+    mockRegisterOrg.mockResolvedValueOnce({
+      orgId: 'treg_path',
+      did: 'did:web:example.com:teams:registry',
+      name: 'Test Org',
+      trustLevel: 'basic',
+      domain: 'example.com',
+      dnsRecordName: '_grantex-verify.example.com',
+      verificationToken: 'grantex-verify=path-token',
+    });
+
+    await submitRegistration('did:web:example.com:teams:registry');
+
+    expect(await screen.findByText('_grantex-verify.example.com')).toBeInTheDocument();
+    expect(screen.queryByText('_grantex-verify.example.com:teams:registry')).not.toBeInTheDocument();
   });
 
   it('has Back to Registry link', () => {

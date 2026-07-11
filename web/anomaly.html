@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- SEO -->
-  <title>Grantex Anomaly Detection — Real-time AI Agent Security Monitoring</title>
-  <meta name="description" content="Know when your AI agents misbehave. Real-time detection for velocity spikes, scope escalation, unknown agents, and token replay. Integrates with Slack, PagerDuty, Datadog.">
-  <meta name="keywords" content="AI agent anomaly detection, AI agent security monitoring, real-time anomaly detection, agent behavior monitoring, velocity spike detection, scope escalation, token replay detection, Grantex anomaly, AI agent alerting, PagerDuty AI agents">
+  <title>Grantex Anomaly Detection — Scheduled AI Agent Activity Checks</title>
+  <meta name="description" content="Run SQL-backed anomaly checks for AI agent activity. Detect high action volume, high failure rates, new agent-principal pairs, and off-hours activity; review findings through the API and dashboard.">
+  <meta name="keywords" content="AI agent anomaly detection, AI agent security monitoring, agent behavior monitoring, action volume detection, failure rate monitoring, off-hours activity, Grantex anomaly findings">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/anomaly">
 
   <!-- OpenGraph -->
-  <meta property="og:title" content="Grantex Anomaly Detection — Real-time AI Agent Security Monitoring">
-  <meta property="og:description" content="Know when your AI agents misbehave. Real-time detection for velocity spikes, scope escalation, unknown agents, and token replay. Integrates with Slack, PagerDuty, Datadog.">
+  <meta property="og:title" content="Grantex Anomaly Detection — Scheduled AI Agent Activity Checks">
+  <meta property="og:description" content="Run SQL-backed anomaly checks for high action volume, high failure rates, new agent-principal pairs, and off-hours activity; review findings through the API and dashboard.">
   <meta property="og:url" content="https://grantex.dev/anomaly">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
   <meta property="og:type" content="website">
@@ -22,8 +22,8 @@
   <!-- Twitter Card -->
   <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Grantex Anomaly Detection — Real-time AI Agent Security Monitoring">
-  <meta name="twitter:description" content="Know when your AI agents misbehave. Real-time detection for velocity spikes, scope escalation, unknown agents, and token replay.">
+  <meta name="twitter:title" content="Grantex Anomaly Detection — Scheduled AI Agent Activity Checks">
+  <meta name="twitter:description" content="Run SQL-backed checks for high action volume, high failure rates, new agent-principal pairs, and off-hours activity.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
 
   <!-- JSON-LD Structured Data -->
@@ -35,7 +35,7 @@
     "applicationCategory": "SecurityApplication",
     "operatingSystem": "Any",
     "url": "https://grantex.dev/anomaly",
-    "description": "Real-time anomaly detection and alerting for AI agent authorization. 10 built-in rules, custom rule DSL, Slack/PagerDuty/Datadog integration.",
+    "description": "Scheduled and on-demand SQL-backed anomaly checks for AI agent authorization, with finding lifecycle APIs and stored rule and channel configuration.",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "isPartOf": {
       "@type": "SoftwareApplication",
@@ -56,7 +56,7 @@
         "name": "What anomalies does Grantex detect for AI agents?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Grantex detects 10 types of anomalies out of the box: velocity spikes, scope escalation attempts, unknown agent activity, token replay attacks, off-hours activity, high failure rates, concurrent sessions from different IPs, delegation chain depth violations, budget overspend, and geographic anomalies. You can also create custom rules."
+          "text": "The current detector evaluates four SQL-backed patterns: high action volume, high failure rate, a new agent-principal pair, and off-hours activity. The API exposes additional built-in rule metadata, but those definitions are not all evaluated by the detector."
         }
       },
       {
@@ -64,7 +64,7 @@
         "name": "How does Grantex anomaly detection integrate with Slack?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Configure a Slack notification channel with your webhook URL. Grantex sends real-time alerts to any Slack channel when anomalies are detected. You can filter by severity level so critical alerts go to #incidents while low-severity alerts go to a monitoring channel."
+          "text": "The channel API accepts and stores Slack, generic webhook, and email configuration with severity filters. Automatic delivery from anomaly findings to those channels is not currently implemented; connect a delivery worker before relying on notifications."
         }
       },
       {
@@ -72,7 +72,7 @@
         "name": "Can I create custom anomaly detection rules?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Grantex provides a custom rule DSL where you specify agent filters, scope filters, time windows, thresholds, and severity levels. Custom rules are evaluated alongside built-in rules and trigger the same alert lifecycle (open, acknowledged, resolved) and notification channels."
+          "text": "You can store, list, enable, disable, and delete custom rule definitions with a condition object and severity. The current detector does not evaluate those custom definitions automatically."
         }
       }
     ]
@@ -627,9 +627,9 @@
   <div class="container">
     <h1>Know When Your Agents Misbehave</h1>
     <p>
-      Real-time anomaly detection for AI agent authorization. 10 built-in rules catch
-      velocity spikes, scope escalation, token replay, and more. Alert to Slack,
-      PagerDuty, or Datadog in seconds.
+      Scheduled and on-demand anomaly checks for AI agent authorization. The implemented
+      detector evaluates high action volume, high failure rates, new agent-principal pairs,
+      and off-hours activity, then stores findings for review.
     </p>
     <div class="hero-ctas">
       <a href="https://docs.grantex.dev/features/anomaly-detection" class="btn btn-primary">
@@ -714,28 +714,28 @@
     <div class="feature-cards">
       <div class="feature-card">
         <span class="card-icon">&#x26A1;</span>
-        <h3>Sub-second Detection</h3>
-        <p>Anomalies are detected as events flow through Grantex. No batch processing delay. Alerts fire within 1 second of the triggering event.</p>
+        <h3>Scheduled or On Demand</h3>
+        <p>The worker runs on startup and then hourly by default. The protected detection endpoint can also run the same checks on demand.</p>
       </div>
       <div class="feature-card">
         <span class="card-icon">&#x1F50D;</span>
         <h3>Pattern-based Analysis</h3>
-        <p>10 built-in detection rules cover the most common agent misbehavior patterns. Each rule is battle-tested and tuned to minimize false positives.</p>
+        <p>Four SQL-backed checks currently evaluate action volume, failure rate, new agent-principal pairs, and off-hours activity.</p>
       </div>
       <div class="feature-card">
         <span class="card-icon">&#x1F6E0;</span>
-        <h3>Custom Rule DSL</h3>
-        <p>Write your own rules with agent filters, scope filters, time windows, and thresholds. Deploy custom rules via the API or dashboard.</p>
+        <h3>Stored Rule Definitions</h3>
+        <p>Create and manage custom condition objects through the API. An evaluator for those custom definitions is not currently wired into detection.</p>
       </div>
       <div class="feature-card">
         <span class="card-icon">&#x1F514;</span>
-        <h3>Multi-channel Alerts</h3>
-        <p>Route alerts to Slack, PagerDuty, Datadog, or email. Filter by severity so critical alerts page on-call while low-severity alerts log quietly.</p>
+        <h3>Channel Configuration</h3>
+        <p>Store Slack, generic webhook, or email channel configuration and severity filters. Automatic finding delivery requires a separate worker.</p>
       </div>
       <div class="feature-card">
         <span class="card-icon">&#x1F504;</span>
         <h3>Alert Lifecycle</h3>
-        <p>Every alert has a clear lifecycle: open, acknowledged, resolved. Track who responded, when, and what action was taken. Full audit trail.</p>
+        <p>Finding APIs support open, acknowledged, and resolved status with timestamps and optional resolution notes.</p>
       </div>
       <div class="feature-card">
         <span class="card-icon">&#x1F6AB;</span>
@@ -851,8 +851,8 @@
       <div class="lifecycle-arrow">&rarr;</div>
       <div class="lifecycle-step">
         <div class="step-icon" style="background:rgba(88,166,255,0.12)">&#x1F514;</div>
-        <div class="step-label">Notified</div>
-        <div class="step-desc">Slack, PagerDuty, email</div>
+        <div class="step-label">Delivery hook</div>
+        <div class="step-desc">Connect your notification worker</div>
       </div>
       <div class="lifecycle-arrow">&rarr;</div>
       <div class="lifecycle-step">
@@ -874,41 +874,31 @@
 <section id="integrations">
   <div class="container">
     <div class="section-label">Notification channels</div>
-    <h2 class="section-title">Alert Where Your Team Already Works</h2>
+    <h2 class="section-title">Store notification-channel settings</h2>
     <p class="section-sub">
-      Route anomaly alerts to the tools your team uses. Filter by severity
-      to keep noise low and signal high.
+      The API stores Slack, generic webhook, and email settings with severity filters.
+      It does not yet dispatch anomaly findings to these destinations automatically.
     </p>
     <div class="integrations-row">
       <div class="int-card">
         <div class="int-icon">&#x1F4AC;</div>
         <div class="int-label">Slack</div>
-        <div class="int-desc">Incoming webhook</div>
+        <div class="int-desc">Configuration storage</div>
       </div>
       <div class="int-card">
         <div class="int-icon">&#x1F6A8;</div>
-        <div class="int-label">PagerDuty</div>
-        <div class="int-desc">Events API v2</div>
+        <div class="int-label">Generic webhook</div>
+        <div class="int-desc">Bring your own delivery worker</div>
       </div>
       <div class="int-card">
         <div class="int-icon">&#x1F4CA;</div>
-        <div class="int-label">Datadog</div>
-        <div class="int-desc">Events API</div>
-      </div>
-      <div class="int-card">
-        <div class="int-icon">&#x2709;</div>
         <div class="int-label">Email</div>
-        <div class="int-desc">SMTP / SES</div>
-      </div>
-      <div class="int-card">
-        <div class="int-icon">&#x1F310;</div>
-        <div class="int-label">Webhook</div>
-        <div class="int-desc">Custom HTTP POST</div>
+        <div class="int-desc">Configuration storage</div>
       </div>
       <div class="int-card">
         <div class="int-icon">&#x1F4E1;</div>
-        <div class="int-label">SSE Stream</div>
-        <div class="int-desc">Real-time events</div>
+        <div class="int-label">Finding API</div>
+        <div class="int-desc">Poll or integrate directly</div>
       </div>
     </div>
   </div>
@@ -918,48 +908,31 @@
 <section id="custom-rules">
   <div class="container">
     <div class="section-label">Custom rules</div>
-    <h2 class="section-title">Write Rules That Match Your Threat Model</h2>
+    <h2 class="section-title">Store rules for a future evaluator</h2>
     <p class="section-sub">
-      Built-in rules cover the common cases. Custom rules let you encode
-      your organization's specific security policies.
+      Custom definitions can be created, listed, enabled, disabled, and deleted.
+      They are configuration records today; the detector does not evaluate them automatically.
     </p>
     <div class="code-block">
-      <div class="code-label">Custom Rule — TypeScript SDK</div>
+      <div class="code-label">On-demand detection — TypeScript SDK</div>
       <button class="copy-btn" onclick="copyCode('custom-rule-code', this)">Copy</button>
       <pre id="custom-rule-code"><span class="kw">import</span> { Grantex } <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
 
-<span class="kw">const</span> grantex = <span class="kw">new</span> <span class="fn">Grantex</span>({ <span class="id">apiKey</span>: process.env.GRANTEX_API_KEY });
-
-<span class="cm">// Create a custom rule that fires when any agent</span>
-<span class="cm">// makes more than 50 email:send requests in 5 minutes</span>
-<span class="kw">await</span> grantex.anomalies.<span class="fn">createRule</span>({
-  <span class="id">ruleId</span>: <span class="str">'email_flood'</span>,
-  <span class="id">name</span>: <span class="str">'Email Flood Detection'</span>,
-  <span class="id">description</span>: <span class="str">'Too many email sends in a short window'</span>,
-  <span class="id">severity</span>: <span class="str">'critical'</span>,
-  <span class="id">condition</span>: {
-    <span class="id">scopes</span>: [<span class="str">'email:send'</span>],
-    <span class="id">timeWindow</span>: <span class="str">'5m'</span>,
-    <span class="id">threshold</span>: <span class="id">50</span>,
-  },
-  <span class="id">channels</span>: [<span class="str">'slack-incidents'</span>, <span class="str">'pagerduty-oncall'</span>],
+<span class="kw">const</span> grantex = <span class="kw">new</span> <span class="fn">Grantex</span>({
+  <span class="id">apiKey</span>: process.env.GRANTEX_API_KEY!,
 });
 
-<span class="cm">// Configure a Slack notification channel</span>
-<span class="kw">await</span> grantex.anomalies.<span class="fn">createChannel</span>({
-  <span class="id">type</span>: <span class="str">'slack'</span>,
-  <span class="id">name</span>: <span class="str">'slack-incidents'</span>,
-  <span class="id">config</span>: {
-    <span class="id">webhookUrl</span>: <span class="str">'https://hooks.slack.com/services/...'</span>,
-  },
-  <span class="id">severities</span>: [<span class="str">'critical'</span>, <span class="str">'high'</span>],
+<span class="cm">// Run the four implemented SQL-backed checks now</span>
+<span class="kw">const</span> run = <span class="kw">await</span> grantex.anomalies.<span class="fn">detect</span>();
+console.<span class="fn">log</span>(run.total, run.anomalies);
+
+<span class="cm">// Review unacknowledged findings</span>
+<span class="kw">const</span> open = <span class="kw">await</span> grantex.anomalies.<span class="fn">list</span>({
+  <span class="id">unacknowledged</span>: <span class="kw">true</span>,
 });
 
-<span class="cm">// Stream anomaly events in real time</span>
-<span class="kw">for await</span> (<span class="kw">const</span> event <span class="kw">of</span> grantex.events.<span class="fn">stream</span>({
-  <span class="id">types</span>: [<span class="str">'anomaly.detected'</span>],
-})) {
-  console.<span class="fn">log</span>(<span class="str">'Alert:'</span>, event.data.ruleName, event.data.severity);
+<span class="kw">if</span> (open.anomalies[<span class="id">0</span>]) {
+  <span class="kw">await</span> grantex.anomalies.<span class="fn">acknowledge</span>(open.anomalies[<span class="id">0</span>].id);
 }</pre>
     </div>
   </div>
@@ -969,36 +942,34 @@
 <section>
   <div class="container">
     <div class="section-label">Observability</div>
-    <h2 class="section-title">Metrics, SSE, and Prometheus</h2>
+    <h2 class="section-title">Metrics, lifecycle APIs, and Prometheus</h2>
     <p class="section-sub">
-      Query anomaly metrics via the API, stream events over SSE, or scrape
-      Prometheus-format counters from the <code>/metrics</code> endpoint.
+      Query finding counts via the protected API, manage lifecycle status,
+      or scrape implemented Prometheus metrics from <code>/metrics</code>.
     </p>
     <div class="feature-cards">
       <div class="feature-card">
         <span class="card-icon">&#x1F4C8;</span>
         <h3>Metrics API</h3>
         <p>
-          <code>GET /v1/anomalies/metrics</code> returns alert counts by severity,
-          by rule, and a 14-day activity histogram. Filter by agent or time window.
+          <code>GET /v1/anomaly/metrics</code> returns counts by status and severity
+          for a 1h, 6h, or 24h window, with an optional agent filter.
         </p>
       </div>
       <div class="feature-card">
         <span class="card-icon">&#x1F4E1;</span>
-        <h3>SSE Stream</h3>
+        <h3>Finding Lifecycle API</h3>
         <p>
-          <code>GET /v1/events/stream?types=anomaly.detected</code> pushes
-          anomaly events in real time. Use with <code>@grantex/destinations</code>
-          to forward to Datadog, Splunk, or S3.
+          List findings, acknowledge them, resolve them with a note, and query
+          current lifecycle totals. The detector does not currently publish anomaly SSE events.
         </p>
       </div>
       <div class="feature-card">
         <span class="card-icon">&#x1F527;</span>
         <h3>Prometheus Counters</h3>
         <p>
-          <code>GET /metrics</code> exposes <code>grantex_anomalies_total</code>,
-          <code>grantex_alerts_open</code>, and <code>grantex_alerts_resolved</code>
-          counters for Grafana dashboards.
+          <code>GET /metrics</code> exposes <code>grantex_anomalies_detected_total</code>
+          and <code>grantex_anomalies_unacknowledged</code> alongside service metrics.
         </p>
       </div>
     </div>
@@ -1008,10 +979,10 @@
 <!-- ── CTA ────────────────────────────────────────────────────────────────── -->
 <section class="cta-section">
   <div class="container">
-    <h2>Start Monitoring Your Agents Today</h2>
+    <h2>Review agent activity patterns</h2>
     <p>
-      Anomaly detection is available on all plans, including the free tier.
-      10 built-in rules. No configuration required.
+      Run the four implemented checks on demand or use the hourly worker,
+      then review and manage findings through the API or dashboard.
     </p>
     <div class="hero-ctas">
       <a href="/dashboard/signup" class="btn btn-primary">

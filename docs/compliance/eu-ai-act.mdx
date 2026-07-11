@@ -1,12 +1,18 @@
 ---
 title: "EU AI Act Compliance"
 sidebarTitle: "EU AI Act"
-description: "How Grantex helps meet EU AI Act requirements for AI agent deployments. Binding August 2026."
+description: "How Grantex technical controls can support EU AI Act readiness across the regulation's phased implementation timeline."
 ---
 
 ## Overview
 
-The **EU AI Act** (Regulation (EU) 2024/1689) is the world's first comprehensive AI regulation. It entered into force in August 2024, with key provisions for high-risk AI systems and general-purpose AI becoming **binding in August 2026**.
+The **EU AI Act** (Regulation (EU) 2024/1689) entered into force in August
+2024 and applies in phases. Under the European Commission's current
+implementation timeline, transparency rules apply from August 2026, high-risk
+rules for the listed areas apply from December 2027, and high-risk systems
+embedded in regulated products follow in August 2028. Check the
+[Commission's current timeline](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai)
+because implementation dates and transition measures can change.
 
 For AI agent deployments, five articles create direct obligations: risk management (Art. 9), transparency (Art. 13), human oversight (Art. 14), quality management (Art. 17), and deployer responsibilities (Art. 26). Grantex provides technical controls that map to each.
 
@@ -21,10 +27,13 @@ For AI agent deployments, five articles create direct obligations: risk manageme
 | **August 2024** | EU AI Act enters into force |
 | **February 2025** | Prohibited practices provisions apply |
 | **August 2025** | GPAI model obligations apply |
-| **August 2026** | **High-risk AI system provisions become binding** |
-| **August 2027** | Certain product-specific requirements apply |
+| **August 2026** | Transparency rules apply under the current Commission timeline |
+| **December 2027** | High-risk rules for the listed areas apply under current official guidance |
+| **August 2028** | High-risk systems embedded in regulated products follow under current official guidance |
 
-The August 2026 deadline is the critical one for most AI agent deployments. If your agents operate in regulated domains (healthcare, finance, employment, law enforcement) or make decisions that significantly affect individuals, they likely fall under the high-risk classification.
+Which phase applies depends on the system's intended purpose, role, deployment,
+and risk classification. Operating in a regulated domain does not by itself make
+every agent high-risk; perform a deployment-specific legal classification.
 
 ## Relevant Articles
 
@@ -100,7 +109,7 @@ for await (const event of grantex.events.stream({
 
 **Grantex coverage:**
 
-- **Compliance evidence packs:** `POST /v1/compliance/evidence` generates a complete documentation bundle with grants, tokens, audit entries, policies, and anomaly reports.
+- **Compliance evidence packs:** `GET /v1/compliance/evidence-pack` returns selected-period grant and audit records, current policies, summary counts, and an audit-chain integrity result. It is supporting evidence, not a complete EU AI Act conformity assessment.
 - **Configuration-as-code:** Terraform provider manages agents, grants, policies, and webhooks declaratively. Changes are versioned in git.
 - **Policy bundles:** `POST /v1/policies/sync` uploads OPA/Cedar policy bundles with versioning. You can trace which policy version was active for any historical decision.
 - **Conformance test suite:** `@grantex/conformance` validates your deployment against the Grantex protocol specification. Run it in CI to catch compliance regressions.
@@ -122,7 +131,10 @@ for await (const event of grantex.events.stream({
 
 ### 1. Classify your AI system
 
-Determine whether your agent deployment falls under the high-risk classification. Agents operating in Annex III domains (healthcare, finance, employment, law enforcement, critical infrastructure) are likely high-risk.
+Determine whether your specific deployment falls under the Act and, if so, its
+risk classification and your role. Annex III and product-safety contexts require
+careful assessment, but an agent is not automatically high-risk merely because
+it is used in a regulated industry.
 
 ### 2. Implement risk management (Art. 9)
 
@@ -193,7 +205,11 @@ const report = await dpdp.exportAudit({
 ## Deadline Warnings
 
 <Warning>
-  **August 2026** is when high-risk AI system provisions become binding. If you are deploying AI agents in the EU or serving EU users, your compliance infrastructure must be in place before this date. Retroactive compliance is significantly more expensive and disruptive than building it in from the start.
+  The Act applies in phases. Current Commission guidance places transparency
+  rules in August 2026, listed high-risk areas in December 2027, and
+  product-integrated high-risk systems in August 2028. Confirm the phase and
+  obligations for your deployment with qualified counsel and current official
+  guidance.
 </Warning>
 
 Organizations that fail to comply face penalties of up to EUR 35 million or 7% of global annual turnover, whichever is higher, for the most serious infringements.

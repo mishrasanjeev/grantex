@@ -200,7 +200,7 @@ class Grantex:
     ) -> EnforceResult:
         """Enforce scope for a tool call.
 
-        1. Verifies the grant token JWT offline (JWKS cached, <1ms after first call)
+        1. Verifies the grant token JWT locally using the issuer's JWKS
         2. Looks up the tool's required permission from loaded manifests
         3. Checks if the granted scope level covers the required permission
 
@@ -221,7 +221,7 @@ class Grantex:
         scopes: list[str] = []
         permission = ""
 
-        # 1. Verify the token offline via JWKS
+        # 1. Verify the token locally using JWKS retrieved from the configured URI
         try:
             grant = verify_grant_token(
                 grant_token,

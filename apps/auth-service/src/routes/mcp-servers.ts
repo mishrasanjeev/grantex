@@ -15,6 +15,13 @@ const VALID_CERT_LEVELS = ['bronze', 'silver', 'gold'];
 
 const VALID_SORT_FIELDS = ['weekly_active_agents', 'stars'];
 
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: unknown }).code === '23505';
+}
+
 interface RegisterServerBody {
   name: string;
   description?: string;
@@ -187,6 +194,12 @@ export async function mcpServersRoutes(app: FastifyInstance): Promise<void> {
           s.certified, s.certified_at, s.certification_level,
           s.server_url, s.auth_endpoint, s.npm_package,
           s.weekly_active_agents, s.stars, s.status,
+          EXISTS (
+            SELECT 1
+            FROM mcp_certifications c
+            WHERE c.server_id = s.id
+              AND c.status IN ('pending_conformance_test', 'pending_review')
+          ) AS certification_pending,
           s.created_at, s.updated_at,
           d.id AS publisher_id, d.name AS publisher_name
         FROM mcp_servers s
@@ -218,6 +231,7 @@ export async function mcpServersRoutes(app: FastifyInstance): Promise<void> {
         weeklyActiveAgents: r['weekly_active_agents'] as number,
         stars: r['stars'] as number,
         status: r['status'] as string,
+        certificationPending: Boolean(r['certification_pending']),
         createdAt: (r['created_at'] as Date).toISOString(),
         updatedAt: (r['updated_at'] as Date).toISOString(),
         publisher: {
@@ -267,12 +281,45 @@ export async function mcpServersRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
+      const pendingRows = await sql`
+        SELECT id, requested_level, status, created_at
+        FROM mcp_certifications
+        WHERE server_id = ${serverId}
+          AND developer_id = ${developerId}
+          AND status IN ('pending_conformance_test', 'pending_review')
+        ORDER BY created_at DESC
+        LIMIT 1
+      `;
+      const pending = pendingRows[0];
+      if (pending) {
+        return reply.status(409).send({
+          message: 'A certification application is already pending for this server',
+          code: 'CERTIFICATION_PENDING',
+          requestId: request.id,
+          certificationId: pending['id'] as string,
+          requestedLevel: pending['requested_level'] as string,
+          status: pending['status'] as string,
+          createdAt: (pending['created_at'] as Date).toISOString(),
+        });
+      }
+
       const certId = newCertificationId();
 
-      await sql`
-        INSERT INTO mcp_certifications (id, server_id, developer_id, requested_level)
-        VALUES (${certId}, ${serverId}, ${developerId}, ${requestedLevel})
-      `;
+      try {
+        await sql`
+          INSERT INTO mcp_certifications (id, server_id, developer_id, requested_level)
+          VALUES (${certId}, ${serverId}, ${developerId}, ${requestedLevel})
+        `;
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          return reply.status(409).send({
+            message: 'A certification application is already pending for this server',
+            code: 'CERTIFICATION_PENDING',
+            requestId: request.id,
+          });
+        }
+        throw error;
+      }
 
       return reply.status(202).send({
         certificationId: certId,

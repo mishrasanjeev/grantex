@@ -154,7 +154,10 @@ The `shouldRefresh()` function alerts when 80% of the TTL has elapsed, giving th
 | Android | Kotlin (Nimbus JOSE) | EncryptedSharedPreferences | Hardware-backed Keystore |
 | iOS | Swift (CryptoKit) | Keychain | Secure Enclave on supported devices |
 
-The TypeScript SDK also includes adapters for Google ADK and LangChain -- wrap any tool with `withGrantexAuth()` to add offline verification and audit logging automatically.
+The Google ADK and LangChain integrations verify tokens through their configured
+JWKS endpoint before scope enforcement; they are not automatically network-free.
+For a truly disconnected Gemma deployment, use the consent bundle's preloaded
+JWKS snapshot and offline audit log shown above.
 
 ## Try It
 

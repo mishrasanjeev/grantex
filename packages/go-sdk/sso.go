@@ -47,7 +47,7 @@ func (s *SSOService) TestConnection(ctx context.Context, id string) (*SsoConnect
 
 // SetEnforcement configures SSO enforcement settings.
 func (s *SSOService) SetEnforcement(ctx context.Context, params SsoEnforcementParams) (*SsoEnforcementResponse, error) {
-	return unmarshal[SsoEnforcementResponse](s.http.post(ctx, "/v1/sso/enforcement", params))
+	return unmarshal[SsoEnforcementResponse](s.http.post(ctx, "/v1/sso/enforce", params))
 }
 
 // --- SSO Sessions ---
@@ -72,22 +72,22 @@ func (s *SSOService) GetLoginURL(ctx context.Context, org string, domain ...stri
 	if len(domain) > 0 && domain[0] != "" {
 		q.Set("domain", domain[0])
 	}
-	return unmarshal[SsoLoginResponse](s.http.get(ctx, "/v1/sso/login?"+q.Encode()))
+	return unmarshal[SsoLoginResponse](s.http.get(ctx, "/sso/login?"+q.Encode()))
 }
 
 // HandleOidcCallback processes an OIDC SSO callback.
 func (s *SSOService) HandleOidcCallback(ctx context.Context, params SsoOidcCallbackParams) (*SsoCallbackResult, error) {
-	return unmarshal[SsoCallbackResult](s.http.post(ctx, "/v1/sso/callback/oidc", params))
+	return unmarshal[SsoCallbackResult](s.http.post(ctx, "/sso/callback/oidc", params))
 }
 
 // HandleSamlCallback processes a SAML SSO callback.
 func (s *SSOService) HandleSamlCallback(ctx context.Context, params SsoSamlCallbackParams) (*SsoCallbackResult, error) {
-	return unmarshal[SsoCallbackResult](s.http.post(ctx, "/v1/sso/callback/saml", params))
+	return unmarshal[SsoCallbackResult](s.http.post(ctx, "/sso/callback/saml", params))
 }
 
 // HandleLdapCallback processes an LDAP SSO callback with bind authentication.
 func (s *SSOService) HandleLdapCallback(ctx context.Context, params SsoLdapCallbackParams) (*SsoCallbackResult, error) {
-	return unmarshal[SsoCallbackResult](s.http.post(ctx, "/v1/sso/callback/ldap", params))
+	return unmarshal[SsoCallbackResult](s.http.post(ctx, "/sso/callback/ldap", params))
 }
 
 // --- Legacy (kept for backward compatibility) ---
@@ -114,9 +114,8 @@ func (s *SSOService) DeleteConfig(ctx context.Context) error {
 // HandleCallback processes an SSO callback.
 // Deprecated: Use HandleOidcCallback or HandleSamlCallback for enterprise SSO.
 func (s *SSOService) HandleCallback(ctx context.Context, code string, state string) (*SsoCallbackResponse, error) {
-	body := map[string]string{
-		"code":  code,
-		"state": state,
-	}
-	return unmarshal[SsoCallbackResponse](s.http.post(ctx, "/v1/sso/callback", body))
+	q := url.Values{}
+	q.Set("code", code)
+	q.Set("state", state)
+	return unmarshal[SsoCallbackResponse](s.http.get(ctx, "/sso/callback?"+q.Encode()))
 }

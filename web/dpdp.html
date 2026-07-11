@@ -5,16 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- SEO -->
-  <title>Grantex DPDP — AI Agent Compliance for India's DPDP Act 2023</title>
-  <meta name="description" content="Meet India's DPDP Act and EU AI Act requirements for AI agents. Structured consent records, purpose limitation, right to withdrawal, and audit-ready exports — built on Grantex.">
+  <title>Grantex DPDP — Technical Controls for AI Agent Data Workflows</title>
+  <meta name="description" content="Build auditable consent workflows for AI agents under India's DPDP Act and the EU AI Act. Structured consent records, purpose limitation, right to withdrawal, and audit-ready exports — built on Grantex.">
   <meta name="keywords" content="DPDP Act 2023, India data protection, AI agent compliance, EU AI Act, GDPR AI agents, consent management, purpose limitation, right to withdrawal, audit exports, Grantex DPDP, digital personal data protection, data principal rights, AI regulation India">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/dpdp">
   <link rel="llms-txt" href="/llms.txt">
 
   <!-- OpenGraph -->
-  <meta property="og:title" content="Grantex DPDP — AI Agent Compliance for India's DPDP Act 2023">
-  <meta property="og:description" content="Meet India's DPDP Act and EU AI Act requirements for AI agents. Structured consent records, purpose limitation, right to withdrawal, and audit-ready exports.">
+  <meta property="og:title" content="Grantex DPDP — Technical Controls for AI Agent Data Workflows">
+  <meta property="og:description" content="Build auditable consent workflows for AI agents under India's DPDP Act and the EU AI Act. Structured consent records, purpose limitation, right to withdrawal, and audit-ready exports.">
   <meta property="og:url" content="https://grantex.dev/dpdp">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
   <meta property="og:type" content="website">
@@ -23,8 +23,8 @@
   <!-- Twitter Card -->
   <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Grantex DPDP — AI Agent Compliance for India's DPDP Act 2023">
-  <meta name="twitter:description" content="Meet India's DPDP Act and EU AI Act requirements for AI agents. Structured consent records, purpose limitation, right to withdrawal, and audit-ready exports.">
+  <meta name="twitter:title" content="Grantex DPDP — Technical Controls for AI Agent Data Workflows">
+  <meta name="twitter:description" content="Build auditable consent workflows for AI agents under India's DPDP Act and the EU AI Act. Structured consent records, purpose limitation, right to withdrawal, and audit-ready exports.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
 
   <!-- JSON-LD Structured Data -->
@@ -32,11 +32,11 @@
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    "name": "Grantex DPDP Compliance Module",
+    "name": "Grantex DPDP Technical Controls",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Any",
     "url": "https://grantex.dev/dpdp",
-    "description": "DPDP Act 2023, EU AI Act, and GDPR compliance module for AI agent deployments. Structured consent records, purpose limitation, data principal rights, and audit-ready exports.",
+    "description": "Technical consent-record, withdrawal, and audit tooling for AI agent deployments subject to DPDP, EU AI Act, or GDPR review. Structured consent records, purpose limitation, data principal rights, and audit-ready exports.",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "codeRepository": "https://github.com/mishrasanjeev/grantex",
     "applicationSubCategory": "Compliance",
@@ -59,7 +59,7 @@
         "name": "What is India's DPDP Act 2023?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "The Digital Personal Data Protection Act 2023 (DPDP Act) is India's comprehensive data protection law. It establishes rights for data principals (individuals), obligations for data fiduciaries (organizations processing data), and requirements for consent, purpose limitation, and data processing transparency. For AI agents, DPDP creates specific obligations around how agents collect, process, and use personal data on behalf of users."
+          "text": "India's Digital Personal Data Protection Act 2023 governs digital personal-data processing and assigns duties and rights to covered parties. How it applies to an AI-assisted workflow depends on the organization, data, processing activity, and current rules."
         }
       },
       {
@@ -67,7 +67,7 @@
         "name": "Does the DPDP Act apply to AI agents?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. AI agents that process digital personal data of Indian residents fall under the DPDP Act. The Act applies to any automated processing of personal data, which includes AI agents accessing emails, calendar entries, files, contacts, or any data that identifies an individual. The agent's developer is the data fiduciary and must ensure compliance."
+          "text": "Applicability depends on the organization, processing activity, data, and jurisdiction. Grantex provides technical controls, but organizations should obtain legal advice for their specific deployment."
         }
       },
       {
@@ -75,23 +75,23 @@
         "name": "How does Grantex help with DPDP Act compliance?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Grantex provides a structured DPDPConsentRecord that maps directly to DPDP Act sections. It enforces purpose limitation through scoped grant tokens, implements right to withdrawal via instant revocation, maintains audit-ready logs for regulatory inspection, and provides data principal portals for individuals to manage their consent. The compliance module generates export packages formatted for DPDP audit requirements."
+          "text": "Grantex provides structured consent records, scoped grants, withdrawal and revocation operations, audit logs, grievances, erasure workflows, and export data. These technical controls can support a compliance program but do not establish legal compliance on their own."
         }
       },
       {
         "@type": "Question",
-        "name": "What is the EU AI Act and when does it take effect?",
+        "name": "How should teams assess the EU AI Act?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "The EU AI Act is the world's first comprehensive AI regulation. Key provisions become binding in August 2026. Articles 9, 13, 14, 17, and 26 create specific obligations for AI agent deployments including risk management, transparency, human oversight, quality management, and deployer responsibilities. Organizations deploying AI agents that serve EU users must comply."
+          "text": "The EU AI Act applies in phases and obligations vary by system classification and organizational role. Teams should check current official guidance and obtain legal advice for their deployment. Grantex exports technical records; it does not determine applicability or conformity."
         }
       },
       {
         "@type": "Question",
-        "name": "Can Grantex handle both DPDP and GDPR compliance simultaneously?",
+        "name": "Can Grantex support reviews across DPDP, GDPR, and the EU AI Act?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. Grantex's consent records support multiple regulatory frameworks simultaneously. A single DPDPConsentRecord can include DPDP Act section mappings, GDPR Article 6 legal bases, and EU AI Act article references. The export system generates framework-specific reports from the same underlying data."
+          "text": "Grantex can export selected consent and audit records under several requested export types. Those records may support a review, but the service does not determine legal compliance, produce a certification, or replace a framework-specific assessment."
         }
       }
     ]
@@ -928,19 +928,19 @@
     <div class="urgency-bar">
       <div class="urgency-item">
         <span class="urgency-dot warning"></span>
-        <span class="urgency-label">EU AI Act binding:</span>
-        <span class="urgency-value">August 2026</span>
+        <span class="urgency-label">Regulatory scope:</span>
+        <span class="urgency-value">Assess per deployment</span>
       </div>
       <div class="urgency-item">
         <span class="urgency-dot active"></span>
-        <span class="urgency-label">DPDP enforcement:</span>
-        <span class="urgency-value">Active</span>
+        <span class="urgency-label">Grantex role:</span>
+        <span class="urgency-value">Technical controls only</span>
       </div>
     </div>
 
-    <h1>AI Agent Compliance. Solved.</h1>
+    <h1>Technical controls for agent data workflows.</h1>
     <p>
-      Meet India's DPDP Act 2023 and the EU AI Act for AI agent deployments.
+      Build consent, withdrawal, grievance, erasure, and audit workflows for regulated AI agent deployments.
       Structured consent records, purpose limitation, right to withdrawal,
       and audit-ready exports — built into the Grantex protocol.
     </p>
@@ -973,8 +973,8 @@
     <div class="section-label">Regulatory Coverage</div>
     <h2 class="section-title">Three frameworks. One integration.</h2>
     <p class="section-sub">
-      Grantex maps your AI agent authorization infrastructure directly to regulatory requirements.
-      No separate compliance layer needed.
+      Grantex connects authorization events to structured compliance evidence.
+      Legal review and organizational controls remain your responsibility.
     </p>
 
     <div class="cards">
@@ -985,8 +985,8 @@
           <h3>DPDP Act 2023</h3>
         </div>
         <p>
-          India's Digital Personal Data Protection Act creates specific obligations
-          for AI agents that process personal data of Indian residents.
+          Organizations using AI agents to process digital personal data may need consent,
+          purpose, retention, rights, and grievance workflows under the DPDP Act.
         </p>
         <div class="card-sections">
           <div class="card-section-item">
@@ -1023,8 +1023,8 @@
           <h3>EU AI Act</h3>
         </div>
         <p>
-          The world's first comprehensive AI regulation. Key provisions for
-          AI agent deployments become binding in August 2026.
+          EU AI Act obligations apply in phases and vary by system classification and role.
+          Use Grantex records as technical evidence within a broader assessment.
         </p>
         <div class="card-sections">
           <div class="card-section-item">
@@ -1087,10 +1087,10 @@
 <section id="how">
   <div class="container">
     <div class="section-label">What Grantex Does</div>
-    <h2 class="section-title">Structured consent records for every grant</h2>
+    <h2 class="section-title">Structured consent records alongside grants</h2>
     <p class="section-sub">
-      Every Grantex authorization creates a DPDPConsentRecord that maps directly to
-      DPDP Act requirements. No bolted-on compliance layer — it is the authorization layer.
+      Applications can create a DPDPConsentRecord alongside an authorization and retain
+      the purpose, notice version, legal basis, and lifecycle events for later review.
     </p>
 
     <div class="code-section">
@@ -1099,80 +1099,70 @@
           <span class="code-filename">create-consent.ts</span>
           <span class="code-lang">TypeScript</span>
         </div>
-        <pre><span class="kw">import</span> { <span class="id">DPDPClient</span> } <span class="kw">from</span> <span class="str">'@grantex/dpdp'</span>;
+        <pre><span class="kw">import</span> { <span class="id">Grantex</span> } <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
 
-<span class="kw">const</span> <span class="id">dpdp</span> = <span class="kw">new</span> <span class="fn">DPDPClient</span>({
-  <span class="id">apiKey</span>: process.env.<span class="id">GRANTEX_API_KEY</span>,
+<span class="kw">const</span> <span class="id">grantex</span> = <span class="kw">new</span> <span class="fn">Grantex</span>({
+  <span class="id">apiKey</span>: process.env.<span class="id">GRANTEX_API_KEY</span>!,
 });
 
-<span class="cm">// Create a DPDP-compliant consent record</span>
-<span class="kw">const</span> <span class="id">consent</span> = <span class="kw">await</span> <span class="id">dpdp</span>.<span class="fn">createConsentRecord</span>({
-  <span class="id">principalId</span>: <span class="str">'user_rajesh_kumar'</span>,
-  <span class="id">agentId</span>:     <span class="str">'ag_calendar_assistant'</span>,
-  <span class="id">purposes</span>: [
-    {
-      <span class="id">code</span>:        <span class="str">'calendar:read'</span>,
-      <span class="id">description</span>: <span class="str">'Read calendar events'</span>,
-      <span class="id">dpdpSection</span>: <span class="str">'S.4'</span>,
-      <span class="id">retention</span>:   <span class="str">'30d'</span>,
-    },
-    {
-      <span class="id">code</span>:        <span class="str">'calendar:write'</span>,
-      <span class="id">description</span>: <span class="str">'Create and modify events'</span>,
-      <span class="id">dpdpSection</span>: <span class="str">'S.4'</span>,
-      <span class="id">retention</span>:   <span class="str">'30d'</span>,
-    },
-  ],
-  <span class="id">consentNotice</span>: {
-    <span class="id">language</span>: <span class="str">'en'</span>,
-    <span class="id">text</span>: <span class="str">'This agent will access your calendar to schedule and manage meetings on your behalf.'</span>,
-  },
-  <span class="id">dataCategories</span>: [<span class="str">'schedule'</span>, <span class="str">'contacts'</span>],
-  <span class="id">crossBorder</span>:    <span class="kw">false</span>,
+<span class="kw">const</span> <span class="id">purposes</span> = [{
+  <span class="id">code</span>: <span class="str">'calendar:read'</span>,
+  <span class="id">description</span>: <span class="str">'Read calendar events for scheduling'</span>,
+}];
+
+<span class="kw">const</span> <span class="id">notice</span> = <span class="kw">await</span> <span class="id">grantex</span>.<span class="id">dpdp</span>.<span class="fn">createConsentNotice</span>({
+  <span class="id">noticeId</span>: <span class="str">'calendar-access'</span>,
+  <span class="id">version</span>: <span class="str">'1.0'</span>,
+  <span class="id">title</span>: <span class="str">'Calendar access notice'</span>,
+  <span class="id">content</span>: <span class="str">'This agent reads calendar events for scheduling.'</span>,
+  <span class="id">purposes</span>,
 });
 
-<span class="cm">// consent.id          → "cns_01HZ..."</span>
-<span class="cm">// consent.status      → "active"</span>
-<span class="cm">// consent.withdrawUrl → consent withdrawal endpoint</span>
-<span class="cm">// consent.grantId     → linked Grantex grant</span></pre>
+<span class="kw">const</span> <span class="id">consent</span> = <span class="kw">await</span> <span class="id">grantex</span>.<span class="id">dpdp</span>.<span class="fn">createConsentRecord</span>({
+  <span class="id">grantId</span>: <span class="str">'grnt_01J...'</span>,
+  <span class="id">dataPrincipalId</span>: <span class="str">'user_123'</span>,
+  <span class="id">purposes</span>,
+  <span class="id">consentNoticeId</span>: notice.noticeId,
+  <span class="id">processingExpiresAt</span>: <span class="kw">new</span> <span class="fn">Date</span>(<span class="str">'2026-12-31'</span>).toISOString(),
+});
+
+console.<span class="fn">log</span>(consent.recordId, consent.status);</pre>
       </div>
 
       <div class="explain-list">
         <div class="explain-item">
           <h4><span class="tag tag-dpdp">S.6</span> Structured Consent</h4>
           <p>
-            Each consent record captures the specific data principal, the agent, the purposes,
-            and a plain-language consent notice. The record is immutable and timestamped.
+            Each record links a data principal and grant to stored purposes, scopes, a notice
+            identifier and hash, processing dates, and lifecycle status.
           </p>
         </div>
         <div class="explain-item">
           <h4><span class="tag tag-dpdp">S.4</span> Purpose Limitation</h4>
           <p>
-            Every purpose is tagged with its DPDP section reference and a retention period.
-            The agent can only access data for the declared purposes. Enforcement happens
-            at the grant token level — the JWT scopes match the declared purposes.
+            Purpose codes and descriptions are stored with the consent record. Applications
+            remain responsible for mapping those purposes to grant scopes and enforcing use.
           </p>
         </div>
         <div class="explain-item">
           <h4><span class="tag tag-dpdp">S.6(6)</span> Right to Withdraw</h4>
           <p>
-            Every consent record includes a withdrawal URL. Withdrawal triggers instant
-            revocation of the underlying Grantex grant, cascading to all delegated sub-agents.
-            The withdrawal is as easy as granting consent.
+            The authenticated withdrawal endpoint changes record status. API callers can also
+            request underlying-grant revocation; local JWT consumers still need current revocation state.
           </p>
         </div>
         <div class="explain-item">
           <h4><span class="tag tag-gdpr">Art. 15</span> Data Access</h4>
           <p>
-            The consent record links to all audit entries for that grant. Data principals
-            can export their complete processing history via the portal or API.
+            The principal-records endpoint returns stored consent records. Export requests can
+            include selected consent and audit rows, but do not determine legal completeness.
           </p>
         </div>
         <div class="explain-item">
           <h4><span class="tag tag-euai">Art. 13</span> Transparency</h4>
           <p>
-            The consent notice is stored alongside the technical authorization.
-            Auditors can verify that the user saw a clear explanation of what the agent does.
+            The notice API stores versioned content and a hash, while consent records reference
+            the notice. That supports comparison during review but does not itself prove presentation.
           </p>
         </div>
       </div>
@@ -1184,9 +1174,10 @@
 <section id="dashboard">
   <div class="container">
     <div class="section-label">Compliance Dashboard</div>
-    <h2 class="section-title">Real-time compliance visibility</h2>
+    <h2 class="section-title">Operational consent and audit visibility</h2>
     <p class="section-sub">
-      Monitor consent status, purpose adherence, and withdrawal rates across all agents and data principals.
+      Inspect tenant-level grant, policy, audit, and consent data in the authenticated dashboard.
+      The screen below is an illustrative mockup with sample values, not live customer data or a compliance score.
     </p>
 
     <div class="dashboard-mockup">
@@ -1280,11 +1271,11 @@
 <!-- ── Data Principal Portal ─────────────────────────────────────────────── -->
 <section id="portal">
   <div class="container">
-    <div class="section-label">Data Principal Portal</div>
-    <h2 class="section-title">Your users manage their own consent</h2>
+    <div class="section-label">Operator Dashboard</div>
+    <h2 class="section-title">Inspect consent records by data principal</h2>
     <p class="section-sub">
-      DPDP Act Section 11 requires that data principals can access, correct, and withdraw
-      their consent at any time. Grantex provides this out of the box.
+      The authenticated dashboard lets operators look up stored consent records and withdraw a record.
+      A separate end-user self-service portal and correction workflow are not currently implemented.
     </p>
 
     <div class="portal-grid">
@@ -1292,57 +1283,57 @@
         <div class="portal-feature">
           <span class="check">&#x2713;</span>
           <div>
-            <h4>View all active consents</h4>
+            <h4>Look up consent records</h4>
             <p>
-              Data principals see every agent that has access to their data, what scopes
-              were granted, when consent was given, and retention periods.
+              Search by data principal ID to retrieve stored purposes, scopes, status,
+              processing expiry, retention date, and withdrawal metadata.
             </p>
           </div>
         </div>
         <div class="portal-feature">
           <span class="check">&#x2713;</span>
           <div>
-            <h4>One-click withdrawal</h4>
+            <h4>Withdraw a consent record</h4>
             <p>
-              Withdrawing consent is as easy as granting it. One click triggers instant revocation
-              of the underlying grant token, cascading to all delegated sub-agents.
+              The dashboard calls the consent-withdrawal endpoint. Revoking the underlying grant
+              is a separate optional API behavior and is not implied by local JWT verification.
             </p>
           </div>
         </div>
         <div class="portal-feature">
           <span class="check">&#x2713;</span>
           <div>
-            <h4>Processing history</h4>
+            <h4>Inspect record history</h4>
             <p>
-              View the complete audit trail of what each agent did with the granted access.
-              Hash-chained entries ensure the log cannot be tampered with.
+              Review access counts, last-access timestamps, processing dates, and withdrawal
+              metadata returned with each consent record.
             </p>
           </div>
         </div>
         <div class="portal-feature">
           <span class="check">&#x2713;</span>
           <div>
-            <h4>Data export</h4>
+            <h4>Request evidence exports</h4>
             <p>
-              Export consent records, processing history, and agent metadata in
-              machine-readable JSON. Satisfies DPDP Section 11 and GDPR Article 20.
+              Request selected consent and audit records by date range, export type,
+              and optional data principal ID for downstream review.
             </p>
           </div>
         </div>
         <div class="portal-feature">
           <span class="check">&#x2713;</span>
           <div>
-            <h4>Grievance submission</h4>
+            <h4>File and retrieve grievances</h4>
             <p>
-              Integrated grievance form per DPDP Section 13. Data principals can flag
-              consent violations, and the system routes to the designated Data Protection Officer.
+              Authenticated operators can submit a grievance and retrieve its status by ID.
+              Automated DPO or regulator routing is not currently implemented.
             </p>
           </div>
         </div>
       </div>
 
       <div class="portal-mockup">
-        <div style="font-size:14px;font-weight:600;margin-bottom:16px;">My AI Agent Consents</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:16px;">Illustrative consent record view</div>
         <div class="portal-card">
           <div class="portal-card-top">
             <span class="portal-card-agent">Calendar Assistant</span>
@@ -1356,8 +1347,7 @@
             Granted Apr 1, 2026 &middot; Retention: 30 days &middot; Purpose: Schedule management
           </div>
           <div class="portal-card-actions">
-            <span class="portal-btn">View activity</span>
-            <span class="portal-btn">Export data</span>
+            <span class="portal-btn">View record</span>
             <span class="portal-btn danger">Withdraw consent</span>
           </div>
         </div>
@@ -1373,8 +1363,7 @@
             Granted Mar 28, 2026 &middot; Retention: 7 days &middot; Purpose: Email digest
           </div>
           <div class="portal-card-actions">
-            <span class="portal-btn">View activity</span>
-            <span class="portal-btn">Export data</span>
+            <span class="portal-btn">View record</span>
             <span class="portal-btn danger">Withdraw consent</span>
           </div>
         </div>
@@ -1391,8 +1380,7 @@
             Granted Mar 15, 2026 &middot; Withdrawn Mar 22, 2026
           </div>
           <div class="portal-card-actions">
-            <span class="portal-btn">View activity</span>
-            <span class="portal-btn">Export data</span>
+            <span class="portal-btn">View record</span>
           </div>
         </div>
       </div>
@@ -1406,8 +1394,8 @@
     <div class="section-label">Section Mapping</div>
     <h2 class="section-title">How Grantex maps to DPDP Act sections</h2>
     <p class="section-sub">
-      Every DPDP obligation that applies to AI agent deployments has a corresponding
-      Grantex feature. No gaps, no manual processes.
+      Selected operational requirements have corresponding Grantex features.
+      Organizations must validate the mapping and complete their own legal and manual processes.
     </p>
 
     <table class="mapping-table">
@@ -1422,57 +1410,57 @@
         <tr>
           <td class="ref">Section 4</td>
           <td>Lawful purpose &mdash; personal data shall be processed only for a lawful purpose</td>
-          <td class="feature">Purpose-tagged consent records; JWT scp claim enforces scope at every API call</td>
+          <td class="feature">Purpose-tagged consent records plus application-level JWT scope checks</td>
         </tr>
         <tr>
           <td class="ref">Section 5</td>
           <td>Notice &mdash; data fiduciary must give notice before processing</td>
-          <td class="feature">Consent notice stored in DPDPConsentRecord; human-readable consent UI</td>
+          <td class="feature">Versioned consent-notice API; consent records link the notice ID and content hash</td>
         </tr>
         <tr>
           <td class="ref">Section 6</td>
           <td>Consent &mdash; processing based on free, specific, informed consent</td>
-          <td class="feature">Structured consent flow; purpose-specific scope selection; immutable record</td>
+          <td class="feature">Structured consent records linked to grants, purposes, scopes, and processing dates</td>
         </tr>
         <tr>
           <td class="ref">Section 6(6)</td>
           <td>Withdrawal &mdash; consent withdrawal must be as easy as granting</td>
-          <td class="feature">One-click withdrawal in data principal portal; instant grant revocation</td>
+          <td class="feature">Authenticated withdrawal endpoint; optional underlying-grant revocation when requested through the API</td>
         </tr>
         <tr>
           <td class="ref">Section 8</td>
           <td>Data fiduciary obligations &mdash; accuracy, storage limitation, security</td>
-          <td class="feature">Retention periods per purpose; auto-expiry; audit trail; encryption at rest</td>
+          <td class="feature">Processing-expiry and retention-date fields; deployments remain responsible for deletion and infrastructure controls</td>
         </tr>
         <tr>
           <td class="ref">Section 8(7)</td>
           <td>Grievance redressal &mdash; data fiduciary must have a grievance mechanism</td>
-          <td class="feature">Integrated grievance form in data principal portal; DPO routing</td>
+          <td class="feature">Authenticated grievance submission and status retrieval with an expected-resolution date</td>
         </tr>
         <tr>
           <td class="ref">Section 9</td>
           <td>Children's data &mdash; additional protections for minors</td>
-          <td class="feature">Age flag on consent records; separate approval flow for minor data principals</td>
+          <td class="feature">No dedicated child-data or guardian-consent workflow is currently implemented</td>
         </tr>
         <tr>
           <td class="ref">Section 11</td>
           <td>Data principal rights &mdash; access, correction, erasure, portability</td>
-          <td class="feature">Self-service portal; JSON export; processing history; correction requests</td>
+          <td class="feature">API retrieval of consent records plus an erasure-request workflow; no correction endpoint is currently implemented</td>
         </tr>
         <tr>
           <td class="ref">Section 13</td>
           <td>Grievance mechanism &mdash; respond within prescribed period</td>
-          <td class="feature">Grievance tracking with SLA timers; escalation to Data Protection Board</td>
+          <td class="feature">Grievance status and expected-resolution dates; regulator escalation remains an organizational process</td>
         </tr>
         <tr>
           <td class="ref">Section 16</td>
           <td>Cross-border transfer &mdash; restrictions on data transfer outside India</td>
-          <td class="feature">crossBorder flag on consent records; data residency controls in grant tokens</td>
+          <td class="feature">No dedicated cross-border-transfer or data-residency enforcement is currently implemented</td>
         </tr>
         <tr>
           <td class="ref">Section 17</td>
           <td>Data Protection Board &mdash; regulatory oversight and penalties</td>
-          <td class="feature">Audit export packages formatted for Board inspection requirements</td>
+          <td class="feature">JSON export of selected consent, grievance, and audit records for downstream review</td>
         </tr>
       </tbody>
     </table>
@@ -1483,111 +1471,111 @@
 <section id="exports">
   <div class="container">
     <div class="section-label">Export &amp; Audit</div>
-    <h2 class="section-title">Audit-ready exports for every framework</h2>
+    <h2 class="section-title">Evidence exports for downstream review</h2>
     <p class="section-sub">
-      Generate compliance evidence packages formatted for DPDP, GDPR, and EU AI Act requirements.
-      One API call, framework-specific output.
+      Request selected consent, grievance, and audit records by date range and export type.
+      The result is technical evidence, not a legal filing, conformity report, or certification.
     </p>
 
     <div class="export-cards">
       <div class="export-card">
         <h3>DPDP Audit Export</h3>
         <p>
-          Complete consent and processing records formatted for India's Data Protection Board.
-          Includes all mandatory fields from Sections 6, 8, 11, and 13.
+          Returns selected consent records, audit entries, and DPDP grievance summaries
+          in a JSON-backed export record for downstream review.
         </p>
         <div class="export-fields">
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Consent records with purpose mapping</span>
+            <span>Consent records with stored purposes and scopes</span>
           </div>
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Data principal consent notices (original text)</span>
+            <span>Consent status, processing expiry, and retention dates</span>
           </div>
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Withdrawal timestamps and cascaded revocations</span>
+            <span>Withdrawal timestamps and reasons</span>
           </div>
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Grievance log with response SLAs</span>
+            <span>Grievance IDs, reference numbers, status, and dates</span>
           </div>
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Data retention compliance status</span>
+            <span>Selected application audit entries</span>
           </div>
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Cross-border transfer declarations</span>
+            <span>Requested date range and tenant identifier</span>
           </div>
         </div>
       </div>
 
       <div class="export-card">
-        <h3>GDPR Article 15 Export</h3>
+        <h3>GDPR-Scoped Review Export</h3>
         <p>
-          Subject access request response package. All data processing activities
-          related to a specific data principal, formatted per Article 15 requirements.
+          Uses the <code>gdpr-article-15</code> export type and can filter stored consent
+          and audit records by data principal ID. Completeness still requires review.
         </p>
         <div class="export-fields">
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Processing purposes and legal basis</span>
+            <span>Selected consent records</span>
           </div>
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Categories of personal data processed</span>
+            <span>Selected audit entries</span>
           </div>
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Recipients and third-party access</span>
+            <span>Optional data-principal filter</span>
           </div>
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Retention periods per purpose</span>
+            <span>Requested date-range metadata</span>
           </div>
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Agent delegation chain (all sub-agents)</span>
+            <span>Export status and expiry</span>
           </div>
           <div class="export-field">
-            <span class="field-check">&#x2713;</span>
-            <span>Automated decision-making disclosure</span>
+            <span class="field-check">&mdash;</span>
+            <span>No automatic Article 15 completeness determination</span>
           </div>
         </div>
       </div>
 
       <div class="export-card">
-        <h3>EU AI Act Conformance Report</h3>
+        <h3>EU AI Act Review Export</h3>
         <p>
-          Technical documentation per Articles 9, 13, and 17. Maps your
-          Grantex configuration to EU AI Act conformity requirements.
+          Uses the <code>eu-ai-act-conformance</code> request type to package selected
+          consent and audit records. It does not generate an article mapping or conformity decision.
         </p>
         <div class="export-fields">
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Risk management controls (Art. 9)</span>
+            <span>Selected consent records</span>
           </div>
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Transparency evidence (Art. 13)</span>
+            <span>Selected audit entries</span>
           </div>
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Human oversight mechanisms (Art. 14)</span>
+            <span>Requested date-range metadata</span>
           </div>
           <div class="export-field">
             <span class="field-check">&#x2713;</span>
-            <span>Quality management documentation (Art. 17)</span>
+            <span>Export status and expiry</span>
           </div>
           <div class="export-field">
-            <span class="field-check">&#x2713;</span>
-            <span>Deployer obligation checklist (Art. 26)</span>
+            <span class="field-check">&mdash;</span>
+            <span>No generated article-by-article mapping</span>
           </div>
           <div class="export-field">
-            <span class="field-check">&#x2713;</span>
-            <span>Anomaly detection and incident reports</span>
+            <span class="field-check">&mdash;</span>
+            <span>No conformity determination or certification</span>
           </div>
         </div>
       </div>
@@ -1598,19 +1586,27 @@
         <span class="code-filename">export-audit.ts</span>
         <span class="code-lang">TypeScript</span>
       </div>
-      <pre><span class="cm">// Generate a DPDP audit export</span>
-<span class="kw">const</span> <span class="id">pack</span> = <span class="kw">await</span> <span class="id">dpdp</span>.<span class="fn">exportAudit</span>({
-  <span class="id">framework</span>: <span class="str">'dpdp'</span>,
-  <span class="id">dateRange</span>: { <span class="id">from</span>: <span class="str">'2026-01-01'</span>, <span class="id">to</span>: <span class="str">'2026-04-01'</span> },
-  <span class="id">format</span>:    <span class="str">'json'</span>,  <span class="cm">// or 'csv', 'pdf'</span>
-});
+      <pre><span class="kw">import</span> { <span class="fn">requestDpdpExport</span>, <span class="fn">requestGdprExport</span> } <span class="kw">from</span> <span class="str">'@grantex/dpdp'</span>;
 
-<span class="cm">// Also available: 'gdpr', 'eu-ai-act'</span>
-<span class="kw">const</span> <span class="id">gdprPack</span> = <span class="kw">await</span> <span class="id">dpdp</span>.<span class="fn">exportAudit</span>({
-  <span class="id">framework</span>:   <span class="str">'gdpr'</span>,
-  <span class="id">principalId</span>: <span class="str">'user_rajesh_kumar'</span>,
-  <span class="id">format</span>:      <span class="str">'json'</span>,
-});</pre>
+<span class="kw">const</span> <span class="id">apiKey</span> = <span class="id">process</span>.<span class="id">env</span>.<span class="id">GRANTEX_API_KEY</span>!;
+
+<span class="kw">const</span> <span class="id">options</span> = {
+  <span class="id">dateFrom</span>: <span class="kw">new</span> <span class="fn">Date</span>(<span class="str">'2026-01-01'</span>),
+  <span class="id">dateTo</span>: <span class="kw">new</span> <span class="fn">Date</span>(<span class="str">'2026-04-01'</span>),
+  <span class="id">format</span>: <span class="str">'json'</span> <span class="kw">as const</span>,
+  <span class="id">includeActionLog</span>: <span class="kw">true</span>,
+  <span class="id">includeConsentRecords</span>: <span class="kw">true</span>,
+};
+
+<span class="kw">const</span> <span class="id">pack</span> = <span class="kw">await</span> <span class="fn">requestDpdpExport</span>(
+  <span class="id">options</span>, <span class="id">apiKey</span>, <span class="str">'https://api.grantex.dev'</span>
+);
+
+<span class="kw">const</span> <span class="id">gdprPack</span> = <span class="kw">await</span> <span class="fn">requestGdprExport</span>(
+  { ...<span class="id">options</span>, <span class="id">dataPrincipalId</span>: <span class="str">'user_123'</span> },
+  <span class="id">apiKey</span>,
+  <span class="str">'https://api.grantex.dev'</span>
+);</pre>
     </div>
   </div>
 </section>
@@ -1618,10 +1614,10 @@
 <!-- ── CTA Bottom ────────────────────────────────────────────────────────── -->
 <section class="cta-section">
   <div class="container">
-    <h2>Start building compliant AI agents today</h2>
+    <h2>Start building auditable consent workflows today</h2>
     <p>
-      The DPDP Act is active now. The EU AI Act is binding August 2026.
-      Grantex gives you the compliance infrastructure so you can focus on shipping.
+      Regulatory applicability and timelines depend on your deployment and jurisdiction.
+      Grantex supplies technical evidence controls; it is not legal advice or certification.
     </p>
 
     <div class="install-commands">
@@ -1671,12 +1667,6 @@
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
       </ul>
       <ul class="footer-links" aria-label="Legal and procurement">
-        <li><a href="https://docs.grantex.dev/compliance/privacy-policy">Privacy</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/terms-of-service">Terms</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/dpa">DPA</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/cookie-policy">Cookies</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/sub-processors">Sub-processors</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/data-residency">Data Residency</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/SECURITY.md">Security</a></li>
       </ul>
       <span class="footer-copy">&copy; 2026 Grantex</span>

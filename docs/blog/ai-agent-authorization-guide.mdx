@@ -61,7 +61,7 @@ import { Grantex } from '@grantex/sdk';
 
 const gx = new Grantex({
   apiKey: process.env.GRANTEX_API_KEY,
-  baseUrl: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app',
+  baseUrl: 'https://api.grantex.dev',
 });
 
 // 1. Register the agent with its own identity
@@ -100,7 +100,7 @@ from grantex import Grantex
 
 gx = Grantex(
     api_key=os.environ["GRANTEX_API_KEY"],
-    base_url="https://grantex-auth-dd4mtrt2gq-uc.a.run.app",
+    base_url="https://api.grantex.dev",
 )
 
 agent = gx.agents.create(name="expense-report-agent", description="Files expense reports")
@@ -131,7 +131,7 @@ import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
 const gx = new Grantex({ apiKey: 'gx_...' });
 gx.loadManifest(salesforceManifest);
 
-// This checks the JWT's scopes against the manifest — no network call
+// This verifies the JWT via JWKS, then checks its scopes against the manifest
 const check = await gx.enforce({
   grantToken: token.grantToken,
   connector: 'salesforce',
@@ -142,6 +142,11 @@ if (!check.allowed) {
   console.log(check.reason); // "Token lacks tool:salesforce:delete scope"
 }
 ```
+
+`enforce()` fails closed if signature or claim verification fails. It uses the
+configured JWKS endpoint before evaluating the manifest, and the current
+standalone verifier may fetch those keys on each invocation. A decode-only
+helper must never be used as an authorization decision.
 
 For framework-specific enforcement, Grantex integrates with [LangChain](/integrations/langchain), [CrewAI](/integrations/crewai), [OpenAI Agents SDK](/integrations/openai-agents), [Google ADK](/integrations/google-adk), [Vercel AI](/integrations/vercel-ai), and [more](/integrations/overview).
 

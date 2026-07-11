@@ -37,7 +37,7 @@ from grantex import Grantex, ListGrantsParams
 with Grantex(api_key="gx_live_...") as client:
     # List all grants
     result = client.grants.list()
-    print(f"Total grants: {result.total}")
+    print(f"Total grants: {len(result.grants)}")
 
     # List with filters
     result = client.grants.list(ListGrantsParams(
@@ -128,7 +128,9 @@ with Grantex(api_key="gx_live_...") as client:
 Returns a `VerifiedGrant` dataclass. See [Offline Verification](/sdks/python/offline-verification) for the full field reference.
 
 <Note>
-For purely offline verification without any network call to the Grantex API, use the standalone [`verify_grant_token()`](/sdks/python/offline-verification) function instead.
+For local signature-and-claim verification without the online revocation
+endpoint, use [`verify_grant_token()`](/sdks/python/offline-verification). The
+standalone helper still fetches the remote JWKS on every invocation.
 </Note>
 
 ## Grant Type

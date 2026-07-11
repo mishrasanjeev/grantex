@@ -1,15 +1,15 @@
 ---
 title: "Usage"
-description: "Track API usage metrics for the current billing period and view historical usage"
+description: "Track current UTC-date API usage metrics and view daily usage history"
 ---
 
 ## Overview
 
-The `Usage` service provides access to API usage metrics. Check your current billing period's usage and retrieve historical usage data broken down by day.
+The `Usage` service provides daily API usage metrics. `Current` returns the current UTC date's counters; `History` returns earlier daily counters.
 
 ## Current
 
-Get API usage metrics for the current billing period.
+Get API usage metrics for the current UTC date.
 
 ```go
 usage, err := client.Usage.Current(ctx)
@@ -17,7 +17,7 @@ if err != nil {
     log.Fatal(err)
 }
 fmt.Printf("Developer: %s\n", usage.DeveloperID)
-fmt.Printf("Period: %s\n", usage.Period)
+fmt.Printf("Date: %s\n", usage.Period)
 fmt.Printf("Token exchanges: %d\n", usage.TokenExchanges)
 fmt.Printf("Authorizations: %d\n", usage.Authorizations)
 fmt.Printf("Verifications: %d\n", usage.Verifications)
@@ -29,11 +29,11 @@ fmt.Printf("Total requests: %d\n", usage.TotalRequests)
 | Field            | Type     | Description                                          |
 |------------------|----------|------------------------------------------------------|
 | `DeveloperID`    | `string` | The developer organization ID.                       |
-| `Period`         | `string` | The current billing period (e.g., `"2026-03"`).      |
-| `TokenExchanges` | `int`    | Number of token exchange operations this period.     |
-| `Authorizations` | `int`    | Number of authorization requests this period.        |
-| `Verifications`  | `int`    | Number of token verifications this period.           |
-| `TotalRequests`  | `int`    | Total API requests across all endpoints this period. |
+| `Period`         | `string` | Current UTC date in `YYYY-MM-DD` form; the wire field name is retained for compatibility. |
+| `TokenExchanges` | `int`    | Number of token exchange operations on this UTC date. |
+| `Authorizations` | `int`    | Number of authorization requests on this UTC date.   |
+| `Verifications`  | `int`    | Number of token verifications on this UTC date.      |
+| `TotalRequests`  | `int`    | Total API requests across all endpoints on this UTC date. |
 
 ## History
 
@@ -62,7 +62,7 @@ for _, entry := range history.Entries {
 
 | Field     | Type           | Description                                           |
 |-----------|----------------|-------------------------------------------------------|
-| `Entries` | `[]UsageEntry` | Daily usage entries, ordered from oldest to newest.   |
+| `Entries` | `[]UsageEntry` | Daily usage entries, ordered newest to oldest.        |
 
 ### `UsageEntry`
 
@@ -91,12 +91,12 @@ func main() {
     client := grantex.NewClient("gx_live_...")
     ctx := context.Background()
 
-    // Check current period usage
+    // Check current UTC-date usage
     current, err := client.Usage.Current(ctx)
     if err != nil {
         log.Fatal(err)
     }
-    fmt.Printf("Period: %s\n", current.Period)
+    fmt.Printf("Date: %s\n", current.Period)
     fmt.Printf("Total requests: %d\n", current.TotalRequests)
     fmt.Printf("  Authorizations: %d\n", current.Authorizations)
     fmt.Printf("  Token exchanges: %d\n", current.TokenExchanges)

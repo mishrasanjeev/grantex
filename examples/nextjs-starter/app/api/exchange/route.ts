@@ -3,12 +3,12 @@ import { Grantex } from '@grantex/sdk';
 import { cookies } from 'next/headers';
 
 const ALLOWED_HOSTS = [
-  'https://grantex-auth-dd4mtrt2gq-uc.a.run.app',
+  'https://api.grantex.dev',
   'http://localhost:3001',
 ];
 
 function getBaseUrl(): string {
-  const url = process.env['GRANTEX_URL'] ?? 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
+  const url = process.env['GRANTEX_URL'] ?? 'https://api.grantex.dev';
   if (!ALLOWED_HOSTS.includes(url)) {
     throw new Error(`GRANTEX_URL must be one of: ${ALLOWED_HOSTS.join(', ')}`);
   }

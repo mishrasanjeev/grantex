@@ -11,7 +11,9 @@ The `audit` sub-client provides a tamper-evident, append-only audit trail for al
 ```typescript
 await grantex.audit.log({
   agentId: agent.id,
+  agentDid: agent.did,
   grantId: token.grantId,
+  principalId: 'user_123',
   action: 'email.sent',
   status: 'success',
   metadata: { to: 'user@example.com', subject: 'Flight confirmation' },
@@ -27,7 +29,9 @@ Log an agent action to the audit trail.
 ```typescript
 const entry = await grantex.audit.log({
   agentId: 'ag_01HXYZ...',
+  agentDid: 'did:grantex:ag_01HXYZ...',
   grantId: 'grnt_01HXYZ...',
+  principalId: 'user_123',
   action: 'payment.initiated',
   status: 'success',
   metadata: { amount: 420, currency: 'USD', merchant: 'Air India' },
@@ -45,8 +49,16 @@ console.log(entry.timestamp); // '2026-02-28T12:00:00Z'
   The agent that performed the action.
 </ParamField>
 
+<ParamField body="agentDid" type="string" required>
+  The decentralized identifier of the agent that performed the action.
+</ParamField>
+
 <ParamField body="grantId" type="string" required>
   The grant under which the action was performed.
+</ParamField>
+
+<ParamField body="principalId" type="string" required>
+  The principal on whose behalf the action was performed.
 </ParamField>
 
 <ParamField body="action" type="string" required>
@@ -123,7 +135,7 @@ const result = await grantex.audit.list({
   pageSize: 50,
 });
 
-console.log(result.total);  // 128
+console.log(result.entries.length);  // entries returned on this page
 for (const entry of result.entries) {
   console.log(`[${entry.timestamp}] ${entry.action} - ${entry.status}`);
 }

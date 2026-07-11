@@ -6,9 +6,9 @@ const DEFAULT_JWKS_URI = 'https://api.grantex.dev/.well-known/jwks.json';
 /**
  * Create a Grantex-authorized function in OpenAI function-calling format.
  *
- * The scope check is performed offline by reading the `scp` claim from the
- * grant token JWT — no network call is made. If the agent does not hold
- * `requiredScope`, `execute()` throws before calling `func`.
+ * Before execution, the grant token signature and claims are verified against
+ * JWKS, then the verified `scp` claim is checked. If verification fails or the
+ * agent does not hold `requiredScope`, `execute()` throws before calling `func`.
  *
  * @example
  * ```ts

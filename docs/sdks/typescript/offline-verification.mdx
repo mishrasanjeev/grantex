@@ -1,14 +1,20 @@
 ---
 title: "Offline Verification"
 sidebarTitle: "Offline Verification"
-description: "Verify grant tokens locally using the published JWKS endpoint -- no Grantex API dependency at runtime."
+description: "Verify grant tokens locally with published JWKS keys, without a per-token Grantex verification API call."
 ---
 
 ## Overview
 
-`verifyGrantToken()` is a standalone function that verifies Grantex grant tokens offline using the published JWKS (JSON Web Key Set). It validates the RS256 signature, checks expiry, and optionally enforces required scopes and audience.
+`verifyGrantToken()` is a standalone function that verifies signatures and claims
+locally after retrieving the published JWKS (JSON Web Key Set). It validates the
+RS256 signature, issuer, expiry, and optional scopes and audience. The current
+standalone helper resolves the remote JWKS on each invocation, so it is not a
+network-free hot path.
 
-This is the recommended way for services to verify tokens -- it requires zero runtime dependency on Grantex infrastructure.
+Use it when signature-and-claim validation without a revocation lookup is the
+right trade-off. It avoids `POST /v1/tokens/verify`, but the JWKS endpoint must be
+reachable for each standalone helper call.
 
 ```typescript
 import { verifyGrantToken } from '@grantex/sdk';
@@ -24,7 +30,16 @@ console.log(grant.scopes);      // All granted scopes
 ```
 
 <Note>
-  The JWKS endpoint is cached automatically by the underlying `jose` library. Repeated verifications do not make repeated HTTP calls.
+  The standalone helper may contact the JWKS endpoint when it resolves keys.
+  Keep that endpoint reachable from the verifying service; token validation
+  itself is performed locally and does not call `POST /v1/tokens/verify`.
+</Note>
+
+<Note>
+  Hosted tokens use the canonical issuer `https://grantex.dev`, even though the
+  stable JWKS URL is served from `https://api.grantex.dev`. The SDK handles this
+  alias automatically. For self-hosted deployments, it derives the expected
+  issuer from the JWKS URL unless you set `issuer` or `issuerDid` explicitly.
 </Note>
 
 ## Import
@@ -57,6 +72,21 @@ This function does not require a `Grantex` client instance.
 
 <ParamField body="audience" type="string">
   Expected `aud` claim. If provided, verification fails when the token's audience does not match.
+</ParamField>
+
+<ParamField body="issuer" type="string">
+  Expected `iss` claim. The hosted JWKS alias automatically expects
+  `https://grantex.dev`; custom JWKS URLs derive the issuer from their URL when
+  this option is omitted.
+</ParamField>
+
+<ParamField body="issuerDid" type="string">
+  A `did:web` issuer identifier. When provided, the SDK derives both the JWKS URL
+  and expected issuer from the DID. An explicit `issuer` still takes precedence.
+</ParamField>
+
+<ParamField body="clockTolerance" type="number">
+  Optional clock-skew tolerance, in seconds, for time-based JWT claims.
 </ParamField>
 
 ## Response: `VerifiedGrant`
@@ -111,6 +141,7 @@ This function does not require a `Grantex` client instance.
 
 - The JWT signature is invalid
 - The token has expired
+- The token issuer does not match the expected issuer
 - Required claims (`jti`, `sub`, `agt`, `dev`, `scp`, `iat`, `exp`) are missing
 - The token is missing one or more `requiredScopes`
 - The `audience` does not match
@@ -154,8 +185,8 @@ The following table shows how JWT claims map to `VerifiedGrant` fields:
 
 | | `verifyGrantToken()` | `tokens.verify()` |
 |---|---|---|
-| **Network call** | Only to JWKS endpoint (cached) | Calls Grantex API |
-| **Latency** | Sub-millisecond after initial JWKS fetch | Network round-trip |
+| **Network call** | May fetch keys from the JWKS endpoint | Calls Grantex API |
+| **Latency** | Local cryptography plus JWKS retrieval when needed | Network round-trip |
 | **Revocation check** | No (checks signature + expiry only) | Yes (checks revocation status) |
 | **Requires API key** | No | Yes |
 | **Use case** | Services verifying tokens at high throughput | Admin dashboards, token status checks |

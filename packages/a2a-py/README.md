@@ -31,7 +31,7 @@ task = client.send_task(TaskSendParams(
 from grantex_a2a import create_a2a_auth_middleware, A2AAuthMiddlewareOptions
 
 middleware = create_a2a_auth_middleware(
-    A2AAuthMiddlewareOptions(jwks_uri="https://grantex.dev/.well-known/jwks.json")
+    A2AAuthMiddlewareOptions(jwks_uri="https://api.grantex.dev/.well-known/jwks.json")
 )
 
 # In your request handler:
@@ -48,7 +48,7 @@ card = build_grantex_agent_card(GrantexAgentCardOptions(
     name="My Agent",
     description="An agent",
     url="https://my-agent.example.com/a2a",
-    jwks_uri="https://grantex.dev/.well-known/jwks.json",
+    jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
     issuer="https://grantex.dev",
 ))
 ```

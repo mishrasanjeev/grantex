@@ -42,7 +42,7 @@ import { Grantex } from '@grantex/sdk';
 import { createMcpAuthServer } from '@grantex/mcp-auth';
 
 const grantex = new Grantex({
-  baseUrl: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app',
+  baseUrl: 'https://api.grantex.dev',
   apiKey: process.env.GRANTEX_API_KEY!,
 });
 
@@ -320,17 +320,17 @@ class PostgresClientStore implements ClientStore {
 
 ## Certification Program
 
-Grantex offers three certification tiers for MCP servers. See the [MCP Certification Guide](/guides/mcp-certification) for full details.
+Grantex accepts Bronze, Silver, and Gold certification applications for registered MCP servers. Applications begin in `pending_conformance_test`; submission alone is not certification. See the [MCP Certification Applications guide](/guides/mcp-certification) for the current API and limitations.
 
-| Tier | Key Requirements | Benefits |
-|------|-----------------|----------|
-| **Bronze** | OAuth 2.1 + PKCE, DCR, metadata discovery | Registry listing |
-| **Silver** | + Introspection, revocation, consent UI, audit hooks | Featured placement |
-| **Gold** | + Persistent store, delegation, budget enforcement, conformance pass | Top placement + badge |
+| Requested level | Application value |
+|-----------------|-------------------|
+| **Bronze** | `bronze` |
+| **Silver** | `silver` |
+| **Gold** | `gold` |
 
-<Tip>
-  Using `@grantex/mcp-auth` with all features enabled (custom client store, hooks, consent UI) achieves Gold certification automatically.
-</Tip>
+<Warning>
+  Using `@grantex/mcp-auth` does not automatically certify a server. Treat the status returned by the certification API as authoritative and do not publish a badge for a pending application.
+</Warning>
 
 ## Configuration Reference
 
@@ -375,8 +375,8 @@ Default per-endpoint rate limits:
 
 ## Related
 
-- [MCP Certification Guide](/guides/mcp-certification) -- Bronze, Silver, and Gold requirements
-- [MCP Server (13 tools)](/integrations/mcp) -- Grantex MCP server for Claude Desktop/Cursor
+- [MCP Certification Applications](/guides/mcp-certification) -- Application API and current limitations
+- [MCP Server (17 tools)](/integrations/mcp) -- Grantex MCP server for Claude Desktop/Cursor
 - [Express Middleware](/integrations/express) -- Grantex Express.js middleware
 - [Self-Hosting Guide](/guides/self-hosting) -- Deploy the full Grantex stack
 - [Security Best Practices](/guides/security-best-practices) -- Token verification, key rotation

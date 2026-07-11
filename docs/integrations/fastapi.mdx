@@ -22,7 +22,7 @@ from grantex_fastapi import GrantexAuth, GrantexFastAPIError, grantex_exception_
 app = FastAPI()
 app.add_exception_handler(GrantexFastAPIError, grantex_exception_handler)
 
-JWKS_URI = "https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json"
+JWKS_URI = "https://api.grantex.dev/.well-known/jwks.json"
 grantex = GrantexAuth(jwks_uri=JWKS_URI)
 
 @app.get("/api/calendar")
@@ -210,7 +210,7 @@ app = FastAPI(title="My Agent API")
 app.add_exception_handler(GrantexFastAPIError, grantex_exception_handler)
 
 grantex = GrantexAuth(
-    jwks_uri="https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json",
+    jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
     clock_tolerance=5,
 )
 

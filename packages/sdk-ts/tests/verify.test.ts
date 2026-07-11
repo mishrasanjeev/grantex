@@ -14,8 +14,11 @@ vi.mock('jose', () => {
 });
 
 // Import after mock is in place
-const { verifyGrantToken } = await import('../src/verify.js');
-const { mapOnlineVerifyToVerifiedGrant } = await import('../src/verify.js');
+const {
+  clearRemoteJwksCache,
+  mapOnlineVerifyToVerifiedGrant,
+  verifyGrantToken,
+} = await import('../src/verify.js');
 import * as jose from 'jose';
 
 const VALID_PAYLOAD = {
@@ -32,6 +35,7 @@ const VALID_PAYLOAD = {
 
 describe('verifyGrantToken', () => {
   afterEach(() => {
+    clearRemoteJwksCache();
     vi.clearAllMocks();
   });
 
@@ -70,6 +74,84 @@ describe('verifyGrantToken', () => {
       'mock-jwks',
       expect.objectContaining({ issuer: 'https://grantex.dev' }),
     );
+  });
+
+  it('maps the production API JWKS alias to the canonical token issuer', async () => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: VALID_PAYLOAD,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    await verifyGrantToken('fake.token.here', {
+      jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+    });
+
+    expect(jose.jwtVerify).toHaveBeenCalledWith(
+      'fake.token.here',
+      'mock-jwks',
+      expect.objectContaining({ issuer: 'https://grantex.dev' }),
+    );
+  });
+
+  it('reuses one JOSE resolver for normalized variants of the same JWKS URI', async () => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: VALID_PAYLOAD,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    await verifyGrantToken('first.token', {
+      jwksUri: 'https://GRANTEX.dev:443/.well-known/jwks.json#first',
+    });
+    await verifyGrantToken('second.token', {
+      jwksUri: 'https://grantex.dev/.well-known/jwks.json#second',
+    });
+
+    expect(jose.createRemoteJWKSet).toHaveBeenCalledOnce();
+    expect(jose.createRemoteJWKSet).toHaveBeenCalledWith(
+      new URL('https://grantex.dev/.well-known/jwks.json'),
+    );
+    expect(vi.mocked(jose.jwtVerify).mock.calls[0]?.[1]).toBe(
+      vi.mocked(jose.jwtVerify).mock.calls[1]?.[1],
+    );
+  });
+
+  it('keeps resolvers isolated between distinct JWKS URIs', async () => {
+    vi.mocked(jose.createRemoteJWKSet)
+      .mockReturnValueOnce('resolver-a' as never)
+      .mockReturnValueOnce('resolver-b' as never);
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: VALID_PAYLOAD,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    await verifyGrantToken('first.token', {
+      jwksUri: 'https://one.example/.well-known/jwks.json',
+    });
+    await verifyGrantToken('second.token', {
+      jwksUri: 'https://two.example/.well-known/jwks.json',
+    });
+
+    expect(jose.createRemoteJWKSet).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(jose.jwtVerify).mock.calls[0]?.[1]).toBe('resolver-a');
+    expect(vi.mocked(jose.jwtVerify).mock.calls[1]?.[1]).toBe('resolver-b');
+  });
+
+  it('retains the resolver after a verification failure', async () => {
+    vi.mocked(jose.jwtVerify)
+      .mockRejectedValueOnce(new Error('unknown kid'))
+      .mockResolvedValueOnce({
+        payload: VALID_PAYLOAD,
+        protectedHeader: { alg: 'RS256' },
+      } as never);
+
+    await expect(verifyGrantToken('stale.token', {
+      jwksUri: 'https://keys.example/.well-known/jwks.json',
+    })).rejects.toBeInstanceOf(GrantexTokenError);
+    await expect(verifyGrantToken('fresh.token', {
+      jwksUri: 'https://keys.example/.well-known/jwks.json',
+    })).resolves.toBeDefined();
+
+    expect(jose.createRemoteJWKSet).toHaveBeenCalledOnce();
   });
 
   it('throws GrantexTokenError when jose throws', async () => {

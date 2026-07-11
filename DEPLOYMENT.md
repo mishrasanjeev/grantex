@@ -10,7 +10,7 @@ Complete guide to deploying the Grantex authorization platform in your environme
 |-----------|---------|-------------|---------|
 | **Node.js** | 18.0.0 | 20 LTS | Auth service, CLI, TypeScript packages |
 | **Python** | 3.9 | 3.12+ | Python SDK, FastAPI middleware, integrations |
-| **Go** | 1.21 | 1.24+ | Go SDK, Terraform provider |
+| **Go** | 1.26.1 | 1.26.1+ | Go SDK (the Terraform provider currently requires 1.25+) |
 | **PostgreSQL** | 14 | 16 | Primary database |
 | **Redis** | 6 | 7+ | Caching, rate limiting, pub/sub, revocation |
 | **Docker** | 20.10+ | 24+ | Containerized deployment (optional) |
@@ -29,10 +29,10 @@ Complete guide to deploying the Grantex authorization platform in your environme
 | `docker-compose.yml` | Dev stack (auth service + PostgreSQL + Redis) |
 | `docker-compose.prod.yml` | Production Docker stack |
 | `apps/auth-service/Dockerfile` | Auth service container image |
-| `apps/auth-service/.env.example` | All environment variables with defaults |
+| `apps/auth-service/.env.example` | Baseline environment template; `src/config.ts` is authoritative |
 | `apps/auth-service/package.json` | Node.js dependencies |
 | `apps/auth-service/package-lock.json` | Pinned Node.js dependencies |
-| `apps/auth-service/src/db/migrations/` | 30 SQL migration files |
+| `apps/auth-service/src/db/migrations/` | Ordered SQL migrations (currently through `063`) |
 | `packages/gateway/Dockerfile` | Gateway reverse proxy container |
 | `deploy/gcp/setup.sh` | Google Cloud Run setup |
 | `deploy/gcp/setup-wif.sh` | Workload Identity Federation setup |
@@ -126,6 +126,9 @@ curl http://localhost:3001/health
 | `REDIS_URL` | Redis connection string | `redis://localhost:6379` |
 | `JWT_ISSUER` | JWT issuer claim (your domain) | `https://auth.example.com` |
 | `RSA_PRIVATE_KEY` | RSA private key (PEM format) for JWT signing | `-----BEGIN RSA PRIVATE KEY-----...` |
+| `ADMIN_API_KEY` | Strong key protecting `/v1/admin/*` endpoints (required in production) | 32+ random bytes |
+| `VAULT_ENCRYPTION_KEY` | 32-byte hex or base64 key for credential-vault encryption (required in production) | `openssl rand -hex 32` |
+| `METRICS_API_KEY` | Key protecting `/metrics` when production metrics are enabled | 32+ random bytes |
 
 > **Note:** Set `AUTO_GENERATE_KEYS=true` instead of `RSA_PRIVATE_KEY` for development. The service will generate an ephemeral RSA key pair on startup. **Do not use this in production** — keys change on every restart.
 
@@ -137,12 +140,10 @@ curl http://localhost:3001/health
 | `HOST` | `0.0.0.0` | Bind address |
 | `NODE_ENV` | `development` | `production` enables optimizations |
 | `LOG_LEVEL` | `info` | Pino log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
-| `ADMIN_API_KEY` | (none) | Admin API key for `/v1/admin/*` endpoints |
 | `STRIPE_SECRET_KEY` | (none) | Stripe billing integration |
 | `STRIPE_WEBHOOK_SECRET` | (none) | Stripe webhook signature verification |
 | `STRIPE_PRICE_PRO` | (none) | Stripe price ID for pro plan |
 | `STRIPE_PRICE_ENTERPRISE` | (none) | Stripe price ID for enterprise plan |
-| `VAULT_ENCRYPTION_KEY` | (none) | AES encryption key for credential vault (hex 64 chars or base64 44 chars) |
 | `FIDO_RP_ID` | `grantex.dev` | WebAuthn Relying Party ID |
 | `FIDO_RP_NAME` | `Grantex` | WebAuthn Relying Party name |
 | `FIDO_ORIGIN` | `https://grantex.dev` | WebAuthn origin URL |
@@ -189,7 +190,7 @@ cd apps/auth-service
 npm run migrate
 ```
 
-30 migration files create all required tables: agents, grants, tokens, audit, webhooks, policies, budgets, credentials, SSO, SCIM, WebAuthn, and more.
+The ordered migrations currently run from `001` through `063` and create the core, enterprise, offline, trust-registry, and commerce data structures. Treat the migration directory—not a copied count in documentation—as authoritative.
 
 ### Backup
 
@@ -229,8 +230,9 @@ Before deploying to production:
 
 - [ ] Set a real `RSA_PRIVATE_KEY` (do NOT use `AUTO_GENERATE_KEYS` in production)
 - [ ] Set `NODE_ENV=production`
-- [ ] Set a strong `ADMIN_API_KEY` (if using admin endpoints)
-- [ ] Set `VAULT_ENCRYPTION_KEY` (if using credential vault)
+- [ ] Set a strong `ADMIN_API_KEY` (required in production)
+- [ ] Set a valid 32-byte `VAULT_ENCRYPTION_KEY` (required in production)
+- [ ] Set `METRICS_API_KEY`, or explicitly disable metrics with `METRICS_ENABLED=false`
 - [ ] Enable TLS termination (via reverse proxy or cloud load balancer)
 - [ ] Configure firewall — only expose port 3001 (or your chosen port)
 - [ ] Restrict admin endpoints to internal network / VPN
@@ -281,8 +283,11 @@ cd deploy/gcp
 gcloud run deploy grantex-auth \
   --source apps/auth-service \
   --region us-central1 \
-  --set-env-vars "DATABASE_URL=...,REDIS_URL=...,JWT_ISSUER=..."
+  --set-env-vars "DATABASE_URL=...,REDIS_URL=...,JWT_ISSUER=..." \
+  --set-secrets "RSA_PRIVATE_KEY=grantex-rsa-private-key:latest,ADMIN_API_KEY=grantex-admin-api-key:latest,VAULT_ENCRYPTION_KEY=grantex-vault-encryption-key:latest,METRICS_API_KEY=grantex-metrics-api-key:latest"
 ```
+
+All four referenced secrets must already exist in Secret Manager and contain production values. Grant the Cloud Run runtime service account `roles/secretmanager.secretAccessor`. Never deploy production with `AUTO_GENERATE_KEYS=true`; an ephemeral key changes after a restart and invalidates signature verification. If metrics are explicitly disabled with `METRICS_ENABLED=false`, the metrics key is not required.
 
 Or use the GitHub Actions deploy workflow (`.github/workflows/deploy.yml`).
 
@@ -290,12 +295,17 @@ Or use the GitHub Actions deploy workflow (`.github/workflows/deploy.yml`).
 
 ```bash
 cd deploy/helm
-helm install grantex . \
-  --set database.url="postgresql://..." \
-  --set redis.url="redis://..." \
-  --set jwt.issuer="https://your-domain.com" \
-  --set jwt.privateKey="$(cat private.pem)"
+helm install grantex ./grantex \
+  --set-string externalDatabase.url="postgresql://..." \
+  --set-string externalRedis.url="redis://..." \
+  --set-string config.jwtIssuer="https://your-domain.com" \
+  --set-file rsaPrivateKey=private.pem \
+  --set-string adminApiKey="$(openssl rand -hex 32)" \
+  --set-string vaultEncryptionKey="$(openssl rand -hex 32)" \
+  --set-string metrics.apiKey="$(openssl rand -hex 32)"
 ```
+
+For repeatable production installs, place these values in an encrypted values file or supply `existingSecret`; shell-generated values in an upgrade command would rotate credentials unexpectedly.
 
 The Helm chart includes:
 - Deployment with health checks
@@ -320,13 +330,13 @@ nginx -t && systemctl reload nginx
 ### TypeScript
 
 ```bash
-npm install @grantex/sdk@0.3.7
+npm install @grantex/sdk
 ```
 
 ### Python
 
 ```bash
-pip install grantex==0.3.8
+pip install grantex
 # Or from requirements.txt:
 pip install -r requirements.txt
 ```
@@ -334,8 +344,10 @@ pip install -r requirements.txt
 ### Go
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.1.5
+go get github.com/mishrasanjeev/grantex-go@latest
 ```
+
+Resolve and test the current registry version, then commit the resulting lockfile or exact production pin. Do not copy old version numbers from this guide into a deployment manifest.
 
 ### SDK Configuration
 
@@ -358,7 +370,7 @@ All SDKs accept these options:
 npm install @grantex/sdk                 # Core SDK
 npm install @grantex/express             # Express.js middleware
 npm install @grantex/gateway             # Zero-code reverse proxy
-npm install @grantex/mcp                 # MCP server (13 tools)
+npm install @grantex/mcp                 # MCP server (17 tools)
 npm install @grantex/mcp-auth            # OAuth 2.1 + PKCE for MCP
 npm install @grantex/langchain           # LangChain integration
 npm install @grantex/anthropic           # Anthropic SDK integration
@@ -388,7 +400,7 @@ pip install grantex-gemma               # Gemma offline auth
 ### Go
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.1.5
+go get github.com/mishrasanjeev/grantex-go@latest
 ```
 
 ### Terraform
@@ -406,7 +418,7 @@ terraform {
 ### CLI
 
 ```bash
-npm install -g @grantex/cli@0.2.3
+npm install -g @grantex/cli
 grantex --help
 ```
 

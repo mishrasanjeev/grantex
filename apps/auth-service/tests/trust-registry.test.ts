@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { buildTestApp, seedAuth, authHeader, sqlMock, TEST_DEVELOPER } from './helpers.js';
+import { verifyDnsTxt } from '../src/routes/trust-registry.js';
 import type { FastifyInstance } from 'fastify';
 
 // Mock node:dns/promises to control verifyDnsTxt behavior
@@ -14,11 +16,36 @@ beforeAll(async () => {
   app = await buildTestApp();
 });
 
+function registryRow(id: string, overrides: Record<string, unknown> = {}) {
+  return {
+    id,
+    organization_did: `did:web:${id}.example`,
+    domain: `${id}.example`,
+    name: `Organization ${id}`,
+    description: null,
+    trust_level: 'basic',
+    badges: [],
+    total_agents: 0,
+    weekly_active_grants: 0,
+    average_rating: 0,
+    review_count: 0,
+    website: null,
+    logo_url: null,
+    created_at: new Date(),
+    ...overrides,
+  };
+}
+
+function sqlText(callIndex: number): string {
+  return (sqlMock.mock.calls[callIndex]?.[0] as readonly string[]).join(' ');
+}
+
 // -----------------------------------------------------------------
 // GET /v1/registry/orgs — Public: search organizations
 // -----------------------------------------------------------------
 describe('GET /v1/registry/orgs', () => {
   it('returns results without auth (public)', async () => {
+    sqlMock.mockResolvedValueOnce([{ total: 1 }]);
     sqlMock.mockResolvedValueOnce([
       {
         id: 'treg_1',
@@ -52,10 +79,11 @@ describe('GET /v1/registry/orgs', () => {
     expect(body.data[0].verificationLevel).toBe('verified');
     expect(body.data[0].stats.totalAgents).toBe(3);
     expect(body.data[0].stats.weeklyActiveGrants).toBe(42);
-    expect(body.meta).toBeDefined();
+    expect(body.meta).toEqual({ total: 1 });
   });
 
   it('filters by verified=true', async () => {
+    sqlMock.mockResolvedValueOnce([{ total: 1 }]);
     sqlMock.mockResolvedValueOnce([
       {
         id: 'treg_1',
@@ -63,21 +91,6 @@ describe('GET /v1/registry/orgs', () => {
         domain: 'verified.com',
         name: 'Verified Corp',
         trust_level: 'verified',
-        badges: [],
-        total_agents: 0,
-        weekly_active_grants: 0,
-        average_rating: 0,
-        review_count: 0,
-        website: null,
-        logo_url: null,
-        created_at: new Date(),
-      },
-      {
-        id: 'treg_2',
-        organization_did: 'did:web:basic.com',
-        domain: 'basic.com',
-        name: 'Basic Corp',
-        trust_level: 'basic',
         badges: [],
         total_agents: 0,
         weekly_active_grants: 0,
@@ -98,9 +111,12 @@ describe('GET /v1/registry/orgs', () => {
     const body = res.json();
     expect(body.data).toHaveLength(1);
     expect(body.data[0].did).toBe('did:web:verified.com');
+    expect(sqlText(0)).toContain("t.trust_level = 'verified'");
+    expect(sqlText(1)).toContain("t.trust_level = 'verified'");
   });
 
   it('searches by name (q param)', async () => {
+    sqlMock.mockResolvedValueOnce([{ total: 1 }]);
     sqlMock.mockResolvedValueOnce([
       {
         id: 'treg_1',
@@ -108,22 +124,6 @@ describe('GET /v1/registry/orgs', () => {
         domain: 'acme.com',
         name: 'Acme Industries',
         description: 'Building things',
-        trust_level: 'basic',
-        badges: [],
-        total_agents: 0,
-        weekly_active_grants: 0,
-        average_rating: 0,
-        review_count: 0,
-        website: null,
-        logo_url: null,
-        created_at: new Date(),
-      },
-      {
-        id: 'treg_2',
-        organization_did: 'did:web:other.com',
-        domain: 'other.com',
-        name: 'Other Corp',
-        description: null,
         trust_level: 'basic',
         badges: [],
         total_agents: 0,
@@ -145,6 +145,66 @@ describe('GET /v1/registry/orgs', () => {
     const body = res.json();
     expect(body.data).toHaveLength(1);
     expect(body.data[0].name).toBe('Acme Industries');
+    expect(sqlMock.mock.calls[0]?.slice(1)).toContain('%acme%');
+    expect(sqlMock.mock.calls[1]?.slice(1)).toContain('%acme%');
+  });
+
+  it('applies category filtering in SQL and reports the full filtered total', async () => {
+    sqlMock.mockResolvedValueOnce([{ total: 27 }]);
+    sqlMock.mockResolvedValueOnce([
+      registryRow('treg_payments', {
+        organization_did: 'did:web:payments.example',
+        name: 'Payments Org',
+      }),
+    ]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/registry/orgs?category=payments&limit=1',
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toHaveLength(1);
+    expect(res.json().meta).toEqual({ total: 27 });
+    expect(sqlText(0)).toContain('EXISTS');
+    expect(sqlText(1)).toContain('EXISTS');
+    expect(sqlMock.mock.calls[0]?.slice(1)).toContain('payments');
+    expect(sqlMock.mock.calls[1]?.slice(1)).toContain('payments');
+  });
+
+  it('uses a stable database cursor across multiple pages', async () => {
+    sqlMock
+      .mockResolvedValueOnce([{ total: 3 }])
+      .mockResolvedValueOnce([
+        registryRow('treg_3'),
+        registryRow('treg_2'),
+        registryRow('treg_1'),
+      ])
+      .mockResolvedValueOnce([{ total: 3 }])
+      .mockResolvedValueOnce([registryRow('treg_1')]);
+
+    const first = await app.inject({
+      method: 'GET',
+      url: '/v1/registry/orgs?limit=2',
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().data.map((org: { did: string }) => org.did)).toEqual([
+      'did:web:treg_3.example',
+      'did:web:treg_2.example',
+    ]);
+    expect(first.json().meta).toEqual({ total: 3, cursor: 'treg_2' });
+
+    const second = await app.inject({
+      method: 'GET',
+      url: '/v1/registry/orgs?limit=2&cursor=treg_2',
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().data.map((org: { did: string }) => org.did)).toEqual([
+      'did:web:treg_1.example',
+    ]);
+    expect(second.json().meta).toEqual({ total: 3 });
+    expect(sqlText(3)).toContain('WHERE c.id =');
+    expect(sqlMock.mock.calls[3]?.slice(1)).toContain('treg_2');
   });
 });
 
@@ -303,8 +363,54 @@ describe('POST /v1/registry/orgs', () => {
     expect(body.did).toBe('did:web:neworg.com');
     expect(body.name).toBe('New Org');
     expect(body.trustLevel).toBe('basic');
+    expect(body.domain).toBe('neworg.com');
+    expect(body.dnsRecordName).toBe('_grantex-verify.neworg.com');
     expect(body.verificationToken).toBeDefined();
     expect(body.instructions).toContain('_grantex-verify.neworg.com');
+  });
+
+  it('returns a DNS record name derived from the host of a path-based did:web', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/registry/orgs',
+      headers: authHeader(),
+      payload: {
+        did: 'did:web:example.com:teams:registry',
+        name: 'Path DID Org',
+        requestVerification: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().domain).toBe('example.com');
+    expect(res.json().dnsRecordName).toBe('_grantex-verify.example.com');
+    expect(res.json().instructions).not.toContain('example.com:teams:registry');
+  });
+
+  it('returns an owner-safe conflict when the DID is already registered', async () => {
+    seedAuth();
+    sqlMock.mockRejectedValueOnce(Object.assign(new Error('duplicate'), { code: '23505' }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/registry/orgs',
+      headers: authHeader(),
+      payload: {
+        did: 'did:web:existing.example',
+        name: 'Existing Org',
+        requestVerification: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({
+      message: 'This organization DID is already registered',
+      code: 'CONFLICT',
+    });
+    expect(res.json().verificationToken).toBeUndefined();
   });
 
   it('rejects missing name (400)', async () => {
@@ -339,6 +445,41 @@ describe('POST /v1/registry/orgs', () => {
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('BAD_REQUEST');
   });
+
+  it('rejects verification methods that are not implemented', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/registry/orgs',
+      headers: authHeader(),
+      payload: {
+        did: 'did:web:neworg.com',
+        name: 'New Org',
+        verificationMethod: 'soc2',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('UNSUPPORTED_VERIFICATION_METHOD');
+  });
+
+  it('rejects identifiers that cannot be verified through did:web DNS ownership', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/registry/orgs',
+      headers: authHeader(),
+      payload: {
+        did: 'did:key:z6Mktest',
+        name: 'Unsupported DID Org',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('BAD_REQUEST');
+  });
 });
 
 // -----------------------------------------------------------------
@@ -347,6 +488,8 @@ describe('POST /v1/registry/orgs', () => {
 describe('POST /v1/registry/orgs/:orgId/verify-dns', () => {
   it('verifies DNS successfully', async () => {
     seedAuth();
+    const verificationToken = 'grantex-verify=token-from-registration';
+    const verificationTokenHash = createHash('sha256').update(verificationToken).digest('hex');
     // Lookup org
     sqlMock.mockResolvedValueOnce([
       {
@@ -354,15 +497,14 @@ describe('POST /v1/registry/orgs/:orgId/verify-dns', () => {
         domain: 'example.com',
         organization_did: 'did:web:example.com',
         developer_id: TEST_DEVELOPER.id,
+        verification_token_hash: verificationTokenHash,
       },
     ]);
 
     // Mock DNS resolution to succeed
-    mockResolve.mockResolvedValueOnce([['grantex-verify=did:web:example.com']]);
+    mockResolve.mockResolvedValueOnce([[verificationToken]]);
 
-    // Update trust_registry (badges not yet present)
-    sqlMock.mockResolvedValueOnce([]);
-    // Update trust_registry (badges already present path)
+    // Update trust_registry and add the badge if needed
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
@@ -377,6 +519,20 @@ describe('POST /v1/registry/orgs/:orgId/verify-dns', () => {
     expect(body.verificationMethod).toBe('dns-txt');
     expect(body.trustLevel).toBe('verified');
     expect(body.domain).toBe('example.com');
+  });
+
+  it('requires the exact registered token instead of accepting an arbitrary prefix', async () => {
+    const expectedToken = 'grantex-verify=expected-token';
+    const expectedHash = createHash('sha256').update(expectedToken).digest('hex');
+    mockResolve.mockResolvedValueOnce([['grantex-verify=attacker-controlled']]);
+
+    await expect(verifyDnsTxt('example.com', expectedHash)).resolves.toBe(false);
+  });
+
+  it('retains the exact legacy did:web proof for registrations without a token hash', async () => {
+    mockResolve.mockResolvedValueOnce([['grantex-verify=did:web:legacy.example']]);
+
+    await expect(verifyDnsTxt('legacy.example', null)).resolves.toBe(true);
   });
 
   it('fails on DNS miss', async () => {
@@ -416,6 +572,61 @@ describe('POST /v1/registry/orgs/:orgId/verify-dns', () => {
 
     expect(res.statusCode).toBe(404);
     expect(res.json().code).toBe('NOT_FOUND');
+  });
+});
+
+describe('POST /v1/trust-registry/verify-dns (legacy)', () => {
+  it('rejects a predictable legacy TXT replay when the row has a one-time token hash', async () => {
+    seedAuth();
+    const expectedHash = createHash('sha256')
+      .update('grantex-verify=one-time-registration-token')
+      .digest('hex');
+    sqlMock.mockResolvedValueOnce([
+      {
+        id: 'treg_protected',
+        verification_token_hash: expectedHash,
+      },
+    ]);
+    mockResolve.mockResolvedValueOnce([['grantex-verify=did:web:protected.example']]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/trust-registry/verify-dns',
+      headers: authHeader(),
+      payload: { domain: 'protected.example' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('DNS_VERIFICATION_FAILED');
+    expect(res.json().message).toBe('DNS TXT verification failed for protected.example');
+    expect(sqlMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains the deterministic proof only for a row whose token hash is null', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([
+      {
+        id: 'treg_legacy',
+        verification_token_hash: null,
+      },
+    ]);
+    mockResolve.mockResolvedValueOnce([['grantex-verify=did:web:legacy.example']]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/trust-registry/verify-dns',
+      headers: authHeader(),
+      payload: { domain: 'legacy.example' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      organizationDID: 'did:web:legacy.example',
+      verified: true,
+      trustLevel: 'verified',
+    });
+    expect(sqlText(2)).toContain('verification_token_hash = NULL');
   });
 });
 
