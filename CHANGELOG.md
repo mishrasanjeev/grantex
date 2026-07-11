@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added missing TypeScript Vault documentation, package READMEs, JSON-LD contexts, and documentation health checks.
 
 ### Changed
-- Prepared unreleased core SDK patch versions: TypeScript 0.3.13, Python 0.3.14, and Go v0.1.10. Consumer examples remain on the latest published artifacts until release.
+- Published Python SDK 0.3.14 and Go SDK v0.1.10 on 2026-07-11. TypeScript SDK 0.3.13 remains prepared for publication after npm credentials are refreshed.
 
 ### Fixed
 - Corrected SDK quick starts, audit payloads, verification examples, endpoint paths, usage semantics, package metadata, and OpenAPI coverage.
