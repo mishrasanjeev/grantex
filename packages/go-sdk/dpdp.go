@@ -15,11 +15,11 @@ type DPDPService struct {
 
 // CreateConsentRecordParams contains the parameters for creating a consent record.
 type CreateConsentRecordParams struct {
-	GrantID             string                `json:"grantId"`
-	DataPrincipalID     string                `json:"dataPrincipalId"`
-	Purposes            []ConsentPurpose      `json:"purposes"`
-	ConsentNoticeID     string                `json:"consentNoticeId"`
-	ProcessingExpiresAt string                `json:"processingExpiresAt"`
+	GrantID             string           `json:"grantId"`
+	DataPrincipalID     string           `json:"dataPrincipalId"`
+	Purposes            []ConsentPurpose `json:"purposes"`
+	ConsentNoticeID     string           `json:"consentNoticeId"`
+	ProcessingExpiresAt string           `json:"processingExpiresAt"`
 }
 
 // ConsentPurpose describes a data processing purpose for DPDP consent.
@@ -30,21 +30,21 @@ type ConsentPurpose struct {
 
 // WithdrawConsentParams contains the parameters for withdrawing consent.
 type WithdrawConsentParams struct {
-	Reason               string `json:"reason"`
-	RevokeGrant          bool   `json:"revokeGrant,omitempty"`
-	DeleteProcessedData  bool   `json:"deleteProcessedData,omitempty"`
+	Reason              string `json:"reason"`
+	RevokeGrant         bool   `json:"revokeGrant,omitempty"`
+	DeleteProcessedData bool   `json:"deleteProcessedData,omitempty"`
 }
 
 // CreateConsentNoticeParams contains the parameters for creating a consent notice.
 type CreateConsentNoticeParams struct {
-	NoticeID              string                 `json:"noticeId"`
-	Version               string                 `json:"version"`
-	Title                 string                 `json:"title"`
-	Content               string                 `json:"content"`
-	Purposes              []ConsentPurpose       `json:"purposes"`
-	Language              string                 `json:"language,omitempty"`
-	DataFiduciaryContact  string                 `json:"dataFiduciaryContact,omitempty"`
-	GrievanceOfficer      *GrievanceOfficer      `json:"grievanceOfficer,omitempty"`
+	NoticeID             string            `json:"noticeId"`
+	Version              string            `json:"version"`
+	Title                string            `json:"title"`
+	Content              string            `json:"content"`
+	Purposes             []ConsentPurpose  `json:"purposes"`
+	Language             string            `json:"language,omitempty"`
+	DataFiduciaryContact string            `json:"dataFiduciaryContact,omitempty"`
+	GrievanceOfficer     *GrievanceOfficer `json:"grievanceOfficer,omitempty"`
 }
 
 // GrievanceOfficer represents the grievance officer contact info in a consent notice.

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BASE_URL = process.env['GRANTEX_URL'] ?? 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
+const BASE_URL = process.env['GRANTEX_URL'] ?? 'https://api.grantex.dev';
 const API_KEY = process.env['GRANTEX_API_KEY'] ?? '';
 
 export async function GET(request: NextRequest) {

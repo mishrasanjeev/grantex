@@ -1,193 +1,53 @@
 ---
-title: "Conformance Results"
-sidebarTitle: "Latest Results"
-description: "Latest conformance test results for the Grantex production server."
+title: "Conformance Status"
+sidebarTitle: "Conformance Status"
+description: "How to obtain current, reproducible Grantex conformance results."
 ---
 
-## Production Conformance Status
+## Source of Truth
 
-The Grantex hosted service at `grantex-auth-dd4mtrt2gq-uc.a.run.app` is continuously validated against the full conformance suite. Below are the latest results.
+Conformance results are generated artifacts, not permanent product claims. The current status for a commit is the corresponding CI run and its machine-readable report. This page intentionally does not publish a hand-maintained “latest” pass count, date, duration, or production result because those values become stale as suites change.
 
 <Info>
-**45 passed, 0 failed** — 42 core + 3 optional principal-sessions tests in ~80s
+Use the commit SHA, conformance package version, base URL, selected extensions, and generated JSON report together when citing a result.
 </Info>
 
-Last run: **March 1, 2026** | Conformance suite version: **0.1.3**
+## Current Suite Inventory
 
----
+The repository currently defines these core suites:
 
-## Core Suites (42 tests)
+- `health`, `agents`, `authorize`, `token`, `token-refresh`, and `tokens`
+- `grants`, `delegation`, and `audit`
+- `security` and `rate-limit-headers`
 
-### health — Health check and JWKS endpoints
+Optional suites cover:
 
-| Test | Status | Spec |
-|------|--------|------|
-| GET /health returns 200 with status ok | Pass | §3.3 |
-| JWKS endpoint has RS256 keys | Pass | §10 |
+- `policies`, `webhooks`, `scim`, and `sso`
+- `anomalies`, `compliance`, and `principal-sessions`
 
-### agents — Agent registration and management (CRUD)
+Suite membership and test counts are determined by the installed `@grantex/conformance` version. Do not infer today's count from an older report.
 
-| Test | Status | Spec |
-|------|--------|------|
-| POST /v1/agents creates agent with agentId and did | Pass | §10 |
-| GET /v1/agents lists agents | Pass | §10 |
-| GET /v1/agents/:id returns agent details | Pass | §10 |
-| PATCH /v1/agents/:id updates agent | Pass | §10 |
-| DELETE /v1/agents/:id returns 204 | Pass | §10 |
-
-### authorize — Authorization request creation and consent flow
-
-| Test | Status | Spec |
-|------|--------|------|
-| POST /v1/authorize returns authRequestId, consentUrl, expiresAt (201) | Pass | §5.1 |
-| POST /v1/authorize rejects missing required fields (400) | Pass | §5.1 |
-| POST /v1/authorize rejects non-existent agent (404) | Pass | §5.1 |
-| Consent approval produces authorization code | Pass | §5.2 |
-
-### token — Token exchange and refresh
-
-| Test | Status | Spec |
-|------|--------|------|
-| POST /v1/token exchanges code for grantToken, refreshToken, grantId, scopes, expiresAt | Pass | §5.3 |
-| POST /v1/token rejects invalid code (400) | Pass | §5.3 |
-| POST /v1/token rejects reused code (400) | Pass | §5.3 |
-| POST /v1/token/refresh exchanges refresh token for new grant token | Pass | §7.4 |
-| POST /v1/token/refresh rejects used refresh token (400) | Pass | §7.4 |
-
-### tokens — Token verification and revocation
-
-| Test | Status | Spec |
-|------|--------|------|
-| POST /v1/tokens/verify returns valid=true for active token | Pass | §7.2 |
-| POST /v1/tokens/revoke returns 204 | Pass | §7.3 |
-| POST /v1/tokens/verify returns valid=false after revocation | Pass | §7.3 |
-| POST /v1/tokens/verify returns valid=false for garbage token | Pass | §7.2 |
-
-### grants — Grant listing, retrieval, and revocation
-
-| Test | Status | Spec |
-|------|--------|------|
-| GET /v1/grants lists grants | Pass | §7.1 |
-| GET /v1/grants/:id returns grant details | Pass | §7.1 |
-| DELETE /v1/grants/:id returns 204 | Pass | §7.1 |
-| Grant status is revoked after DELETE | Pass | §7.1 |
-
-### delegation — Grant delegation and scope enforcement
-
-| Test | Status | Spec |
-|------|--------|------|
-| POST /v1/grants/delegate returns 201 with grantToken | Pass | §9 |
-| Delegated JWT contains parentAgt, parentGrnt, delegationDepth | Pass | §9 |
-| Delegation rejects scope superset (400) | Pass | §9 |
-| Delegation depth limit is enforced | Pass | §9 |
-| Revoking parent cascades to delegated grants | Pass | §9 |
-
-### audit — Audit logging with hash chain integrity
-
-| Test | Status | Spec |
-|------|--------|------|
-| POST /v1/audit/log creates entry with entryId, hash, prevHash (201) | Pass | §8 |
-| Hash chain integrity: entry2.prevHash === entry1.hash | Pass | §8 |
-| GET /v1/audit/entries returns entries list | Pass | §8 |
-| GET /v1/audit/:id returns single entry | Pass | §8 |
-| Audit hash is a valid SHA-256 hex string | Pass | §8 |
-
-### security — Authentication, authorization, and security enforcement
-
-| Test | Status | Spec |
-|------|--------|------|
-| Request without auth returns 401 | Pass | §14 |
-| Request with bad auth returns 401 | Pass | §14 |
-| JWKS only contains RS256 keys | Pass | §14 |
-| Delegation scope enforcement prevents escalation | Pass | §14 |
-| Audit log is append-only (PUT/DELETE return 404 or 405) | Pass | §14 |
-
-### rate-limit-headers — Rate limit headers presence and format
-
-| Test | Status | Spec |
-|------|--------|------|
-| Rate limit headers on authenticated endpoint | Pass | §14 |
-| Rate limit headers on token verify endpoint | Pass | §14 |
-| JWKS endpoint exempt from rate limits | Pass | §14 |
-
----
-
-## Optional Extension Suites (28 tests)
-
-### policies — Policy CRUD and enforcement
-
-| Test | Status | Spec |
-|------|--------|------|
-| POST /v1/policies creates policy (201) | Pass | §12 |
-| GET /v1/policies lists policies | Pass | §12 |
-| GET /v1/policies/:id returns policy details | Pass | §12 |
-| PATCH /v1/policies/:id updates policy | Pass | §12 |
-| DELETE /v1/policies/:id returns 204 | Pass | §12 |
-
-### webhooks — Webhook registration and management
-
-| Test | Status | Spec |
-|------|--------|------|
-| POST /v1/webhooks creates webhook (201) | Pass | §11 |
-| GET /v1/webhooks lists webhooks | Pass | §11 |
-| DELETE /v1/webhooks/:id returns 204 | Pass | §11 |
-
-### scim — SCIM 2.0 provisioning endpoints
-
-| Test | Status | Spec |
-|------|--------|------|
-| POST /v1/scim/tokens creates SCIM token (201) | Pass | §13 |
-| GET /v1/scim/tokens lists SCIM tokens | Pass | §13 |
-| GET /scim/v2/ServiceProviderConfig returns config | Pass | §13 |
-| POST /scim/v2/Users creates user (201) | Pass | §13 |
-| GET /scim/v2/Users lists users | Pass | §13 |
-| DELETE /scim/v2/Users/:id returns 204 | Pass | §13 |
-
-### sso — SSO configuration and flow
-
-| Test | Status | Spec |
-|------|--------|------|
-| POST /v1/sso/config creates SSO config (201) | Pass | §13 |
-| GET /v1/sso/config returns SSO config | Pass | §13 |
-| GET /sso/login requires org parameter | Pass | §13 |
-| DELETE /v1/sso/config returns 204 | Pass | §13 |
-
-### anomalies — Anomaly detection and acknowledgement
-
-| Test | Status | Spec |
-|------|--------|------|
-| POST /v1/anomalies/detect runs detection (200) | Pass | §12 |
-| GET /v1/anomalies lists anomalies | Pass | §12 |
-| PATCH /v1/anomalies/:id/acknowledge returns 404 for invalid ID | Pass | §12 |
-
-### compliance — Compliance reporting and evidence export
-
-| Test | Status | Spec |
-|------|--------|------|
-| GET /v1/compliance/summary returns summary | Pass | §12 |
-| GET /v1/compliance/export/grants returns grants export | Pass | §12 |
-| GET /v1/compliance/export/audit returns audit export | Pass | §12 |
-| GET /v1/compliance/evidence-pack returns evidence pack | Pass | §12 |
-
-### principal-sessions — Principal session tokens and end-user permissions
-
-| Test | Status | Spec |
-|------|--------|------|
-| POST /v1/principal-sessions returns 201 with sessionToken and dashboardUrl | Pass | §12 |
-| POST /v1/principal-sessions returns 400 without principalId | Pass | §12 |
-| Session token can be used to GET /v1/principal/grants | Pass | §12 |
-
----
-
-## Run It Yourself
-
-Validate your own Grantex server:
+## Generate a Reproducible Report
 
 ```bash
 npx @grantex/conformance \
-  --base-url YOUR_SERVER_URL \
-  --api-key YOUR_API_KEY \
-  --include policies,webhooks,scim,sso,anomalies,compliance,principal-sessions
+  --base-url https://api.grantex.dev \
+  --api-key "$GRANTEX_API_KEY" \
+  --include policies,webhooks,scim,sso,anomalies,compliance,principal-sessions \
+  --format json > conformance-results.json
 ```
 
-See the [Conformance Suite guide](/integrations/conformance) for full documentation.
+The command exits with status `0` when no selected test failed, `1` when at least one selected test failed, and `2` when the runner itself could not complete.
+
+Store the following alongside the report:
+
+```bash
+git rev-parse HEAD
+npm view @grantex/conformance version
+```
+
+<Warning>
+A report against one deployment does not certify another deployment, and a general Grantex conformance report does not by itself approve an MCP certification application.
+</Warning>
+
+See the [Conformance Suite guide](/integrations/conformance) for CLI options and suite selection.

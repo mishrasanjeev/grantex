@@ -40,7 +40,7 @@ info:
     checkout/payment paths, enable live providers, enable live Plural, write
     production config, or set allowlists.
 servers:
-  - url: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+  - url: https://api.grantex.dev
     description: Production (Cloud Run)
   - url: http://localhost:3001
     description: Local
@@ -2712,7 +2712,7 @@ components:
           items: { $ref: "#/components/schemas/CommerceConnector" }
         source_precedence:
           type: array
-            items: { $ref: "#/components/schemas/CommerceConnectorSourcePrecedenceEntry" }
+          items: { $ref: "#/components/schemas/CommerceConnectorSourcePrecedenceEntry" }
         controls: { $ref: "#/components/schemas/CommerceConnectorControls" }
 
     CommerceConnectorDryRunRequest:

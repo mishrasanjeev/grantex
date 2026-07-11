@@ -93,7 +93,7 @@ const result = await grantex.grants.list({
   pageSize: 25,
 });
 
-console.log(result.total);  // 42
+console.log(result.grants.length);  // grants returned on this page
 for (const grant of result.grants) {
   console.log(`${grant.id}: ${grant.scopes.join(', ')}`);
 }

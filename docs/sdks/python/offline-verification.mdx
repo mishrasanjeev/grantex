@@ -1,14 +1,24 @@
 ---
 title: "Offline Verification"
 sidebarTitle: "Offline Verification"
-description: "Verify Grantex grant tokens offline using published JWKS without calling the Grantex API."
+description: "Verify signatures and claims locally with a remote JWKS request per standalone call, without online token introspection."
 ---
 
 ## Overview
 
-The `verify_grant_token()` function verifies a Grantex grant token locally using the published JSON Web Key Set (JWKS). This approach has zero runtime dependency on Grantex infrastructure -- the only network call is to fetch the JWKS from the issuer.
+The `verify_grant_token()` function verifies a Grantex grant token's signature
+and claims locally after retrieving the published JSON Web Key Set (JWKS). It
+avoids the online verification/revocation endpoint, but the current standalone
+helper fetches the remote JWKS on every invocation and is not network-free.
 
 This is ideal for service-side verification where latency matters and you want to avoid an API round-trip for every request.
+
+<Note>
+Hosted tokens use the canonical issuer `https://grantex.dev`, even though the
+stable JWKS URL is served from `https://api.grantex.dev`. The SDK handles this
+alias automatically. For self-hosted deployments, it derives the expected
+issuer from the JWKS URL unless you set `issuer` or `issuer_did` explicitly.
+</Note>
 
 ## Usage
 
@@ -44,6 +54,8 @@ from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenErr
 | `required_scopes`  | `list[str] \| None` | No    | `None`  | If set, verification fails if the token is missing any of these scopes. |
 | `clock_tolerance`  | `int`            | No       | `0`     | Seconds of leeway for `exp` and `iat` clock skew.                  |
 | `audience`         | `str \| None`    | No       | `None`  | Expected `aud` claim. If `None`, audience is not validated.        |
+| `issuer`           | `str \| None`    | No       | `None`  | Expected `iss` claim. The hosted alias expects `https://grantex.dev`; custom JWKS URLs derive it when omitted. |
+| `issuer_did`       | `str \| None`    | No       | `None`  | A `did:web` issuer used to derive the JWKS URL and expected issuer. An explicit `issuer` takes precedence. |
 
 ## Response
 
@@ -152,6 +164,8 @@ else:
 - No matching RSA key is found in the JWKS
 - The token signature is invalid
 - The token is expired
+- The token issuer does not match the expected issuer
+- The token audience does not match `audience`, when configured
 - Required claims (`jti`, `sub`, `agt`, `dev`, `scp`, `iat`, `exp`) are missing
 - Required scopes are not present in the token
 

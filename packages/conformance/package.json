@@ -1,6 +1,6 @@
 {
   "name": "@grantex/conformance",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Conformance test suite for the Grantex protocol",
   "homepage": "https://grantex.dev",
   "bugs": {
@@ -9,6 +9,16 @@
   "type": "module",
   "bin": {
     "grantex-conformance": "./dist/index.js"
+  },
+  "exports": {
+    "./runner": {
+      "types": "./dist/runner.d.ts",
+      "import": "./dist/runner.js"
+    },
+    "./reporter": {
+      "types": "./dist/reporter.d.ts",
+      "import": "./dist/reporter.js"
+    }
   },
   "files": [
     "dist",

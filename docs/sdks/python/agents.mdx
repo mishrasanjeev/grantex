@@ -62,7 +62,7 @@ List all agents registered under your developer account:
 ```python
 result = client.agents.list()
 
-print(f"Total agents: {result.total}")
+print(f"Total agents: {len(result.agents)}")
 for agent in result.agents:
     print(f"  {agent.name} ({agent.id}) - {agent.status}")
 ```
@@ -149,7 +149,7 @@ with Grantex(api_key="gx_live_...") as client:
 
     # List
     all_agents = client.agents.list()
-    print(f"Total agents: {all_agents.total}")
+    print(f"Total agents: {len(all_agents.agents)}")
 
     # Delete
     client.agents.delete(agent.id)

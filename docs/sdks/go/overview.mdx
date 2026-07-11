@@ -11,7 +11,7 @@ go get github.com/mishrasanjeev/grantex-go
 
 ## Requirements
 
-- Go 1.21+
+- Go 1.26.1+
 
 ## Configuration
 
@@ -124,7 +124,7 @@ func main() {
 
 | Function | Description |
 |----------|-------------|
-| `grantex.VerifyGrantToken()` | Offline JWT verification via JWKS |
+| `grantex.VerifyGrantToken()` | Local JWT verification with a JWKS fetch per standalone call |
 | `grantex.GeneratePKCE()` | Generate PKCE S256 challenge pair |
 | `grantex.VerifyWebhookSignature()` | Verify HMAC-SHA256 webhook signatures |
 | `grantex.Signup()` | Register a new developer (no API key needed) |

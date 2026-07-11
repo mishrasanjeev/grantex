@@ -1,11 +1,14 @@
 ---
 title: "SSO (OIDC + SAML + LDAP)"
-description: "Enterprise single sign-on with multi-IdP connections, SAML 2.0, OIDC, LDAP, JIT provisioning, and domain-based enforcement using the Grantex Go SDK."
+description: "Enterprise OIDC and SAML single sign-on, plus the LDAP direct-bind preview, using the Grantex Go SDK."
 ---
 
 ## Overview
 
-The `SSO` service provides enterprise-grade single sign-on for your developer organization. It supports multiple identity provider connections (OIDC, SAML 2.0, and LDAP), domain-based enforcement, JIT (just-in-time) provisioning, and session management. Compatible with Okta, Azure AD, Google Workspace, Auth0, OneLogin, PingFederate, OpenLDAP, FreeIPA, and any SAML 2.0, OIDC, or LDAP-compliant provider.
+The `SSO` service manages OIDC and SAML 2.0 enterprise connections,
+domain-based enforcement, JIT provisioning, and sessions. It also exposes the
+current LDAP direct-bind preview; that preview is not a general LDAP directory
+integration and has the limitations documented below.
 
 ```go
 conn, err := client.SSO.CreateConnection(ctx, grantex.CreateSsoConnectionParams{
@@ -217,30 +220,28 @@ Enforce SSO login for your organization. When enabled, all members must authenti
 
 ```go
 enforcement, err := client.SSO.SetEnforcement(ctx, grantex.SsoEnforcementParams{
-    Enforced:    true,
-    ExemptRoles: []string{"owner"},
+    Enforce: true,
 })
 if err != nil {
     log.Fatal(err)
 }
 
-fmt.Printf("Enforced: %v\n", enforcement.Enforced)       // true
-fmt.Printf("Exempt roles: %v\n", enforcement.ExemptRoles) // [owner]
+fmt.Printf("Enforced: %v\n", enforcement.Enforce)       // true
+fmt.Printf("Developer: %s\n", enforcement.DeveloperID)
 ```
 
 ### `SsoEnforcementParams`
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `Enforced` | `bool` | Yes | Whether SSO login is enforced for all members. |
-| `ExemptRoles` | `[]string` | No | Roles exempt from SSO enforcement. |
+| `Enforce` | `bool` | Yes | Whether SSO login is enforced for all members. |
 
-### `SsoEnforcement`
+### `SsoEnforcementResponse`
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Enforced` | `bool` | Whether SSO enforcement is active. |
-| `ExemptRoles` | `[]string` | Roles exempt from the enforcement policy. |
+| `Enforce` | `bool` | Whether SSO enforcement is active. |
+| `DeveloperID` | `string` | Organization/developer ID updated by the request. |
 
 ---
 
@@ -257,7 +258,7 @@ if err != nil {
 }
 
 for _, s := range sessions.Sessions {
-    fmt.Printf("%s - %s - expires %s\n", s.Email, s.ConnectionName, s.ExpiresAt)
+    fmt.Printf("%s - %s - expires %s\n", s.Email, s.ConnectionID, s.ExpiresAt)
 }
 ```
 
@@ -266,9 +267,9 @@ for _, s := range sessions.Sessions {
 | Field | Type | Description |
 |-------|------|-------------|
 | `ID` | `string` | Session identifier. |
+| `DeveloperID` | `string` | Organization/developer that owns the session. |
 | `Email` | `string` | The user's email address. |
 | `ConnectionID` | `string` | The SSO connection used for this session. |
-| `ConnectionName` | `string` | Display name of the SSO connection. |
 | `CreatedAt` | `string` | ISO 8601 session creation timestamp. |
 | `ExpiresAt` | `string` | ISO 8601 session expiration timestamp. |
 
@@ -292,36 +293,30 @@ if err != nil {
 
 ### Get Login URL (enterprise)
 
-Get the SSO authorization URL for a user based on their email domain. The domain is matched against configured connections to route the user to the correct IdP.
+Get the SSO authorization URL for an organization, with an optional email-domain
+hint used to select a configured connection.
 
 ```go
-login, err := client.SSO.GetLoginURL(ctx, grantex.SsoLoginParams{
-    Domain:      "mycompany.com",
-    RedirectURI: "https://yourapp.com/sso/callback",
-})
+login, err := client.SSO.GetLoginURL(ctx, "org_01HXYZ...", "mycompany.com")
 if err != nil {
     log.Fatal(err)
 }
 
 fmt.Printf("Redirect to: %s\n", login.AuthorizeURL)
-fmt.Printf("Connection: %s\n", login.ConnectionID)  // sso_conn_01HX...
-fmt.Printf("Protocol: %s\n", login.Protocol)         // oidc
 ```
 
-### `SsoLoginParams`
+### Parameters
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `Domain` | `string` | Yes | Email domain to match against SSO connections. |
-| `RedirectURI` | `string` | No | Override the redirect URI for this login request. |
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `org` | `string` | Yes | Organization/developer ID that owns the SSO connections. |
+| `domain` | `string` | No | Optional email domain used to select a connection. |
 
 ### `SsoLoginResponse` (enterprise)
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `AuthorizeURL` | `string` | The full authorization URL. Redirect the user here. |
-| `ConnectionID` | `string` | The matched SSO connection ID. |
-| `Protocol` | `string` | The protocol of the matched connection. |
 
 ---
 
@@ -331,8 +326,9 @@ Handle the callback from an OIDC identity provider. Exchanges the authorization 
 
 ```go
 result, err := client.SSO.HandleOidcCallback(ctx, grantex.SsoOidcCallbackParams{
-    Code:  "oidc_auth_code",
-    State: "csrf_state",
+    Code:        "oidc_auth_code",
+    State:       "csrf_state",
+    RedirectURI: "https://yourapp.com/sso/callback", // optional
 })
 if err != nil {
     log.Fatal(err)
@@ -342,8 +338,8 @@ fmt.Printf("Email: %s\n", *result.Email)              // alice@mycompany.com
 fmt.Printf("Name: %s\n", *result.Name)                // Alice Smith
 fmt.Printf("Subject: %s\n", *result.Sub)              // okta|abc123
 fmt.Printf("Developer ID: %s\n", result.DeveloperID)  // dev_01HXYZ...
-fmt.Printf("Connection: %s\n", result.ConnectionID)   // sso_conn_01HX...
-fmt.Printf("Provisioned: %v\n", result.Provisioned)   // true
+fmt.Printf("Session: %s\n", result.SessionID)
+fmt.Printf("Scopes: %v\n", result.MappedScopes)
 ```
 
 ### `SsoOidcCallbackParams`
@@ -352,17 +348,21 @@ fmt.Printf("Provisioned: %v\n", result.Provisioned)   // true
 |-------|------|----------|-------------|
 | `Code` | `string` | Yes | The authorization code from the OIDC callback. |
 | `State` | `string` | Yes | The state parameter for CSRF protection. |
+| `RedirectURI` | `string` | No | Redirect URI used during the authorization request. Serialized as `redirect_uri`. |
 
-### `SsoCallbackResponse`
+### `SsoCallbackResult`
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `Email` | `*string` | The user's email address from the IdP. |
 | `Name` | `*string` | The user's display name from the IdP. |
 | `Sub` | `*string` | The user's subject identifier from the IdP. |
+| `Groups` | `[]string` | Groups returned by the identity provider. |
+| `MappedScopes` | `[]string` | Scopes produced by group/default-scope mapping. |
+| `PrincipalID` | `*string` | JIT-provisioned or matched principal ID, when available. |
 | `DeveloperID` | `string` | The Grantex developer ID. |
-| `ConnectionID` | `string` | The SSO connection that handled this authentication. |
-| `Provisioned` | `bool` | Whether the user was JIT-provisioned during this login. |
+| `SessionID` | `string` | Created SSO session ID. |
+| `ExpiresAt` | `string` | Session expiration timestamp. |
 
 ---
 
@@ -382,8 +382,8 @@ if err != nil {
 fmt.Printf("Email: %s\n", *result.Email)              // bob@contoso.com
 fmt.Printf("Name: %s\n", *result.Name)                // Bob Jones
 fmt.Printf("Developer ID: %s\n", result.DeveloperID)  // dev_01HXYZ...
-fmt.Printf("Connection: %s\n", result.ConnectionID)   // sso_conn_02HX...
-fmt.Printf("Provisioned: %v\n", result.Provisioned)   // false
+fmt.Printf("Session: %s\n", result.SessionID)
+fmt.Printf("Scopes: %v\n", result.MappedScopes)
 ```
 
 ### `SsoSamlCallbackParams`
@@ -393,42 +393,52 @@ fmt.Printf("Provisioned: %v\n", result.Provisioned)   // false
 | `SAMLResponse` | `string` | Yes | The base64-encoded SAML response from the IdP. |
 | `RelayState` | `string` | No | The RelayState parameter from the SAML callback. |
 
-Returns the same `SsoCallbackResponse` as `HandleOidcCallback()`.
+Returns the same `SsoCallbackResult` as `HandleOidcCallback()`.
 
 ---
 
 ### Handle LDAP Callback
 
-Authenticate a user via LDAP bind. Unlike OIDC and SAML which use browser redirects, LDAP authentication submits credentials directly. Grantex binds to the LDAP directory, verifies the user's password, reads their attributes and group memberships, maps groups to scopes, and provisions the user if JIT is enabled.
+Authenticate a user with the LDAP direct-bind preview. Unlike OIDC and SAML,
+credentials are submitted directly. The built-in client binds a service account,
+constructs a user DN from `LdapSearchFilter` plus `LdapSearchBase`, and binds that
+DN with the submitted password. It does not search entries, read attributes, or
+retrieve group memberships.
 
 ```go
 result, err := client.SSO.HandleLdapCallback(ctx, grantex.SsoLdapCallbackParams{
     Username:     "alice",
     Password:     "user-password",
     ConnectionID: "sso_conn_03HX...",
+    Org:          "org_01HXYZ...",
 })
 if err != nil {
     log.Fatal(err)
 }
 
-fmt.Printf("Email: %s\n", *result.Email)              // alice@mycompany.com
-fmt.Printf("Name: %s\n", *result.Name)                // Alice Smith
-fmt.Printf("Developer ID: %s\n", result.DeveloperID)  // dev_01HXYZ...
-fmt.Printf("Connection: %s\n", result.ConnectionID)   // sso_conn_03HX...
-fmt.Printf("Provisioned: %v\n", result.Provisioned)   // true
+fmt.Printf("Groups: %v\n", result.Groups)              // []
+fmt.Printf("Mapped scopes: %v\n", result.MappedScopes) // default scopes only
+fmt.Printf("Developer ID: %s\n", result.DeveloperID)   // dev_01HXYZ...
+fmt.Printf("Session: %s\n", result.SessionID)          // ssosess_01HXYZ...
 ```
 
 ### `SsoLdapCallbackParams`
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `Username` | `string` | Yes | The user's LDAP username (e.g. uid, sAMAccountName, or full DN). |
+| `Username` | `string` | Yes | Username interpolated into the configured filter to construct the user DN; the built-in preview does not search. |
 | `Password` | `string` | Yes | The user's LDAP password for bind authentication. |
 | `ConnectionID` | `string` | Yes | The SSO connection ID for the LDAP directory. |
+| `Org` | `string` | Yes | Organization/developer ID that owns the LDAP connection. |
 
-Returns the same `SsoCallbackResponse` as `HandleOidcCallback()`.
+Returns `SsoCallbackResult`. With the built-in LDAP client, `Groups` is empty,
+`Name` and `Email` are absent, and `MappedScopes` therefore contains only
+configured default scopes.
 
-> **Note:** LDAP credentials are never stored by Grantex. They are used only for the bind operation and discarded immediately after authentication.
+> **Note:** LDAP credentials are never stored by Grantex. They are used only for
+> the bind operations and discarded after authentication. LDAP search,
+> attribute retrieval, group lookup/mapping, and broad provider compatibility
+> are not supported by the built-in preview client.
 
 ---
 
@@ -481,8 +491,7 @@ func main() {
 
     // Step 2: Enforce SSO for the organization
     _, err = client.SSO.SetEnforcement(ctx, grantex.SsoEnforcementParams{
-        Enforced:    true,
-        ExemptRoles: []string{"owner"},
+        Enforce: true,
     })
     if err != nil {
         log.Fatal(err)
@@ -491,10 +500,7 @@ func main() {
     // Step 3: Redirect user to SSO login based on email domain
     http.HandleFunc("/sso/login", func(w http.ResponseWriter, r *http.Request) {
         domain := r.URL.Query().Get("domain")
-        login, err := client.SSO.GetLoginURL(ctx, grantex.SsoLoginParams{
-            Domain:      domain,
-            RedirectURI: "https://yourapp.com/sso/callback",
-        })
+        login, err := client.SSO.GetLoginURL(ctx, "org_01HXYZ...", domain)
         if err != nil {
             http.Error(w, err.Error(), 500)
             return
@@ -505,8 +511,9 @@ func main() {
     // Step 4a: Handle OIDC callback
     http.HandleFunc("/sso/callback", func(w http.ResponseWriter, r *http.Request) {
         result, err := client.SSO.HandleOidcCallback(ctx, grantex.SsoOidcCallbackParams{
-            Code:  r.URL.Query().Get("code"),
-            State: r.URL.Query().Get("state"),
+            Code:        r.URL.Query().Get("code"),
+            State:       r.URL.Query().Get("state"),
+            RedirectURI: "https://yourapp.com/sso/callback",
         })
         if err != nil {
             http.Error(w, err.Error(), 500)
@@ -514,7 +521,7 @@ func main() {
         }
 
         fmt.Printf("Welcome, %s (%s)\n", *result.Name, *result.Email)
-        if result.Provisioned {
+        if result.PrincipalID != nil {
             fmt.Println("New user provisioned via JIT")
         }
         http.Redirect(w, r, "/dashboard", http.StatusFound)

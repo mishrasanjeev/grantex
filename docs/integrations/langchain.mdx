@@ -31,7 +31,7 @@ const tool = createGrantexTool({
 const agent = createToolCallingAgent({ llm, tools: [tool], prompt });
 ```
 
-The scope check is **offline** — it reads the `scp` claim from the JWT directly, no network call needed. If the token doesn't include the required scope, the tool throws before your function runs.
+Before executing the tool, the wrapper verifies the token signature and claims with `verifyGrantToken()`, using the configured JWKS endpoint, and then checks the verified `scp` claim. The verifier may contact that endpoint to resolve keys, so it must be reachable. Invalid tokens and missing scopes fail before your function runs.
 
 ## Audit Logging
 

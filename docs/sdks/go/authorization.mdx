@@ -12,6 +12,7 @@ authReq, err := client.Authorize(ctx, grantex.AuthorizeParams{
     AgentID:     "agent-id",
     PrincipalID: "user-123",
     Scopes:      []string{"read:email", "send:email"},
+    Audience:    "https://api.example.com",
 })
 ```
 
@@ -22,6 +23,7 @@ authReq, err := client.Authorize(ctx, grantex.AuthorizeParams{
 | `AgentID` | `string` | Yes | The agent requesting authorization |
 | `PrincipalID` | `string` | Yes | The user granting authorization |
 | `Scopes` | `[]string` | Yes | Permissions being requested |
+| `Audience` | `string` | No | Intended token recipient, emitted as the grant token's `aud` claim |
 | `ExpiresIn` | `string` | No | Grant duration (e.g. `"24h"`, `"7d"`) |
 | `RedirectURI` | `string` | No | Where to redirect after consent |
 | `CodeChallenge` | `string` | No | PKCE S256 code challenge |

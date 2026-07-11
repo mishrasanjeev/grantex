@@ -20,7 +20,7 @@ def build_grantex_agent_card(options: GrantexAgentCardOptions) -> A2AAgentCard:
             name="My Agent",
             description="An agent that does things",
             url="https://my-agent.example.com/a2a",
-            jwks_uri="https://grantex.dev/.well-known/jwks.json",
+            jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
             issuer="https://grantex.dev",
             required_scopes=["read", "write"],
             delegation_allowed=True,

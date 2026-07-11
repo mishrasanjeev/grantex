@@ -1,246 +1,104 @@
 ---
-title: "MCP Certification Guide"
+title: "MCP Certification Applications"
 sidebarTitle: "MCP Certification"
-description: "Get your MCP server certified with the Grantex-Auth badge. Bronze, Silver, and Gold tiers."
+description: "Register an MCP server and submit a Bronze, Silver, or Gold certification application."
 ---
 
-## What Is MCP Certification?
+## Current Status
 
-The Grantex MCP Certification program verifies that your Model Context Protocol server implements OAuth 2.1 authorization correctly. Certified servers receive a badge, a listing in the Grantex MCP Registry, and visibility to 10,000+ developers using Grantex.
+Grantex provides an MCP server directory and a certification **application intake** workflow. A server owner can register a server, request a Bronze, Silver, or Gold level, and inspect the resulting application status.
 
-There are three tiers -- **Bronze**, **Silver**, and **Gold** -- each adding progressively stricter security and compliance requirements.
+<Warning>
+Submitting an application does not certify a server. The current public contract creates an application with status `pending_conformance_test`; it does not promise an automated decision, a review deadline, a public badge URL, or an external compliance attestation. Do not display a Grantex certification badge unless the server record has been approved and Grantex provides a verifiable public record.
+</Warning>
 
-## Why It Matters
+## Register a Server
 
-The MCP specification mandates OAuth 2.1 for transport-level auth, but there is no standard way to verify that an MCP server actually implements it correctly. Many servers ship with API keys, hardcoded tokens, or no auth at all.
+Use the developer portal:
 
-Certification solves this:
+1. Open [MCP Servers](https://grantex.dev/dashboard/mcp).
+2. Select **Register MCP Server**.
+3. Enter the server metadata and save it.
+4. Open the server detail page.
 
-- **For MCP server authors**: Prove your server meets OAuth 2.1 requirements. The badge signals production-readiness to potential users.
-- **For MCP clients/users**: Find servers you can trust. Every certified server has passed automated conformance checks.
-- **For enterprises**: Certification maps to compliance requirements (SOC 2 access controls, GDPR consent, OWASP Agentic Top 10).
+The same operation is available through `POST /v1/mcp/servers`. Registration requires a developer API key.
 
-## Certification Tiers
+## Submit an Application
 
-### Bronze -- Standard
+On an MCP server detail page, choose Bronze, Silver, or Gold. The portal calls:
 
-The baseline tier. Your server implements the core OAuth 2.1 flow that the MCP specification requires.
+```http
+POST /v1/mcp/certification/apply
+Authorization: Bearer gx_live_...
+Content-Type: application/json
 
-**Requirements:**
+{
+  "serverId": "mcp_01HXYZ...",
+  "requestedLevel": "bronze"
+}
+```
 
-| # | Check | Description |
-|---|-------|-------------|
-| 1 | OAuth 2.1 + PKCE S256 | Authorization code flow with PKCE S256 challenge. `plain` method rejected. |
-| 2 | Dynamic Client Registration | RFC 7591 endpoint at `/register`. Returns `client_id` and `client_secret`. |
-| 3 | Server metadata discovery | RFC 8414 endpoint at `/.well-known/oauth-authorization-server`. All required fields present. |
-| 4 | Rate limiting | Token and authorize endpoints enforce request limits. |
+Accepted levels are `bronze`, `silver`, and `gold`. A successful submission returns HTTP `202`:
 
-**Benefits:**
-- Listed in the Grantex MCP Registry
-- Bronze badge for your README and documentation
+```json
+{
+  "certificationId": "cert_01HXYZ...",
+  "serverId": "mcp_01HXYZ...",
+  "requestedLevel": "bronze",
+  "status": "pending_conformance_test",
+  "conformancePassed": 0,
+  "conformanceTotal": 13,
+  "createdAt": "2026-07-10T12:00:00.000Z"
+}
+```
 
-### Silver -- Enhanced
+The server must belong to the authenticated developer. Submitting a duplicate active application may return a conflict response.
 
-Adds token lifecycle management and user-facing consent customization.
+## Check Application Status
 
-**Requirements (all Bronze requirements plus):**
+```http
+GET /v1/mcp/certification/cert_01HXYZ...
+Authorization: Bearer gx_live_...
+```
 
-| # | Check | Description |
-|---|-------|-------------|
-| 5 | Token introspection | RFC 7662 endpoint at `/introspect`. Returns `active` boolean plus token metadata. |
-| 6 | Token revocation | RFC 7009 endpoint at `/revoke`. Always returns 200 OK per spec. |
-| 7 | Consent UI customization | Custom app name, logo, privacy URL, and terms URL on the consent page. |
-| 8 | Lifecycle hooks | `onTokenIssued` and `onRevocation` hooks for audit logging. |
+The response includes the requested level, current status, conformance counts and results when available, and reviewer fields when a review has occurred. Treat the returned status as the source of truth.
 
-**Benefits:**
-- Featured placement in the MCP Registry
-- Silver badge
-- Priority support channel
+## Conformance Suite
 
-### Gold -- Production
-
-The highest tier. Demonstrates production-grade infrastructure, delegation support, and full protocol compliance.
-
-**Requirements (all Silver requirements plus):**
-
-| # | Check | Description |
-|---|-------|-------------|
-| 9 | Persistent client store | Client registrations stored in a durable database (not in-memory). |
-| 10 | Resource indicators | RFC 8707 support for audience-restricted tokens. |
-| 11 | Delegation support | Grantex SPEC Section 9 delegation with `parentAgt`, `parentGrnt`, and `delegationDepth` claims. |
-| 12 | Budget enforcement | Budget allocation and debit support for cost-controlled agent operations. |
-| 13 | Full conformance suite | Pass all checks in the `@grantex/conformance` test suite. |
-
-**Benefits:**
-- Top placement in the MCP Registry
-- Gold badge with verification link
-- Listed on the Grantex landing page
-- Co-marketing opportunities
-
-## Conformance Checks
-
-The Grantex conformance suite runs 13 automated checks against your server. You can run them locally before applying:
+`@grantex/conformance` validates a Grantex-compatible authorization service. It does not currently accept `--issuer`, `--tier`, or `--output` flags and does not by itself submit an MCP certification application.
 
 ```bash
 npx @grantex/conformance \
-  --issuer https://your-mcp-server.example.com \
-  --tier gold
+  --base-url https://api.grantex.dev \
+  --api-key "$GRANTEX_API_KEY" \
+  --format json
 ```
 
-### Check Details
-
-| # | Check | What It Verifies |
-|---|-------|-----------------|
-| 1 | `metadata-discovery` | `GET /.well-known/oauth-authorization-server` returns valid JSON with all required fields |
-| 2 | `pkce-s256-required` | Authorization requests without `code_challenge` or with `plain` method are rejected (400) |
-| 3 | `dcr-registration` | `POST /register` creates a client and returns `client_id` + `client_secret` |
-| 4 | `authorization-code-flow` | Full authorize -> callback -> token exchange flow succeeds |
-| 5 | `code-single-use` | Replaying an authorization code returns 400 |
-| 6 | `rate-limiting` | Exceeding request limits returns 429 |
-| 7 | `introspection-active` | `POST /introspect` with valid token returns `active: true` and correct metadata |
-| 8 | `introspection-expired` | `POST /introspect` with expired/revoked token returns `active: false` |
-| 9 | `revocation` | `POST /revoke` returns 200 and subsequent introspection shows `active: false` |
-| 10 | `consent-ui` | Consent page renders with custom app name and logo |
-| 11 | `persistent-clients` | Client registrations survive server restart |
-| 12 | `delegation-claims` | Delegated tokens include `parentAgt`, `parentGrnt`, `delegationDepth` claims |
-| 13 | `budget-enforcement` | Token exchange respects budget allocation; debit reduces remaining balance |
-
-<Info>
-  Bronze requires checks 1-6. Silver requires checks 1-10. Gold requires all 13.
-</Info>
-
-## How to Apply
-
-### Step 1: Implement the requirements
-
-If you are using `@grantex/mcp-auth`, most requirements are met automatically:
-
-```typescript
-import { Grantex } from '@grantex/sdk';
-import { createMcpAuthServer } from '@grantex/mcp-auth';
-
-const server = await createMcpAuthServer({
-  grantex: new Grantex({
-    baseUrl: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app',
-    apiKey: process.env.GRANTEX_API_KEY!,
-  }),
-  agentId: 'ag_your_server',
-  scopes: ['tools:read', 'tools:execute'],
-  issuer: 'https://your-mcp-server.example.com',
-  // Silver: consent UI customization
-  consentUi: {
-    appName: 'My MCP Server',
-    appLogo: 'https://example.com/logo.png',
-    privacyUrl: 'https://example.com/privacy',
-    termsUrl: 'https://example.com/terms',
-  },
-  // Silver: lifecycle hooks
-  hooks: {
-    onTokenIssued: async (event) => {
-      console.log(`Token issued: ${event.grantId}`);
-    },
-    onRevocation: async (jti) => {
-      console.log(`Token revoked: ${jti}`);
-    },
-  },
-  // Gold: persistent client store
-  clientStore: new PostgresClientStore(),
-});
-```
-
-### Step 2: Run the conformance suite
+Available options include `--suite`, `--include`, `--format text|json`, and `--bail`. Redirect standard output if you need to retain the JSON report:
 
 ```bash
 npx @grantex/conformance \
-  --issuer https://your-mcp-server.example.com \
-  --tier gold \
-  --output results.json
+  --base-url https://api.grantex.dev \
+  --api-key "$GRANTEX_API_KEY" \
+  --format json > conformance-results.json
 ```
 
-The suite outputs a JSON report with pass/fail status for each check.
+<Note>
+The general Grantex conformance report and MCP certification application are separate contracts today. The application endpoint does not accept an uploaded report.
+</Note>
 
-### Step 3: Submit for certification
+## Badges and Public Claims
 
-Once all checks pass, submit your server for certification via the Grantex portal:
+There is currently no documented public badge asset, Shields.io endpoint, or `/mcp-registry/:slug` verification page. Until a stable verification URL is published:
 
-1. Go to the [Grantex Dashboard](https://grantex.dev/dashboard)
-2. Navigate to **MCP Servers** > **Apply for Certification**
-3. Enter your server URL and upload the conformance results
-4. Your server will be reviewed and listed within 48 hours
-
-Alternatively, use the CLI:
-
-```bash
-npx @grantex/cli mcp-servers certify \
-  --url https://your-mcp-server.example.com \
-  --tier gold \
-  --results results.json
-```
-
-## Displaying the Badge
-
-Once certified, add the badge to your README:
-
-### Markdown
-
-```markdown
-[![Grantex-Auth Certified: Gold](https://img.shields.io/badge/Grantex--Auth-Gold-ffd700?logo=data:image/svg+xml;base64,...)](https://grantex.dev/mcp-registry/your-server)
-```
-
-### HTML
-
-```html
-<a href="https://grantex.dev/mcp-registry/your-server">
-  <img src="https://grantex.dev/badges/mcp-auth-gold.svg"
-       alt="Grantex-Auth Certified: Gold" />
-</a>
-```
-
-### Shield.io dynamic badge
-
-```markdown
-![Grantex-Auth](https://img.shields.io/endpoint?url=https://grantex.dev/api/badges/your-server-id)
-```
-
-The dynamic badge automatically updates if your certification tier changes.
-
-## Recertification
-
-Certification is valid for **12 months**. Before expiry:
-
-1. Run the conformance suite against your current deployment
-2. Submit updated results via the portal or CLI
-3. Certification is renewed automatically if all checks pass
-
-If your server fails recertification, the badge is downgraded and you have 30 days to fix issues before being delisted.
-
-## FAQ
-
-<AccordionGroup>
-  <Accordion title="Do I have to use @grantex/mcp-auth to get certified?">
-    No. Any OAuth 2.1 implementation that passes the conformance suite qualifies. `@grantex/mcp-auth` is the fastest path because it handles all requirements out of the box, but you can build your own auth server and still get certified.
-  </Accordion>
-
-  <Accordion title="Is certification free?">
-    Yes. Bronze and Silver certification are free. Gold certification is free for open-source MCP servers. Commercial servers on the Pro or Enterprise plan can certify for free; others pay a one-time review fee.
-  </Accordion>
-
-  <Accordion title="Can I upgrade tiers later?">
-    Yes. Start with Bronze, add introspection and revocation for Silver, then add persistent storage and delegation for Gold. Each upgrade is a new conformance run and submission.
-  </Accordion>
-
-  <Accordion title="What happens if my server goes down?">
-    Grantex monitors certified servers with periodic health checks. If your metadata endpoint is unreachable for more than 72 hours, your listing is temporarily hidden until it recovers.
-  </Accordion>
-
-  <Accordion title="How long does the review take?">
-    Bronze and Silver certifications are fully automated -- results are available instantly after the conformance suite passes. Gold certification includes a manual review and is typically completed within 48 hours.
-  </Accordion>
-</AccordionGroup>
+- do not link to guessed badge or registry paths;
+- do not claim that a pending application is certified;
+- do not claim SOC 2, GDPR, OAuth, or production-readiness certification from a Grantex application;
+- link to an official server record only when the API or portal exposes one as approved.
 
 ## Related
 
-- [MCP Auth Server](/features/mcp-auth-server) -- Full feature documentation
-- [Conformance Suite](/integrations/conformance) -- Running conformance tests
-- [MCP Server (13 tools)](/integrations/mcp) -- Grantex MCP server for Claude Desktop/Cursor
-- [Security Best Practices](/guides/security-best-practices) -- Token verification and key rotation
+- [MCP Auth Server](/features/mcp-auth-server)
+- [Conformance Suite](/integrations/conformance)
+- [MCP Server (17 tools)](/integrations/mcp)
+- [Security Best Practices](/guides/security-best-practices)

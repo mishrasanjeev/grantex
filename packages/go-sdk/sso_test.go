@@ -244,7 +244,7 @@ func TestSSOTestConnectionFailure(t *testing.T) {
 
 func TestSSOSetEnforcement(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/sso/enforcement" || r.Method != http.MethodPost {
+		if r.URL.Path != "/v1/sso/enforce" || r.Method != http.MethodPost {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		var params SsoEnforcementParams
@@ -252,26 +252,17 @@ func TestSSOSetEnforcement(t *testing.T) {
 		if !params.Enforce {
 			t.Error("expected enforce to be true")
 		}
-		if params.ConnectionID != "sso-conn-1" {
-			t.Errorf("expected connectionId sso-conn-1, got %s", params.ConnectionID)
-		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(SsoEnforcementResponse{
-			Enforce:      true,
-			ConnectionID: "sso-conn-1",
-			GracePeriod:  "72h",
-			ExemptEmails: []string{"admin@acme.com"},
-			UpdatedAt:    "2026-03-29T00:00:00Z",
+			Enforce:     true,
+			DeveloperID: "dev-1",
 		})
 	}))
 	defer server.Close()
 
 	client := NewClient("test-key", WithBaseURL(server.URL))
 	result, err := client.SSO.SetEnforcement(context.Background(), SsoEnforcementParams{
-		Enforce:      true,
-		ConnectionID: "sso-conn-1",
-		GracePeriod:  "72h",
-		ExemptEmails: []string{"admin@acme.com"},
+		Enforce: true,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -279,14 +270,8 @@ func TestSSOSetEnforcement(t *testing.T) {
 	if !result.Enforce {
 		t.Error("expected enforce to be true")
 	}
-	if result.ConnectionID != "sso-conn-1" {
-		t.Errorf("expected connectionId sso-conn-1, got %s", result.ConnectionID)
-	}
-	if result.GracePeriod != "72h" {
-		t.Errorf("expected grace period 72h, got %s", result.GracePeriod)
-	}
-	if len(result.ExemptEmails) != 1 || result.ExemptEmails[0] != "admin@acme.com" {
-		t.Errorf("expected exempt emails [admin@acme.com], got %v", result.ExemptEmails)
+	if result.DeveloperID != "dev-1" {
+		t.Errorf("expected developerId dev-1, got %s", result.DeveloperID)
 	}
 }
 
@@ -357,7 +342,7 @@ func TestSSORevokeSession(t *testing.T) {
 
 func TestSSOGetLoginURLWithDomain(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/sso/login" || r.Method != http.MethodGet {
+		if r.URL.Path != "/sso/login" || r.Method != http.MethodGet {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		if r.URL.Query().Get("org") != "acme-corp" {
@@ -410,7 +395,7 @@ func TestSSOGetLoginURLWithoutDomain(t *testing.T) {
 
 func TestSSOHandleOidcCallback(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/sso/callback/oidc" || r.Method != http.MethodPost {
+		if r.URL.Path != "/sso/callback/oidc" || r.Method != http.MethodPost {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		var params SsoOidcCallbackParams
@@ -421,36 +406,35 @@ func TestSSOHandleOidcCallback(t *testing.T) {
 		if params.State != "state-abc" {
 			t.Errorf("expected state state-abc, got %s", params.State)
 		}
-		if params.ConnectionID != "sso-conn-1" {
-			t.Errorf("expected connectionId sso-conn-1, got %s", params.ConnectionID)
+		if params.RedirectURI != "https://app.example.com/callback" {
+			t.Errorf("expected redirect URI, got %s", params.RedirectURI)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(SsoCallbackResult{
-			Email:        "alice@acme.com",
-			Name:         "Alice Smith",
-			Sub:          "okta-sub-123",
-			DeveloperID:  "dev-1",
-			ConnectionID: "sso-conn-1",
-			Groups:       []string{"engineering", "admins"},
-			SessionID:    "sess-1",
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email":        "alice@acme.com",
+			"name":         "Alice Smith",
+			"sub":          "okta-sub-123",
+			"developerId":  "dev-1",
+			"groups":       []string{"engineering", "admins"},
+			"mappedScopes": []string{"read", "admin"},
+			"principalId":  "prn-1",
+			"sessionId":    "sess-1",
+			"expiresAt":    "2026-03-30T00:00:00Z",
 		})
 	}))
 	defer server.Close()
 
 	client := NewClient("test-key", WithBaseURL(server.URL))
 	result, err := client.SSO.HandleOidcCallback(context.Background(), SsoOidcCallbackParams{
-		Code:         "auth-code-123",
-		State:        "state-abc",
-		ConnectionID: "sso-conn-1",
+		Code:        "auth-code-123",
+		State:       "state-abc",
+		RedirectURI: "https://app.example.com/callback",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Email != "alice@acme.com" {
-		t.Errorf("expected alice@acme.com, got %s", result.Email)
-	}
-	if result.ConnectionID != "sso-conn-1" {
-		t.Errorf("expected connectionId sso-conn-1, got %s", result.ConnectionID)
+	if result.Email == nil || *result.Email != "alice@acme.com" {
+		t.Errorf("expected alice@acme.com, got %v", result.Email)
 	}
 	if len(result.Groups) != 2 {
 		t.Errorf("expected 2 groups, got %d", len(result.Groups))
@@ -458,34 +442,38 @@ func TestSSOHandleOidcCallback(t *testing.T) {
 	if result.SessionID != "sess-1" {
 		t.Errorf("expected sessionId sess-1, got %s", result.SessionID)
 	}
+	if len(result.MappedScopes) != 2 || result.PrincipalID == nil || *result.PrincipalID != "prn-1" {
+		t.Errorf("unexpected callback authorization data: scopes=%v principal=%v", result.MappedScopes, result.PrincipalID)
+	}
+	if result.ExpiresAt != "2026-03-30T00:00:00Z" {
+		t.Errorf("unexpected expiresAt: %s", result.ExpiresAt)
+	}
 }
 
 func TestSSOHandleSamlCallback(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/sso/callback/saml" || r.Method != http.MethodPost {
+		if r.URL.Path != "/sso/callback/saml" || r.Method != http.MethodPost {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
-		var params SsoSamlCallbackParams
+		var params map[string]string
 		json.NewDecoder(r.Body).Decode(&params)
-		if params.SAMLResponse != "PHNhbWw+..." {
-			t.Errorf("expected SAML response, got %s", params.SAMLResponse)
+		if params["SAMLResponse"] != "PHNhbWw+..." {
+			t.Errorf("expected SAML response, got %s", params["SAMLResponse"])
 		}
-		if params.RelayState != "relay-state-123" {
-			t.Errorf("expected relay state relay-state-123, got %s", params.RelayState)
-		}
-		if params.ConnectionID != "sso-conn-2" {
-			t.Errorf("expected connectionId sso-conn-2, got %s", params.ConnectionID)
+		if params["RelayState"] != "relay-state-123" {
+			t.Errorf("expected relay state relay-state-123, got %s", params["RelayState"])
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(SsoCallbackResult{
-			Email:        "bob@acme.com",
-			Name:         "Bob Jones",
-			Sub:          "saml-nameid-456",
-			DeveloperID:  "dev-2",
-			ConnectionID: "sso-conn-2",
-			Groups:       []string{"engineering"},
-			Attributes:   map[string]string{"department": "Engineering", "title": "Staff Engineer"},
-			SessionID:    "sess-2",
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email":        "bob@acme.com",
+			"name":         "Bob Jones",
+			"sub":          "saml-nameid-456",
+			"developerId":  "dev-2",
+			"groups":       []string{"engineering"},
+			"mappedScopes": []string{"read"},
+			"principalId":  nil,
+			"sessionId":    "sess-2",
+			"expiresAt":    "2026-03-30T00:00:00Z",
 		})
 	}))
 	defer server.Close()
@@ -494,19 +482,15 @@ func TestSSOHandleSamlCallback(t *testing.T) {
 	result, err := client.SSO.HandleSamlCallback(context.Background(), SsoSamlCallbackParams{
 		SAMLResponse: "PHNhbWw+...",
 		RelayState:   "relay-state-123",
-		ConnectionID: "sso-conn-2",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Email != "bob@acme.com" {
-		t.Errorf("expected bob@acme.com, got %s", result.Email)
+	if result.Email == nil || *result.Email != "bob@acme.com" {
+		t.Errorf("expected bob@acme.com, got %v", result.Email)
 	}
-	if result.ConnectionID != "sso-conn-2" {
-		t.Errorf("expected connectionId sso-conn-2, got %s", result.ConnectionID)
-	}
-	if result.Attributes["department"] != "Engineering" {
-		t.Errorf("expected department Engineering, got %s", result.Attributes["department"])
+	if result.PrincipalID != nil {
+		t.Errorf("expected null principalId, got %v", result.PrincipalID)
 	}
 	if result.SessionID != "sess-2" {
 		t.Errorf("expected sessionId sess-2, got %s", result.SessionID)
@@ -517,7 +501,7 @@ func TestSSOHandleSamlCallback(t *testing.T) {
 
 func TestSSOHandleLdapCallback(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/sso/callback/ldap" || r.Method != http.MethodPost {
+		if r.URL.Path != "/sso/callback/ldap" || r.Method != http.MethodPost {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		var params SsoLdapCallbackParams
@@ -535,14 +519,16 @@ func TestSSOHandleLdapCallback(t *testing.T) {
 			t.Errorf("expected org acme-corp, got %s", params.Org)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(SsoCallbackResult{
-			Email:        "carol@acme.com",
-			Name:         "Carol Davis",
-			Sub:          "ldap-uid-carol",
-			DeveloperID:  "dev-1",
-			ConnectionID: "sso-conn-3",
-			Groups:       []string{"engineering"},
-			SessionID:    "sess-3",
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"email":        nil,
+			"name":         nil,
+			"sub":          "uid=carol,ou=people,dc=corp,dc=com",
+			"developerId":  "dev-1",
+			"groups":       []string{},
+			"mappedScopes": []string{"read"},
+			"principalId":  "prn-3",
+			"sessionId":    "sess-3",
+			"expiresAt":    "2026-03-30T00:00:00Z",
 		})
 	}))
 	defer server.Close()
@@ -557,14 +543,11 @@ func TestSSOHandleLdapCallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Email != "carol@acme.com" {
-		t.Errorf("expected carol@acme.com, got %s", result.Email)
+	if result.Email != nil {
+		t.Errorf("expected null email, got %v", result.Email)
 	}
-	if result.ConnectionID != "sso-conn-3" {
-		t.Errorf("expected connectionId sso-conn-3, got %s", result.ConnectionID)
-	}
-	if len(result.Groups) != 1 || result.Groups[0] != "engineering" {
-		t.Errorf("expected groups [engineering], got %v", result.Groups)
+	if len(result.Groups) != 0 {
+		t.Errorf("expected no discovered groups, got %v", result.Groups)
 	}
 	if result.SessionID != "sess-3" {
 		t.Errorf("expected sessionId sess-3, got %s", result.SessionID)
@@ -730,7 +713,7 @@ func TestSSODeleteConfig(t *testing.T) {
 
 func TestSSOGetLoginURL(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/sso/login" || r.Method != http.MethodGet {
+		if r.URL.Path != "/sso/login" || r.Method != http.MethodGet {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
 		if r.URL.Query().Get("org") != "acme-corp" {
@@ -755,8 +738,11 @@ func TestSSOGetLoginURL(t *testing.T) {
 
 func TestSSOHandleCallback(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/sso/callback" || r.Method != http.MethodPost {
+		if r.URL.Path != "/sso/callback" || r.Method != http.MethodGet {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		if r.URL.Query().Get("code") != "auth-code" || r.URL.Query().Get("state") != "state-123" {
+			t.Errorf("unexpected callback query: %s", r.URL.RawQuery)
 		}
 		email := "alice@example.com"
 		name := "Alice"

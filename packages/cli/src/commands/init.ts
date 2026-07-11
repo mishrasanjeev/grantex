@@ -15,7 +15,7 @@ const PACKAGE_JSON = `{
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@grantex/gemma": "^0.1.0"
+    "@grantex/gemma": "^0.1.1"
   },
   "devDependencies": {
     "tsx": "^4.7.0",
@@ -100,7 +100,7 @@ const ENV_EXAMPLE = `# Grantex Gemma — Environment Variables
 GRANTEX_API_KEY=
 
 # Optional: Base URL for Grantex auth service
-GRANTEX_URL=https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+GRANTEX_URL=https://api.grantex.dev
 `;
 
 const README_MD = `# Grantex Gemma Starter

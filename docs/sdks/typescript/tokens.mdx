@@ -156,7 +156,9 @@ if (result.valid) {
 </ResponseField>
 
 <Note>
-  For zero-latency, offline verification without calling the Grantex API, use [verifyGrantToken()](/sdks/typescript/offline-verification) instead.
+  For local signature-and-claim verification without the online revocation
+  endpoint, use [verifyGrantToken()](/sdks/typescript/offline-verification).
+  The standalone helper still resolves the remote JWKS on each call.
 </Note>
 
 ---

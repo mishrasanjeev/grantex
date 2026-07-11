@@ -8,14 +8,14 @@
 
   <!-- SEO -->
   <title>Grantex Trust Registry — Verify AI Agent Identity</title>
-  <meta name="description" content="The public directory of verified AI agent publishers. Look up any organization by DID. Get your agents certified. Build trust before authorization.">
-  <meta name="keywords" content="Grantex, Trust Registry, AI agent identity, DID verification, agent publisher directory, verified agents, SOC 2, GDPR, DPDP, Decentralized Identifier, agent trust, AI security">
+  <meta name="description" content="A public directory of registered AI agent publishers with DNS-verified domain ownership and DID-based organization profiles.">
+  <meta name="keywords" content="Grantex, Trust Registry, AI agent identity, DID verification, DNS domain verification, agent publisher directory, Decentralized Identifier, agent trust, AI security">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/registry">
 
   <!-- OpenGraph -->
   <meta property="og:title" content="Grantex Trust Registry — Verify AI Agent Identity">
-  <meta property="og:description" content="The public directory of verified AI agent publishers. Look up any organization by DID. Get your agents certified. Build trust before authorization.">
+  <meta property="og:description" content="A public directory of registered AI agent publishers with DNS-verified domain ownership and DID-based organization profiles.">
   <meta property="og:url" content="https://grantex.dev/registry">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
   <meta property="og:type" content="website">
@@ -24,7 +24,7 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Grantex Trust Registry — Verify AI Agent Identity">
-  <meta name="twitter:description" content="The public directory of verified AI agent publishers. Look up any organization by DID. Get your agents certified. Build trust before authorization.">
+  <meta name="twitter:description" content="A public directory of registered AI agent publishers with DNS-verified domain ownership and DID-based organization profiles.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
 
   <!-- JSON-LD Structured Data -->
@@ -36,7 +36,7 @@
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Any",
     "url": "https://grantex.dev/registry",
-    "description": "Public directory of verified AI agent publishers with DID-based identity, compliance badges, and real-time reputation scoring.",
+    "description": "Public directory of registered AI agent publishers with DID-based identity and DNS-verified domain ownership.",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
     "isPartOf": {
@@ -57,7 +57,7 @@
         "name": "What is the Grantex Trust Registry?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "The Grantex Trust Registry is a public directory of verified AI agent publishers. Organizations register with their Decentralized Identifier (DID), verify domain ownership, and earn compliance badges. Any developer can look up an organization before authorizing its agents."
+          "text": "The Grantex Trust Registry is a public directory of registered AI agent publishers. Organizations register a Decentralized Identifier (DID) and can prove domain ownership with an exact DNS TXT challenge."
         }
       },
       {
@@ -65,23 +65,23 @@
         "name": "How do I get verified in the Trust Registry?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Register your organization with your DID, then verify ownership via DNS TXT record, .well-known endpoint, SOC 2 attestation, or manual review. DNS TXT verification is the fastest method and typically completes in under 5 minutes."
+          "text": "Register your organization with its DID, save the one-time challenge returned by the API, and publish that exact value as a DNS TXT record at _grantex-verify on the DID domain."
         }
       },
       {
         "@type": "Question",
-        "name": "What compliance badges are available?",
+        "name": "Does the registry verify compliance attestations?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "The Trust Registry supports SOC 2 Type II, GDPR, DPDP (India's Digital Personal Data Protection Act), and ISO 27001 compliance badges. Each badge is independently verified and displayed on your organization's public profile."
+          "text": "Not currently. The implemented verification flow proves DNS domain control; it does not review or certify SOC 2, GDPR, DPDP, or ISO 27001 compliance."
         }
       },
       {
         "@type": "Question",
-        "name": "Can I embed a trust badge on my website?",
+        "name": "Is an embeddable trust-badge component available?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Yes. After verification, you can embed a trust badge using the <grantex-trust-badge> web component. The badge displays your verification status, compliance badges, and agent count in real time."
+          "text": "Not currently. Use the public registry API to retrieve current organization and DNS verification data."
         }
       }
     ]
@@ -721,8 +721,8 @@
   <div class="container">
     <h1>Trust Before Authorization</h1>
     <p>
-      The public directory of verified AI agent publishers. Look up any organization by DID,
-      check compliance badges, and verify the humans behind the agents &mdash; before you authorize anything.
+      A public directory of registered AI agent publishers. Look up an organization by DID,
+      inspect its agents, and confirm DNS-verified domain ownership before authorizing access.
     </p>
     <div class="hero-ctas">
       <a href="/dashboard/registry/register" class="btn btn-primary"
@@ -741,9 +741,9 @@
   <div class="container">
     <div style="text-align:center;">
       <div class="section-label">Public Directory</div>
-      <h2 class="section-title">Look up any organization</h2>
+      <h2 class="section-title">Look up a registered organization</h2>
       <p class="section-sub" style="margin:0 auto 36px;">
-        Search by name, DID, or domain. Every lookup is public &mdash; no account required.
+        Search the live registry by name, DID, or domain. Results are returned by the public registry API.
       </p>
     </div>
 
@@ -754,257 +754,50 @@
       <input type="text" placeholder="Search organizations by name or DID..." id="registry-search" />
       <span class="search-hint">Enter</span>
     </div>
-
-    <!-- Featured Org Cards -->
-    <div class="org-grid" id="org-results">
-      <!-- Acme AI -->
-      <div class="org-card">
-        <div class="org-header">
-          <div class="org-logo">A</div>
-          <div>
-            <div class="org-name">Acme AI Labs</div>
-            <div class="org-did">did:web:acme-ai.com</div>
-          </div>
-        </div>
-        <div class="org-badges">
-          <span class="org-badge verified"><span class="dot"></span> Verified</span>
-          <span class="org-badge">SOC 2</span>
-          <span class="org-badge">GDPR</span>
-        </div>
-        <div class="org-desc">Enterprise AI automation platform with code generation, data analysis, and workflow orchestration agents.</div>
-        <div class="org-stats">
-          <span><span class="org-stat-val">12</span> agents</span>
-          <span><span class="org-stat-val">8.4K</span> grants/wk</span>
-          <span><span class="org-stat-val">4.8</span> rating</span>
-        </div>
-      </div>
-
-      <!-- NovaMind -->
-      <div class="org-card">
-        <div class="org-header">
-          <div class="org-logo">N</div>
-          <div>
-            <div class="org-name">NovaMind Technologies</div>
-            <div class="org-did">did:web:novamind.dev</div>
-          </div>
-        </div>
-        <div class="org-badges">
-          <span class="org-badge verified"><span class="dot"></span> Verified</span>
-          <span class="org-badge">SOC 2</span>
-          <span class="org-badge">DPDP</span>
-          <span class="org-badge">ISO 27001</span>
-        </div>
-        <div class="org-desc">Research-grade AI agents for scientific computing, literature review, and experimental design automation.</div>
-        <div class="org-stats">
-          <span><span class="org-stat-val">8</span> agents</span>
-          <span><span class="org-stat-val">3.2K</span> grants/wk</span>
-          <span><span class="org-stat-val">4.9</span> rating</span>
-        </div>
-      </div>
-
-      <!-- Helios -->
-      <div class="org-card">
-        <div class="org-header">
-          <div class="org-logo">H</div>
-          <div>
-            <div class="org-name">Helios Finance</div>
-            <div class="org-did">did:web:helios.finance</div>
-          </div>
-        </div>
-        <div class="org-badges">
-          <span class="org-badge verified"><span class="dot"></span> Verified</span>
-          <span class="org-badge">SOC 2</span>
-          <span class="org-badge">GDPR</span>
-          <span class="org-badge">DPDP</span>
-        </div>
-        <div class="org-desc">Fintech AI agents for portfolio analysis, risk assessment, compliance reporting, and trade execution.</div>
-        <div class="org-stats">
-          <span><span class="org-stat-val">6</span> agents</span>
-          <span><span class="org-stat-val">1.8K</span> grants/wk</span>
-          <span><span class="org-stat-val">4.7</span> rating</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Stats bar -->
-    <div class="stats-bar">
-      <div class="stats-bar-item">
-        <div class="stats-bar-num">89</div>
-        <div class="stats-bar-label">Verified Organizations</div>
-      </div>
-      <div class="stats-bar-item">
-        <div class="stats-bar-num">234</div>
-        <div class="stats-bar-label">Registered Agents</div>
-      </div>
-      <div class="stats-bar-item">
-        <div class="stats-bar-num">1.2M</div>
-        <div class="stats-bar-label">Grants per Week</div>
-      </div>
-    </div>
+    <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:18px;">
+      Verification means the registrant proved control of the DID domain through an exact DNS TXT challenge.
+    </p>
   </div>
 </section>
-
 <!-- ── How Verification Works ───────────────────────────────────────────── -->
 <section>
   <div class="container">
     <div class="section-label">Verification</div>
-    <h2 class="section-title">How Verification Works</h2>
-    <p class="section-sub">Four methods to prove you own your DID and meet compliance standards.</p>
+    <h2 class="section-title">Prove control with DNS</h2>
+    <p class="section-sub">DNS TXT is the verification method currently implemented by the API and portal.</p>
 
     <div class="methods-grid">
-      <!-- DNS-TXT -->
       <div class="method-card">
         <span class="method-icon">&#127760;</span>
         <h3>DNS TXT Record</h3>
-        <p>Add a TXT record at <code style="font-size:13px;color:var(--accent2);">_grantex.your-domain.com</code> with the token we provide. We verify automatically in under 5 minutes.</p>
-        <span class="method-tag recommended">Recommended</span>
-      </div>
-
-      <!-- Well-Known -->
-      <div class="method-card">
-        <span class="method-icon">&#128279;</span>
-        <h3>.well-known Endpoint</h3>
-        <p>Serve a JSON document at <code style="font-size:13px;color:var(--accent2);">/.well-known/grantex-verification</code> on your domain. Ideal for organizations with restricted DNS access.</p>
-        <span class="method-tag automated">Automated</span>
-      </div>
-
-      <!-- SOC 2 -->
-      <div class="method-card">
-        <span class="method-icon">&#128220;</span>
-        <h3>SOC 2 Attestation</h3>
-        <p>Upload your SOC 2 Type II report for automated compliance verification. Earns the SOC 2 badge alongside DID verification.</p>
-        <span class="method-tag automated">2 Business Days</span>
-      </div>
-
-      <!-- Manual Review -->
-      <div class="method-card">
-        <span class="method-icon">&#128101;</span>
-        <h3>Manual Review</h3>
-        <p>Request a manual review by the Grantex trust team. Best for organizations with unique structures or non-standard DIDs.</p>
-        <span class="method-tag" style="background:rgba(210,168,255,0.1);color:#d2a8ff;border:1px solid rgba(210,168,255,0.2);">3-5 Business Days</span>
+        <p>Add the one-time value returned at registration to <code style="font-size:13px;color:var(--accent2);">_grantex-verify.your-domain.com</code>, then trigger verification in the portal.</p>
+        <span class="method-tag recommended">Supported</span>
       </div>
     </div>
   </div>
 </section>
-
 <!-- ── How It Works: Step by Step ───────────────────────────────────────── -->
 <section>
   <div class="container">
     <div class="how-grid">
       <div>
         <div class="section-label">Getting Started</div>
-        <h2 class="section-title">Register in minutes</h2>
-        <p class="section-sub">Three steps from unregistered to verified. Most organizations complete the process in under 10 minutes.</p>
-
-        <div class="flow">
-          <div class="flow-step">
-            <div class="step-num">1</div>
-            <div class="step-body">
-              <h3>Register your DID</h3>
-              <p>Enter your organization's Decentralized Identifier (did:web recommended), name, and contact information in the dashboard.</p>
-            </div>
-          </div>
-          <div class="flow-step">
-            <div class="step-num">2</div>
-            <div class="step-body">
-              <h3>Verify domain ownership</h3>
-              <p>Add a DNS TXT record or serve a .well-known endpoint. We check automatically and mark you as verified.</p>
-            </div>
-          </div>
-          <div class="flow-step">
-            <div class="step-num">3</div>
-            <div class="step-body">
-              <h3>Earn compliance badges</h3>
-              <p>Upload attestations for SOC 2, GDPR, DPDP, or ISO 27001. Badges appear on your public profile and in search results.</p>
-            </div>
-          </div>
-          <div class="flow-step">
-            <div class="step-num">4</div>
-            <div class="step-body">
-              <h3>Embed your trust badge</h3>
-              <p>Add the trust badge web component to your site. Shows real-time verification status, badges, and agent count.</p>
-            </div>
-          </div>
+        <h2 class="section-title">From registration to verified domain</h2>
+        <div class="flow-steps">
+          <div class="flow-step"><div class="step-num">1</div><div class="step-body"><h3>Register your organization</h3><p>Submit its DID, name, website, and public security contact in the portal.</p></div></div>
+          <div class="flow-step"><div class="step-num">2</div><div class="step-body"><h3>Save the one-time challenge</h3><p>The portal displays the DNS TXT name and value returned by the registration API.</p></div></div>
+          <div class="flow-step"><div class="step-num">3</div><div class="step-body"><h3>Verify DNS ownership</h3><p>Publish the exact TXT value and trigger verification. The service compares it with the stored one-way hash.</p></div></div>
         </div>
       </div>
-
       <div class="how-visual">
-        <div style="font-family:var(--mono);font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;">Live Verification Status</div>
-        <div class="how-visual-row">
-          <div class="how-visual-icon dns">&#127760;</div>
-          <div class="how-visual-text"><strong>DNS TXT</strong> &mdash; _grantex.acme-ai.com</div>
-          <div class="how-visual-check">&#10003;</div>
-        </div>
-        <div class="how-visual-row">
-          <div class="how-visual-icon badge">&#128220;</div>
-          <div class="how-visual-text"><strong>SOC 2 Type II</strong> &mdash; 2026-01-15</div>
-          <div class="how-visual-check">&#10003;</div>
-        </div>
-        <div class="how-visual-row">
-          <div class="how-visual-icon badge">&#127987;</div>
-          <div class="how-visual-text"><strong>GDPR</strong> &mdash; DPO: dpo@acme-ai.com</div>
-          <div class="how-visual-check">&#10003;</div>
-        </div>
-        <div class="how-visual-row">
-          <div class="how-visual-icon key">&#128273;</div>
-          <div class="how-visual-text"><strong>Public Keys</strong> &mdash; 2 JWK entries</div>
-          <div class="how-visual-check">&#10003;</div>
-        </div>
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;">
-          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);"></span>
-          <span style="font-size:13px;font-weight:600;color:var(--accent);">Fully Verified</span>
-          <span style="font-size:12px;color:var(--muted);margin-left:auto;">Verified 2026-02-10</span>
-        </div>
+        <div style="font-family:var(--mono);font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;">DNS challenge</div>
+        <div class="how-visual-row"><div class="how-visual-icon dns">&#127760;</div><div class="how-visual-text"><strong>Host</strong> &mdash; _grantex-verify.example.com</div></div>
+        <div class="how-visual-row"><div class="how-visual-icon key">&#128273;</div><div class="how-visual-text"><strong>Value</strong> &mdash; grantex-verify=&lt;one-time-token&gt;</div></div>
+        <div class="how-visual-row"><div class="how-visual-icon badge">&#10003;</div><div class="how-visual-text"><strong>Result</strong> &mdash; DNS ownership verified</div></div>
       </div>
     </div>
   </div>
 </section>
-
-<!-- ── Embeddable Trust Badge ───────────────────────────────────────────── -->
-<section>
-  <div class="container">
-    <div class="section-label">Embed</div>
-    <h2 class="section-title">Embeddable Trust Badge</h2>
-    <p class="section-sub">Show developers your verified status with a single HTML tag. Updates in real time.</p>
-
-    <div class="badge-demo">
-      <!-- Preview -->
-      <div class="badge-preview">
-        <div class="badge-widget">
-          <svg class="badge-widget-shield" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-          </svg>
-          <div>
-            <div class="badge-widget-name">Acme AI Labs</div>
-            <div class="badge-widget-status">Verified</div>
-            <div class="badge-widget-agents">12 agents &middot; SOC 2 &middot; GDPR</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Code snippet -->
-      <div>
-        <p style="font-size:14px;color:var(--muted);margin-bottom:16px;">Add a single line to your HTML:</p>
-        <div class="code-snippet">
-          <button class="copy-btn" onclick="copyBadgeSnippet(this)">Copy</button>
-          <pre><span class="cm">&lt;!-- Grantex Trust Badge --&gt;</span>
-<span class="tag">&lt;grantex-trust-badge</span>
-  <span class="attr">did</span>=<span class="val">"did:web:acme-ai.com"</span>
-  <span class="attr">theme</span>=<span class="val">"dark"</span>
-<span class="tag">/&gt;</span>
-
-<span class="cm">&lt;!-- Load the web component --&gt;</span>
-<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="val">"https://cdn.grantex.dev/trust-badge.js"</span><span class="tag">&gt;&lt;/script&gt;</span></pre>
-        </div>
-        <p style="font-size:13px;color:var(--muted);margin-top:12px;">
-          The badge auto-updates when your verification status or badge count changes.
-          Supports <code style="font-size:12px;color:var(--accent2);">light</code> and <code style="font-size:12px;color:var(--accent2);">dark</code> themes.
-        </p>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- ── API Access ───────────────────────────────────────────────────────── -->
 <section>
   <div class="container">
@@ -1020,14 +813,7 @@
   <span class="str">'https://api.grantex.dev/v1/registry/orgs?q=acme'</span>
 );
 <span class="kw">const</span> { data, meta } = <span class="kw">await</span> res.<span class="fn">json</span>();
-
-<span class="cm">// Or use the SDK</span>
-<span class="kw">import</span> { Grantex } <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
-<span class="kw">const</span> gx = <span class="kw">new</span> <span class="fn">Grantex</span>();
-<span class="kw">const</span> orgs = <span class="kw">await</span> gx.registry.<span class="fn">search</span>({
-  q: <span class="str">'acme'</span>,
-  verified: <span class="kw">true</span>
-});</pre>
+</pre>
       </div>
 
       <div class="code-snippet">
@@ -1040,11 +826,7 @@ res = httpx.<span class="fn">get</span>(
     params={<span class="str">"q"</span>: <span class="str">"acme"</span>}
 )
 orgs = res.<span class="fn">json</span>()[<span class="str">"data"</span>]
-
-<span class="cm"># Or use the SDK</span>
-<span class="kw">from</span> grantex <span class="kw">import</span> Grantex
-gx = <span class="fn">Grantex</span>()
-orgs = gx.registry.<span class="fn">search</span>(q=<span class="str">"acme"</span>, verified=<span class="kw">True</span>)</pre>
+</pre>
       </div>
     </div>
   </div>
@@ -1055,8 +837,8 @@ orgs = gx.registry.<span class="fn">search</span>(q=<span class="str">"acme"</sp
   <div class="container">
     <h2>Build Trust Into Your Agent Infrastructure</h2>
     <p>
-      Register your organization, get verified, and let every developer in the ecosystem know
-      your agents are legitimate &mdash; before a single grant is issued.
+      Register your organization, prove control of its DID domain, and publish a profile that
+      developers can inspect before issuing a grant.
     </p>
     <div class="hero-ctas">
       <a href="/dashboard/registry/register" class="btn btn-primary"
@@ -1083,12 +865,6 @@ orgs = gx.registry.<span class="fn">search</span>(q=<span class="str">"acme"</sp
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
       </ul>
       <ul class="footer-links" aria-label="Legal and procurement">
-        <li><a href="https://docs.grantex.dev/compliance/privacy-policy">Privacy</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/terms-of-service">Terms</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/dpa">DPA</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/cookie-policy">Cookies</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/sub-processors">Sub-processors</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/data-residency">Data Residency</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/SECURITY.md">Security</a></li>
       </ul>
       <span class="footer-copy">&copy; 2026 Grantex</span>
@@ -1108,14 +884,6 @@ orgs = gx.registry.<span class="fn">search</span>(q=<span class="str">"acme"</sp
       }
     }
   });
-
-  /* Copy badge snippet */
-  function copyBadgeSnippet(btn) {
-    const snippet = `<grantex-trust-badge did="did:web:acme.com" theme="dark" />\n<script src="https://cdn.grantex.dev/trust-badge.js"><\/script>`;
-    navigator.clipboard.writeText(snippet);
-    btn.textContent = 'Copied!';
-    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
-  }
 
   /* Copy code snippet */
   function copyCodeSnippet(btn, id) {

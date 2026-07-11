@@ -4,14 +4,14 @@ sidebarTitle: "Rate Limits"
 description: "Understand and work with Grantex API rate limits."
 ---
 
-Grantex enforces per-IP rate limits using 1-minute sliding windows. These limits protect the service from abuse while allowing normal usage patterns. All rate limits apply at the IP level — there are no per-key limits.
+Grantex applies layered one-minute rate limits. A global per-IP abuse guard protects every route, individual routes can define lower per-IP limits, and authorization creation also has a per-developer limiter. A request must pass every limiter that applies to it.
 
 ## Default Limits
 
 | Endpoint | Limit | Notes |
 |----------|-------|-------|
-| **All endpoints** (global) | 100 req/min | Default for every route |
-| `POST /v1/authorize` | 10 req/min | Stricter — creates auth requests |
+| **All endpoints** (global) | 500 req/min per IP | Baseline abuse guard; route limits can be lower |
+| `POST /v1/authorize` | 10 req/min per developer | Redis-backed developer limit in addition to global/route protection |
 | `POST /v1/token` | 20 req/min | Stricter — exchanges codes for tokens |
 | `POST /v1/token/refresh` | 20 req/min | Stricter — refreshes grant tokens |
 | `GET /.well-known/jwks.json` | **Exempt** | Public key distribution is never throttled |
@@ -24,7 +24,7 @@ Every response includes rate limit headers so your application can track its bud
 |--------|-------------|
 | `X-RateLimit-Limit` | Maximum requests allowed in the current window |
 | `X-RateLimit-Remaining` | Requests remaining in the current window |
-| `X-RateLimit-Reset` | Unix timestamp (seconds) when the window resets |
+| `X-RateLimit-Reset` | Seconds until the current limiter's window resets |
 | `Retry-After` | Seconds to wait before retrying (only on `429` responses) |
 
 ## 429 Error Response
@@ -34,12 +34,12 @@ When you exceed a rate limit, the API returns a `429 Too Many Requests` status w
 ```json
 {
   "message": "Rate limit exceeded, retry in 42 seconds",
-  "code": "BAD_REQUEST",
+  "code": "RATE_LIMITED",
   "requestId": "a1b2c3d4-e5f6-..."
 }
 ```
 
-The `Retry-After` header tells you exactly how long to wait.
+The `Retry-After` header tells you the minimum number of seconds to wait. Generic route-limit responses are produced by `@fastify/rate-limit` and can use a different error code/message; clients should branch on HTTP status `429` and honor the header rather than matching message text.
 
 ## Reading Rate Limits from SDKs
 
@@ -198,11 +198,16 @@ func withRetry[T any](fn func() (T, error), maxRetries int) (T, error) {
 ## Best Practices
 
 <Note>
-The JWKS endpoint (`/.well-known/jwks.json`) is exempt from rate limits. Prefer [offline token verification](/concepts/grant-token) over online `POST /v1/tokens/verify` calls to avoid hitting limits entirely.
+The JWKS endpoint (`/.well-known/jwks.json`) is exempt from rate limits. Local
+JWKS-based verification avoids the `POST /v1/tokens/verify` rate limit when a
+revocation lookup is not required, but current standalone helpers still make a
+JWKS network request per call.
 </Note>
 
 - **Cache tokens** — Grant tokens are valid JWTs. Store and reuse them until they expire instead of requesting new ones per operation.
-- **Use offline verification** — Call `verifyGrantToken()` with the JWKS URI to validate tokens locally. The JWKS endpoint is never rate-limited.
+- **Use local verification deliberately** — `verifyGrantToken()` validates with
+  JWKS and avoids the online verification rate limit, but the standalone helper
+  fetches JWKS on each call.
 - **Use webhooks instead of polling** — Subscribe to [webhook events](/guides/webhooks) like `grant.created` and `grant.revoked` rather than polling grant or audit endpoints.
 - **Honor `Retry-After`** — When you receive a `429`, always use the `Retry-After` header value as your minimum wait time.
 - **Spread requests** — If your system makes burst requests (e.g., batch token exchanges), add short delays between calls.

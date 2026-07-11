@@ -117,6 +117,7 @@ class AuthorizeParams:
     redirect_uri: str | None = None
     code_challenge: str | None = None
     code_challenge_method: str | None = None
+    audience: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {
@@ -124,6 +125,8 @@ class AuthorizeParams:
             "principalId": self.user_id,
             "scopes": self.scopes,
         }
+        if self.audience is not None:
+            body["audience"] = self.audience
         if self.expires_in is not None:
             body["expiresIn"] = self.expires_in
         if self.redirect_uri is not None:

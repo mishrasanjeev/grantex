@@ -6,14 +6,14 @@
 
   <!-- SEO -->
   <title>Grantex MCP Auth Server — OAuth 2.1 for Any MCP Server</title>
-  <meta name="description" content="Drop-in OAuth 2.1 + PKCE authorization for any MCP server. Human consent, scoped access, instant revocation. Get Grantex-Auth Certified and reach 10,000+ developers.">
+  <meta name="description" content="Drop-in OAuth 2.1 + PKCE authorization for any MCP server. Human consent, scoped access, central revocation. Certification application intake is available as a preview.">
   <meta name="keywords" content="MCP auth, MCP OAuth, Model Context Protocol authorization, MCP server security, OAuth 2.1 MCP, PKCE MCP, MCP token introspection, MCP certification, Grantex MCP, AI agent authorization, MCP server auth, dynamic client registration MCP">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/mcp">
 
   <!-- OpenGraph -->
   <meta property="og:title" content="Grantex MCP Auth Server — OAuth 2.1 for Any MCP Server">
-  <meta property="og:description" content="Drop-in OAuth 2.1 + PKCE authorization for any MCP server. Human consent, scoped access, instant revocation. Get Grantex-Auth Certified and reach 10,000+ developers.">
+  <meta property="og:description" content="Drop-in OAuth 2.1 + PKCE authorization for any MCP server. Human consent, scoped access, central revocation. Certification application intake is available as a preview.">
   <meta property="og:url" content="https://grantex.dev/mcp">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
   <meta property="og:type" content="website">
@@ -23,7 +23,7 @@
   <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Grantex MCP Auth Server — OAuth 2.1 for Any MCP Server">
-  <meta name="twitter:description" content="Drop-in OAuth 2.1 + PKCE authorization for any MCP server. Human consent, scoped access, instant revocation.">
+  <meta name="twitter:description" content="Drop-in OAuth 2.1 + PKCE authorization for any MCP server. Human consent, scoped access, central revocation.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
 
   <!-- JSON-LD Structured Data -->
@@ -35,7 +35,7 @@
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Any",
     "url": "https://grantex.dev/mcp",
-    "description": "Drop-in OAuth 2.1 + PKCE authorization server for any MCP server. Human consent, scoped access, instant revocation, and certification program.",
+    "description": "Drop-in OAuth 2.1 + PKCE authorization server for any MCP server. Human consent, scoped access, central revocation, and certification application preview.",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "codeRepository": "https://github.com/mishrasanjeev/grantex",
     "applicationSubCategory": "Security",
@@ -71,10 +71,10 @@
       },
       {
         "@type": "Question",
-        "name": "How do I get my MCP server certified?",
+        "name": "What MCP certification functionality is available?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Grantex offers Bronze, Silver, and Gold certification tiers. Bronze requires OAuth 2.1 + PKCE, Dynamic Client Registration, and metadata discovery. Silver adds introspection, revocation, and consent UI. Gold adds persistent client stores, delegation, and budget enforcement. Using @grantex/mcp-auth with all features enabled achieves Gold automatically."
+          "text": "The API accepts Bronze, Silver, and Gold certification applications and exposes their pending status. Automated conformance decisions, badge delivery, and automatic tier assignment are not currently implemented."
         }
       },
       {
@@ -757,7 +757,7 @@
     <h1>Your MCP Server Needs<br>Real Authorization.</h1>
     <p>
       Drop-in OAuth 2.1 + PKCE authorization for any Model Context Protocol server.
-      Human consent, scoped access, instant revocation, and a full audit trail &mdash;
+      Human consent, scoped access, central revocation, and a full audit trail &mdash;
       in under 10 lines of code.
     </p>
     <div class="hero-ctas">
@@ -812,7 +812,7 @@
           <td><span class="check">&#x2713;</span></td>
         </tr>
         <tr>
-          <td>Instant revocation</td>
+          <td>Token revocation endpoint</td>
           <td><span class="partial">Rotate key</span></td>
           <td><span class="cross">&#x2715;</span></td>
           <td><span class="check">&#x2713;</span></td>
@@ -948,7 +948,7 @@
 <span class="kw">import</span> { <span class="fn">createMcpAuthServer</span> } <span class="kw">from</span> <span class="str">'@grantex/mcp-auth'</span>;
 
 <span class="kw">const</span> <span class="id">grantex</span> = <span class="kw">new</span> <span class="fn">Grantex</span>({
-  <span class="id">baseUrl</span>: <span class="str">'https://grantex-auth-dd4mtrt2gq-uc.a.run.app'</span>,
+  <span class="id">baseUrl</span>: <span class="str">'https://api.grantex.dev'</span>,
   <span class="id">apiKey</span>: <span class="id">process</span>.<span class="id">env</span>.<span class="id">GRANTEX_API_KEY</span>,
 });
 
@@ -996,114 +996,37 @@
   </div>
 </section>
 
-<!-- ── Certification ─────────────────────────────────────────────────────── -->
+<!-- ── Certification preview ─────────────────────────────────────────────── -->
 <section id="certification">
   <div class="container">
-    <div class="section-label">Certification Program</div>
-    <div class="section-title">Get the Grantex-Auth Certified badge.</div>
+    <div class="section-label">Preview</div>
+    <div class="section-title">Certification application intake.</div>
     <p class="section-sub">
-      Prove your MCP server implements OAuth 2.1 correctly. Three tiers, automated conformance testing,
-      and a listing in the Grantex MCP Registry visible to 10,000+ developers.
+      Registered MCP servers can submit a Bronze, Silver, or Gold certification application and track its pending status.
+      Automated conformance decisions, badge delivery, placement guarantees, and audience-reach claims are not currently implemented.
     </p>
-
     <div class="cert-grid">
-      <!-- Bronze -->
       <div class="cert-card bronze">
-        <div class="cert-tier">Bronze</div>
-        <h3>Standard</h3>
+        <div class="cert-tier">Available now</div>
+        <h3>Application API</h3>
         <ul class="cert-list">
-          <li><span class="bullet">&#x2713;</span> OAuth 2.1 + PKCE S256</li>
-          <li><span class="bullet">&#x2713;</span> Dynamic Client Registration (RFC 7591)</li>
-          <li><span class="bullet">&#x2713;</span> Server metadata discovery (RFC 8414)</li>
-          <li><span class="bullet">&#x2713;</span> Rate limiting on token + authorize</li>
+          <li><span class="bullet">&#x2713;</span> Register an MCP server</li>
+          <li><span class="bullet">&#x2713;</span> Request a certification level</li>
+          <li><span class="bullet">&#x2713;</span> Retrieve application status</li>
         </ul>
-        <div class="cert-benefit">Registry listing</div>
       </div>
-
-      <!-- Silver -->
       <div class="cert-card silver">
-        <div class="cert-tier">Silver</div>
-        <h3>Enhanced</h3>
+        <div class="cert-tier">Not automated</div>
+        <h3>Review and badges</h3>
         <ul class="cert-list">
-          <li><span class="bullet">&#x2713;</span> All Bronze requirements</li>
-          <li><span class="bullet">&#x2713;</span> Token introspection (RFC 7662)</li>
-          <li><span class="bullet">&#x2713;</span> Token revocation (RFC 7009)</li>
-          <li><span class="bullet">&#x2713;</span> Consent UI customization</li>
-          <li><span class="bullet">&#x2713;</span> Lifecycle hooks for audit logging</li>
+          <li><span class="bullet">&mdash;</span> No CLI certification command</li>
+          <li><span class="bullet">&mdash;</span> No automatic tier decision</li>
+          <li><span class="bullet">&mdash;</span> No embeddable badge delivery</li>
         </ul>
-        <div class="cert-benefit">Featured in registry</div>
-      </div>
-
-      <!-- Gold -->
-      <div class="cert-card gold">
-        <div class="cert-tier">Gold</div>
-        <h3>Production</h3>
-        <ul class="cert-list">
-          <li><span class="bullet">&#x2713;</span> All Silver requirements</li>
-          <li><span class="bullet">&#x2713;</span> Persistent client store</li>
-          <li><span class="bullet">&#x2713;</span> Resource indicators (RFC 8707)</li>
-          <li><span class="bullet">&#x2713;</span> Delegation support (SPEC &sect;9)</li>
-          <li><span class="bullet">&#x2713;</span> Budget enforcement</li>
-          <li><span class="bullet">&#x2713;</span> Full conformance suite pass</li>
-        </ul>
-        <div class="cert-benefit">Top placement + badge</div>
       </div>
     </div>
   </div>
 </section>
-
-<!-- ── Registry Preview ──────────────────────────────────────────────────── -->
-<section id="registry">
-  <div class="container">
-    <div class="section-label">MCP Server Registry</div>
-    <div class="section-title">Discover certified MCP servers.</div>
-    <p class="section-sub">
-      Every certified server appears in the Grantex registry with its tier, scopes,
-      and a direct install link. Users can trust that listed servers meet OAuth 2.1 requirements.
-    </p>
-
-    <div class="registry-grid">
-      <div class="reg-card">
-        <div class="reg-header">
-          <span class="reg-name">Calendar MCP</span>
-          <span class="reg-badge gold">Gold</span>
-        </div>
-        <p class="reg-desc">Read, create, and manage calendar events. Full delegation support with budget controls for scheduling agents.</p>
-        <div class="reg-scopes">
-          <span class="reg-scope">calendar:read</span>
-          <span class="reg-scope">calendar:write</span>
-          <span class="reg-scope">calendar:manage</span>
-        </div>
-      </div>
-
-      <div class="reg-card">
-        <div class="reg-header">
-          <span class="reg-name">File System MCP</span>
-          <span class="reg-badge silver">Silver</span>
-        </div>
-        <p class="reg-desc">Sandboxed file operations with scoped directory access. Read, write, and search files within allowed paths.</p>
-        <div class="reg-scopes">
-          <span class="reg-scope">fs:read</span>
-          <span class="reg-scope">fs:write</span>
-          <span class="reg-scope">fs:search</span>
-        </div>
-      </div>
-
-      <div class="reg-card">
-        <div class="reg-header">
-          <span class="reg-name">Database MCP</span>
-          <span class="reg-badge bronze">Bronze</span>
-        </div>
-        <p class="reg-desc">Read-only SQL queries against Postgres and MySQL. Schema introspection and query result formatting.</p>
-        <div class="reg-scopes">
-          <span class="reg-scope">db:query</span>
-          <span class="reg-scope">db:schema</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- ── Managed vs Self-Hosted ────────────────────────────────────────────── -->
 <section id="deployment">
   <div class="container">
@@ -1133,22 +1056,22 @@
           <div class="deploy-feature">
             <span class="check-icon">&#x2713;</span>
             <div>
-              <h4>99.9% uptime SLA</h4>
-              <p>Cloud Run auto-scaling with global CDN for metadata endpoints.</p>
+              <h4>Managed deployment</h4>
+              <p>Cloud Run deployment with health checks and CDN-backed public metadata endpoints.</p>
             </div>
           </div>
           <div class="deploy-feature">
             <span class="check-icon">&#x2713;</span>
             <div>
-              <h4>SOC 2 + GDPR ready</h4>
-              <p>Compliance handled on our side. Export audit logs anytime.</p>
+              <h4>Audit evidence tooling</h4>
+              <p>Export audit and authorization records for your own compliance review. No certification is implied.</p>
             </div>
           </div>
           <div class="deploy-feature">
             <span class="check-icon">&#x2713;</span>
             <div>
               <h4>Free tier included</h4>
-              <p>1,000 token exchanges per month. No credit card required.</p>
+              <p>50,000 token exchanges per month. No credit card required.</p>
             </div>
           </div>
         </div>
@@ -1156,7 +1079,7 @@
           <button class="copy-btn" onclick="copyCode('code-managed', this)">Copy</button>
 <pre id="code-managed"><span class="kw">const</span> <span class="id">server</span> = <span class="kw">await</span> <span class="fn">createMcpAuthServer</span>({
   <span class="id">grantex</span>: <span class="kw">new</span> <span class="fn">Grantex</span>({
-    <span class="id">baseUrl</span>: <span class="str">'https://grantex-auth-dd4mtrt2gq-uc.a.run.app'</span>,
+    <span class="id">baseUrl</span>: <span class="str">'https://api.grantex.dev'</span>,
     <span class="id">apiKey</span>:  <span class="id">process</span>.<span class="id">env</span>.<span class="id">GRANTEX_API_KEY</span>,
   }),
   <span class="id">agentId</span>: <span class="str">'ag_your_server'</span>,
@@ -1253,7 +1176,7 @@
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
         <div style="font-size:28px;margin-bottom:12px;">&#x1f4dc;</div>
         <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Full Audit Trail</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Every token issuance, introspection, and revocation is logged via Grantex events. Stream to Datadog, Splunk, or S3.</p>
+        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Token issuance can invoke the configured <code style="font-family:var(--mono);font-size:12px;">onTokenIssued</code> callback. Host applications should log introspection and revocation and connect any event destinations they require.</p>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
         <div style="font-size:28px;margin-bottom:12px;">&#x1f310;</div>
@@ -1269,8 +1192,8 @@
   <div class="container">
     <h2>Ship your MCP server with real auth.</h2>
     <p>
-      One package. Six RFC-compliant endpoints. Human consent, scoped access, instant revocation,
-      and a certification badge to prove it.
+      One package. Six authorization endpoints with PKCE, consent, scoped access,
+      token introspection, and revocation support.
     </p>
     <div class="hero-ctas">
       <div class="install-hero" onclick="copyInstall('npm install @grantex/mcp-auth', this)">
@@ -1280,7 +1203,7 @@
     </div>
     <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
       <a href="https://docs.grantex.dev/features/mcp-auth-server" class="btn btn-primary">Read the Docs</a>
-      <a href="https://docs.grantex.dev/guides/mcp-certification" class="btn btn-secondary">Get Certified</a>
+      <a href="https://docs.grantex.dev/guides/mcp-certification" class="btn btn-secondary">Certification Preview</a>
       <a href="https://github.com/mishrasanjeev/grantex/tree/main/packages/mcp-auth" class="btn btn-secondary">GitHub</a>
     </div>
   </div>
@@ -1299,12 +1222,6 @@
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
       </ul>
       <ul class="footer-links" aria-label="Legal and procurement">
-        <li><a href="https://docs.grantex.dev/compliance/privacy-policy">Privacy</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/terms-of-service">Terms</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/dpa">DPA</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/cookie-policy">Cookies</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/sub-processors">Sub-processors</a></li>
-        <li><a href="https://docs.grantex.dev/compliance/data-residency">Data Residency</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/SECURITY.md">Security</a></li>
       </ul>
       <span class="footer-copy">&copy; 2026 Grantex</span>

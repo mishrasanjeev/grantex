@@ -6,9 +6,9 @@ import (
 )
 
 type clientConfig struct {
-	baseURL    string
-	timeout    time.Duration
-	httpClient *http.Client
+	baseURL       string
+	timeout       time.Duration
+	httpClient    *http.Client
 	maxRetries    int
 	maxRetriesSet bool
 }

@@ -5,9 +5,9 @@ import type { VerifiedGrant } from '@grantex/sdk';
 
 export interface GrantexMiddlewareOptions {
   /**
-   * JWKS endpoint URL for offline token verification.
+   * JWKS endpoint URL used to retrieve keys for local token verification.
    * For the hosted Grantex service this is:
-   * `https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json`
+   * `https://api.grantex.dev/.well-known/jwks.json`
    */
   jwksUri: string;
 

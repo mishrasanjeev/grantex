@@ -1,12 +1,12 @@
 ---
 title: "Usage"
 sidebarTitle: "Usage"
-description: "Track API usage metrics for the current billing period and view historical usage."
+description: "Track current UTC API usage metrics and view daily usage history."
 ---
 
 ## Overview
 
-The `usage` sub-client provides access to API usage metrics. You can check your current billing period's usage and retrieve historical usage data broken down by day.
+The `usage` sub-client provides daily API usage metrics. `current()` returns the current UTC date's counters; `history()` returns earlier daily counters.
 
 ```typescript
 const current = await grantex.usage.current();
@@ -17,13 +17,13 @@ const history = await grantex.usage.history({ days: 30 });
 
 ## usage.current()
 
-Get API usage metrics for the current billing period.
+Get API usage metrics for the current UTC date.
 
 ```typescript
 const usage = await grantex.usage.current();
 
 console.log(usage.developerId);        // 'dev_01HXYZ...'
-console.log(usage.period);             // '2026-03'
+console.log(usage.period);             // '2026-03-07'
 console.log(usage.tokenExchanges);     // 142
 console.log(usage.authorizations);     // 89
 console.log(usage.verifications);      // 1024
@@ -37,23 +37,23 @@ console.log(usage.totalRequests);      // 1255
 </ResponseField>
 
 <ResponseField name="period" type="string">
-  The current billing period (e.g., `'2026-03'`).
+  The current UTC date in `YYYY-MM-DD` format (e.g., `'2026-03-07'`). The wire field retains the name `period` for compatibility.
 </ResponseField>
 
 <ResponseField name="tokenExchanges" type="number">
-  Number of token exchange operations this period.
+  Number of token exchange operations on this UTC date.
 </ResponseField>
 
 <ResponseField name="authorizations" type="number">
-  Number of authorization requests this period.
+  Number of authorization requests on this UTC date.
 </ResponseField>
 
 <ResponseField name="verifications" type="number">
-  Number of token verifications this period.
+  Number of token verifications on this UTC date.
 </ResponseField>
 
 <ResponseField name="totalRequests" type="number">
-  Total API requests across all endpoints this period.
+  Total API requests across all endpoints on this UTC date.
 </ResponseField>
 
 ---
@@ -83,7 +83,7 @@ for (const entry of history.entries) {
 ### Response: `UsageHistory`
 
 <ResponseField name="entries" type="UsageEntry[]">
-  Array of daily usage entries, ordered from oldest to newest.
+  Array of daily usage entries, ordered newest to oldest.
 </ResponseField>
 
 Each `UsageEntry` contains:
@@ -117,9 +117,9 @@ import { Grantex } from '@grantex/sdk';
 
 const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
 
-// Check current period usage
+// Check current UTC-date usage
 const current = await grantex.usage.current();
-console.log(`Period: ${current.period}`);
+console.log(`Date: ${current.period}`);
 console.log(`Total requests: ${current.totalRequests}`);
 console.log(`  Authorizations: ${current.authorizations}`);
 console.log(`  Token exchanges: ${current.tokenExchanges}`);

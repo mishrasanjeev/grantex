@@ -1,0 +1,32 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@protected": true,
+    "id": "@id",
+    "type": "@type",
+    "grantex": "https://grantex.dev/vocab#",
+    "schema": "https://schema.org/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "AgentIdentity": "grantex:AgentIdentity",
+    "developer": "grantex:developer",
+    "name": "schema:name",
+    "description": "schema:description",
+    "declaredScopes": {
+      "@id": "grantex:declaredScopes",
+      "@container": "@set"
+    },
+    "status": "grantex:status",
+    "createdAt": {
+      "@id": "schema:dateCreated",
+      "@type": "xsd:dateTime"
+    },
+    "verificationMethod": {
+      "@id": "https://w3id.org/security#verificationMethod",
+      "@container": "@set"
+    },
+    "publicKeyJwk": {
+      "@id": "https://w3id.org/security#publicKeyJwk",
+      "@type": "@json"
+    }
+  }
+}

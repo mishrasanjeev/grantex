@@ -13,6 +13,7 @@ const authRequest = await grantex.authorize({
   agentId: agent.id,
   userId: 'user_abc123',
   scopes: ['calendar:read', 'payments:initiate:max_500'],
+  audience: 'https://api.yourapp.com',
   expiresIn: '24h',
   redirectUri: 'https://yourapp.com/auth/callback',
 });
@@ -37,6 +38,10 @@ console.log(authRequest.consentUrl);
 
 <ParamField body="scopes" type="string[]" required>
   The scopes the agent is requesting. Must be a subset of the agent's registered scopes.
+</ParamField>
+
+<ParamField body="audience" type="string">
+  Intended token recipient. When set, the issued grant token includes this value in its `aud` claim; verifiers should require the same audience.
 </ParamField>
 
 <ParamField body="expiresIn" type="string">
@@ -114,6 +119,7 @@ const authRequest = await grantex.authorize({
   agentId: agent.id,
   userId: 'user_abc123',
   scopes: ['email:read', 'email:send'],
+  audience: 'https://api.myapp.com',
   expiresIn: '7d',
   redirectUri: 'https://myapp.com/auth/callback',
 });

@@ -1,6 +1,6 @@
 # @grantex/adapters
 
-Pre-built service provider adapters for [Grantex](https://grantex.dev) — translate grant tokens into real API calls for Google Calendar, Gmail, Stripe, and Slack.
+Eleven pre-built service provider adapters for [Grantex](https://grantex.dev). They verify grant tokens, enforce scopes, and translate authorized operations into upstream API calls.
 
 ## Install
 
@@ -109,11 +109,23 @@ await slack.sendMessage(token, { channel: 'C123ABC', text: 'Hello from agent!' }
 await slack.listMessages(token, { channel: 'C123ABC', limit: 20 });
 ```
 
+### Additional adapters
+
+| Adapter | Read operation and scope | Write operation and scope |
+|---|---|---|
+| `GoogleDriveAdapter` | `listFiles` — `files:read` | `uploadFile` — `files:write` |
+| `GitHubAdapter` | `listRepositories` — `repos:read` | `createIssue` — `issues:write` |
+| `NotionAdapter` | `queryDatabase` — `pages:read` | `createPage` — `pages:write` |
+| `HubSpotAdapter` | `listContacts` — `contacts:read` | `createContact` — `contacts:write` |
+| `SalesforceAdapter` | `queryRecords` — `crm:read` | `createRecord` — `crm:write` |
+| `LinearAdapter` | `listIssues` — `issues:read` | `createIssue` — `issues:write` |
+| `JiraAdapter` | `searchIssues` — `issues:read` | `createIssue` — `issues:write` |
+
 ## Configuration
 
 ```typescript
 interface AdapterConfig {
-  jwksUri: string;             // JWKS endpoint for offline token verification
+  jwksUri: string;             // Endpoint used to retrieve token-verification keys
   credentials: CredentialProvider; // API key/token (string or async function)
   auditLogger?: AuditLogger;   // Optional audit logging callback
   clockTolerance?: number;     // JWT clock skew tolerance in seconds
@@ -212,7 +224,7 @@ class MyApiAdapter extends BaseAdapter {
 ## Requirements
 
 - Node.js 18+
-- `@grantex/sdk` >= 0.1.0
+- `@grantex/sdk` >= 0.3.0
 
 ## License
 

@@ -8,7 +8,7 @@ Grantex lets humans authorize AI agents with **verifiable, revocable, audited gr
 [![Python](https://img.shields.io/pypi/pyversions/grantex)](https://pypi.org/project/grantex/)
 [![License](https://img.shields.io/pypi/l/grantex)](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 
-> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[API Reference](https://grantex.mintlify.app/api-reference)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+> **[Homepage](https://grantex.dev)** | **[Docs](https://docs.grantex.dev)** | **[API Reference](https://docs.grantex.dev/api-reference)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 
@@ -19,16 +19,17 @@ pip install grantex
 ## Quick start
 
 ```python
-from grantex import Grantex, ExchangeTokenParams, verify_grant_token, VerifyGrantTokenOptions
+from grantex import AuthorizeParams, ExchangeTokenParams, Grantex, VerifyGrantTokenOptions, verify_grant_token
 
 client = Grantex(api_key="YOUR_API_KEY")
 
 # 1. Start the authorization flow
-request = client.authorize(
+request = client.authorize(AuthorizeParams(
     agent_id="ag_01HXYZ...",
     user_id="usr_01HXYZ...",
     scopes=["files:read", "email:send"],
-)
+    audience="https://api.example.com",  # optional; becomes the JWT aud claim
+))
 
 # Redirect the user to the consent page — they approve in plain language
 print(request.consent_url)
@@ -39,7 +40,7 @@ token = client.tokens.exchange(ExchangeTokenParams(code=code, agent_id="ag_01HXY
 print(token.grant_token)  # RS256-signed JWT
 print(token.scopes)       # ('files:read', 'email:send')
 
-# 3. Verify the grant token offline (no network call)
+# 3. Verify locally using keys retrieved from the issuer's JWKS
 grant = verify_grant_token(
     token=token.grant_token,
     options=VerifyGrantTokenOptions(
@@ -52,16 +53,19 @@ print(grant.principal_id)  # 'usr_01HXYZ...'
 client.tokens.revoke(grant.token_id)
 ```
 
-## Offline verification
+## Local JWKS verification
 
-Verify grant tokens without a network call using the public JWKS:
+Verify grant-token signatures locally using the issuer's public JWKS. The verifier
+retrieves the current JWKS over the network for each call:
 
 ```python
-from grantex import verify_grant_token
+from grantex import VerifyGrantTokenOptions, verify_grant_token
 
 verified = verify_grant_token(
     token="eyJhbGciOiJSUzI1NiIs...",
-    jwks_url="https://api.grantex.dev/.well-known/jwks.json",
+    options=VerifyGrantTokenOptions(
+        jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+    ),
 )
 
 print(verified.scopes)       # ['files:read', 'email:send']
@@ -74,7 +78,7 @@ print(verified.agent_did)    # 'did:web:...'
 The SDK includes built-in PKCE (Proof Key for Code Exchange) support using the S256 method:
 
 ```python
-from grantex import Grantex, ExchangeTokenParams, generate_pkce
+from grantex import AuthorizeParams, ExchangeTokenParams, Grantex, generate_pkce
 
 client = Grantex(api_key="YOUR_API_KEY")
 
@@ -85,13 +89,13 @@ pkce = generate_pkce()
 # pkce.code_challenge_method — 'S256'
 
 # 2. Pass the challenge when requesting authorization
-request = client.authorize(
+request = client.authorize(AuthorizeParams(
     agent_id="ag_01HXYZ...",
     user_id="usr_01HXYZ...",
     scopes=["files:read"],
     code_challenge=pkce.code_challenge,
     code_challenge_method=pkce.code_challenge_method,
-)
+))
 
 # 3. Exchange the code with the verifier
 token = client.tokens.exchange(ExchangeTokenParams(
@@ -108,18 +112,18 @@ token = client.tokens.exchange(ExchangeTokenParams(
 | **Authorization flow** | `client.authorize()` — initiate consent, get grant tokens |
 | **Token exchange** | `client.tokens.exchange()` — exchange an authorization code for a grant token |
 | **Token management** | `client.tokens.verify()`, `.revoke()` — online verification and revocation |
-| **Offline verification** | `verify_grant_token()` — RS256 signature check against JWKS |
-| **Agent management** | `client.agents.create()`, `.get()`, `.list()`, `.update()`, `.delete()` |
+| **Local verification** | `verify_grant_token()` — retrieves JWKS, then performs the RS256 signature check locally |
+| **Agent management** | `client.agents.register()`, `.get()`, `.list()`, `.update()`, `.delete()` |
 | **Grant management** | `client.grants.list()`, `.get()`, `.revoke()` |
 | **Multi-agent delegation** | `client.grants.delegate()` — scoped sub-grants with cascade revocation |
 | **Audit trail** | `client.audit.log()`, `.list()`, `.get()` — tamper-evident hash-chained log |
 | **Policy engine** | `client.policies.create()`, `.list()`, `.update()`, `.delete()` |
 | **Anomaly detection** | `client.anomalies.list()`, `.detect()` |
-| **Compliance** | `client.compliance.summary()`, `.export_audit()`, `.export_grants()`, `.evidence_pack()` |
+| **Compliance** | `client.compliance.get_summary()`, `.export_audit()`, `.export_grants()`, `.evidence_pack()` |
 | **Webhooks** | `client.webhooks.create()`, `.list()`, `.delete()` + `verify_webhook_signature()` |
-| **Billing** | `client.billing.status()`, `.checkout()`, `.portal()` |
+| **Billing** | `client.billing.get_subscription()`, `.create_checkout()`, `.create_portal()` |
 | **SCIM 2.0** | `client.scim.create_user()`, `.list_users()`, `.get_user()`, `.update_user()`, `.delete_user()` |
-| **OIDC SSO** | `client.sso.create_config()`, `.get_config()`, `.login()`, `.callback()` |
+| **OIDC SSO** | `client.sso.create_config()`, `.get_config()`, `.get_login_url()`, `.handle_callback()` |
 | **Commerce V1/OACP** | `client.commerce.get_profile()`, `.search_catalog()`, `.create_cart()`, `.get_ops_health()` |
 
 ## Commerce V1 / OACP
@@ -185,7 +189,7 @@ except GrantexNetworkError:
 
 - Python 3.9+
 - [httpx](https://www.python-httpx.org/) (sync HTTP client)
-- [PyJWT](https://pyjwt.readthedocs.io/) + [cryptography](https://cryptography.io/) (for offline token verification)
+- [PyJWT](https://pyjwt.readthedocs.io/) + [cryptography](https://cryptography.io/) (for local token signature verification)
 
 ## Links
 

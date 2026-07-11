@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grantex-a2a"
-version = "0.1.3"
+version = "0.1.4"
 description = "Google A2A protocol bridge for Grantex — inject grant tokens into agent-to-agent communication"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -28,7 +28,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://grantex.dev"
-Documentation = "https://docs.grantex.dev/integrations/a2a"
+Documentation = "https://docs.grantex.dev/integrations/a2a-py"
 Repository = "https://github.com/mishrasanjeev/grantex"
 Issues = "https://github.com/mishrasanjeev/grantex/issues"
 

@@ -26,7 +26,7 @@ description: "Grantex integrates with every major AI agent framework."
     Dependency injection for grant token verification and scope checks.
   </Card>
   <Card title="MCP Server" icon="plug" href="/integrations/mcp">
-    13 tools for Claude Desktop, Cursor, and Windsurf.
+    17 tools for Claude Desktop, Cursor, and Windsurf.
   </Card>
   <Card title="LangChain" icon="link-horizontal" href="/integrations/langchain">
     Scope-enforced tools and audit callbacks.
@@ -41,7 +41,7 @@ description: "Grantex integrates with every major AI agent framework."
     Python tools with scope enforcement and audit logging.
   </Card>
   <Card title="OpenAI Agents SDK" icon="microchip" href="/integrations/openai-agents">
-    FunctionTool wrapper with offline scope checks.
+    FunctionTool wrapper with JWKS-backed token verification and scope checks.
   </Card>
   <Card title="Google ADK" icon="brain" href="/integrations/google-adk">
     Plain function tools for Google Agent Development Kit.
@@ -144,7 +144,9 @@ Verifiable Credentials are opt-in. Pass `credentialFormat: "vc-jwt"` during toke
 
 <CardGroup cols={2}>
   <Card title="Enterprise SSO" icon="key" href="/guides/enterprise-sso">
-    OIDC + SAML 2.0 + LDAP single sign-on with multi-IdP connections, domain-based routing, LDAP directory authentication, JIT provisioning, group-to-scope mapping, and SSO enforcement.
+    OIDC and SAML 2.0 SSO with multi-IdP routing, JIT provisioning,
+    group-to-scope mapping, and enforcement, plus an LDAP direct-bind preview
+    that does not yet search directories or retrieve groups.
   </Card>
   <Card title="SCIM 2.0 Provisioning" icon="users" href="/sdks/typescript/scim">
     Sync agents and principals from your identity provider automatically via SCIM 2.0.
@@ -158,7 +160,9 @@ Every integration follows the same pattern:
 1. **Wrap** your tool function with Grantex scope enforcement
 2. **Pass** a grant token (RS256 JWT) from the authorization flow
 3. **Specify** the required scope for the tool
-4. The integration **checks** the JWT's `scp` claim offline — no network call
+4. The integration **verifies** the JWT signature and claims against the configured JWKS endpoint, then checks `scp`
 5. If the scope is missing, the tool **throws immediately** before your function runs
 
-This means scope enforcement is completely decoupled from the Grantex API — your agent's tools work even if the Grantex server is unreachable.
+The standalone verification helpers may contact their configured JWKS endpoint
+while resolving keys. Keep that endpoint reachable from every protected runtime;
+if keys cannot be obtained, protected execution fails closed.

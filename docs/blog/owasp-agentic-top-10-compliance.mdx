@@ -1,6 +1,6 @@
 ---
 title: "OWASP Agentic Top 10: What It Means for Your AI Security Stack"
-description: "OWASP published the Agentic Security Top 10 in December 2025. The EU AI Act is binding in August 2026. NIST AI RMF is active now. Here is how each requirement maps to Grantex."
+description: "OWASP published the Agentic Security Top 10 in December 2025. The EU AI Act applies in phases, and NIST AI RMF is active now. Here is how the controls map to Grantex."
 date: "2026-03-28"
 authors:
   - name: "Sanjeev Kumar"
@@ -50,11 +50,14 @@ The `delegationDepth` claim is signed into the JWT. The protocol rejects delegat
 
 **The control:** Instant, cascading revocation. One API call invalidates the agent's token and all child delegations.
 
-**Grantex implementation:** `POST /v1/tokens/revoke` blocklists the JTI in Redis. The next `POST /v1/tokens/verify` call returns `valid: false`. For offline verification, StatusList2021 provides bitstring-based revocation that can be checked without a network call.
+**Grantex implementation:** `POST /v1/tokens/revoke` blocklists the JTI in Redis.
+The next `POST /v1/tokens/verify` call returns `valid: false`. A StatusList2021
+bitstring can be checked without a network call only after the relevant list has
+already been fetched and cached; disconnected checks can be stale until refresh.
 
 ---
 
-## EU AI Act (Binding August 2026)
+## EU AI Act (Phased Implementation)
 
 The EU AI Act is the world's first comprehensive AI regulation. Three articles directly impact agent deployments.
 
@@ -145,7 +148,12 @@ This matrix is also available as a dedicated page in our documentation: [Complia
 
 ## What To Do Now
 
-If you are deploying agents in production — especially in regulated industries or enterprise environments — these frameworks are not future concerns. OWASP's taxonomy is already appearing in security questionnaires. The EU AI Act becomes enforceable in August 2026. NIST's framework is active now for US government contractors.
+If you are deploying agents in production — especially in regulated industries
+or enterprise environments — these frameworks are not future concerns. OWASP's
+taxonomy is already appearing in security questionnaires. The EU AI Act applies
+in phases: current Commission guidance places transparency rules in August 2026,
+listed high-risk areas in December 2027, and product-integrated high-risk systems
+in August 2028. NIST's framework is active now for US government contractors.
 
 1. **Audit your current agent auth** — are agents using shared API keys or scoped, verifiable tokens?
 2. **Map your exposure** — which OWASP ASI risks apply to your deployment?

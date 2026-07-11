@@ -1,11 +1,17 @@
 ---
 title: "Offline Verification"
-description: "Verify grant tokens locally using JWKS without API calls"
+description: "Verify signatures and claims locally with a remote JWKS request per standalone call"
 ---
 
 ## Overview
 
-`VerifyGrantToken` verifies a grant token JWT locally using the Grantex JWKS endpoint. This avoids an API call per request and is ideal for high-throughput services.
+`VerifyGrantToken` verifies a grant token JWT locally using keys from the Grantex
+JWKS endpoint. It avoids the online token-verification endpoint, including its
+revocation lookup.
+
+The standalone helper fetches keys from the configured JWKS endpoint on every
+verification call, so that endpoint must be reachable. It does not call the
+online token-verification/revocation API, but it is not network-free.
 
 ```go
 grant, err := grantex.VerifyGrantToken(ctx, tokenString, grantex.VerifyOptions{
@@ -24,7 +30,13 @@ fmt.Printf("Principal: %s, Scopes: %v\n", grant.PrincipalID, grant.Scopes)
 | `JwksURI` | `string` | Yes | URL to fetch the JWKS from |
 | `RequiredScopes` | `[]string` | No | Scopes the token must contain |
 | `Audience` | `string` | No | Expected `aud` claim |
+| `Issuer` | `string` | No | Expected `iss` claim. The hosted JWKS alias expects `https://grantex.dev`; custom JWKS URLs derive an issuer when omitted. |
+| `IssuerDID` | `string` | No | A `did:web` issuer used to derive the JWKS URL and expected issuer. An explicit `Issuer` takes precedence. |
 | `ClockTolerance` | `time.Duration` | No | Tolerance for clock skew |
+
+Hosted tokens use the canonical issuer `https://grantex.dev`, even though the
+stable JWKS URL is served from `https://api.grantex.dev`. The SDK handles this
+alias automatically.
 
 ## Response (`VerifiedGrant`)
 
@@ -58,5 +70,8 @@ Returns `*grantex.TokenError` for:
 - Missing or invalid JWKS URI
 - Expired tokens
 - Invalid signatures
+- Issuer or audience mismatches
+- Missing or incorrectly typed required claims (`jti`, `sub`, `agt`, `dev`,
+  `scp`, `iat`, `exp`)
 - Missing required scopes
 - Malformed JWTs

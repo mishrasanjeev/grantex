@@ -7,6 +7,18 @@ on:
     branches: [main]
 
 jobs:
+  docs-integrity:
+    name: Documentation Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node scripts/check-docs-integrity.mjs
+
   commerce-preview-conformance:
     name: Commerce Preview Conformance
     runs-on: ubuntu-latest

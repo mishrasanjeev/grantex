@@ -1,0 +1,76 @@
+---
+title: "Credential Vault"
+sidebarTitle: "Vault"
+description: "Store encrypted upstream credentials and exchange grant tokens for scoped access."
+---
+
+## Overview
+
+The `vault` sub-client stores upstream service credentials encrypted by the Grantex auth service. List and get operations return metadata only; they never return stored raw tokens.
+
+<Warning>
+Set `VAULT_ENCRYPTION_KEY` to a stable production secret before storing credentials. Rotating or losing that key without a migration makes stored ciphertext unusable.
+</Warning>
+
+## Store or Update a Credential
+
+Credentials are upserted by principal and service.
+
+```typescript
+const stored = await grantex.vault.store({
+  principalId: 'user_123',
+  service: 'google-calendar',
+  credentialType: 'oauth2',
+  accessToken: googleAccessToken,
+  refreshToken: googleRefreshToken,
+  tokenExpiresAt: '2026-07-10T14:00:00.000Z',
+  metadata: { account: 'user@example.com' },
+});
+```
+
+`principalId`, `service`, and `accessToken` are required. `credentialType` defaults on the server when omitted.
+
+## List Credential Metadata
+
+```typescript
+const result = await grantex.vault.list({
+  principalId: 'user_123',
+  service: 'google-calendar',
+});
+
+for (const credential of result.credentials) {
+  console.log(credential.id, credential.service, credential.tokenExpiresAt);
+}
+```
+
+Both filters are optional. Returned `VaultCredential` records include identifiers, type, expiry, metadata, and timestamps—not access or refresh tokens.
+
+## Get or Delete
+
+```typescript
+const credential = await grantex.vault.get('vc_01HXYZ...');
+await grantex.vault.delete(credential.id);
+```
+
+## Exchange with a Grant Token
+
+`exchange()` is intentionally authorized with a grant token rather than the developer API key. The grant must belong to the principal and include the service scope required by the server.
+
+```typescript
+const upstream = await grantex.vault.exchange(grantToken, {
+  service: 'google-calendar',
+});
+
+console.log(upstream.accessToken);
+console.log(upstream.tokenExpiresAt);
+```
+
+The response includes the decrypted access token, service, credential type, expiry, and metadata. Keep it in memory only for the upstream request and never send it to a browser or log it.
+
+## API Reference
+
+- [Store credential](/api-reference/vault/store)
+- [List credentials](/api-reference/vault/list)
+- [Get credential](/api-reference/vault/get)
+- [Delete credential](/api-reference/vault/delete)
+- [Exchange credential](/api-reference/vault/exchange)

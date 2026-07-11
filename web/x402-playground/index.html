@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
 <title>Grantex x402 Playground</title>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Grantex x402 Playground","url":"https://grantex.dev/x402-playground","description":"Interactive demo of agent spend authorization for x402 payment flows","applicationCategory":"DeveloperApplication","operatingSystem":"Web"}</script>
 <style>
@@ -199,6 +200,7 @@ const app = express();
 
 app.use('/api/weather', x402Middleware({
   requiredScopes: ['weather:read'],
+  requiredAmount: 0.001,
   currency: 'USDC',
 }));
 

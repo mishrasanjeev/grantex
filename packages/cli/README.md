@@ -15,10 +15,10 @@ npm install -g @grantex/cli
 ## Configure
 
 ```bash
-grantex config set --url https://grantex-auth-dd4mtrt2gq-uc.a.run.app --key YOUR_API_KEY
+grantex config set --url https://api.grantex.dev --key YOUR_API_KEY
 
 # Or use environment variables
-export GRANTEX_URL=https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+export GRANTEX_URL=https://api.grantex.dev
 export GRANTEX_KEY=YOUR_API_KEY
 
 # Verify your setup
@@ -244,6 +244,61 @@ grantex scim users list | get usr_... | create --user-name john@co.com | update 
 grantex sso get | configure --issuer-url ... --client-id ... | delete
 grantex sso login-url my-org
 grantex sso callback --code CODE --state STATE
+```
+
+### Rich Token Inspection
+
+```bash
+grantex verify <jwt> [--verbose --check-revocation]
+grantex verify --file token.txt [--jwks https://api.grantex.dev/.well-known/jwks.json]
+grantex decode <jwt>
+grantex decode --file token.txt --json
+```
+
+`decode` does not verify the signature. Use `verify` before trusting claims.
+
+### Offline Audit Logs
+
+```bash
+grantex audit-log inspect audit.jsonl
+grantex audit-log verify audit.jsonl
+```
+
+### Trust Registry
+
+```bash
+grantex registry lookup did:web:agent.example.com
+grantex registry verify-dns did:web:agent.example.com
+```
+
+### DPDP Act Compliance
+
+```bash
+grantex dpdp consent list --principal user@example.com
+grantex dpdp consent get cr_...
+grantex dpdp consent withdraw cr_... --reason "Consent withdrawn"
+grantex dpdp grievances get grv_...
+grantex dpdp erasure user@example.com
+grantex dpdp principal-records user@example.com
+```
+
+Run `grantex dpdp --help` for the create, notice, grievance, and export options.
+
+### Tool Manifests and Scope Enforcement
+
+```bash
+grantex manifest list [--category finance]
+grantex manifest show salesforce
+grantex manifest validate --agent-tools list_contacts,create_contact --connector hubspot
+grantex manifest load ./manifest.json
+grantex manifest generate ./src
+grantex enforce test --token <jwt> --connector salesforce --tool delete_contact
+```
+
+### Project Scaffolding
+
+```bash
+grantex init gemma [--dir ./grantex-gemma-starter]
 ```
 
 ## Local Development

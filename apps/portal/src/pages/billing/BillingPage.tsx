@@ -18,13 +18,13 @@ const PLANS = [
   {
     name: 'pro',
     label: 'Pro',
-    price: '$49/mo',
+    price: 'Price shown at checkout',
     features: ['5,000 agents', '50,000 grants', '1,000,000 audit entries', '500 policies', '200 webhooks', 'Priority support', 'SOC 2 evidence packs'],
   },
   {
     name: 'enterprise',
     label: 'Enterprise',
-    price: '$249/mo',
+    price: 'Price shown at checkout',
     features: ['Unlimited agents', 'Unlimited grants', 'Unlimited audit entries', 'Dedicated support', 'All compliance packs', 'SSO & SCIM'],
   },
 ];

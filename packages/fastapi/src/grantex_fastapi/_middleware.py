@@ -28,7 +28,7 @@ class GrantexAuth:
         from grantex_fastapi import GrantexAuth
 
         grantex = GrantexAuth(
-            jwks_uri="https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json",
+            jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
         )
 
         @app.get("/api/calendar")

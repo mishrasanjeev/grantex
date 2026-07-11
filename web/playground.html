@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
   <title>Playground — Grantex | Try AI Agent Authorization Live</title>
   <meta name="description" content="Try the Grantex authorization protocol live in your browser. Create agents, issue scoped grants, and verify JWTs — no signup required.">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -258,7 +259,7 @@
       </div>
       <div class="field">
         <label for="baseUrl">Server URL</label>
-        <input type="text" id="baseUrl" value="https://grantex-auth-dd4mtrt2gq-uc.a.run.app">
+        <input type="text" id="baseUrl" value="https://api.grantex.dev">
         <div class="hint">The Grantex auth service endpoint. Change this if self-hosting.</div>
       </div>
     </div>
@@ -342,7 +343,7 @@
         <span class="step-badge badge-pending" id="badge4">Pending</span>
       </div>
       <div class="step-body">
-        <div class="step-desc">Verify the grant token online. In production, you'd verify offline via JWKS — this endpoint is a convenience for quick checks.</div>
+        <div class="step-desc">Verify the grant token online. Production services can validate locally using keys retrieved from JWKS; fetching or refreshing those keys may require a network call.</div>
         <div class="panel">
           <div class="panel-label"><span class="method method-post">POST</span> /v1/tokens/verify</div>
           <pre id="req4"></pre>
@@ -384,7 +385,7 @@
         <span class="step-badge badge-pending" id="badge6">Pending</span>
       </div>
       <div class="step-body">
-        <div class="step-desc">Revoke the grant entirely. After this, the token fails verification. Revocation is instant and cascades to all delegated grants.</div>
+        <div class="step-desc">Revoke the grant and its descendants centrally. Services that verify JWTs locally must also consult current revocation state or use short token lifetimes.</div>
         <div class="panel">
           <div class="panel-label"><span class="method method-delete">DELETE</span> /v1/grants/:id</div>
           <pre id="req6"></pre>
@@ -431,7 +432,7 @@
 const $ = (id) => document.getElementById(id);
 
 const DEMO_KEY = 'gx_test_playground_demo_2026';
-const DEFAULT_BASE_URL = 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
+const DEFAULT_BASE_URL = 'https://api.grantex.dev';
 
 let state = {
   apiKey: '',

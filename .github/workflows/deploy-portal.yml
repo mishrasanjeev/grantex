@@ -40,12 +40,6 @@ jobs:
           mkdir -p web/dashboard
           cp -r apps/portal/dist/* web/dashboard/
 
-      - name: Update sitemap lastmod dates
-        run: |
-          TODAY=$(date -u +%Y-%m-%d)
-          sed -i "s|<lastmod>[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}</lastmod>|<lastmod>${TODAY}</lastmod>|g" web/sitemap.xml
-          echo "Updated sitemap lastmod dates to ${TODAY}"
-
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
@@ -83,6 +77,11 @@ jobs:
           check "/consent?req=smoke-test" "Authorization Request"
           check "/.well-known/jwks.json" "\"keys\""
           check "/.well-known/did.json" "\"id\""
+          check "/.well-known/grantex-commerce" "\"grantex-commerce-v1\""
+          check "/contexts/mpp/v1" "\"@context\""
+          check "/ns/credentials/v1" "\"@context\""
+          check "/v1/identity" "\"@context\""
+          check "/v1/x402" "\"@context\""
 
           echo "--- POST $BASE/v1/webauthn/assert/options"
           webauthn_body=$(curl -sS -L --fail-with-body --max-time 20 \

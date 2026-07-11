@@ -8,10 +8,14 @@ Grantex supports two verification approaches, each with different trade-offs. Th
 
 ## Offline Verification
 
-Offline verification validates the JWT signature locally using the JWKS endpoint, without calling the Grantex API. This is the fastest option and the recommended default.
+This mode validates the JWT signature and claims locally after obtaining public
+keys from the JWKS endpoint. It avoids the online token-verification/revocation
+endpoint. The current standalone TypeScript, Python, and Go helpers fetch or
+resolve the remote JWKS for each invocation, so do not treat them as
+network-free or assume zero-latency hot-path behavior.
 
 **How it works:**
-1. Fetch the public keys from `/.well-known/jwks.json` (cached automatically)
+1. Resolve the public keys from `/.well-known/jwks.json`
 2. Verify the RS256 signature against the public key
 3. Check `exp`, `iss`, and optionally `aud` and required scopes
 4. Return the decoded claims
@@ -23,7 +27,7 @@ Offline verification validates the JWT signature locally using the JWKS endpoint
 import { verifyGrantToken } from '@grantex/sdk';
 
 const grant = await verifyGrantToken(grantToken, {
-  jwksUri: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json',
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
   requiredScopes: ['calendar:read'],
   audience: 'my-service',  // optional
 });
@@ -39,7 +43,7 @@ from grantex import verify_grant_token, VerifyGrantTokenOptions
 grant = verify_grant_token(
     grant_token,
     VerifyGrantTokenOptions(
-        jwks_uri="https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json",
+        jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
         required_scopes=["calendar:read"],
         audience="my-service",  # optional
     ),
@@ -55,6 +59,13 @@ print(grant.grant_id)      # 'grnt_01HXYZ...'
 
 <Note>
 The JWKS endpoint (`/.well-known/jwks.json`) is exempt from rate limits. You can fetch it as often as needed.
+</Note>
+
+<Note>
+Hosted grant tokens have `iss: https://grantex.dev`, while the stable JWKS alias
+is `https://api.grantex.dev/.well-known/jwks.json`. Current SDKs recognize this
+alias automatically. For a self-hosted issuer, configure the expected issuer
+explicitly or use the SDK's custom-JWKS issuer derivation.
 </Note>
 
 ## Online Verification
@@ -92,11 +103,13 @@ with Grantex(api_key="gx_live_...") as client:
 ```
 </CodeGroup>
 
-**Trade-off:** Adds network latency (~50-100ms) and counts against your [rate limit](/guides/rate-limits) (100 req/min global).
+**Trade-off:** Adds network latency and counts against the applicable [rate limits](/guides/rate-limits), including the 500 requests/minute global IP guard.
 
 ## Hybrid Approach
 
-The hybrid strategy uses offline verification as the fast path and online verification for sensitive operations. This gives you the best of both worlds.
+The hybrid strategy uses local signature-and-claim verification first and calls
+the online endpoint for sensitive operations. With the standalone helpers, the
+first step can still include a JWKS network request.
 
 ```typescript
 import { verifyGrantToken, Grantex } from '@grantex/sdk';
@@ -104,9 +117,9 @@ import { verifyGrantToken, Grantex } from '@grantex/sdk';
 const SENSITIVE_SCOPES = ['payments:initiate', 'files:delete', 'admin:write'];
 
 async function verifyToken(grantToken: string): Promise<void> {
-  // Step 1: Always verify the signature offline (fast, no network)
+  // Step 1: Verify signature and claims locally (the helper fetches JWKS)
   const grant = await verifyGrantToken(grantToken, {
-    jwksUri: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json',
+    jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
   });
 
   // Step 2: If the token has sensitive scopes, also verify online
@@ -149,12 +162,16 @@ Do not cache for longer than 5 minutes. Revoked tokens must be detected within a
 
 | Criteria | Offline | Online | Hybrid |
 |----------|---------|--------|--------|
-| **Latency** | ~0ms (after JWKS fetch) | ~50-100ms | Varies |
+| **Latency** | Local cryptography plus JWKS retrieval when needed | Network round-trip | Varies |
 | **Revocation check** | No | Yes | Conditional |
 | **Rate limit impact** | None | 1 req per verify | Reduced |
-| **Best for** | Read-only endpoints, high-velocity | Payment, deletion, admin | Most production apps |
+| **Best for** | Signature-only decisions where revocation is not required | Payment, deletion, admin | Mixed-risk applications |
 
-**Recommendation:** Start with the hybrid approach. Use offline verification for reads and online for writes or sensitive scopes.
+**Recommendation:** Choose based on revocation requirements. Use local
+signature-and-claim verification for lower-risk decisions and the online endpoint
+for writes or sensitive scopes. For high-volume hot paths, do not assume the
+standalone helper provides a persistent JWKS cache; design key caching and
+rotation refresh explicitly.
 
 ## Token Refresh
 

@@ -9,6 +9,11 @@
       { "source": "/docs/:path*", "destination": "https://docs.grantex.dev/:path*", "type": 301 }
     ],
     "rewrites": [
+      { "source": "/.well-known/grantex-commerce", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
+      { "source": "/contexts/mpp/v1", "destination": "/contexts/mpp-v1.json" },
+      { "source": "/ns/credentials/v1", "destination": "/contexts/credentials-v1.json" },
+      { "source": "/v1/identity", "destination": "/contexts/identity-v1.json" },
+      { "source": "/v1/x402", "destination": "/contexts/x402-v1.json" },
       { "source": "/consent", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
       { "source": "/v1/consent/**", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
       { "source": "/v1/webauthn/**", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
@@ -19,8 +24,6 @@
       { "source": "/v1/signup/verify/**", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
       { "source": "/dashboard/**", "destination": "/dashboard/index.html" },
       { "source": "/playground", "destination": "/playground.html" },
-      { "source": "/for/:framework", "destination": "/for/index.html" },
-      { "source": "/vs/:topic", "destination": "/vs/index.html" },
       { "source": "/report/state-of-agent-security-2026", "destination": "/report/state-of-agent-security-2026.html" }
     ],
     "headers": [
@@ -58,11 +61,85 @@
         ]
       },
       {
-        "source": "public/contexts/**",
+        "source": "contexts/**",
         "headers": [
           { "key": "Cache-Control", "value": "public,max-age=86400" },
           { "key": "Content-Type", "value": "application/ld+json" },
           { "key": "Access-Control-Allow-Origin", "value": "*" }
+        ]
+      },
+      {
+        "source": "/ns/credentials/v1",
+        "headers": [
+          { "key": "Cache-Control", "value": "public,max-age=86400" },
+          { "key": "Content-Type", "value": "application/ld+json" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" }
+        ]
+      },
+      {
+        "source": "/v1/identity",
+        "headers": [
+          { "key": "Cache-Control", "value": "public,max-age=86400" },
+          { "key": "Content-Type", "value": "application/ld+json" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" }
+        ]
+      },
+      {
+        "source": "/v1/x402",
+        "headers": [
+          { "key": "Cache-Control", "value": "public,max-age=86400" },
+          { "key": "Content-Type", "value": "application/ld+json" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" }
+        ]
+      },
+      {
+        "source": "/contexts/mpp/v1",
+        "headers": [
+          { "key": "Cache-Control", "value": "public,max-age=86400" },
+          { "key": "Content-Type", "value": "application/ld+json" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" }
+        ]
+      },
+      {
+        "source": "/dashboard",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex,nofollow" }
+        ]
+      },
+      {
+        "source": "/dashboard/**",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex,nofollow" }
+        ]
+      },
+      {
+        "source": "/playground",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex,nofollow" }
+        ]
+      },
+      {
+        "source": "/commerce-playground",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex,nofollow" }
+        ]
+      },
+      {
+        "source": "/ph-gallery",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex,nofollow" }
+        ]
+      },
+      {
+        "source": "/mpp-demo/**",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex,nofollow" }
+        ]
+      },
+      {
+        "source": "/x402-playground/**",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex,nofollow" }
         ]
       },
       {
@@ -76,8 +153,7 @@
         "headers": [
           { "key": "X-Frame-Options",           "value": "DENY" },
           { "key": "X-Content-Type-Options",    "value": "nosniff" },
-          { "key": "Referrer-Policy",           "value": "strict-origin-when-cross-origin" },
-          { "key": "X-Robots-Tag",              "value": "index,follow" }
+          { "key": "Referrer-Policy",           "value": "strict-origin-when-cross-origin" }
         ]
       }
     ]

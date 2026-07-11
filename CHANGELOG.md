@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+### Added
+- Added `audience` support to TypeScript, Python, and Go authorization requests.
+- Added missing TypeScript Vault documentation, package READMEs, JSON-LD contexts, and documentation health checks.
+
+### Changed
+- Prepared unreleased core SDK patch versions: TypeScript 0.3.13, Python 0.3.14, and Go v0.1.10. Consumer examples remain on the latest published artifacts until release.
+
+### Fixed
+- Corrected SDK quick starts, audit payloads, verification examples, endpoint paths, usage semantics, package metadata, and OpenAPI coverage.
+- Fixed production issuer alias handling across offline verifiers and tightened Go grant-claim verification.
+- Hardened JWKS key selection and caching, LDAP bind framing and DN escaping, and production deployment-secret validation.
+- Secured Trust Registry DNS ownership verification, removed unsupported seeded claims, and fixed filtered cursor pagination.
+- Prevented duplicate active MCP certification applications and persisted their pending state in the portal.
+- Reconciled landing-page examples and product claims with the implemented APIs and supported verification workflows.
+
+### Documentation
+- Expanded the core OpenAPI description and aligned landing pages, SDK guides, compatibility data, deployment guidance, and release metadata.
+- Replaced unsupported certification, compliance, latency, cache, and automatic-audit claims with implementation-backed behavior.
+
 ## v0.3.12 / Integration SDK verification releases (2026-06-20)
 
 ### Added

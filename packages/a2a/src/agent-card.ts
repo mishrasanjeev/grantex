@@ -16,7 +16,7 @@ import type { A2AAgentCard, GrantexAgentCardOptions } from './types.js';
  *   name: 'My Agent',
  *   description: 'An agent that does things',
  *   url: 'https://my-agent.example.com/a2a',
- *   jwksUri: 'https://grantex.dev/.well-known/jwks.json',
+ *   jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
  *   issuer: 'https://grantex.dev',
  *   requiredScopes: ['read', 'write'],
  *   delegationAllowed: true,

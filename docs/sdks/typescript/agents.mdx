@@ -118,7 +118,7 @@ List all agents in your organization.
 ```typescript
 const result = await grantex.agents.list();
 
-console.log(result.total);  // 3
+console.log(result.agents.length);  // 3 returned
 for (const agent of result.agents) {
   console.log(`${agent.name} (${agent.status})`);
 }

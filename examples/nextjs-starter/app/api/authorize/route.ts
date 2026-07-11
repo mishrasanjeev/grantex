@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { Grantex } from '@grantex/sdk';
 import { cookies } from 'next/headers';
 
-const BASE_URL = process.env['GRANTEX_URL'] ?? 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
+const BASE_URL = process.env['GRANTEX_URL'] ?? 'https://api.grantex.dev';
 const API_KEY = process.env['GRANTEX_API_KEY'] ?? '';
 const APP_URL = process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
 

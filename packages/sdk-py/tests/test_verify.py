@@ -7,6 +7,7 @@ import json
 import pytest
 
 from grantex import verify_grant_token, GrantexTokenError
+from grantex._verify import _fetch_signing_key
 from grantex._types import VerifyGrantTokenOptions, VerifiedGrant
 from tests.conftest import MOCK_JWT_PAYLOAD
 
@@ -49,7 +50,9 @@ def test_valid_token_returns_verified_grant(mocker: pytest.FixtureRequest) -> No
         "jwt.decode", return_value=MOCK_JWT_PAYLOAD
     )
 
-    options = VerifyGrantTokenOptions(jwks_uri="https://grantex.dev/.well-known/jwks.json")
+    options = VerifyGrantTokenOptions(
+        jwks_uri="https://api.grantex.dev/.well-known/jwks.json"
+    )
     result = verify_grant_token(token, options)
 
     assert result.token_id == expected.token_id
@@ -205,5 +208,92 @@ def test_no_matching_kid_raises_token_error(mocker: pytest.FixtureRequest) -> No
     options = VerifyGrantTokenOptions(jwks_uri="https://grantex.dev/.well-known/jwks.json")
     with pytest.raises(GrantexTokenError, match="RSA key"):
         verify_grant_token(token, options)
+
+
+def _mock_jwks(mocker: pytest.FixtureRequest, keys: object) -> None:
+    response = mocker.Mock()  # type: ignore[attr-defined]
+    response.raise_for_status.return_value = None
+    response.json.return_value = {"keys": keys}
+    mocker.patch(  # type: ignore[attr-defined]
+        "grantex._verify.httpx.get", return_value=response
+    )
+
+
+def test_fetch_signing_key_rejects_unknown_kid_without_fallback(
+    mocker: pytest.FixtureRequest,
+) -> None:
+    _mock_jwks(mocker, [
+        {"kid": "known-key", "kty": "RSA", "n": "AQ", "e": "AQAB"},
+    ])
+    from_jwk = mocker.patch(  # type: ignore[attr-defined]
+        "grantex._verify.RSAAlgorithm.from_jwk", return_value="resolved-key"
+    )
+
+    with pytest.raises(GrantexTokenError, match="kid='unknown-key'"):
+        _fetch_signing_key("https://keys.example/jwks.json", "unknown-key")
+
+    from_jwk.assert_not_called()
+
+
+def test_fetch_signing_key_selects_exact_rsa_kid(
+    mocker: pytest.FixtureRequest,
+) -> None:
+    selected = {"kid": "selected", "kty": "RSA", "n": "AQ", "e": "AQAB"}
+    _mock_jwks(mocker, [
+        {"kid": "other", "kty": "RSA", "n": "Ag", "e": "AQAB"},
+        selected,
+    ])
+    from_jwk = mocker.patch(  # type: ignore[attr-defined]
+        "grantex._verify.RSAAlgorithm.from_jwk", return_value="resolved-key"
+    )
+
+    assert _fetch_signing_key(
+        "https://keys.example/jwks.json", "selected"
+    ) == "resolved-key"
+    from_jwk.assert_called_once_with(selected)
+
+
+def test_fetch_signing_key_rejects_duplicate_rsa_kid(
+    mocker: pytest.FixtureRequest,
+) -> None:
+    _mock_jwks(mocker, [
+        {"kid": "duplicate", "kty": "RSA", "n": "AQ", "e": "AQAB"},
+        {"kid": "duplicate", "kty": "RSA", "n": "Ag", "e": "AQAB"},
+    ])
+    from_jwk = mocker.patch(  # type: ignore[attr-defined]
+        "grantex._verify.RSAAlgorithm.from_jwk", return_value="resolved-key"
+    )
+
+    with pytest.raises(GrantexTokenError, match="multiple RSA keys"):
+        _fetch_signing_key("https://keys.example/jwks.json", "duplicate")
+
+    from_jwk.assert_not_called()
+
+
+def test_fetch_signing_key_rejects_missing_kid_with_multiple_rsa_keys(
+    mocker: pytest.FixtureRequest,
+) -> None:
+    _mock_jwks(mocker, [
+        {"kid": "one", "kty": "RSA"},
+        {"kid": "two", "kty": "RSA"},
+    ])
+
+    with pytest.raises(GrantexTokenError, match="missing kid"):
+        _fetch_signing_key("https://keys.example/jwks.json", None)
+
+
+def test_fetch_signing_key_allows_missing_kid_for_single_rsa_key(
+    mocker: pytest.FixtureRequest,
+) -> None:
+    only_key = {"kid": "only", "kty": "RSA", "n": "AQ", "e": "AQAB"}
+    _mock_jwks(mocker, [only_key])
+    from_jwk = mocker.patch(  # type: ignore[attr-defined]
+        "grantex._verify.RSAAlgorithm.from_jwk", return_value="resolved-key"
+    )
+
+    assert _fetch_signing_key(
+        "https://keys.example/jwks.json", None
+    ) == "resolved-key"
+    from_jwk.assert_called_once_with(only_key)
 
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { registerOrg } from '../../api/registry';
-import type { RegisterOrgParams } from '../../api/registry';
+import type { RegisterOrgParams, RegisterOrgResponse } from '../../api/registry';
 import { useToast } from '../../store/toast';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -14,35 +14,14 @@ const VERIFICATION_METHODS = [
     label: 'DNS TXT Record',
     recommended: true,
     description: 'Add a TXT record to your domain DNS. Fastest and most reliable.',
-    instructions: 'Add a TXT record at _grantex.<your-domain> with the value provided after registration.',
-  },
-  {
-    id: 'well-known',
-    label: '.well-known Endpoint',
-    recommended: false,
-    description: 'Host a JSON file at /.well-known/grantex-verification on your domain.',
-    instructions: 'Serve a JSON file at https://<your-domain>/.well-known/grantex-verification containing your verification token.',
-  },
-  {
-    id: 'soc2',
-    label: 'SOC 2 Attestation',
-    recommended: false,
-    description: 'Provide a SOC 2 Type II report for automated compliance verification.',
-    instructions: 'Upload your SOC 2 Type II report. Our compliance team will review it within 2 business days.',
-  },
-  {
-    id: 'manual',
-    label: 'Manual Review',
-    recommended: false,
-    description: 'Request a manual review by the Grantex team.',
-    instructions: 'Submit your organization details for manual verification. This typically takes 3-5 business days.',
+    instructions: 'Add a TXT record at _grantex-verify.<your-domain> with the value provided after registration.',
   },
 ];
 
 export function RegisterOrgForm() {
   const [step, setStep] = useState<Step>(1);
   const [submitting, setSubmitting] = useState(false);
-  const navigate = useNavigate();
+  const [registration, setRegistration] = useState<RegisterOrgResponse | null>(null);
   const { show } = useToast();
 
   // Form state
@@ -84,9 +63,9 @@ export function RegisterOrgForm() {
         ...(description.trim() ? { description: description.trim() } : {}),
         ...(website.trim() ? { website: website.trim() } : {}),
       };
-      await registerOrg(params);
-      show('Organization registered successfully', 'success');
-      navigate('/dashboard/registry');
+      const result = await registerOrg(params);
+      setRegistration(result);
+      show('Organization registered. Add the DNS record to verify it.', 'success');
     } catch {
       show('Failed to register organization', 'error');
     } finally {
@@ -95,6 +74,32 @@ export function RegisterOrgForm() {
   }
 
   const selectedMethod = VERIFICATION_METHODS.find((m) => m.id === verificationMethod);
+
+  if (registration) {
+    return (
+      <div className={'max-w-2xl mx-auto'}>
+        <h1 className={'text-xl font-semibold text-gx-text mb-2'}>Organization Registered</h1>
+        <p className={'text-sm text-gx-muted mb-6'}>
+          Save this DNS verification value now. It is shown only in this registration response.
+        </p>
+        <Card>
+          <div className={'space-y-5'}>
+            <DnsField label={'DNS record type'} value={'TXT'} />
+            <DnsField label={'DNS record name'} value={registration.dnsRecordName} />
+            <DnsField label={'DNS record value'} value={registration.verificationToken} />
+            {registration.instructions && (
+              <p className={'text-xs text-gx-muted'}>{registration.instructions}</p>
+            )}
+          </div>
+          <div className={'flex justify-end mt-6'}>
+            <Link to={'/dashboard/registry/' + encodeURIComponent(registration.did)}>
+              <Button size={'sm'}>Continue to verification</Button>
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -236,7 +241,7 @@ export function RegisterOrgForm() {
                 className="w-full px-3 py-2 text-sm bg-gx-bg border border-gx-border rounded-md text-gx-text placeholder:text-gx-muted/50 focus:outline-none focus:border-gx-accent focus:ring-1 focus:ring-gx-accent/30"
               />
               <p className="text-xs text-gx-muted mt-1">
-                Required for GDPR and DPDP compliance badges.
+                Optional public contact for data-protection inquiries.
               </p>
             </div>
           </div>
@@ -256,7 +261,7 @@ export function RegisterOrgForm() {
         <Card>
           <h2 className="text-sm font-semibold text-gx-text mb-4">Verification Method</h2>
           <p className="text-sm text-gx-muted mb-4">
-            Choose how you'd like to verify ownership of your DID.
+            DNS TXT verification is the currently supported ownership method.
           </p>
           <div className="space-y-3">
             {VERIFICATION_METHODS.map((method) => (
@@ -347,6 +352,17 @@ function ReviewField({ label, value }: { label: string; value: string }) {
     <div className="flex items-start gap-4 py-2 border-b border-gx-border/50 last:border-0">
       <span className="text-xs text-gx-muted w-36 flex-shrink-0">{label}</span>
       <span className="text-sm text-gx-text break-all">{value}</span>
+    </div>
+  );
+}
+
+function DnsField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className={'text-xs font-medium text-gx-muted mb-1.5'}>{label}</p>
+      <code className={'block break-all rounded-md border border-gx-border bg-gx-bg px-3 py-2 text-sm text-gx-text'}>
+        {value}
+      </code>
     </div>
   );
 }

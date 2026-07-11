@@ -141,6 +141,8 @@ helm install grantex deploy/helm/grantex/ \
 
 ## 5. Environment Variable Reference
 
+This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth-service/src/config.ts` and `.env.example` from the exact release you deploy for all feature-specific settings and validation rules.
+
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
@@ -161,7 +163,7 @@ helm install grantex deploy/helm/grantex/ \
 
 Migrations run **automatically on every startup**. The auth service reads all `*.sql` files from the `migrations/` directory and executes each one using idempotent DDL (`CREATE TABLE IF NOT EXISTS`, etc.).
 
-There are currently **9 migration files** covering: core tables, webhooks, consent, delegation, compliance, policies, anomalies, SCIM/SSO, and developer email.
+The repository currently contains ordered migrations through `063`, covering core authorization, webhooks, policy, enterprise identity, credentials, budgets, offline operation, trust registry, DPDP, commerce, and MCP certification-state integrity. Inspect the migration directory in the exact release you deploy rather than relying on a copied file count.
 
 To upgrade, just restart the service — new migration files are applied automatically.
 
@@ -171,7 +173,7 @@ To upgrade, just restart the service — new migration files are applied automat
 2. Update `RSA_PRIVATE_KEY` in your env file or Kubernetes secret
 3. Restart the auth service
 
-Tokens signed with the old key remain valid until expiry because the JWKS endpoint always exposes the current public key — clients re-fetch it automatically when verification fails.
+The bundled JWKS endpoint publishes the active signing key. Replacing that key without also publishing the previous public key makes previously issued tokens fail signature verification. Schedule signing-key rotation after old tokens expire (or implement an overlapping multi-key JWKS) and test verifiers before removing the old key.
 
 ## 8. Health Checks & Monitoring
 

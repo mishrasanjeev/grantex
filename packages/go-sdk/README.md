@@ -8,6 +8,8 @@ Official Go SDK for the [Grantex](https://grantex.dev) delegated authorization p
 go get github.com/mishrasanjeev/grantex-go
 ```
 
+Requires Go 1.26.1 or newer, matching the module's `go.mod` directive.
+
 ## Quick Start
 
 ```go
@@ -40,6 +42,7 @@ func main() {
         AgentID:     agent.ID,
         PrincipalID: "user-123",
         Scopes:      []string{"read:email", "send:email"},
+        Audience:    "https://mail-api.example.com",
     })
     if err != nil {
         log.Fatal(err)
@@ -82,8 +85,17 @@ client := grantex.NewClient("api-key",
 | `client.Compliance` | GetSummary, ExportGrants, ExportAudit, EvidencePack |
 | `client.Anomalies` | Detect, List, Acknowledge |
 | `client.SCIM` | CreateToken, ListTokens, RevokeToken, ListUsers, GetUser, CreateUser, ReplaceUser, UpdateUser, DeleteUser |
-| `client.SSO` | CreateConfig, GetConfig, DeleteConfig, GetLoginURL, HandleCallback |
+| `client.SSO` | Enterprise connections, enforcement, sessions, login, OIDC/SAML/LDAP callbacks, and legacy config methods |
 | `client.PrincipalSessions` | Create |
+| `client.Budgets` | Allocate, Debit, Balance, Allocations, Transactions |
+| `client.Events` | Stream |
+| `client.Usage` | Current, History |
+| `client.Domains` | Create, List, Verify, Delete |
+| `client.WebAuthn` | RegisterOptions, RegisterVerify, ListCredentials, DeleteCredential |
+| `client.Credentials` | Get, List, Verify, Present |
+| `client.Passports` | Issue, Get, List, Revoke |
+| `client.Vault` | Store, List, Get, Delete, Exchange |
+| `client.DPDP` | Consent records/notices, grievances, erasure, principal records, exports |
 | `client.Commerce` | GetProfile, SearchCatalog, CreateCart, CreatePaymentIntent, CreateCheckoutLink, GetOpsHealth |
 
 ## Commerce V1 / OACP
@@ -99,10 +111,11 @@ products, err := client.Commerce.SearchCatalog(ctx, grantex.CommerceRecord{
 ## Standalone Functions
 
 ```go
-// Offline JWT verification
+// Local JWT verification using remotely retrieved JWKS
 grant, err := grantex.VerifyGrantToken(ctx, token, grantex.VerifyOptions{
     JwksURI:        "https://api.grantex.dev/.well-known/jwks.json",
     RequiredScopes: []string{"read:email"},
+    Audience:       "https://api.example.com",
 })
 
 // PKCE challenge generation
@@ -114,6 +127,13 @@ valid := grantex.VerifyWebhookSignature(payload, signature, secret)
 // Developer signup (no API key needed)
 resp, err := grantex.Signup(ctx, grantex.SignupParams{Name: "My App"})
 ```
+
+`VerifyGrantToken` always validates the RS256 signature, expiry, issuer, and the
+required Grantex claims (`jti`, `sub`, `agt`, `dev`, `scp`, `iat`, and `exp`).
+The hosted JWKS URL is automatically mapped to the canonical
+`https://grantex.dev` issuer. For custom deployments, set `Issuer` explicitly or
+set `IssuerDID` to a `did:web` identifier; otherwise the issuer is derived from
+`JwksURI`. `Audience` and `RequiredScopes` add application-specific checks.
 
 ## Error Handling
 
@@ -135,7 +155,7 @@ if err != nil {
 
 ## Documentation
 
-Full documentation at [grantex.dev/docs](https://grantex.dev/docs).
+Full documentation at [docs.grantex.dev](https://docs.grantex.dev).
 
 ## License
 

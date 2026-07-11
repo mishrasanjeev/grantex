@@ -56,7 +56,7 @@ The auth service validates required environment variables at startup and **exits
 
 ### Full environment variable reference
 
-See the [Self-Hosting guide](/guides/self-hosting#5-environment-variable-reference) for the complete list of environment variables including optional Stripe, FIDO, email, and policy engine settings.
+See the [Self-Hosting guide](/guides/self-hosting#5-environment-variable-reference) for common variables. `apps/auth-service/src/config.ts` in the deployed release is the authoritative configuration schema, including feature-specific validation.
 
 ### Startup sequence
 
@@ -146,7 +146,7 @@ WHERE datname = 'grantex' AND state = 'active';
 
 The auth service uses [ioredis](https://github.com/redis/ioredis) with lazy connect. Redis stores:
 
-- **Rate limit counters** -- sliding-window request counts per IP
+- **Rate limit counters** -- one-minute request counts for global/route IP buckets and the per-developer authorization bucket
 - **Ephemeral token metadata** -- in-flight authorization request state
 
 ### Reconnection behavior

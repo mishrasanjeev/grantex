@@ -102,7 +102,8 @@ Section 6(6) requires that withdrawal of consent is "as easy as" giving consent.
 Grantex provides this out of the box:
 
 - Every consent record includes a `withdrawUrl`
-- The data principal portal shows a "Withdraw consent" button next to each active consent
+- Your application can expose a withdrawal control backed by the authenticated
+  DPDP API or SDK
 - Withdrawal triggers instant revocation of the grant token
 - All delegated sub-agent tokens are cascade-revoked
 - The withdrawal is logged with an immutable timestamp
@@ -136,7 +137,11 @@ const auditPack = await dpdp.exportAudit({
 
 ## The EU AI Act Is Next
 
-While you are building DPDP compliance, consider that the EU AI Act becomes binding in August 2026. If your agents serve users in the EU, you will need the same infrastructure plus:
+While building DPDP controls, assess whether the EU AI Act applies to your
+deployment. It applies in phases: current Commission guidance places
+transparency rules in August 2026, listed high-risk areas in December 2027, and
+product-integrated high-risk systems in August 2028. Depending on your role and
+risk classification, relevant supporting controls may include:
 
 - **Risk management documentation** (Art. 9) — what controls limit what your agents can do?
 - **Transparency evidence** (Art. 13) — can you prove users understood what they were authorizing?
@@ -154,7 +159,10 @@ Grantex's export system supports `'dpdp'`, `'gdpr'`, and `'eu-ai-act'` framework
 
 3. **Implement structured consent.** Install `@grantex/dpdp` (or `grantex-dpdp` for Python) and create consent records for every agent authorization. This is the foundational step.
 
-4. **Enable the data principal portal.** Your users need to see their consents, withdraw them, and file grievances. Grantex provides this as an embeddable UI via Principal Sessions.
+4. **Build the data-principal experience.** Use the authenticated DPDP APIs or
+SDKs to list consent records, withdraw consent, request exports/erasure, and file
+grievances from your own application. Grantex does not currently provide a
+separate or embeddable DPDP end-user portal.
 
 5. **Set up audit exports.** Run a test export now. Do not wait until the regulator asks. Verify that your export includes all mandatory fields.
 

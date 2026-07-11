@@ -1,0 +1,28 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@protected": true,
+    "id": "@id",
+    "type": "@type",
+    "grantex": "https://grantex.dev/vocab#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "GrantexDelegationToken": "grantex:GrantexDelegationToken",
+    "scope": {
+      "@id": "grantex:scope",
+      "@container": "@set"
+    },
+    "spendLimit": "grantex:spendLimit",
+    "amount": {
+      "@id": "grantex:amount",
+      "@type": "xsd:decimal"
+    },
+    "currency": "grantex:currency",
+    "period": "grantex:period",
+    "paymentChain": "grantex:paymentChain",
+    "delegationChain": {
+      "@id": "grantex:delegationChain",
+      "@container": "@list",
+      "@type": "@id"
+    }
+  }
+}

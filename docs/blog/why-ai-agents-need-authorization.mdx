@@ -36,7 +36,11 @@ If the parent's grant is revoked, every child grant in the chain is automaticall
 
 OAuth token revocation is defined in RFC 7009, but it is advisory. Resource servers are free to keep accepting a token until it expires. For a 1-hour access token, that is a 1-hour window of exposure.
 
-With agents performing high-stakes actions autonomously, you cannot afford that window. Grantex supports both offline verification (fast JWT validation) and online verification (`POST /v1/tokens/verify`) that checks revocation state in real time. When you revoke a grant, the very next verification call returns `valid: false`.
+With agents performing high-stakes actions autonomously, you cannot afford that
+window. Grantex supports local signature-and-claim validation after JWKS key
+retrieval, and online verification (`POST /v1/tokens/verify`) that checks
+revocation state in real time. Current standalone SDK verifiers fetch JWKS per
+call. After revocation, the next online verification returns `valid: false`.
 
 ### 4. Action-Level Audit Trails
 
@@ -46,7 +50,11 @@ Grantex includes a first-class audit subsystem. Every action an agent performs c
 
 ## The Compliance Dimension
 
-This is not just a technical nicety. The EU AI Act (effective August 2025) requires that high-risk AI systems maintain logs of their operation, support human oversight, and provide transparency about their decision-making. Grantex's audit trail, scoped grants, and real-time revocation map directly onto these requirements.
+This is not just a technical nicety. The EU AI Act applies in phases and can
+require logging, transparency, and human oversight depending on the system's
+classification and the organization's role. Grantex's audit trail, scoped
+grants, and revocation controls can support those obligations, but do not by
+themselves establish compliance.
 
 Similarly, SOC 2 auditors want to see evidence that access is scoped, time-limited, and revocable. Grant tokens with explicit `exp`, `scp`, and revocation support provide that evidence out of the box.
 

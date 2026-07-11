@@ -1,0 +1,30 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/credentials/v2",
+    "https://grantex.dev/contexts/mpp/v1"
+  ],
+  "type": [
+    "VerifiableCredential",
+    "AgentPassportCredential"
+  ],
+  "issuer": "did:web:grantex.dev",
+  "credentialSubject": {
+    "id": "did:grantex:ag_fixture",
+    "type": "AIAgent",
+    "humanPrincipal": "did:grantex:user_fixture",
+    "organizationDID": "did:web:merchant.example",
+    "grantId": "grnt_fixture",
+    "allowedMPPCategories": [
+      "inference",
+      "compute"
+    ],
+    "maxTransactionAmount": {
+      "amount": 50,
+      "currency": "USDC"
+    },
+    "paymentRails": [
+      "tempo"
+    ],
+    "delegationDepth": 0
+  }
+}

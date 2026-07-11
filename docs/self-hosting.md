@@ -202,6 +202,8 @@ helm rollback grantex 1   # roll back to revision 1
 
 ## 5. Environment Variable Reference
 
+This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth-service/src/config.ts` and `.env.example` from the exact release you deploy for all feature-specific settings and validation rules.
+
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
@@ -227,19 +229,7 @@ runner (`src/db/migrate.ts`) that reads all `*.sql` files from the `migrations/`
 alphabetical order and executes each one. All statements use idempotent DDL (`CREATE TABLE IF NOT EXISTS`,
 `ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`), so re-running is safe.
 
-There are currently **9 migration files** covering:
-
-| File | Tables / Changes |
-|------|-----------------|
-| `001_core.sql` | `developers`, `agents`, `grants`, `tokens`, `audit_log` |
-| `002_webhooks.sql` | `webhooks`, `webhook_deliveries` |
-| `003_consent.sql` | `consent_requests` |
-| `004_delegation.sql` | Delegation columns on `grants` and `tokens` |
-| `005_compliance.sql` | Compliance views and indexes |
-| `006_policies.sql` | `policies` table |
-| `007_anomalies.sql` | `anomalies` table |
-| `008_scim_sso.sql` | `scim_tokens`, `scim_users`, `sso_connections` |
-| `009_developer_email.sql` | `email` column on `developers` |
+The repository currently contains ordered migrations through `063`, covering core authorization, webhooks, policy, enterprise identity, credentials, budgets, offline operation, trust registry, DPDP, commerce, and MCP certification-state integrity. Inspect the migration directory in the exact release you deploy rather than relying on a copied file count.
 
 **Upgrade procedure** — just restart the service:
 
@@ -270,10 +260,10 @@ docker compose -f docker-compose.prod.yml up -d auth-service
 kubectl rollout restart deployment/grantex -n grantex
 ```
 
-Tokens signed with the old key remain valid until expiry because the JWKS endpoint
-(`GET /.well-known/jwks.json`) always exposes the current public key — clients re-fetch it
-automatically when verification fails. If you need to immediately invalidate old tokens,
-revoke them individually via `POST /v1/tokens/revoke`.
+The bundled JWKS endpoint publishes the active signing key. Replacing that key without also
+publishing the previous public key makes previously issued tokens fail signature verification.
+Schedule signing-key rotation after old tokens expire (or implement an overlapping multi-key
+JWKS) and test verifiers before removing the old key.
 
 ---
 
@@ -296,9 +286,9 @@ No configuration needed — just forward stdout from your container runtime.
 
 ### Prometheus metrics
 
-The auth service does not yet expose a `/metrics` endpoint. In the interim, use your ingress
-controller or a sidecar proxy to scrape HTTP request metrics. Native Prometheus support is
-tracked for a future release.
+When `METRICS_ENABLED=true` (the default), the auth service exposes Prometheus text at
+`GET /metrics`. The endpoint is unauthenticated and limited to 10 requests per minute per IP;
+restrict it at your network boundary if metrics must remain private.
 
 ---
 

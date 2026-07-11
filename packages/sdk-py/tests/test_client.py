@@ -49,6 +49,7 @@ def test_authorize_maps_user_id_to_principal_id() -> None:
     )
     client = Grantex(api_key="test-key")
     params = AuthorizeParams(
+        audience="https://calendar.example.com",
         agent_id="ag_01HXYZ123abc",
         user_id="user_abc123",
         scopes=["calendar:read"],
@@ -62,6 +63,7 @@ def test_authorize_maps_user_id_to_principal_id() -> None:
     sent_body = route.calls[0].request
     import json
     body = json.loads(sent_body.content)
+    assert body["audience"] == "https://calendar.example.com"
     assert body["principalId"] == "user_abc123"
     assert "userId" not in body
 
@@ -93,7 +95,7 @@ def test_user_agent_header_sent() -> None:
         AuthorizeParams(agent_id="ag_01", user_id="u_01", scopes=[])
     )
     request = respx.calls[0].request
-    assert "grantex-python" in request.headers["user-agent"]
+    assert request.headers["user-agent"] == "grantex-python/0.3.14"
 
 
 @respx.mock

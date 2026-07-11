@@ -1,12 +1,12 @@
 ---
-title: "NIST NCCoE Public Comment"
+title: "Draft NIST NCCoE Public Comment"
 sidebarTitle: "NIST Comment"
 description: "Grantex response to NIST NCCoE AI challenge areas — mapping DAAP to the AI Risk Management Framework."
 ---
 
 ## Overview
 
-We submitted a public comment to the NIST National Cybersecurity Center of Excellence (NCCoE) mapping DAAP protocol capabilities to the NIST AI Risk Management Framework (AI RMF 1.0). The comment addresses the gap in standardized authorization frameworks for autonomous AI agents.
+The repository publishes a draft comment for the NIST National Cybersecurity Center of Excellence (NCCoE), mapping DAAP protocol capabilities to the NIST AI Risk Management Framework (AI RMF 1.0). The NCCoE comment period closed on April 2, 2026 and NIST lists the project as reviewing comments. Grantex does not currently publish a submission receipt or a NIST response, so this page must not be read as evidence of NIST acceptance, endorsement, or confirmed receipt.
 
 ## Key Mappings
 
@@ -23,10 +23,10 @@ The comment maps DAAP capabilities to all four AI RMF functions:
 
 The comment includes evidence from the Grantex reference implementation:
 
-- **Authorization server**: ~362 automated tests, deployed on Cloud Run
-- **SDK coverage**: TypeScript, Python, Go — all at v0.2.0 with 317 combined tests
+- **Authorization server**: Fastify/PostgreSQL/Redis reference service deployed on Cloud Run, with CI-backed unit, integration, security, conformance, and end-to-end tests
+- **SDK coverage**: TypeScript, Python, and Go; use each registry/module tag as the release source of truth
 - **Framework integrations**: 11 production-ready integrations
-- **Conformance suite**: `@grantex/conformance` v0.1.4
+- **Conformance suite**: `@grantex/conformance`, with results tied to the tested package version and commit
 
 ## Recommendations
 

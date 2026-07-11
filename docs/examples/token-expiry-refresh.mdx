@@ -9,9 +9,9 @@ description: "Time-bound grants with expiry detection and refresh token rotation
 This example demonstrates the complete token expiry and refresh lifecycle:
 
 1. **Authorize with a short-lived token** (10 seconds) using the `expiresIn` parameter
-2. **Use the token** successfully before it expires (offline + online verification)
+2. **Use the token** successfully before it expires (local JWKS-based + online verification)
 3. **Wait for expiry** — observe the token becoming invalid
-4. **Detect expiry** — offline verification throws, online returns `valid: false`
+4. **Detect expiry** — local JWKS-based verification throws, online returns `valid: false`
 5. **Refresh the token** — get a new JWT with the same `grantId` and fresh expiry
 6. **Use the refreshed token** — verify it works with full scope access
 7. **Refresh token rotation** — demonstrate that old refresh tokens are single-use

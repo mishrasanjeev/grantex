@@ -176,7 +176,9 @@ The audit log is your forensic record. Use it proactively:
 ```typescript
 await grantex.audit.log({
   agentId: agent.id,
+  agentDid: agent.did,
   grantId: grant.id,
+  principalId: grant.principalId,
   action: 'payments:initiate',
   metadata: { amount: 250, currency: 'USD', recipient: 'vendor_xyz' },
   status: 'success',
@@ -185,7 +187,7 @@ await grantex.audit.log({
 
 ## Key Rotation
 
-- Rotate your Grantex API key periodically using `POST /v1/me/rotate-key`
+- Rotate your Grantex API key periodically using `POST /v1/keys/rotate`
 - After rotation, update all services that use the old key
 - The old key is immediately invalidated — plan for a brief deployment window
 

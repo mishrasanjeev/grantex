@@ -95,14 +95,14 @@ func TestVerifyGrantTokenValid(t *testing.T) {
 
 	now := time.Now()
 	tokenStr := signTestToken(t, key, jwt.MapClaims{
-		"iss": "https://api.grantex.dev",
-		"sub": "user-123",
-		"agt": "did:grantex:agent-1",
-		"dev": "dev-456",
-		"scp": []string{"read:email", "send:email"},
-		"iat": now.Unix(),
-		"exp": now.Add(1 * time.Hour).Unix(),
-		"jti": "token-789",
+		"iss":  jwksServer.URL,
+		"sub":  "user-123",
+		"agt":  "did:grantex:agent-1",
+		"dev":  "dev-456",
+		"scp":  []string{"read:email", "send:email"},
+		"iat":  now.Unix(),
+		"exp":  now.Add(1 * time.Hour).Unix(),
+		"jti":  "token-789",
 		"grnt": "grant-abc",
 	})
 
@@ -139,7 +139,7 @@ func TestVerifyGrantTokenGrantIDFallback(t *testing.T) {
 
 	now := time.Now()
 	tokenStr := signTestToken(t, key, jwt.MapClaims{
-		"iss": "https://api.grantex.dev",
+		"iss": jwksServer.URL,
 		"sub": "user-1",
 		"agt": "did:grantex:a",
 		"dev": "dev-1",
@@ -168,7 +168,7 @@ func TestVerifyGrantTokenDelegation(t *testing.T) {
 
 	now := time.Now()
 	tokenStr := signTestToken(t, key, jwt.MapClaims{
-		"iss":             "https://api.grantex.dev",
+		"iss":             jwksServer.URL,
 		"sub":             "user-1",
 		"agt":             "did:grantex:sub-agent",
 		"dev":             "dev-1",
@@ -206,7 +206,7 @@ func TestVerifyGrantTokenExpired(t *testing.T) {
 
 	past := time.Now().Add(-2 * time.Hour)
 	tokenStr := signTestToken(t, key, jwt.MapClaims{
-		"iss": "https://api.grantex.dev",
+		"iss": jwksServer.URL,
 		"sub": "user-1",
 		"agt": "did:grantex:a",
 		"dev": "dev-1",
@@ -238,7 +238,7 @@ func TestVerifyGrantTokenRequiredScopes(t *testing.T) {
 
 	now := time.Now()
 	tokenStr := signTestToken(t, key, jwt.MapClaims{
-		"iss": "https://api.grantex.dev",
+		"iss": jwksServer.URL,
 		"sub": "user-1",
 		"agt": "did:grantex:a",
 		"dev": "dev-1",
@@ -271,6 +271,159 @@ func TestVerifyGrantTokenRequiredScopes(t *testing.T) {
 	}
 	if tokenErr.Message != "missing required scope: write:email" {
 		t.Errorf("unexpected message: %s", tokenErr.Message)
+	}
+}
+
+func TestVerifyGrantTokenRejectsWrongIssuer(t *testing.T) {
+	key := generateTestKey(t)
+	jwksServer := startJWKSServer(t, key)
+	defer jwksServer.Close()
+
+	now := time.Now()
+	tokenStr := signTestToken(t, key, jwt.MapClaims{
+		"iss": "https://attacker.example",
+		"sub": "user-1",
+		"agt": "did:grantex:a",
+		"dev": "dev-1",
+		"scp": []string{"read"},
+		"iat": now.Unix(),
+		"exp": now.Add(1 * time.Hour).Unix(),
+		"jti": "wrong-issuer",
+	})
+
+	_, err := VerifyGrantToken(context.Background(), tokenStr, VerifyOptions{
+		JwksURI: jwksServer.URL,
+	})
+	if err == nil {
+		t.Fatal("expected error for wrong issuer")
+	}
+	if _, ok := err.(*TokenError); !ok {
+		t.Fatalf("expected TokenError, got %T", err)
+	}
+}
+
+func TestVerifyGrantTokenRequiresCoreClaims(t *testing.T) {
+	key := generateTestKey(t)
+	jwksServer := startJWKSServer(t, key)
+	defer jwksServer.Close()
+
+	now := time.Now()
+	baseClaims := jwt.MapClaims{
+		"iss": jwksServer.URL,
+		"sub": "user-1",
+		"agt": "did:grantex:a",
+		"dev": "dev-1",
+		"scp": []string{"read"},
+		"iat": now.Unix(),
+		"exp": now.Add(1 * time.Hour).Unix(),
+		"jti": "required-claims",
+	}
+
+	for _, missing := range []string{"iss", "jti", "sub", "agt", "dev", "scp", "iat", "exp"} {
+		t.Run(missing, func(t *testing.T) {
+			claims := make(jwt.MapClaims, len(baseClaims)-1)
+			for name, value := range baseClaims {
+				if name != missing {
+					claims[name] = value
+				}
+			}
+
+			tokenStr := signTestToken(t, key, claims)
+			_, err := VerifyGrantToken(context.Background(), tokenStr, VerifyOptions{
+				JwksURI: jwksServer.URL,
+			})
+			if err == nil {
+				t.Fatalf("expected error when %s is missing", missing)
+			}
+			if _, ok := err.(*TokenError); !ok {
+				t.Fatalf("expected TokenError, got %T", err)
+			}
+		})
+	}
+}
+
+func TestVerifyGrantTokenRejectsInvalidScopeClaim(t *testing.T) {
+	key := generateTestKey(t)
+	jwksServer := startJWKSServer(t, key)
+	defer jwksServer.Close()
+
+	now := time.Now()
+	tokenStr := signTestToken(t, key, jwt.MapClaims{
+		"iss": jwksServer.URL,
+		"sub": "user-1",
+		"agt": "did:grantex:a",
+		"dev": "dev-1",
+		"scp": []interface{}{"read", 123},
+		"iat": now.Unix(),
+		"exp": now.Add(1 * time.Hour).Unix(),
+		"jti": "invalid-scope",
+	})
+
+	_, err := VerifyGrantToken(context.Background(), tokenStr, VerifyOptions{
+		JwksURI: jwksServer.URL,
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid scope claim")
+	}
+	if _, ok := err.(*TokenError); !ok {
+		t.Fatalf("expected TokenError, got %T", err)
+	}
+}
+
+func TestDeriveIssuerFromJwksURI(t *testing.T) {
+	tests := []struct {
+		name    string
+		jwksURI string
+		want    string
+	}{
+		{
+			name:    "hosted production alias",
+			jwksURI: "https://api.grantex.dev/.well-known/jwks.json/",
+			want:    "https://grantex.dev",
+		},
+		{
+			name:    "custom well-known path",
+			jwksURI: "https://auth.example.com/tenant/.well-known/jwks.json",
+			want:    "https://auth.example.com/tenant",
+		},
+		{
+			name:    "custom key path",
+			jwksURI: "https://auth.example.com/tenant/keys/",
+			want:    "https://auth.example.com/tenant/keys",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := deriveIssuerFromJwksURI(tt.jwksURI)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %s, got %s", tt.want, got)
+			}
+		})
+	}
+
+	if _, err := deriveIssuerFromJwksURI("not-a-url"); err == nil {
+		t.Fatal("expected invalid URL error")
+	}
+}
+
+func TestResolveVerificationEndpointsFromIssuerDID(t *testing.T) {
+	jwksURI, issuer, err := resolveVerificationEndpoints(VerifyOptions{
+		JwksURI:   "https://ignored.example/.well-known/jwks.json",
+		IssuerDID: "did:web:auth.example.com:tenant",
+		Issuer:    "https://canonical.example",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if jwksURI != "https://auth.example.com/tenant/.well-known/jwks.json" {
+		t.Fatalf("unexpected JWKS URI: %s", jwksURI)
+	}
+	if issuer != "https://canonical.example" {
+		t.Fatalf("unexpected issuer: %s", issuer)
 	}
 }
 

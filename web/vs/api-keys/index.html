@@ -6,10 +6,10 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <title>Grantex vs API Keys — Why API Keys Are Dangerous for AI Agents</title>
   <meta name="description" content="API keys give AI agents unlimited access with no scoping, audit trail, or revocation. Learn how Grantex replaces all-or-nothing API keys with scoped, revocable JWTs.">
-  <link rel="canonical" href="https://grantex.dev/vs/api-keys/">
+  <link rel="canonical" href="https://grantex.dev/vs/api-keys">
   <meta property="og:title" content="Grantex vs API Keys — Why API Keys Are Dangerous for AI Agents">
   <meta property="og:description" content="API keys give AI agents unlimited access with no scoping, audit trail, or revocation. Learn how Grantex replaces all-or-nothing API keys with scoped, revocable JWTs.">
-  <meta property="og:url" content="https://grantex.dev/vs/api-keys/">
+  <meta property="og:url" content="https://grantex.dev/vs/api-keys">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Grantex">
@@ -76,7 +76,7 @@
       .comparison-table th,.comparison-table td{padding:.5rem}
     }
   </style>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Grantex vs API Keys — Why API Keys Are Dangerous for AI Agents","description":"API keys give AI agents unlimited access with no scoping, audit trail, or revocation. Learn how Grantex replaces all-or-nothing API keys with scoped, revocable JWTs.","url":"https://grantex.dev/vs/api-keys/","author":{"@type":"Organization","name":"Grantex","url":"https://grantex.dev"},"publisher":{"@type":"Organization","name":"Grantex","url":"https://grantex.dev"}}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"Grantex vs API Keys — Why API Keys Are Dangerous for AI Agents","description":"API keys give AI agents unlimited access with no scoping, audit trail, or revocation. Learn how Grantex replaces all-or-nothing API keys with scoped, revocable JWTs.","url":"https://grantex.dev/vs/api-keys","author":{"@type":"Organization","name":"Grantex","url":"https://grantex.dev"},"publisher":{"@type":"Organization","name":"Grantex","url":"https://grantex.dev"}}</script>
 </head>
 <body>
 <nav class="nav">
@@ -88,7 +88,7 @@
   </ul>
 </nav>
 
-<article class="article" id="content"></article>
+<article class="article" id="content"><h1>Grantex vs API Keys</h1><p class="subtitle">Compare broad shared API keys with per-agent identity, scoped grants, and revocable access.</p><p>This page contains a detailed comparison, implementation notes, and current Grantex examples.</p><p><a href="https://docs.grantex.dev">Read the documentation</a> or <a href="https://github.com/mishrasanjeev/grantex">inspect the source</a>.</p></article>
 
 <footer class="footer">
   <span style="color:var(--muted);font-size:.85rem">Grantex — Open authorization for AI agents</span>
@@ -135,11 +135,11 @@ const pages = {
 
       <h3>3. No Audit Trail</h3>
       <p>OAuth tokens are opaque to the authorization server after issuance. There's no standard for logging what actions were performed with a token.</p>
-      <p><strong>Grantex fix:</strong> Append-only, hash-chained audit log. Every action is recorded with the agent DID, scopes used, timestamp, and a SHA-256 hash linking to the previous entry. Tamper-evident by design.</p>
+      <p><strong>Grantex fix:</strong> Applications can send actions to an append-only, hash-chained audit log when the audit integration is enabled. Entries carry agent, scope, timestamp, and integrity context.</p>
 
       <h3>4. Slow Revocation</h3>
       <p>OAuth revocation depends on token introspection or short expiry windows. If an agent goes rogue, you might have to wait for the token to expire.</p>
-      <p><strong>Grantex fix:</strong> Real-time revocation effective in under 1 second. Plus cascade revocation — revoke a parent to instantly kill all delegated sub-agent grants.</p>
+      <p><strong>Grantex fix:</strong> Centralized grant revocation with cascade controls for delegated sub-agent grants. Local-only JWT consumers must use short token lifetimes or synchronized revocation data.</p>
 
       <h2>Feature Comparison</h2>
       <table class="comparison-table">
@@ -152,7 +152,7 @@ const pages = {
         <tr><td>Delegation chains</td><td class="no">No</td><td class="yes">Yes (depth-tracked)</td></tr>
         <tr><td>Cascade revocation</td><td class="no">No</td><td class="yes">Yes (&lt; 1s)</td></tr>
         <tr><td>Hash-chained audit trail</td><td class="no">No</td><td class="yes">Yes</td></tr>
-        <tr><td>Offline verification (JWKS)</td><td>Varies</td><td class="yes">Yes (always)</td></tr>
+        <tr><td>JWKS-backed verification</td><td>Varies</td><td class="yes">Local check; keys fetched and cached</td></tr>
         <tr><td>Budget controls</td><td class="no">No</td><td class="yes">Yes</td></tr>
         <tr><td>Multi-agent delegation</td><td class="no">No</td><td class="yes">Yes</td></tr>
         <tr><td>Anomaly detection</td><td class="no">No</td><td class="yes">Yes</td></tr>
@@ -168,7 +168,7 @@ const pages = {
       <div class="cta-box">
         <h3>Ready to add agent authorization?</h3>
         <p>Get started in under 5 minutes. Open source, Apache 2.0.</p>
-        <a href="https://docs.grantex.dev/getting-started/quickstart" class="btn btn-primary" style="margin-right:.5rem">Get Started</a>
+        <a href="https://docs.grantex.dev/quickstart" class="btn btn-primary" style="margin-right:.5rem">Get Started</a>
         <a href="/" class="btn btn-secondary">Learn More</a>
       </div>
     `
@@ -208,11 +208,11 @@ const pages = {
         <tr><td>User consent</td><td class="no">None</td><td class="yes">Explicit consent flow</td></tr>
         <tr><td>Agent identity</td><td class="no">Shared key</td><td class="yes">Cryptographic DID per agent</td></tr>
         <tr><td>Audit trail</td><td class="no">Key-level only</td><td class="yes">Per-agent, hash-chained</td></tr>
-        <tr><td>Revocation</td><td class="no">Kills all agents</td><td class="yes">Per-agent, &lt; 1 second</td></tr>
+        <tr><td>Revocation</td><td class="no">Kills all agents</td><td>Per-agent central grant revocation</td></tr>
         <tr><td>Delegation</td><td class="no">Copy the key</td><td class="yes">Scoped, depth-tracked</td></tr>
         <tr><td>Expiration</td><td class="no">Usually never</td><td class="yes">Time-limited JWTs</td></tr>
         <tr><td>Budget limits</td><td class="no">No</td><td class="yes">Per-grant budgets</td></tr>
-        <tr><td>Verification</td><td>API call required</td><td class="yes">Offline via JWKS</td></tr>
+        <tr><td>Verification</td><td>API call required</td><td class="yes">Local with cached JWKS</td></tr>
       </table>
 
       <h2>Migration Path</h2>
@@ -233,19 +233,21 @@ await stripe.charges.create({ amount: 5000, currency: 'usd' });
 // Who authorized this? Which agent? What scopes? No idea.</code></pre>
 
       <h3>After: Agent with Grantex JWT</h3>
-      <pre><code>// Agent has scoped access: "payments:read" only
-const toolkit = new GrantexToolkit({
-  client: gx,
-  grantToken: token,  // JWT with scopes: ["payments:read"]
-  tools: [stripeReadTool],
+      <pre><code>import { createGrantexTool } from '@grantex/langchain';
+
+const stripeReadTool = createGrantexTool({
+  name: 'list_charges',
+  description: 'List recent Stripe charges',
+  grantToken: token,
+  requiredScope: 'payments:read',
+  func: async () => JSON.stringify(await stripe.charges.list()),
 });
-// Agent CAN read charges but CANNOT create them.
-// Every action logged with agent DID, user ID, timestamp.</code></pre>
+// The signed token and payments:read scope are verified before execution.</code></pre>
 
       <div class="cta-box">
         <h3>Replace API keys with scoped grants</h3>
         <p>10 lines of code. Open source. Apache 2.0.</p>
-        <a href="https://docs.grantex.dev/getting-started/quickstart" class="btn btn-primary" style="margin-right:.5rem">Get Started</a>
+        <a href="https://docs.grantex.dev/quickstart" class="btn btn-primary" style="margin-right:.5rem">Get Started</a>
         <a href="/playground" class="btn btn-secondary">Try in Playground</a>
       </div>
     `
@@ -272,7 +274,7 @@ const toolkit = new GrantexToolkit({
       <h2>Two Grantex Solutions for MCP</h2>
 
       <h3>1. @grantex/mcp — Grantex as an MCP Server</h3>
-      <p>13 tools for managing agent authorization directly from Claude Desktop or Cursor:</p>
+      <p>17 tools for managing agent authorization directly from Claude Desktop or Cursor:</p>
       <pre><code>// claude_desktop_config.json
 {
   "mcpServers": {
@@ -291,16 +293,17 @@ const toolkit = new GrantexToolkit({
 
       <h3>2. @grantex/mcp-auth — Add Auth to YOUR MCP Server</h3>
       <p>OAuth 2.1 + PKCE authorization for any MCP server you build:</p>
-      <pre><code>import { GrantexMCPAuth } from '@grantex/mcp-auth';
+      <pre><code>import express from 'express';
+import { requireMcpAuth } from '@grantex/mcp-auth/express';
 
-const auth = new GrantexMCPAuth({
-  jwksUrl: 'https://your-auth/.well-known/jwks.json',
-});
+const app = express();
 
-// Wrap your MCP tool handlers with authorization
-server.tool('query_database', auth.requireScopes(['db:read']), async (params) => {
-  // Only executes if the caller has db:read scope
-  return await db.query(params.sql);
+app.post('/mcp/tools/query_database', requireMcpAuth({
+  issuer: 'https://your-auth.example.com',
+  scopes: ['db:read'],
+}), async (req, res) => {
+  const rows = await db.query(req.body.sql);
+  res.json({ rows, grant: req.mcpGrant });
 });</code></pre>
 
       <h2>Feature Comparison</h2>
@@ -309,13 +312,13 @@ server.tool('query_database', auth.requireScopes(['db:read']), async (params) =>
         <tr><td>Tool access control</td><td class="no">None</td><td class="yes">Per-tool scopes</td></tr>
         <tr><td>User consent</td><td class="no">No</td><td class="yes">OAuth 2.1 consent flow</td></tr>
         <tr><td>PKCE</td><td class="no">No</td><td class="yes">S256</td></tr>
-        <tr><td>Audit trail</td><td class="no">No</td><td class="yes">Hash-chained</td></tr>
-        <tr><td>Token revocation</td><td class="no">N/A</td><td class="yes">&lt; 1 second</td></tr>
+        <tr><td>Audit trail</td><td class="no">No</td><td>Host application integration</td></tr>
+        <tr><td>Token revocation</td><td class="no">N/A</td><td>Central endpoint; local verifiers need current state</td></tr>
         <tr><td>Multi-user</td><td class="no">No</td><td class="yes">Per-user grants</td></tr>
       </table>
 
       <div class="cta-box">
-        <h3>Secure your MCP server in 5 minutes</h3>
+        <h3>Secure your MCP server</h3>
         <p>Works with Claude Desktop, Cursor, and Windsurf.</p>
         <a href="https://docs.grantex.dev/integrations/mcp" class="btn btn-primary" style="margin-right:.5rem">Read the Docs</a>
         <a href="https://www.npmjs.com/package/@grantex/mcp-auth" class="btn btn-secondary">npm install</a>
@@ -325,7 +328,7 @@ server.tool('query_database', auth.requireScopes(['db:read']), async (params) =>
 
   'securing-ai-agents': {
     metaTitle: 'How to Secure AI Agents — Authorization, Scoping, and Audit Trails',
-    metaDesc: 'A practical guide to securing AI agents in production. Scoped permissions, cryptographic identity, audit trails, delegation control, and real-time revocation.',
+    metaDesc: 'A practical guide to securing AI agents in production. Scoped permissions, cryptographic identity, audit trails, delegation control, and central grant revocation.',
     html: `
       <h1>How to Secure AI Agents in Production</h1>
       <p class="subtitle">A practical guide to authorization, scoping, and audit trails for AI agents</p>
@@ -378,9 +381,9 @@ const delegated = await gx.grants.delegate({
 });</code></pre>
       <p>The delegation depth is tracked in the JWT. Revoking the parent cascades to all children.</p>
 
-      <h2>6. Real-Time Revocation</h2>
-      <p>If an agent behaves unexpectedly, you need to kill its access immediately — not wait for a token to expire.</p>
-      <p>Grantex revocation takes effect in under 1 second. Cascade revocation kills all delegated sub-agent grants simultaneously.</p>
+      <h2>6. Centralized Revocation</h2>
+      <p>If an agent behaves unexpectedly, revoke its grant centrally and define how each verifier receives revocation state.</p>
+      <p>Grantex supports centralized and cascading grant revocation. Local-only JWT consumers must use short token lifetimes or synchronized revocation data.</p>
 
       <h2>7. Budget Controls</h2>
       <p>For agents that spend money (API calls, compute, purchases), set spending limits:</p>
@@ -395,9 +398,9 @@ const delegated = await gx.grants.delegate({
       <p>Grantex provides all of these primitives as an open protocol (Apache 2.0) with SDKs for <a href="https://docs.grantex.dev/sdks/typescript/overview">TypeScript</a>, <a href="https://docs.grantex.dev/sdks/python/overview">Python</a>, and <a href="https://docs.grantex.dev/sdks/go/overview">Go</a>.</p>
 
       <div class="cta-box">
-        <h3>Secure your agents in under 5 minutes</h3>
-        <p>Open source. 14 framework integrations. 174 pages of docs.</p>
-        <a href="https://docs.grantex.dev/getting-started/quickstart" class="btn btn-primary" style="margin-right:.5rem">Quickstart Guide</a>
+        <h3>Start securing your agents</h3>
+        <p>Open source SDKs, framework integrations, and maintained implementation guides.</p>
+        <a href="https://docs.grantex.dev/quickstart" class="btn btn-primary" style="margin-right:.5rem">Quickstart Guide</a>
         <a href="/playground" class="btn btn-secondary">Try in Playground</a>
       </div>
     `

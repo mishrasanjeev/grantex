@@ -26,7 +26,7 @@ from ._types import (
 )
 from ._verifier import OfflineVerifier, create_offline_verifier
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = [
     # Verifier

@@ -4,7 +4,7 @@ LangChain integration for the [Grantex](https://grantex.dev) delegated authoriza
 
 Adds scope-enforced tools and automatic audit logging to any LangChain agent.
 
-> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+> **[Homepage](https://grantex.dev)** | **[Docs](https://docs.grantex.dev)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 
@@ -36,7 +36,7 @@ const tool = createGrantexTool({
 const agent = createToolCallingAgent({ llm, tools: [tool], prompt });
 ```
 
-The scope check is **offline** — it reads the `scp` claim from the JWT directly, no network call needed. If the token doesn't include the required scope, the tool throws before your function runs.
+Before every execution, the tool verifies the token signature and claims against JWKS, then checks the verified `scp` claim. Each standalone verification may fetch the JWKS. If verification fails or the scope is missing, the wrapped function does not run.
 
 ### Audit Logging
 
@@ -78,6 +78,9 @@ Creates a LangChain `DynamicTool` with Grantex scope enforcement.
 | `name` | `string` | Tool name shown to the LLM |
 | `description` | `string` | Tool description shown to the LLM |
 | `grantToken` | `string` | Grantex JWT from token exchange |
+| `jwksUri` | `string?` | JWKS URL; defaults to the Grantex production JWKS |
+| `issuer`, `issuerDid`, `audience` | `string?` | Optional JWT claim validation settings |
+| `clockTolerance` | `number?` | Clock tolerance in seconds |
 | `requiredScope` | `string` | Scope required to invoke this tool |
 | `func` | `(input: string) => Promise<string>` | Tool implementation |
 
@@ -96,7 +99,7 @@ LangChain callback handler that writes tool invocations to the Grantex audit tra
 ## Requirements
 
 - Node.js 18+
-- `@grantex/sdk` >= 0.1.0
+- `@grantex/sdk` >= 0.3.11
 - `@langchain/core` >= 0.3.0
 
 ## Links

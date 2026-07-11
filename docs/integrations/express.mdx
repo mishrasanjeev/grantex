@@ -20,7 +20,7 @@ import { requireGrantToken, requireScopes } from '@grantex/express';
 
 const app = express();
 
-const JWKS_URI = 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json';
+const JWKS_URI = 'https://api.grantex.dev/.well-known/jwks.json';
 
 // 1. Verify the grant token
 app.use('/api', requireGrantToken({ jwksUri: JWKS_URI }));
@@ -63,7 +63,7 @@ Client → Authorization: Bearer <grantToken> → Express app
 ```
 
 1. `requireGrantToken()` extracts the Bearer token from the `Authorization` header
-2. It verifies the RS256 signature against the Grantex JWKS endpoint (offline — cached after first fetch)
+2. It resolves the signing key from the configured JWKS endpoint and verifies the RS256 signature and claims locally
 3. On success, `req.grant` is populated and `next()` is called
 4. `requireScopes()` checks that `req.grant.scopes` contains every required scope
 5. If any scope is missing, it returns a `403 Forbidden` response
@@ -78,7 +78,7 @@ Use `createGrantex()` to avoid repeating the same options on every route:
 import { createGrantex } from '@grantex/express';
 
 const grantex = createGrantex({
-  jwksUri: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json',
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
   clockTolerance: 5,
 });
 
@@ -196,7 +196,7 @@ const app = express();
 app.use(express.json());
 
 const grantex = createGrantex({
-  jwksUri: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json',
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
 });
 
 // Public health check — no auth required

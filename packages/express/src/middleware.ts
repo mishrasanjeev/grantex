@@ -40,7 +40,7 @@ function defaultErrorHandler(
  * import { requireGrantToken } from '@grantex/express';
  *
  * const app = express();
- * const JWKS_URI = 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json';
+ * const JWKS_URI = 'https://api.grantex.dev/.well-known/jwks.json';
  *
  * // Protect all routes under /api
  * app.use('/api', requireGrantToken({ jwksUri: JWKS_URI }));
@@ -167,7 +167,7 @@ export function requireScopes(...scopes: string[]): RequestHandler {
  * import { createGrantex } from '@grantex/express';
  *
  * const grantex = createGrantex({
- *   jwksUri: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json',
+ *   jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
  *   clockTolerance: 5,
  * });
  *

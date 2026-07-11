@@ -5,7 +5,7 @@ TypeScript SDK for the [Grantex](https://grantex.dev) delegated authorization pr
 [![npm version](https://img.shields.io/npm/v/@grantex/sdk)](https://www.npmjs.com/package/@grantex/sdk)
 [![License](https://img.shields.io/npm/l/@grantex/sdk)](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 
-> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[API Reference](https://grantex.mintlify.app/api-reference)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+> **[Homepage](https://grantex.dev)** | **[Docs](https://docs.grantex.dev)** | **[API Reference](https://docs.grantex.dev/api-reference)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Installation
 
@@ -42,7 +42,7 @@ console.log(token.grantToken);  // RS256-signed JWT
 console.log(token.scopes);     // ['email:read', 'email:send']
 console.log(token.grantId);    // 'grnt_01J...'
 
-// 4. Verify the grant token offline (no network call)
+// 4. Verify locally using keys retrieved from the issuer's JWKS
 const grant = await verifyGrantToken(token.grantToken, {
   jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
 });
@@ -68,8 +68,8 @@ const grantex = new Grantex({
 |--------|------|---------|-------------|
 | `apiKey` | `string` | `process.env.GRANTEX_API_KEY` | API key for authentication |
 | `baseUrl` | `string` | `https://api.grantex.dev` | Base URL of the Grantex API |
-| `issuer` | `string` | derived from `jwksUri` | Expected JWT issuer for offline verification |
-| `jwksUri` | `string` | `${baseUrl}/.well-known/jwks.json` | JWKS URL used for offline verification |
+| `issuer` | `string` | derived from `jwksUri` | Expected JWT issuer for local signature verification |
+| `jwksUri` | `string` | `${baseUrl}/.well-known/jwks.json` | URL from which the verifier retrieves signing keys |
 | `timeout` | `number` | `30000` | Request timeout in milliseconds |
 
 ## Commerce V1 / OACP
@@ -193,6 +193,7 @@ const request = await grantex.authorize({
   agentId: 'ag_01J...',
   userId: 'usr_01J...',
   scopes: ['files:read', 'email:send'],
+  audience: 'https://api.example.com', // optional; becomes the JWT aud claim
   expiresIn: '24h',          // optional
   redirectUri: 'https://...' // optional
 });
@@ -239,7 +240,7 @@ const agent = await grantex.agents.get('ag_01J...');
 #### `grantex.agents.list()`
 
 ```typescript
-const { agents, total } = await grantex.agents.list();
+const { agents } = await grantex.agents.list();
 ```
 
 #### `grantex.agents.update(agentId, params)`
@@ -270,7 +271,7 @@ const grant = await grantex.grants.get('grnt_01J...');
 #### `grantex.grants.list(params?)`
 
 ```typescript
-const { grants, total } = await grantex.grants.list({
+const { grants } = await grantex.grants.list({
   agentId: 'ag_01J...',       // optional filter
   principalId: 'usr_01J...',  // optional filter
   status: 'active',           // 'active' | 'revoked' | 'expired'
@@ -371,11 +372,11 @@ await grantex.tokens.revoke('tok_01J...');
 
 ---
 
-### Offline Token Verification
+### Local Token Verification
 
 #### `verifyGrantToken(token, options)`
 
-Verify a grant token offline using the published JWKS. No API call needed — signature is verified locally using RS256.
+Verify a grant token locally with RS256 signing keys retrieved from the published JWKS URL. A bounded process-level resolver cache reuses valid keys for each normalized JWKS URI; initial retrieval and key-rotation refreshes may require network access.
 
 ```typescript
 import { verifyGrantToken } from '@grantex/sdk';
@@ -388,7 +389,7 @@ const grant = await verifyGrantToken('eyJhbG...', {
 });
 ```
 
-If you call a deployment through a raw Cloud Run URL or another internal host, but the service signs tokens for a canonical public domain, pass `issuer` explicitly. Otherwise offline verification will reject a valid token because the JWT `iss` claim will not match the transport host.
+If you call a deployment through a raw Cloud Run URL or another internal host, but the service signs tokens for a canonical public domain, pass `issuer` explicitly. Otherwise issuer validation will reject a valid token because the JWT `iss` claim will not match the transport host.
 
 **Returns**: `VerifiedGrant`
 
@@ -417,7 +418,9 @@ Log an auditable action taken by an agent.
 ```typescript
 const entry = await grantex.audit.log({
   agentId: 'ag_01J...',
+  agentDid: 'did:grantex:ag_01J...',
   grantId: 'grnt_01J...',
+  principalId: 'usr_01J...',
   action: 'email:send',
   metadata: { to: 'user@example.com', subject: 'Hello' },
   status: 'success',   // 'success' | 'failure' | 'blocked'
@@ -427,7 +430,7 @@ const entry = await grantex.audit.log({
 #### `grantex.audit.list(params?)`
 
 ```typescript
-const { entries, total } = await grantex.audit.list({
+const { entries } = await grantex.audit.list({
   agentId: 'ag_01J...',
   action: 'email:send',
   since: '2026-01-01T00:00:00Z',

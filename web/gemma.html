@@ -783,7 +783,7 @@
       <div style="text-align:center; margin-top:20px;">
         <span class="verify-badge">
           <span class="check-mark">&#10003;</span>
-          Verified in 2ms &middot; No network required
+          Verified locally &middot; No network during the offline phase
         </span>
       </div>
     </div>
@@ -865,16 +865,16 @@
       <div class="solution-step">
         <div class="solution-num">2</div>
         <div>
-          <h3>Verify in 2ms</h3>
-          <p>Agent verifies the JWT against the bundled JWKS &mdash; no network call. Scope checks included.</p>
-          <span class="step-tag">&lt; 5ms</span>
+          <h3>Verify locally</h3>
+          <p>Agent verifies the JWT against the JWKS snapshot in its consent bundle &mdash; no network call during the offline phase. Scope checks included.</p>
+          <span class="step-tag">Offline</span>
         </div>
       </div>
       <div class="solution-step">
         <div class="solution-num">3</div>
         <div>
           <h3>Log locally, signed</h3>
-          <p>Every action is appended to an Ed25519-signed, hash-chained audit log on the device.</p>
+          <p>Configured tool actions are appended to an Ed25519-signed, hash-chained audit log on the device.</p>
           <span class="step-tag">Tamper-evident</span>
         </div>
       </div>
@@ -987,8 +987,7 @@ audit_log = <span class="fn">create_offline_audit_log</span>(
     <div id="tab-adk" class="tab-panel">
       <div class="code-block">
         <button class="copy-btn" onclick="copyCode('code-adk', this, 'copy_adk')">Copy</button>
-        <pre id="code-adk"><span class="kw">import</span> { <span class="fn">withGrantexAuth</span> } <span class="kw">from</span> <span class="str">'@grantex/gemma/adapters/google-adk'</span>;
-<span class="kw">import</span> { <span class="fn">createOfflineVerifier</span>, <span class="fn">createOfflineAuditLog</span> } <span class="kw">from</span> <span class="str">'@grantex/gemma'</span>;
+        <pre id="code-adk"><span class="kw">import</span> { <span class="fn">withGrantexAuthADK</span>, <span class="fn">createOfflineVerifier</span>, <span class="fn">createOfflineAuditLog</span> } <span class="kw">from</span> <span class="str">'@grantex/gemma'</span>;
 
 <span class="cm">// Wrap any Google ADK tool with offline auth</span>
 <span class="kw">const</span> verifier = <span class="fn">createOfflineVerifier</span>({
@@ -1001,16 +1000,18 @@ audit_log = <span class="fn">create_offline_audit_log</span>(
 });
 
 <span class="cm">// One line to protect any tool</span>
-<span class="kw">const</span> securedCalendarTool = <span class="fn">withGrantexAuth</span>(calendarTool, {
+<span class="kw">const</span> securedCalendarTool = <span class="fn">withGrantexAuthADK</span>(calendarTool, {
   verifier,
   auditLog,
+  grantToken: bundle.<span class="id">grantToken</span>,
   requiredScopes: [<span class="str">'calendar:write'</span>],
 });
 
 <span class="cm">// Tool now auto-verifies grants and logs every invocation</span>
-<span class="kw">const</span> securedEmailTool = <span class="fn">withGrantexAuth</span>(emailTool, {
+<span class="kw">const</span> securedEmailTool = <span class="fn">withGrantexAuthADK</span>(emailTool, {
   verifier,
   auditLog,
+  grantToken: bundle.<span class="id">grantToken</span>,
   requiredScopes: [<span class="str">'email:send'</span>],
 });</pre>
       </div>
@@ -1022,37 +1023,37 @@ audit_log = <span class="fn">create_offline_audit_log</span>(
 <section id="compatibility">
   <div class="container section-center">
     <div class="section-label">Compatibility</div>
-    <h2 class="section-title">Runs Everywhere Gemma 4 Runs</h2>
+    <h2 class="section-title">Runtime requirements</h2>
     <p class="section-sub">
-      Tested on every platform that supports Gemma 4 inference.
-      Same API, same verification guarantees.
+      The current TypeScript package targets Node.js 18+ and uses a writable filesystem for its offline audit log.
+      Validate Web Crypto, Ed25519, and storage support on any device runtime before deployment.
     </p>
 
     <div class="compat-grid">
       <div class="compat-card">
         <span class="compat-icon">&#x1F4F1;</span>
-        <h3>Android</h3>
-        <p>Pixel, Galaxy, any device with MediaPipe</p>
+        <h3>Node.js 18+</h3>
+        <p>Required by the published package</p>
       </div>
       <div class="compat-card">
         <span class="compat-icon">&#x1F34E;</span>
-        <h3>iOS</h3>
-        <p>iPhone and iPad via ML frameworks</p>
+        <h3>Web Crypto</h3>
+        <p>Ed25519 verification and signing support</p>
       </div>
       <div class="compat-card">
         <span class="compat-icon">&#x1F4BB;</span>
-        <h3>Raspberry Pi</h3>
-        <p>Pi 5, Pi 4 with 4GB+ RAM</p>
+        <h3>Filesystem</h3>
+        <p>Writable path for the JSONL audit log</p>
       </div>
       <div class="compat-card">
         <span class="compat-icon">&#x1F3AE;</span>
-        <h3>NVIDIA Jetson</h3>
-        <p>Orin Nano, Orin NX, AGX</p>
+        <h3>JWKS snapshot</h3>
+        <p>Pre-fetched keys for offline verification</p>
       </div>
       <div class="compat-card">
         <span class="compat-icon">&#x1F5A5;</span>
-        <h3>Desktop</h3>
-        <p>Windows, macOS, Linux x64/ARM</p>
+        <h3>Device testing</h3>
+        <p>Required for each target runtime</p>
       </div>
     </div>
   </div>
@@ -1062,10 +1063,10 @@ audit_log = <span class="fn">create_offline_audit_log</span>(
 <section id="benchmarks">
   <div class="container section-center">
     <div class="section-label">Performance</div>
-    <h2 class="section-title">Benchmarks: Real Hardware, Real Numbers</h2>
+    <h2 class="section-title">Repository performance checks</h2>
     <p class="section-sub">
-      Grant verification is a single Ed25519 signature check against a local JWKS cache.
-      No network. No database. Just math.
+      The repository tests local verification performance on the test runner.
+      Device-specific benchmark methodology and reproducible hardware results are not published yet.
     </p>
 
     <table class="bench-table">
@@ -1078,19 +1079,19 @@ audit_log = <span class="fn">create_offline_audit_log</span>(
       </thead>
       <tbody>
         <tr>
-          <td class="platform-name">Raspberry Pi 5</td>
-          <td class="bench-value">3.2ms avg</td>
-          <td class="bench-mem">1.1 MB</td>
+          <td class="platform-name">Verifier unit test</td>
+          <td class="bench-value">&lt;5ms target on test runner</td>
+          <td class="bench-mem">Not measured</td>
         </tr>
         <tr>
-          <td class="platform-name">Android (mid-range)</td>
-          <td class="bench-value">1.8ms avg</td>
-          <td class="bench-mem">0.9 MB</td>
+          <td class="platform-name">Production E2E test</td>
+          <td class="bench-value">100-token average &lt;5ms on test runner</td>
+          <td class="bench-mem">Not measured</td>
         </tr>
         <tr>
-          <td class="platform-name">Jetson Orin Nano</td>
-          <td class="bench-value">1.1ms avg</td>
-          <td class="bench-mem">0.8 MB</td>
+          <td class="platform-name">Device-specific results</td>
+          <td class="bench-value">Not published</td>
+          <td class="bench-mem">Not published</td>
         </tr>
       </tbody>
     </table>

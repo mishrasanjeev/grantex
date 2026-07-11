@@ -1,25 +1,28 @@
 import type { FastifyInstance } from 'fastify';
 import { resolve } from 'node:dns/promises';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { getSql } from '../db/client.js';
 import { ulid } from 'ulid';
 
 /**
  * Verify organization ownership via DNS TXT record.
  *
- * Expected record: `_grantex-verify.<domain>` with value `grantex-verify=<token>`
- * where `<token>` is the org's `verificationToken` from the trust registry or
- * matches the pattern `grantex-verify=did:web:<domain>`.
+ * New registrations must match the SHA-256 hash of the one-time token returned
+ * at registration. Existing registrations without a stored hash retain support
+ * for the legacy, exact `grantex-verify=did:web:<domain>` proof.
  */
-export async function verifyDnsTxt(domain: string): Promise<boolean> {
+export async function verifyDnsTxt(domain: string, expectedTokenHash: string | null): Promise<boolean> {
   try {
     const records = await resolve(`_grantex-verify.${domain}`, 'TXT');
     // DNS TXT records come as arrays of strings (chunked)
     for (const chunks of records) {
       const txt = Array.isArray(chunks) ? chunks.join('') : String(chunks);
-      if (
-        txt === `grantex-verify=did:web:${domain}` ||
-        txt.startsWith('grantex-verify=')
-      ) {
+      if (expectedTokenHash !== null) {
+        const actualHash = hashVerificationToken(txt);
+        const expected = Buffer.from(expectedTokenHash, 'hex');
+        const actual = Buffer.from(actualHash, 'hex');
+        if (expected.length === actual.length && timingSafeEqual(actual, expected)) return true;
+      } else if (txt === `grantex-verify=did:web:${domain}`) {
         return true;
       }
     }
@@ -28,6 +31,38 @@ export async function verifyDnsTxt(domain: string): Promise<boolean> {
     // ENOTFOUND, ENODATA, etc. — record doesn't exist
     return false;
   }
+}
+
+function hashVerificationToken(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
+function domainFromWebDid(did: string): string | null {
+  if (!did.startsWith('did:web:')) return null;
+
+  const authoritySegment = did.slice('did:web:'.length).split(':', 1)[0];
+  if (!authoritySegment) return null;
+
+  try {
+    const authority = decodeURIComponent(authoritySegment);
+    if (!authority || /[\s\/?#@]/.test(authority)) return null;
+    const parsed = new URL(`https://${authority}`);
+    const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
+    const labels = hostname.split('.');
+
+    if (hostname.length > 253 || labels.length < 2 || /^\d+(?:\.\d+){3}$/.test(hostname)) return null;
+    if (labels.some((label) => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label))) return null;
+
+    return hostname;
+  } catch {
+    return null;
+  }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null
+    && 'code' in error
+    && (error as { code?: unknown }).code === '23505';
 }
 
 // -----------------------------------------------------------------
@@ -210,23 +245,31 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const orgDID = `did:web:${domain}`;
-      const verified = await verifyDnsTxt(domain);
+      const sql = getSql();
+
+      // Check the row before resolving DNS so registrations with a one-time
+      // challenge cannot fall back to the predictable legacy proof.
+      const existing = await sql`
+        SELECT id, verification_token_hash
+        FROM trust_registry
+        WHERE organization_did = ${orgDID}
+      `;
+      const expectedTokenHash = existing[0]
+        ? (existing[0]['verification_token_hash'] as string | null)
+        : null;
+      const verified = await verifyDnsTxt(domain, expectedTokenHash);
 
       if (!verified) {
         return reply.status(400).send({
-          message: `DNS TXT verification failed. Add a TXT record at _grantex-verify.${domain} with value "grantex-verify=did:web:${domain}"`,
+          message: expectedTokenHash === null
+            ? `DNS TXT verification failed. Add a TXT record at _grantex-verify.${domain} with value "grantex-verify=did:web:${domain}"`
+            : `DNS TXT verification failed for ${domain}`,
           code: 'DNS_VERIFICATION_FAILED',
           requestId: request.id,
         });
       }
 
-      const sql = getSql();
       const now = new Date();
-
-      // Check if org already exists
-      const existing = await sql`
-        SELECT id FROM trust_registry WHERE organization_did = ${orgDID}
-      `;
 
       if (existing[0]) {
         // Update existing record
@@ -235,6 +278,7 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
           SET verification_method = 'dns-txt',
               trust_level = 'verified',
               verified_at = ${now},
+              verification_token_hash = NULL,
               updated_at = ${now}
           WHERE organization_did = ${orgDID}
         `;
@@ -290,91 +334,112 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
 
       const limit = Math.min(Math.max(Number(limitStr) || 20, 1), 100);
 
-      // Build dynamic conditions
-      const conditions: string[] = [];
-      const params: unknown[] = [];
-
-      if (q) {
-        // Search by name or description (case-insensitive)
-        conditions.push(`(t.name ILIKE $1 OR t.description ILIKE $1)`);
-        params.push(`%${q}%`);
+      if (verified !== undefined && verified !== 'true' && verified !== 'false') {
+        return reply.status(400).send({
+          message: 'verified must be true or false',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+      if (sort !== undefined && sort !== 'average_rating') {
+        return reply.status(400).send({
+          message: 'sort must be average_rating',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
       }
 
-      if (verified === 'true') {
-        conditions.push(`t.trust_level = 'verified'`);
-      } else if (verified === 'false') {
-        conditions.push(`t.trust_level != 'verified'`);
-      }
+      const searchPattern = q?.trim() ? `%${q.trim()}%` : null;
+      const verifiedFilter = verified === undefined ? null : verified;
+      const badgeFilter = badge?.trim() || null;
+      const categoryFilter = category?.trim() || null;
+      const sortByRating = sort === 'average_rating';
 
-      if (badge) {
-        conditions.push(`$${params.length + 1} = ANY(t.badges)`);
-        params.push(badge);
-      }
-
-      if (cursor) {
-        conditions.push(`t.id < $${params.length + 1}`);
-        params.push(cursor);
-      }
-
-      // When category is provided we need to join registry_agents
-      // to filter orgs that have agents in that category
-      if (category) {
-        conditions.push(
-          `EXISTS (SELECT 1 FROM registry_agents ra WHERE ra.registry_id = t.id AND ra.category = $${params.length + 1} AND ra.listed = true)`,
-        );
-        params.push(category);
-      }
-
-      // Because postgres.js uses tagged-template sql we cannot pass
-      // dynamic WHERE easily. Instead we query all and filter in-app
-      // for simplicity (registry will be small — thousands of rows max).
-      // We read a superset and apply filters.
+      // Count the complete filtered result, independent of the current page.
+      const countRows = await sql`
+        SELECT COUNT(*)::integer AS total
+        FROM trust_registry t
+        WHERE (
+          ${searchPattern}::text IS NULL
+          OR t.name ILIKE ${searchPattern}
+          OR COALESCE(t.description, '') ILIKE ${searchPattern}
+        )
+          AND (
+            ${verifiedFilter}::text IS NULL
+            OR (${verifiedFilter} = 'true' AND t.trust_level = 'verified')
+            OR (${verifiedFilter} = 'false' AND t.trust_level != 'verified')
+          )
+          AND (${badgeFilter}::text IS NULL OR ${badgeFilter} = ANY(t.badges))
+          AND (
+            ${categoryFilter}::text IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM registry_agents ra
+              WHERE ra.registry_id = t.id
+                AND ra.category = ${categoryFilter}
+                AND ra.listed = true
+            )
+          )
+      `;
 
       const rows = await sql`
         SELECT * FROM trust_registry t
+        WHERE (
+          ${searchPattern}::text IS NULL
+          OR t.name ILIKE ${searchPattern}
+          OR COALESCE(t.description, '') ILIKE ${searchPattern}
+        )
+          AND (
+            ${verifiedFilter}::text IS NULL
+            OR (${verifiedFilter} = 'true' AND t.trust_level = 'verified')
+            OR (${verifiedFilter} = 'false' AND t.trust_level != 'verified')
+          )
+          AND (${badgeFilter}::text IS NULL OR ${badgeFilter} = ANY(t.badges))
+          AND (
+            ${categoryFilter}::text IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM registry_agents ra
+              WHERE ra.registry_id = t.id
+                AND ra.category = ${categoryFilter}
+                AND ra.listed = true
+            )
+          )
+          AND (
+            ${cursor ?? null}::text IS NULL
+            OR (
+              ${sortByRating} = true
+              AND (t.average_rating, t.weekly_active_grants, t.created_at, t.id) < (
+                SELECT c.average_rating, c.weekly_active_grants, c.created_at, c.id
+                FROM trust_registry c
+                WHERE c.id = ${cursor ?? null}
+              )
+            )
+            OR (
+              ${sortByRating} = false
+              AND (t.weekly_active_grants, t.created_at, t.id) < (
+                SELECT c.weekly_active_grants, c.created_at, c.id
+                FROM trust_registry c
+                WHERE c.id = ${cursor ?? null}
+              )
+            )
+          )
         ORDER BY
-          CASE WHEN ${sort ?? ''} = 'average_rating' THEN t.average_rating ELSE 0 END DESC,
+          CASE WHEN ${sortByRating} THEN t.average_rating END DESC NULLS LAST,
           t.weekly_active_grants DESC,
-          t.created_at DESC
+          t.created_at DESC,
+          t.id DESC
         LIMIT ${limit + 1}
       `;
 
-      // Apply in-app filters
-      let filtered = rows as Record<string, unknown>[];
-
-      if (q) {
-        const lower = q.toLowerCase();
-        filtered = filtered.filter(
-          (r) =>
-            ((r['name'] as string) ?? '').toLowerCase().includes(lower) ||
-            ((r['description'] as string) ?? '').toLowerCase().includes(lower),
-        );
-      }
-
-      if (verified === 'true') {
-        filtered = filtered.filter((r) => r['trust_level'] === 'verified');
-      } else if (verified === 'false') {
-        filtered = filtered.filter((r) => r['trust_level'] !== 'verified');
-      }
-
-      if (badge) {
-        filtered = filtered.filter((r) =>
-          ((r['badges'] as string[]) ?? []).includes(badge),
-        );
-      }
-
-      if (cursor) {
-        filtered = filtered.filter((r) => (r['id'] as string) < cursor);
-      }
-
-      const hasMore = filtered.length > limit;
-      const page = filtered.slice(0, limit);
+      const hasMore = rows.length > limit;
+      const page = rows.slice(0, limit) as Record<string, unknown>[];
       const nextCursor = hasMore ? (page[page.length - 1]!['id'] as string) : null;
 
       return reply.send({
         data: page.map(toOrgSummary),
         meta: {
-          total: page.length,
+          total: Number(countRows[0]?.['total'] ?? 0),
           ...(nextCursor !== null ? { cursor: nextCursor } : {}),
         },
       });
@@ -468,30 +533,57 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
+      if (verificationMethod && verificationMethod !== 'dns-txt') {
+        return reply.status(400).send({
+          message: 'Only dns-txt verification is currently supported',
+          code: 'UNSUPPORTED_VERIFICATION_METHOD',
+          requestId: request.id,
+        });
+      }
+
+      const domain = domainFromWebDid(did);
+      if (!domain) {
+        return reply.status(400).send({
+          message: 'did must be a did:web identifier with a valid DNS hostname',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+
       const sql = getSql();
       const id = `treg_${ulid()}`;
 
-      // Extract domain from DID (did:web:example.com → example.com)
-      const domain = did.startsWith('did:web:') ? did.slice('did:web:'.length) : did;
-
       const verificationToken = `grantex-verify=${ulid()}`;
+      const verificationTokenHash = hashVerificationToken(verificationToken);
 
-      await sql`
-        INSERT INTO trust_registry (
-          id, organization_did, domain, developer_id,
-          name, description, website,
-          contact_security, contact_dpo,
-          trust_level, verification_method, verified_at
-        ) VALUES (
-          ${id}, ${did}, ${domain}, ${developerId},
-          ${name}, ${description ?? null}, ${website ?? null},
-          ${contact?.security ?? null}, ${contact?.dpo ?? null},
-          'basic', ${verificationMethod ?? 'pending'}, NOW()
-        )
-      `;
+      try {
+        await sql`
+          INSERT INTO trust_registry (
+            id, organization_did, domain, developer_id,
+            name, description, website,
+            contact_security, contact_dpo,
+            trust_level, verification_method, verification_token_hash, verified_at
+          ) VALUES (
+            ${id}, ${did}, ${domain}, ${developerId},
+            ${name}, ${description ?? null}, ${website ?? null},
+            ${contact?.security ?? null}, ${contact?.dpo ?? null},
+            'basic', ${requestVerification ? 'dns-txt' : 'pending'}, ${verificationTokenHash}, NULL
+          )
+        `;
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          return reply.status(409).send({
+            message: 'This organization DID is already registered',
+            code: 'CONFLICT',
+            requestId: request.id,
+          });
+        }
+        throw error;
+      }
 
+      const dnsRecordName = `_grantex-verify.${domain}`;
       const instructions = requestVerification
-        ? `Add a DNS TXT record at _grantex-verify.${domain} with value "${verificationToken}"`
+        ? `Add a DNS TXT record at ${dnsRecordName} with value "${verificationToken}"`
         : null;
 
       return reply.status(201).send({
@@ -499,6 +591,8 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
         did,
         name,
         trustLevel: 'basic',
+        domain,
+        dnsRecordName,
         verificationToken,
         ...(instructions !== null ? { instructions } : {}),
       });
@@ -516,7 +610,7 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
 
       // Look up org
       const rows = await sql`
-        SELECT id, domain, organization_did, developer_id
+        SELECT id, domain, organization_did, developer_id, verification_token_hash
         FROM trust_registry
         WHERE id = ${orgId} OR organization_did = ${orgId}
       `;
@@ -540,7 +634,7 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const domain = record['domain'] as string;
-      const verified = await verifyDnsTxt(domain);
+      const verified = await verifyDnsTxt(domain, record['verification_token_hash'] as string | null);
 
       if (!verified) {
         return reply.status(400).send({
@@ -557,22 +651,13 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
         SET verification_method = 'dns-txt',
             trust_level = 'verified',
             verified_at = ${now},
-            badges = array_append(
-              CASE WHEN NOT ('dns-verified' = ANY(badges)) THEN badges ELSE badges END,
-              'dns-verified'
-            ),
+            verification_token_hash = NULL,
+            badges = CASE
+              WHEN 'dns-verified' = ANY(badges) THEN badges
+              ELSE array_append(badges, 'dns-verified')
+            END,
             updated_at = ${now}
-        WHERE id = ${record['id']} AND NOT ('dns-verified' = ANY(badges))
-      `;
-
-      // Also update if badges already contained it (just update times)
-      await sql`
-        UPDATE trust_registry
-        SET verification_method = 'dns-txt',
-            trust_level = 'verified',
-            verified_at = ${now},
-            updated_at = ${now}
-        WHERE id = ${record['id']} AND 'dns-verified' = ANY(badges)
+        WHERE id = ${record['id']}
       `;
 
       return reply.send({

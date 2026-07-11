@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
   <title>Grantex — Product Hunt Gallery</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1019,8 +1020,8 @@
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3v4M10 13v4M3 10h4M13 10h4" stroke="#3fb950" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="10" r="3" stroke="#3fb950" stroke-width="1.5"/></svg>
             </div>
             <div>
-              <h3>Any Service Verifies Offline via JWKS</h3>
-              <p>Zero network calls needed &mdash; verify tokens with the public key set</p>
+              <h3>Any Service Verifies Signed Grants via JWKS</h3>
+              <p>Verify with cached public keys; retrieve and refresh the key set when needed</p>
             </div>
           </div>
         </div>
@@ -1032,8 +1033,8 @@
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M5 10l3 3 7-7" stroke="#3fb950" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </div>
             <div>
-              <h3>Immutable Audit Trail + Instant Revocation</h3>
-              <p>Every action is logged. Revoke any grant instantly, across all services</p>
+              <h3>Immutable Audit Trail + Central Revocation</h3>
+              <p>Configured actions can be logged. Distributed services must synchronize revocation state.</p>
             </div>
           </div>
         </div>
@@ -1088,7 +1089,7 @@
   <span class="pr">agentId</span>: <span class="str">'agent_123'</span>,
 });
 
-<span class="cm">// 3. Verify anywhere — zero network calls</span>
+<span class="cm">// 3. Verify through the token verification endpoint</span>
 <span class="kw">const</span> grant = <span class="kw">await</span> gx.tokens.<span class="fn">verify</span>(grantToken);</pre>
           </div>
         </div>
@@ -1123,7 +1124,7 @@ result = gx.tokens.<span class="fn">exchange</span>(
     <span class="pr">agent_id</span>=<span class="str">"agent_123"</span>,
 )
 
-<span class="cm"># 3. Verify anywhere — zero network calls</span>
+<span class="cm"># 3. Verify through the token verification endpoint</span>
 grant = gx.tokens.<span class="fn">verify</span>(result.<span class="pr">grant_token</span>)</pre>
           </div>
         </div>

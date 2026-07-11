@@ -4,7 +4,7 @@
 
 Adds scope-enforced tools and audit logging to any Vercel AI SDK agent.
 
-> **[Homepage](https://grantex.dev)** | **[Docs](https://grantex.dev/docs)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
+> **[Homepage](https://grantex.dev)** | **[Docs](https://docs.grantex.dev)** | **[Sign Up Free](https://grantex.dev/dashboard/signup)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
 ## Install
 
@@ -16,7 +16,7 @@ npm install @grantex/vercel-ai @grantex/sdk ai zod
 
 ### Scope-Enforced Tools
 
-Create Vercel AI SDK tools with Grantex authorization. Scope is checked **at construction time** — if the token is missing the required scope, `createGrantexTool` throws immediately, before the LLM can invoke the tool:
+Create Vercel AI SDK tools with Grantex authorization. Before each execution, the wrapper verifies the token against JWKS and checks the verified scope. Invalid or insufficient tokens fail before your tool implementation runs:
 
 ```typescript
 import { createGrantexTool } from '@grantex/vercel-ai';
@@ -29,7 +29,7 @@ const readCalendar = createGrantexTool({
     date: z.string().describe('Date in YYYY-MM-DD format'),
   }),
   grantToken,                     // JWT from Grantex token exchange
-  requiredScope: 'calendar:read', // checked at construction time
+  requiredScope: 'calendar:read', // verified before execution
   execute: async (args) => {
     return await getCalendarEvents(args.date);
   },
@@ -88,14 +88,17 @@ Creates a Vercel AI SDK tool with Grantex scope enforcement.
 | `description` | `string` | Tool description |
 | `parameters` | `z.ZodTypeAny` | Zod schema for tool arguments |
 | `grantToken` | `string` | Grantex JWT from token exchange |
-| `requiredScope` | `string` | Scope required — checked at construction time |
+| `jwksUri` | `string?` | JWKS URL; defaults to the Grantex production JWKS |
+| `issuer`, `issuerDid`, `audience` | `string?` | Optional JWT claim validation settings |
+| `clockTolerance` | `number?` | Clock tolerance in seconds |
+| `requiredScope` | `string` | Scope required — checked against verified claims before execution |
 | `execute` | `(args, options) => Promise<Result>` | Tool implementation |
 
-Throws `GrantexScopeError` if scope is missing.
+Throws `GrantexScopeError` during execution if the verified scope is missing; token verification failures also reject execution.
 
 ### `getGrantScopes(grantToken)`
 
-Returns the `string[]` of scopes from the token's `scp` claim (offline, no network call).
+Returns the unverified `string[]` from the token's `scp` claim for diagnostics only. Do not use this helper to authorize a call.
 
 ### `withAuditLogging(tool, client, options)`
 
@@ -121,7 +124,7 @@ Error thrown when a grant token is missing the required scope.
 ## Requirements
 
 - Node.js 18+
-- `@grantex/sdk` >= 0.1.0
+- `@grantex/sdk` >= 0.3.11
 - `ai` >= 4.0.0 (Vercel AI SDK)
 - `zod` >= 3.0.0
 

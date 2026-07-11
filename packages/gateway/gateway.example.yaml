@@ -1,8 +1,8 @@
 # Grantex Gateway Configuration
-# See https://grantex.dev/docs/integrations/gateway for full reference
+# See https://docs.grantex.dev/integrations/gateway for full reference
 
 upstream: https://api.internal.example.com
-jwksUri: https://grantex-auth-dd4mtrt2gq-uc.a.run.app/.well-known/jwks.json
+jwksUri: https://api.grantex.dev/.well-known/jwks.json
 port: 8080
 
 # Optional: headers added to every upstream request

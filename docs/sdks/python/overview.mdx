@@ -91,7 +91,7 @@ from grantex import Grantex
 
 with Grantex(api_key="gx_live_...") as client:
     agents = client.agents.list()
-    print(f"Total agents: {agents.total}")
+    print(f"Total agents: {len(agents.agents)}")
 # Connection pool is closed automatically
 ```
 

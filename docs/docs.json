@@ -223,6 +223,7 @@
               "sdks/typescript/principal-sessions",
               "sdks/typescript/webauthn",
               "sdks/typescript/credentials",
+              "sdks/typescript/vault",
               "sdks/typescript/budgets",
               "sdks/typescript/events",
               "sdks/typescript/usage",
@@ -383,7 +384,8 @@
               "integrations/crewai",
               "integrations/openai-agents",
               "integrations/google-adk",
-              "integrations/anthropic"
+              "integrations/anthropic",
+              "integrations/strands"
             ]
           },
           {

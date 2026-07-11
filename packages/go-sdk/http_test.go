@@ -17,7 +17,7 @@ func TestHTTPClientGet(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer test-key" {
 			t.Errorf("expected Bearer test-key, got %s", r.Header.Get("Authorization"))
 		}
-		if r.Header.Get("User-Agent") != "grantex-go/"+sdkVersion {
+		if r.Header.Get("User-Agent") != "grantex-go/0.1.10" {
 			t.Errorf("unexpected User-Agent: %s", r.Header.Get("User-Agent"))
 		}
 		w.Header().Set("Content-Type", "application/json")

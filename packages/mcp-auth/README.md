@@ -36,7 +36,7 @@ import { Grantex } from '@grantex/sdk';
 import { createMcpAuthServer } from '@grantex/mcp-auth';
 
 const grantex = new Grantex({
-  baseUrl: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app',
+  baseUrl: 'https://api.grantex.dev',
   apiKey: process.env.GRANTEX_API_KEY!,
 });
 
@@ -339,7 +339,7 @@ Use the Grantex Cloud auth service. Zero infrastructure to manage:
 ```typescript
 const server = await createMcpAuthServer({
   grantex: new Grantex({
-    baseUrl: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app',
+    baseUrl: 'https://api.grantex.dev',
     apiKey: process.env.GRANTEX_API_KEY!,
   }),
   agentId: 'ag_your_server',
@@ -365,37 +365,17 @@ const server = await createMcpAuthServer({
 });
 ```
 
-## MCP Server Certification
+## Conformance testing
 
-Grantex offers a certification program for MCP servers that implement OAuth 2.1 correctly:
+There is currently no automated MCP certification or badge program. Validate the Grantex protocol endpoints used by your deployment with the published conformance runner:
 
-### Bronze
+```bash
+npx @grantex/conformance \
+  --base-url https://api.grantex.dev \
+  --api-key "$GRANTEX_API_KEY"
+```
 
-- OAuth 2.1 + PKCE S256 for all flows
-- Dynamic Client Registration (RFC 7591)
-- Server metadata discovery (RFC 8414)
-- Rate limiting on token and authorize endpoints
-
-### Silver
-
-All Bronze requirements, plus:
-
-- Token introspection (RFC 7662)
-- Token revocation (RFC 7009)
-- Consent UI customization
-- Lifecycle hooks for audit logging
-
-### Gold
-
-All Silver requirements, plus:
-
-- Custom client store (persistent, production-grade)
-- Resource indicators (RFC 8707)
-- Delegation support (Grantex SPEC Section 9)
-- Budget enforcement
-- Full Grantex conformance suite pass
-
-Using `@grantex/mcp-auth` with all features enabled gets you to Gold certification automatically.
+Passing the suite is useful deployment evidence; it is not a certification or endorsement by Grantex.
 
 ## Security Considerations
 
@@ -462,7 +442,7 @@ import type { McpAuthRequest } from '@grantex/mcp-auth/express';
 
 // 1. Create Grantex client
 const grantex = new Grantex({
-  baseUrl: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app',
+  baseUrl: 'https://api.grantex.dev',
   apiKey: process.env.GRANTEX_API_KEY!,
 });
 
@@ -474,18 +454,22 @@ const authServer = await createMcpAuthServer({
   issuer: 'https://calendar-mcp.example.com',
   hooks: {
     onTokenIssued: async (event) => {
+      const verification = await grantex.tokens.verify(event.accessToken);
+      if (!verification.principal) {
+        throw new Error('Issued token did not contain a principal');
+      }
       await grantex.audit.log({
-        action: 'mcp.token.issued',
-        agentId: event.agentDid,
+        agentId: 'ag_calendar_mcp',
+        agentDid: event.agentDid,
         grantId: event.grantId,
-        scopes: event.scopes,
+        principalId: verification.principal,
+        action: 'mcp.token.issued',
+        metadata: { scopes: event.scopes, clientId: event.clientId },
       });
     },
     onRevocation: async (jti) => {
-      await grantex.audit.log({
-        action: 'mcp.token.revoked',
-        tokenId: jti,
-      });
+      // Token revocation is recorded by Grantex; use this hook to clear local caches.
+      console.log(`Revoked token ${jti}`);
     },
   },
 });

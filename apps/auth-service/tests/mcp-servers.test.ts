@@ -223,6 +223,7 @@ describe('GET /v1/mcp/servers/:serverId', () => {
         weekly_active_agents: 1423,
         stars: 234,
         status: 'active',
+        certification_pending: true,
         created_at: new Date('2026-03-01'),
         updated_at: new Date('2026-03-15'),
         publisher_id: 'dev_PUB01',
@@ -241,6 +242,7 @@ describe('GET /v1/mcp/servers/:serverId', () => {
     expect(body.publisher.id).toBe('dev_PUB01');
     expect(body.publisher.name).toBe('Acme Corp');
     expect(body.certificationLevel).toBe('gold');
+    expect(body.certificationPending).toBe(true);
   });
 
   it('returns 404 for unknown server', async () => {
@@ -264,6 +266,8 @@ describe('POST /v1/mcp/certification/apply', () => {
     seedAuth();
     // Server ownership check
     sqlMock.mockResolvedValueOnce([{ id: 'mcp_srv_01HABC' }]);
+    // No existing active certification
+    sqlMock.mockResolvedValueOnce([]);
     // Insert certification
     sqlMock.mockResolvedValueOnce([]);
 
@@ -285,6 +289,54 @@ describe('POST /v1/mcp/certification/apply', () => {
     expect(body.status).toBe('pending_conformance_test');
     expect(body.conformancePassed).toBe(0);
     expect(body.conformanceTotal).toBe(13);
+  });
+
+  it('rejects a duplicate active certification application (409)', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: 'mcp_srv_01HABC' }]);
+    sqlMock.mockResolvedValueOnce([{
+      id: 'cert_EXISTING',
+      requested_level: 'silver',
+      status: 'pending_conformance_test',
+      created_at: new Date('2026-04-14T00:00:00Z'),
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/mcp/certification/apply',
+      headers: authHeader(),
+      payload: {
+        serverId: 'mcp_srv_01HABC',
+        requestedLevel: 'gold',
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({
+      code: 'CERTIFICATION_PENDING',
+      certificationId: 'cert_EXISTING',
+      requestedLevel: 'silver',
+    });
+  });
+
+  it('maps a concurrent active-application conflict to 409', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: 'mcp_srv_01HABC' }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockRejectedValueOnce(Object.assign(new Error('duplicate'), { code: '23505' }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/mcp/certification/apply',
+      headers: authHeader(),
+      payload: {
+        serverId: 'mcp_srv_01HABC',
+        requestedLevel: 'gold',
+      },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('CERTIFICATION_PENDING');
   });
 
   it('rejects server not owned by developer (404)', async () => {

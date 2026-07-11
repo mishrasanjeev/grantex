@@ -51,7 +51,7 @@ for (const block of response.content) {
 }
 ```
 
-The scope check is **offline** — the grant token's `scp` claim is decoded from the JWT without any network call. If the required scope is missing, `execute()` throws a `GrantexScopeError` before your function runs.
+`execute()` verifies the token signature and claims with `verifyGrantToken()` before checking its verified `scp` claim. The verifier may contact its configured JWKS endpoint to resolve keys, so that endpoint must be reachable. Invalid tokens and missing scopes fail before your function runs.
 
 ## Tool Registry
 
@@ -82,7 +82,7 @@ for (const block of response.content) {
 
 ## Inspect Grant Scopes
 
-Decode the scopes from a grant token offline:
+Decode the scopes from a grant token without verification. Use this only for display or debugging; authorization decisions must use the verified tool wrapper:
 
 ```typescript
 import { getGrantScopes } from '@grantex/anthropic';
