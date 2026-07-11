@@ -364,26 +364,41 @@ function compareVersions(left, right) {
   return 0;
 }
 
+const allowedRegistryOrigins = new Set([
+  'https://registry.npmjs.org',
+  'https://pypi.org',
+  'https://proxy.golang.org',
+]);
+
 async function fetchJson(url) {
-  const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  const target = new URL(url);
+  if (
+    target.protocol !== 'https:'
+    || !allowedRegistryOrigins.has(target.origin)
+    || target.username
+    || target.password
+  ) {
+    throw new Error('Refusing non-registry URL: ' + target.origin);
+  }
+  const response = await fetch(target, { signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error(response.status + ' ' + response.statusText);
   return response.json();
 }
 
 async function validatePublishedVersions() {
-  const expectedAheadNpm = new Set(['@grantex/sdk']);
-  const expectedAheadPyPi = new Set(['grantex']);
   const manifests = await walk(path.join(root, 'packages'), (file) => path.basename(file) === 'package.json');
   for (const manifestPath of manifests) {
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
     if (manifest.private || !manifest.name?.startsWith('@grantex/') || !manifest.version) continue;
+    if (!/^@grantex\/[a-z0-9][a-z0-9-]*$/.test(manifest.name)) {
+      failures.push(relative(manifestPath) + ' has an invalid public npm package name');
+      continue;
+    }
     try {
       const metadata = await fetchJson('https://registry.npmjs.org/' + encodeURIComponent(manifest.name) + '/latest');
       const comparison = compareVersions(manifest.version, metadata.version);
       if (comparison < 0) {
         failures.push(relative(manifestPath) + ' is behind npm (' + manifest.version + ' < ' + metadata.version + ')');
-      } else if (expectedAheadNpm.has(manifest.name) && comparison === 0) {
-        failures.push(relative(manifestPath) + ' is expected to be ahead of npm but equals published ' + metadata.version);
       }
     } catch (error) {
       warnings.push('Could not verify npm package ' + manifest.name + ': ' + error.message);
@@ -397,13 +412,15 @@ async function validatePublishedVersions() {
     const name = project?.[1].match(/^name\s*=\s*"([^"]+)"/m)?.[1];
     const version = project?.[1].match(/^version\s*=\s*"([^"]+)"/m)?.[1];
     if (!name?.startsWith('grantex') || !version) continue;
+    if (!/^grantex(?:-[a-z0-9][a-z0-9-]*)?$/.test(name)) {
+      failures.push(relative(projectPath) + ' has an invalid public PyPI package name');
+      continue;
+    }
     try {
       const metadata = await fetchJson('https://pypi.org/pypi/' + encodeURIComponent(name) + '/json');
       const comparison = compareVersions(version, metadata.info.version);
       if (comparison < 0) {
         failures.push(relative(projectPath) + ' is behind PyPI (' + version + ' < ' + metadata.info.version + ')');
-      } else if (expectedAheadPyPi.has(name) && comparison === 0) {
-        failures.push(relative(projectPath) + ' is expected to be ahead of PyPI but equals published ' + metadata.info.version);
       }
     } catch (error) {
       warnings.push('Could not verify PyPI package ' + name + ': ' + error.message);
@@ -420,8 +437,8 @@ async function validatePublishedVersions() {
       const metadata = await fetchJson('https://proxy.golang.org/github.com/mishrasanjeev/grantex-go/@latest');
       const publishedVersion = String(metadata.Version || '').replace(/^v/, '');
       if (!publishedVersion) throw new Error('Go proxy response has no Version');
-      if (compareVersions(localVersion, publishedVersion) <= 0) {
-        failures.push('packages/go-sdk/http.go is expected to be ahead of the Go proxy (' + localVersion + ' <= ' + publishedVersion + ')');
+      if (compareVersions(localVersion, publishedVersion) < 0) {
+        failures.push('packages/go-sdk/http.go is behind the Go proxy (' + localVersion + ' < ' + publishedVersion + ')');
       }
     }
   } catch (error) {

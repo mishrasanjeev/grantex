@@ -77,6 +77,11 @@ jobs:
           check "/consent?req=smoke-test" "Authorization Request"
           check "/.well-known/jwks.json" "\"keys\""
           check "/.well-known/did.json" "\"id\""
+          check "/.well-known/grantex-commerce" "\"grantex-commerce-v1\""
+          check "/contexts/mpp/v1" "\"@context\""
+          check "/ns/credentials/v1" "\"@context\""
+          check "/v1/identity" "\"@context\""
+          check "/v1/x402" "\"@context\""
 
           echo "--- POST $BASE/v1/webauthn/assert/options"
           webauthn_body=$(curl -sS -L --fail-with-body --max-time 20 \

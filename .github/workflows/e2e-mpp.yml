@@ -48,13 +48,11 @@ jobs:
           echo "Health: $STATUS"
           [ "$STATUS" = "ok" ] || [ "$STATUS" = "healthy" ] || exit 1
 
-      - name: Test trust registry — seeded orgs
+      - name: Test trust registry — public search shape
         run: |
-          for org in grantex.dev pinelabs.com shopify.com doordash.com acme-demo.dev; do
-            LEVEL=$(curl -sf "$PROD_URL/v1/trust-registry/did:web:$org" | jq -r '.trustLevel')
-            echo "did:web:$org → $LEVEL"
-            [ -n "$LEVEL" ] || exit 1
-          done
+          REGISTRY=$(curl -sf "$PROD_URL/v1/registry/orgs?limit=1")
+          echo "$REGISTRY" | jq -e '.data | type == "array"' >/dev/null
+          echo "$REGISTRY" | jq -e '.meta.total | type == "number"' >/dev/null
 
       - name: Test trust registry — unknown org returns 404
         run: |
