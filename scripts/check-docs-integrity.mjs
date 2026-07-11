@@ -369,6 +369,37 @@ const allowedRegistryOrigins = new Set([
   'https://pypi.org',
   'https://proxy.golang.org',
 ]);
+const npmRegistryUrls = new Map([
+  ['@grantex/a2a', 'https://registry.npmjs.org/%40grantex%2Fa2a/latest'],
+  ['@grantex/adapters', 'https://registry.npmjs.org/%40grantex%2Fadapters/latest'],
+  ['@grantex/anthropic', 'https://registry.npmjs.org/%40grantex%2Fanthropic/latest'],
+  ['@grantex/autogen', 'https://registry.npmjs.org/%40grantex%2Fautogen/latest'],
+  ['@grantex/cli', 'https://registry.npmjs.org/%40grantex%2Fcli/latest'],
+  ['@grantex/conformance', 'https://registry.npmjs.org/%40grantex%2Fconformance/latest'],
+  ['@grantex/destinations', 'https://registry.npmjs.org/%40grantex%2Fdestinations/latest'],
+  ['@grantex/dpdp', 'https://registry.npmjs.org/%40grantex%2Fdpdp/latest'],
+  ['@grantex/express', 'https://registry.npmjs.org/%40grantex%2Fexpress/latest'],
+  ['@grantex/gateway', 'https://registry.npmjs.org/%40grantex%2Fgateway/latest'],
+  ['@grantex/gemma', 'https://registry.npmjs.org/%40grantex%2Fgemma/latest'],
+  ['@grantex/langchain', 'https://registry.npmjs.org/%40grantex%2Flangchain/latest'],
+  ['@grantex/mcp', 'https://registry.npmjs.org/%40grantex%2Fmcp/latest'],
+  ['@grantex/mcp-auth', 'https://registry.npmjs.org/%40grantex%2Fmcp-auth/latest'],
+  ['@grantex/mpp', 'https://registry.npmjs.org/%40grantex%2Fmpp/latest'],
+  ['@grantex/sdk', 'https://registry.npmjs.org/%40grantex%2Fsdk/latest'],
+  ['@grantex/strands', 'https://registry.npmjs.org/%40grantex%2Fstrands/latest'],
+  ['@grantex/vercel-ai', 'https://registry.npmjs.org/%40grantex%2Fvercel-ai/latest'],
+  ['@grantex/x402', 'https://registry.npmjs.org/%40grantex%2Fx402/latest'],
+]);
+const pypiRegistryUrls = new Map([
+  ['grantex', 'https://pypi.org/pypi/grantex/json'],
+  ['grantex-a2a', 'https://pypi.org/pypi/grantex-a2a/json'],
+  ['grantex-adk', 'https://pypi.org/pypi/grantex-adk/json'],
+  ['grantex-crewai', 'https://pypi.org/pypi/grantex-crewai/json'],
+  ['grantex-fastapi', 'https://pypi.org/pypi/grantex-fastapi/json'],
+  ['grantex-gemma', 'https://pypi.org/pypi/grantex-gemma/json'],
+  ['grantex-openai-agents', 'https://pypi.org/pypi/grantex-openai-agents/json'],
+  ['grantex-strands', 'https://pypi.org/pypi/grantex-strands/json'],
+]);
 
 async function fetchJson(url) {
   const target = new URL(url);
@@ -390,12 +421,13 @@ async function validatePublishedVersions() {
   for (const manifestPath of manifests) {
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
     if (manifest.private || !manifest.name?.startsWith('@grantex/') || !manifest.version) continue;
-    if (!/^@grantex\/[a-z0-9][a-z0-9-]*$/.test(manifest.name)) {
-      failures.push(relative(manifestPath) + ' has an invalid public npm package name');
+    const registryUrl = npmRegistryUrls.get(manifest.name);
+    if (!registryUrl) {
+      failures.push(relative(manifestPath) + ' has no approved npm registry URL');
       continue;
     }
     try {
-      const metadata = await fetchJson('https://registry.npmjs.org/' + encodeURIComponent(manifest.name) + '/latest');
+      const metadata = await fetchJson(registryUrl);
       const comparison = compareVersions(manifest.version, metadata.version);
       if (comparison < 0) {
         failures.push(relative(manifestPath) + ' is behind npm (' + manifest.version + ' < ' + metadata.version + ')');
@@ -412,12 +444,13 @@ async function validatePublishedVersions() {
     const name = project?.[1].match(/^name\s*=\s*"([^"]+)"/m)?.[1];
     const version = project?.[1].match(/^version\s*=\s*"([^"]+)"/m)?.[1];
     if (!name?.startsWith('grantex') || !version) continue;
-    if (!/^grantex(?:-[a-z0-9][a-z0-9-]*)?$/.test(name)) {
-      failures.push(relative(projectPath) + ' has an invalid public PyPI package name');
+    const registryUrl = pypiRegistryUrls.get(name);
+    if (!registryUrl) {
+      failures.push(relative(projectPath) + ' has no approved PyPI registry URL');
       continue;
     }
     try {
-      const metadata = await fetchJson('https://pypi.org/pypi/' + encodeURIComponent(name) + '/json');
+      const metadata = await fetchJson(registryUrl);
       const comparison = compareVersions(version, metadata.info.version);
       if (comparison < 0) {
         failures.push(relative(projectPath) + ' is behind PyPI (' + version + ' < ' + metadata.info.version + ')');
