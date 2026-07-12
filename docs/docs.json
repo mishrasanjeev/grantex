@@ -23,6 +23,7 @@
             "pages": [
               "introduction",
               "quickstart",
+              "release-status",
               "local-development"
             ]
           },

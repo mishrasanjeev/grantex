@@ -1,0 +1,102 @@
+---
+title: "Release Status"
+sidebarTitle: "Release Status"
+description: "Current published Grantex SDK and MCP Auth versions, compatibility boundaries, and reproducible install commands."
+---
+
+## Current published releases
+
+Last verified: **July 12, 2026**
+
+Grantex packages are versioned independently. There is no single version number
+that represents every SDK, integration, service, and protocol artifact in this
+repository.
+
+| Surface | Current release | Status | Runtime requirement |
+|---|---:|---|---|
+| TypeScript SDK | `@grantex/sdk@0.3.13` | Published to npm | Node.js 18+; ESM |
+| Python SDK | `grantex==0.3.14` | Published to PyPI | Python 3.9+ |
+| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.1.10` | Published with known limitations | Go 1.26.1+ |
+| MCP Auth server | `@grantex/mcp-auth@2.0.2` | Published with known limitations | Node.js 18+; ESM |
+| OpenAPI contract | `0.3.12` | Repository API-contract version | Independent of SDK-only patches |
+
+<Info>
+  The SDK patch versions differ because each language package is released on its
+  own schedule. A newer package version does not imply a newer protocol or API
+  contract version.
+</Info>
+
+## Known limitations in the current published artifacts
+
+<Warning>
+  **Go SDK `v0.1.10`:** registration responses use `agentId`, but the published
+  `Agent.ID` field expects JSON `id`, so it remains empty. Derive the agent ID
+  from the returned `did:grantex:<agentId>` value for this release. Its
+  `LogAuditParams` also lacks the API-required `agentDid` and `principalId`;
+  submit audit records with the REST API or CLI.
+</Warning>
+
+<Warning>
+  **MCP Auth `2.0.2`:** use a single process for evaluation only. Authorization
+  codes are always process-local, `consentUi` does not create a page,
+  `onTokenIssued` is not called, middleware/introspection do not check current
+  revocation state, and the Grantex authorization code is not persisted for the
+  token handler. See [MCP Auth Server](/features/mcp-auth-server) for the detailed
+  endpoint and deployment matrix.
+</Warning>
+
+## Reproducible installation
+
+Pin exact versions in applications, examples, CI, and deployment manifests:
+
+<CodeGroup>
+```bash TypeScript
+npm install @grantex/sdk@0.3.13
+```
+
+```bash Python
+python -m pip install grantex==0.3.14
+```
+
+```bash Go
+go get github.com/mishrasanjeev/grantex-go@v0.1.10
+```
+
+```bash MCP Auth
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13
+```
+</CodeGroup>
+
+Unpinned `npm install`, `pip install`, and `go get` commands resolve according to
+their registries and module proxy. Use the pinned commands above when the build
+must be repeatable.
+
+## How to read release information
+
+- [Machine-readable release snapshot](https://github.com/mishrasanjeev/grantex/blob/main/release-status.json)
+  drives the automated cross-surface version and registry checks.
+- [Compatibility matrix](https://github.com/mishrasanjeev/grantex/blob/main/COMPATIBILITY.md)
+  maps repository packages to artifact names, versions, and publication status.
+- [Repository changelog](https://github.com/mishrasanjeev/grantex/blob/main/CHANGELOG.md)
+  records cross-project work. Its latest numbered entry can trail independently
+  published SDK patches.
+- Package registries are authoritative for public availability:
+  [npm (`@grantex/sdk`)](https://www.npmjs.com/package/@grantex/sdk),
+  [PyPI (`grantex`)](https://pypi.org/project/grantex/),
+  [Go Packages](https://pkg.go.dev/github.com/mishrasanjeev/grantex-go), and
+  [npm (`@grantex/mcp-auth`)](https://www.npmjs.com/package/@grantex/mcp-auth).
+
+## Upgrade checklist
+
+1. Read the package-specific notes in the compatibility matrix and changelog.
+2. Confirm the required Node.js, Python, or Go toolchain version.
+3. Update the exact dependency version and regenerate the relevant lockfile.
+4. Run your authorization, token-verification, scope-enforcement, and revocation
+   tests before deployment.
+5. For self-hosted environments, verify the API contract used by your service;
+   an SDK-only patch does not upgrade the service automatically.
+
+<Warning>
+  Do not infer publication from a repository manifest or marketing page alone.
+  Confirm the exact artifact on its public registry before promoting a release.
+</Warning>

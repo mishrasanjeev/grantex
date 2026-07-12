@@ -1,39 +1,59 @@
 ---
 title: "MCP Auth Server"
 sidebarTitle: "MCP Auth Server"
-description: "Production-ready OAuth 2.1 + PKCE authorization server for any MCP server. Managed or self-hosted."
+description: "OAuth 2.1 + PKCE endpoint package for MCP servers, including current v2.0.2 limitations."
 ---
 
 ## Overview
 
-The **MCP specification mandates OAuth 2.1** for transport-level authorization. Implementing it correctly requires PKCE S256, Dynamic Client Registration (RFC 7591), token introspection (RFC 7662), token revocation (RFC 7009), rate limiting, and proper key management.
+MCP clients use OAuth authorization-server metadata, Dynamic Client Registration,
+PKCE, token exchange, introspection, and revocation endpoints.
+`@grantex/mcp-auth` registers those six routes on a Fastify instance and provides
+Express and Hono JWT-verification middleware.
 
-`@grantex/mcp-auth` handles all of this in a single function call. It creates a fully-compliant OAuth 2.1 authorization server that MCP clients auto-discover via the well-known metadata endpoint.
+Current published release: **`@grantex/mcp-auth@2.0.2`**.
 
 ```bash
-npm install @grantex/mcp-auth @grantex/sdk
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13
 ```
 
+This exact command is reproducible. See [Release Status](/release-status) before
+upgrading either independently versioned package.
+
 <Info>
-  `@grantex/mcp-auth` works in both **managed** (Grantex Cloud) and **self-hosted** modes.
-  The API is identical -- just point the Grantex SDK at a different base URL.
+  The supplied `Grantex` client can point at Grantex Cloud or a self-hosted
+  Grantex API. That backend choice does not make the MCP authorization server's
+  own client-registration or authorization-code state managed or durable.
 </Info>
 
-## Managed vs Self-Hosted
+<Warning>
+  Release `2.0.2` is a single-process evaluation release, not a turnkey
+  production deployment. Client registrations default to process memory and
+  authorization codes always use a non-configurable in-memory store, so restarts
+  lose state and multi-replica authorize/token flows can fail. `consentUi` only
+  adds discovery metadata; no `/consent` page is registered. The package also
+  does not persist the `auth.code` returned by the Grantex SDK and can fall back
+  to an authorization-request ID during token exchange, which is not a valid
+  exchange code. Do not rely on end-to-end token issuance until a corrected
+  package release is published and validated with your backend.
+</Warning>
 
-| Feature | Managed (Grantex Cloud) | Self-Hosted |
-|---------|------------------------|-------------|
-| **Setup** | `createMcpAuthServer({ grantex, ... })` | Same API, your infrastructure |
-| **Client Store** | In-memory (stateless, horizontal scale) | Bring your own (Postgres, Redis, etc.) |
-| **JWKS** | Hosted by Grantex | Your JWKS endpoint |
-| **Token Signing** | Grantex signs tokens | Grantex signs tokens (delegated) |
-| **Rate Limiting** | Built-in per-endpoint limits | Built-in, configurable |
-| **Consent UI** | Grantex-hosted consent page | Custom consent page via `consentUi` config |
-| **Audit Trail** | Full audit via Grantex events | Full audit via Grantex events |
-| **Uptime SLA** | 99.9% | Your responsibility |
-| **Compliance** | SOC 2, GDPR ready | Your responsibility |
+## Deployment behavior in 2.0.2
+
+| Concern | Current behavior |
+|---|---|
+| Grantex backend | Cloud or self-hosted, selected through the supplied SDK client |
+| Client registrations | In-memory by default; a custom `ClientStore` can persist clients |
+| Authorization codes | Always process-local `InMemoryCodeStore`; no `codeStore` option |
+| Horizontal scaling | Unsupported for authorize/token flows in `2.0.2` |
+| Consent UI | Metadata only; the package registers no consent route or page |
+| Rate limiting | Fixed Fastify limits; not configurable through `McpAuthConfig` |
+| Middleware/introspection | Signature and claim validation; no live revocation lookup |
 
 ## Quick Start
+
+The following starts the published endpoint surface for local inspection and
+evaluation. It does not remove the limitations above.
 
 ### 1. Create the auth server
 
@@ -101,8 +121,8 @@ curl https://your-mcp-server.example.com/.well-known/oauth-authorization-server
 | `/register` | `POST` | RFC 7591 | Dynamic Client Registration |
 | `/authorize` | `GET` | OAuth 2.1 | Authorization endpoint (PKCE required) |
 | `/token` | `POST` | OAuth 2.1 | Token endpoint (authorization_code, refresh_token) |
-| `/introspect` | `POST` | RFC 7662 | Token introspection |
-| `/revoke` | `POST` | RFC 7009 | Token revocation |
+| `/introspect` | `POST` | RFC 7662 | JWT signature/claim introspection; no live revocation lookup |
+| `/revoke` | `POST` | RFC 7009 | Requests backend revocation by JWT `jti` |
 
 ### Well-Known Metadata
 
@@ -128,7 +148,7 @@ The metadata endpoint returns a JSON document that MCP clients use to discover a
 
 ### Token Introspection
 
-Resource servers validate tokens by calling the introspection endpoint:
+The endpoint verifies JWT signatures and claims against the issuer JWKS. In `2.0.2` it does not query Grantex for current revocation state, so a revoked but otherwise valid token can remain `active` here until expiry:
 
 ```bash
 curl -X POST https://your-mcp-server.example.com/introspect \
@@ -154,7 +174,7 @@ Active token response:
 
 ### Token Revocation
 
-Revoke tokens when a user logs out or an agent is deauthorized:
+The revocation endpoint decodes the token `jti` and requests revocation from Grantex. It returns `200 OK` even if that backend call fails, and the package middleware/introspection paths do not consult the resulting revocation state:
 
 ```bash
 curl -X POST https://your-mcp-server.example.com/revoke \
@@ -185,14 +205,18 @@ const authServer = await createMcpAuthServer({
 });
 ```
 
-Scopes are enforced at two levels:
+Scopes are used at two implemented points in `2.0.2`:
 
-1. **Authorization**: Users see the requested scopes on the consent page and can approve or deny
-2. **Middleware**: The `requireMcpAuth()` middleware rejects requests that lack required scopes
+1. **Authorization request**: The package forwards the requested scopes to the configured Grantex client.
+2. **Middleware**: `requireMcpAuth()` rejects tokens that lack required scopes.
 
-## Consent UI Customization
+The package does not render a consent page. A complete human-consent handoff must
+be implemented outside this release.
 
-Customize the consent page shown to users during authorization:
+## Consent metadata (not a rendered page)
+
+`consentUi` copies display metadata into the discovery document under
+`grantex_extensions.consent_ui_config`:
 
 ```typescript
 const authServer = await createMcpAuthServer({
@@ -209,34 +233,45 @@ const authServer = await createMcpAuthServer({
 });
 ```
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `appName` | `string` | Application name displayed on the consent page |
-| `appLogo` | `string` | URL to your application logo |
-| `privacyUrl` | `string` | Link to your privacy policy |
-| `termsUrl` | `string` | Link to your terms of service |
+| Property | Type | Metadata meaning |
+|---|---|---|
+| `appName` | `string` | Application label advertised to discovery consumers |
+| `appLogo` | `string` | Advertised application-logo URL |
+| `privacyUrl` | `string` | Advertised privacy-policy URL |
+| `termsUrl` | `string` | Advertised terms URL |
 
-## Lifecycle Hooks
+<Warning>
+  `2.0.2` does not register the `/consent` URL advertised in
+  `grantex_extensions.consent_ui`, and `consentUi` does not render or host a
+  consent page. Supply that interaction separately and validate the complete
+  authorization flow before use.
+</Warning>
 
-React to authorization events for audit logging, analytics, or downstream notifications:
+## Lifecycle hooks
+
+Only `hooks.onRevocation` is invoked by `2.0.2`:
 
 ```typescript
 const authServer = await createMcpAuthServer({
   // ...required fields...
   hooks: {
-    onTokenIssued: async (event) => {
-      console.log(`Token issued for client ${event.clientId}`);
-      console.log(`Scopes: ${event.scopes.join(', ')}`);
-      console.log(`Grant ID: ${event.grantId}`);
-    },
     onRevocation: async (jti) => {
-      console.log(`Token ${jti} was revoked`);
+      console.log(`Token ${jti} was submitted for revocation`);
     },
   },
 });
 ```
 
+The exported configuration type also declares `onTokenIssued`, but the token
+endpoint in `2.0.2` does not call it. Do not depend on that hook until a corrected
+release is published.
+
 ## Express Middleware
+
+<Note>
+  Express and Hono middleware verify JWT signatures, claims, algorithms, and
+  configured scopes. They do not perform an online revocation check in `2.0.2`.
+</Note>
 
 ```typescript
 import { requireMcpAuth } from '@grantex/mcp-auth/express';
@@ -293,7 +328,7 @@ app.post('/mcp/tools/call', (c) => {
 
 ## Custom Client Store
 
-By default, client registrations are stored in memory. For production, implement the `ClientStore` interface:
+By default, client registrations are stored in process memory. A custom `ClientStore` can persist registrations, but authorization codes remain in a non-configurable process-local store in `2.0.2`; a custom client store alone does not make the server durable or horizontally scalable:
 
 ```typescript
 import type { ClientStore, ClientRegistration } from '@grantex/mcp-auth';
@@ -342,12 +377,12 @@ Grantex accepts Bronze, Silver, and Gold certification applications for register
 | `agentId` | `string` | Yes | -- | Agent ID for Grantex authorization |
 | `scopes` | `string[]` | Yes | -- | Scopes to request from Grantex |
 | `issuer` | `string` | Yes | -- | Base URL for this auth server |
-| `allowedRedirectUris` | `string[]` | No | `[]` | Allowed redirect URIs (empty = all) |
+| `allowedRedirectUris` | `string[]` | No | `[]` | Declared by the type but not enforced in `2.0.2`; authorization checks each client's DCR-provided URI |
 | `allowedResources` | `string[]` | No | `[]` | Allowed resource indicators (RFC 8707) |
-| `clientStore` | `ClientStore` | No | `InMemoryClientStore` | Custom client registration store |
+| `clientStore` | `ClientStore` | No | `InMemoryClientStore` | Custom client-registration store only; authorization codes remain in memory |
 | `codeExpirationSeconds` | `number` | No | `600` | Authorization code TTL |
-| `consentUi` | `object` | No | -- | Consent UI customization |
-| `hooks` | `object` | No | -- | Lifecycle hooks |
+| `consentUi` | `object` | No | -- | Discovery metadata only; does not create a consent page |
+| `hooks` | `object` | No | -- | `onRevocation` runs; declared `onTokenIssued` is not invoked in `2.0.2` |
 
 ## Rate Limits
 
@@ -357,13 +392,13 @@ Default per-endpoint rate limits:
 |----------|-------------|--------|
 | `/authorize` | 10 | 1 minute |
 | `/token` | 20 | 1 minute |
-| `/introspect` | 30 | 1 minute |
+| `/introspect` | 20 | 1 minute |
 | `/revoke` | 20 | 1 minute |
 | All others | 100 | 1 minute |
 
 ## Security Considerations
 
-`@grantex/mcp-auth` enforces OAuth 2.1 security requirements:
+`@grantex/mcp-auth` implements the following request and token-validation controls. These controls do not remove the deployment and end-to-end flow limitations documented above:
 
 - **PKCE S256 is mandatory.** The `plain` method and implicit grant are rejected.
 - **No password grant.** The `password` grant type is not supported.

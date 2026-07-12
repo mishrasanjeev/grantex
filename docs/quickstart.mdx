@@ -6,13 +6,21 @@ description: "Get up and running with Grantex in under 5 minutes."
 
 ## 1. Install the SDK
 
+This guide targets TypeScript `0.3.13`, Python `0.3.14`, Go `v0.1.10`
+(which requires Go 1.26.1+), and MCP Auth `2.0.2`.
+See [Release Status](/release-status) for publication details and upgrade guidance.
+
 <CodeGroup>
-```bash npm
-npm install @grantex/sdk
+```bash TypeScript
+npm install @grantex/sdk@0.3.13
 ```
 
-```bash pip
-pip install grantex
+```bash Python
+python -m pip install grantex==0.3.14
+```
+
+```bash Go
+go get github.com/mishrasanjeev/grantex-go@v0.1.10
 ```
 
 ```bash CLI
@@ -54,6 +62,27 @@ print(agent.did)
 # → did:grantex:ag_01HXYZ123abc...
 ```
 
+```go Go
+ctx := context.Background()
+client := grantex.NewClient(os.Getenv("GRANTEX_API_KEY"))
+
+agent, err := client.Agents.Register(ctx, grantex.RegisterAgentParams{
+    Name:        "travel-booker",
+    Description: "Books flights and hotels on behalf of users",
+    Scopes:      []string{"calendar:read", "payments:initiate:max_500", "email:send"},
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+const didPrefix = "did:grantex:"
+if !strings.HasPrefix(agent.DID, didPrefix) {
+    log.Fatal("unexpected agent DID")
+}
+agentID := strings.TrimPrefix(agent.DID, didPrefix)
+fmt.Printf("%s (%s)\n", agentID, agent.DID)
+```
+
 ```bash CLI
 grantex agents register \
   --name travel-booker \
@@ -61,6 +90,13 @@ grantex agents register \
   --scopes calendar:read,payments:initiate:max_500,email:send
 ```
 </CodeGroup>
+
+<Note>
+  Go SDK `v0.1.10` expects an `id` response field while the current API returns
+  `agentId`, so `agent.ID` is empty after registration. The Go example derives
+  `agentID` from the stable `did:grantex:<agentId>` value until a corrected SDK
+  release is published. Add `strings` to your imports.
+</Note>
 
 ## 3. Request authorization from a user
 
@@ -90,6 +126,22 @@ auth = client.authorize(AuthorizeParams(
 
 # Redirect user to the consent page
 print(auth.consent_url)
+```
+
+```go Go
+authRequest, err := client.Authorize(ctx, grantex.AuthorizeParams{
+    AgentID:     agentID,
+    PrincipalID: "user_abc123",
+    Scopes:      []string{"calendar:read", "payments:initiate:max_500"},
+    ExpiresIn:   "24h",
+    RedirectURI: "https://yourapp.com/auth/callback",
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+// Redirect the user to the consent page.
+fmt.Println(authRequest.ConsentURL)
 ```
 
 ```bash CLI
@@ -130,6 +182,20 @@ print(token.scopes)       # ('calendar:read', 'payments:initiate:max_500')
 print(token.grant_id)     # 'grnt_01HXYZ...'
 ```
 
+```go Go
+token, err := client.Tokens.Exchange(ctx, grantex.ExchangeTokenParams{
+    Code:    code, // from the redirect callback
+    AgentID: agentID,
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(token.GrantToken)
+fmt.Println(token.Scopes)
+fmt.Println(token.GrantID)
+```
+
 ```bash CLI
 grantex tokens exchange --code <code> --agent-id ag_01HXYZ...
 # Returns grantToken (JWT), refreshToken, grantId, scopes
@@ -160,6 +226,19 @@ grant = verify_grant_token(token.grant_token, VerifyGrantTokenOptions(
 
 print(grant.principal_id)  # 'user_abc123'
 print(grant.scopes)        # ('calendar:read', 'payments:initiate:max_500')
+```
+
+```go Go
+grant, err := grantex.VerifyGrantToken(ctx, token.GrantToken, grantex.VerifyOptions{
+    JwksURI:        "https://api.grantex.dev/.well-known/jwks.json",
+    RequiredScopes: []string{"calendar:read"},
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Println(grant.PrincipalID) // "user_abc123"
+fmt.Println(grant.Scopes)
 ```
 
 ```bash CLI
@@ -207,6 +286,13 @@ grantex audit log \
 ```
 </CodeGroup>
 
+<Warning>
+  Go SDK `v0.1.10` cannot send the current audit-log contract: its
+  `LogAuditParams` omits the required `agentDid` and `principalId` fields. Use
+  the CLI or call `POST /v1/audit/log` directly for this optional step until a
+  corrected Go SDK release is published.
+</Warning>
+
 ## Next steps
 
 <CardGroup cols={2}>
@@ -221,6 +307,9 @@ grantex audit log \
   </Card>
   <Card title="Python SDK" icon="python" href="/sdks/python/overview">
     Full API reference for the Python SDK.
+  </Card>
+  <Card title="Go SDK" icon="code" href="/sdks/go/overview">
+    Full API reference for the Go SDK.
   </Card>
   <Card title="CLI" icon="terminal" href="/integrations/cli">
     83 commands with --json support for scripting and AI agents.

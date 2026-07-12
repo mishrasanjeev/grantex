@@ -54,7 +54,8 @@
     "sameAs": [
       "https://github.com/mishrasanjeev/grantex",
       "https://www.npmjs.com/package/@grantex/sdk",
-      "https://pypi.org/project/grantex/"
+      "https://pypi.org/project/grantex/",
+      "https://pkg.go.dev/github.com/mishrasanjeev/grantex-go"
     ]
   }
   </script>
@@ -93,7 +94,7 @@
         "name": "How do I secure my AI agent with Grantex?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "Install the SDK (npm install @grantex/sdk or pip install grantex), register your agent, create an authorization request with specific scopes, have the user approve via consent URL, and exchange the code for a signed JWT. The agent uses this token for all API calls, and any service can verify its signature and claims with JWKS. The entire flow takes about 10 lines of code."
+          "text": "Install the SDK for your language (npm install @grantex/sdk, pip install grantex, or go get github.com/mishrasanjeev/grantex-go@v0.1.10), register your agent, create an authorization request with specific scopes, have the user approve via the consent URL, and exchange the code for a signed JWT. Services can verify the token's signature and claims locally after retrieving the issuer's JWKS."
         }
       },
       {
@@ -253,6 +254,7 @@
       align-items: center;
       justify-content: space-between;
       height: 60px;
+      min-width: 0;
     }
     .nav-logo {
       font-family: var(--mono);
@@ -262,11 +264,33 @@
       letter-spacing: -0.5px;
     }
     .nav-logo span { color: var(--text); }
+    .nav-toggle {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 40px;
+      padding: 8px 12px;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: var(--mono);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .nav-toggle:hover { border-color: var(--muted); }
+    .nav-toggle:focus-visible,
+    .nav-links a:focus-visible {
+      outline: 2px solid var(--accent2);
+      outline-offset: 2px;
+    }
     .nav-links {
       display: flex;
       gap: 28px;
       list-style: none;
       font-size: 14px;
+      min-width: 0;
     }
     .nav-links a { color: var(--muted); transition: color 0.15s; }
     .nav-links a:hover { color: var(--text); text-decoration: none; }
@@ -340,11 +364,148 @@
       color: var(--muted);
       background: var(--surface);
     }
+    .badge:hover {
+      color: var(--text);
+      border-color: var(--muted);
+      text-decoration: none;
+    }
     .badge .dot {
       width: 6px; height: 6px;
       border-radius: 50%;
       background: var(--accent);
     }
+
+    /* ── Release snapshot ──────────────────────────────────────────────────── */
+    .snapshot-section { padding: 56px 0 64px; }
+    .release-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+    .release-header .section-title { margin-bottom: 8px; }
+    .release-intro {
+      max-width: 680px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+    .release-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px 16px;
+      flex-shrink: 0;
+      font-size: 13px;
+    }
+    .release-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .release-card {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      padding: 22px;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .release-card:hover {
+      border-color: var(--accent2);
+      text-decoration: none;
+      transform: translateY(-1px);
+    }
+    .release-card:focus-visible,
+    .snapshot-card:focus-visible {
+      outline: 2px solid var(--accent2);
+      outline-offset: 3px;
+    }
+    .release-language {
+      margin-bottom: 6px;
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .release-name {
+      overflow-wrap: anywhere;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .release-version {
+      margin: 6px 0 10px;
+      font-family: var(--mono);
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .release-meta {
+      margin-top: auto;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .release-caveat {
+      margin-top: 16px;
+      padding: 14px 16px;
+      color: var(--muted);
+      background: rgba(210, 168, 255, 0.07);
+      border: 1px solid rgba(210, 168, 255, 0.25);
+      border-radius: var(--radius);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .release-caveat strong { color: var(--text); }
+    .capability-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 24px;
+      margin: 48px 0 20px;
+    }
+    .capability-heading h3 { font-size: 20px; }
+    .capability-heading p { color: var(--muted); font-size: 13px; }
+    .snapshot-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .snapshot-card {
+      display: block;
+      padding: 22px;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      transition: border-color 0.2s;
+    }
+    .snapshot-card:hover { border-color: var(--accent); text-decoration: none; }
+    .snapshot-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .status-tag {
+      padding: 2px 8px;
+      color: #0d1117;
+      background: var(--accent);
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .status-tag.blue { background: var(--accent2); }
+    .status-tag.purple { background: #d2a8ff; }
+    .snapshot-card-title { font-weight: 600; }
+    .snapshot-card p { color: var(--muted); font-size: 14px; line-height: 1.55; }
 
     /* ── Problem cards ─────────────────────────────────────────────────────── */
     .section-label {
@@ -444,6 +605,7 @@
     .tabs {
       display: flex;
       gap: 0;
+      overflow-x: auto;
       border-bottom: 1px solid var(--border);
       margin-bottom: 0;
     }
@@ -458,14 +620,21 @@
       border-bottom: 2px solid transparent;
       margin-bottom: -1px;
       transition: color 0.15s;
+      white-space: nowrap;
     }
     .tab-btn.active {
       color: var(--accent2);
       border-bottom-color: var(--accent2);
     }
     .tab-btn:hover { color: var(--text); }
+    .tab-btn:focus-visible {
+      outline: 2px solid var(--accent2);
+      outline-offset: -2px;
+    }
+    .quickstart-shell { max-width: 760px; }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
+    .tab-panel[hidden] { display: none; }
     .code-block {
       position: relative;
       background: var(--surface);
@@ -507,26 +676,30 @@
 
     /* ── Install commands ──────────────────────────────────────────────────── */
     .install-commands {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 16px;
-      flex-wrap: wrap;
       margin-bottom: 40px;
-      max-width: 680px;
+      max-width: 900px;
     }
     .install-cmd {
-      flex: 1;
-      min-width: 260px;
       display: flex;
       align-items: center;
       gap: 12px;
+      width: 100%;
+      min-width: 0;
       padding: 14px 18px;
+      color: var(--text);
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
+      font: inherit;
+      text-align: left;
       cursor: pointer;
       transition: border-color 0.2s;
     }
     .install-cmd:hover { border-color: var(--accent2); }
+    .install-cmd:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
     .install-label {
       font-family: var(--mono);
       font-size: 11px;
@@ -542,6 +715,8 @@
       font-size: 14px;
       color: var(--text);
       flex: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
     .install-copy {
       font-family: var(--mono);
@@ -930,10 +1105,43 @@
     .alt-table .partial { color: #d29922; font-size: 12px; }
 
     /* ── Responsive ────────────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .nav-inner {
+        height: auto;
+        min-height: 60px;
+        flex-wrap: wrap;
+      }
+      .nav-toggle { display: inline-flex; }
+      .nav-links {
+        display: none;
+        order: 3;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+        gap: 4px;
+        padding: 10px 0 14px;
+        border-top: 1px solid var(--border);
+      }
+      .nav-links.is-open { display: grid; }
+      .nav-links a {
+        display: block;
+        padding: 8px 10px;
+        border-radius: 6px;
+      }
+      .nav-links a:hover { background: var(--surface); }
+      .release-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
     @media (max-width: 640px) {
       section { padding: 56px 0; }
-      .nav-links { gap: 16px; font-size: 13px; }
+      .container { padding: 0 18px; }
+      .nav-links { grid-template-columns: 1fr; font-size: 13px; }
       .hero { padding: 64px 0 56px; }
+      .snapshot-section { padding: 48px 0 56px; }
+      .release-header,
+      .capability-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
+      .release-links { justify-content: flex-start; }
+      .release-grid,
+      .install-commands { grid-template-columns: 1fr; }
+      .tab-btn { padding: 10px 14px; }
       .footer-inner { flex-direction: column; align-items: flex-start; }
     }
   </style>
@@ -947,11 +1155,18 @@
       <a href="/" class="nav-logo" style="text-decoration:none;">
         grant<span>ex</span>
       </a>
-      <ul class="nav-links">
+      <button type="button" class="nav-toggle" aria-expanded="false" aria-controls="primary-navigation">
+        Menu
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M2 4.25a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.25zm0 3.75a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H2.75A.75.75 0 012 8zm0 3.75a.75.75 0 01.75-.75h10.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75z"/>
+        </svg>
+      </button>
+      <ul class="nav-links" id="primary-navigation">
         <li><a href="https://docs.grantex.dev"
                onclick="gtag('event','docs_click',{event_category:'nav'})">Docs</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex"
                onclick="gtag('event','github_click',{event_category:'nav'})">GitHub</a></li>
+        <li><a href="#whats-new">Releases</a></li>
         <li><a href="/playground"
                onclick="gtag('event','playground_click',{event_category:'nav'})">Playground</a></li>
         <li><a href="/gemma">Gemma 4</a></li>
@@ -1014,82 +1229,130 @@
       <span class="badge"><span class="dot"></span> IETF I-D</span>
       <span class="badge"><span class="dot"></span> SOC 2 readiness mapping</span>
       <span class="badge"><span class="dot"></span> Apache 2.0</span>
-      <span class="badge"><span class="dot"></span> v1.0</span>
+      <a class="badge" href="https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md"
+         aria-label="Read the Grantex protocol version 1.0 specification">
+        <span class="dot"></span> Protocol v1.0
+      </a>
     </div>
   </div>
 </section>
 
-<!-- ── Current Development Snapshot ───────────────────────────────────────── -->
-<section id="whats-new" style="padding:48px 0;border-bottom:1px solid var(--border);">
+<!-- ── Published releases and capability highlights ───────────────────────── -->
+<section id="whats-new" class="snapshot-section">
   <div class="container">
-    <div class="section-label">Current snapshot</div>
-    <h2 class="section-title" style="font-size:clamp(24px,4vw,36px);">Recent Grantex capabilities</h2>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:32px;">
+    <div class="release-header">
+      <div>
+        <div class="section-label">Published releases</div>
+        <h2 class="section-title">Current public releases</h2>
+        <p class="release-intro">
+          Verified against npm, PyPI, and the Go module proxy on 12 July 2026.
+          Grantex packages are independently versioned.
+        </p>
+      </div>
+      <div class="release-links" aria-label="Release resources">
+        <a href="https://docs.grantex.dev/release-status">Release status guide</a>
+        <a href="https://github.com/mishrasanjeev/grantex/blob/main/COMPATIBILITY.md">Compatibility matrix</a>
+        <a href="https://github.com/mishrasanjeev/grantex/blob/main/CHANGELOG.md">Release notes</a>
+      </div>
+    </div>
 
-      <a href="/gemma" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="background:#3fb950;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">NEW</span>
-          <span style="color:var(--text);font-weight:600;">@grantex/gemma</span>
-        </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Offline consent bundles and on-device verification examples for Gemma agents.</p>
+    <div class="release-grid">
+      <a class="release-card" href="https://www.npmjs.com/package/@grantex/sdk/v/0.3.13">
+        <span class="release-language">TypeScript SDK</span>
+        <span class="release-name">@grantex/sdk</span>
+        <strong class="release-version">0.3.13</strong>
+        <span class="release-meta">npm &middot; published 11 Jul 2026</span>
       </a>
-
-      <a href="/mcp" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="background:#3fb950;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">PKG</span>
-          <span style="color:var(--text);font-weight:600;">MCP Auth Server v2.0.1</span>
-        </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">OAuth 2.1 + PKCE for MCP servers, with managed and self-hosted modes.</p>
+      <a class="release-card" href="https://pypi.org/project/grantex/0.3.14/">
+        <span class="release-language">Python SDK</span>
+        <span class="release-name">grantex</span>
+        <strong class="release-version">0.3.14</strong>
+        <span class="release-meta">PyPI &middot; published 11 Jul 2026</span>
       </a>
-
-      <a href="/dpdp" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="background:#3fb950;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">NEW</span>
-          <span style="color:var(--text);font-weight:600;">@grantex/dpdp</span>
-        </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">DPDP Act 2023 and EU AI Act control mappings, structured consent records, purpose limitation, and audit-ready exports.</p>
+      <a class="release-card" href="https://pkg.go.dev/github.com/mishrasanjeev/grantex-go@v0.1.10">
+        <span class="release-language">Go SDK</span>
+        <span class="release-name">github.com/mishrasanjeev/grantex-go</span>
+        <strong class="release-version">v0.1.10</strong>
+        <span class="release-meta">Go module proxy &middot; Go 1.26.1+ &middot; known SDK gaps</span>
       </a>
-
-      <a href="/registry" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="background:#58a6ff;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">LAUNCH</span>
-          <span style="color:var(--text);font-weight:600;">Trust Registry</span>
-        </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Public DID-based directory of verified AI agent publishers, DNS verification, and embeddable widgets.</p>
+      <a class="release-card" href="https://www.npmjs.com/package/@grantex/mcp-auth/v/2.0.2">
+        <span class="release-language">MCP Auth</span>
+        <span class="release-name">@grantex/mcp-auth</span>
+        <strong class="release-version">2.0.2</strong>
+        <span class="release-meta">npm &middot; independently versioned</span>
       </a>
+    </div>
 
-      <a href="/anomaly" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="background:#58a6ff;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">EXPANDED</span>
-          <span style="color:var(--text);font-weight:600;">Anomaly Detection</span>
+    <div class="release-caveat" role="note">
+      <strong>Known published-package limits:</strong>
+      Go SDK v0.1.10 needs an agent-ID workaround after registration and cannot
+      send the current audit payload through its typed client. MCP Auth 2.0.2 is
+      single-process evaluation software with in-memory code state, no rendered
+      consent page, and an incomplete backend code handoff.
+      <a href="https://docs.grantex.dev/release-status">Read the exact boundaries and workarounds.</a>
+    </div>
+
+    <div class="capability-heading">
+      <h3>Capability highlights</h3>
+      <p>Implemented product areas; follow the linked docs for package-level status and limitations.</p>
+    </div>
+    <div class="snapshot-grid">
+      <a class="snapshot-card" href="/gemma">
+        <div class="snapshot-card-header">
+          <span class="status-tag">SDK</span>
+          <span class="snapshot-card-title">@grantex/gemma</span>
         </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Four SQL-backed activity checks, finding lifecycle APIs, and stored custom-rule and channel configuration.</p>
+        <p>Offline consent bundles and on-device verification examples for Gemma agents.</p>
       </a>
-
-      <a href="https://docs.grantex.dev/cli/verify" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="background:#58a6ff;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">NEW</span>
-          <span style="color:var(--text);font-weight:600;">grantex verify</span>
+      <a class="snapshot-card" href="/mcp">
+        <div class="snapshot-card-header">
+          <span class="status-tag blue">AUTH</span>
+          <span class="snapshot-card-title">MCP Auth Server</span>
         </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">One command to inspect any grant token. Claims can be decoded locally; signature verification may retrieve JWKS, and live revocation checks require network access.</p>
+        <p>Published OAuth endpoint package for single-process evaluation; review the v2.0.2 consent, state, and token-exchange limitations.</p>
       </a>
-
-      <a href="https://docs.grantex.dev/guides/security-hardening" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="background:#f97583;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">CURRENT</span>
-          <span style="color:var(--text);font-weight:600;">Enterprise Hardening</span>
+      <a class="snapshot-card" href="/dpdp">
+        <div class="snapshot-card-header">
+          <span class="status-tag purple">CONTROLS</span>
+          <span class="snapshot-card-title">@grantex/dpdp</span>
         </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">Rate limiting on every endpoint, HTTP security headers, SDK retry with backoff, structured logging, deep health checks, DB transactions, graceful shutdown.</p>
+        <p>DPDP Act 2023 and EU AI Act control mappings, structured consent records, purpose limitation, and audit-ready exports.</p>
       </a>
-
-      <a href="#scope-enforcement" style="text-decoration:none;display:block;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="background:#f97583;color:#0d1117;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;">CURRENT</span>
-          <span style="color:var(--text);font-weight:600;">Scope Enforcement</span>
+      <a class="snapshot-card" href="/registry">
+        <div class="snapshot-card-header">
+          <span class="status-tag blue">TRUST</span>
+          <span class="snapshot-card-title">Trust Registry</span>
         </div>
-        <p style="color:var(--muted);font-size:14px;margin:0;line-height:1.5;">enforce() + wrapTool() + Express/FastAPI middleware. Define manifests for any connector, or use 53 pre-built ones. &lt;1ms per call.</p>
+        <p>Public DID-based directory of verified AI agent publishers, DNS verification, and embeddable widgets.</p>
       </a>
-
+      <a class="snapshot-card" href="/anomaly">
+        <div class="snapshot-card-header">
+          <span class="status-tag blue">SECURITY</span>
+          <span class="snapshot-card-title">Anomaly Detection</span>
+        </div>
+        <p>Four SQL-backed activity checks, finding lifecycle APIs, and stored custom-rule and channel configuration.</p>
+      </a>
+      <a class="snapshot-card" href="https://docs.grantex.dev/cli/verify">
+        <div class="snapshot-card-header">
+          <span class="status-tag">CLI</span>
+          <span class="snapshot-card-title">grantex verify</span>
+        </div>
+        <p>Decode claims locally, verify signatures with JWKS, and opt into a network-backed live revocation check.</p>
+      </a>
+      <a class="snapshot-card" href="https://docs.grantex.dev/guides/security-hardening">
+        <div class="snapshot-card-header">
+          <span class="status-tag purple">OPERATIONS</span>
+          <span class="snapshot-card-title">Enterprise Hardening</span>
+        </div>
+        <p>Rate limiting, HTTP security headers, SDK retry, structured logging, deep health checks, transactions, and graceful shutdown.</p>
+      </a>
+      <a class="snapshot-card" href="#scope-enforcement">
+        <div class="snapshot-card-header">
+          <span class="status-tag">ENFORCEMENT</span>
+          <span class="snapshot-card-title">Scope Enforcement</span>
+        </div>
+        <p>enforce(), wrapTool(), and Express/FastAPI middleware with custom or pre-built tool manifests.</p>
+      </a>
     </div>
   </div>
 </section>
@@ -1558,90 +1821,161 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
     <div class="section-label">Quickstart</div>
     <h2 class="section-title">Up and running in minutes</h2>
     <p class="section-sub">
-      Install the SDK and authorize your first agent in under 10 lines.
+      Choose an SDK. These pinned commands reproduce the releases verified above; each follows the same consent, token exchange, and verification lifecycle.
     </p>
 
     <div class="install-commands">
-      <div class="install-cmd" onclick="copyInstall('npm install @grantex/sdk', this)">
+      <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/sdk@0.3.13', this)"
+              aria-label="Copy the TypeScript SDK install command">
         <span class="install-label">npm</span>
-        <code>npm install @grantex/sdk</code>
+        <code>npm install @grantex/sdk@0.3.13</code>
         <span class="install-copy">Copy</span>
-      </div>
-      <div class="install-cmd" onclick="copyInstall('pip install grantex', this)">
+      </button>
+      <button type="button" class="install-cmd" onclick="copyInstall('python -m pip install grantex==0.3.14', this)"
+              aria-label="Copy the Python SDK install command">
         <span class="install-label">PyPI</span>
-        <code>pip install grantex</code>
+        <code>python -m pip install grantex==0.3.14</code>
         <span class="install-copy">Copy</span>
-      </div>
-      <div class="install-cmd" onclick="copyInstall('npm install -g @grantex/cli', this)">
+      </button>
+      <button type="button" class="install-cmd" onclick="copyInstall('go get github.com/mishrasanjeev/grantex-go@v0.1.10', this)"
+              aria-label="Copy the Go SDK version 0.1.10 install command">
+        <span class="install-label">Go</span>
+        <code>go get github.com/mishrasanjeev/grantex-go@v0.1.10</code>
+        <span class="install-copy">Copy</span>
+      </button>
+      <button type="button" class="install-cmd" onclick="copyInstall('npm install -g @grantex/cli', this)"
+              aria-label="Copy the Grantex CLI install command">
         <span class="install-label">CLI</span>
         <code>npm install -g @grantex/cli</code>
         <span class="install-copy">Copy</span>
-      </div>
+      </button>
     </div>
 
-    <div style="max-width:680px;">
-      <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('node', this)">Node.js</button>
-        <button class="tab-btn" onclick="switchTab('python', this)">Python</button>
-        <button class="tab-btn" onclick="switchTab('cli', this)">CLI</button>
+    <div class="quickstart-shell">
+      <div class="tabs" role="tablist" aria-label="SDK quickstarts">
+        <button type="button" class="tab-btn active" id="tab-button-node" role="tab"
+                aria-selected="true" aria-controls="tab-node" tabindex="0" onclick="switchTab('node', this)">Node.js</button>
+        <button type="button" class="tab-btn" id="tab-button-python" role="tab"
+                aria-selected="false" aria-controls="tab-python" tabindex="-1" onclick="switchTab('python', this)">Python</button>
+        <button type="button" class="tab-btn" id="tab-button-go" role="tab"
+                aria-selected="false" aria-controls="tab-go" tabindex="-1" onclick="switchTab('go', this)">Go</button>
+        <button type="button" class="tab-btn" id="tab-button-cli" role="tab"
+                aria-selected="false" aria-controls="tab-cli" tabindex="-1" onclick="switchTab('cli', this)">CLI</button>
       </div>
 
       <!-- Node.js -->
-      <div class="tab-panel active" id="tab-node">
+      <div class="tab-panel active" id="tab-node" role="tabpanel" aria-labelledby="tab-button-node">
         <div class="code-block">
-          <button class="copy-btn" onclick="copyCode('code-node', this, 'npm_install_copy')">Copy</button>
-          <pre id="code-node"><span class="cm">// npm install @grantex/sdk</span>
+          <button type="button" class="copy-btn" aria-label="Copy the Node.js quickstart"
+                  onclick="copyCode('code-node', this, 'node_quickstart_copy')">Copy</button>
+          <pre id="code-node"><span class="cm">// npm install @grantex/sdk@0.3.13</span>
 <span class="kw">import</span> <span class="op">{ </span><span class="id">Grantex</span><span class="op">,</span> <span class="id">verifyGrantToken</span><span class="op"> }</span> <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
 
 <span class="kw">const</span> <span class="id">grantex</span> <span class="op">=</span> <span class="kw">new</span> <span class="fn">Grantex</span><span class="op">({</span> <span class="id">apiKey</span><span class="op">:</span> <span class="str">'YOUR_API_KEY'</span> <span class="op">});</span>
 
-<span class="cm">// 1. Request authorization — redirect user to consentUrl</span>
-<span class="kw">const</span> <span class="op">{</span> <span class="id">consentUrl</span> <span class="op">}</span> <span class="op">=</span> <span class="kw">await</span> <span class="id">grantex</span><span class="op">.</span><span class="fn">authorize</span><span class="op">({</span>
+<span class="cm">// 1. Request authorization; live mode returns the code to your callback.</span>
+<span class="kw">const</span> <span class="id">auth</span> <span class="op">=</span> <span class="kw">await</span> <span class="id">grantex</span><span class="op">.</span><span class="fn">authorize</span><span class="op">({</span>
   <span class="id">agentId</span><span class="op">:</span>  <span class="str">'ag_01J...'</span><span class="op">,</span>
   <span class="id">userId</span><span class="op">:</span>   <span class="str">'usr_01J...'</span><span class="op">,</span>
   <span class="id">scopes</span><span class="op">:</span>  <span class="op">[</span><span class="str">'calendar:read'</span><span class="op">,</span> <span class="str">'email:send'</span><span class="op">],</span>
+  <span class="id">audience</span><span class="op">:</span> <span class="str">'https://api.example.com'</span><span class="op">,</span>
 <span class="op">});</span>
 
-<span class="cm">// 2. Exchange the authorization code for a grant token</span>
-<span class="kw">const</span> <span class="id">token</span> <span class="op">=</span> <span class="kw">await</span> <span class="id">grantex</span><span class="op">.</span><span class="id">tokens</span><span class="op">.</span><span class="fn">exchange</span><span class="op">({</span> <span class="id">code</span><span class="op">,</span> <span class="id">agentId</span><span class="op">:</span> <span class="str">'ag_01J...'</span> <span class="op">});</span>
+<span class="kw">if</span> <span class="op">(!</span><span class="id">auth</span><span class="op">.</span><span class="id">code</span><span class="op">) {</span>
+  <span class="id">console</span><span class="op">.</span><span class="fn">log</span><span class="op">(</span><span class="str">`Approve access at: ${auth.consentUrl}`</span><span class="op">);</span>
+  <span class="cm">// Exchange the callback's code in your redirect handler.</span>
+<span class="op">} else {</span>
+  <span class="cm">// 2. Sandbox or policy auto-approval can return a code immediately.</span>
+  <span class="kw">const</span> <span class="id">token</span> <span class="op">=</span> <span class="kw">await</span> <span class="id">grantex</span><span class="op">.</span><span class="id">tokens</span><span class="op">.</span><span class="fn">exchange</span><span class="op">({</span> <span class="id">code</span><span class="op">:</span> <span class="id">auth</span><span class="op">.</span><span class="id">code</span><span class="op">,</span> <span class="id">agentId</span><span class="op">:</span> <span class="str">'ag_01J...'</span> <span class="op">});</span>
 
-<span class="cm">// 3. Verify locally (valid JWKS keys are reused; fetch and refresh may use network)</span>
-<span class="kw">const</span> <span class="id">grant</span> <span class="op">=</span> <span class="kw">await</span> <span class="fn">verifyGrantToken</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">grantToken</span><span class="op">,</span> <span class="op">{</span>
-  <span class="id">jwksUri</span><span class="op">:</span> <span class="str">'https://api.grantex.dev/.well-known/jwks.json'</span><span class="op">,</span>
-<span class="op">});</span>
-<span class="id">console</span><span class="op">.</span><span class="fn">log</span><span class="op">(</span><span class="id">grant</span><span class="op">.</span><span class="id">scopes</span><span class="op">);</span> <span class="cm">// ['calendar:read', 'email:send']</span></pre>
+  <span class="cm">// 3. Verify locally; retrieving or refreshing JWKS may use the network.</span>
+  <span class="kw">const</span> <span class="id">grant</span> <span class="op">=</span> <span class="kw">await</span> <span class="fn">verifyGrantToken</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">grantToken</span><span class="op">,</span> <span class="op">{</span>
+    <span class="id">jwksUri</span><span class="op">:</span> <span class="str">'https://api.grantex.dev/.well-known/jwks.json'</span><span class="op">,</span>
+    <span class="id">audience</span><span class="op">:</span> <span class="str">'https://api.example.com'</span><span class="op">,</span>
+  <span class="op">});</span>
+  <span class="id">console</span><span class="op">.</span><span class="fn">log</span><span class="op">(</span><span class="id">grant</span><span class="op">.</span><span class="id">scopes</span><span class="op">);</span> <span class="cm">// ['calendar:read', 'email:send']</span>
+<span class="op">}</span></pre>
         </div>
       </div>
 
       <!-- Python -->
-      <div class="tab-panel" id="tab-python">
+      <div class="tab-panel" id="tab-python" role="tabpanel" aria-labelledby="tab-button-python" hidden>
         <div class="code-block">
-          <button class="copy-btn" onclick="copyCode('code-python', this, 'pip_install_copy')">Copy</button>
-          <pre id="code-python"><span class="cm"># pip install grantex</span>
-<span class="kw">from</span> <span class="id">grantex</span> <span class="kw">import</span> <span class="id">Grantex</span><span class="op">,</span> <span class="id">ExchangeTokenParams</span>
+          <button type="button" class="copy-btn" aria-label="Copy the Python quickstart"
+                  onclick="copyCode('code-python', this, 'python_quickstart_copy')">Copy</button>
+          <pre id="code-python"><span class="cm"># python -m pip install grantex==0.3.14</span>
+<span class="kw">from</span> <span class="id">grantex</span> <span class="kw">import</span> <span class="id">AuthorizeParams</span><span class="op">,</span> <span class="id">ExchangeTokenParams</span><span class="op">,</span> <span class="id">Grantex</span>
 
 <span class="id">client</span> <span class="op">=</span> <span class="fn">Grantex</span><span class="op">(</span><span class="id">api_key</span><span class="op">=</span><span class="str">"YOUR_API_KEY"</span><span class="op">)</span>
 
-<span class="cm"># 1. Request authorization — redirect user to consent_url</span>
-<span class="id">auth</span> <span class="op">=</span> <span class="id">client</span><span class="op">.</span><span class="fn">authorize</span><span class="op">(</span>
+<span class="cm"># 1. Request authorization; live mode returns the code to your callback.</span>
+<span class="id">auth</span> <span class="op">=</span> <span class="id">client</span><span class="op">.</span><span class="fn">authorize</span><span class="op">(</span><span class="fn">AuthorizeParams</span><span class="op">(</span>
     <span class="id">agent_id</span><span class="op">=</span><span class="str">"ag_01J..."</span><span class="op">,</span>
     <span class="id">user_id</span><span class="op">=</span><span class="str">"usr_01J..."</span><span class="op">,</span>
     <span class="id">scopes</span><span class="op">=[</span><span class="str">"calendar:read"</span><span class="op">,</span> <span class="str">"email:send"</span><span class="op">],</span>
-<span class="op">)</span>
+    <span class="id">audience</span><span class="op">=</span><span class="str">"https://api.example.com"</span><span class="op">,</span>
+<span class="op">))</span>
 
-<span class="cm"># 2. Exchange the authorization code for a grant token</span>
-<span class="id">token</span> <span class="op">=</span> <span class="id">client</span><span class="op">.</span><span class="id">tokens</span><span class="op">.</span><span class="fn">exchange</span><span class="op">(</span><span class="fn">ExchangeTokenParams</span><span class="op">(</span><span class="id">code</span><span class="op">=</span><span class="id">code</span><span class="op">,</span> <span class="id">agent_id</span><span class="op">=</span><span class="str">"ag_01J..."</span><span class="op">))</span>
+<span class="kw">if</span> <span class="kw">not</span> <span class="id">auth</span><span class="op">.</span><span class="id">code</span><span class="op">:</span>
+    <span class="fn">print</span><span class="op">(</span><span class="str">f"Approve access at: {auth.consent_url}"</span><span class="op">)</span>
+    <span class="cm"># Exchange the callback code in your redirect handler.</span>
+<span class="kw">else</span><span class="op">:</span>
+    <span class="cm"># 2. Sandbox or policy auto-approval can return a code immediately.</span>
+    <span class="id">token</span> <span class="op">=</span> <span class="id">client</span><span class="op">.</span><span class="id">tokens</span><span class="op">.</span><span class="fn">exchange</span><span class="op">(</span><span class="fn">ExchangeTokenParams</span><span class="op">(</span><span class="id">code</span><span class="op">=</span><span class="id">auth</span><span class="op">.</span><span class="id">code</span><span class="op">,</span> <span class="id">agent_id</span><span class="op">=</span><span class="str">"ag_01J..."</span><span class="op">))</span>
 
-<span class="cm"># 3. Use the token — scopes, grantId, and JWT are all available</span>
-<span class="fn">print</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">scopes</span><span class="op">)</span>      <span class="cm"># ('calendar:read', 'email:send')</span>
-<span class="fn">print</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">grant_token</span><span class="op">)</span> <span class="cm"># RS256-signed JWT</span></pre>
+    <span class="cm"># 3. Use the token — scopes, grant ID, and JWT are available.</span>
+    <span class="fn">print</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">scopes</span><span class="op">)</span>      <span class="cm"># ('calendar:read', 'email:send')</span>
+    <span class="fn">print</span><span class="op">(</span><span class="id">token</span><span class="op">.</span><span class="id">grant_token</span><span class="op">)</span> <span class="cm"># RS256-signed JWT</span></pre>
+        </div>
+      </div>
+
+      <!-- Go -->
+      <div class="tab-panel" id="tab-go" role="tabpanel" aria-labelledby="tab-button-go" hidden>
+        <div class="code-block">
+          <button type="button" class="copy-btn" aria-label="Copy the Go quickstart"
+                  onclick="copyCode('code-go', this, 'go_quickstart_copy')">Copy</button>
+          <pre id="code-go">// go get github.com/mishrasanjeev/grantex-go@v0.1.10
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+
+	grantex "github.com/mishrasanjeev/grantex-go"
+)
+
+func main() {
+	ctx := context.Background()
+	client := grantex.NewClient("YOUR_API_KEY")
+	auth, err := client.Authorize(ctx, grantex.AuthorizeParams{
+		AgentID:     "ag_01J...",
+		PrincipalID: "usr_01J...",
+		Scopes:      []string{"calendar:read", "email:send"},
+		Audience:    "https://api.example.com",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(auth.ConsentURL)
+	token, err := client.Tokens.Exchange(ctx, grantex.ExchangeTokenParams{
+		Code:    "authorization-code-from-callback",
+		AgentID: "ag_01J...",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(token.GrantToken)
+}
+</pre>
         </div>
       </div>
 
       <!-- CLI -->
-      <div class="tab-panel" id="tab-cli">
+      <div class="tab-panel" id="tab-cli" role="tabpanel" aria-labelledby="tab-button-cli" hidden>
         <div class="code-block">
-          <button class="copy-btn" onclick="copyCode('code-cli', this, 'cli_copy')">Copy</button>
+          <button type="button" class="copy-btn" aria-label="Copy the CLI quickstart"
+                  onclick="copyCode('code-cli', this, 'cli_quickstart_copy')">Copy</button>
           <pre id="code-cli"><span class="cm"># npm install -g @grantex/cli</span>
 <span class="cm"># All commands support --json for AI agent / script use</span>
 
@@ -1797,11 +2131,12 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
     <!-- ── Install + CTA ──────────────────────────────────────────────── -->
     <div style="margin-top:40px;">
       <div class="install-commands">
-        <div class="install-cmd" onclick="navigator.clipboard.writeText('npm install @grantex/mpp')">
+        <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/mpp', this)"
+                aria-label="Copy the MPP package install command">
           <span class="install-label">npm</span>
           <code>npm install @grantex/mpp</code>
           <span class="install-copy">Copy</span>
-        </div>
+        </button>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;">
         <a href="https://docs.grantex.dev/features/mpp-agent-passport" class="btn btn-primary"
@@ -1948,11 +2283,12 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
     <!-- ── Install + CTA ──────────────────────────────────────────────── -->
     <div style="margin-top:40px;">
       <div class="install-commands">
-        <div class="install-cmd" onclick="navigator.clipboard.writeText('npm install @grantex/x402')">
+        <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/x402', this)"
+                aria-label="Copy the x402 package install command">
           <span class="install-label">npm</span>
           <code>npm install @grantex/x402</code>
           <span class="install-copy">Copy</span>
-        </div>
+        </button>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;">
         <a href="https://docs.grantex.dev/integrations/x402" class="btn btn-primary"
@@ -2342,17 +2678,19 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
     <div class="section-label">Trust &amp; compliance</div>
     <h2 class="section-title">Built to enterprise standards</h2>
     <p class="section-sub">
-      Security audited, standards-track, open source.
+      Published security assessment, individual IETF Internet-Draft, open source.
     </p>
     <div class="trust-cards">
       <div class="trust-card">
-        <div class="trust-label">Security Audit</div>
-        <h3>Independent Penetration Test</h3>
+        <div class="trust-label">Security assessment</div>
+        <h3>External Review Published</h3>
         <p>
-          External security review found no critical or high severity findings.
-          Full report available to enterprise customers under NDA.
+          No critical findings were identified. The single high-severity finding
+          was fixed during the engagement; the report and remediation notes are public.
         </p>
-        <div class="auditor">Vestige Security Labs</div>
+        <div class="auditor">
+          <a href="https://docs.grantex.dev/security/audit-report" style="color:var(--accent2);">Read the public report &rarr;</a>
+        </div>
       </div>
       <div class="trust-card">
         <div class="trust-label">SOC 2 readiness</div>
@@ -2369,7 +2707,8 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <p>
           The Grantex wire protocol is an open IETF Internet-Draft
           (<code style="font-family:var(--mono)">draft-mishra-oauth-agent-grants-01</code>),
-          built on the OAuth 2.0 framework.
+          built on the OAuth 2.0 framework. It is an individual submission for
+          discussion, not an IETF-adopted or endorsed standard.
         </p>
         <div class="auditor">
           <a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/"
@@ -2493,7 +2832,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
             <span class="check">&#x2713;</span>
             <div>
               <h4>MCP Auth Server</h4>
-              <p>Drop-in OAuth 2.1 + PKCE authorization for any MCP server with dynamic client registration.</p>
+              <p>Fastify OAuth 2.1 + PKCE endpoint package with dynamic client registration; v2.0.2 limitations are documented.</p>
             </div>
           </div>
           <div class="enterprise-feature">
@@ -2671,13 +3010,73 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
 
 <!-- ── Scripts ────────────────────────────────────────────────────────────── -->
 <script>
-  /* Tab switcher */
+  /* Responsive navigation */
+  (function() {
+    var toggle = document.querySelector('.nav-toggle');
+    var navigation = document.getElementById('primary-navigation');
+    if (!toggle || !navigation) return;
+
+    function setNavigationOpen(open) {
+      navigation.classList.toggle('is-open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+    }
+
+    toggle.addEventListener('click', function() {
+      setNavigationOpen(toggle.getAttribute('aria-expanded') !== 'true');
+    });
+    navigation.querySelectorAll('a').forEach(function(link) {
+      link.addEventListener('click', function() { setNavigationOpen(false); });
+    });
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'Escape' && toggle.getAttribute('aria-expanded') === 'true') {
+        setNavigationOpen(false);
+        toggle.focus();
+      }
+    });
+    window.addEventListener('resize', function() {
+      if (window.innerWidth > 900) setNavigationOpen(false);
+    });
+  })();
+
+  /* Accessible tab switcher */
   function switchTab(id, btn) {
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('tab-' + id).classList.add('active');
-    btn.classList.add('active');
+    var shell = btn.closest('.quickstart-shell');
+    if (!shell) return;
+    var activePanelId = 'tab-' + id;
+
+    shell.querySelectorAll('[role="tab"]').forEach(function(tab) {
+      var active = tab === btn;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-selected', String(active));
+      tab.tabIndex = active ? 0 : -1;
+    });
+    shell.querySelectorAll('[role="tabpanel"]').forEach(function(panel) {
+      var active = panel.id === activePanelId;
+      panel.classList.toggle('active', active);
+      panel.hidden = !active;
+    });
   }
+
+  document.querySelectorAll('.tabs[role="tablist"]').forEach(function(tabList) {
+    tabList.addEventListener('keydown', function(event) {
+      var tabs = Array.from(tabList.querySelectorAll('[role="tab"]'));
+      var current = tabs.indexOf(document.activeElement);
+      if (current < 0) return;
+
+      var nextIndex = current;
+      if (event.key === 'ArrowRight') nextIndex = (current + 1) % tabs.length;
+      else if (event.key === 'ArrowLeft') nextIndex = (current - 1 + tabs.length) % tabs.length;
+      else if (event.key === 'Home') nextIndex = 0;
+      else if (event.key === 'End') nextIndex = tabs.length - 1;
+      else return;
+
+      event.preventDefault();
+      var nextTab = tabs[nextIndex];
+      var panelId = nextTab.getAttribute('aria-controls');
+      switchTab(panelId.replace(/^tab-/, ''), nextTab);
+      nextTab.focus();
+    });
+  });
 
   /* Copy button */
   function copyCode(id, btn, gaEvent) {

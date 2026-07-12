@@ -1,43 +1,69 @@
 ---
 title: "MCP Auth Server"
 sidebarTitle: "MCP Auth"
-description: "Drop-in OAuth 2.1 + PKCE authorization server for any MCP server. Powered by Grantex."
+description: "OAuth 2.1 + PKCE endpoint package for MCP servers, with v2.0.2 limitations."
 ---
 
 <Info>Full feature guide: [MCP Auth Server](/features/mcp-auth-server)</Info>
 
 ## Overview
 
-`@grantex/mcp-auth` is a production-ready OAuth 2.1 + PKCE authorization server that adds delegated auth to any MCP (Model Context Protocol) server. Works with Claude Desktop, Cursor, Windsurf, and any MCP-compatible client.
+`@grantex/mcp-auth` registers OAuth 2.1-style metadata, PKCE authorization-code, client-registration, token, introspection, and revocation routes for MCP servers, plus JWT-verification middleware.
+
+Current published release: **`@grantex/mcp-auth@2.0.2`**.
 
 ## Install
 
 ```bash
-npm install @grantex/mcp-auth
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13
 ```
+
+The exact versions above provide a reproducible install. The packages are
+versioned independently; check [Release Status](/release-status) before upgrading.
+
+<Warning>
+  Treat `2.0.2` as a single-process evaluation release. Authorization codes are
+  always process-local, `consentUi` does not create a consent page, and the
+  Grantex-backed token exchange does not persist the SDK's returned
+  authorization code. End-to-end issuance can therefore fail against the real
+  backend. Middleware and introspection validate signatures/claims but do not
+  perform live revocation checks. See the [full feature guide](/features/mcp-auth-server)
+  before deployment.
+</Warning>
 
 ## Quick Start
 
 ```typescript
+import { Grantex } from '@grantex/sdk';
 import { createMcpAuthServer } from '@grantex/mcp-auth';
 
-const auth = createMcpAuthServer({
-  grantexApiKey: process.env.GRANTEX_API_KEY!,
+const grantex = new Grantex({
+  apiKey: process.env.GRANTEX_API_KEY!,
+  baseUrl: 'https://api.grantex.dev',
+});
+
+const authServer = await createMcpAuthServer({
+  grantex,
+  agentId: 'ag_your_mcp_server',
   issuer: 'https://auth.myapp.com',
   scopes: ['calendar:read', 'email:send'],
 });
 
-// Mount on Express
-app.use('/oauth', auth.routes());
+await authServer.listen({ port: 3001, host: '0.0.0.0' });
 ```
 
-### What You Get
+`createMcpAuthServer()` is asynchronous and returns a Fastify instance with the
+OAuth metadata, registration, authorization, token, introspection, and revocation
+routes already registered. Start that returned server with `listen()`; it is not
+an Express router.
+
+### Endpoint surface in 2.0.2
 
 - **OAuth 2.1 + PKCE** — authorization code flow with S256 challenge
 - **Client registration** — dynamic or pre-registered MCP clients
-- **Token introspection** — validate tokens issued by this server
-- **Token revocation** — revoke access at any time
-- **Grantex-backed** — tokens are Grantex grant tokens with full audit trail
+- **Token introspection** — validate JWT signatures and claims; no live revocation lookup
+- **Revocation endpoint** — submit a token `jti` to Grantex; local verifiers still need synchronized revocation state
+- **Grantex calls** — authorization, exchange, refresh, and revoke handlers call the supplied SDK client, subject to the limitations above
 
 ## Links
 

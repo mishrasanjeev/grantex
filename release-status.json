@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-07-12",
+  "artifacts": [
+    {
+      "id": "typescript-sdk",
+      "label": "TypeScript SDK",
+      "ecosystem": "npm",
+      "name": "@grantex/sdk",
+      "version": "0.3.13",
+      "status": "published",
+      "registryUrl": "https://registry.npmjs.org/%40grantex%2Fsdk/latest"
+    },
+    {
+      "id": "python-sdk",
+      "label": "Python SDK",
+      "ecosystem": "pypi",
+      "name": "grantex",
+      "version": "0.3.14",
+      "status": "published",
+      "registryUrl": "https://pypi.org/pypi/grantex/json"
+    },
+    {
+      "id": "go-sdk",
+      "label": "Go SDK",
+      "ecosystem": "go",
+      "name": "github.com/mishrasanjeev/grantex-go",
+      "version": "v0.1.10",
+      "status": "published-with-known-limitations",
+      "limitations": [
+        "Agent.ID expects JSON id while the API returns agentId; derive the ID from the returned DID.",
+        "LogAuditParams omits the API-required agentDid and principalId fields; use REST or CLI for audit writes."
+      ],
+      "registryUrl": "https://proxy.golang.org/github.com/mishrasanjeev/grantex-go/@latest"
+    },
+    {
+      "id": "mcp-auth",
+      "label": "MCP Authorization Server",
+      "ecosystem": "npm",
+      "name": "@grantex/mcp-auth",
+      "version": "2.0.2",
+      "status": "published-with-known-limitations",
+      "limitations": [
+        "Authorization codes are stored in a non-configurable process-local store; use one process for evaluation only.",
+        "consentUi is discovery metadata and does not register or render a consent page.",
+        "The Grantex authorization code is not persisted for token exchange, so end-to-end issuance can fail.",
+        "Middleware and introspection validate signatures and claims but do not query current revocation state."
+      ],
+      "registryUrl": "https://registry.npmjs.org/%40grantex%2Fmcp-auth/latest"
+    }
+  ]
+}

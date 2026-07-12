@@ -11,7 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Added missing TypeScript Vault documentation, package READMEs, JSON-LD contexts, and documentation health checks.
 
 ### Changed
-- Published Python SDK 0.3.14 and Go SDK v0.1.10 on 2026-07-11. TypeScript SDK 0.3.13 remains prepared for publication after npm credentials are refreshed.
+- Published TypeScript SDK 0.3.13, Python SDK 0.3.14, and Go SDK v0.1.10 on 2026-07-11; synchronized the public release snapshot across the landing page, README, compatibility matrix, and SDK documentation.
 
 ### Fixed
 - Corrected SDK quick starts, audit payloads, verification examples, endpoint paths, usage semantics, package metadata, and OpenAPI coverage.
@@ -296,6 +296,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - MPP demo UI (`apps/mpp-demo/`) — 3-screen interactive demo (issue, flow, verify)
 - W3C JSON-LD context document at `grantex.dev/contexts/mpp/v1`
 - E2E test for full MPP passport lifecycle
+
+## [0.1.5] - 2026-03-01
+
+### Added
+- Principal sessions — `POST /v1/principal-sessions` creates short-lived session JWTs for end-users
+- End-user permissions dashboard — `GET /permissions` serves HTML self-service UI
+- Three principal endpoints: `GET /v1/principal/grants`, `GET /v1/principal/audit`, `DELETE /v1/principal/grants/:id`
+- Express middleware (`@grantex/express`) — drop-in Grantex token verification for Node.js APIs
+- FastAPI middleware (`grantex-fastapi`) — drop-in Grantex token verification for Python APIs
+- Go SDK (`github.com/mishrasanjeev/grantex-go`) v0.1.0 — 12 resource services, offline JWT verification, PKCE, webhook HMAC-SHA256
+- Service provider adapters (`@grantex/adapters`) — Google Calendar, Gmail, Stripe, Slack
+- Reverse-proxy gateway (`@grantex/gateway`) — YAML-configured, Fastify-based token verification proxy
+- `principalSessions.create()` in TypeScript and Python SDKs
+- Conformance suite: principal-sessions test suite
+
+### Changed
+- Bumped `@grantex/sdk` to 0.1.5 and `grantex` (Python) to 0.1.5
+- Bumped `@grantex/conformance` to 0.1.2
+
+## [0.1.4] - 2026-02-28
+
+### Added
+- Token refresh — `POST /v1/token/refresh` with single-use rotation per SPEC §7.4
+- `tokens.refresh()` method in TypeScript and Python SDKs
+- Conformance suite: token refresh tests
+- Troubleshooting guide in docs
+
+### Changed
+- Bumped `@grantex/sdk` to 0.1.4 and `grantex` (Python) to 0.1.4
 
 ## [0.1.3] - 2026-02-28
 

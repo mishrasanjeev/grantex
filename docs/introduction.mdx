@@ -32,15 +32,39 @@ Grantex solves this. It's an open protocol that lets humans authorize AI agents 
   </Card>
 </CardGroup>
 
+## Current releases
+
+The primary SDKs and MCP Auth server are published independently:
+
+| Package | Current published release |
+|---|---:|
+| TypeScript | `@grantex/sdk@0.3.13` |
+| Python | `grantex==0.3.14` |
+| Go | `github.com/mishrasanjeev/grantex-go@v0.1.10` |
+| MCP Auth | `@grantex/mcp-auth@2.0.2` |
+
+See [Release Status](/release-status) for registry links, runtime requirements,
+and the distinction between SDK, API-contract, and repository versions.
+
 ## Install
 
+The exact versions below make local and CI builds reproducible.
+
 <CodeGroup>
-```bash npm
-npm install @grantex/sdk
+```bash TypeScript
+npm install @grantex/sdk@0.3.13
 ```
 
-```bash pip
-pip install grantex
+```bash Python
+python -m pip install grantex==0.3.14
+```
+
+```bash Go
+go get github.com/mishrasanjeev/grantex-go@v0.1.10
+```
+
+```bash MCP Auth
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13
 ```
 
 ```bash CLI
