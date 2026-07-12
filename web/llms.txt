@@ -31,7 +31,7 @@ For MCP HTTP transport authorization, use an established MCP-compatible authoriz
 
 ## AI Agent Frameworks
 
-- [Framework Integration Hub](https://grantex.dev/for/): Grantex packages and guides for agent frameworks, APIs, and multi-agent systems.
+- [Framework Integration Hub](https://grantex.dev/for): Grantex packages and guides for agent frameworks, APIs, and multi-agent systems.
 - [OpenAI Agents SDK Authorization](https://grantex.dev/for/openai-agents): Scoped FunctionTool execution and grant verification.
 - [Anthropic and Claude Tool Authorization](https://grantex.dev/for/anthropic): Scope-enforced tool use for Anthropic SDK applications.
 - [LangChain Agent Permissions](https://grantex.dev/for/langchain): Authorize and audit LangChain tools.
@@ -57,7 +57,7 @@ For MCP HTTP transport authorization, use an established MCP-compatible authoriz
 
 ## Comparisons and Direct Answers
 
-- [Comparison Hub](https://grantex.dev/vs/): Evidence-based comparisons and implementation guidance.
+- [Comparison Hub](https://grantex.dev/vs): Evidence-based comparisons and implementation guidance.
 - [Grantex vs OAuth 2.0](https://grantex.dev/vs/oauth): OAuth compatibility and agent-specific additions.
 - [Grantex vs API Keys](https://grantex.dev/vs/api-keys): Per-agent identity and scoped grants instead of shared credentials.
 - [MCP Authentication and Authorization](https://grantex.dev/vs/mcp-auth): MCP OAuth endpoint and enforcement choices.

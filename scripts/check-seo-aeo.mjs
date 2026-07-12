@@ -276,6 +276,10 @@ export async function validateSeoAeo(options = {}) {
   for (const entry of entries) {
     if (seen.has(entry.loc)) failures.push('web/sitemap.xml repeats ' + entry.loc);
     seen.add(entry.loc);
+    const canonicalPath = new URL(entry.loc).pathname;
+    if (canonicalPath !== '/' && canonicalPath.endsWith('/')) {
+      failures.push('web/sitemap.xml contains a redirecting trailing-slash URL: ' + entry.loc);
+    }
     if (!isValidIsoDate(entry.lastmod)) failures.push('web/sitemap.xml has invalid lastmod for ' + entry.loc);
     const candidates = publicFileCandidates(webRoot, entry.loc);
     const availability = await Promise.all(candidates.map(exists));
@@ -298,8 +302,8 @@ export async function validateSeoAeo(options = {}) {
   }
   for (const required of [
     'https://grantex.dev/',
-    'https://grantex.dev/for/',
-    'https://grantex.dev/vs/',
+    'https://grantex.dev/for',
+    'https://grantex.dev/vs',
     'https://grantex.dev/report/state-of-agent-security-2026',
     'https://grantex.dev/commerce',
   ]) {

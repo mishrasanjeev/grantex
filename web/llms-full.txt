@@ -288,7 +288,7 @@ Grantex is complementary to both. Use OAuth/OIDC for human and application ident
 | FastAPI service enforcement | `grantex-fastapi` | https://grantex.dev/for/fastapi |
 | Google A2A bridge | `@grantex/a2a` or `grantex-a2a` | https://docs.grantex.dev/integrations/a2a |
 
-The canonical hub is https://grantex.dev/for/ . Verify each adapter's registry release before adding a version pin.
+The canonical hub is https://grantex.dev/for . Verify each adapter's registry release before adding a version pin.
 
 ## Multi-Agent Delegation
 
@@ -385,7 +385,7 @@ No. The protocol specification is a Grantex v1.0 artifact. The Delegated Agent A
 
 ## Comparisons and Further Reading
 
-- Comparison hub: https://grantex.dev/vs/
+- Comparison hub: https://grantex.dev/vs
 - Grantex vs OAuth 2.0: https://grantex.dev/vs/oauth
 - Grantex vs API keys: https://grantex.dev/vs/api-keys
 - MCP authentication choices: https://grantex.dev/vs/mcp-auth
