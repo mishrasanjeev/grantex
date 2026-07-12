@@ -168,6 +168,11 @@ async function validatePublicReferences(routes, docFiles) {
     [/\/v1\/anomalies\/(?:alerts|channels|metrics|rules)\b/g, 'incorrect plural anomaly endpoint'],
     [/\/v1\/me\/rotate-key\b/g, 'retired key rotation endpoint'],
     [/\b13\s+MCP\s+tools\b/gi, 'stale MCP tool count'],
+    [/\bfully[- ]compliant OAuth 2\.1 authorization server\b/gi, 'unsupported MCP Auth conformance claim'],
+    [/\bproduction-ready OAuth 2\.1(?: \+ PKCE)? authorization server\b/gi, 'unsupported MCP Auth production-readiness claim'],
+    [/In-memory\s*\(stateless,\s*horizontal scale\)/gi, 'incorrect MCP Auth horizontal-scaling claim'],
+    [/Custom consent page via\s+`?consentUi`?\s+config/gi, 'incorrect MCP Auth consent-page claim'],
+    [/default consent page works out of the box/gi, 'incorrect MCP Auth consent-page claim'],
     [/failures\s+are\s+never\s+retried/gi, 'incorrect webhook retry claim'],
     [/DNS-TXT,\s+manual,\s+or\s+SOC\s+2\s+verification/gi, 'unsupported Trust Registry verification methods'],
     [/https:\/\/grantex\.dev\/integrations\/anthropic\b/g, 'incorrect Anthropic documentation host'],
@@ -354,6 +359,305 @@ async function validateOpenApi() {
   if (/name:\s*status\b/.test(dpdpList)) failures.push('DPDP consent list documents unsupported status query filtering');
 }
 
+function hasReleasePair(text, name, version) {
+  const escape = (value) => value.replace(/[|\\{}()[\]^$+*?.-]/g, '\\$&');
+  const namePattern = '(?:^|[^0-9A-Za-z@/._-])' + escape(name) + '(?=$|[^0-9A-Za-z/._-])';
+  const versionPattern = '(?:^|[^0-9A-Za-z.])' + escape(version) + '(?=$|[^0-9A-Za-z.])';
+  const pairPattern = new RegExp(namePattern + '[\\s\\S]*?' + versionPattern);
+  const releaseCards = text.match(/<a\b[^>]*\brelease-card\b[^>]*>[\s\S]*?<\/a>/gi) || [];
+  return [...text.split(/\r?\n/), ...releaseCards].some((segment) => pairPattern.test(segment));
+}
+
+function isValidIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(value + 'T00:00:00Z');
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function releaseDateForms(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return [value];
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  const month = months[Number(match[2]) - 1];
+  const day = Number(match[3]);
+  return [value, day + ' ' + month + ' ' + match[1], month + ' ' + day + ', ' + match[1]];
+}
+
+function hasReleaseDate(text, value) {
+  const datePattern = releaseDateForms(value).join('|');
+  const pattern = new RegExp('(?:verified|updated|release snapshot).{0,160}(?:' + datePattern + ')', 'i');
+  return text.split(/\r?\n/).some((line) => pattern.test(line));
+}
+
+async function loadReleaseSnapshot() {
+  const snapshotPath = path.join(root, 'release-status.json');
+  let snapshot;
+  try {
+    snapshot = JSON.parse(await fs.readFile(snapshotPath, 'utf8'));
+  } catch (error) {
+    failures.push('release-status.json is unreadable or invalid JSON: ' + error.message);
+    return { schemaVersion: 1, verifiedAt: '', artifacts: [] };
+  }
+
+  if (snapshot.schemaVersion !== 1) {
+    failures.push('release-status.json must use schemaVersion 1');
+  }
+  if (typeof snapshot.verifiedAt !== 'string' || !isValidIsoDate(snapshot.verifiedAt)) {
+    failures.push('release-status.json must have a verifiedAt date in YYYY-MM-DD format');
+  }
+
+  const required = new Map([
+    ['typescript-sdk', {
+      name: '@grantex/sdk',
+      ecosystem: 'npm',
+      registryUrl: 'https://registry.npmjs.org/%40grantex%2Fsdk/latest',
+    }],
+    ['python-sdk', {
+      name: 'grantex',
+      ecosystem: 'pypi',
+      registryUrl: 'https://pypi.org/pypi/grantex/json',
+    }],
+    ['go-sdk', {
+      name: 'github.com/mishrasanjeev/grantex-go',
+      ecosystem: 'go',
+      registryUrl: 'https://proxy.golang.org/github.com/mishrasanjeev/grantex-go/@latest',
+    }],
+    ['mcp-auth', {
+      name: '@grantex/mcp-auth',
+      ecosystem: 'npm',
+      registryUrl: 'https://registry.npmjs.org/%40grantex%2Fmcp-auth/latest',
+    }],
+  ]);
+  const expectedStatus = new Map([
+    ['typescript-sdk', 'published'],
+    ['python-sdk', 'published'],
+    ['go-sdk', 'published-with-known-limitations'],
+    ['mcp-auth', 'published-with-known-limitations'],
+  ]);
+  const artifacts = Array.isArray(snapshot.artifacts) ? snapshot.artifacts : [];
+  if (!Array.isArray(snapshot.artifacts)) {
+    failures.push('release-status.json artifacts must be an array');
+  }
+
+  const seenIds = new Set();
+  const seenNames = new Set();
+  for (const artifact of artifacts) {
+    for (const field of ['id', 'label', 'ecosystem', 'name', 'version', 'status', 'registryUrl']) {
+      if (typeof artifact?.[field] !== 'string' || !artifact[field]) {
+        failures.push('release-status.json artifact is missing string field ' + field);
+      }
+    }
+    if (!artifact?.id) continue;
+    if (seenIds.has(artifact.id)) failures.push('release-status.json repeats artifact id ' + artifact.id);
+    if (artifact.name && seenNames.has(artifact.name)) failures.push('release-status.json repeats artifact name ' + artifact.name);
+    seenIds.add(artifact.id);
+    if (artifact.name) seenNames.add(artifact.name);
+
+    if (!['published', 'published-with-known-limitations'].includes(artifact.status)) {
+      failures.push('release-status.json artifact ' + artifact.id + ' has invalid status ' + artifact.status);
+    }
+    if (artifact.id && expectedStatus.has(artifact.id) && artifact.status !== expectedStatus.get(artifact.id)) {
+      failures.push('release-status.json artifact ' + artifact.id + ' must use status ' + expectedStatus.get(artifact.id));
+    }
+    if (artifact.status === 'published-with-known-limitations' && (
+      !Array.isArray(artifact.limitations)
+      || artifact.limitations.length === 0
+      || artifact.limitations.some((item) => typeof item !== 'string' || !item)
+    )) {
+      failures.push('release-status.json artifact ' + artifact.id + ' must list its known limitations');
+    }
+
+    const expected = required.get(artifact.id);
+    if (expected && (
+      artifact.name !== expected.name
+      || artifact.ecosystem !== expected.ecosystem
+      || artifact.registryUrl !== expected.registryUrl
+    )) {
+      failures.push('release-status.json artifact ' + artifact.id + ' must use the canonical ' + expected.ecosystem + ' identity and registry URL for ' + expected.name);
+    }
+    try {
+      const target = new URL(artifact.registryUrl);
+      if (
+        target.protocol !== 'https:'
+        || !allowedRegistryOrigins.has(target.origin)
+        || target.username
+        || target.password
+      ) {
+        failures.push('release-status.json has an unapproved registry URL for ' + artifact.id);
+      }
+    } catch {
+      failures.push('release-status.json has an invalid registry URL for ' + artifact.id);
+    }
+  }
+  for (const id of required.keys()) {
+    if (!seenIds.has(id)) failures.push('release-status.json is missing required artifact ' + id);
+  }
+
+  const validArtifacts = artifacts.filter((artifact) => artifact
+    && ['id', 'label', 'ecosystem', 'name', 'version', 'status', 'registryUrl']
+      .every((field) => typeof artifact[field] === 'string' && artifact[field]));
+  return { ...snapshot, artifacts: validArtifacts };
+}
+
+async function validateReleaseCopy() {
+  async function readVersionSource(sourcePath, label) {
+    try {
+      return await fs.readFile(sourcePath, 'utf8');
+    } catch (error) {
+      failures.push(label + ' version source is unreadable (' + relative(sourcePath) + '): ' + error.message);
+      return '';
+    }
+  }
+
+  async function readPackageVersion(sourcePath, expectedName) {
+    const source = await readVersionSource(sourcePath, expectedName);
+    if (!source) return null;
+    try {
+      const manifest = JSON.parse(source);
+      if (manifest.name !== expectedName || typeof manifest.version !== 'string' || !manifest.version) {
+        failures.push(relative(sourcePath) + ' has no version for ' + expectedName);
+        return null;
+      }
+      return manifest.version;
+    } catch (error) {
+      failures.push(relative(sourcePath) + ' is not valid JSON: ' + error.message);
+      return null;
+    }
+  }
+
+  const releaseSnapshot = await loadReleaseSnapshot();
+  const releaseById = new Map(releaseSnapshot.artifacts.map((artifact) => [artifact.id, artifact]));
+
+  const localVersions = new Map();
+  localVersions.set('typescript-sdk', await readPackageVersion(
+    path.join(root, 'packages', 'sdk-ts', 'package.json'),
+    '@grantex/sdk',
+  ));
+  localVersions.set('mcp-auth', await readPackageVersion(
+    path.join(root, 'packages', 'mcp-auth', 'package.json'),
+    '@grantex/mcp-auth',
+  ));
+
+  const pythonSourcePath = path.join(root, 'packages', 'sdk-py', 'pyproject.toml');
+  const pythonSource = await readVersionSource(pythonSourcePath, 'grantex');
+  const pythonProject = pythonSource.match(/\[project\]([\s\S]*?)(?=\n\[|$)/);
+  const pythonVersion = pythonProject?.[1].match(/^version\s*=\s*"([^"]+)"/m)?.[1] || null;
+  if (pythonSource && !pythonVersion) {
+    failures.push(relative(pythonSourcePath) + ' has no [project] version for grantex');
+  }
+  localVersions.set('python-sdk', pythonVersion);
+
+  const goSourcePath = path.join(root, 'packages', 'go-sdk', 'http.go');
+  const goSource = await readVersionSource(goSourcePath, 'Grantex Go SDK');
+  const goSdkVersion = goSource.match(/const\s+sdkVersion\s*=\s*"([^"]+)"/)?.[1] || null;
+  if (goSource && !goSdkVersion) {
+    failures.push(relative(goSourcePath) + ' has no sdkVersion for release-copy checking');
+  }
+  localVersions.set('go-sdk', goSdkVersion
+    ? (goSdkVersion.startsWith('v') ? goSdkVersion : 'v' + goSdkVersion)
+    : null);
+
+  for (const [id, localVersion] of localVersions) {
+    const published = releaseById.get(id);
+    if (localVersion && published && compareVersions(localVersion, published.version) < 0) {
+      failures.push('Local ' + published.label + ' version is behind the published snapshot (' + localVersion + ' < ' + published.version + ')');
+    }
+  }
+
+  const overviewFilesById = new Map([
+    ['typescript-sdk', ['docs/sdks/typescript/overview.mdx']],
+    ['python-sdk', ['docs/sdks/python/overview.mdx']],
+    ['go-sdk', ['docs/sdks/go/overview.mdx']],
+    ['mcp-auth', [
+      'docs/features/mcp-auth-server.mdx',
+      'docs/integrations/mcp-auth.mdx',
+    ]],
+  ]);
+  const artifacts = [...overviewFilesById].flatMap(([id, overviewFiles]) => {
+    const published = releaseById.get(id);
+    return published
+      ? [{ label: published.label, name: published.name, version: published.version, overviewFiles }]
+      : [];
+  });
+
+  const globalFiles = [
+    'README.md',
+    'COMPATIBILITY.md',
+    'web/index.html',
+    'web/llms.txt',
+    'web/llms-full.txt',
+    'docs/release-status.mdx',
+    'docs/protocol/changelog.mdx',
+  ];
+  const contentByFile = new Map();
+  async function readReleaseTarget(file) {
+    if (contentByFile.has(file)) return contentByFile.get(file);
+    const target = path.join(root, ...file.split('/'));
+    try {
+      const text = await fs.readFile(target, 'utf8');
+      contentByFile.set(file, text);
+      return text;
+    } catch (error) {
+      failures.push('Release-copy target is unreadable (' + file + '): ' + error.message);
+      contentByFile.set(file, null);
+      return null;
+    }
+  }
+
+  for (const file of globalFiles) {
+    const text = await readReleaseTarget(file);
+    if (text === null) continue;
+    for (const artifact of artifacts) {
+      if (!hasReleasePair(text, artifact.name, artifact.version)) {
+        failures.push(file + ' must associate ' + artifact.name + ' with current ' + artifact.label + ' version ' + artifact.version);
+      }
+    }
+    if (!hasReleaseDate(text, releaseSnapshot.verifiedAt)) {
+      failures.push(file + ' must display release snapshot date ' + releaseSnapshot.verifiedAt);
+    }
+  }
+
+  for (const artifact of artifacts) {
+    for (const file of artifact.overviewFiles) {
+      const text = await readReleaseTarget(file);
+      if (text !== null && !hasReleasePair(text, artifact.name, artifact.version)) {
+        failures.push(file + ' must associate ' + artifact.name + ' with current ' + artifact.label + ' version ' + artifact.version);
+      }
+    }
+  }
+  const stalePatterns = [
+    [/\bMCP Auth Server v2\.0\.1\b/i, 'MCP Auth Server v2.0.1'],
+    [/(?:TypeScript(?: SDK)?|@grantex\/sdk)[^\n]{0,120}\b0\.3\.13\b[^\n]{0,80}\bunreleased\b/i, 'TypeScript 0.3.13 marked unreleased'],
+    [/(?:TypeScript(?: SDK)?|@grantex\/sdk)[^\n]{0,120}\b0\.3\.13\b[^\n]{0,80}\bprepared for publication\b/i, 'TypeScript 0.3.13 prepared for publication'],
+    [/\blatest published(?: version)?(?:\s+is)?\s+0\.3\.12\b/i, 'latest published 0.3.12'],
+    [/TypeScript\s+0\.3\.12[^\n]{0,80}Python\s+0\.3\.13[^\n]{0,80}Go\s+v0\.1\.9/i, 'stale three-SDK release summary'],
+    [/AgentID:\s+agent\.ID\b/, 'Go v0.1.10 empty Agent.ID used in a request'],
+    [/client\.Audit\.Log\s*\([\s\S]{0,160}?grantex\.LogAuditParams\s*\{/m, 'Go v0.1.10 audit payload documented as usable'],
+  ];
+  const staleFiles = new Set([
+    ...globalFiles,
+    ...artifacts.flatMap((artifact) => artifact.overviewFiles),
+    'CHANGELOG.md',
+    'docs/quickstart.mdx',
+    'docs/sdks/go/audit.mdx',
+  ]);
+  for (const file of staleFiles) {
+    const text = await readReleaseTarget(file);
+    if (text === null) continue;
+    for (const [pattern, label] of stalePatterns) {
+      const match = pattern.exec(text);
+      if (match) {
+        failures.push(file + ':' + lineAt(text, match.index) + ' contains stale current-release copy: ' + label);
+      }
+    }
+  }
+
+  return releaseSnapshot;
+}
+
 function compareVersions(left, right) {
   const parse = (value) => value.replace(/^v/, '').split(/[.-]/).slice(0, 3).map((part) => Number.parseInt(part, 10) || 0);
   const a = parse(left);
@@ -416,21 +720,29 @@ async function fetchJson(url) {
   return response.json();
 }
 
-async function validatePublishedVersions() {
+async function validatePublishedVersions(releaseSnapshot) {
+  const releaseByName = new Map(releaseSnapshot.artifacts.map((artifact) => [artifact.name, artifact]));
+
   const manifests = await walk(path.join(root, 'packages'), (file) => path.basename(file) === 'package.json');
   for (const manifestPath of manifests) {
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
     if (manifest.private || !manifest.name?.startsWith('@grantex/') || !manifest.version) continue;
-    const registryUrl = npmRegistryUrls.get(manifest.name);
+    const advertised = releaseByName.get(manifest.name);
+    const registryUrl = advertised?.registryUrl || npmRegistryUrls.get(manifest.name);
     if (!registryUrl) {
       failures.push(relative(manifestPath) + ' has no approved npm registry URL');
       continue;
     }
     try {
       const metadata = await fetchJson(registryUrl);
-      const comparison = compareVersions(manifest.version, metadata.version);
-      if (comparison < 0) {
-        failures.push(relative(manifestPath) + ' is behind npm (' + manifest.version + ' < ' + metadata.version + ')');
+      const publishedVersion = String(metadata.version || '');
+      if (!publishedVersion) throw new Error('npm response has no version');
+      if (advertised) {
+        if (advertised.version !== publishedVersion) {
+          failures.push('release-status.json is out of sync with npm for ' + manifest.name + ' (' + advertised.version + ' != ' + publishedVersion + ')');
+        }
+      } else if (compareVersions(manifest.version, publishedVersion) < 0) {
+        failures.push(relative(manifestPath) + ' is behind npm (' + manifest.version + ' < ' + publishedVersion + ')');
       }
     } catch (error) {
       warnings.push('Could not verify npm package ' + manifest.name + ': ' + error.message);
@@ -444,38 +756,43 @@ async function validatePublishedVersions() {
     const name = project?.[1].match(/^name\s*=\s*"([^"]+)"/m)?.[1];
     const version = project?.[1].match(/^version\s*=\s*"([^"]+)"/m)?.[1];
     if (!name?.startsWith('grantex') || !version) continue;
-    const registryUrl = pypiRegistryUrls.get(name);
+    const advertised = releaseByName.get(name);
+    const registryUrl = advertised?.registryUrl || pypiRegistryUrls.get(name);
     if (!registryUrl) {
       failures.push(relative(projectPath) + ' has no approved PyPI registry URL');
       continue;
     }
     try {
       const metadata = await fetchJson(registryUrl);
-      const comparison = compareVersions(version, metadata.info.version);
-      if (comparison < 0) {
-        failures.push(relative(projectPath) + ' is behind PyPI (' + version + ' < ' + metadata.info.version + ')');
+      const publishedVersion = String(metadata.info?.version || '');
+      if (!publishedVersion) throw new Error('PyPI response has no version');
+      if (advertised) {
+        if (advertised.version !== publishedVersion) {
+          failures.push('release-status.json is out of sync with PyPI for ' + name + ' (' + advertised.version + ' != ' + publishedVersion + ')');
+        }
+      } else if (compareVersions(version, publishedVersion) < 0) {
+        failures.push(relative(projectPath) + ' is behind PyPI (' + version + ' < ' + publishedVersion + ')');
       }
     } catch (error) {
       warnings.push('Could not verify PyPI package ' + name + ': ' + error.message);
     }
   }
 
-  try {
-    const goSourcePath = path.join(root, 'packages', 'go-sdk', 'http.go');
-    const goSource = await fs.readFile(goSourcePath, 'utf8');
-    const localVersion = goSource.match(/const\s+sdkVersion\s*=\s*"([^"]+)"/)?.[1];
-    if (!localVersion) {
-      failures.push('packages/go-sdk/http.go has no sdkVersion for release-integrity checking');
-    } else {
-      const metadata = await fetchJson('https://proxy.golang.org/github.com/mishrasanjeev/grantex-go/@latest');
-      const publishedVersion = String(metadata.Version || '').replace(/^v/, '');
+  const goModule = 'github.com/mishrasanjeev/grantex-go';
+  const advertisedGo = releaseByName.get(goModule);
+  if (!advertisedGo) {
+    failures.push('release-status.json is missing the Go SDK');
+  } else {
+    try {
+      const metadata = await fetchJson(advertisedGo.registryUrl);
+      const publishedVersion = String(metadata.Version || '');
       if (!publishedVersion) throw new Error('Go proxy response has no Version');
-      if (compareVersions(localVersion, publishedVersion) < 0) {
-        failures.push('packages/go-sdk/http.go is behind the Go proxy (' + localVersion + ' < ' + publishedVersion + ')');
+      if (advertisedGo.version !== publishedVersion) {
+        failures.push('release-status.json is out of sync with the Go proxy (' + advertisedGo.version + ' != ' + publishedVersion + ')');
       }
+    } catch (error) {
+      warnings.push('Could not verify Go SDK version: ' + error.message);
     }
-  } catch (error) {
-    warnings.push('Could not verify Go SDK version: ' + error.message);
   }
 }
 
@@ -521,9 +838,13 @@ await validateLocks();
 await validateContexts();
 await validateYamlArtifacts();
 await validateOpenApi();
+const releaseSnapshot = await validateReleaseCopy();
 if (live) {
-  await validatePublishedVersions();
+  await validatePublishedVersions(releaseSnapshot);
   await validateLiveUrls(publicContent);
+  if (warnings.length) {
+    failures.push('Live checks were incomplete because ' + warnings.length + ' network verification warning(s) occurred');
+  }
 }
 
 for (const warning of warnings) console.warn('WARN:', warning);

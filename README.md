@@ -17,7 +17,8 @@
 [![npm downloads](https://img.shields.io/npm/dm/@grantex/sdk?label=npm%20downloads)](https://www.npmjs.com/package/@grantex/sdk)
 [![GitHub Stars](https://img.shields.io/github/stars/mishrasanjeev/grantex?style=social)](https://github.com/mishrasanjeev/grantex)
 [![Docs](https://img.shields.io/badge/docs-grantex.dev-3fb950)](https://docs.grantex.dev)
-[![MCP Server](https://img.shields.io/badge/MCP-Server-blue)](https://www.npmjs.com/package/@grantex/mcp)
+[![MCP Tool Server](https://img.shields.io/npm/v/@grantex/mcp?label=MCP%20tool%20server)](https://www.npmjs.com/package/@grantex/mcp)
+[![MCP Auth](https://img.shields.io/npm/v/@grantex/mcp-auth?label=MCP%20Auth)](https://www.npmjs.com/package/@grantex/mcp-auth)
 [![DPDP Mapping](https://img.shields.io/badge/DPDP-control%20mapping-informational)](https://grantex.dev/dpdp)
 [![EU AI Act Mapping](https://img.shields.io/badge/EU_AI_Act-control%20mapping-informational)](https://grantex.dev/dpdp)
 
@@ -59,12 +60,31 @@ flowchart LR
 
 Start with the [OACP runtime launch closure PRD](docs/guides/oacp/runtime-launch-closure-prd.mdx), [OACP authority overview](docs/guides/oacp/overview.mdx), [merchant self-service config boundary](docs/guides/oacp/merchant-self-service-config.mdx), [truth inventory](docs/guides/oacp/truth-inventory.mdx), [AgenticOrg integration guide](docs/guides/oacp/agenticorg-integration.mdx), [POS bridge boundary](docs/guides/oacp/pos-bridge-boundary.mdx), and [operator runbook](docs/guides/oacp/operator-runbook.mdx). The older [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx) remains historical/contextual and should not be used to imply that Grantex owns AgenticOrg merchant connector runtime.
 
-## Current Development Snapshot
+## Current Releases
 
-The latest repository changelog currently tops out at v0.3.12. Use [COMPATIBILITY.md](COMPATIBILITY.md) as the source of truth for package-specific versions.
+Grantex components are independently versioned. The protocol specification remains **v1.0 Final**; SDK, MCP package, and roadmap milestone versions are separate release lines and do not represent a monorepo-wide version.
+
+Current public releases, verified 2026-07-12:
+
+| Component | Public version | Reproducible install |
+| --- | ---: | --- |
+| TypeScript SDK | `@grantex/sdk` `0.3.13` | `npm install @grantex/sdk@0.3.13` |
+| Python SDK | `grantex` `0.3.14` | `python -m pip install grantex==0.3.14` |
+| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.1.10` (Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.1.10` |
+| MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | `npm install @grantex/mcp-auth@2.0.2` |
+
+> **Known published-package limits:** Go SDK `v0.1.10` does not populate
+> `Agent.ID` from the API's `agentId` response and its audit type omits two
+> required fields. MCP Auth `2.0.2` keeps authorization codes in process memory,
+> does not render consent, and has an incomplete Grantex code handoff. See the
+> [release-status guide](https://docs.grantex.dev/release-status) for supported
+> workarounds and deployment boundaries.
+
+Omit a version pin to install the registry's current latest release. See the [release-status documentation](https://docs.grantex.dev/release-status), [COMPATIBILITY.md](COMPATIBILITY.md) for the full package matrix, and [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 - **@grantex/gemma**: Offline consent bundles and on-device verification examples
-- **MCP Auth Server**: OAuth 2.1 + PKCE for MCP servers, managed and self-hosted modes
+- **MCP Authorization Server (`@grantex/mcp-auth`)**: Published OAuth 2.1 + PKCE endpoint package; review the documented `2.0.2` single-process, consent, and token-exchange limitations
+- **MCP Tool Server (`@grantex/mcp`)**: Agent-facing Grantex tools for MCP clients
 - **@grantex/dpdp**: DPDP Act 2023 and EU AI Act control mappings
 - **Trust Registry**: Public DID verification registry — `grantex.dev/registry`
 - **`grantex verify`**: Token inspection CLI — no account needed
@@ -72,34 +92,52 @@ The latest repository changelog currently tops out at v0.3.12. Use [COMPATIBILIT
 
 ---
 
-## Try in 30 seconds
+## SDK quickstart
 
 ```bash
-npm install @grantex/sdk
+npm install @grantex/sdk@0.3.13
 ```
 
 ```typescript
 import { Grantex, verifyGrantToken } from '@grantex/sdk';
 const gx = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
 
-// 1. Authorize an agent for a user
-const auth = await gx.authorize({ agentId: 'agent-123', userId: 'user-456', scopes: ['calendar:read', 'email:send'] });
+// 1. Register an agent, then request authorization from a user
+const agent = await gx.agents.register({
+  name: 'quickstart-agent',
+  description: 'Grantex quickstart agent',
+  scopes: ['calendar:read', 'email:send'],
+});
+const auth = await gx.authorize({
+  agentId: agent.id,
+  userId: 'user-456',
+  scopes: ['calendar:read', 'email:send'],
+});
 
-// 2. Exchange code for a scoped, signed JWT
-const { grantToken } = await gx.tokens.exchange({ code: auth.code, agentId: 'agent-123' });
+// Live mode requires consent at this URL and returns the code to your callback.
+// Sandbox or policy auto-approval can return the code immediately.
+if (!auth.code) {
+  console.log(`Approve access at: ${auth.consentUrl}`);
+} else {
+  // 2. Exchange the authorization code for a scoped, signed JWT
+  const { grantToken } = await gx.tokens.exchange({ code: auth.code, agentId: agent.id });
 
-// 3. Verify locally using the issuer's published JWKS
-const grant = await verifyGrantToken(grantToken, { jwksUri: 'https://api.grantex.dev/.well-known/jwks.json' });
-console.log(grant.scopes); // ['calendar:read', 'email:send']
+  // 3. Verify locally using the issuer's published JWKS
+  const grant = await verifyGrantToken(grantToken, {
+    jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+  });
+  console.log(grant.scopes); // ['calendar:read', 'email:send']
+}
 ```
 
 ```bash
-pip install grantex             # Python
-go get github.com/mishrasanjeev/grantex-go  # Go
-npm install -g @grantex/cli     # CLI
+python -m pip install grantex==0.3.14               # Python SDK
+go get github.com/mishrasanjeev/grantex-go@v0.1.10 # Go SDK (Go 1.26.1+)
+npm install @grantex/mcp-auth@2.0.2                 # MCP Authorization Server
+npm install -g @grantex/cli                         # Optional CLI tooling
 ```
 
-> **29 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, Strands Agents SDK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. The changelog and GitHub Actions are the source of truth for current pass/fail status. Fully self-hostable. Apache 2.0.
+> **29 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, Strands Agents SDK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. Use the compatibility matrix for versions, the changelog for release notes, and GitHub Actions for current CI status. Fully self-hostable. Apache 2.0.
 
 ---
 
@@ -213,11 +251,12 @@ await grantex.audit.log({
 // In any service that receives agent requests — no Grantex account needed
 import { verifyGrantToken } from '@grantex/sdk';
 
-const grant = await verifyGrantToken(token, {
-  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',  // or cache locally
+const grant = await verifyGrantToken(token.grantToken, {
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
   requiredScopes: ['payments:initiate'],
 });
-// Throws if token is expired, revoked, tampered, or missing required scopes
+// Throws if the token is expired, tampered with, has invalid claims, or lacks required scopes.
+// Use grantex.tokens.verify(token.grantToken) when you also need current revocation status.
 ```
 
 ### 7. Give users control over their permissions
@@ -1347,7 +1386,8 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **Gemma 4 (Python)** | `grantex-gemma` | `pip install grantex-gemma` | ✅ Shipped |
 | **DPDP Compliance** | `@grantex/dpdp` | `npm install @grantex/dpdp` | ✅ Shipped |
 | **Adapters** | `@grantex/adapters` | `npm install @grantex/adapters` | ✅ Shipped |
-| **MCP Auth Server** | `@grantex/mcp-auth` | `npm install @grantex/mcp-auth` | ✅ Shipped |
+| **MCP Tool Server** | `@grantex/mcp` (`0.1.10`) | `npm install @grantex/mcp` | ✅ Shipped |
+| **MCP Authorization Server** | `@grantex/mcp-auth` (`2.0.2`) | `npm install @grantex/mcp-auth` | ⚠️ Published; evaluate documented limitations |
 | **Gateway** | `@grantex/gateway` | `npm install @grantex/gateway` | ✅ Shipped |
 | **Express.js** | `@grantex/express` | `npm install @grantex/express` | ✅ Shipped |
 | **FastAPI** | `grantex-fastapi` | `pip install grantex-fastapi` | ✅ Shipped |
@@ -1360,9 +1400,9 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 | **Strands Agents SDK (Python)** | `grantex-strands` | `pip install grantex-strands` | ✅ Shipped |
 | **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | ✅ Shipped |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | ✅ Shipped |
-| **TypeScript SDK** | `@grantex/sdk` | `npm install @grantex/sdk` | ✅ Shipped |
-| **Python SDK** | `grantex` | `pip install grantex` | ✅ Shipped |
-| **Go SDK** | `grantex-go` | `go get github.com/mishrasanjeev/grantex-go` | ✅ Shipped |
+| **TypeScript SDK** | `@grantex/sdk` (`0.3.13`) | `npm install @grantex/sdk` | ✅ Shipped |
+| **Python SDK** | `grantex` (`0.3.14`) | `python -m pip install grantex` | ✅ Shipped |
+| **Go SDK** | `grantex-go` (`v0.1.10`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go` | ✅ Shipped |
 | **CLI** | `@grantex/cli` | `npm install -g @grantex/cli` | ✅ Shipped |
 | **Conformance Suite** | `@grantex/conformance` | `npm install -g @grantex/conformance` | ✅ Shipped |
 | **A2A Bridge (TS)** | `@grantex/a2a` | `npm install @grantex/a2a` | ✅ Shipped |
@@ -1623,15 +1663,15 @@ Walk through all 7 steps of the protocol: register an agent, authorize, exchange
 
 ## Roadmap
 
-All milestones through v1.0 are complete. See [ROADMAP.md](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md) for full details.
+All listed roadmap milestones through v2.4 are complete. These labels are historical product milestones, not a shared npm, PyPI, Go module, or monorepo release line; package versions vary independently, while the protocol specification remains v1.0 Final. See [ROADMAP.md](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md) for completed and active work.
 
 | Milestone | Highlights | Status |
 |-----------|-----------|--------|
 | **v0.1 — Foundation** | Protocol spec, TypeScript & Python SDKs, auth service, consent UI, audit trail, multi-agent delegation, sandbox mode | ✅ Complete |
 | **v0.2 — Integrations** | LangChain, AutoGen, webhooks, Stripe billing, CLI | ✅ Complete |
 | **v0.3 — Enterprise** | CrewAI, Vercel AI, compliance exports, policy engine, SCIM/SSO, anomaly detection | ✅ Complete |
-| **v1.0 — Stable Protocol** | Protocol spec finalized (v1.0), security audit, SOC 2 readiness mapping, standards submission | ✅ Complete |
-| **v2.0 — Platform** | MCP Auth Server, Credential Vault, 7 new adapters, webhook delivery log, examples | ✅ Complete |
+| **v1.0 — Stable Protocol** | Protocol spec finalized (v1.0), security audit, SOC 2 readiness mapping, individual IETF Internet-Draft submission | ✅ Complete |
+| **v2.0 — Platform** | MCP Authorization Server, Credential Vault, 7 new adapters, webhook delivery log, examples | ✅ Complete |
 | **v2.1 — Enterprise Scale** | Event streaming, budget controls, observability, Terraform provider, gateway, conformance | ✅ Complete |
 | **v2.2 — Ecosystem** | OPA/Cedar policy backends, A2A protocol bridge, usage metering, custom domains, policy-as-code | ✅ Complete |
 | **v2.3 — Trust & Identity** | FIDO2/WebAuthn passkeys, W3C Verifiable Credentials, SD-JWT selective disclosure, DID infrastructure, StatusList2021 revocation, Mastercard Verifiable Intent | ✅ Complete |
@@ -1659,7 +1699,7 @@ Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRI
 | **OWASP** | Covers ASI-01, ASI-03, ASI-05, ASI-10 from the [Agentic Security Top 10](https://docs.grantex.dev/blog/owasp-agentic-top-10-compliance) (Dec 2025) |
 | **EU AI Act** | Technical control mapping only, not legal advice. Application is phased: transparency rules from Aug 2026, certain high-risk rules from Dec 2027, and product-integrated high-risk rules from Aug 2028 under the political agreement. See the [European Commission timeline](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai). |
 | **NIST AI RMF** | Govern 1.1, Map 5.1, Measure 2.5 — repository comment draft; no public submission receipt or endorsement |
-| **IETF** | Individual Internet-Draft -01 targeting OAuth Working Group discussion; not adopted or endorsed ([draft-mishra-oauth-agent-grants-01](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
+| **IETF** | Active individual Internet-Draft -01; not adopted or endorsed by the IETF ([draft-mishra-oauth-agent-grants-01](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
 | **AuthZEN** | Conformance mapped |
 | **SOC 2** | Readiness control mapping published; formal third-party attestation not published |
 | **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, open, Apache 2.0 |
@@ -1691,7 +1731,7 @@ OAuth 2.0 was designed for "user grants app permission to access their data." Ag
 MCP solves tool connectivity — how agents access data and call functions. Grantex solves trust — proving that an agent is authorized to use those tools on behalf of a specific human. They're complementary. A Grantex-authorized agent uses MCP tools.
 
 **Who owns the standard?**  
-The protocol spec is open (Apache 2.0). Grantex Inc. maintains a hosted reference implementation. Our goal is to contribute the spec to a neutral standards body (W3C, IETF, or CNCF) once it stabilizes.
+The v1.0 protocol specification is open (Apache 2.0), and Grantex Inc. maintains the reference implementation. An active -01 document is published as an individual IETF Internet-Draft; that publication is not working-group adoption or IETF endorsement.
 
 **Can I self-host?**  
 Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the complete guide or the [self-hosting docs](https://docs.grantex.dev/guides/self-hosting).

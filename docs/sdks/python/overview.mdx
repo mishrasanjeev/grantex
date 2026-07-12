@@ -6,9 +6,15 @@ description: "Install and configure the Grantex Python SDK for delegated authori
 
 ## Installation
 
+Current published release: **`grantex==0.3.14`** (verified July 12, 2026).
+
 ```bash
-pip install grantex
+python -m pip install grantex==0.3.14
 ```
+
+The unpinned `python -m pip install grantex` command follows PyPI's current
+release. Keep the exact version above in reproducible builds. See
+[Release Status](/release-status) before upgrading.
 
 ### Requirements
 
@@ -16,7 +22,7 @@ pip install grantex
 - [httpx](https://www.python-httpx.org/) (sync HTTP client)
 - [PyJWT](https://pyjwt.readthedocs.io/) >= 2.8 with [cryptography](https://cryptography.io/) (for offline token verification)
 
-All dependencies are installed automatically with `pip install grantex`.
+All dependencies are installed automatically with the SDK.
 
 ## Quick Start
 

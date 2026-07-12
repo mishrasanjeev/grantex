@@ -1,10 +1,10 @@
 # Grantex
 
-> Last updated: 2026-04-06
+> Last updated: 2026-07-12
 
 > Delegated authorization protocol for AI agents. What OAuth 2.0 is to humans, Grantex is to agents.
 
-Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, human-approved, revocable permissions via signed JWTs. Any service can verify tokens offline using published JWKS — no runtime dependency on Grantex infrastructure.
+Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, human-approved, revocable permissions via signed JWTs. Any service can verify token signatures and claims locally after retrieving the issuer's published JWKS; current revocation status requires an online check or synchronized revocation data.
 
 ## Quick Facts
 
@@ -15,12 +15,15 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - IETF Draft: https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/
 - License: Apache 2.0
 - Protocol Version: 1.0 (Final, frozen)
+- Release status: https://docs.grantex.dev/release-status
+- Release snapshot verified: 2026-07-12
 
 ## SDKs
 
-- TypeScript: `npm install @grantex/sdk`
-- Python: `pip install grantex`
-- Go: `go get github.com/mishrasanjeev/grantex-go`
+- TypeScript: `npm install @grantex/sdk@0.3.13`
+- Python: `python -m pip install grantex==0.3.14`
+- Go: `go get github.com/mishrasanjeev/grantex-go@v0.1.10` (Go 1.26.1+)
+- MCP Authorization Server: `npm install @grantex/mcp-auth@2.0.2`
 - CLI: `npm install -g @grantex/cli`
 
 ## Framework Integrations
@@ -39,7 +42,7 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 
 ## Key Packages
 - @grantex/gemma: Offline authorization for Gemma 4 on-device agents
-- @grantex/mcp-auth: OAuth 2.1 auth server for MCP servers
+- @grantex/mcp-auth 2.0.2: OAuth 2.1 + PKCE endpoint package for MCP servers; review MCP Auth limitations before production use
 - @grantex/dpdp: DPDP Act 2023 + EU AI Act control mappings
 
 ## Agentic Commerce V1 Live Pilot
@@ -129,12 +132,17 @@ Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, hum
 - Structured JSON logging via pino (zero console.log remaining)
 - Webhook retry with 20% jitter (prevents thundering herd)
 - The monorepo contains 29 packages; GitHub Actions is the source of truth for current test status
-- Zero known vulnerabilities (npm audit, pip-audit, govulncheck all clean)
+- Security status: use `SECURITY.md`, the public audit report, and current GitHub Actions scans; do not infer current vulnerability status from this static file
 
-## SDK Parity
+## SDK Coverage
 
-All 3 SDKs (TypeScript 0.3.12, Python 0.3.13, Go v0.1.9) have:
-- 21 resource services each (agents, tokens, grants, audit, anomalies, compliance, billing, policies, scim, sso, principal sessions, vault, budgets, events, usage, domains, webauthn, credentials, passports, webhooks, dpdp)
+Current primary releases are TypeScript `@grantex/sdk@0.3.13`, Python
+`grantex==0.3.14`, and Go `github.com/mishrasanjeev/grantex-go@v0.1.10`.
+Known current-release limitations:
+- Go v0.1.10: derive the registered agent ID from `did:grantex:<agentId>`; use REST/CLI for audit writes because the typed payload omits required fields
+- MCP Auth 2.0.2: single-process evaluation only; process-local codes, metadata-only consent config, no live revocation lookup, and incomplete Grantex code handoff
+
+Coverage across the primary SDKs includes core authorization resources plus:
 - Offline JWT verification via JWKS
 - Retry with exponential backoff
 - PassportsClient for MPP agent identity

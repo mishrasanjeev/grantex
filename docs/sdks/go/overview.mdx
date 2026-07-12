@@ -5,13 +5,19 @@ description: "Official Go SDK for the Grantex delegated authorization protocol"
 
 ## Installation
 
+Current published release: **`v0.1.10`** (verified July 12, 2026).
+
 ```bash
-go get github.com/mishrasanjeev/grantex-go
+go get github.com/mishrasanjeev/grantex-go@v0.1.10
 ```
+
+The unpinned `go get github.com/mishrasanjeev/grantex-go` command follows Go's
+module-version resolution. Keep the exact version above in reproducible builds.
+See [Release Status](/release-status) before upgrading.
 
 ## Requirements
 
-- Go 1.26.1+
+- **Go 1.26.1+**, matching this module's `go.mod` directive
 
 ## Configuration
 
@@ -37,6 +43,13 @@ client := grantex.NewClient("your-api-key",
 
 ## Quick Start
 
+<Warning>
+  In `v0.1.10`, the API's `agentId` response does not populate `Agent.ID`
+  because that SDK field expects `id`. This example derives the ID from the
+  returned `did:grantex:<agentId>` value. Remove the workaround only after
+  upgrading to a release that corrects the response mapping.
+</Warning>
+
 ```go
 package main
 
@@ -44,6 +57,7 @@ import (
     "context"
     "fmt"
     "log"
+    "strings"
 
     grantex "github.com/mishrasanjeev/grantex-go"
 )
@@ -61,11 +75,16 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    fmt.Printf("Agent registered: %s (DID: %s)\n", agent.ID, agent.DID)
+    const didPrefix = "did:grantex:"
+    if !strings.HasPrefix(agent.DID, didPrefix) {
+        log.Fatal("unexpected agent DID")
+    }
+    agentID := strings.TrimPrefix(agent.DID, didPrefix)
+    fmt.Printf("Agent registered: %s (DID: %s)\n", agentID, agent.DID)
 
     // 2. Create authorization request
     authReq, err := client.Authorize(ctx, grantex.AuthorizeParams{
-        AgentID:     agent.ID,
+        AgentID:     agentID,
         PrincipalID: "user-123",
         Scopes:      []string{"read:email", "send:email"},
     })
@@ -77,7 +96,7 @@ func main() {
     // 3. Exchange authorization code for token (after user consents)
     tokenResp, err := client.Tokens.Exchange(ctx, grantex.ExchangeTokenParams{
         Code:    "authorization-code-from-callback",
-        AgentID: agent.ID,
+        AgentID: agentID,
     })
     if err != nil {
         log.Fatal(err)

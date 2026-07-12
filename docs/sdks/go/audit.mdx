@@ -5,16 +5,26 @@ description: "Log and query tamper-evident audit entries"
 
 ## Log
 
-```go
-entry, err := client.Audit.Log(ctx, grantex.LogAuditParams{
-    AgentID: "agent-id",
-    GrantID: "grant-id",
-    Action:  "email:read",
-    Status:  "success",
-    Metadata: map[string]interface{}{
-        "messageId": "msg-123",
-    },
-})
+<Warning>
+  Go SDK `v0.1.10` cannot create an audit entry through
+  `client.Audit.Log`: its `LogAuditParams` omits the API-required `agentDid` and
+  `principalId` fields. Use the REST endpoint or CLI for writes until a corrected
+  Go SDK release is published. List and get operations below remain available.
+</Warning>
+
+```bash REST workaround
+curl -X POST https://api.grantex.dev/v1/audit/log \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agentId": "ag_01HXYZ...",
+    "agentDid": "did:grantex:ag_01HXYZ...",
+    "grantId": "grnt_01HXYZ...",
+    "principalId": "user_123",
+    "action": "email:read",
+    "status": "success",
+    "metadata": {"messageId": "msg-123"}
+  }'
 ```
 
 ## List

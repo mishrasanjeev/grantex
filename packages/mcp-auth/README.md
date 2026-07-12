@@ -4,27 +4,39 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 [![npm downloads](https://img.shields.io/npm/dm/@grantex/mcp-auth)](https://www.npmjs.com/package/@grantex/mcp-auth)
 
-**OAuth 2.1 + PKCE authorization server for MCP servers, powered by Grantex.**
+**OAuth 2.1 + PKCE endpoint package for MCP servers, powered by Grantex.**
 
-Turn any [Model Context Protocol](https://modelcontextprotocol.io/) server into a fully-compliant OAuth 2.1 authorization server in under 10 lines of code. Built on the Grantex delegated authorization protocol, `@grantex/mcp-auth` handles token issuance, introspection, revocation, Dynamic Client Registration (DCR), and PKCE -- so you can focus on building tools, not auth infrastructure.
+Current published release: **`@grantex/mcp-auth@2.0.2`**.
 
-## Why @grantex/mcp-auth?
+`createMcpAuthServer()` registers authorization-server metadata, Dynamic Client
+Registration, PKCE authorization, token, introspection, and revocation routes on
+a Fastify instance. The package also exports Express and Hono JWT-verification
+middleware.
 
-The MCP specification mandates OAuth 2.1 for transport-level auth. Implementing it correctly is hard:
+> [!WARNING]
+> Treat `2.0.2` as a single-process evaluation release. Client registrations
+> default to process memory and authorization codes always use a
+> non-configurable in-memory store. `consentUi` adds metadata but no consent
+> route. The Grantex authorization code returned by the SDK is not persisted for
+> token exchange, so end-to-end issuance can fail against the real backend.
+> Middleware and introspection verify signatures/claims but do not perform a live
+> revocation lookup. See the
+> [feature guide](https://docs.grantex.dev/features/mcp-auth-server) for the full
+> current-status matrix.
 
-- **PKCE S256** is mandatory (no `plain`, no implicit flow)
-- **Dynamic Client Registration** (RFC 7591) for zero-config MCP clients
-- **Token introspection** (RFC 7662) for resource servers to validate tokens
-- **Token revocation** (RFC 7009) for secure logout
-- **Rate limiting** on all sensitive endpoints
-- **Grantex integration** for delegated, auditable, scope-controlled authorization
+## What 2.0.2 implements
 
-`@grantex/mcp-auth` handles all of this out of the box, with a single function call.
+- PKCE S256 request validation (no `plain` or implicit flow)
+- Dynamic Client Registration (RFC 7591) with a replaceable client store
+- Authorization, token, introspection, and revocation endpoint handlers
+- Fixed Fastify rate limits on sensitive endpoints
+- Express and Hono JWT signature, claim, algorithm, and scope verification
+- Calls to a supplied Grantex SDK client for authorization and token operations
 
 ## Installation
 
 ```bash
-npm install @grantex/mcp-auth
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13
 ```
 
 ## Quick Start
@@ -66,7 +78,7 @@ app.use('/mcp', requireMcpAuth({
 }));
 ```
 
-That's it. MCP clients can now discover your auth server via `/.well-known/oauth-authorization-server`, register dynamically, and obtain tokens.
+The server now exposes the published endpoint surface for inspection. Discovery and registration can be exercised locally; token issuance remains subject to the `2.0.2` limitations above.
 
 ## Endpoints
 
@@ -78,8 +90,8 @@ That's it. MCP clients can now discover your auth server via `/.well-known/oauth
 | `/register` | POST | RFC 7591 | Dynamic Client Registration |
 | `/authorize` | GET | OAuth 2.1 | Authorization endpoint (PKCE required) |
 | `/token` | POST | OAuth 2.1 | Token endpoint (authorization_code, refresh_token) |
-| `/introspect` | POST | RFC 7662 | Token introspection |
-| `/revoke` | POST | RFC 7009 | Token revocation |
+| `/introspect` | POST | RFC 7662 | JWT signature/claim introspection; no live revocation lookup |
+| `/revoke` | POST | RFC 7009 | Requests backend revocation by JWT `jti` |
 
 ## API Reference
 
@@ -101,16 +113,18 @@ const server = await createMcpAuthServer(config);
 | `agentId` | `string` | Yes | - | Agent ID for Grantex authorization |
 | `scopes` | `string[]` | Yes | - | Scopes to request from Grantex |
 | `issuer` | `string` | Yes | - | Base URL for this auth server (used in metadata) |
-| `allowedRedirectUris` | `string[]` | No | `[]` | Allowed redirect URIs (empty = all allowed) |
+| `allowedRedirectUris` | `string[]` | No | `[]` | Declared but not enforced in `2.0.2`; the client's registered URI is checked |
 | `allowedResources` | `string[]` | No | `[]` | Allowed resource indicators (RFC 8707) |
-| `clientStore` | `ClientStore` | No | `InMemoryClientStore` | Custom client registration store |
+| `clientStore` | `ClientStore` | No | `InMemoryClientStore` | Client registrations only; authorization codes stay in process memory |
 | `codeExpirationSeconds` | `number` | No | `600` | Authorization code TTL in seconds |
-| `consentUi` | `object` | No | - | Consent UI customization (appName, appLogo, privacyUrl, termsUrl) |
-| `hooks` | `object` | No | - | Lifecycle hooks (onTokenIssued, onRevocation) |
+| `consentUi` | `object` | No | - | Discovery metadata only; no consent page is created |
+| `hooks` | `object` | No | - | `onRevocation` runs; declared `onTokenIssued` is not invoked in `2.0.2` |
 
-#### Consent UI
+#### Consent metadata
 
-Customize the consent page shown to users:
+`consentUi` copies labels and links into
+`grantex_extensions.consent_ui_config` in the discovery response. It does not
+render or register the advertised `/consent` page in `2.0.2`.
 
 ```typescript
 const server = await createMcpAuthServer({
@@ -124,31 +138,27 @@ const server = await createMcpAuthServer({
 });
 ```
 
-#### Lifecycle Hooks
+#### Lifecycle hooks
 
-React to authorization events:
+Only `onRevocation` is invoked by `2.0.2`:
 
 ```typescript
 const server = await createMcpAuthServer({
   // ...required fields...
   hooks: {
-    onTokenIssued: async (event) => {
-      console.log(`Token issued for client ${event.clientId}`);
-      console.log(`Scopes: ${event.scopes.join(', ')}`);
-      console.log(`Grant ID: ${event.grantId}`);
-      // Send to your analytics, audit log, etc.
-    },
     onRevocation: async (jti) => {
-      console.log(`Token ${jti} was revoked`);
-      // Invalidate cached sessions, notify downstream, etc.
+      console.log(`Token ${jti} was submitted for revocation`);
     },
   },
 });
 ```
 
+`onTokenIssued` is present in the exported type but is not called by the token
+endpoint in this release.
+
 ### Custom Client Store
 
-By default, client registrations are stored in memory. For production, implement the `ClientStore` interface backed by your database:
+By default, client registrations are stored in memory. A custom `ClientStore` can persist clients, but the authorization-code store remains process-local and non-configurable in `2.0.2`:
 
 ```typescript
 import type { ClientStore, ClientRegistration } from '@grantex/mcp-auth';
@@ -180,7 +190,8 @@ const server = await createMcpAuthServer({
 
 ## Express.js Middleware
 
-Protect your Express routes with JWT validation:
+Protect Express routes with JWT signature, claim, algorithm, and scope validation.
+This middleware does not check current revocation state in 2.0.2:
 
 ```typescript
 import express from 'express';
@@ -261,7 +272,7 @@ export default app;
 
 ## Token Introspection (RFC 7662)
 
-Resource servers can validate tokens by calling the introspection endpoint:
+Resource servers can validate JWT signatures and claims by calling the introspection endpoint. It does not query Grantex for current revocation state, so a revoked but otherwise valid token can remain `active` until expiry:
 
 ```bash
 curl -X POST https://your-mcp-server.example.com/introspect \
@@ -307,7 +318,7 @@ curl -X POST https://your-mcp-server.example.com/introspect \
 
 ## Token Revocation (RFC 7009)
 
-Revoke tokens when a user logs out or an agent is deauthorized:
+The endpoint decodes the JWT `jti` and requests backend revocation. It returns `200 OK` even when that call fails, and local middleware/introspection do not consult the resulting state:
 
 ```bash
 curl -X POST https://your-mcp-server.example.com/revoke \
@@ -318,52 +329,13 @@ curl -X POST https://your-mcp-server.example.com/revoke \
 
 Per RFC 7009, the endpoint always returns `200 OK`, even if the token was already revoked or unknown.
 
-## Managed vs Self-Hosted
+## Backend selection and local state
 
-| Feature | Managed (Grantex Cloud) | Self-Hosted |
-|---------|------------------------|-------------|
-| **Setup** | `createMcpAuthServer({ grantex, ... })` | Same API, your infrastructure |
-| **Client Store** | In-memory (stateless, horizontal scale) | Bring your own (Postgres, Redis, etc.) |
-| **JWKS** | Hosted by Grantex | Your JWKS endpoint |
-| **Token Signing** | Grantex signs tokens | Grantex signs tokens (delegated) |
-| **Rate Limiting** | Built-in per-endpoint limits | Built-in, configurable |
-| **Consent UI** | Grantex-hosted consent page | Custom consent page via `consentUi` config |
-| **Audit Trail** | Full audit via Grantex events | Full audit via Grantex events |
-| **Uptime SLA** | 99.9% | Your responsibility |
-| **Compliance** | SOC 2, GDPR ready | Your responsibility |
-
-### Managed Mode (Recommended)
-
-Use the Grantex Cloud auth service. Zero infrastructure to manage:
-
-```typescript
-const server = await createMcpAuthServer({
-  grantex: new Grantex({
-    baseUrl: 'https://api.grantex.dev',
-    apiKey: process.env.GRANTEX_API_KEY!,
-  }),
-  agentId: 'ag_your_server',
-  scopes: ['tools:read', 'tools:execute'],
-  issuer: 'https://your-domain.example.com',
-});
-```
-
-### Self-Hosted Mode
-
-Run your own Grantex auth service and point the SDK at it:
-
-```typescript
-const server = await createMcpAuthServer({
-  grantex: new Grantex({
-    baseUrl: 'https://auth.your-company.internal',
-    apiKey: process.env.GRANTEX_API_KEY!,
-  }),
-  agentId: 'ag_internal_server',
-  scopes: ['internal:read', 'internal:write'],
-  issuer: 'https://auth.your-company.internal',
-  clientStore: new PostgresClientStore(),  // Persistent storage
-});
-```
+The `Grantex` SDK passed to `createMcpAuthServer()` can target Grantex Cloud or a
+self-hosted API. In both cases, the MCP auth Fastify process owns its client and
+code state. A custom `ClientStore` persists only registrations; `2.0.2` exposes
+no custom authorization-code store. Run a single process for evaluation and do
+not treat selecting Grantex Cloud as managed MCP-auth hosting.
 
 ## Conformance testing
 
@@ -379,14 +351,14 @@ Passing the suite is useful deployment evidence; it is not a certification or en
 
 ## Security Considerations
 
-`@grantex/mcp-auth` enforces OAuth 2.1 security requirements:
+`@grantex/mcp-auth` implements the following request and token-validation controls. They do not remove the deployment and issuance limitations above:
 
 - **PKCE S256 is mandatory.** The `plain` method and implicit grant are rejected.
 - **No password grant.** The `password` grant type is not supported.
 - **No implicit grant.** Only `response_type=code` is accepted.
 - **Authorization codes are single-use.** Replayed codes are rejected.
 - **HS256 rejected.** Only asymmetric algorithms (RS256, ES256, PS256, EdDSA) are accepted for token verification.
-- **Rate limiting** is applied to all endpoints (configurable per-endpoint).
+- **Rate limiting** is applied with fixed per-endpoint values in this release.
 - **Client secrets** are generated using `crypto.randomBytes(32)`.
 - **JWKS verification** uses the `jose` library with remote key set fetching and caching.
 
@@ -403,7 +375,7 @@ Symmetric algorithms (`HS256`, `HS384`, `HS512`) are explicitly rejected.
 
 ## Discovery
 
-MCP clients discover your auth server via the well-known metadata endpoint:
+MCP clients can read the well-known metadata endpoint. Note that `2.0.2` advertises `/consent` and `/events/stream` extension URLs without registering those routes:
 
 ```bash
 curl https://your-mcp-server.example.com/.well-known/oauth-authorization-server
@@ -431,7 +403,7 @@ curl https://your-mcp-server.example.com/.well-known/oauth-authorization-server
 }
 ```
 
-## Full Example: MCP Server with Auth
+## Endpoint wiring example (subject to 2.0.2 limitations)
 
 ```typescript
 import { Grantex } from '@grantex/sdk';
@@ -453,23 +425,8 @@ const authServer = await createMcpAuthServer({
   scopes: ['calendar:read', 'calendar:write'],
   issuer: 'https://calendar-mcp.example.com',
   hooks: {
-    onTokenIssued: async (event) => {
-      const verification = await grantex.tokens.verify(event.accessToken);
-      if (!verification.principal) {
-        throw new Error('Issued token did not contain a principal');
-      }
-      await grantex.audit.log({
-        agentId: 'ag_calendar_mcp',
-        agentDid: event.agentDid,
-        grantId: event.grantId,
-        principalId: verification.principal,
-        action: 'mcp.token.issued',
-        metadata: { scopes: event.scopes, clientId: event.clientId },
-      });
-    },
     onRevocation: async (jti) => {
-      // Token revocation is recorded by Grantex; use this hook to clear local caches.
-      console.log(`Revoked token ${jti}`);
+      console.log(`Submitted token ${jti} for revocation`);
     },
   },
 });
@@ -538,7 +495,7 @@ Default limits per endpoint:
 |----------|-------------|--------|
 | `/authorize` | 10 | 1 minute |
 | `/token` | 20 | 1 minute |
-| `/introspect` | 30 | 1 minute |
+| `/introspect` | 20 | 1 minute |
 | `/revoke` | 20 | 1 minute |
 | All others | 100 | 1 minute |
 
@@ -549,7 +506,7 @@ Default limits per endpoint:
 | [`@grantex/sdk`](https://www.npmjs.com/package/@grantex/sdk) | Core TypeScript SDK |
 | [`@grantex/express`](https://www.npmjs.com/package/@grantex/express) | Express.js middleware for Grantex |
 | [`@grantex/gateway`](https://www.npmjs.com/package/@grantex/gateway) | Reverse-proxy gateway with YAML config |
-| [`@grantex/mcp`](https://www.npmjs.com/package/@grantex/mcp) | MCP server with 13 Grantex tools |
+| [`@grantex/mcp`](https://www.npmjs.com/package/@grantex/mcp) | MCP tool server (17 tools in the current repository surface) |
 | [`@grantex/cli`](https://www.npmjs.com/package/@grantex/cli) | CLI for managing grants, tokens, and agents |
 | [`@grantex/conformance`](https://www.npmjs.com/package/@grantex/conformance) | Protocol conformance test suite |
 
