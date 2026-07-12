@@ -39,10 +39,49 @@ function isValidIsoDate(value) {
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+function isTagBoundary(character) {
+  return character === undefined || ' \t\n\f\r/>'.includes(character);
+}
+
+function findElementMarker(source, marker, fromIndex) {
+  let index = source.indexOf(marker, fromIndex);
+  while (index !== -1) {
+    if (isTagBoundary(source[index + marker.length])) return index;
+    index = source.indexOf(marker, index + marker.length);
+  }
+  return -1;
+}
+
+function removeElementBlocks(value, tagName) {
+  const source = String(value);
+  const lower = source.toLowerCase();
+  const openMarker = '<' + tagName;
+  const closeMarker = '</' + tagName;
+  let cursor = 0;
+  let output = '';
+
+  while (cursor < source.length) {
+    const openStart = findElementMarker(lower, openMarker, cursor);
+    if (openStart === -1) return output + source.slice(cursor);
+
+    output += source.slice(cursor, openStart) + ' ';
+    const closeStart = findElementMarker(lower, closeMarker, openStart + openMarker.length);
+    if (closeStart === -1) return output;
+
+    const closeEnd = lower.indexOf('>', closeStart + closeMarker.length);
+    if (closeEnd === -1) return output;
+    cursor = closeEnd + 1;
+  }
+
+  return output;
+}
+
+function removeNonVisibleBlocks(value) {
+  return removeElementBlocks(removeElementBlocks(value, 'script'), 'style');
+}
+
 function normalizeVisibleText(value) {
-  return value
-    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+  return removeNonVisibleBlocks(value)
     .replace(/<[^>]+>/g, ' ')
     .replace(/&(?:amp|quot|apos|#39|#x27);/gi, ' ')
     .replace(/&[a-z0-9#]+;/gi, ' ')
@@ -191,9 +230,7 @@ export async function validateSeoAeo(options = {}) {
     for (const page of pages) {
       const html = await fs.readFile(page, 'utf8');
       const label = relative(root, page);
-      const visible = html
-        .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
-        .replace(/<style\b[\s\S]*?<\/style>/gi, ' ');
+      const visible = removeNonVisibleBlocks(html);
       if ((visible.match(/<h1\b/gi) || []).length !== 1) failures.push(label + ' must have exactly one visible H1');
       if (/const\s+(?:frameworks|pages)\s*=/.test(html)) failures.push(label + ' must not rely on a client-side content map');
       if (/<title>[^<]*\s\?\s[^<]*<\/title>|(?:guide|documentation|comparison)\s+\?|do\?and|Grantex\s+\?\s+/i.test(html)) {
