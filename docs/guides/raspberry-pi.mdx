@@ -1,12 +1,12 @@
 ---
 title: "Raspberry Pi Guide"
 sidebarTitle: "Raspberry Pi"
-description: "Run Grantex-authorized Gemma 4 agents on Raspberry Pi 5 with offline verification in under 5ms."
+description: "Run Grantex-authorized Gemma agents on Raspberry Pi 5 with offline token verification, scope enforcement, local audit records, and later synchronization."
 ---
 
 ## Overview
 
-Raspberry Pi 5 with 8GB RAM can run Gemma 4's smaller model variants locally via `llama.cpp` or `mediapipe`. This guide shows how to add Grantex offline authorization to a Gemma 4 agent running on a Pi, so every action is scope-checked and audit-logged even without internet.
+Raspberry Pi 5 with 8GB RAM can run smaller Gemma model variants locally through compatible runtimes. This guide shows how to add Grantex offline authorization so configured actions are scope-checked and recorded locally without internet connectivity; current revocation state requires later synchronization.
 
 ## Prerequisites
 
@@ -214,19 +214,19 @@ if result.revocation_status == "revoked":
     os.remove(BUNDLE_PATH)
 ```
 
-## Benchmarks
+## Performance Considerations
 
-Measured on a Raspberry Pi 5 (8GB, Bookworm, Python 3.11):
+A Raspberry Pi deployment performs these operations locally:
 
-| Operation | Time | Notes |
+| Operation | Execution characteristic | Notes |
 |---|---|---|
-| `loadBundle` (decrypt) | ~8ms | AES-256-GCM decryption of ~2KB bundle |
-| `verifier.verify()` | ~3-5ms | RS256 signature verification |
-| `enforce_scopes()` | <0.01ms | Array comparison |
-| `audit_log.append()` | ~2ms | SHA-256 hash + Ed25519 sign + JSONL append |
-| `verify_chain()` (100 entries) | ~15ms | Full chain re-verification |
+| `loadBundle` (decrypt) | Local cryptographic operation | AES-256-GCM decryption of the stored bundle |
+| `verifier.verify()` | Local signature verification | Runtime depends on key material, implementation, and device load |
+| `enforce_scopes()` | Local array comparison | Cost scales with the number of required and granted scopes |
+| `audit_log.append()` | Local hashing, signing, and storage | Runtime depends on storage and signing configuration |
+| `verify_chain()` | Full-chain verification | Cost scales with the number of entries |
 
-Total overhead per agent action: **under 5ms**. This is negligible compared to Gemma 4 inference time (~500ms-2s for the 2B model on Pi 5).
+Benchmark these operations on the target device and workload. Performance varies with bundle size, key implementation, storage, thermal state, and concurrent inference load.
 
 ## Production Tips
 

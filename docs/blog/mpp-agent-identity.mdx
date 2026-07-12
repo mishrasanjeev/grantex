@@ -1,6 +1,6 @@
 ---
 title: "Agent Identity for Machine Payments: Why MPP Needs a Passport Layer"
-description: "MPP solves how agents pay. But who authorized the payment? Grantex adds a verifiable identity layer — W3C credentials that let merchants know exactly who is behind every agent transaction."
+description: "Grantex adds verifiable agent and principal credential context that merchants can validate alongside independent payment and risk controls."
 date: "2026-03-20"
 authors:
   - name: "Sanjeev Kumar"
@@ -42,11 +42,11 @@ Here is the flow:
 | **1. Issue** | Human | Issues `AgentPassportCredential` — W3C VC 2.0, Ed25519 signed, with categories, spending limit, and expiry |
 | **2. Store** | Agent | Receives and stores the passport credential |
 | **3. Pay** | Agent | Makes MPP request with `Authorization: Payment` + `X-Grantex-Passport` headers |
-| **4. Verify** | Merchant | Checks signature, expiry, categories, amount in **<50ms** via cached JWKS |
-| **5. Deliver** | Merchant | Returns resource — knows the human, org, and delegation chain |
-| **6. Audit** | System | Every event logged. Revoke anytime via StatusList2021 bit-flip |
+| **4. Verify** | Merchant | Checks signature, expiry, categories, and amount using cached JWKS; latency depends on the deployment |
+| **5. Deliver** | Merchant | Returns the resource after configured passport-claim and merchant-policy checks pass |
+| **6. Record** | Application | Records configured verification and action events; current status depends on synchronized status material |
 
-The credential contains everything a merchant needs to make a trust decision:
+The credential carries inputs for a merchant trust decision. Merchants must combine them with independent payment, order, fraud, and settlement controls:
 
 | Field | What It Tells the Merchant |
 |-------|---------------------------|
@@ -60,9 +60,9 @@ The credential contains everything a merchant needs to make a trust decision:
 
 ## What Makes This Different
 
-### 1. Offline Verification in Under 50ms
+### 1. Offline Cryptographic Verification
 
-The passport is a self-contained JWT signed with the issuer's key. Merchants fetch the JWKS once, cache it, and verify every subsequent passport locally. No API call to Grantex. No latency added to the payment flow.
+The passport is a self-contained JWT signed with the issuer's key. With cached JWKS and status material, merchants can perform signature and claim checks locally without a per-request Grantex verification call. Latency and current revocation freshness depend on deployment and synchronization choices.
 
 ```typescript
 import { requireAgentPassport } from '@grantex/mpp';
@@ -210,4 +210,4 @@ npm install @grantex/mpp @grantex/sdk
 
 ---
 
-*MPP solved how agents pay. Grantex solves who authorized the payment. Together, they make agentic commerce auditable, revocable, and compliant — without locking anyone into a proprietary network.*
+*MPP addresses payment transport. Grantex can add verifiable agent and principal authority context without replacing merchant, payment, order, settlement, fraud, or compliance controls.*
