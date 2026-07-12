@@ -3,21 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <title>How to Secure AI Agents — Authorization, Scoping, and Audit Trails</title>
-  <meta name="description" content="A practical guide to securing AI agents in production. Scoped permissions, cryptographic identity, audit trails, delegation control, and central grant revocation.">
+  <title>How to Secure AI Agents: Authorization Checklist</title>
+  <meta name="description" content="A practical AI agent security checklist covering identity, least privilege, consent, token verification, revocation, delegation, audit, and budgets.">
   <link rel="canonical" href="https://grantex.dev/vs/securing-ai-agents">
-  <meta property="og:title" content="How to Secure AI Agents — Authorization, Scoping, and Audit Trails">
-  <meta property="og:description" content="A practical guide to securing AI agents in production. Scoped permissions, cryptographic identity, audit trails, delegation control, and central grant revocation.">
+  <link rel="alternate" type="text/plain" href="/llms.txt" title="Grantex LLM index">
+  <meta property="og:title" content="How to Secure AI Agents: Authorization Checklist">
+  <meta property="og:description" content="A practical AI agent security checklist covering identity, least privilege, consent, token verification, revocation, delegation, audit, and budgets.">
   <meta property="og:url" content="https://grantex.dev/vs/securing-ai-agents">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Grantex AI agent authorization comparison">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Grantex">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="How to Secure AI Agents — Authorization, Scoping, and Audit Trails">
-  <meta name="twitter:description" content="A practical guide to securing AI agents in production. Scoped permissions, cryptographic identity, audit trails, delegation control, and central grant revocation.">
+  <meta name="twitter:title" content="How to Secure AI Agents: Authorization Checklist">
+  <meta name="twitter:description" content="A practical AI agent security checklist covering identity, least privilege, consent, token verification, revocation, delegation, audit, and budgets.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+  <meta name="twitter:image:alt" content="Grantex AI agent authorization comparison">
 
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
   <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-DNXYVLS5NY');</script>
@@ -76,7 +83,7 @@
       .comparison-table th,.comparison-table td{padding:.5rem}
     }
   </style>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"How to Secure AI Agents — Authorization, Scoping, and Audit Trails","description":"A practical guide to securing AI agents in production. Scoped permissions, cryptographic identity, audit trails, delegation control, and central grant revocation.","url":"https://grantex.dev/vs/securing-ai-agents","author":{"@type":"Organization","name":"Grantex","url":"https://grantex.dev"},"publisher":{"@type":"Organization","name":"Grantex","url":"https://grantex.dev"}}</script>
+  <script id="page-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://grantex.dev/vs/securing-ai-agents#webpage","url":"https://grantex.dev/vs/securing-ai-agents","name":"How to Secure AI Agents: Authorization Checklist","description":"A practical AI agent security checklist covering identity, least privilege, consent, token verification, revocation, delegation, audit, and budgets.","isPartOf":{"@id":"https://grantex.dev/#website"},"mainEntity":{"@id":"https://grantex.dev/vs/securing-ai-agents#article"},"breadcrumb":{"@id":"https://grantex.dev/vs/securing-ai-agents#breadcrumb"},"dateModified":"2026-07-12","inLanguage":"en"},{"@type":"TechArticle","@id":"https://grantex.dev/vs/securing-ai-agents#article","url":"https://grantex.dev/vs/securing-ai-agents","headline":"How to Secure AI Agents: Authorization Checklist","description":"A practical AI agent security checklist covering identity, least privilege, consent, token verification, revocation, delegation, audit, and budgets.","author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/vs/securing-ai-agents#webpage"},"inLanguage":"en"},{"@type":"BreadcrumbList","@id":"https://grantex.dev/vs/securing-ai-agents#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"Comparisons","item":"https://grantex.dev/vs/"},{"@type":"ListItem","position":3,"name":"How to Secure AI Agents: Authorization Checklist","item":"https://grantex.dev/vs/securing-ai-agents"}]}]}</script>
 </head>
 <body>
 <nav class="nav">
@@ -88,357 +95,84 @@
   </ul>
 </nav>
 
-<article class="article" id="content"><h1>How to Secure AI Agents</h1><p class="subtitle">A practical guide to agent identity, scoped permissions, consent, audit integrations, and grant lifecycle controls.</p><p>This page contains a detailed comparison, implementation notes, and current Grantex examples.</p><p><a href="https://docs.grantex.dev">Read the documentation</a> or <a href="https://github.com/mishrasanjeev/grantex">inspect the source</a>.</p></article>
+<article class="article" id="content">
+      <h1>How to Secure AI Agents</h1>
+      <p class="subtitle">A practical authorization checklist for agents that call tools, delegate work, or act for people and organizations.</p>
+      <p>No package makes an agent secure by itself. A defensible design combines model and tool isolation, strong authentication, least-privilege authorization, input and output controls, monitoring, and incident response. Grantex addresses the delegated-authorization layer.</p>
+
+      <h2>1. Give each agent an attributable identity</h2>
+      <p>Do not rely on one shared API key to distinguish several agents. Bind a stable agent DID, principal identifier, and grant identifier into a signed authorization token so the receiving service can attribute the request.</p>
+
+      <h2>2. Enforce least privilege at the tool boundary</h2>
+      <p>Define action-specific scopes such as <code>calendar:read</code> and <code>calendar:write</code>. The service that owns the protected action&mdash;not the model&mdash;must verify and enforce the required scope before execution.</p>
+
+      <h2>3. Capture a real delegation decision</h2>
+      <p>Show the person or organization which agent is requesting which scopes, for how long, and for which service. A consent URL or UI is only one part of this: the authorization server must record the approved grant and reject mismatched or replayed exchanges.</p>
+
+      <h2>4. Verify every token and request context</h2>
+      <ul>
+        <li>Validate signature, algorithm, issuer, audience, expiry, and not-before claims.</li>
+        <li>Require the expected agent, principal, and scope for the action.</li>
+        <li>Retrieve signing keys from the configured JWKS endpoint and handle key rotation.</li>
+        <li>Never treat an MCP session identifier or model-generated field as authentication.</li>
+      </ul>
+
+      <h2>5. Design revocation explicitly</h2>
+      <p>Local JWT verification checks signatures and claims after JWKS retrieval. It does not prove current revocation unless the verifier performs an online state check or synchronizes revocation data. Use short token lifetimes as an additional exposure limit, not as a substitute for state when immediate revocation is required.</p>
+
+      <h2>6. Attenuate sub-agent delegation</h2>
+      <p>A child grant should never exceed its parent. Require a subset of parent scopes, track the parent grant and delegation depth, cap depth, and cascade state changes according to policy.</p>
+
+      <h2>7. Separate authorization from audit</h2>
+      <p>A valid grant proves what was authorized; it does not prove which tool actually ran. Add an audit integration at the execution boundary and record the agent, principal, grant, action, outcome, timestamp, and non-secret context. Hash chaining makes later changes evident, not impossible.</p>
+
+      <h2>8. Apply budgets and domain policy</h2>
+      <p>For spend or other metered actions, enforce limits server-side using a transactional source of truth. Combine scopes with amount, category, destination, time, and organizational policy; never trust a model to self-enforce a budget.</p>
+
+      <h2>Implementation checklist</h2>
+      <table class="comparison-table">
+        <thead><tr><th>Control</th><th>Evidence to test</th></tr></thead>
+        <tbody>
+          <tr><td>Identity</td><td>Requests resolve to one agent, principal, and grant</td></tr>
+          <tr><td>Scope</td><td>A missing or narrower scope returns a denial before tool execution</td></tr>
+          <tr><td>Verification</td><td>Wrong issuer, audience, signature, or expiry is rejected</td></tr>
+          <tr><td>Revocation</td><td>The verifier receives current state within the documented window</td></tr>
+          <tr><td>Delegation</td><td>Broader child scopes and excessive depth are rejected</td></tr>
+          <tr><td>Audit</td><td>Successful and denied actions are attributable without logging secrets</td></tr>
+          <tr><td>Recovery</td><td>Operators can revoke, rotate keys, investigate, and restore service</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Choose the current implementation</h2>
+      <ul>
+        <li>TypeScript application: <code>@grantex/sdk@0.3.13</code></li>
+        <li>Python application: <code>grantex==0.3.14</code></li>
+        <li>Go application: <code>grantex-go@v0.1.10</code>, with the documented workarounds</li>
+        <li>MCP production integration: primary SDK or direct JWKS enforcement; treat MCP Auth 2.0.2 as evaluation software</li>
+      </ul>
+      <div class="cta-box"><h3>Build the enforcement point first</h3><p>Start with a protected service, one narrow scope, one denial test, and one revocation test.</p><a class="btn btn-primary" href="https://docs.grantex.dev/quickstart">Authorization quickstart</a> <a class="btn btn-secondary" href="https://docs.grantex.dev/release-status">Package status</a></div>
+      <p><small>Technical review updated 12 July 2026.</small></p>
+      <h2>Related implementation resources</h2>
+      <ul>
+        <li><a href="/vs/">All Grantex comparisons</a></li>
+        <li><a href="/for/">AI agent framework integrations</a></li>
+        <li><a href="https://docs.grantex.dev/quickstart">AI agent authorization quickstart</a></li>
+        <li><a href="https://docs.grantex.dev/guides/token-verification">JWT verification and revocation boundaries</a></li>
+        <li><a href="https://docs.grantex.dev/release-status">Current SDK versions and known limitations</a></li>
+      </ul>
+</article>
 
 <footer class="footer">
   <span style="color:var(--muted);font-size:.85rem">Grantex — Open authorization for AI agents</span>
   <ul class="footer-links">
     <li><a href="https://docs.grantex.dev">Docs</a></li>
     <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+    <li><a href="/for/">Integrations</a></li>
+    <li><a href="/vs/">Comparisons</a></li>
     <li><a href="/">Home</a></li>
   </ul>
 </footer>
 
-<script>
-const pages = {
-  'oauth': {
-    metaTitle: 'Grantex vs OAuth 2.0 — How AI Agent Authorization Differs',
-    metaDesc: 'Comparing Grantex and OAuth 2.0 for AI agent authorization. Learn why OAuth falls short for agents and what Grantex adds: agent identity, delegation chains, audit trails.',
-    html: `
-      <h1>Grantex vs OAuth 2.0</h1>
-      <p class="subtitle">Why OAuth 2.0 doesn't work for AI agents — and what Grantex does differently</p>
-
-      <p>OAuth 2.0 is the gold standard for delegated authorization on the web. It's battle-tested, widely adopted, and well-understood. So why do AI agents need something different?</p>
-      <p>The short answer: <strong>OAuth was designed for human users granting access to applications. Agents aren't applications.</strong></p>
-
-      <h2>What OAuth 2.0 Gets Right</h2>
-      <p>Grantex builds on OAuth's proven patterns:</p>
-      <ul>
-        <li><strong>Consent flow</strong> — users explicitly approve access</li>
-        <li><strong>Scoped permissions</strong> — not all-or-nothing access</li>
-        <li><strong>Token-based</strong> — bearer tokens for API access</li>
-        <li><strong>Revocable</strong> — tokens can be invalidated</li>
-        <li><strong>PKCE</strong> — proof key for code exchange (S256)</li>
-      </ul>
-      <p>If you know OAuth, Grantex will feel familiar. The authorization code flow, token exchange, and scope model all work the same way.</p>
-
-      <h2>Where OAuth Falls Short for Agents</h2>
-
-      <h3>1. No Agent Identity</h3>
-      <p>In OAuth, the <em>application</em> (client) is the identity boundary. When you grant "Acme App" access to your calendar, the token represents your session with that app.</p>
-      <p>But agents aren't apps. A single application might spawn multiple agents — a travel planner, a flight booker, a hotel finder. In OAuth, they all share the same client credentials. You can't distinguish which agent performed an action.</p>
-      <p><strong>Grantex fix:</strong> Every agent gets a cryptographic DID (Decentralized Identifier). The agent's identity is embedded in the JWT (<code>agt</code> claim). You always know <em>which agent</em> performed an action.</p>
-
-      <h3>2. Flat Scopes</h3>
-      <p>OAuth scopes are flat — a user grants scopes to an app, end of story. But agents delegate work to sub-agents. A travel agent needs to give the flight booker <code>flights:book</code> but not <code>hotels:book</code>.</p>
-      <p><strong>Grantex fix:</strong> Delegation chains. A parent agent can delegate a <em>narrower subset</em> of its scopes to a child agent. The delegation depth is tracked in the JWT. Revoking the parent cascades to all children.</p>
-
-      <h3>3. No Audit Trail</h3>
-      <p>OAuth tokens are opaque to the authorization server after issuance. There's no standard for logging what actions were performed with a token.</p>
-      <p><strong>Grantex fix:</strong> Applications can send actions to an append-only, hash-chained audit log when the audit integration is enabled. Entries carry agent, scope, timestamp, and integrity context.</p>
-
-      <h3>4. Slow Revocation</h3>
-      <p>OAuth revocation depends on token introspection or short expiry windows. If an agent goes rogue, you might have to wait for the token to expire.</p>
-      <p><strong>Grantex fix:</strong> Centralized grant revocation with cascade controls for delegated sub-agent grants. Local-only JWT consumers must use short token lifetimes or synchronized revocation data.</p>
-
-      <h2>Feature Comparison</h2>
-      <table class="comparison-table">
-        <tr><th>Feature</th><th>OAuth 2.0</th><th>Grantex</th></tr>
-        <tr><td>Consent flow</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
-        <tr><td>Scoped permissions</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
-        <tr><td>PKCE (S256)</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
-        <tr><td>Token refresh/rotation</td><td class="yes">Yes</td><td class="yes">Yes</td></tr>
-        <tr><td>Agent identity (DID)</td><td class="no">No</td><td class="yes">Yes</td></tr>
-        <tr><td>Delegation chains</td><td class="no">No</td><td class="yes">Yes (depth-tracked)</td></tr>
-        <tr><td>Cascade revocation</td><td class="no">No</td><td class="yes">Yes (&lt; 1s)</td></tr>
-        <tr><td>Hash-chained audit trail</td><td class="no">No</td><td class="yes">Yes</td></tr>
-        <tr><td>JWKS-backed verification</td><td>Varies</td><td class="yes">Local check; keys fetched and cached</td></tr>
-        <tr><td>Budget controls</td><td class="no">No</td><td class="yes">Yes</td></tr>
-        <tr><td>Multi-agent delegation</td><td class="no">No</td><td class="yes">Yes</td></tr>
-        <tr><td>Anomaly detection</td><td class="no">No</td><td class="yes">Yes</td></tr>
-      </table>
-
-      <h2>When to Use What</h2>
-      <p><strong>Use OAuth 2.0</strong> when you're building a traditional web/mobile app where humans interact directly with services. OAuth is mature, universally supported, and the right tool for human-to-app authorization.</p>
-      <p><strong>Use Grantex</strong> when AI agents act on behalf of users — especially when agents spawn sub-agents, operate autonomously, or access sensitive services. Grantex gives you the agent-specific primitives that OAuth lacks.</p>
-
-      <h2>Can I Use Both?</h2>
-      <p>Yes. Many teams use OAuth for their user-facing app and Grantex for the agent layer. Grantex's <a href="https://grantex.dev/for/express">Express middleware</a> and <a href="https://grantex.dev/for/fastapi">FastAPI middleware</a> can run alongside existing OAuth middleware.</p>
-
-      <div class="cta-box">
-        <h3>Ready to add agent authorization?</h3>
-        <p>Get started in under 5 minutes. Open source, Apache 2.0.</p>
-        <a href="https://docs.grantex.dev/quickstart" class="btn btn-primary" style="margin-right:.5rem">Get Started</a>
-        <a href="/" class="btn btn-secondary">Learn More</a>
-      </div>
-    `
-  },
-
-  'api-keys': {
-    metaTitle: 'Grantex vs API Keys — Why API Keys Are Dangerous for AI Agents',
-    metaDesc: 'API keys give AI agents unlimited access with no scoping, audit trail, or revocation. Learn how Grantex replaces all-or-nothing API keys with scoped, revocable JWTs.',
-    html: `
-      <h1>Grantex vs API Keys</h1>
-      <p class="subtitle">Why all-or-nothing API keys are dangerous for AI agents</p>
-
-      <p>Most AI agents today run on raw API keys. This is the simplest approach — and the most dangerous.</p>
-
-      <h2>The Problem with API Keys for Agents</h2>
-
-      <h3>1. No Scoping</h3>
-      <p>An API key typically grants full access to a service. Your LangChain agent has a Stripe API key? It can read transactions, create charges, issue refunds, and delete customers. There's no way to say "this agent can only <em>read</em> transactions."</p>
-
-      <h3>2. No Audit Trail</h3>
-      <p>API keys don't identify <em>which agent</em> made a request. If you have 5 agents sharing a Stripe key, your logs show "API key sk_live_... made a charge" — not "the travel-booking agent made a charge on behalf of user Alice."</p>
-
-      <h3>3. No Revocation (Without Breaking Everything)</h3>
-      <p>Revoking an API key kills <em>all</em> agents using it. If one agent misbehaves, you can't revoke just that agent's access. You have to rotate the key and update every agent.</p>
-
-      <h3>4. No User Consent</h3>
-      <p>API keys are developer-level credentials. End users never approve what an agent can do on their behalf. This is a compliance and trust problem.</p>
-
-      <h3>5. No Delegation Control</h3>
-      <p>If a parent agent gives its API key to a sub-agent, the sub-agent has the same full access. There's no narrowing, no depth tracking, no cascade revocation.</p>
-
-      <h2>How Grantex Replaces API Keys</h2>
-
-      <table class="comparison-table">
-        <tr><th>Aspect</th><th>API Keys</th><th>Grantex</th></tr>
-        <tr><td>Access scope</td><td class="no">Full access</td><td class="yes">Per-grant scoping</td></tr>
-        <tr><td>User consent</td><td class="no">None</td><td class="yes">Explicit consent flow</td></tr>
-        <tr><td>Agent identity</td><td class="no">Shared key</td><td class="yes">Cryptographic DID per agent</td></tr>
-        <tr><td>Audit trail</td><td class="no">Key-level only</td><td class="yes">Per-agent, hash-chained</td></tr>
-        <tr><td>Revocation</td><td class="no">Kills all agents</td><td>Per-agent central grant revocation</td></tr>
-        <tr><td>Delegation</td><td class="no">Copy the key</td><td class="yes">Scoped, depth-tracked</td></tr>
-        <tr><td>Expiration</td><td class="no">Usually never</td><td class="yes">Time-limited JWTs</td></tr>
-        <tr><td>Budget limits</td><td class="no">No</td><td class="yes">Per-grant budgets</td></tr>
-        <tr><td>Verification</td><td>API call required</td><td class="yes">Local with cached JWKS</td></tr>
-      </table>
-
-      <h2>Migration Path</h2>
-      <p>You don't have to replace all your API keys at once. The typical migration:</p>
-      <ol>
-        <li><strong>Add Grantex to your agent layer</strong> — agents get scoped JWTs for user-facing actions</li>
-        <li><strong>Keep API keys for internal services</strong> — machine-to-machine calls that don't involve user data</li>
-        <li><strong>Add verification middleware</strong> — Express.js or FastAPI middleware checks Grantex JWTs on your endpoints</li>
-        <li><strong>Phase out agent API keys</strong> — as you add Grantex coverage, remove direct API key access from agents</li>
-      </ol>
-
-      <h2>Code Comparison</h2>
-
-      <h3>Before: Agent with API Key</h3>
-      <pre><code>// Agent has FULL Stripe access
-const stripe = new Stripe(process.env.STRIPE_API_KEY);
-await stripe.charges.create({ amount: 5000, currency: 'usd' });
-// Who authorized this? Which agent? What scopes? No idea.</code></pre>
-
-      <h3>After: Agent with Grantex JWT</h3>
-      <pre><code>import { createGrantexTool } from '@grantex/langchain';
-
-const stripeReadTool = createGrantexTool({
-  name: 'list_charges',
-  description: 'List recent Stripe charges',
-  grantToken: token,
-  requiredScope: 'payments:read',
-  func: async () => JSON.stringify(await stripe.charges.list()),
-});
-// The signed token and payments:read scope are verified before execution.</code></pre>
-
-      <div class="cta-box">
-        <h3>Replace API keys with scoped grants</h3>
-        <p>10 lines of code. Open source. Apache 2.0.</p>
-        <a href="https://docs.grantex.dev/quickstart" class="btn btn-primary" style="margin-right:.5rem">Get Started</a>
-        <a href="/playground" class="btn btn-secondary">Try in Playground</a>
-      </div>
-    `
-  },
-
-  'mcp-auth': {
-    metaTitle: 'How to Add Authentication to MCP Servers — Grantex MCP Auth',
-    metaDesc: 'Add OAuth 2.1 + PKCE authentication to any MCP server. Grantex MCP Auth provides scoped authorization for Claude Desktop, Cursor, and Windsurf tools.',
-    html: `
-      <h1>How to Add Auth to MCP Servers</h1>
-      <p class="subtitle">OAuth 2.1 + PKCE authorization for Model Context Protocol servers</p>
-
-      <p>MCP (Model Context Protocol) lets AI assistants like Claude Desktop, Cursor, and Windsurf call external tools. But out of the box, <strong>MCP servers have no authorization layer</strong>. Any connected client can call any tool with full access.</p>
-
-      <h2>The Problem</h2>
-      <p>When you build an MCP server that accesses real services — databases, APIs, file systems — you need to control who can call what. Without auth:</p>
-      <ul>
-        <li>Any MCP client can invoke any tool</li>
-        <li>No way to scope access per user or per session</li>
-        <li>No audit trail of tool invocations</li>
-        <li>No consent flow for sensitive operations</li>
-      </ul>
-
-      <h2>Two Grantex Solutions for MCP</h2>
-
-      <h3>1. @grantex/mcp — Grantex as an MCP Server</h3>
-      <p>17 tools for managing agent authorization directly from Claude Desktop or Cursor:</p>
-      <pre><code>// claude_desktop_config.json
-{
-  "mcpServers": {
-    "grantex": {
-      "command": "npx",
-      "args": ["@grantex/mcp"],
-      "env": { "GRANTEX_API_KEY": "gx_live_..." }
-    }
-  }
-}
-
-// Then ask Claude:
-// "Register an agent called data-bot with db:read scope"
-// "Create a grant for user alice on data-bot"
-// "Show me the audit log for the last hour"</code></pre>
-
-      <h3>2. @grantex/mcp-auth — Add Auth to YOUR MCP Server</h3>
-      <p>OAuth 2.1 + PKCE authorization for any MCP server you build:</p>
-      <pre><code>import express from 'express';
-import { requireMcpAuth } from '@grantex/mcp-auth/express';
-
-const app = express();
-
-app.post('/mcp/tools/query_database', requireMcpAuth({
-  issuer: 'https://your-auth.example.com',
-  scopes: ['db:read'],
-}), async (req, res) => {
-  const rows = await db.query(req.body.sql);
-  res.json({ rows, grant: req.mcpGrant });
-});</code></pre>
-
-      <h2>Feature Comparison</h2>
-      <table class="comparison-table">
-        <tr><th>Feature</th><th>MCP (default)</th><th>MCP + Grantex</th></tr>
-        <tr><td>Tool access control</td><td class="no">None</td><td class="yes">Per-tool scopes</td></tr>
-        <tr><td>User consent</td><td class="no">No</td><td class="yes">OAuth 2.1 consent flow</td></tr>
-        <tr><td>PKCE</td><td class="no">No</td><td class="yes">S256</td></tr>
-        <tr><td>Audit trail</td><td class="no">No</td><td>Host application integration</td></tr>
-        <tr><td>Token revocation</td><td class="no">N/A</td><td>Central endpoint; local verifiers need current state</td></tr>
-        <tr><td>Multi-user</td><td class="no">No</td><td class="yes">Per-user grants</td></tr>
-      </table>
-
-      <div class="cta-box">
-        <h3>Secure your MCP server</h3>
-        <p>Works with Claude Desktop, Cursor, and Windsurf.</p>
-        <a href="https://docs.grantex.dev/integrations/mcp" class="btn btn-primary" style="margin-right:.5rem">Read the Docs</a>
-        <a href="https://www.npmjs.com/package/@grantex/mcp-auth" class="btn btn-secondary">npm install</a>
-      </div>
-    `
-  },
-
-  'securing-ai-agents': {
-    metaTitle: 'How to Secure AI Agents — Authorization, Scoping, and Audit Trails',
-    metaDesc: 'A practical guide to securing AI agents in production. Scoped permissions, cryptographic identity, audit trails, delegation control, and central grant revocation.',
-    html: `
-      <h1>How to Secure AI Agents in Production</h1>
-      <p class="subtitle">A practical guide to authorization, scoping, and audit trails for AI agents</p>
-
-      <p>Your AI agent books flights, reads emails, and processes payments. How do you make sure it only does what it's supposed to?</p>
-      <p>This guide covers the key security primitives you need for production AI agents, and how to implement them.</p>
-
-      <h2>1. Scoped Permissions</h2>
-      <p>The #1 rule: <strong>never give an agent more access than it needs.</strong></p>
-      <p>Instead of a full API key, give each agent a token with specific scopes:</p>
-      <pre><code>// Agent can read emails but NOT send them
-const auth = await gx.authorize({
-  agentId: agent.id,
-  userId: 'user_alice',
-  scopes: ['email:read'],  // not 'email:*'
-});</code></pre>
-      <p>With Grantex, scopes are enforced at the protocol level. If an agent tries to call a tool requiring <code>email:send</code> but only has <code>email:read</code>, the request is denied.</p>
-
-      <h2>2. Agent Identity</h2>
-      <p>Every agent needs its own cryptographic identity — not shared credentials.</p>
-      <p>Grantex assigns each agent a DID (Decentralized Identifier) embedded in its JWT. This means you can always answer: <em>"Which agent performed this action?"</em></p>
-
-      <h2>3. User Consent</h2>
-      <p>Before an agent acts on a user's behalf, the user should explicitly approve:</p>
-      <ul>
-        <li>What scopes the agent gets</li>
-        <li>How long the access lasts</li>
-        <li>What services the agent can access</li>
-      </ul>
-      <p>Grantex provides a consent URL that users visit to approve or deny the request. This is the same pattern as OAuth — familiar to users.</p>
-
-      <h2>4. Audit Trail</h2>
-      <p>You need to know what your agents did, not just what they were authorized to do.</p>
-      <p>Grantex provides an append-only, hash-chained audit log. Each entry includes:</p>
-      <ul>
-        <li>Agent DID and grant ID</li>
-        <li>Action performed and scopes used</li>
-        <li>Timestamp</li>
-        <li>SHA-256 hash linking to the previous entry (tamper-evident)</li>
-      </ul>
-
-      <h2>5. Delegation Control</h2>
-      <p>When a parent agent spawns sub-agents, the sub-agents should get <em>narrower</em> permissions, not the same or broader.</p>
-      <pre><code>// Parent has: ["flights:book", "hotels:book"]
-// Delegate only flights to the sub-agent:
-const delegated = await gx.grants.delegate({
-  parentGrantToken: parentToken,
-  childAgentId: flightBooker.id,
-  scopes: ['flights:book'],  // subset only
-});</code></pre>
-      <p>The delegation depth is tracked in the JWT. Revoking the parent cascades to all children.</p>
-
-      <h2>6. Centralized Revocation</h2>
-      <p>If an agent behaves unexpectedly, revoke its grant centrally and define how each verifier receives revocation state.</p>
-      <p>Grantex supports centralized and cascading grant revocation. Local-only JWT consumers must use short token lifetimes or synchronized revocation data.</p>
-
-      <h2>7. Budget Controls</h2>
-      <p>For agents that spend money (API calls, compute, purchases), set spending limits:</p>
-      <pre><code>await gx.budgets.allocate({
-  grantId: grant.id,
-  amount: 100.00,  // max $100
-  currency: 'USD',
-});
-// Agent is automatically cut off at the limit</code></pre>
-
-      <h2>Getting Started</h2>
-      <p>Grantex provides all of these primitives as an open protocol (Apache 2.0) with SDKs for <a href="https://docs.grantex.dev/sdks/typescript/overview">TypeScript</a>, <a href="https://docs.grantex.dev/sdks/python/overview">Python</a>, and <a href="https://docs.grantex.dev/sdks/go/overview">Go</a>.</p>
-
-      <div class="cta-box">
-        <h3>Start securing your agents</h3>
-        <p>Open source SDKs, framework integrations, and maintained implementation guides.</p>
-        <a href="https://docs.grantex.dev/quickstart" class="btn btn-primary" style="margin-right:.5rem">Quickstart Guide</a>
-        <a href="/playground" class="btn btn-secondary">Try in Playground</a>
-      </div>
-    `
-  }
-};
-
-const slug = window.location.pathname.replace(/\/$/, '').split('/').pop();
-const page = pages[slug];
-
-if (!page) {
-  window.location.href = '/';
-} else {
-  document.title = page.metaTitle;
-  document.querySelector('meta[name="description"]').content = page.metaDesc;
-  document.querySelector('link[rel="canonical"]').href = 'https://grantex.dev/vs/' + slug;
-  document.querySelector('meta[property="og:title"]').content = page.metaTitle;
-  document.querySelector('meta[property="og:description"]').content = page.metaDesc;
-  document.querySelector('meta[property="og:url"]').content = 'https://grantex.dev/vs/' + slug;
-  document.querySelector('meta[name="twitter:title"]').content = page.metaTitle;
-  document.querySelector('meta[name="twitter:description"]').content = page.metaDesc;
-  document.getElementById('content').innerHTML = page.html;
-
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Article",
-    "headline": page.metaTitle,
-    "description": page.metaDesc,
-    "url": "https://grantex.dev/vs/" + slug,
-    "author": { "@type": "Organization", "name": "Grantex", "url": "https://grantex.dev" },
-    "publisher": { "@type": "Organization", "name": "Grantex", "url": "https://grantex.dev" }
-  };
-  const s = document.createElement('script');
-  s.type = 'application/ld+json';
-  s.textContent = JSON.stringify(jsonLd);
-  document.head.appendChild(s);
-
-  gtag('event', 'page_view', { page_title: page.metaTitle, page_location: window.location.href });
-}
-</script>
+<script>gtag('event','page_view',{page_title:document.title,page_location:window.location.href,content_group:'comparison'});</script>
 </body>
 </html>

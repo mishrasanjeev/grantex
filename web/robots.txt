@@ -1,14 +1,52 @@
+# Grantex public documentation and marketing content is crawlable.
+# Authentication, not robots.txt, protects non-public application state.
+# Public noindex app/demo shells remain crawlable so page-level noindex can be read.
+#
+# The explicit names below document known crawler purposes as of 2026-07-12.
+# Google-Extended, GPTBot, ClaudeBot, and Applebot-Extended are product/training
+# controls, not search-ranking controls. User-triggered fetchers can have behavior
+# distinct from autonomous crawlers. OAI-AdsBot validates advertising destinations.
+# User-agent: * is the functional allow policy for all other crawlers.
+
+# General search and indexing
+User-agent: Googlebot
+User-agent: Bingbot
+User-agent: DuckDuckBot
+User-agent: Applebot
+User-agent: Amazonbot
+User-agent: Amzn-SearchBot
+User-agent: YouBot
+
+# AI search and answer grounding
+User-agent: OAI-SearchBot
+User-agent: Claude-SearchBot
+User-agent: PerplexityBot
+User-agent: DuckAssistBot
+
+# User-triggered retrieval
+User-agent: ChatGPT-User
+User-agent: Claude-User
+User-agent: Perplexity-User
+User-agent: Google-Agent
+User-agent: Amzn-User
+
+# Product improvement or training controls
+User-agent: GPTBot
+User-agent: ClaudeBot
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+
+# Advertising landing-page validation
+User-agent: OAI-AdsBot
+Allow: /
+
 User-agent: *
 Allow: /
-Disallow: /dashboard/
-Disallow: /commerce-playground
-Disallow: /ph-gallery
-Disallow: /playground
-Disallow: /mpp-demo
-Disallow: /x402-playground/
 
 Sitemap: https://grantex.dev/sitemap.xml
 Sitemap: https://docs.grantex.dev/sitemap.xml
 
-# LLM discovery — see https://llmstxt.org
-LLMs-Txt: https://grantex.dev/llms.txt
+# AI-readable summaries (comments, not Robots Exclusion Protocol directives):
+# https://grantex.dev/llms.txt
+# https://grantex.dev/llms-full.txt
+# https://grantex.dev/ld.json

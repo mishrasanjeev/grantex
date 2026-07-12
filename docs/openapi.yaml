@@ -3,7 +3,9 @@ info:
   title: Grantex Auth Service API
   version: 0.3.12
   description: |
-    The Grantex Auth Service implements the Grantex delegated authorization protocol for AI agents.
+    Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
+
+    The Grantex Auth Service implements this protocol for API clients.
     It provides agent registration, authorization flows, token management, audit logging, policy enforcement,
     anomaly detection, compliance exports, SCIM provisioning, SSO, and billing.
 

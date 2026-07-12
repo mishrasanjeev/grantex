@@ -1,10 +1,11 @@
 ---
-title: "Integrations"
+title: "AI Agent Framework Integrations"
 sidebarTitle: "Overview"
-description: "Grantex integrates with every major AI agent framework."
+description: "Choose Grantex integrations for OpenAI Agents, Anthropic, LangChain, CrewAI, Google ADK, AutoGen, Vercel AI, MCP, Express, FastAPI, Strands, and A2A."
+keywords: ["AI agent framework integrations", "OpenAI Agents authorization", "LangChain permissions", "MCP authorization", "CrewAI security"]
 ---
 
-## Available Integrations
+## Choose an AI agent integration
 
 <CardGroup cols={2}>
   <Card title="Service Provider Adapters" icon="puzzle-piece" href="/integrations/adapters">
@@ -14,7 +15,7 @@ description: "Grantex integrates with every major AI agent framework."
     Encrypted per-user credential store. Agents exchange grant tokens for upstream service credentials.
   </Card>
   <Card title="MCP Auth Server" icon="lock" href="/integrations/mcp-auth">
-    Drop-in OAuth 2.1 + PKCE authorization provider for any MCP server.
+    OAuth 2.1 + PKCE endpoint package for single-process evaluation; review the version 2.0.2 consent, code-handoff, state, and revocation limitations.
   </Card>
   <Card title="Grantex Gateway" icon="shield-halved" href="/integrations/gateway">
     Zero-code reverse-proxy that enforces grant tokens via YAML config.
@@ -65,13 +66,13 @@ description: "Grantex integrates with every major AI agent framework."
     Python client/server for Grantex-authenticated A2A task exchange.
   </Card>
   <Card title="Gemma 4 (On-Device)" icon="microchip" href="/integrations/gemma">
-    Offline authorization for Gemma 4 on-device agents — consent bundles, JWT verification, and audit logging without network calls.
+    Verify signed grant claims against a provisioned key bundle during offline operation; refresh keys, token validity, and revocation data through a trusted synchronization path.
   </Card>
-  <Card title="DPDP / GDPR Compliance" icon="shield-check" href="/integrations/dpdp">
-    India DPDP Act 2023 and EU GDPR compliance — consent records, purpose limitation, grievances, and audit exports.
+  <Card title="DPDP / GDPR Technical Controls" icon="shield-check" href="/integrations/dpdp">
+    Consent records, purpose-limitation fields, grievance workflows, and audit exports can support DPDP Act 2023 and EU GDPR programs; they are technical tooling, not legal compliance or certification.
   </Card>
   <Card title="Trust Registry" icon="building-columns" href="/integrations/registry">
-    Public directory of verified AI agent publishers with DID-based identity and compliance badges.
+    Public directory of registered AI agent publishers with DID profiles, public keys, and DNS ownership verification. Stored badge fields are metadata, not a compliance certification program.
   </Card>
   <Card title="Scope Enforcement" icon="shield-check" href="/guides/scope-enforcement">
     Enforce tool-level permissions on any connector — define your own manifests or use 53 pre-built ones. One-line enforcement via enforce().
@@ -92,7 +93,7 @@ description: "Grantex integrates with every major AI agent framework."
 | Framework | Package | Install | Language |
 |-----------|---------|---------|----------|
 | Adapters | `@grantex/adapters` | `npm install @grantex/adapters` | TypeScript |
-| MCP Auth Server | `@grantex/mcp-auth` | `npm install @grantex/mcp-auth` | TypeScript |
+| MCP Auth Server | `@grantex/mcp-auth@2.0.2` | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13` | TypeScript; evaluation only |
 | Gateway | `@grantex/gateway` | `npm install @grantex/gateway` | TypeScript |
 | Express.js | `@grantex/express` | `npm install @grantex/express` | TypeScript |
 | FastAPI | `grantex-fastapi` | `pip install grantex-fastapi` | Python |
@@ -106,7 +107,7 @@ description: "Grantex integrates with every major AI agent framework."
 | Strands Agents SDK (TS) | `@grantex/strands` | `npm install @grantex/strands` | TypeScript |
 | Strands Agents SDK (Python) | `grantex-strands` | `pip install grantex-strands` | Python |
 | Anthropic SDK | `@grantex/anthropic` | `npm install @grantex/anthropic` | TypeScript |
-| Go SDK | `grantex-go` | `go get github.com/mishrasanjeev/grantex-go` | Go |
+| Go SDK | `grantex-go@v0.1.10` | `go get github.com/mishrasanjeev/grantex-go@v0.1.10` | Go 1.26.1+; workarounds documented |
 | A2A Bridge (TS) | `@grantex/a2a` | `npm install @grantex/a2a` | TypeScript |
 | A2A Bridge (Py) | `grantex-a2a` | `pip install grantex-a2a` | Python |
 | CLI | `@grantex/cli` | `npm install -g @grantex/cli` | TypeScript |
@@ -115,13 +116,19 @@ description: "Grantex integrates with every major AI agent framework."
 | MPP Agent Identity | `@grantex/mpp` | `npm install @grantex/mpp` | TypeScript |
 | Terraform Provider | `terraform-provider-grantex` | `source = "mishrasanjeev/grantex"` | Go / HCL |
 
+<Warning>
+  For production MCP enforcement today, use a primary SDK or direct JWKS-backed
+  verification at the service boundary. Treat `@grantex/mcp-auth@2.0.2` as
+  single-process evaluation software until its documented limitations are fixed.
+</Warning>
+
 ## Verifiable Intent & Agentic Commerce
 
 Grantex integrates with emerging standards for agentic commerce through W3C Verifiable Credentials and FIDO2/WebAuthn:
 
 <CardGroup cols={2}>
   <Card title="Verifiable Credentials" icon="certificate" href="/features/verifiable-credentials">
-    Issue W3C VCs alongside grant tokens. Agents present portable, tamper-proof proof of authorization to any verifier -- no Grantex account required.
+    Issue W3C VCs alongside grant tokens. Agents present portable, tamper-evident proof of authorization to any verifier -- no Grantex account required.
   </Card>
   <Card title="FIDO2 / WebAuthn" icon="fingerprint" href="/features/fido-webauthn">
     Passkey-based human presence verification. Cryptographic proof that a real human authorized the agent, embedded in grants and VCs.
@@ -130,7 +137,7 @@ Grantex integrates with emerging standards for agentic commerce through W3C Veri
     W3C DID document at did:web:grantex.dev. Any party can verify Grantex-issued credentials using published public keys.
   </Card>
   <Card title="MPP Agent Passport" icon="passport" href="/features/mpp-agent-passport">
-    Agent identity for machine payments. Issue W3C VC 2.0 passports with spending limits, category restrictions, and offline merchant verification in &lt;50ms.
+    Agent identity for machine payments. Issue W3C VC 2.0 passports with spending limits and category restrictions; verifiers can reuse valid cached keys after JWKS retrieval.
   </Card>
 </CardGroup>
 

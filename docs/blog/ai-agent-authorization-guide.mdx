@@ -1,175 +1,274 @@
 ---
-title: "AI Agent Authorization: The Complete Guide for 2026"
-description: "Learn how to authorize AI agents with scoped, revocable permissions. Covers the problem with API keys, how delegated authorization works, code examples, and a comparison of approaches."
+title: "AI Agent Authorization Guide for 2026: Scopes, Consent, and Revocation"
+description: "Implement AI agent authorization with scoped grants, consent, JWT verification, current revocation checks, and TypeScript and Python examples."
 date: "2026-04-05"
+updated: "2026-07-12"
+keywords:
+  - "AI agent authorization"
+  - "agent permissions"
+  - "delegated authorization"
+  - "AI agent access control"
+  - "agent token revocation"
 authors:
   - name: "Sanjeev Kumar"
 ---
 
-AI agents are no longer chatbots. They book travel, move money, file JIRA tickets, manage cloud infrastructure, and send emails on your behalf. The question every engineering team eventually hits is the same: **how do you authorize an AI agent to act without giving it the keys to the kingdom?**
+AI agent authorization is the policy and enforcement layer that determines which agent may perform which action for which principal. It supplements authentication: identifying a workload or API client is not the same as deciding whether a particular agent may invoke a particular tool now.
 
-This guide covers everything you need to know about AI agent authorization in 2026 — why it matters, what the current approaches get wrong, how delegated authorization works, and how to implement it with working code.
+This guide explains the implementation boundaries that matter in production: agent identity, scoped consent, token verification, action-boundary enforcement, current revocation state, and explicit audit integration.
 
-## Why AI Agents Need Authorization
+## What Is AI Agent Authorization?
 
-A traditional API integration has a developer, a credential, and a service. The developer writes the code, decides which endpoints to call, and ships it. The credential never makes autonomous decisions.
+An agent often selects tools at runtime. The protected service therefore needs more context than a valid application credential:
 
-AI agents break this model. An agent decides *at runtime* which tools to call, which APIs to hit, and which actions to take. The same agent might read your calendar one moment and try to delete a database table the next — all within a single conversation. Without proper authorization, the only thing standing between an agent and a catastrophic action is the LLM's judgment.
+- the agent identity;
+- the principal or organization that approved the authority;
+- the exact scopes granted to that agent;
+- the token audience and expiry;
+- any delegation constraints; and
+- the current grant state when revocation freshness matters.
 
-That is not a security model. That is a prayer.
+The service that executes the action is the final enforcement point. A prompt, tool description, or framework wrapper can reduce mistakes, but it should not be the only authorization control.
 
-Three specific problems make AI agent authorization different from traditional API auth:
+## How API Keys, OAuth, and Agent Grants Fit Together
 
-1. **Dynamic tool selection.** You cannot predict at build time which tools an agent will invoke. The agent decides based on the user's request and its own reasoning.
-2. **Delegation chains.** A parent agent may spawn sub-agents, each of which needs its own narrowly-scoped permissions. API keys do not support this.
-3. **Auditability.** When an agent performs an action, you need to know *which agent*, *which user approved it*, *what scopes were granted*, and *when the permission expires*. API keys give you none of this.
+These mechanisms solve overlapping but distinct problems; they are not mutually exclusive.
 
-## The Problem with API Keys
+**API keys and service credentials** can be appropriate for application-to-service authentication. Providers may support restricted keys, rotation, access policy, and audit records. A shared credential usually does not, by itself, identify the individual agent and approving principal for each action. Keep upstream credentials behind the service boundary where possible.
 
-Most agent frameworks today tell you to pass your API keys as environment variables. The agent gets the same access as the key holder — typically full read/write access to the service.
+**OAuth 2.0 and OpenID Connect** provide mature authorization and identity building blocks, including scopes, consent, token expiry, and revocation mechanisms. An implementation can model agents with OAuth-native concepts. Agent-specific identity, delegation-chain rules, and per-tool policy still need explicit claim semantics and enforcement.
 
-Here is what goes wrong:
+**Grantex grant tokens** carry agent, principal, scope, expiry, and delegation context for the protected service to verify. Grantex complements upstream OAuth, identity providers, secret managers, and provider credentials rather than replacing them.
 
-| Problem | API Keys | Delegated Auth |
-|---------|----------|----------------|
-| **Scope** | All-or-nothing access | Per-action scoped permissions |
-| **Revocation** | Rotate the entire key | Revoke individual agent grants instantly |
-| **Audit trail** | "Someone used the key" | "Agent X did action Y, approved by user Z" |
-| **Delegation** | Share the same key (dangerous) | Parent grants child a strict subset of permissions |
-| **Expiry** | Manual rotation | Automatic time-limited tokens |
-| **Identity** | Key identifies the developer | Token identifies the agent, user, and developer |
+For MCP over HTTP, use an authorization server that follows the current MCP authorization specification for transport access. Add agent-specific checks inside the MCP tool or protected downstream service when tool authority must be narrower than transport access.
 
-API keys were designed for server-to-server communication where a human developer controls every call. Using them for autonomous agents is like giving your car keys to a stranger and hoping they only drive to the grocery store.
+## A Delegated Agent Authorization Flow
 
-## How Delegated Authorization for AI Agents Works
+A typical flow has seven explicit steps:
 
-Delegated authorization follows a pattern similar to OAuth 2.0, but extended for agent-specific requirements. The flow works like this:
+1. **Register the agent.** The developer registers the agent and its permitted scope catalog. Grantex returns an agent ID and DID.
+2. **Request authority.** The application requests exact scopes for a known principal and redirect URI.
+3. **Collect consent.** The principal reviews the request. The application receives a code only after approval.
+4. **Exchange the code.** The application exchanges the callback code for a signed grant token.
+5. **Verify at the action boundary.** The protected service validates the signature, issuer, audience, expiry, and required scopes before executing the action.
+6. **Check current state when required.** Local JWT validation cannot discover a later revocation on its own. Use an online grant check or synchronized revocation data for current status.
+7. **Record configured events.** The application or gateway explicitly records authorization decisions and action outcomes. External tool calls are not automatically audited merely because a token exists.
 
-1. **Agent registration.** The agent gets its own cryptographic identity (a DID). This is not a shared credential — it uniquely identifies this agent instance.
-2. **Authorization request.** The agent requests specific permissions (scopes) from a human user. The user sees exactly what the agent is asking for.
-3. **Consent.** The user reviews the requested scopes and approves or denies. This is the human-in-the-loop step that API keys skip entirely.
-4. **Token exchange.** After approval, the agent receives a grant token — a signed JWT containing the approved scopes, the agent identity, the user identity, and an expiry time.
-5. **Enforcement.** On every tool call, the token's scopes are checked against the tool's required permission. If the agent tries to call a tool outside its granted scopes, the call is rejected before execution.
-6. **Revocation.** The user (or an admin) can revoke the grant at any time. The agent's access stops immediately.
+Scope names should describe the resource and action clearly, such as `calendar:read` or `payments:initiate:max_500`. The SDK manifest enforcer uses `tool:{connector}:{permission}`, for example `tool:expense-api:write`.
 
-## Implementing AI Agent Authorization with Grantex
+## Install the Current SDKs
 
-[Grantex](https://grantex.dev) is an open protocol (Apache 2.0) that implements this entire flow. Here is a working example in TypeScript:
+The SDKs are independently versioned. These pins match the current published releases documented in the machine-readable implementation guide:
+
+```bash
+npm install @grantex/sdk@0.3.13
+python -m pip install grantex==0.3.14
+```
+
+Check [release status](/release-status) before changing versions.
+
+## TypeScript: Register, Authorize, Exchange, and Verify
 
 ```typescript
-import { Grantex } from '@grantex/sdk';
+import { Grantex, verifyGrantToken } from '@grantex/sdk';
 
-const gx = new Grantex({
-  apiKey: process.env.GRANTEX_API_KEY,
-  baseUrl: 'https://api.grantex.dev',
-});
+const gx = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+const principalId = 'user_alice';
 
-// 1. Register the agent with its own identity
-const agent = await gx.agents.create({
+const agent = await gx.agents.register({
   name: 'expense-report-agent',
-  description: 'Files expense reports and reads receipts',
+  description: 'Reads receipts and creates expense reports after approval',
+  scopes: ['tool:expense-api:read', 'tool:expense-api:write'],
 });
 
-// 2. Request scoped authorization from the user
 const auth = await gx.authorize({
   agentId: agent.id,
-  userId: 'user_alice',
-  scopes: ['expenses:read', 'expenses:create'],
-  callbackUrl: 'https://app.example.com/callback',
-});
-// Redirect user to auth.consentUrl — they see the exact scopes
-
-// 3. After user approves, exchange the code for a grant token
-const token = await gx.tokens.exchange({
-  code: callbackCode,
-  agentId: agent.id,
+  userId: principalId,
+  scopes: ['tool:expense-api:read', 'tool:expense-api:write'],
+  redirectUri: 'https://app.example.com/auth/callback',
 });
 
-// 4. Verify the token before every action
-const result = await gx.tokens.verify(token.grantToken);
-console.log(result.scopes);    // ['expenses:read', 'expenses:create']
-console.log(result.agent);     // 'did:grantex:ag_01ABC...'
-console.log(result.principal); // 'user_alice'
-console.log(result.expiresAt); // '2026-04-06T00:00:00Z'
-```
+console.log('Send the principal to: ' + auth.consentUrl);
 
-The same flow in Python:
+// Call this from the registered callback after reading its code parameter.
+export async function finishAuthorization(code: string) {
+  const token = await gx.tokens.exchange({ code, agentId: agent.id });
 
-```python
-from grantex import Grantex
+  const localGrant = await verifyGrantToken(token.grantToken, {
+    jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+    requiredScopes: ['tool:expense-api:write'],
+  });
 
-gx = Grantex(
-    api_key=os.environ["GRANTEX_API_KEY"],
-    base_url="https://api.grantex.dev",
-)
+  // Online verification checks current server-side grant state.
+  const currentGrant = await gx.grants.verify(token.grantToken);
 
-agent = gx.agents.create(name="expense-report-agent", description="Files expense reports")
-
-auth = gx.authorize(
-    agent_id=agent.id,
-    user_id="user_alice",
-    scopes=["expenses:read", "expenses:create"],
-    callback_url="https://app.example.com/callback",
-)
-
-token = gx.tokens.exchange(code=callback_code, agent_id=agent.id)
-
-result = gx.tokens.verify(token.grant_token)
-# result.scopes == ['expenses:read', 'expenses:create']
-```
-
-## Scope Enforcement on Tool Calls
-
-Authorization alone is not enough. You also need **enforcement** — checking the token's scopes against the tool's required permission on every call, before execution.
-
-Grantex ships 53 pre-built tool manifests covering popular services (Salesforce, Jira, Stripe, HubSpot, GitHub, Slack, and more). Each manifest maps tool names to required permission levels:
-
-```typescript
-import { Grantex } from '@grantex/sdk';
-import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
-
-const gx = new Grantex({ apiKey: 'gx_...' });
-gx.loadManifest(salesforceManifest);
-
-// This verifies the JWT via JWKS, then checks its scopes against the manifest
-const check = await gx.enforce({
-  grantToken: token.grantToken,
-  connector: 'salesforce',
-  tool: 'delete_contact',
-});
-
-if (!check.allowed) {
-  console.log(check.reason); // "Token lacks tool:salesforce:delete scope"
+  return { token, localGrant, currentGrant };
 }
 ```
 
-`enforce()` fails closed if signature or claim verification fails. It uses the
-configured JWKS endpoint before evaluating the manifest, and the current
-standalone verifier may fetch those keys on each invocation. A decode-only
-helper must never be used as an authorization decision.
+`verifyGrantToken()` validates cryptographic and JWT claims after resolving the issuer's JWKS. The TypeScript verifier keeps a bounded process-level JWKS resolver cache. That cache is about signing keys, not grant revocation.
 
-For framework-specific enforcement, Grantex integrates with [LangChain](/integrations/langchain), [CrewAI](/integrations/crewai), [OpenAI Agents SDK](/integrations/openai-agents), [Google ADK](/integrations/google-adk), [Vercel AI](/integrations/vercel-ai), and [more](/integrations/overview).
+`gx.grants.verify()` performs an online check. Use it, or an equivalent synchronized state mechanism, when the service must reject a grant that was revoked after the JWT was issued.
 
-## Comparing AI Agent Authorization Approaches
+## Python: The Same Flow with Current Types
 
-| Approach | Scoped | Revocable | Auditable | Delegable | Standard |
-|----------|--------|-----------|-----------|-----------|----------|
-| Raw API keys | No | Rotate all | No | No | N/A |
-| OAuth 2.0 (human flow) | Yes | Yes | Partial | No | RFC 6749 |
-| Service accounts | No | Yes | Partial | No | Varies |
-| Custom JWT issuance | Yes | Manual | Manual | Manual | Custom |
-| **Grantex (delegated auth)** | **Yes** | **Yes (instant)** | **Yes (hash-chained)** | **Yes (depth-limited)** | **Open spec** |
+```python
+import os
 
-## Getting Started
+from grantex import (
+    AuthorizeParams,
+    ExchangeTokenParams,
+    Grantex,
+    VerifyGrantTokenOptions,
+    verify_grant_token,
+)
 
-If you are building AI agents that interact with real services, you need authorization that matches the autonomy you are giving those agents. API keys are not enough.
+client = Grantex(api_key=os.environ["GRANTEX_API_KEY"])
+principal_id = "user_alice"
 
-Start here:
+agent = client.agents.register(
+    name="expense-report-agent",
+    description="Reads receipts and creates expense reports after approval",
+    scopes=["tool:expense-api:read", "tool:expense-api:write"],
+)
 
-- [Quickstart guide](/quickstart) — up and running in under 5 minutes
-- [How it works](/concepts/how-it-works) — the full authorization flow explained
-- [Scope enforcement guide](/guides/scope-enforcement) — enforce per-tool permissions with manifests
-- [Protocol specification](/protocol/specification) — the full Grantex spec (v1.0, frozen)
-- [GitHub repository](https://github.com/mishrasanjeev/grantex) — Apache 2.0, open source
+auth = client.authorize(AuthorizeParams(
+    agent_id=agent.id,
+    user_id=principal_id,
+    scopes=["tool:expense-api:read", "tool:expense-api:write"],
+    redirect_uri="https://app.example.com/auth/callback",
+))
 
-The more capable your agents become, the more critical proper authorization becomes. Building it in from the start is significantly easier than retrofitting it after an incident.
+print(f"Send the principal to: {auth.consent_url}")
+
+# Call this from the registered callback after reading its code parameter.
+def finish_authorization(code: str):
+    token = client.tokens.exchange(ExchangeTokenParams(
+        code=code,
+        agent_id=agent.id,
+    ))
+
+    local_grant = verify_grant_token(
+        token.grant_token,
+        VerifyGrantTokenOptions(
+            jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+            required_scopes=["tool:expense-api:write"],
+        ),
+    )
+
+    current_grant = client.grants.verify(token.grant_token)
+    return token, local_grant, current_grant
+```
+
+The current Python verifier retrieves JWKS during each `verify_grant_token()` call. It still checks signatures and claims, not current revocation state. The online `client.grants.verify()` call supplies that state check.
+
+## Enforce a Tool Manifest Before Execution
+
+The TypeScript SDK can map connector tools to permission levels. Loading a manifest does not intercept every tool automatically; your application must call `enforce()`, use a configured wrapper, or place equivalent middleware at the execution boundary.
+
+```typescript
+import { Permission, ToolManifest } from '@grantex/sdk';
+
+gx.loadManifest(new ToolManifest({
+  connector: 'expense-api',
+  description: 'Internal expense service',
+  tools: {
+    read_receipt: Permission.READ,
+    create_report: Permission.WRITE,
+  },
+}));
+
+// Obtain token from finishAuthorization() above.
+await gx.grants.verify(token.grantToken); // current-state check
+
+const decision = await gx.enforce({
+  grantToken: token.grantToken,
+  connector: 'expense-api',
+  tool: 'create_report',
+});
+
+if (!decision.allowed) {
+  throw new Error(decision.reason);
+}
+
+// Call the expense API only after the decision is allowed.
+// After the action completes, explicitly record the outcome if desired:
+await gx.audit.log({
+  agentId: agent.id,
+  agentDid: agent.did,
+  grantId: token.grantId,
+  principalId,
+  action: 'expense-api.create_report',
+  status: 'success',
+});
+```
+
+`enforce()` verifies the JWT through the configured JWKS URI and evaluates the loaded manifest. It does not perform the online grant-state check shown immediately before it. Keep both checks at the same trusted boundary when current revocation is required.
+
+Audit logging is also explicit. `gx.audit.log()` records the event submitted by the application; it does not prove that every external side effect was captured. Log denied decisions, attempted actions, and final outcomes according to your threat model.
+
+## Local Verification Versus Current Revocation
+
+This distinction is central to JWT-based authorization:
+
+| Check | What it establishes | What it does not establish |
+|---|---|---|
+| Local JWT verification | Trusted signature, expected claims, expiry, audience, and required scopes | Whether the grant was revoked after issuance |
+| Online grant verification | Current status known to the authorization service | Availability without a network path |
+| Synchronized revocation data | Current status up to the last successful synchronization | Changes newer than the local snapshot |
+| Short token lifetime | Bounds how long an unrefreshed token remains usable | Immediate revocation |
+
+Revoking a grant updates authorization state:
+
+```typescript
+await gx.grants.revoke(token.grantId);
+```
+
+An enforcement point learns about that change only when it performs an online check, consumes updated revocation state, or waits for the token to expire. Key rotation and JWKS refresh are separate from grant revocation.
+
+## Design Checklist
+
+Before enabling an agent action:
+
+1. Give each agent a stable identity separate from the application credential.
+2. Request only the scopes required for the current workflow.
+3. Bind tokens to the intended audience where supported.
+4. Verify signature and claims at the service that executes the action.
+5. Map every exposed tool to an explicit required scope or permission.
+6. Choose an online or synchronized revocation strategy based on freshness and availability needs.
+7. Keep upstream provider credentials behind the enforcement boundary.
+8. Record authorization decisions and action outcomes explicitly.
+9. Test missing scopes, unknown tools, expired tokens, revoked grants, stale state, and issuer mismatches.
+
+## Frequently Asked Questions
+
+### Are API keys unsuitable for every AI agent?
+
+No. API keys can authenticate an application to a provider and may support useful restrictions. The risk is treating a shared application credential as sufficient evidence that a particular agent was authorized by a particular principal for a particular action.
+
+### Does agent authorization replace OAuth 2.0?
+
+No. OAuth can provide transport authorization, delegated user access, token lifecycle, and identity integration. Agent-specific claims and per-tool policy can be built with OAuth or layered alongside it. Grantex focuses on that agent-specific authority and enforcement context.
+
+### Does local verification immediately reject a revoked grant?
+
+No. Local JWT verification sees the signed token and available keys. It needs an online state check or synchronized revocation data to learn that an otherwise unexpired token was revoked.
+
+### Does Grantex automatically audit every agent action?
+
+No. The SDK exposes audit APIs and integrations, but the application or gateway must submit the relevant decision and outcome events at the execution boundary.
+
+### How does this relate to MCP?
+
+MCP connects clients to tools and defines OAuth-based authorization for HTTP transports. Agent-specific authorization answers a narrower action question: which agent may call which tool for which principal. Use both layers when both transport access and delegated tool authority matter.
+
+## Next Steps
+
+- Follow the [quickstart](/quickstart) for the complete callback flow.
+- Read [scope enforcement](/guides/scope-enforcement) for manifest and middleware patterns.
+- Review [offline verification](/sdks/typescript/offline-verification) before choosing a revocation strategy.
+- See the [MCP authorization guide](/blog/mcp-server-oauth-authentication) for transport and tool-boundary architecture.
+- Check the [protocol specification](/protocol/specification) for the normative grant model.
+- Inspect the [Apache-2.0 repository](https://github.com/mishrasanjeev/grantex).
+
+The important design decision is not which label to use. It is where the protected action is enforced, which claims are verified there, and how that enforcement point obtains current authorization state.

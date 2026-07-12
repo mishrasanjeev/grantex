@@ -3,23 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
   <!-- Dynamic meta tags set by JS below -->
-  <title>Grantex for Express.js — JWT Middleware for AI Agent Authorization</title>
-  <meta name="description" content="Drop-in Express.js middleware for Grantex JWT verification. JWKS-backed verification, per-route scope enforcement, and agent identity. Open source.">
+  <title>Grantex for Express.js &mdash; AI Agent JWT Authorization</title>
+  <meta name="description" content="Verify Grantex grant JWTs in Express with JWKS-backed signature checks, per-route scope enforcement, and typed agent and principal context.">
   <link rel="canonical" href="https://grantex.dev/for/express">
-  <meta property="og:title" content="Grantex for Express.js — JWT Middleware for AI Agent Authorization">
-  <meta property="og:description" content="Drop-in Express.js middleware for Grantex JWT verification. JWKS-backed verification, per-route scope enforcement, and agent identity. Open source.">
+  <link rel="alternate" type="text/plain" href="/llms.txt" title="Grantex LLM index">
+  <meta property="og:title" content="Grantex for Express.js &mdash; AI Agent JWT Authorization">
+  <meta property="og:description" content="Verify Grantex grant JWTs in Express with JWKS-backed signature checks, per-route scope enforcement, and typed agent and principal context.">
   <meta property="og:url" content="https://grantex.dev/for/express">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Grantex AI agent authorization integration guide">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Grantex">
+  <meta property="og:locale" content="en_US">
   <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Grantex for Express.js — JWT Middleware for AI Agent Authorization">
-  <meta name="twitter:description" content="Drop-in Express.js middleware for Grantex JWT verification. JWKS-backed verification, per-route scope enforcement, and agent identity. Open source.">
+  <meta name="twitter:title" content="Grantex for Express.js &mdash; AI Agent JWT Authorization">
+  <meta name="twitter:description" content="Verify Grantex grant JWTs in Express with JWKS-backed signature checks, per-route scope enforcement, and typed agent and principal context.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+  <meta name="twitter:image:alt" content="Grantex AI agent authorization integration guide">
 
   <!-- Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
@@ -112,7 +119,7 @@
       .problem-grid { grid-template-columns: 1fr; }
     }
   </style>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Grantex for Express.js","applicationCategory":"DeveloperApplication","operatingSystem":"Any","url":"https://grantex.dev/for/express","description":"Drop-in Express.js middleware for Grantex JWT verification. JWKS-backed verification, per-route scope enforcement, and agent identity. Open source.","license":"https://www.apache.org/licenses/LICENSE-2.0"}</script>
+  <script id="page-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://grantex.dev/for/express#webpage","url":"https://grantex.dev/for/express","name":"Grantex for Express.js — AI Agent JWT Authorization","description":"Verify Grantex grant JWTs in Express with JWKS-backed signature checks, per-route scope enforcement, and typed agent and principal context.","isPartOf":{"@id":"https://grantex.dev/#website"},"about":{"@id":"https://grantex.dev/for/express#reference-implementation"},"mainEntity":{"@id":"https://grantex.dev/for/express#integration-guide"},"breadcrumb":{"@id":"https://grantex.dev/for/express#breadcrumb"},"dateModified":"2026-07-12","inLanguage":"en"},{"@type":"TechArticle","@id":"https://grantex.dev/for/express#integration-guide","url":"https://grantex.dev/for/express","headline":"Grantex for Express.js — AI Agent JWT Authorization","name":"Grantex for Express integration guide","description":"Verify Grantex grant JWTs in Express with JWKS-backed signature checks, per-route scope enforcement, and typed agent and principal context.","about":{"@id":"https://grantex.dev/for/express#reference-implementation"},"author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/for/express#webpage"},"inLanguage":"en"},{"@type":"SoftwareSourceCode","@id":"https://grantex.dev/for/express#reference-implementation","url":"https://grantex.dev/for/express","name":"Grantex for Express","description":"Verify Grantex grant JWTs in Express with JWKS-backed signature checks, per-route scope enforcement, and typed agent and principal context.","codeRepository":"https://github.com/mishrasanjeev/grantex","license":"https://www.apache.org/licenses/LICENSE-2.0","author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/for/express#webpage"}},{"@type":"BreadcrumbList","@id":"https://grantex.dev/for/express#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"Framework integrations","item":"https://grantex.dev/for/"},{"@type":"ListItem","position":3,"name":"Grantex for Express.js — AI Agent JWT Authorization","item":"https://grantex.dev/for/express"}]}]}</script>
 </head>
 <body>
 
@@ -127,9 +134,9 @@
 
 <div id="app">
   <section class="hero">
-    <span class="hero-badge" id="badge">Grantex for Express.js</span>
-    <h1 id="heroTitle">Grantex for Express.js</h1>
-    <p id="heroDesc">Verify grant tokens and enforce scopes in Express routes with JWKS-backed middleware.</p>
+    <span class="hero-badge" id="badge">Express + Grantex</span>
+    <h1 id="heroTitle">Grantex Middleware for <span class="highlight">Express.js</span></h1>
+    <p id="heroDesc">Protect your Express.js APIs with Grantex grant tokens. Express middleware that verifies JWTs, enforces scopes, and attaches verified grant context.</p>
     <div class="hero-ctas">
       <a href="https://docs.grantex.dev/integrations/express" id="ctaDocs" class="btn btn-primary">View Integration Docs</a>
       <a href="https://docs.grantex.dev/integrations/express" id="ctaInstall" class="btn btn-secondary">Get Started</a>
@@ -141,18 +148,24 @@
     <div class="problem-grid">
       <div class="problem-card bad">
         <h3>Without Grantex</h3>
-        <p id="problemBad">Raw API keys provide broad access and weak agent-level attribution.</p>
+        <p id="problemBad">Your Express APIs accept API keys or bearer tokens with no scope enforcement. Any valid token can access any endpoint. No agent identity tracking.</p>
       </div>
       <div class="problem-card good">
         <h3>With Grantex</h3>
-        <p id="problemGood">Scoped grant tokens add agent identity, scope enforcement, and central lifecycle controls.</p>
+        <p id="problemGood">Grantex middleware verifies JWTs against published JWKS, enforces scopes per route, and identifies the calling agent. Warm resolvers can reuse cached signing keys; initial retrieval and rotation refreshes require network access.</p>
       </div>
     </div>
   </section>
 
   <section class="section">
-    <h2 id="howTitle">How It Works</h2>
-    <div class="steps" id="steps"></div>
+    <h2 id="howTitle">How Grantex Works with Express.js</h2>
+    <div class="steps" id="steps">
+      <div class="step"><div class="step-content"><h3>Install the middleware</h3><p>npm install @grantex/express — uses Express and @grantex/sdk as peer dependencies.</p></div></div>
+      <div class="step"><div class="step-content"><h3>Add to your app</h3><p>One line to protect your routes. Specify required scopes per endpoint.</p></div></div>
+      <div class="step"><div class="step-content"><h3>Local verification</h3><p>JWT signatures are checked locally. Warm resolvers can reuse cached JWKS keys; initial retrieval and rotation refreshes require network access.</p></div></div>
+      <div class="step"><div class="step-content"><h3>Access agent identity</h3><p>req.grant contains the verified agent DID, scopes, principal, and grant ID.</p></div></div>
+      <div class="step"><div class="step-content"><h3>Service middleware</h3><p>JWKS-backed verification, scope enforcement, key rotation support, and typed authorization errors.</p></div></div>
+    </div>
   </section>
 
   <section class="section">
@@ -161,455 +174,7 @@
       <span id="installCmd">npm install @grantex/express</span>
       <button onclick="navigator.clipboard.writeText(document.getElementById('installCmd').textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)">Copy</button>
     </div>
-    <pre><code id="codeExample"></code></pre>
-  </section>
-
-  <section class="section">
-    <h2 id="featuresTitle">Why Grantex</h2>
-    <div class="feature-grid" id="features"></div>
-  </section>
-
-  <section class="section" style="text-align:center">
-    <h2>Ready to secure your <span id="ctaFramework"></span> agents?</h2>
-    <p style="margin-bottom:1.5rem;color:var(--muted)">Get started in under 5 minutes. Open source, Apache 2.0.</p>
-    <div class="hero-ctas">
-      <a href="https://grantex.dev/dashboard/signup" class="btn btn-primary">Sign Up Free</a>
-      <a href="" id="ctaDocsBottom" class="btn btn-secondary">Read the Docs</a>
-    </div>
-  </section>
-</div>
-
-<footer class="footer">
-  <span style="color:var(--muted);font-size:0.85rem">Grantex — Open authorization for AI agents</span>
-  <ul class="footer-links">
-    <li><a href="https://docs.grantex.dev">Docs</a></li>
-    <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
-    <li><a href="/">Home</a></li>
-  </ul>
-</footer>
-
-<script>
-const frameworks = {
-  langchain: {
-    name: 'LangChain',
-    badge: 'LangChain + Grantex',
-    title: 'Authorization for <span class="highlight">LangChain</span> Agents',
-    desc: 'Add scoped, revocable permissions to your LangChain agents. Grantex integrates natively with LangChain tools — your agents get signed JWTs instead of raw API keys.',
-    docsUrl: 'https://docs.grantex.dev/integrations/langchain',
-    installUrl: 'https://docs.grantex.dev/integrations/langchain',
-    install: 'npm install @grantex/langchain @grantex/sdk',
-    problemBad: 'Your LangChain agents use raw API keys with full access. No scoping, no audit trail, no way to revoke access if an agent goes rogue. One compromised key exposes everything.',
-    problemGood: 'Each LangChain agent gets a scoped, time-limited JWT. Tools verify token signatures and permissions against JWKS, and every audited action is recorded with a hash chain.',
-    howTitle: 'How Grantex Works with LangChain',
-    steps: [
-      ['Install the integration', 'npm install @grantex/langchain — wraps LangChain tools with automatic grant verification.'],
-      ['Register your agent', 'Create an agent identity with specific scopes like "email:send" or "calendar:read".'],
-      ['Get user consent', 'Redirect the user to a consent page. They approve exactly which permissions the agent gets.'],
-      ['Agent receives a JWT', 'The agent gets a signed token it presents to any service. Services verify signatures locally using keys obtained from JWKS.'],
-      ['Audit & revoke', 'Attach the audit integration to record tool calls, and manage grants centrally when access changes.'],
-    ],
-    code: `import { createGrantexTool } from '@grantex/langchain';
-
-const calendarTool = createGrantexTool({
-  name: 'read_calendar',
-  description: 'Read upcoming calendar events',
-  grantToken: token,
-  requiredScope: 'calendar:read',
-  func: async (input) => JSON.stringify(
-    await searchTool.invoke(input)
-  ),
-});
-
-// The token signature and scope are checked before every call
-const agent = createToolCallingAgent({
-  llm,
-  tools: [calendarTool],
-  prompt,
-});`,
-    features: [
-      ['Native LangChain Integration', 'Drop-in toolkit that wraps your existing LangChain tools with automatic scope verification.'],
-      ['Scoped Permissions', 'Define exactly what each agent can do — "email:read" vs "email:send". No more all-or-nothing API keys.'],
-      ['JWKS Verification', 'Tools verify the JWT signature and claims before execution. Initial and rotated signing keys may require a JWKS fetch.'],
-      ['Multi-Agent Delegation', 'Parent agents delegate narrower scopes to sub-agents. Revoking the parent cascades to all children.'],
-      ['Audit Integration', 'Add an audit wrapper or callback to record tool invocations; local authorization alone does not log execution.'],
-      ['Central Grant Management', 'Revoke grants centrally; local-only JWT consumers should use short token lifetimes or synchronized revocation data.'],
-    ],
-    ctaFramework: 'LangChain',
-    metaTitle: 'Grantex for LangChain — Authorization for LangChain AI Agents',
-    metaDesc: 'Add scoped, revocable permissions to LangChain agents. Drop-in toolkit for authorization with signed JWTs, audit trails, and central grant revocation. Open source.',
-  },
-  crewai: {
-    name: 'CrewAI',
-    badge: 'CrewAI + Grantex',
-    title: 'Authorization for <span class="highlight">CrewAI</span> Agents',
-    desc: 'Secure your CrewAI crews with scoped, revocable permissions. Each crew member gets exactly the access it needs — nothing more.',
-    docsUrl: 'https://docs.grantex.dev/integrations/crewai',
-    installUrl: 'https://docs.grantex.dev/integrations/crewai',
-    install: 'pip install grantex-crewai grantex',
-    problemBad: 'Your CrewAI agents share the same API keys. If one crew member is compromised, the entire crew\'s access is exposed. No way to scope or revoke individual agent access.',
-    problemGood: 'Each crew member gets its own scoped JWT. The researcher can only read, the writer can only draft, the publisher can only post. Revoke an individual member grant centrally.',
-    howTitle: 'How Grantex Works with CrewAI',
-    steps: [
-      ['Install the integration', 'pip install grantex-crewai — Python-native integration for CrewAI crews.'],
-      ['Register each crew member', 'Create agent identities with role-specific scopes for each crew member.'],
-      ['Authorize the crew', 'Users approve scoped permissions for each role in the crew.'],
-      ['Crew operates with scoped tokens', 'Each crew member presents its own JWT. Services verify independently.'],
-      ['Monitor & control', 'Audit every crew action. Revoke individual members without stopping the whole crew.'],
-    ],
-    code: `from grantex_crewai import create_grantex_tool
-
-research_tool = create_grantex_tool(
-    name='research',
-    description='Search approved research sources',
-    grant_token=researcher_token,
-    required_scope='search:read',
-    func=search_tool,
-)
-
-write_tool = create_grantex_tool(
-    name='write_draft',
-    description='Write a document draft',
-    grant_token=writer_token,
-    required_scope='docs:write',
-    func=save_draft,
-)`,
-    features: [
-      ['Per-Agent Scoping', 'Each crew member gets exactly the permissions it needs. Researcher reads, writer writes, publisher posts.'],
-      ['Role-Based Access', 'Map CrewAI roles to Grantex scopes. Define authorization policies per role, not per API key.'],
-      ['Crew-Wide Audit Trail', 'Use the audit wrapper to record crew tool calls with their grant and agent identifiers.'],
-      ['Delegation Chains', 'A lead agent can delegate narrower permissions to sub-agents. Revoking the lead cascades to all.'],
-      ['Python Native', 'Pure Python integration. pip install and go — works with any CrewAI version.'],
-      ['Central Revocation', 'Revoke a crew member\'s grant centrally without changing the other crew members\' grants.'],
-    ],
-    ctaFramework: 'CrewAI',
-    metaTitle: 'Grantex for CrewAI — Secure Multi-Agent Crew Permissions',
-    metaDesc: 'Scope and control permissions for CrewAI agents. Each crew member gets its own signed JWT with role-specific access. Audit trails, delegation, central grant revocation.',
-  },
-  'openai-agents': {
-    name: 'OpenAI Agents SDK',
-    badge: 'OpenAI Agents + Grantex',
-    title: 'Authorization for <span class="highlight">OpenAI Agents SDK</span>',
-    desc: 'Add enterprise-grade authorization to your OpenAI agents. Scoped permissions, audit trails, and central revocation — built for the Agents SDK.',
-    docsUrl: 'https://docs.grantex.dev/integrations/openai-agents',
-    installUrl: 'https://docs.grantex.dev/integrations/openai-agents',
-    install: 'pip install grantex-openai-agents grantex',
-    problemBad: 'Your OpenAI agents operate with full API access. No scoping, no audit trail, no revocation. You can\'t tell which agent did what or limit what it can do.',
-    problemGood: 'Each agent gets a scoped, time-limited JWT. Tools enforce scope checks, optional audit wrappers record calls, and grants remain centrally managed.',
-    howTitle: 'How Grantex Works with OpenAI Agents SDK',
-    steps: [
-      ['Install the integration', 'pip install grantex-openai-agents — wraps OpenAI agent tools with authorization.'],
-      ['Register your agent', 'Create an agent identity with scopes matching its capabilities.'],
-      ['Get user approval', 'Users approve exactly which permissions the agent receives via a consent page.'],
-      ['Agent operates with JWT', 'The agent\'s tools automatically verify permissions before executing.'],
-      ['Optional audit trail', 'Use the audit wrapper to record tool invocations with agent identity, scopes, and timestamps.'],
-    ],
-    code: `from agents import Agent
-from grantex_openai_agents import create_grantex_tool
-
-search = create_grantex_tool(
-    name='search',
-    description='Search approved sources',
-    grant_token=token,
-    required_scope='search:read',
-    func=search_tool,
-)
-
-email = create_grantex_tool(
-    name='send_email',
-    description='Send an approved email',
-    grant_token=token,
-    required_scope='email:send',
-    func=email_tool,
-)
-
-agent = Agent(
-    name='assistant',
-    tools=[search, email],
-)`,
-    features: [
-      ['OpenAI Agents SDK Integration', 'Drop-in wrapper for OpenAI agent tools. Add authorization without changing your agent logic.'],
-      ['Scoped Tool Access', 'Define which tools each agent can use and with what parameters. Enforced at the protocol level.'],
-      ['Enterprise Audit Support', 'Use the audit wrapper to record tool calls with agent identity and scope context.'],
-      ['Multi-Agent Pipelines', 'Parent agents delegate narrower access to sub-agents. Full delegation chain tracking.'],
-      ['Budget Controls', 'Set spending limits per agent. Automatic cutoff when budget is exhausted.'],
-      ['Compliance Support', 'Optional audit logging plus SCIM and SSO controls for enterprise identity workflows.'],
-    ],
-    ctaFramework: 'OpenAI Agents',
-    metaTitle: 'Grantex for OpenAI Agents SDK — Enterprise Agent Authorization',
-    metaDesc: 'Add scoped permissions, audit trails, and central grant revocation to OpenAI Agents SDK. Enterprise-grade authorization for AI agents. Open source.',
-  },
-  anthropic: {
-    name: 'Anthropic SDK',
-    badge: 'Anthropic + Grantex',
-    title: 'Authorization for <span class="highlight">Anthropic SDK</span> Tool Use',
-    desc: 'Enforce scoped permissions on Claude tool calls. JWKS-backed JWT verification, scope enforcement, and audit logging for Anthropic SDK apps.',
-    docsUrl: 'https://docs.grantex.dev/integrations/anthropic',
-    installUrl: 'https://docs.grantex.dev/integrations/anthropic',
-    install: 'npm install @grantex/anthropic @grantex/sdk',
-    problemBad: 'Your Claude-powered agents call tools with no authorization layer. Any tool can be invoked with full access. No scoping, no consent, no audit trail of what the agent did.',
-    problemGood: 'Grantex wraps each tool with scope enforcement. The agent\'s JWT signature and scopes are verified against JWKS before execution. Every configured audit event is recorded.',
-    howTitle: 'How Grantex Works with the Anthropic SDK',
-    steps: [
-      ['Install the integration', 'npm install @grantex/anthropic — wraps Anthropic tool definitions with authorization.'],
-      ['Create scoped tools', 'Use createGrantexTool() to define tools with required scopes and JSON Schema input.'],
-      ['Pass tools to Claude', 'tool.definition is type-compatible with client.messages.create({ tools }).'],
-      ['Dispatch tool_use blocks', 'Use GrantexToolRegistry or handleToolCall() to execute with automatic audit logging.'],
-      ['Monitor everything', 'Optional audit callbacks record tool calls; grant lifecycle remains centrally managed.'],
-    ],
-    code: `import Anthropic from '@anthropic-ai/sdk';
-import { createGrantexTool, GrantexToolRegistry } from '@grantex/anthropic';
-
-const client = new Anthropic();
-
-const readFile = createGrantexTool({
-  name: 'read_file',
-  description: 'Read a file from disk',
-  inputSchema: {
-    type: 'object',
-    properties: { path: { type: 'string' } },
-    required: ['path'],
-  },
-  grantToken,
-  requiredScope: 'file:read',
-  execute: async ({ path }) => fs.readFile(path, 'utf-8'),
-});
-
-const response = await client.messages.create({
-  model: 'claude-sonnet-4-6',
-  max_tokens: 1024,
-  tools: [readFile.definition],
-  messages,
-});`,
-    features: [
-      ['Anthropic SDK Native', 'Type-compatible with client.messages.create(). tool.definition drops in directly.'],
-      ['Verified Scope Checks', 'The JWT signature and claims are verified with JWKS before the scp claim is enforced.'],
-      ['Tool Registry', 'GrantexToolRegistry manages multiple tools and dispatches tool_use blocks by name.'],
-      ['Audit Logging', 'withAuditLogging() and handleToolCall() log every success/failure automatically.'],
-      ['GrantexScopeError', 'Typed error with requiredScope and grantedScopes for clean error handling.'],
-      ['Budget Controls', 'Per-agent spending limits with automatic cutoff at thresholds.'],
-    ],
-    ctaFramework: 'Anthropic SDK',
-    metaTitle: 'Grantex for Anthropic SDK — Secure Claude Tool Use Authorization',
-    metaDesc: 'Add scoped permissions and audit trails to Claude tool use. JWKS-backed JWT verification, tool registry, and audit support. Open source.',
-  },
-  'google-adk': {
-    name: 'Google ADK',
-    badge: 'Google ADK + Grantex',
-    title: 'Authorization for <span class="highlight">Google ADK</span> Agents',
-    desc: 'Secure your Google Agent Development Kit agents with scoped, human-approved permissions and full audit trails.',
-    docsUrl: 'https://docs.grantex.dev/integrations/google-adk',
-    installUrl: 'https://docs.grantex.dev/integrations/google-adk',
-    install: 'pip install grantex-adk grantex',
-    problemBad: 'Your ADK agents access services with broad credentials. No fine-grained scoping, no delegation control, no tamper-evident audit log of agent actions.',
-    problemGood: 'Each ADK agent gets cryptographic identity and scoped JWTs. Delegation chains track multi-agent workflows, and optional audit hooks record actions.',
-    howTitle: 'How Grantex Works with Google ADK',
-    steps: [
-      ['Install the integration', 'pip install grantex-adk — Python-native integration for Google ADK.'],
-      ['Register your agent', 'Create an agent identity with specific scopes matching your ADK agent\'s capabilities.'],
-      ['Authorize via consent', 'Users approve scoped permissions through a consent flow.'],
-      ['Agent operates securely', 'ADK tools verify permissions via JWT before executing any action.'],
-      ['Monitor everything', 'Optional audit hooks record actions; grant lifecycle remains centrally managed.'],
-    ],
-    code: `from grantex_adk import create_grantex_tool
-from google.adk import Agent
-
-calendar_tool = create_grantex_tool(
-    name='read_calendar',
-    description='Read upcoming calendar events',
-    grant_token=token,
-    required_scope='calendar:read',
-    func=get_calendar_events,
-)
-
-agent = Agent(
-    model='gemini-2.0-flash',
-    name='assistant',
-    tools=[calendar_tool],
-)`,
-    features: [
-      ['Google ADK Native', 'Built for the Agent Development Kit. Wraps ADK tools with automatic authorization.'],
-      ['Scoped Permissions', 'Fine-grained scopes for each capability. "calendar:read" vs "calendar:write".'],
-      ['Delegation Chains', 'Multi-agent ADK pipelines with tracked delegation. Revoke parent to cascade.'],
-      ['JWKS Verification', 'Tools verify JWT signatures and claims before execution; signing keys are obtained from JWKS.'],
-      ['Audit Support', 'Record authorized tool activity for internal evidence and compliance review workflows.'],
-      ['Budget Controls', 'Per-agent spending limits with automatic cutoff at thresholds.'],
-    ],
-    ctaFramework: 'Google ADK',
-    metaTitle: 'Grantex for Google ADK — Secure Agent Development Kit Authorization',
-    metaDesc: 'Add scoped permissions and audit trails to Google ADK agents. Delegation chains, central grant revocation, and enterprise compliance workflows. Open source.',
-  },
-  'vercel-ai': {
-    name: 'Vercel AI SDK',
-    badge: 'Vercel AI + Grantex',
-    title: 'Authorization for <span class="highlight">Vercel AI SDK</span>',
-    desc: 'Add scoped authorization to your Vercel AI SDK tools. Signed JWTs, audit trails, and central revocation for AI-powered apps.',
-    docsUrl: 'https://docs.grantex.dev/integrations/vercel-ai',
-    installUrl: 'https://docs.grantex.dev/integrations/vercel-ai',
-    install: 'npm install @grantex/vercel-ai @grantex/sdk',
-    problemBad: 'Your Vercel AI tools run with full access. Users can\'t see or control what the AI does on their behalf. No audit trail, no revocation.',
-    problemGood: 'Each AI tool call is authorized with a scoped JWT. Users approve permissions upfront, optional wrappers log actions, and grants remain centrally managed.',
-    howTitle: 'How Grantex Works with Vercel AI SDK',
-    steps: [
-      ['Install the integration', 'npm install @grantex/vercel-ai — TypeScript-native integration for Vercel AI SDK.'],
-      ['Define authorized tools', 'Wrap your AI SDK tools with Grantex scope requirements.'],
-      ['User consents', 'Users approve specific scopes before the AI can act on their behalf.'],
-      ['Tools verify automatically', 'Each tool call checks the JWT scopes before execution.'],
-      ['Audit Support', 'Wrap authorized tools with withAuditLogging when tool-level audit records are required.'],
-    ],
-    code: `import { createGrantexTool } from '@grantex/vercel-ai';
-import { z } from 'zod';
-
-const search = createGrantexTool({
-  name: 'search_flights',
-  description: 'Search available flights',
-  parameters: z.object({ destination: z.string() }),
-  grantToken: token,
-  requiredScope: 'flights:read',
-  execute: async ({ destination }) => searchFlights(destination),
-});
-
-const result = await generateText({
-  model: openai('gpt-4o'),
-  tools: { search },
-  prompt: 'Search for flights to Bengaluru',
-});`,
-    features: [
-      ['Vercel AI SDK Native', 'Works with generateText, streamText, and all AI SDK tool patterns.'],
-      ['TypeScript First', 'Full type safety. Scopes are checked at compile time and runtime.'],
-      ['Runtime Compatible', 'Returns a standard AI SDK tool and verifies the grant token before each execution.'],
-      ['Streaming Support', 'Compatible with streaming responses. Authorization doesn\'t block the stream.'],
-      ['Multi-Step Flows', 'Authorize multi-step AI workflows where each step requires different scopes.'],
-      ['Next.js Ready', 'Drop into your Next.js app with zero configuration beyond the SDK.'],
-    ],
-    ctaFramework: 'Vercel AI',
-    metaTitle: 'Grantex for Vercel AI SDK — Authorization for AI-Powered Apps',
-    metaDesc: 'Add scoped permissions to Vercel AI SDK tools. TypeScript-native, Edge-compatible, with audit trails and central grant revocation. Open source.',
-  },
-  autogen: {
-    name: 'AutoGen',
-    badge: 'AutoGen + Grantex',
-    title: 'Authorization for <span class="highlight">AutoGen</span> Multi-Agent Systems',
-    desc: 'Secure your AutoGen conversations with per-agent permissions. Each agent in the group gets exactly the scopes it needs.',
-    docsUrl: 'https://docs.grantex.dev/integrations/autogen',
-    installUrl: 'https://docs.grantex.dev/integrations/autogen',
-    install: 'npm install @grantex/autogen @grantex/sdk',
-    problemBad: 'AutoGen agents in a group chat share credentials. If one agent is compromised or hallucinates, it has access to everything the others can do.',
-    problemGood: 'Each AutoGen agent gets its own scoped JWT. The coder can only write code, the executor can only run tests. Isolated, audited, revocable.',
-    howTitle: 'How Grantex Works with AutoGen',
-    steps: [
-      ['Install the integration', 'npm install @grantex/autogen — wraps AutoGen function maps with authorization.'],
-      ['Register each agent', 'Create identities with role-specific scopes for each agent in the group.'],
-      ['Scope per conversation', 'Users approve what each agent can do before the conversation starts.'],
-      ['Agents operate independently', 'Each agent presents its own JWT. Function calls are scope-checked automatically.'],
-      ['Trace everything', 'Full audit trail across the multi-agent conversation. Attribute actions to specific agents.'],
-    ],
-    code: `import { createGrantexFunction } from '@grantex/autogen';
-
-const writeCode = createGrantexFunction({
-  name: 'write_code',
-  description: 'Write code for an approved task',
-  parameters: {
-    type: 'object',
-    properties: { task: { type: 'string' } },
-    required: ['task'],
-  },
-  grantToken: coderToken,
-  requiredScope: 'code:write',
-  func: async ({ task }) => writeCodeFn(task),
-});
-
-const runCode = createGrantexFunction({
-  name: 'run_code',
-  description: 'Execute approved code',
-  parameters: {
-    type: 'object',
-    properties: { source: { type: 'string' } },
-    required: ['source'],
-  },
-  grantToken: executorToken,
-  requiredScope: 'code:execute',
-  func: async ({ source }) => runCodeFn(source),
-});
-
-const tools = [writeCode.definition, runCode.definition];`,
-    features: [
-      ['Per-Agent Authorization', 'Each agent in the AutoGen group gets its own scoped token and identity.'],
-      ['Group Chat Security', 'Prevent agents from accessing tools outside their role. Enforced at the protocol level.'],
-      ['Conversation Audit Support', 'Wrap functions to record which agent called which function and with what scope context.'],
-      ['Delegation Support', 'Agents can delegate narrower scopes to spawned sub-agents with depth tracking.'],
-      ['Function Map Wrapping', 'Drop-in wrapper for AutoGen function maps. No changes to your agent logic.'],
-      ['Central Grant Control', 'Revoke an agent grant centrally. Local JWT consumers must synchronize revocation state or use short token lifetimes.'],
-    ],
-    ctaFramework: 'AutoGen',
-    metaTitle: 'Grantex for AutoGen — Secure Multi-Agent Group Chat Authorization',
-    metaDesc: 'Per-agent scoped permissions for AutoGen multi-agent systems. Each agent gets its own JWT. Audit trails, delegation chains, central revocation.',
-  },
-  mcp: {
-    name: 'Model Context Protocol',
-    badge: 'MCP + Grantex',
-    title: 'Authorization for <span class="highlight">MCP</span> Servers',
-    desc: 'Add enterprise-grade authorization to any MCP server. 17 built-in tools for managing agents, grants, and tokens from Claude Desktop, Cursor, or Windsurf.',
-    docsUrl: 'https://docs.grantex.dev/integrations/mcp',
-    installUrl: 'https://docs.grantex.dev/integrations/mcp',
-    install: 'npm install @grantex/mcp',
-    problemBad: 'MCP servers expose tools to AI assistants with no authorization layer. Any connected client can call any tool with full access. No scoping, no consent, no audit trail.',
-    problemGood: 'Grantex adds OAuth 2.1-style authorization to MCP. Users approve scoped access per tool. Every invocation is logged. Revoke access from the permission dashboard.',
-    howTitle: 'How Grantex Works with MCP',
-    steps: [
-      ['Install the MCP server', 'npm install @grantex/mcp — adds 17 Grantex tools to any MCP-compatible client.'],
-      ['Connect to Claude Desktop', 'Add Grantex to your MCP config. Works with Claude Desktop, Cursor, and Windsurf.'],
-      ['Manage via natural language', 'Ask Claude to "register an agent", "create a grant", or "check the audit log".'],
-      ['Or add MCP Auth', 'Use @grantex/mcp-auth to add OAuth 2.1 + PKCE to your own MCP servers.'],
-      ['Full protocol access', 'All 17 Grantex operations available as MCP tools — agents, grants, tokens, audit, budgets.'],
-    ],
-    code: `// claude_desktop_config.json
-{
-  "mcpServers": {
-    "grantex": {
-      "command": "npx",
-      "args": ["@grantex/mcp"],
-      "env": {
-        "GRANTEX_API_KEY": "gx_live_..."
-      }
-    }
-  }
-}
-
-// Then in Claude Desktop:
-// "Register a new agent called travel-bot with flights:book scope"
-// "Create a grant for user alice on travel-bot"
-// "Show me the audit log for the last hour"`,
-    features: [
-      ['17 MCP Tools', 'Full Grantex protocol access: agents, grants, tokens, audit, budgets, verification — all as MCP tools.'],
-      ['Claude Desktop Ready', 'Works out of the box with Claude Desktop, Cursor, and Windsurf.'],
-      ['MCP Auth Server', 'Separate @grantex/mcp-auth package adds OAuth 2.1 + PKCE to any MCP server.'],
-      ['Natural Language Control', 'Manage authorization through conversation. "Revoke all grants for agent X."'],
-      ['Zero Code Setup', 'npx @grantex/mcp — no code required. Just add to your MCP config and go.'],
-      ['Enterprise Grade', 'Budget controls, policy engine, SCIM/SSO — all accessible via MCP tools.'],
-    ],
-    ctaFramework: 'MCP',
-    metaTitle: 'Grantex for MCP — Authorization for Model Context Protocol Servers',
-    metaDesc: 'Add OAuth 2.1 authorization to MCP servers. 17 tools for Claude Desktop, Cursor, and Windsurf. Scoped grants, audit trails, central grant revocation.',
-  },
-  express: {
-    name: 'Express.js',
-    badge: 'Express + Grantex',
-    title: 'Grantex Middleware for <span class="highlight">Express.js</span>',
-    desc: 'Protect your Express.js APIs with Grantex grant tokens. Drop-in middleware that verifies JWTs, enforces scopes, and attaches verified grant context.',
-    docsUrl: 'https://docs.grantex.dev/integrations/express',
-    installUrl: 'https://docs.grantex.dev/integrations/express',
-    install: 'npm install @grantex/express',
-    problemBad: 'Your Express APIs accept API keys or bearer tokens with no scope enforcement. Any valid token can access any endpoint. No agent identity tracking.',
-    problemGood: 'Grantex middleware verifies JWTs against published JWKS, enforces scopes per route, and identifies the calling agent. Warm resolvers can reuse cached signing keys; initial retrieval and rotation refreshes require network access.',
-    howTitle: 'How Grantex Works with Express.js',
-    steps: [
-      ['Install the middleware', 'npm install @grantex/express — uses Express and @grantex/sdk as peer dependencies.'],
-      ['Add to your app', 'One line to protect your routes. Specify required scopes per endpoint.'],
-      ['Local verification', 'JWT signatures are checked locally. Warm resolvers can reuse cached JWKS keys; initial retrieval and rotation refreshes require network access.'],
-      ['Access agent identity', 'req.grant contains the verified agent DID, scopes, principal, and grant ID.'],
-      ['Production ready', 'JWKS caching, key rotation, scope enforcement, and error handling built in.'],
-    ],
-    code: `import express from 'express';
+    <pre><code id="codeExample">import express from 'express';
 import {
   requireGrantToken,
   requireScopes,
@@ -622,190 +187,66 @@ app.use('/api', requireGrantToken({
   jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
 }));
 
-app.get('/api/emails', requireScopes('email:read'), (req, res) => {
+app.get('/api/emails', requireScopes('email:read'), (req, res) =&gt; {
   const grant = (req as GrantexRequest).grant;
   console.log(grant.agentDid);
   console.log(grant.scopes);
   res.json({ emails: [] });
-});`,
-    features: [
-      ['Drop-In Middleware', 'One line to protect your Express routes. Works with any Express 4+ app.'],
-      ['JWKS Verification', 'Signing keys are retrieved from the configured JWKS endpoint. Cached resolvers avoid repeat fetches while valid and refresh as keys rotate.'],
-      ['Per-Route Scopes', 'requireScopes() enforces specific permissions per endpoint. Returns 403 if scopes don\'t match.'],
-      ['Agent Identity', 'req.grant provides agent DID, scopes, principal ID, and grant ID after verification.'],
-      ['JWKS Caching', 'Automatic key caching and rotation. Handles key rollover transparently.'],
-      ['TypeScript Support', 'Full type definitions are provided for req.grant and verified grant claims.'],
-    ],
-    ctaFramework: 'Express.js',
-    metaTitle: 'Grantex for Express.js — JWT Middleware for AI Agent Authorization',
-    metaDesc: 'Drop-in Express.js middleware for Grantex JWT verification. JWKS-backed verification, per-route scope enforcement, and agent identity. Open source.',
-  },
-  fastapi: {
-    name: 'FastAPI',
-    badge: 'FastAPI + Grantex',
-    title: 'Grantex Middleware for <span class="highlight">FastAPI</span>',
-    desc: 'Protect your FastAPI endpoints with Grantex grant tokens. Dependency-injection middleware that verifies JWTs, enforces scopes, and identifies agents.',
-    docsUrl: 'https://docs.grantex.dev/integrations/fastapi',
-    installUrl: 'https://docs.grantex.dev/integrations/fastapi',
-    install: 'pip install grantex-fastapi',
-    problemBad: 'Your FastAPI endpoints accept bearer tokens with no scope enforcement. Any valid token accesses any route. No way to identify which AI agent made the request.',
-    problemGood: 'Grantex verifies JWT signatures with the configured JWKS URI, enforces scopes per route, and provides typed agent identity context.',
-    howTitle: 'How Grantex Works with FastAPI',
-    steps: [
-      ['Install the middleware', 'pip install grantex-fastapi — integrates with FastAPI dependency injection.'],
-      ['Add the dependency', 'Use GrantexAuth as a dependency and auth.scopes() for required scopes.'],
-      ['JWKS verification', 'The current Python verifier retrieves the configured JWKS during verification; account for that network dependency.'],
-      ['Access agent identity', 'The dependency returns the full grant context: agent DID, scopes, principal, grant ID.'],
-      ['Verification support', 'Configurable JWKS retrieval, scope enforcement, and typed authorization errors.'],
-    ],
-    code: `from fastapi import FastAPI, Depends
-from grantex import VerifiedGrant
-from grantex_fastapi import GrantexAuth
+});</code></pre>
+  </section>
 
-app = FastAPI()
-auth = GrantexAuth(
-    jwks_uri="https://api.grantex.dev/.well-known/jwks.json"
-)
+  <section class="section">
+    <h2 id="featuresTitle">Why Grantex for Express.js</h2>
+    <div class="feature-grid" id="features">
+      <div class="feature-card"><h3>Express Middleware</h3><p>Install the middleware on every protected Express route and verify compatibility with your Express version.</p></div>
+      <div class="feature-card"><h3>JWKS Verification</h3><p>Signing keys are retrieved from the configured JWKS endpoint. Cached resolvers avoid repeat fetches while valid and refresh as keys rotate.</p></div>
+      <div class="feature-card"><h3>Per-Route Scopes</h3><p>requireScopes() enforces specific permissions per endpoint. Returns 403 if scopes don't match.</p></div>
+      <div class="feature-card"><h3>Agent Identity</h3><p>req.grant provides agent DID, scopes, principal ID, and grant ID after verification.</p></div>
+      <div class="feature-card"><h3>JWKS Caching</h3><p>Automatic key caching and rotation. Handles key rollover transparently.</p></div>
+      <div class="feature-card"><h3>TypeScript Support</h3><p>Full type definitions are provided for req.grant and verified grant claims.</p></div>
+    </div>
+  </section>
 
-@app.get("/api/emails")
-async def list_emails(
-    grant: VerifiedGrant = Depends(auth.scopes("email:read"))
-):
-    print(grant.agent_did)
-    print(grant.scopes)
-    return {"emails": []}`,
-    features: [
-      ['FastAPI Dependency Injection', 'Works with FastAPI\'s Depends() pattern. Pythonic and type-safe.'],
-      ['FastAPI Dependency', 'A callable dependency verifies tokens and returns a typed VerifiedGrant.'],
-      ['Per-Route Scopes', 'auth.scopes() creates a dependency that enforces required permissions and returns 403 on mismatch.'],
-      ['Typed Grant Context', 'Full Pydantic model for grant context: agent DID, scopes, principal, grant ID.'],
-      ['JWKS URI', 'Configure the signing-key endpoint used during token verification.'],
-      ['Error Handling', 'Typed authorization errors distinguish missing, invalid, expired, and insufficient-scope tokens.'],
-    ],
-    ctaFramework: 'FastAPI',
-    metaTitle: 'Grantex for FastAPI — JWT Middleware for AI Agent Authorization',
-    metaDesc: 'FastAPI dependency helpers for Grantex JWT verification. Dependency-injection, per-route scopes, and agent identity. Type-safe, Pythonic. Open source.',
-  },
-  mpp: {
-    name: 'MPP (Machine Payments Protocol)',
-    badge: 'MPP + Grantex',
-    title: 'Agent Identity for <span class="highlight">Machine Payments</span>',
-    desc: 'MPP defines how AI agents pay for services. Grantex adds the missing identity layer — verifiable agent passports that let merchants know exactly who authorized every payment, with local verification using cached JWKS.',
-    docsUrl: 'https://docs.grantex.dev/features/mpp-agent-passport',
-    installUrl: 'https://docs.grantex.dev/guides/mpp-integration',
-    install: 'npm install @grantex/mpp @grantex/sdk',
-    problemBad: 'When an agent makes an MPP payment, the source is just a wallet address. No human name, no org, no authorization chain. For $0.10 API calls nobody cares. For $500 B2B procurement, it\'s a compliance blocker.',
-    problemGood: 'Every MPP payment carries an AgentPassportCredential — a W3C VC 2.0 credential with the human principal, org DID, spending limits, and allowed categories. Merchants verify locally with cached JWKS.',
-    howTitle: 'How Grantex Works with MPP',
-    steps: [
-      ['Install the package', 'npm install @grantex/mpp — agent-side middleware + merchant-side verification in one package.'],
-      ['Issue an agent passport', 'Call grantex.passports.issue() with categories (inference, compute, data), spending limits, and expiry.'],
-      ['Attach to MPP requests', 'createMppPassportMiddleware() injects the X-Grantex-Passport header on every outgoing fetch.'],
-      ['Verify on the merchant side', 'requireAgentPassport() Express middleware — one line to verify identity, categories, and amounts.'],
-      ['Check the trust registry', 'lookupOrgTrust() returns the public organization record and current DNS-backed trust level.'],
-    ],
-    code: `import { Grantex } from '@grantex/sdk';
-import { createMppPassportMiddleware, requireAgentPassport } from '@grantex/mpp';
 
-// Agent side: issue passport and attach to requests
-const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
-const passport = await grantex.passports.issue({
-  agentId: 'ag_01HXYZ...',
-  grantId: 'grnt_01HXYZ...',
-  allowedMPPCategories: ['inference', 'compute'],
-  maxTransactionAmount: { amount: 50, currency: 'USDC' },
-  expiresIn: '24h',
-});
 
-const middleware = createMppPassportMiddleware({ passport });
-const enriched = await middleware(new Request(url));
-// X-Grantex-Passport header attached
+  <section class="section" aria-labelledby="authorization-boundary-title">
+    <h2 id="authorization-boundary-title">Verification, revocation, and audit boundary</h2>
+    <p>This integration enforces authorization only where its wrapper or middleware is installed. Local JWT verification checks signatures and claims after JWKS retrieval; it does not prove current revocation unless the verifier performs an online state check or synchronizes revocation data.</p>
+    <p>Token verification does not create a consent record or prove that a tool executed. Use the configured authorization flow for grant decisions and add an audit integration at the execution boundary when action records are required.</p>
+  </section>
 
-// Merchant side: one-line verification
-app.use('/api/inference', requireAgentPassport({
-  requiredCategories: ['inference'],
-  maxAmount: 10,
-}));
-// req.agentPassport → { humanDID, orgDID, categories, maxAmount, ... }`,
-    features: [
-      ['AgentPassportCredential', 'W3C VC 2.0 with agent DID, human principal, org, categories, spending limits, and delegation depth.'],
-      ['Local Verification', 'Signature verification can reuse cached JWKS after keys are obtained; initial retrieval and key-rotation refreshes require network access.'],
-      ['9 MPP Categories', 'inference, compute, data, storage, search, media, delivery, browser, general — each maps to a Grantex scope.'],
-      ['StatusList2021 Revocation', 'Publish passport revocation state through a status list that verifiers can refresh and cache.'],
-      ['Trust Registry', 'Public organization lookup by DID with DNS TXT domain verification.'],
-      ['Auto-Refresh', 'Middleware proactively refreshes passports before expiry via onRefresh callback.'],
-    ],
-    ctaFramework: 'MPP',
-    metaTitle: 'Grantex for MPP — Agent Identity for Machine Payments Protocol',
-    metaDesc: 'Add verifiable agent identity to MPP machine payments. AgentPassportCredential with spending limits, category restrictions, and local merchant verification with cached JWKS. Open source, W3C VC 2.0.',
-  },
-};
+  <section class="section" aria-labelledby="related-guides-title">
+    <h2 id="related-guides-title">Related AI agent authorization guides</h2>
+    <ul>
+      <li><a href="/for/">All framework integrations</a></li>
+      <li><a href="/vs/securing-ai-agents">How to secure AI agents in production</a></li>
+      <li><a href="/vs/oauth">Grantex vs OAuth 2.0</a></li>
+      <li><a href="https://docs.grantex.dev/quickstart">AI agent authorization quickstart</a></li>
+      <li><a href="https://docs.grantex.dev/release-status">Current SDK versions and limitations</a></li>
+    </ul>
+  </section>
 
-// Determine framework from URL
-const path = window.location.pathname.replace(/\/$/, '');
-const slug = path.split('/').pop();
-const fw = frameworks[slug];
+  <section class="section" style="text-align:center">
+    <h2>Ready to secure your <span id="ctaFramework">Express.js</span> agents?</h2>
+    <p style="margin-bottom:1.5rem;color:var(--muted)">Follow the integration guide and verify the package version before deployment. Apache 2.0.</p>
+    <div class="hero-ctas">
+      <a href="https://grantex.dev/dashboard/signup" class="btn btn-primary">Sign Up Free</a>
+      <a href="https://docs.grantex.dev/integrations/express" id="ctaDocsBottom" class="btn btn-secondary">Read the Docs</a>
+    </div>
+  </section>
+</div>
 
-if (!fw) {
-  // Redirect to homepage if unknown framework
-  window.location.href = '/';
-} else {
-  // Set meta tags
-  document.title = fw.metaTitle;
-  document.querySelector('meta[name="description"]').content = fw.metaDesc;
-  document.querySelector('link[rel="canonical"]').href = 'https://grantex.dev/for/' + slug;
-  document.querySelector('meta[property="og:title"]').content = fw.metaTitle;
-  document.querySelector('meta[property="og:description"]').content = fw.metaDesc;
-  document.querySelector('meta[property="og:url"]').content = 'https://grantex.dev/for/' + slug;
-  document.querySelector('meta[name="twitter:title"]').content = fw.metaTitle;
-  document.querySelector('meta[name="twitter:description"]').content = fw.metaDesc;
+<footer class="footer">
+  <span style="color:var(--muted);font-size:0.85rem">Grantex — Open authorization for AI agents</span>
+  <ul class="footer-links">
+    <li><a href="https://docs.grantex.dev">Docs</a></li>
+    <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+    <li><a href="/for/">Integrations</a></li>
+    <li><a href="/vs/">Comparisons</a></li>
+    <li><a href="/">Home</a></li>
+  </ul>
+</footer>
 
-  // Populate content
-  document.getElementById('badge').textContent = fw.badge;
-  document.getElementById('heroTitle').innerHTML = fw.title;
-  document.getElementById('heroDesc').textContent = fw.desc;
-  document.getElementById('ctaDocs').href = fw.docsUrl;
-  document.getElementById('ctaInstall').href = fw.installUrl;
-  document.getElementById('problemBad').textContent = fw.problemBad;
-  document.getElementById('problemGood').textContent = fw.problemGood;
-  document.getElementById('howTitle').textContent = fw.howTitle;
-  document.getElementById('installCmd').textContent = fw.install;
-  document.getElementById('codeExample').textContent = fw.code;
-  document.getElementById('ctaFramework').textContent = fw.ctaFramework;
-  document.getElementById('ctaDocsBottom').href = fw.docsUrl;
-  document.getElementById('featuresTitle').textContent = 'Why Grantex for ' + fw.name;
-
-  // Steps
-  const stepsEl = document.getElementById('steps');
-  fw.steps.forEach(([title, desc]) => {
-    stepsEl.innerHTML += `<div class="step"><div class="step-content"><h3>${title}</h3><p>${desc}</p></div></div>`;
-  });
-
-  // Features
-  const featuresEl = document.getElementById('features');
-  fw.features.forEach(([title, desc]) => {
-    featuresEl.innerHTML += `<div class="feature-card"><h3>${title}</h3><p>${desc}</p></div>`;
-  });
-
-  // Add JSON-LD structured data
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Grantex for " + fw.name,
-    "applicationCategory": "DeveloperApplication",
-    "operatingSystem": "Any",
-    "url": "https://grantex.dev/for/" + slug,
-    "description": fw.metaDesc,
-    "license": "https://www.apache.org/licenses/LICENSE-2.0",
-  };
-  const script = document.createElement('script');
-  script.type = 'application/ld+json';
-  script.textContent = JSON.stringify(jsonLd);
-  document.head.appendChild(script);
-
-  // Track page view
-  gtag('event', 'page_view', { page_title: fw.metaTitle, page_location: window.location.href });
-}
-</script>
+<script>gtag('event','page_view',{page_title:document.title,page_location:window.location.href,content_group:'integration guide'});</script>
 </body>
 </html>

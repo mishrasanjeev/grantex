@@ -41,6 +41,11 @@ client := grantex.NewClient("your-api-key",
 | `WithTimeout(d)` | `30s` | HTTP request timeout |
 | `WithHTTPClient(c)` | `http.DefaultClient` | Custom `*http.Client` |
 
+## Known v0.1.10 limitations
+
+- Registration returns `agentId`, while `Agent.ID` expects `id`; derive the ID from the returned DID.
+- The typed audit payload omits required fields; use the [REST or CLI audit-write workaround](/sdks/go/audit#log).
+
 ## Quick Start
 
 <Warning>

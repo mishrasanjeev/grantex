@@ -3,50 +3,38 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
 
   <!-- SEO -->
   <title>@grantex/gemma — Offline Authorization for Gemma 4 Agents</title>
-  <meta name="description" content="The missing auth layer for Gemma 4's on-device agentic workflows. Offline grant verification, human consent, and tamper-evident audit logs — all running without cloud connectivity.">
+  <meta name="description" content="Add scoped Grantex grant verification to on-device Gemma agent workflows, with explicit consent records and optional tamper-evident audit logs.">
   <meta name="keywords" content="gemma 4 authorization, gemma 4 on device agents security, grantex gemma, offline agent auth, on-device AI authorization, consent bundle, offline verification, edge AI security, Raspberry Pi AI agent, Jetson agent auth">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/gemma">
+  <link rel="alternate" type="text/plain" href="/llms.txt" title="Grantex LLM index">
 
   <!-- OpenGraph -->
   <meta property="og:title" content="@grantex/gemma — Offline Authorization for Gemma 4 Agents">
-  <meta property="og:description" content="The missing auth layer for Gemma 4's on-device agentic workflows. Offline grant verification, human consent, and tamper-evident audit logs — all running without cloud connectivity.">
+  <meta property="og:description" content="Add scoped Grantex grant verification to on-device Gemma agent workflows, with explicit consent records and optional tamper-evident audit logs.">
   <meta property="og:url" content="https://grantex.dev/gemma">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Grantex authorization for Gemma agents">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Grantex">
+  <meta property="og:locale" content="en_US">
 
   <!-- Twitter Card -->
   <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="@grantex/gemma — Offline Authorization for Gemma 4 Agents">
-  <meta name="twitter:description" content="The missing auth layer for Gemma 4's on-device agentic workflows. Offline grant verification, human consent, and tamper-evident audit logs — all running without cloud connectivity.">
+  <meta name="twitter:description" content="Add scoped Grantex grant verification to on-device Gemma agent workflows, with explicit consent records and optional tamper-evident audit logs.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+  <meta name="twitter:image:alt" content="Grantex authorization for Gemma agents">
 
   <!-- JSON-LD Structured Data -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "@grantex/gemma",
-    "applicationCategory": "DeveloperApplication",
-    "operatingSystem": "Android, iOS, Linux, Windows, macOS",
-    "url": "https://grantex.dev/gemma",
-    "description": "Offline authorization library for Gemma 4 on-device AI agents. Consent bundles, offline JWT verification, and Ed25519-signed audit logs.",
-    "license": "https://www.apache.org/licenses/LICENSE-2.0",
-    "codeRepository": "https://github.com/mishrasanjeev/grantex",
-    "applicationSubCategory": "Security",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "isPartOf": {
-      "@type": "SoftwareApplication",
-      "name": "Grantex",
-      "url": "https://grantex.dev"
-    }
-  }
-  </script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://grantex.dev/gemma#webpage","url":"https://grantex.dev/gemma","name":"@grantex/gemma — Offline Authorization for Gemma 4 Agents","description":"Add scoped Grantex grant verification to on-device Gemma agent workflows, with explicit consent records and optional tamper-evident audit logs.","isPartOf":{"@id":"https://grantex.dev/#website"},"about":{"@id":"https://grantex.dev/gemma#reference-implementation"},"breadcrumb":{"@id":"https://grantex.dev/gemma#breadcrumb"},"dateModified":"2026-07-12","inLanguage":"en"},{"@type":"SoftwareSourceCode","@id":"https://grantex.dev/gemma#reference-implementation","name":"@grantex/gemma","url":"https://grantex.dev/gemma","description":"Add scoped Grantex grant verification to on-device Gemma agent workflows, with explicit consent records and optional tamper-evident audit logs.","codeRepository":"https://github.com/mishrasanjeev/grantex","license":"https://www.apache.org/licenses/LICENSE-2.0","programmingLanguage":"TypeScript","runtimePlatform":"Node.js 18+ with writable storage and required cryptographic APIs","author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/gemma#webpage"}},{"@type":"BreadcrumbList","@id":"https://grantex.dev/gemma#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"@grantex/gemma — Offline Authorization for Gemma 4 Agents","item":"https://grantex.dev/gemma"}]}]}</script>
 
   <style>
     /* -- Design tokens ---------------------------------------------------- */
@@ -743,8 +731,8 @@
   <div class="container">
     <h1>Gemma 4 Agents.<br>Now With Offline Authorization.</h1>
     <p>
-      The only auth library purpose-built for on-device AI agents &mdash; offline consent,
-      offline verification, offline audit. Apache 2.0.
+      An Apache-2.0 package for Node.js-based on-device agent workflows &mdash; bounded
+      offline verification, explicit consent records, and optional signed local audit logs.
     </p>
     <div class="hero-ctas">
       <div class="install-cmd" onclick="copyInstall('npm install @grantex/gemma', this)"
@@ -783,7 +771,7 @@
       <div style="text-align:center; margin-top:20px;">
         <span class="verify-badge">
           <span class="check-mark">&#10003;</span>
-          Verified locally &middot; No network during the offline phase
+          Verified locally &middot; No network during a valid offline window
         </span>
       </div>
     </div>
@@ -796,8 +784,8 @@
     <div class="trust-bar-inner">
       <span class="trust-item"><span class="trust-dot"></span> Day-zero integration</span>
       <span class="trust-item"><span class="trust-dot"></span> Apache 2.0</span>
-      <span class="trust-item"><span class="trust-dot"></span> &lt; 5ms verification</span>
-      <span class="trust-item"><span class="trust-dot"></span> Raspberry Pi ready</span>
+      <span class="trust-item"><span class="trust-dot"></span> Test-runner benchmark only</span>
+      <span class="trust-item"><span class="trust-dot"></span> Validate each device runtime</span>
     </div>
   </div>
 </div>
@@ -806,7 +794,7 @@
 <section id="problem">
   <div class="container">
     <div class="section-label">The problem</div>
-    <h2 class="section-title">On-device agents have no authorization layer</h2>
+    <h2 class="section-title">On-device agents need an explicit authorization layer</h2>
     <p class="section-sub">
       Gemma 4 runs locally &mdash; but your security model still assumes a cloud connection.
       These are the gaps.
@@ -816,18 +804,18 @@
         <span class="card-icon">&#x1F511;</span>
         <h3>API keys with no scope boundaries</h3>
         <p>
-          Your agent carries raw API keys with full access. There are no per-action
-          scopes, no expiration, and no way to limit what the agent can do on a
-          user's behalf.
+          An agent that carries a broad API key may lack per-action scope and expiry
+          boundaries. Put verification at each protected action instead of relying
+          on the model to limit itself.
         </p>
       </div>
       <div class="card">
         <span class="card-icon">&#x1F4E1;</span>
-        <h3>No audit trail survives offline</h3>
+        <h3>Unsigned offline logs are hard to trust</h3>
         <p>
-          When the device goes offline, actions happen in a black box. Logs are
-          unsigned, mutable, and lost when the device reconnects &mdash; making
-          compliance impossible.
+          Without a configured local audit sink, offline actions may be recorded only
+          in mutable application logs. Signed, hash-chained records can make later
+          modification evident, but do not by themselves establish compliance.
         </p>
       </div>
       <div class="card">
@@ -835,8 +823,8 @@
         <h3>No mid-session revocation without connectivity</h3>
         <p>
           If a user wants to stop an agent mid-task, they need network access to
-          reach a revocation endpoint. Offline, the agent keeps running with
-          full permissions.
+          reach a revocation endpoint. Offline, a verifier cannot learn newer revocation state and may continue
+          accepting a still-valid bundle until its configured offline TTL expires.
         </p>
       </div>
     </div>
@@ -847,10 +835,10 @@
 <section id="solution">
   <div class="container section-center">
     <div class="section-label">The solution</div>
-    <h2 class="section-title">ConsentBundle: Issue once online. Verify forever offline.</h2>
+    <h2 class="section-title">ConsentBundle: issue online, verify within a bounded offline TTL</h2>
     <p class="section-sub">
-      A single signed bundle contains everything the agent needs to prove authorization,
-      verify scopes, and log actions &mdash; without ever calling home.
+      A signed bundle contains cached token and key material for a configured offline window.
+      It cannot discover key rotation or revocation changes until connectivity and synchronization return.
     </p>
 
     <div class="solution-flow">
@@ -866,7 +854,7 @@
         <div class="solution-num">2</div>
         <div>
           <h3>Verify locally</h3>
-          <p>Agent verifies the JWT against the JWKS snapshot in its consent bundle &mdash; no network call during the offline phase. Scope checks included.</p>
+          <p>The verifier checks the JWT and scopes against the bundled JWKS snapshot within the configured offline TTL. It cannot observe newer revocation state while disconnected.</p>
           <span class="step-tag">Offline</span>
         </div>
       </div>
@@ -896,7 +884,7 @@
     <div class="section-label">Quickstart</div>
     <h2 class="section-title">Three phases. Ten lines each.</h2>
     <p class="section-sub">
-      Issue a consent bundle while online. Verify and audit while offline.
+      Issue a consent bundle online, then verify configured tools during its bounded offline TTL.
       Works with TypeScript, Python, and Google ADK.
     </p>
 
@@ -921,7 +909,7 @@
   offlineTTL: <span class="str">'72h'</span>,
 });
 
-<span class="cm">// Phase 2: Offline — verify in &lt; 5ms</span>
+<span class="cm">// Phase 2: Offline — verify within the configured TTL; benchmark your device</span>
 <span class="kw">const</span> verifier = <span class="fn">createOfflineVerifier</span>({
   jwksSnapshot: bundle.<span class="id">jwksSnapshot</span>,
   requireScopes: [<span class="str">'calendar:read'</span>],
@@ -962,7 +950,7 @@ bundle = <span class="kw">await</span> <span class="fn">create_consent_bundle</s
     offline_ttl=<span class="str">"48h"</span>,
 )
 
-<span class="cm"># Phase 2: Offline — verify in &lt; 5ms</span>
+<span class="cm"># Phase 2: Offline — verify within the configured TTL; benchmark your device</span>
 verifier = <span class="fn">create_offline_verifier</span>(
     jwks_snapshot=bundle.<span class="id">jwks_snapshot</span>,
 )
@@ -989,7 +977,7 @@ audit_log = <span class="fn">create_offline_audit_log</span>(
         <button class="copy-btn" onclick="copyCode('code-adk', this, 'copy_adk')">Copy</button>
         <pre id="code-adk"><span class="kw">import</span> { <span class="fn">withGrantexAuthADK</span>, <span class="fn">createOfflineVerifier</span>, <span class="fn">createOfflineAuditLog</span> } <span class="kw">from</span> <span class="str">'@grantex/gemma'</span>;
 
-<span class="cm">// Wrap any Google ADK tool with offline auth</span>
+<span class="cm">// Wrap a configured Google ADK tool with offline authorization</span>
 <span class="kw">const</span> verifier = <span class="fn">createOfflineVerifier</span>({
   jwksSnapshot: bundle.<span class="id">jwksSnapshot</span>,
 });
@@ -1080,12 +1068,12 @@ audit_log = <span class="fn">create_offline_audit_log</span>(
       <tbody>
         <tr>
           <td class="platform-name">Verifier unit test</td>
-          <td class="bench-value">&lt;5ms target on test runner</td>
+          <td class="bench-value">Under-5ms repository test target; not a device SLA</td>
           <td class="bench-mem">Not measured</td>
         </tr>
         <tr>
           <td class="platform-name">Production E2E test</td>
-          <td class="bench-value">100-token average &lt;5ms on test runner</td>
+          <td class="bench-value">Under-5ms average in the repository test; not a device SLA</td>
           <td class="bench-mem">Not measured</td>
         </tr>
         <tr>

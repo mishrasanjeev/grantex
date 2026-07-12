@@ -1,45 +1,106 @@
 ---
-title: "Adding OAuth 2.1 Authentication to Any MCP Server"
-description: "Current status and evaluation setup for @grantex/mcp-auth 2.0.2."
+title: "MCP Server Authorization with OAuth 2.1 and Grantex"
+description: "Current MCP HTTP authorization, the OAuth 2.1 draft profile, and safe evaluation limits for @grantex/mcp-auth 2.0.2."
 date: "2026-04-05"
+updated: "2026-07-12"
+keywords: ["MCP server authorization", "MCP OAuth 2.1", "Model Context Protocol authorization", "@grantex/mcp-auth", "MCP access token validation"]
 authors:
   - name: "Sanjeev Kumar"
 ---
 
 <Warning>
-  **Status correction — July 12, 2026:** this article previously described the
-  intended production flow as if it were complete. The published
-  `@grantex/mcp-auth@2.0.2` package exposes useful OAuth endpoint and middleware
-  building blocks, but it has material state, consent, code-handoff, hook, and
-  revocation-check limitations. Treat it as single-process evaluation software.
-  The [MCP Auth feature guide](/features/mcp-auth-server) is authoritative.
+  **Release status — updated July 12, 2026:** `@grantex/mcp-auth@2.0.2`
+  exposes useful OAuth endpoint and token-validation building blocks, but it is
+  single-process evaluation software. It is not a complete implementation of
+  the current MCP HTTP authorization specification. The
+  [MCP Auth feature guide](/features/mcp-auth-server) is the authoritative
+  package reference.
 </Warning>
 
-MCP servers need authenticated, scoped access when they expose sensitive tools.
-The `@grantex/mcp-auth` package is an early implementation of the endpoint
-surface needed for that workflow.
+Remote MCP servers often need transport-level authorization before a client can
+call sensitive tools. The current
+[MCP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+defines an optional authorization flow for HTTP-based transports. It profiles a
+selected set of OAuth standards, including OAuth 2.0 Protected Resource Metadata
+(RFC 9728), authorization-server discovery, resource indicators, access-token
+audience validation, and an OAuth 2.1 authorization-code flow.
 
-## What 2.0.2 implements
+OAuth 2.1 is still an
+[IETF Internet-Draft](https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/),
+not a published RFC. In this article, “OAuth 2.1” means the draft-based profile
+required by the current MCP HTTP authorization specification. Authorization is
+optional in MCP, and the HTTP flow is not the credential model for local STDIO
+servers.
 
-`createMcpAuthServer()` returns a Fastify instance with these routes:
+> **Short answer:** for production, use an established, MCP-compatible
+> authorization server for the HTTP OAuth flow. Then enforce agent-specific
+> Grantex grants again at each sensitive tool or service boundary.
+
+## MCP authorization and Grantex solve different layers
+
+MCP HTTP authorization establishes whether an MCP client may access a protected
+MCP resource on behalf of a resource owner. Grantex can add a narrower decision
+at tool execution time: which agent may perform which action, for which
+principal and resource, under which constraints.
+
+A production architecture should keep those responsibilities explicit:
+
+1. **Established authorization server:** use a maintained authorization server
+   that supports the current MCP profile, user authentication and consent,
+   durable authorization-code state, secure client onboarding, token issuance,
+   and revocation.
+2. **MCP protected resource:** expose RFC 9728 protected-resource metadata,
+   advertise the permitted authorization server, and validate every access
+   token's issuer, audience, expiry, and required MCP scopes.
+3. **Grantex tool enforcement:** after transport authorization succeeds, use a
+   primary Grantex SDK or direct, validated grant verification at each sensitive
+   tool boundary. Bind the decision to the agent, principal, action, resource,
+   constraints, and current revocation state.
+4. **Audit and deny safely:** record both the transport authorization context and
+   the tool-level Grantex decision. Deny the call if either layer fails.
+
+This makes Grantex complementary to the MCP authorization server; it does not
+ask `@grantex/mcp-auth@2.0.2` to serve as the production OAuth control plane.
+
+## What @grantex/mcp-auth 2.0.2 implements
+
+For local inspection, `createMcpAuthServer()` returns a Fastify instance with
+these six routes:
 
 | Endpoint | Implemented behavior |
 |---|---|
-| `/.well-known/oauth-authorization-server` | Metadata discovery |
+| `/.well-known/oauth-authorization-server` | Authorization-server metadata discovery |
 | `/register` | Dynamic client registration backed by `ClientStore` |
-| `/authorize` | PKCE S256 and client/redirect validation, then a Grantex authorization request |
-| `/token` | PKCE validation plus Grantex exchange/refresh calls |
+| `/authorize` | PKCE S256 plus client and redirect-URI validation, followed by a Grantex authorization request |
+| `/token` | PKCE validation plus Grantex exchange and refresh calls |
 | `/introspect` | JWT signature and claim validation against JWKS |
 | `/revoke` | Decode the JWT `jti` and request Grantex revocation |
 
-The package also exports Express and Hono middleware that validate JWT
-signatures, claims, algorithms, and required scopes.
+The package also exports Express and Hono middleware that validates JWT
+signatures, claims, algorithms, expiry, and required scopes. This endpoint
+surface does not itself provide the MCP server's RFC 9728 protected-resource
+metadata or make the end-to-end flow conformant with the current MCP
+authorization specification.
 
-## Reproducible evaluation setup
+## Reproducible evaluation install
+
+Use exact package versions and commit both `package.json` and the generated
+lockfile:
 
 ```bash
-npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13
+npm install --save-exact @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13
 ```
+
+Use Node.js 18 or newer. After the lockfile is committed, reproduce the same
+dependency graph in CI with:
+
+```bash
+npm ci
+```
+
+Do not replace the version pins with `latest` in an evaluation record.
+
+## Start the evaluation endpoint surface
 
 ```typescript
 import { Grantex } from '@grantex/sdk';
@@ -54,54 +115,70 @@ const authServer = await createMcpAuthServer({
   grantex,
   agentId: 'ag_your_mcp_server',
   scopes: ['tools:read', 'tools:execute'],
-  issuer: 'https://your-mcp-server.example.com',
+  issuer: 'https://your-auth-server.example.com',
 });
 
 await authServer.listen({ port: 3001 });
 ```
 
-This starts the endpoint surface for inspection. It does not make the full token
-issuance flow production-ready.
+This starts the published endpoint surface for inspection. It does not create a
+production MCP authorization deployment or prove end-to-end token issuance.
 
-## Current limitations
+## Six material limits in 2.0.2
 
-- Client registrations use process memory unless you provide a `ClientStore`.
-- Authorization codes always use a non-configurable `InMemoryCodeStore`; restart
-  and multi-replica flows are unsafe.
-- `consentUi` only adds metadata. The package does not register `/consent` or
-  render a user approval page.
-- The package does not persist the Grantex SDK's returned authorization code for
-  the token handler, which can make real backend exchange fail.
-- The `onTokenIssued` type is declared but is not invoked in `2.0.2`.
-- Introspection and middleware do not query current revocation state. Use online
-  verification or synchronized revocation data when immediate revocation matters.
-- `allowedRedirectUris` is declared but is not enforced as a server-wide allowlist
-  in this release.
+1. **Process-local state:** client registrations use process memory unless you
+   provide a `ClientStore`, and authorization codes always use the
+   non-configurable `InMemoryCodeStore`. Restarts and multi-replica
+   authorize/token flows are unsafe.
+2. **No consent page:** `consentUi` adds discovery metadata only. The package
+   does not register `/consent` or render a user-approval interface.
+3. **Incomplete code handoff:** the package does not persist the authorization
+   code returned by the Grantex SDK for the token handler. A real backend
+   exchange can therefore fail.
+4. **Inactive issuance hook:** the `onTokenIssued` type is declared but the hook
+   is not invoked in `2.0.2`.
+5. **No current revocation lookup:** introspection and middleware perform local
+   JWT validation but do not query current revocation state. Use an online state
+   check or synchronized revocation data when immediate revocation matters.
+6. **No server-wide redirect allowlist:** `allowedRedirectUris` is declared but
+   is not enforced as a server-wide allowlist in this release. Authorization
+   checks the redirect URI registered for the individual client instead.
 
-## Middleware boundary
+## Evaluation-only middleware boundary
 
 ```typescript
 import { requireMcpAuth } from '@grantex/mcp-auth/express';
 
 app.use('/mcp', requireMcpAuth({
-  issuer: 'https://your-mcp-server.example.com',
+  issuer: 'https://your-auth-server.example.com',
   scopes: ['tools:execute'],
 }));
 ```
 
-This protects a route with signature, claim, algorithm, expiry, and scope checks.
-It is not a live revocation check.
+This middleware performs local signature, claim, algorithm, expiry, and scope
+checks. It is not protected-resource discovery, a live revocation check, user
+consent, or tool-level agent authorization.
 
-## Deployment guidance
+## Production checklist
 
-Use one process for evaluation, test every authorize/token transition against the
-actual Grantex backend, and do not advertise a consent page or production OAuth
-conformance from `2.0.2`. Wait for a corrected release that supports durable code
-state and a complete consent/code handoff before multi-replica production use.
+- Follow the current MCP HTTP authorization specification rather than treating
+  an older endpoint list as the protocol.
+- Use an established authorization server and maintained MCP SDK, with exact
+  versions pinned in your own lockfile.
+- Publish and validate RFC 9728 protected-resource metadata for the actual MCP
+  resource identifier.
+- Validate issuer, audience, expiry, scopes, and revocation before accepting the
+  transport token.
+- Enforce the narrower Grantex grant at every sensitive tool or downstream
+  service boundary.
+- Test denial paths, consent, authorization-code replay, redirect URIs,
+  multi-replica state, token expiry, and revocation end to end.
 
-## Next steps
+## Related documentation
 
-- [MCP Auth Server status and reference](/features/mcp-auth-server)
-- [Release Status](/release-status)
+- [MCP Auth Server package status](/features/mcp-auth-server)
+- [Grantex release status](/release-status)
 - [MCP tool-server integration](/integrations/mcp)
 - [Self-hosting guide](/guides/self-hosting)
+- [Current MCP HTTP authorization specification](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+- [OAuth 2.1 Internet-Draft status](https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/)

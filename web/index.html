@@ -4,202 +4,244 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- SEO -->
-  <title>Grantex — OAuth 2.0 for AI Agents</title>
-  <meta name="description" content="Open delegated authorization protocol for AI agents. MPP agent identity for machine payments, W3C Verifiable Credentials, FIDO2/WebAuthn passkeys, SD-JWT selective disclosure, and DID infrastructure — built on JWT and OAuth 2.0.">
-  <meta name="keywords" content="Grantex, AI agent authorization, OAuth for AI agents, Gemma 4 authorization, MCP server OAuth, DPDP Act AI agents, AI agent trust registry, anomaly detection AI agents, offline agent verification, agent delegation, DID, FIDO2, WebAuthn, JWT, W3C Verifiable Credentials, EU AI Act compliance, OWASP agentic security, MPP, agent passport">
+  <!-- SEO and machine discovery -->
+  <title>Grantex | Delegated Authorization for AI Agents</title>
+  <meta name="description" content="Open-source delegated authorization for AI agents: scoped permissions, human consent, agent identity, JWT verification, revocation, delegation, and audit.">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="application-name" content="Grantex">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/">
-  <link rel="llms-txt" href="/llms.txt">
+  <link rel="alternate" type="text/plain" href="/llms.txt" title="Grantex LLM index">
+  <link rel="alternate" type="text/plain" href="/llms-full.txt" title="Grantex implementation brief for LLMs">
+  <link rel="alternate" type="application/ld+json" href="/ld.json" title="Grantex linked-data graph">
+  <link rel="alternate" type="application/json" href="/release-status.json" title="Grantex machine-readable release status">
 
-  <!-- OpenGraph -->
-  <meta property="og:title" content="Grantex — OAuth 2.0 for AI Agents">
-  <meta property="og:description" content="Open delegated authorization protocol for AI agents. MPP agent identity for machine payments, W3C Verifiable Credentials, FIDO2/WebAuthn passkeys — built on JWT and OAuth 2.0.">
+  <!-- Open Graph -->
+  <meta property="og:title" content="Grantex | Delegated Authorization for AI Agents">
+  <meta property="og:description" content="Open-source delegated authorization for AI agents with scoped permissions, human consent, verifiable identity, JWT verification, revocation, delegation, and audit records.">
   <meta property="og:url" content="https://grantex.dev/">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Grantex AI agent authorization">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Grantex">
+  <meta property="og:locale" content="en_US">
 
-  <!-- Twitter Card -->
+  <!-- X / Twitter Card -->
   <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Grantex — OAuth 2.0 for AI Agents">
-  <meta name="twitter:description" content="Open delegated authorization protocol for AI agents. MPP agent identity for machine payments, W3C Verifiable Credentials, FIDO2/WebAuthn passkeys — built on JWT and OAuth 2.0.">
+  <meta name="twitter:title" content="Grantex | Delegated Authorization for AI Agents">
+  <meta name="twitter:description" content="Scoped, human-approved, revocable authority for AI agents, with verifiable identity, delegation, JWT verification, and audit records.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+  <meta name="twitter:image:alt" content="Grantex AI agent authorization">
 
-  <!-- JSON-LD Structured Data -->
+  <!-- Canonical JSON-LD graph; scripts/check-docs-integrity.mjs keeps this synchronized with /ld.json. -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Grantex",
-    "applicationCategory": "DeveloperApplication",
-    "operatingSystem": "Any",
-    "url": "https://grantex.dev",
-    "description": "Open delegated authorization protocol for AI agents. Scoped, human-approved, revocable permissions via signed JWTs.",
-    "license": "https://www.apache.org/licenses/LICENSE-2.0",
-    "codeRepository": "https://github.com/mishrasanjeev/grantex",
-    "applicationSubCategory": "Security",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
-  }
-  </script>
-
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    "name": "Grantex",
-    "url": "https://grantex.dev",
-    "logo": "https://grantex.dev/favicon.svg",
-    "sameAs": [
-      "https://github.com/mishrasanjeev/grantex",
-      "https://www.npmjs.com/package/@grantex/sdk",
-      "https://pypi.org/project/grantex/",
-      "https://pkg.go.dev/github.com/mishrasanjeev/grantex-go"
-    ]
-  }
-  </script>
-
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": [
+    "@graph": [
       {
-        "@type": "Question",
-        "name": "How is Grantex different from OAuth 2.0?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "OAuth 2.0 was designed for human users granting access to apps. Grantex extends that model for AI agents with cryptographic agent identity (DID), delegation chains for multi-agent pipelines, action-level hash-chained audit trails, and central grant revocation. If you know OAuth, Grantex will feel familiar — but it handles the cases OAuth was never designed for."
-        }
+        "@type": "Organization",
+        "@id": "https://grantex.dev/#organization",
+        "name": "Grantex",
+        "alternateName": "Grantex AI Agent Authorization",
+        "url": "https://grantex.dev/",
+        "logo": {
+          "@type": "ImageObject",
+          "@id": "https://grantex.dev/#logo",
+          "url": "https://grantex.dev/favicon.svg",
+          "contentUrl": "https://grantex.dev/favicon.svg",
+          "caption": "Grantex"
+        },
+        "description": "Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records."
       },
       {
-        "@type": "Question",
-        "name": "What AI agent frameworks does Grantex integrate with?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Grantex has official integrations for Anthropic SDK, LangChain, CrewAI, AutoGen, Vercel AI SDK, OpenAI Agents SDK, Google ADK, Strands Agents SDK, and a Model Context Protocol (MCP) server for Claude Desktop and Cursor. SDKs are available for TypeScript, Python, and Go."
-        }
+        "@type": "WebSite",
+        "@id": "https://grantex.dev/#website",
+        "url": "https://grantex.dev/",
+        "name": "Grantex",
+        "alternateName": "Grantex AI Agent Authorization",
+        "description": "Open-source delegated authorization for AI agents, including scoped permissions, human consent, agent identity, JWT verification, revocation, delegation, and audit records.",
+        "publisher": {
+          "@id": "https://grantex.dev/#organization"
+        },
+        "inLanguage": "en"
       },
       {
-        "@type": "Question",
-        "name": "Is Grantex open source?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Yes. Grantex is fully open source under the Apache 2.0 license. The protocol specification is public and frozen at v1.0. Verification uses JWKS-backed signature checks, and services can cache signing keys after fetching them. You can self-host your own auth server."
-        }
+        "@type": "WebPage",
+        "@id": "https://grantex.dev/#webpage",
+        "url": "https://grantex.dev/",
+        "name": "Grantex | Delegated Authorization for AI Agents",
+        "description": "Open-source delegated authorization for AI agents: scoped permissions, human consent, agent identity, JWT verification, revocation, delegation, and audit.",
+        "isPartOf": {
+          "@id": "https://grantex.dev/#website"
+        },
+        "about": {
+          "@id": "https://grantex.dev/#reference-implementation"
+        },
+        "mainEntity": {
+          "@id": "https://grantex.dev/#reference-implementation"
+        },
+        "primaryImageOfPage": {
+          "@type": "ImageObject",
+          "@id": "https://grantex.dev/#primary-image",
+          "url": "https://grantex.dev/og-image.png",
+          "contentUrl": "https://grantex.dev/og-image.png",
+          "width": 1200,
+          "height": 630,
+          "caption": "Grantex AI agent authorization"
+        },
+        "dateModified": "2026-07-12",
+        "inLanguage": "en"
       },
       {
-        "@type": "Question",
-        "name": "How do I secure my AI agent with Grantex?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Install the SDK for your language (npm install @grantex/sdk, pip install grantex, or go get github.com/mishrasanjeev/grantex-go@v0.1.10), register your agent, create an authorization request with specific scopes, have the user approve via the consent URL, and exchange the code for a signed JWT. Services can verify the token's signature and claims locally after retrieving the issuer's JWKS."
-        }
+        "@type": "SoftwareSourceCode",
+        "@id": "https://grantex.dev/#reference-implementation",
+        "name": "Grantex Reference Implementation",
+        "alternateName": "Grantex",
+        "description": "Open-source reference implementation of delegated authorization for AI agents, with verifiable agent identity, scoped grants, human consent, delegation, service-side JWT verification, revocation controls, and audit records.",
+        "url": "https://grantex.dev/",
+        "codeRepository": "https://github.com/mishrasanjeev/grantex",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "programmingLanguage": [
+          "TypeScript",
+          "Python",
+          "Go"
+        ],
+        "runtimePlatform": [
+          "Node.js 18+",
+          "Python 3.9+",
+          "Go 1.26.1+"
+        ],
+        "publisher": {
+          "@id": "https://grantex.dev/#organization"
+        },
+        "subjectOf": [
+          {
+            "@type": "WebPage",
+            "url": "https://docs.grantex.dev/",
+            "name": "Grantex Documentation"
+          },
+          {
+            "@type": "DigitalDocument",
+            "url": "https://grantex.dev/release-status.json",
+            "name": "Grantex Machine-Readable Release Status"
+          }
+        ],
+        "keywords": "AI agent authorization, delegated authorization for AI agents, OAuth for AI agents, agent identity, agent permissions, human consent, least privilege, JWT verification, MCP authorization, multi-agent delegation, AI agent audit"
       },
       {
-        "@type": "Question",
-        "name": "Can I revoke an AI agent's access?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Yes. Grantex can revoke individual grants or cascade revocation through delegated grants. Online consumers can check current grant state; consumers performing only local JWT verification must also use short token lifetimes or synchronized revocation data."
-        }
+        "@type": "TechArticle",
+        "@id": "https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md#specification",
+        "url": "https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md",
+        "name": "Grantex Delegated Authorization Protocol Specification v1.0",
+        "headline": "Grantex Delegated Authorization Protocol Specification v1.0",
+        "description": "The frozen version 1.0 specification for Grantex delegated authorization grants for AI agents.",
+        "version": "1.0",
+        "license": "https://www.apache.org/licenses/LICENSE-2.0",
+        "author": {
+          "@id": "https://grantex.dev/#organization"
+        },
+        "publisher": {
+          "@id": "https://grantex.dev/#organization"
+        },
+        "inLanguage": "en"
       },
       {
-        "@type": "Question",
-        "name": "Does Grantex support WebAuthn/passkeys?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Yes. Grantex integrates FIDO2/WebAuthn for cryptographic human presence verification. When enabled, end-users authenticate with biometrics, security keys, or platform authenticators during the consent flow, and the assertion is embedded as evidence in Verifiable Credentials."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "What are Verifiable Credentials in Grantex?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Grantex issues W3C Verifiable Credentials (VC-JWT) alongside standard grant tokens. VCs are portable, tamper-evident proofs of authorization that any third party can verify using the published DID document — no Grantex account required."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "What is SD-JWT selective disclosure?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "SD-JWT allows credential holders to selectively disclose only the claims a verifier needs. Instead of revealing all grant details, agents can present minimal information — for example, showing scopes without revealing the principal's identity."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "What is MPP agent identity?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "MPP (Machine Payments Protocol) defines how AI agents pay for services. Grantex adds the missing identity layer with AgentPassportCredential — a W3C VC 2.0 credential that lets merchants verify who authorized a payment, what the agent can buy, and spending limits. Verification runs locally with cached JWKS after signing keys have been obtained."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "How does Grantex work with MPP machine payments?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "A human issues an AgentPassportCredential for their agent via Grantex. The agent attaches this credential as an X-Grantex-Passport header alongside standard MPP payment headers. Merchants verify the passport locally using cached JWKS — confirming the human principal, organization, allowed categories (inference, compute, data), and spending limits before fulfilling the request."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "What is an AgentPassportCredential?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "An AgentPassportCredential is a W3C Verifiable Credential (VC 2.0) that binds agent identity, human delegation, MPP payment categories, and spending limits into a single signed document. It includes the agent DID, human principal DID, organization DID, allowed MPP categories, max transaction amount, and StatusList2021 revocation."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "How does Grantex address the OWASP Agentic Top 10?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Grantex provides technical controls relevant to four OWASP Agentic Security Initiative risks: ASI-01 (agent goal hijacking) via scoped permissions, ASI-03 (identity and privilege abuse) via per-agent cryptographic identity, ASI-05 (privilege escalation) via delegation invariants, and ASI-10 (rogue agents) via cascading grant revocation."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "What EU AI Act-related controls does Grantex provide?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Grantex provides technical controls that may support organizational work related to EU AI Act Articles 9 (risk management via budget controls and anomaly detection), 13 (transparency via human consent flows and Verifiable Credentials), and 14 (human oversight via principal dashboards, real-time event streaming, and one-click cascade revocation)."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "How does Grantex compare to HashiCorp Vault for AI agents?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Grantex and HashiCorp Vault solve different problems. Vault manages secrets at rest — encryption, rotation, and access control. Grantex provides the agent identity layer: per-agent cryptographic identity, scoped tokens, human consent, central revocation, and audit trails. They work together — Grantex's Credential Vault lets agents exchange grant tokens for upstream credentials without exposing master keys."
-        }
+        "@type": "FAQPage",
+        "@id": "https://grantex.dev/#answers",
+        "url": "https://grantex.dev/#answers",
+        "isPartOf": {
+          "@id": "https://grantex.dev/#webpage"
+        },
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is Grantex?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What problem does AI agent authorization solve?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "AI agent authorization replaces shared, all-or-nothing credentials with per-agent identity, least-privilege scopes, explicit approval, expiry, delegation constraints, revocation, and attributable audit records."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Grantex a replacement for OAuth 2.0?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Grantex reuses OAuth-style authorization requests, consent, codes, scopes, and tokens, then adds agent identity, multi-agent delegation, and action attribution for autonomous agents."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How is Grantex different from MCP?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which Grantex SDK should I install?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Use @grantex/sdk@0.3.13 for TypeScript, grantex==0.3.14 for Python, and github.com/mishrasanjeev/grantex-go@v0.1.10 for Go. Review release status before upgrading because packages are independently versioned and Go v0.1.10 has documented workarounds."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does local Grantex token verification check current revocation?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Local JWT verification checks signature, issuer, audience, expiry, and scopes after JWKS retrieval. It does not prove current revocation unless the verifier performs an online state check or synchronizes revocation data."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I authorize tools used by AI agent frameworks?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Use a primary Grantex SDK to register the agent, request a grant, and exchange the authorization code, then enforce scopes at the service boundary with an SDK verifier or direct JWKS validation. Framework adapters are available for OpenAI Agents SDK, Anthropic, LangChain, CrewAI, Google ADK, Vercel AI, AutoGen, Express, FastAPI, and MCP."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is @grantex/mcp-auth 2.0.2 ready for general production deployment?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. @grantex/mcp-auth@2.0.2 is single-process evaluation software with process-local codes, metadata-only consent configuration, incomplete Grantex code handoff, and no live revocation lookup in middleware or introspection."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What is OACP in Grantex?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Open Agentic Commerce Protocol (OACP) is Grantex's agentic-commerce trust and artifact-authority layer. Grantex signs and verifies authority artifacts and adapter mappings; it is not a buyer or seller runtime, merchant connector, payment processor, order system, or point of sale."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is Grantex an IETF standard?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. The Grantex protocol specification is open and frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft for discussion, not an IETF-adopted or endorsed standard."
+            }
+          }
+        ]
       }
     ]
   }
   </script>
-
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Grantex MPP Agent Identity",
-    "applicationCategory": "DeveloperApplication",
-    "operatingSystem": "Any",
-    "url": "https://grantex.dev/mpp-demo/",
-    "description": "Agent identity and delegation for the Machine Payments Protocol (MPP). Verifiable agent passports for agentic commerce with local merchant verification using cached JWKS.",
-    "license": "https://www.apache.org/licenses/LICENSE-2.0",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "isPartOf": {
-      "@type": "SoftwareApplication",
-      "name": "Grantex",
-      "url": "https://grantex.dev"
-    }
-  }
-  </script>
-
   <style>
     /* ── Design tokens ─────────────────────────────────────────────────────── */
     :root {
@@ -375,6 +417,62 @@
       background: var(--accent);
     }
 
+    /* ── Direct answer hub ────────────────────────────────────────────────── */
+    .answers-section {
+      padding: 72px 0;
+      background: linear-gradient(180deg, rgba(88, 166, 255, 0.04), transparent);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .answers-intro { max-width: 760px; margin-bottom: 28px; }
+    .answers-intro .section-title { margin-bottom: 10px; }
+    .answers-intro p { color: var(--muted); }
+    .answer-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .answer-card {
+      padding: 0 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .answer-card[open] { border-color: rgba(88, 166, 255, 0.55); }
+    .answer-card summary {
+      position: relative;
+      padding: 18px 34px 18px 0;
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 650;
+      line-height: 1.45;
+      list-style: none;
+    }
+    .answer-card summary::-webkit-details-marker { display: none; }
+    .answer-card summary::after {
+      position: absolute;
+      top: 17px;
+      right: 0;
+      color: var(--accent2);
+      content: "+";
+      font-family: var(--mono);
+      font-size: 20px;
+      line-height: 1;
+    }
+    .answer-card[open] summary::after { content: "−"; }
+    .answer-card p {
+      padding: 0 0 20px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+    .answer-topics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      margin-top: 24px;
+      font-size: 13px;
+    }
     /* ── Release snapshot ──────────────────────────────────────────────────── */
     .snapshot-section { padding: 56px 0 64px; }
     .release-header {
@@ -1140,6 +1238,7 @@
       .capability-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
       .release-links { justify-content: flex-start; }
       .release-grid,
+      .answer-grid,
       .install-commands { grid-template-columns: 1fr; }
       .tab-btn { padding: 10px 14px; }
       .footer-inner { flex-direction: column; align-items: flex-start; }
@@ -1173,6 +1272,7 @@
         <li><a href="/mcp">MCP Auth</a></li>
         <li><a href="/dpdp">DPDP</a></li>
         <li><a href="/registry">Registry</a></li>
+        <li><a href="#answers">Answers</a></li>
         <li><a href="#examples">Examples</a></li>
         <li><a href="/dashboard" style="color:var(--accent);font-weight:600;">Dashboard</a></li>
       </ul>
@@ -1183,10 +1283,9 @@
 <!-- ── Hero ──────────────────────────────────────────────────────────────── -->
 <section class="hero">
   <div class="container">
-    <h1>OAuth 2.0 for AI Agents</h1>
+    <h1>Delegated Authorization for AI Agents</h1>
     <p>
-      Grantex lets humans authorize AI agents with verifiable, revocable, audited
-      grants — an open protocol built on JWT and the OAuth 2.0 model.
+      Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records. Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal.
     </p>
     <div class="hero-ctas">
       <a href="#quickstart" class="btn btn-primary"
@@ -1253,6 +1352,7 @@
         <a href="https://docs.grantex.dev/release-status">Release status guide</a>
         <a href="https://github.com/mishrasanjeev/grantex/blob/main/COMPATIBILITY.md">Compatibility matrix</a>
         <a href="https://github.com/mishrasanjeev/grantex/blob/main/CHANGELOG.md">Release notes</a>
+        <a href="/release-status.json">Machine-readable status</a>
       </div>
     </div>
 
@@ -1323,7 +1423,7 @@
           <span class="status-tag blue">TRUST</span>
           <span class="snapshot-card-title">Trust Registry</span>
         </div>
-        <p>Public DID-based directory of verified AI agent publishers, DNS verification, and embeddable widgets.</p>
+        <p>Public directory of registered AI agent publishers with DID profiles, public keys, and DNS ownership verification; no compliance certification or embeddable badge widget is implied.</p>
       </a>
       <a class="snapshot-card" href="/anomaly">
         <div class="snapshot-card-header">
@@ -1357,6 +1457,69 @@
   </div>
 </section>
 
+<!-- ── Direct answers for developers and answer engines ──────────────────── -->
+<section id="answers" class="answers-section" aria-labelledby="answers-title">
+  <div class="container">
+    <div class="answers-intro">
+      <div class="section-label">Direct answers</div>
+      <h2 id="answers-title" class="section-title">AI agent authorization: key implementation answers</h2>
+      <p>Concise, current answers for developers, search engines, and AI assistants choosing an authorization approach for autonomous agents.</p>
+    </div>
+    <div class="answer-grid">
+      <details class="answer-card" data-faq-item>
+        <summary>What is Grantex?</summary>
+        <p>Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.</p>
+      </details>
+      <details class="answer-card" data-faq-item>
+        <summary>What problem does AI agent authorization solve?</summary>
+        <p>AI agent authorization replaces shared, all-or-nothing credentials with per-agent identity, least-privilege scopes, explicit approval, expiry, delegation constraints, revocation, and attributable audit records.</p>
+      </details>
+      <details class="answer-card" data-faq-item>
+        <summary>Is Grantex a replacement for OAuth 2.0?</summary>
+        <p>No. Grantex reuses OAuth-style authorization requests, consent, codes, scopes, and tokens, then adds agent identity, multi-agent delegation, and action attribution for autonomous agents.</p>
+      </details>
+      <details class="answer-card" data-faq-item>
+        <summary>How is Grantex different from MCP?</summary>
+        <p>Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal.</p>
+      </details>
+      <details class="answer-card" data-faq-item>
+        <summary>Which Grantex SDK should I install?</summary>
+        <p>Use <code>@grantex/sdk@0.3.13</code> for TypeScript, <code>grantex==0.3.14</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.1.10</code> for Go. Review <a href="https://docs.grantex.dev/release-status">release status</a> before upgrading because packages are independently versioned and Go v0.1.10 has documented workarounds.</p>
+      </details>
+      <details class="answer-card" data-faq-item>
+        <summary>Does local Grantex token verification check current revocation?</summary>
+        <p>No. Local JWT verification checks signature, issuer, audience, expiry, and scopes after JWKS retrieval. It does not prove current revocation unless the verifier performs an online state check or synchronizes revocation data.</p>
+      </details>
+      <details class="answer-card" data-faq-item>
+        <summary>How do I authorize tools used by AI agent frameworks?</summary>
+        <p>Use a primary Grantex SDK to register the agent, request a grant, and exchange the authorization code, then enforce scopes at the service boundary with an SDK verifier or direct JWKS validation. Framework adapters are available for OpenAI Agents SDK, Anthropic, LangChain, CrewAI, Google ADK, Vercel AI, AutoGen, Express, FastAPI, and MCP.</p>
+      </details>
+      <details class="answer-card" data-faq-item>
+        <summary>Is @grantex/mcp-auth 2.0.2 ready for general production deployment?</summary>
+        <p>No. <a href="https://docs.grantex.dev/features/mcp-auth-server"><code>@grantex/mcp-auth@2.0.2</code></a> is single-process evaluation software with process-local codes, metadata-only consent configuration, incomplete Grantex code handoff, and no live revocation lookup in middleware or introspection.</p>
+      </details>
+      <details class="answer-card" data-faq-item>
+        <summary>What is OACP in Grantex?</summary>
+        <p>Open Agentic Commerce Protocol (OACP) is Grantex's agentic-commerce trust and artifact-authority layer. Grantex signs and verifies authority artifacts and adapter mappings; it is not a buyer or seller runtime, merchant connector, payment processor, order system, or point of sale.</p>
+      </details>
+      <details class="answer-card" data-faq-item>
+        <summary>Is Grantex an IETF standard?</summary>
+        <p>No. The Grantex protocol specification is open and frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft for discussion, not an IETF-adopted or endorsed standard.</p>
+      </details>
+    </div>
+    <nav class="answer-topics" aria-label="Grantex implementation and comparison guides">
+      <a href="/vs/securing-ai-agents">How to secure AI agents</a>
+      <a href="/vs/oauth">Grantex vs OAuth 2.0</a>
+      <a href="/vs/api-keys">Grantex vs API keys</a>
+      <a href="/for/mcp">MCP authorization</a>
+      <a href="/for/openai-agents">OpenAI Agents SDK authorization</a>
+      <a href="/for/anthropic">Anthropic tool authorization</a>
+      <a href="/for/langchain">LangChain agent permissions</a>
+      <a href="/for/crewai">CrewAI agent permissions</a>
+      <a href="/for/google-adk">Google ADK authorization</a>
+    </nav>
+  </div>
+</section>
 <!-- ── Scope Enforcement ──────────────────────────────────────────────────── -->
 <section id="scope-enforcement" style="padding:64px 0;border-bottom:1px solid var(--border);">
   <div class="container">
@@ -1424,11 +1587,11 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;max-width:960px;margin:0 auto 48px;">
       <div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:16px;">
         <div style="font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px;">Bring Your Own Manifest</div>
-        <div style="font-size:12px;color:var(--muted);">Define manifests for any connector &mdash; internal APIs, new SaaS tools, anything. No dependency on Grantex.</div>
+        <div style="font-size:12px;color:var(--muted);">Define manifests for any connector &mdash; internal APIs, new SaaS tools, anything. No dependency on a prebuilt Grantex connector.</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;">
         <div style="font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px;">enforce()</div>
-        <div style="font-size:12px;color:var(--muted);">Verify JWT + check tool permission via manifest. One line, &lt;1ms.</div>
+        <div style="font-size:12px;color:var(--muted);">Verify JWT claims and check tool permission via a manifest at the configured enforcement boundary.</div>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;">
         <div style="font-weight:600;color:var(--text);font-size:14px;margin-bottom:4px;">wrapTool()</div>
@@ -1591,10 +1754,10 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
 <section id="business-risk">
   <div class="container">
     <div class="section-label">Business risk</div>
-    <h2 class="section-title">When an agent acts, who is legally responsible?</h2>
+    <h2 class="section-title">When an agent acts, can you attribute the decision?</h2>
 
     <div class="risk-scenario">
-      <div class="risk-scenario-label">Real scenario</div>
+      <div class="risk-scenario-label">Hypothetical scenario</div>
       <p>
         Your agent reads an internal doc via MCP, is prompt-injected, and forwards
         confidential customer PII to an external endpoint. API key used: yours.
@@ -1603,18 +1766,18 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
       <div class="risk-questions">
         <div class="risk-q">
           <h3>Who authorized it?</h3>
-          <p>No consent record exists. The agent used your master key. You own the liability.</p>
-          <span class="fix">Grantex fixes this &rarr;</span>
+          <p>In this scenario, no agent-specific consent record exists and the shared credential does not identify an approving principal.</p>
+          <span class="fix">Grantex can address this &rarr;</span>
         </div>
         <div class="risk-q">
           <h3>What did it access?</h3>
-          <p>Full key = full access. No scope means no blast radius boundary.</p>
-          <span class="fix">Grantex fixes this &rarr;</span>
+          <p>A broadly privileged shared credential provides no agent-specific scope boundary.</p>
+          <span class="fix">Grantex can address this &rarr;</span>
         </div>
         <div class="risk-q">
           <h3>Can you prove you tried?</h3>
-          <p>No audit trail, no scoped token, no revocation log. The compliance gap is total.</p>
-          <span class="fix">Grantex fixes this &rarr;</span>
+          <p>Without execution-boundary logging, the deployment lacks an attributable agent-action record.</p>
+          <span class="fix">Grantex can address this &rarr;</span>
         </div>
       </div>
     </div>
@@ -1624,75 +1787,38 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
 <!-- ── Alternatives ───────────────────────────────────────────────────────── -->
 <section id="alternatives">
   <div class="container">
-    <div class="section-label">Your current stack</div>
-    <h2 class="section-title">Your security tools have a blind spot</h2>
+    <div class="section-label">Complementary controls</div>
+    <h2 class="section-title">Use Grantex alongside secrets and identity systems</h2>
     <p class="section-sub">
-      Grantex is not a replacement for Vault or Secrets Manager &mdash; it is the missing
-      agent identity layer that works alongside them.
+      HashiCorp Vault, AWS Secrets Manager, Doppler, and identity providers already offer
+      important controls. Grantex adds agent-specific delegated authority at the action boundary;
+      it does not replace those systems.
     </p>
 
-    <table class="alt-table">
-      <thead>
-        <tr>
-          <th>Tool</th>
-          <th>Secrets</th>
-          <th>Agent ID</th>
-          <th>Scoped</th>
-          <th>Revoke</th>
-          <th>Audit</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><span class="tool-name">HashiCorp Vault</span><span class="tool-desc">Secret storage &amp; rotation</span></td>
-          <td class="check">&#10003;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-        </tr>
-        <tr>
-          <td><span class="tool-name">AWS Secrets Mgr</span><span class="tool-desc">Encrypted secret storage</span></td>
-          <td class="check">&#10003;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-          <td class="partial">~</td>
-        </tr>
-        <tr>
-          <td><span class="tool-name">GitGuardian</span><span class="tool-desc">Detects leaked secrets</span></td>
-          <td class="partial">~</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-        </tr>
-        <tr>
-          <td><span class="tool-name">Snyk / Socket</span><span class="tool-desc">Dependency vuln scanning</span></td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-        </tr>
-        <tr>
-          <td><span class="tool-name">Doppler</span><span class="tool-desc">Secrets injection at deploy</span></td>
-          <td class="check">&#10003;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-          <td class="cross">&#10005;</td>
-        </tr>
-        <tr class="grantex-row">
-          <td><span class="tool-name">Grantex</span><span class="tool-desc">Agent authorization protocol</span></td>
-          <td class="check">&#10003;</td>
-          <td class="check">&#10003;</td>
-          <td class="check">&#10003;</td>
-          <td class="check">&#10003;</td>
-          <td class="check">&#10003;</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="cards">
+      <div class="card">
+        <span class="card-icon">&#x1F511;</span>
+        <h3>Secrets and identity systems</h3>
+        <p>Manage human and application identity, store credentials, apply provider policies, rotate or revoke access, and retain provider audit records. Exact capabilities vary by product and configuration.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">&#x1F916;</span>
+        <h3>Agent-specific authority</h3>
+        <p>Grantex grant tokens can bind an agent, approving principal, scopes, expiry, and delegation context. Attributable action records require integration at the execution boundary.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">&#x1F6E1;</span>
+        <h3>Enforcement at the boundary</h3>
+        <p>The protected service verifies the exact scope and current authorization state before acting, then uses or exchanges the upstream credential only after that decision.</p>
+      </div>
+    </div>
+
+    <p style="margin-top:32px;font-size:14px;color:var(--muted);">
+      Evidence review:
+      <a href="/report/state-of-agent-security-2026">Read the documentation-based 15-project authorization review</a>
+      &middot;
+      <a href="/vs">See architecture comparisons</a>
+    </p>
   </div>
 </section>
 
@@ -2003,18 +2129,18 @@ func main() {
     <div class="section-label">New — Agentic Commerce</div>
     <h2 class="section-title">OACP Authority And Agent Identity</h2>
     <p class="section-sub">
-      MPP defines how agents pay for services. Grantex adds the missing identity layer —
-      so merchants know exactly who authorized every payment.
+      MPP defines a machine-payment flow. Grantex can attach signed agent, principal,
+      category, and spending-limit claims that an integrating merchant verifies and enforces; Grantex does not execute or guarantee a payment.
     </p>
     <p class="section-sub" style="font-size:15px;margin-top:-22px;">
-      For OACP, Grantex is the protocol, trust, policy, artifact, verification,
-      and adapter authority. AgenticOrg runs seller and buyer agents, Shopify
+      Open Agentic Commerce Protocol (OACP) is Grantex's agentic-commerce trust and artifact-authority layer.
+      Grantex governs policy, internal artifact issuance or refusal, verification, and compatibility adapters. AgenticOrg runs seller and buyer agents, Shopify
       connector runtime, buyer surfaces, purchase preparation, and Offline POS
       handoff orchestration. Merchant, POS, and payment providers remain source
       of record for final execution.
     </p>
     <div class="hero-ctas" style="justify-content:center;margin:0 0 40px;">
-      <a href="/commerce.html" class="btn btn-primary">View OACP authority</a>
+      <a href="/commerce" class="btn btn-primary">View OACP authority</a>
       <a href="https://docs.grantex.dev/guides/oacp/overview" class="btn btn-secondary">OACP docs</a>
     </div>
 
@@ -2071,7 +2197,7 @@ func main() {
         <div style="flex:0.8;text-align:center;padding:0 12px;">
           <div style="font-size:36px;margin-bottom:8px;">&#x1F4CA;</div>
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">Audit</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Every payment logged<br>Revoke anytime</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Configured events logged<br>Refresh status for revocation</div>
         </div>
       </div>
     </div>
@@ -2163,8 +2289,8 @@ func main() {
     <div class="section-label">New — HTTP 402 Payments</div>
     <h2 class="section-title">Agent Spend Authorization for x402</h2>
     <p class="section-sub">
-      x402 lets agents pay for APIs with USDC on Base L2. Grantex adds the missing layer —
-      proving the agent was <strong>authorized</strong> to spend before any payment goes through.
+      x402 supports HTTP 402 payment flows. Grantex can add signed agent and spend-policy claims
+      that the protected API must verify and enforce before acting.
     </p>
 
     <!-- ── Visual flow pipeline ───────────────────────────────────────── -->
@@ -2231,17 +2357,17 @@ func main() {
         <div class="card" style="border-left:3px solid #ef4444;margin:0;">
           <span class="card-icon">&#x26A0;</span>
           <h3>The Gap in x402</h3>
-          <p>x402 proves payment was made, but not that the agent was authorized. A compromised agent can drain a wallet with no scope, no limit, and no kill switch.</p>
+          <p>x402 payment evidence does not by itself establish agent-specific delegated authority. Without a separate policy check, a wallet or payment handler may accept requests broader than intended.</p>
         </div>
         <div class="card" style="border-left:3px solid #10b981;margin:0;">
           <span class="card-icon">&#x1F6E1;</span>
-          <h3>Grantex Fills the Gap</h3>
-          <p>A GDT (Grantex Delegation Token) is a W3C Verifiable Credential that encodes who authorized the spend, what scope, how much, and when it expires.</p>
+          <h3>Grantex Adds Authorization Context</h3>
+          <p>A GDT (Grantex Delegation Token) is a W3C Verifiable Credential that carries signed claims for the approving principal, scope, amount limit, and expiry; the protected service must verify and enforce those claims.</p>
         </div>
         <div class="card" style="border-left:3px solid #6366f1;margin:0;">
           <span class="card-icon">&#x1F50D;</span>
-          <h3>Full Audit Trail</h3>
-          <p>Issuance and verification events go to the configured audit logger. The default x402 logger and revocation registry are in-memory; production deployments can provide durable shared implementations.</p>
+          <h3>Configurable Audit Logging</h3>
+          <p>Configured issuance and verification events go to the selected audit logger. The default x402 logger and revocation registry are in memory; durable multi-process enforcement requires host-provided shared implementations.</p>
         </div>
       </div>
       <!-- Right: code -->
@@ -2299,7 +2425,7 @@ func main() {
            onclick="gtag('event','x402_playground_click',{event_category:'x402'})">
           Try the playground
         </a>
-        <a href="/x402/" class="btn btn-secondary"
+        <a href="/x402" class="btn btn-secondary"
            onclick="gtag('event','x402_learn_click',{event_category:'x402'})">
           Learn more
         </a>
@@ -2796,8 +2922,8 @@ func main() {
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Enterprise SSO (OIDC + SAML 2.0 + LDAP)</h4>
-              <p>Multi-IdP connections, domain-based routing, JIT provisioning, group-to-scope mapping, LDAP directory authentication, and SSO enforcement. Supports Okta, Azure AD, Google Workspace, PingFederate, OpenLDAP, Active Directory, FreeIPA, and any OIDC, SAML 2.0, or LDAP-compliant provider.</p>
+              <h4>Enterprise SSO (OIDC and SAML 2.0; LDAP preview)</h4>
+              <p>OIDC and SAML 2.0 support multi-IdP routing, JIT provisioning, group-to-scope mapping, and enforcement. LDAP is a direct-bind preview that does not search directories or retrieve groups.</p>
             </div>
           </div>
           <div class="enterprise-feature">

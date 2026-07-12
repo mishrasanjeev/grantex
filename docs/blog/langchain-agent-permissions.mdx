@@ -1,120 +1,152 @@
 ---
 title: "How to Add Permissions to LangChain Agent Tools"
-description: "LangChain agents can call any tool you give them. Learn how to add scope enforcement, per-tool access control, and audit logging to LangChain agents using Grantex manifests."
+description: "Add scoped permissions to configured LangChain tools with verified Grantex JWTs, manifest enforcement, and optional grant-aware audit callbacks."
+keywords: ["LangChain agent permissions", "LangChain tool authorization", "AI agent access control", "LangChain security", "Grantex LangChain"]
 date: "2026-04-05"
+updated: "2026-07-12"
 authors:
   - name: "Sanjeev Kumar"
 ---
 
-LangChain makes it easy to give an agent a list of tools and let the LLM decide which ones to call. That is the feature. It is also the problem.
+LangChain agent permissions are application-enforced rules that decide whether a configured tool may run for a particular principal and grant. LangChain supplies tool and callback abstractions; your application still has to install the authorization check at each protected execution boundary.
 
-When you hand a LangChain agent tools for `create_lead`, `delete_contact`, `run_payroll`, and `search_emails`, the agent can call any of them. There is no built-in mechanism to say "this user only approved read access" or "this agent should never be able to delete anything." The LLM picks the tool based on its reasoning, and whatever it picks, runs.
+This guide covers the two permission paths implemented by Grantex:
 
-This post shows how to add real permissions to LangChain agent tools — scoped, per-user, revocable, and enforced before execution.
+1. `createGrantexTool()` for an exact required-scope check on one configured function.
+2. `Grantex.wrapTool()` for manifest-based `read`, `write`, `delete`, and `admin` permission levels.
 
-## The Problem: LangChain Tools Have No Access Control
+<Note>
+  **Implementation snapshot, updated July 12, 2026:** these examples target
+  `@grantex/langchain@0.1.7`, `@grantex/sdk@0.3.13`, and the repository's
+  resolved `@langchain/core@1.2.2`. The adapter declares
+  `@langchain/core >=0.3.0`, but that range is not a promise of compatibility
+  with every future LangChain package or agent runtime.
+</Note>
 
-Here is a typical LangChain agent setup:
+## Does LangChain have permissions for agent tools?
+
+A LangChain agent can choose among the tools its host application registers. LangChain also offers callbacks, tracing, and extension points that applications can use to build controls.
+
+LangChain does not, by itself, understand a Grantex grant token, principal, scope, or revocation state. In a typical unwrapped tools array:
 
 ```typescript
-import { ChatOpenAI } from '@langchain/openai';
-import { createToolCallingAgent, AgentExecutor } from 'langchain/agents';
 import { DynamicTool } from '@langchain/core/tools';
 
-const tools = [
-  new DynamicTool({
-    name: 'search_contacts',
-    description: 'Search CRM contacts',
-    func: async (input) => searchContacts(input),
-  }),
-  new DynamicTool({
-    name: 'delete_contact',
-    description: 'Delete a CRM contact by ID',
-    func: async (input) => deleteContact(input),
-  }),
-];
+const searchContactsTool = new DynamicTool({
+  name: 'search_contacts',
+  description: 'Search CRM contacts',
+  func: async (input) => JSON.stringify(await searchContacts(input)),
+});
 
-const agent = createToolCallingAgent({ llm, tools, prompt });
-const executor = new AgentExecutor({ agent, tools });
+const deleteContactTool = new DynamicTool({
+  name: 'delete_contact',
+  description: 'Delete a CRM contact by ID',
+  func: async (input) => JSON.stringify(await deleteContact(input)),
+});
+
+const tools = [searchContactsTool, deleteContactTool];
 ```
 
-Both tools are equally available to the agent. If the user says "clean up duplicate contacts," the agent may call `delete_contact` repeatedly. There is no permission check, no scope enforcement, and no audit trail.
+both tools are available to whichever agent or executor receives that array. Your application can filter tools, add middleware, or implement its own checks. The trusted execution boundary, not the model, must verify authority before the protected function runs.
 
-Three specific gaps:
+Separate three controls:
 
-1. **No per-user permissions.** Every user gets the same tools with the same access level. You cannot give User A read-only access and User B write access without building custom middleware.
-2. **No runtime enforcement.** Once a tool is in the tools array, it is callable. There is no check at invocation time to verify the caller has permission.
-3. **No audit logging.** LangChain does not record which tools were called, by which agent, on behalf of which user, or whether the call was authorized.
+- **Availability:** which tools the application exposes.
+- **Authorization:** which exposed calls a verified grant permits.
+- **Audit:** which configured execution events are recorded.
 
-## The Solution: Scope-Enforced LangChain Tools
+Grantex supplies authorization wrappers and an optional audit callback. Neither is a LangChain default, and neither covers a tool where it is not installed.
 
-[Grantex](https://grantex.dev) adds per-tool scope enforcement to LangChain agents. The core idea: every tool call is checked against the user's approved scopes *before execution*. If the token does not include the required scope, the tool rejects the call immediately — the underlying function never runs.
+## Install the tested package snapshot
 
-There are two approaches, depending on how much control you want.
+Add the integration to an existing LangChain application with exact versions:
 
-### Approach 1: `createGrantexTool` — Per-Tool Scope Wrapping
+```bash
+npm install --save-exact @grantex/langchain@0.1.7 @grantex/sdk@0.3.13 @langchain/core@1.2.2
+```
 
-The `@grantex/langchain` package provides `createGrantexTool`, which creates a LangChain `DynamicTool` with a scope check baked in:
+Node.js 18 or later is required. Pin your model-provider and higher-level `langchain` packages separately for the agent runtime you use.
+
+## Add an exact scope check with `createGrantexTool`
+
+`createGrantexTool()` returns a LangChain `DynamicTool`. On invocation it verifies the configured grant token and requires one exact scope string before calling `func`.
 
 ```typescript
 import { createGrantexTool } from '@grantex/langchain';
 
-const searchTool = createGrantexTool({
-  name: 'search_contacts',
-  description: 'Search CRM contacts',
-  grantToken,                          // JWT from Grantex token exchange
-  requiredScope: 'contacts:read',      // must be in token's scp claim
-  func: async (input) => {
-    return JSON.stringify(await searchContacts(input));
-  },
-});
+export function buildCrmTools(grantToken: string) {
+  const searchTool = createGrantexTool({
+    name: 'search_contacts',
+    description: 'Search CRM contacts',
+    grantToken,
+    requiredScope: 'contacts:read',
+    audience: 'https://crm.example.com',
+    func: async (input) => JSON.stringify(await searchContacts(input)),
+  });
 
-const deleteTool = createGrantexTool({
-  name: 'delete_contact',
-  description: 'Delete a CRM contact by ID',
-  grantToken,
-  requiredScope: 'contacts:delete',
-  func: async (input) => {
-    return JSON.stringify(await deleteContact(input));
-  },
-});
+  const deleteTool = createGrantexTool({
+    name: 'delete_contact',
+    description: 'Delete a CRM contact by ID',
+    grantToken,
+    requiredScope: 'contacts:delete',
+    audience: 'https://crm.example.com',
+    func: async (input) => JSON.stringify(await deleteContact(input)),
+  });
 
-const agent = createToolCallingAgent({
-  llm,
-  tools: [searchTool, deleteTool],
-  prompt,
-});
+  return [searchTool, deleteTool];
+}
 ```
 
-Before checking `scp`, the wrapper verifies the JWT signature and claims with
-the configured JWKS endpoint. The current standalone verifier may fetch keys on
-each call, so this is not an unverified decode or a guaranteed network-free hot
-path. If a verified token only includes `contacts:read`, calling
-`delete_contact` throws before your function executes.
+A verified token with `contacts:read` but not `contacts:delete` causes the delete wrapper to throw before `deleteContact()` runs.
 
-### Approach 2: `wrapTool` with Manifests — Manifest-Based Enforcement
+The wrapper delegates to `verifyGrantToken()` in `@grantex/sdk`. It checks:
 
-For larger agents with many tools, defining scopes inline gets repetitive. Grantex manifests let you define all tool-to-permission mappings in one place and wrap existing LangChain tools:
+- RS256 signature against the configured JWKS.
+- Expected issuer and JWT expiry.
+- Optional `audience` and clock tolerance.
+- Exact membership of `requiredScope` in the verified `scp` claim.
+
+The SDK reuses a bounded, process-level set of JOSE remote-JWKS resolvers. Initial lookup, an unknown key ID, or key rotation can still require network access. There is no latency or network-free guarantee.
+
+<Warning>
+  Local signature and claim verification does not query current grant revocation
+  state. Add online or synchronized state where immediate revocation matters,
+  and use bounded token lifetimes as an additional exposure limit.
+</Warning>
+
+### Configured-tool boundary
+
+`createGrantexTool()` protects only its configured `func`. It does not discover or rewrite other tools. Wrap each protected function and pass the protected instances, not unwrapped equivalents, to the agent.
+
+The `grantToken` option is a string captured by the tool. Build request-, principal-, or session-specific tools when different users need different grants. Do not share one token-bearing tool instance across unrelated principals.
+
+This path uses exact scope strings. It does **not** apply the manifest hierarchy below.
+
+## Add manifest-based permissions with `wrapTool`
+
+For connector-style tools, `@grantex/sdk` maps tool names to permission levels. `loadManifest()` stores a mapping, and `wrapTool()` applies it when the returned object's `invoke()` runs.
 
 ```typescript
-import { Grantex, ToolManifest, Permission } from '@grantex/sdk';
+import { Grantex, Permission, ToolManifest } from '@grantex/sdk';
 
-const gx = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+const gx = new Grantex({
+  apiKey: process.env.GRANTEX_API_KEY,
+  issuer: 'https://grantex.dev',
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+});
 
-// Define a manifest for your CRM tools
 gx.loadManifest(new ToolManifest({
   connector: 'crm',
-  description: 'CRM integration tools',
   tools: {
-    'search_contacts':  Permission.READ,
-    'create_contact':   Permission.WRITE,
-    'update_contact':   Permission.WRITE,
-    'delete_contact':   Permission.DELETE,
-    'export_all':       Permission.ADMIN,
+    search_contacts: Permission.READ,
+    create_contact: Permission.WRITE,
+    delete_contact: Permission.DELETE,
+    export_all: Permission.ADMIN,
   },
 }));
 
-// Wrap existing LangChain tools — enforcement is automatic
+let currentGrantToken = initialGrantToken;
+
 const protectedSearch = gx.wrapTool(searchContactsTool, {
   connector: 'crm',
   tool: 'search_contacts',
@@ -126,145 +158,161 @@ const protectedDelete = gx.wrapTool(deleteContactTool, {
   tool: 'delete_contact',
   grantToken: () => currentGrantToken,
 });
+
+const protectedTools = [protectedSearch, protectedDelete];
 ```
 
-Grantex ships 53 pre-built manifests for popular services. If your agent uses Salesforce, HubSpot, Jira, or Stripe tools, you can skip the manifest definition entirely:
+Loading a manifest alone does not protect anything. Enforcement occurs only through `gx.enforce()` or the object returned by `gx.wrapTool()`. Keep original unwrapped tools out of the executable tool list.
+
+The token getter is synchronous. If the application refreshes a token, update the state read by the getter before the next invocation.
+
+### Permission hierarchy for manifest enforcement
+
+| Granted level | Covers |
+|---|---|
+| `read` | `read` |
+| `write` | `read`, `write` |
+| `delete` | `read`, `write`, `delete` |
+| `admin` | all four levels |
+
+For connector `crm`, `tool:crm:write` can cover `search_contacts` and `create_contact`, but not `delete_contact` or `export_all`.
+
+Unknown connectors and tools are denied in the default strict mode. This hierarchy applies to `gx.enforce()` and `gx.wrapTool()`, not to `createGrantexTool()`.
+
+## Use the pre-built manifests that exist
+
+`@grantex/sdk@0.3.13` exports 53 manifests. Salesforce, HubSpot, Jira, and Stripe are included:
 
 ```typescript
-import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
-import { jiraManifest } from '@grantex/sdk/manifests/jira';
+import {
+  jiraManifest,
+  salesforceManifest,
+  stripeManifest,
+} from '@grantex/sdk/manifests';
 
-gx.loadManifests([salesforceManifest, jiraManifest]);
+gx.loadManifests([salesforceManifest, jiraManifest, stripeManifest]);
 ```
 
-Browse all available manifests with `grantex manifest list` from the [CLI](/integrations/cli).
+Inspect the version-pinned CLI catalog:
 
-## Adding Audit Logging to LangChain Agents
+```bash
+npx --yes @grantex/cli@0.2.5 manifest list
+npx --yes @grantex/cli@0.2.5 manifest show salesforce
+```
 
-Scope enforcement blocks unauthorized calls. Audit logging records authorized ones. The `GrantexAuditHandler` is a LangChain callback that automatically logs every tool invocation to the Grantex audit trail:
+A manifest is a permission mapping, not a connector implementation. It does not create a Salesforce, Jira, or Stripe tool, and it does not prove a third-party tool name matches the mapping.
+
+## Define a custom manifest
+
+```typescript
+import { Permission, ToolManifest } from '@grantex/sdk';
+
+const billingManifest = new ToolManifest({
+  connector: 'internal-billing',
+  tools: {
+    get_invoice: Permission.READ,
+    create_invoice: Permission.WRITE,
+    void_invoice: Permission.DELETE,
+    run_period_close: Permission.ADMIN,
+  },
+});
+
+gx.loadManifest(billingManifest);
+```
+
+The CLI can generate a draft from supported source patterns:
+
+```bash
+npx --yes @grantex/cli@0.2.5 manifest generate agent_tools.py --connector internal-billing --out billing-manifest.json
+```
+
+Generation uses name-based inference. Review every discovered tool and permission; it is not a security-policy generator.
+
+## Add the optional Grantex audit callback
+
+`GrantexAuditHandler` writes through `client.audit.log()` only where the callback is attached.
 
 ```typescript
 import { Grantex } from '@grantex/sdk';
 import { GrantexAuditHandler } from '@grantex/langchain';
 
-const client = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+const client = new Grantex({
+  apiKey: process.env.GRANTEX_API_KEY,
+});
 
 const auditHandler = new GrantexAuditHandler({
   client,
-  agentId: 'ag_01ABC...',
-  agentDid: 'did:key:z6Mk...',
-  principalId: 'user_01',
+  agentId: 'ag_crm_assistant',
+  agentDid: 'did:grantex:ag_crm_assistant',
+  principalId: 'user_alice',
   grantToken,
 });
 
 const result = await executor.invoke(
-  { input: 'Find all contacts in New York' },
+  { input: 'Find contacts in Bengaluru' },
   { callbacks: [auditHandler] },
 );
 ```
 
-Each tool call logs the tool name, success/failure status, the agent identity, and the user who authorized the action. You can query the audit trail later via `gx.audit.list()` or stream events in real time via `gx.events.stream()`.
+The current `0.1.7` behavior is specific:
 
-## Custom Manifests for Custom Tools
+- `handleToolStart()` writes `tool:<toolName>` with `status: "success"` when invocation starts. That is not completion proof.
+- `handleToolError()` writes generic `tool:error` with `status: "failure"`.
+- The constructor decodes `grnt`, falling back to `jti`, for attribution. That decode is not authorization.
+- Tool input and error text enter audit metadata. Apply an appropriate sensitive-data logging policy.
+- Calls outside the callback-enabled executor or chain are not recorded by this handler.
 
-Most production agents use a mix of SaaS connectors and internal APIs. You can define custom manifests for any tool:
-
-```typescript
-import { ToolManifest, Permission } from '@grantex/sdk';
-
-gx.loadManifest(new ToolManifest({
-  connector: 'internal-billing',
-  description: 'Internal billing system',
-  tools: {
-    'get_invoice':       Permission.READ,
-    'create_invoice':    Permission.WRITE,
-    'void_invoice':      Permission.DELETE,
-    'run_period_close':  Permission.ADMIN,
-  },
-}));
-```
-
-Or generate a manifest from your source code using the CLI:
-
-```bash
-grantex manifest generate agent_tools.py --out billing-manifest.json
-```
-
-Custom and pre-built manifests work identically at runtime. The permission hierarchy (read < write < delete < admin) applies to both.
-
-## The Permission Hierarchy
-
-Grantex uses a four-level permission hierarchy. Higher levels subsume lower ones:
-
-| Level | Permission | Allows | Example Scopes |
-|-------|-----------|--------|----------------|
-| 0 | `read` | Query, list, search, fetch | `tool:crm:read` |
-| 1 | `write` | Read + create, update, send | `tool:crm:write` |
-| 2 | `delete` | Read + write + delete, remove | `tool:crm:delete` |
-| 3 | `admin` | Everything | `tool:crm:admin` |
-
-A user granted `tool:crm:write` can use both `search_contacts` (read) and `create_contact` (write), but not `delete_contact` (delete) or `export_all` (admin). This is enforced automatically — you do not need to implement the hierarchy logic yourself.
-
-## Putting It All Together
-
-Here is a complete example: a LangChain agent with scoped tools, manifest enforcement, and audit logging:
+The implemented audit client can list stored entries:
 
 ```typescript
-import { ChatOpenAI } from '@langchain/openai';
-import { createToolCallingAgent, AgentExecutor } from 'langchain/agents';
-import { Grantex } from '@grantex/sdk';
-import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
-import { createGrantexTool } from '@grantex/langchain';
-import { GrantexAuditHandler } from '@grantex/langchain';
-
-// 1. Initialize Grantex with the Salesforce manifest
-const gx = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
-gx.loadManifest(salesforceManifest);
-
-// 2. Create scope-enforced tools
-const tools = [
-  createGrantexTool({
-    name: 'search_contacts',
-    description: 'Search Salesforce contacts',
-    grantToken: userGrantToken,
-    requiredScope: 'tool:salesforce:read',
-    func: async (input) => JSON.stringify(await sfSearch(input)),
-  }),
-  createGrantexTool({
-    name: 'create_lead',
-    description: 'Create a new Salesforce lead',
-    grantToken: userGrantToken,
-    requiredScope: 'tool:salesforce:write',
-    func: async (input) => JSON.stringify(await sfCreateLead(input)),
-  }),
-];
-
-// 3. Create the agent with audit logging
-const llm = new ChatOpenAI({ model: 'gpt-4o' });
-const agent = createToolCallingAgent({ llm, tools, prompt });
-const executor = new AgentExecutor({ agent, tools });
-
-const auditHandler = new GrantexAuditHandler({
-  client: gx,
-  agentId: 'ag_salesforce_bot',
-  agentDid: 'did:grantex:ag_salesforce_bot',
-  principalId: 'user_alice',
-  grantToken: userGrantToken,
+const page = await client.audit.list({
+  agentId: 'ag_crm_assistant',
+  pageSize: 50,
 });
-
-// 4. Run — tools are scope-checked, actions are audit-logged
-const result = await executor.invoke(
-  { input: 'Find contacts in San Francisco and create a lead for the top one' },
-  { callbacks: [auditHandler] },
-);
 ```
 
-If `userGrantToken` only contains `tool:salesforce:read`, the `create_lead` call is blocked before execution. The audit trail records both the successful search and the denied creation attempt.
+Audit and authorization are independent. Keep the scope wrapper at the protected boundary even when the callback is attached.
 
-## Next Steps
+## Put the controls into a LangChain agent safely
 
-- [LangChain integration docs](/integrations/langchain) — full API reference
-- [Scope enforcement guide](/guides/scope-enforcement) — manifests, permission hierarchy, middleware
-- [Custom manifests guide](/guides/custom-manifests) — build manifests for your own tools
-- [Quickstart](/quickstart) — get a Grantex API key and grant token in 5 minutes
-- [GitHub](https://github.com/mishrasanjeev/grantex) — open source, Apache 2.0
+For the agent-construction API used by your pinned LangChain application:
+
+1. Obtain a grant for the correct principal, agent, audience, and scopes.
+2. Build `createGrantexTool()` or `wrapTool()` protected instances.
+3. Pass only protected instances for actions requiring Grantex authorization.
+4. Attach `GrantexAuditHandler` only if its current event and metadata behavior fits your policy.
+5. Test permitted, missing-scope, malformed, expired, and bypass cases.
+6. Add current revocation-state handling if expiry alone is insufficient.
+
+Do not call the entire agent protected because one tool is wrapped. Coverage is the set of execution boundaries where verification is installed and tested.
+
+## Which LangChain permission approach should you use?
+
+| Requirement | Use |
+|---|---|
+| One exact scope per configured function | `createGrantexTool()` |
+| Connector permission hierarchy | `gx.wrapTool()` plus `ToolManifest` |
+| Decision without wrapping | `gx.enforce()` |
+| Grant-aware tool-start and error records | Optional `GrantexAuditHandler` |
+| Immediate revocation awareness | Online or synchronized state |
+| Framework-wide coverage | Inventory and wrap every protected boundary |
+
+## Validation checklist
+
+- The agent receives protected tool objects, not originals.
+- Each protected function has the intended exact scope or manifest entry.
+- Token issuer and audience match the receiving service.
+- Missing, expired, malformed, and wrongly scoped tokens fail before the underlying function.
+- Manifest names match the actual LangChain tool names.
+- Audit callbacks do not capture prohibited data.
+- Revocation freshness and key rotation meet the threat model.
+- The pinned LangChain and Grantex versions pass application integration tests.
+
+## Next steps
+
+- [LangChain integration reference](/integrations/langchain)
+- [Scope enforcement guide](/guides/scope-enforcement)
+- [Custom manifests guide](/guides/custom-manifests)
+- [Token verification and revocation boundaries](/guides/token-verification)
+- [Current package versions and limitations](/release-status)
+- [Grantex source repository](https://github.com/mishrasanjeev/grantex)

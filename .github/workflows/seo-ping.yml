@@ -1,53 +1,225 @@
-name: SEO Sitemap Ping
+name: SEO Discovery Notification
 
 on:
-  schedule:
-    - cron: '0 8 * * 1' # Every Monday at 8am UTC
+  workflow_run:
+    workflows: ["Deploy Portal"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Optional deployed commit to compare against
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: seo-discovery-main
+  cancel-in-progress: true
 
 jobs:
-  ping:
-    name: Ping Search Engines
+  indexnow:
+    name: Notify IndexNow about changed canonical URLs
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SITE_HOST: grantex.dev
+      SITE_ORIGIN: https://grantex.dev
+      INDEXNOW_ENDPOINT: https://api.indexnow.org/indexnow
+      INDEXNOW_KEY: 78181e8137ae41ec881a17171a1e9fb2
+
     steps:
-      - name: Ping Google
-        run: |
-          curl -s "https://www.google.com/ping?sitemap=https://grantex.dev/sitemap.xml"
-          curl -s "https://www.google.com/ping?sitemap=https://docs.grantex.dev/sitemap.xml"
-          echo "Google pinged"
+      - name: Check out the deployed revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
 
-      - name: Ping Bing
+      - name: Find the previous deployed revision
+        id: base
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          REQUESTED_BASE: ${{ github.event.inputs.base_sha || '' }}
+          TRIGGER_RUN_ID: ${{ github.event.workflow_run.id || '0' }}
         run: |
-          curl -s "https://www.bing.com/ping?sitemap=https://grantex.dev/sitemap.xml"
-          curl -s "https://www.bing.com/ping?sitemap=https://docs.grantex.dev/sitemap.xml"
-          echo "Bing pinged"
+          set -euo pipefail
 
-      - name: Ping IndexNow (Bing/Yandex)
+          base_sha="$REQUESTED_BASE"
+          if [[ -z "$base_sha" ]]; then
+            base_sha="$(gh api \
+              "/repos/$GITHUB_REPOSITORY/actions/workflows/deploy-portal.yml/runs?status=success&branch=main&per_page=30" \
+              --jq "[.workflow_runs[] | select(.id != $TRIGGER_RUN_ID) | .head_sha][0] // empty")"
+          fi
+
+          if [[ -z "$base_sha" ]]; then
+            base_sha="$(git rev-parse "$HEAD_SHA^")"
+            echo "No earlier successful deployment was found; comparing with the parent commit."
+          fi
+
+          git cat-file -e "$HEAD_SHA^{commit}"
+          git cat-file -e "$base_sha^{commit}"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "Comparing deployed sitemap state $base_sha..$HEAD_SHA"
+
+      - name: Build a payload from changed sitemap entries
+        id: payload
+        shell: python
+        env:
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.base.outputs.head_sha }}
         run: |
-          curl -s -X POST "https://api.indexnow.org/indexnow" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "host": "grantex.dev",
-              "key": "78181e8137ae41ec881a17171a1e9fb2",
-              "urlList": [
-                "https://grantex.dev/",
-                "https://grantex.dev/mpp-demo",
-                "https://grantex.dev/for/mpp",
-                "https://grantex.dev/playground",
-                "https://grantex.dev/report/state-of-agent-security-2026",
-                "https://grantex.dev/for/langchain",
-                "https://grantex.dev/for/crewai",
-                "https://grantex.dev/for/openai-agents",
-                "https://grantex.dev/for/google-adk",
-                "https://grantex.dev/for/vercel-ai",
-                "https://grantex.dev/for/autogen",
-                "https://grantex.dev/for/mcp",
-                "https://grantex.dev/for/express",
-                "https://grantex.dev/for/fastapi",
-                "https://grantex.dev/vs/oauth",
-                "https://grantex.dev/vs/api-keys",
-                "https://grantex.dev/vs/mcp-auth",
-                "https://grantex.dev/vs/securing-ai-agents"
-              ]
-            }' || true
-          echo "IndexNow pinged"
+          import json
+          import os
+          import subprocess
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          namespace = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+
+          def parse_sitemap(text, require_lastmod=True):
+              root = ET.fromstring(text)
+              values = {}
+              for node in root.findall("sm:url", namespace):
+                  location = node.findtext("sm:loc", default="", namespaces=namespace).strip()
+                  modified = node.findtext("sm:lastmod", default="", namespaces=namespace).strip()
+                  if not location or (require_lastmod and not modified):
+                      raise SystemExit("Every current sitemap entry must contain loc and lastmod")
+                  if location in values:
+                      raise SystemExit(f"Duplicate sitemap URL: {location}")
+                  values[location] = modified
+              return values
+
+          current_text = Path("web/sitemap.xml").read_text(encoding="utf-8")
+          current = parse_sitemap(current_text)
+
+          previous_result = subprocess.run(
+              ["git", "show", f"{os.environ['BASE_SHA']}:web/sitemap.xml"],
+              check=False,
+              capture_output=True,
+              text=True,
+              encoding="utf-8",
+          )
+          previous = parse_sitemap(previous_result.stdout, require_lastmod=False) if previous_result.returncode == 0 else {}
+
+          changed = sorted(
+              location
+              for location in current.keys() | previous.keys()
+              if current.get(location) != previous.get(location)
+          )
+
+          expected_host = os.environ["SITE_HOST"]
+          invalid = [
+              location
+              for location in changed
+              if urlsplit(location).scheme != "https"
+              or urlsplit(location).hostname != expected_host
+              or urlsplit(location).query
+              or urlsplit(location).fragment
+          ]
+          if invalid:
+              raise SystemExit(f"Changed sitemap entries contain invalid URLs: {invalid}")
+          if len(changed) > 10_000:
+              raise SystemExit("IndexNow accepts at most 10,000 URLs per request")
+
+          output = Path(os.environ["GITHUB_OUTPUT"])
+          with output.open("a", encoding="utf-8") as handle:
+              handle.write(f"has_urls={'true' if changed else 'false'}\n")
+              handle.write(f"url_count={len(changed)}\n")
+
+          if not changed:
+              print("No sitemap additions, removals, or lastmod changes; IndexNow submission is unnecessary.")
+              raise SystemExit(0)
+
+          key = os.environ["INDEXNOW_KEY"]
+          origin = os.environ["SITE_ORIGIN"]
+          payload = {
+              "host": expected_host,
+              "key": key,
+              "keyLocation": f"{origin}/{key}.txt",
+              "urlList": changed,
+          }
+          Path("/tmp/grantex-indexnow.json").write_text(
+              json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+              encoding="utf-8",
+          )
+          print(f"Prepared {len(changed)} added, removed, or materially updated URLs.")
+
+      - name: Verify the deployed sitemap and IndexNow key
+        if: steps.payload.outputs.has_urls == 'true'
+        shell: bash
+        env:
+          HEAD_SHA: ${{ steps.base.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+
+          curl --fail-with-body --silent --show-error \
+            --retry 4 --retry-all-errors --retry-delay 3 \
+            --max-time 30 \
+            --header "Cache-Control: no-cache" \
+            "$SITE_ORIGIN/sitemap.xml?rev=$HEAD_SHA" \
+            --output /tmp/grantex-live-sitemap.xml
+
+          curl --fail-with-body --silent --show-error \
+            --retry 4 --retry-all-errors --retry-delay 3 \
+            --max-time 30 \
+            "$SITE_ORIGIN/$INDEXNOW_KEY.txt" \
+            --output /tmp/grantex-indexnow-key.txt
+
+          test "$(tr -d '\r\n' < /tmp/grantex-indexnow-key.txt)" = "$INDEXNOW_KEY"
+
+          python - <<'PY'
+          import xml.etree.ElementTree as ET
+
+          namespace = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+
+          def entries(path):
+              root = ET.parse(path).getroot()
+              return {
+                  node.findtext("sm:loc", default="", namespaces=namespace).strip():
+                  node.findtext("sm:lastmod", default="", namespaces=namespace).strip()
+                  for node in root.findall("sm:url", namespace)
+              }
+
+          repository = entries("web/sitemap.xml")
+          deployed = entries("/tmp/grantex-live-sitemap.xml")
+          if repository != deployed:
+              raise SystemExit("The deployed sitemap does not match the deployed revision")
+          PY
+
+      - name: Submit changed canonical URLs to IndexNow
+        if: steps.payload.outputs.has_urls == 'true'
+        shell: bash
+        env:
+          URL_COUNT: ${{ steps.payload.outputs.url_count }}
+        run: |
+          set -euo pipefail
+
+          status="$(curl --silent --show-error \
+            --retry 4 --retry-all-errors --retry-delay 3 \
+            --max-time 30 \
+            --request POST "$INDEXNOW_ENDPOINT" \
+            --header "Content-Type: application/json; charset=utf-8" \
+            --data-binary @/tmp/grantex-indexnow.json \
+            --output /tmp/grantex-indexnow-response.txt \
+            --write-out "%{http_code}")"
+
+          case "$status" in
+            200|202)
+              echo "IndexNow accepted $URL_COUNT changed URLs (HTTP $status)."
+              ;;
+            *)
+              echo "IndexNow rejected the changed URL set (HTTP $status)." >&2
+              cat /tmp/grantex-indexnow-response.txt >&2
+              exit 1
+              ;;
+          esac

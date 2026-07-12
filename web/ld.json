@@ -1,0 +1,202 @@
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://grantex.dev/#organization",
+      "name": "Grantex",
+      "alternateName": "Grantex AI Agent Authorization",
+      "url": "https://grantex.dev/",
+      "logo": {
+        "@type": "ImageObject",
+        "@id": "https://grantex.dev/#logo",
+        "url": "https://grantex.dev/favicon.svg",
+        "contentUrl": "https://grantex.dev/favicon.svg",
+        "caption": "Grantex"
+      },
+      "description": "Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records."
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://grantex.dev/#website",
+      "url": "https://grantex.dev/",
+      "name": "Grantex",
+      "alternateName": "Grantex AI Agent Authorization",
+      "description": "Open-source delegated authorization for AI agents, including scoped permissions, human consent, agent identity, JWT verification, revocation, delegation, and audit records.",
+      "publisher": {
+        "@id": "https://grantex.dev/#organization"
+      },
+      "inLanguage": "en"
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://grantex.dev/#webpage",
+      "url": "https://grantex.dev/",
+      "name": "Grantex | Delegated Authorization for AI Agents",
+      "description": "Open-source delegated authorization for AI agents: scoped permissions, human consent, agent identity, JWT verification, revocation, delegation, and audit.",
+      "isPartOf": {
+        "@id": "https://grantex.dev/#website"
+      },
+      "about": {
+        "@id": "https://grantex.dev/#reference-implementation"
+      },
+      "mainEntity": {
+        "@id": "https://grantex.dev/#reference-implementation"
+      },
+      "primaryImageOfPage": {
+        "@type": "ImageObject",
+        "@id": "https://grantex.dev/#primary-image",
+        "url": "https://grantex.dev/og-image.png",
+        "contentUrl": "https://grantex.dev/og-image.png",
+        "width": 1200,
+        "height": 630,
+        "caption": "Grantex AI agent authorization"
+      },
+      "dateModified": "2026-07-12",
+      "inLanguage": "en"
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "@id": "https://grantex.dev/#reference-implementation",
+      "name": "Grantex Reference Implementation",
+      "alternateName": "Grantex",
+      "description": "Open-source reference implementation of delegated authorization for AI agents, with verifiable agent identity, scoped grants, human consent, delegation, service-side JWT verification, revocation controls, and audit records.",
+      "url": "https://grantex.dev/",
+      "codeRepository": "https://github.com/mishrasanjeev/grantex",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "programmingLanguage": [
+        "TypeScript",
+        "Python",
+        "Go"
+      ],
+      "runtimePlatform": [
+        "Node.js 18+",
+        "Python 3.9+",
+        "Go 1.26.1+"
+      ],
+      "publisher": {
+        "@id": "https://grantex.dev/#organization"
+      },
+      "subjectOf": [
+        {
+          "@type": "WebPage",
+          "url": "https://docs.grantex.dev/",
+          "name": "Grantex Documentation"
+        },
+        {
+          "@type": "DigitalDocument",
+          "url": "https://grantex.dev/release-status.json",
+          "name": "Grantex Machine-Readable Release Status"
+        }
+      ],
+      "keywords": "AI agent authorization, delegated authorization for AI agents, OAuth for AI agents, agent identity, agent permissions, human consent, least privilege, JWT verification, MCP authorization, multi-agent delegation, AI agent audit"
+    },
+    {
+      "@type": "TechArticle",
+      "@id": "https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md#specification",
+      "url": "https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md",
+      "name": "Grantex Delegated Authorization Protocol Specification v1.0",
+      "headline": "Grantex Delegated Authorization Protocol Specification v1.0",
+      "description": "The frozen version 1.0 specification for Grantex delegated authorization grants for AI agents.",
+      "version": "1.0",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "author": {
+        "@id": "https://grantex.dev/#organization"
+      },
+      "publisher": {
+        "@id": "https://grantex.dev/#organization"
+      },
+      "inLanguage": "en"
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://grantex.dev/#answers",
+      "url": "https://grantex.dev/#answers",
+      "isPartOf": {
+        "@id": "https://grantex.dev/#webpage"
+      },
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is Grantex?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What problem does AI agent authorization solve?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "AI agent authorization replaces shared, all-or-nothing credentials with per-agent identity, least-privilege scopes, explicit approval, expiry, delegation constraints, revocation, and attributable audit records."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Grantex a replacement for OAuth 2.0?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Grantex reuses OAuth-style authorization requests, consent, codes, scopes, and tokens, then adds agent identity, multi-agent delegation, and action attribution for autonomous agents."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How is Grantex different from MCP?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which Grantex SDK should I install?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Use @grantex/sdk@0.3.13 for TypeScript, grantex==0.3.14 for Python, and github.com/mishrasanjeev/grantex-go@v0.1.10 for Go. Review release status before upgrading because packages are independently versioned and Go v0.1.10 has documented workarounds."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does local Grantex token verification check current revocation?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Local JWT verification checks signature, issuer, audience, expiry, and scopes after JWKS retrieval. It does not prove current revocation unless the verifier performs an online state check or synchronizes revocation data."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I authorize tools used by AI agent frameworks?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Use a primary Grantex SDK to register the agent, request a grant, and exchange the authorization code, then enforce scopes at the service boundary with an SDK verifier or direct JWKS validation. Framework adapters are available for OpenAI Agents SDK, Anthropic, LangChain, CrewAI, Google ADK, Vercel AI, AutoGen, Express, FastAPI, and MCP."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is @grantex/mcp-auth 2.0.2 ready for general production deployment?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. @grantex/mcp-auth@2.0.2 is single-process evaluation software with process-local codes, metadata-only consent configuration, incomplete Grantex code handoff, and no live revocation lookup in middleware or introspection."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is OACP in Grantex?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Open Agentic Commerce Protocol (OACP) is Grantex's agentic-commerce trust and artifact-authority layer. Grantex signs and verifies authority artifacts and adapter mappings; it is not a buyer or seller runtime, merchant connector, payment processor, order system, or point of sale."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Grantex an IETF standard?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. The Grantex protocol specification is open and frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft for discussion, not an IETF-adopted or endorsed standard."
+          }
+        }
+      ]
+    }
+  ]
+}

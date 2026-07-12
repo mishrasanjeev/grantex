@@ -5,90 +5,40 @@
   <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-DNXYVLS5NY');</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
 
   <!-- SEO -->
   <title>Grantex Trust Registry — Verify AI Agent Identity</title>
-  <meta name="description" content="A public directory of registered AI agent publishers with DNS-verified domain ownership and DID-based organization profiles.">
+  <meta name="description" content="A public directory of AI agent publishers with DNS-verified domain ownership, DID-based organization profiles, and published verification keys.">
   <meta name="keywords" content="Grantex, Trust Registry, AI agent identity, DID verification, DNS domain verification, agent publisher directory, Decentralized Identifier, agent trust, AI security">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/registry">
+  <link rel="alternate" type="text/plain" href="/llms.txt" title="Grantex LLM index">
 
   <!-- OpenGraph -->
   <meta property="og:title" content="Grantex Trust Registry — Verify AI Agent Identity">
-  <meta property="og:description" content="A public directory of registered AI agent publishers with DNS-verified domain ownership and DID-based organization profiles.">
+  <meta property="og:description" content="A public directory of AI agent publishers with DNS-verified domain ownership, DID-based organization profiles, and published verification keys.">
   <meta property="og:url" content="https://grantex.dev/registry">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Grantex AI agent publisher registry">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Grantex">
+  <meta property="og:locale" content="en_US">
 
   <!-- Twitter Card -->
+  <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Grantex Trust Registry — Verify AI Agent Identity">
-  <meta name="twitter:description" content="A public directory of registered AI agent publishers with DNS-verified domain ownership and DID-based organization profiles.">
+  <meta name="twitter:description" content="A public directory of AI agent publishers with DNS-verified domain ownership, DID-based organization profiles, and published verification keys.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+  <meta name="twitter:image:alt" content="Grantex AI agent publisher registry">
 
   <!-- JSON-LD Structured Data -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "Grantex Trust Registry",
-    "applicationCategory": "DeveloperApplication",
-    "operatingSystem": "Any",
-    "url": "https://grantex.dev/registry",
-    "description": "Public directory of registered AI agent publishers with DID-based identity and DNS-verified domain ownership.",
-    "license": "https://www.apache.org/licenses/LICENSE-2.0",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "isPartOf": {
-      "@type": "SoftwareApplication",
-      "name": "Grantex",
-      "url": "https://grantex.dev"
-    }
-  }
-  </script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://grantex.dev/registry#webpage","url":"https://grantex.dev/registry","name":"Grantex Trust Registry — Verify AI Agent Identity","description":"A public directory of AI agent publishers with DNS-verified domain ownership, DID-based organization profiles, and published verification keys.","isPartOf":{"@id":"https://grantex.dev/#website"},"about":{"@id":"https://grantex.dev/registry#application"},"breadcrumb":{"@id":"https://grantex.dev/registry#breadcrumb"},"dateModified":"2026-07-12","inLanguage":"en"},{"@type":"WebApplication","@id":"https://grantex.dev/registry#application","name":"Grantex Trust Registry","url":"https://grantex.dev/registry","description":"A public directory of AI agent publishers with DNS-verified domain ownership, DID-based organization profiles, and published verification keys.","applicationCategory":"DeveloperApplication","operatingSystem":"Any","license":"https://www.apache.org/licenses/LICENSE-2.0","author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/registry#webpage"}},{"@type":"BreadcrumbList","@id":"https://grantex.dev/registry#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"Grantex Trust Registry — Verify AI Agent Identity","item":"https://grantex.dev/registry"}]}]}</script>
 
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": [
-      {
-        "@type": "Question",
-        "name": "What is the Grantex Trust Registry?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "The Grantex Trust Registry is a public directory of registered AI agent publishers. Organizations register a Decentralized Identifier (DID) and can prove domain ownership with an exact DNS TXT challenge."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "How do I get verified in the Trust Registry?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Register your organization with its DID, save the one-time challenge returned by the API, and publish that exact value as a DNS TXT record at _grantex-verify on the DID domain."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Does the registry verify compliance attestations?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Not currently. The implemented verification flow proves DNS domain control; it does not review or certify SOC 2, GDPR, DPDP, or ISO 27001 compliance."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Is an embeddable trust-badge component available?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Not currently. Use the public registry API to retrieve current organization and DNS verification data."
-        }
-      }
-    ]
-  }
-  </script>
-
-  <style>
+    <style>
     /* ── Design tokens ─────────────────────────────────────────────────────── */
     :root {
       --bg:       #0d1117;

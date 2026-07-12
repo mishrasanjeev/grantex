@@ -3,83 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
 
   <!-- SEO -->
   <title>Grantex Anomaly Detection — Scheduled AI Agent Activity Checks</title>
-  <meta name="description" content="Run SQL-backed anomaly checks for AI agent activity. Detect high action volume, high failure rates, new agent-principal pairs, and off-hours activity; review findings through the API and dashboard.">
+  <meta name="description" content="Detect unusual AI agent activity with SQL-backed rules for action volume, failure rates, new agent-principal pairs, and off-hours behavior.">
   <meta name="keywords" content="AI agent anomaly detection, AI agent security monitoring, agent behavior monitoring, action volume detection, failure rate monitoring, off-hours activity, Grantex anomaly findings">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/anomaly">
+  <link rel="alternate" type="text/plain" href="/llms.txt" title="Grantex LLM index">
 
   <!-- OpenGraph -->
   <meta property="og:title" content="Grantex Anomaly Detection — Scheduled AI Agent Activity Checks">
-  <meta property="og:description" content="Run SQL-backed anomaly checks for high action volume, high failure rates, new agent-principal pairs, and off-hours activity; review findings through the API and dashboard.">
+  <meta property="og:description" content="Detect unusual AI agent activity with SQL-backed rules for action volume, failure rates, new agent-principal pairs, and off-hours behavior.">
   <meta property="og:url" content="https://grantex.dev/anomaly">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Grantex AI agent anomaly detection">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Grantex">
+  <meta property="og:locale" content="en_US">
 
   <!-- Twitter Card -->
   <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Grantex Anomaly Detection — Scheduled AI Agent Activity Checks">
-  <meta name="twitter:description" content="Run SQL-backed checks for high action volume, high failure rates, new agent-principal pairs, and off-hours activity.">
+  <meta name="twitter:description" content="Detect unusual AI agent activity with SQL-backed rules for action volume, failure rates, new agent-principal pairs, and off-hours behavior.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+  <meta name="twitter:image:alt" content="Grantex AI agent anomaly detection">
 
   <!-- JSON-LD Structured Data -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Grantex Anomaly Detection",
-    "applicationCategory": "SecurityApplication",
-    "operatingSystem": "Any",
-    "url": "https://grantex.dev/anomaly",
-    "description": "Scheduled and on-demand SQL-backed anomaly checks for AI agent authorization, with finding lifecycle APIs and stored rule and channel configuration.",
-    "license": "https://www.apache.org/licenses/LICENSE-2.0",
-    "isPartOf": {
-      "@type": "SoftwareApplication",
-      "name": "Grantex",
-      "url": "https://grantex.dev"
-    },
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
-  }
-  </script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://grantex.dev/anomaly#webpage","url":"https://grantex.dev/anomaly","name":"Grantex Anomaly Detection — Scheduled AI Agent Activity Checks","description":"Detect unusual AI agent activity with SQL-backed rules for action volume, failure rates, new agent-principal pairs, and off-hours behavior.","isPartOf":{"@id":"https://grantex.dev/#website"},"about":{"@id":"https://grantex.dev/anomaly#software"},"breadcrumb":{"@id":"https://grantex.dev/anomaly#breadcrumb"},"dateModified":"2026-07-12","inLanguage":"en"},{"@type":"SoftwareApplication","@id":"https://grantex.dev/anomaly#software","name":"Grantex Anomaly Detection","url":"https://grantex.dev/anomaly","description":"Detect unusual AI agent activity with SQL-backed rules for action volume, failure rates, new agent-principal pairs, and off-hours behavior.","applicationCategory":"SecurityApplication","operatingSystem":"Any","license":"https://www.apache.org/licenses/LICENSE-2.0","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/anomaly#webpage"}},{"@type":"BreadcrumbList","@id":"https://grantex.dev/anomaly#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"Grantex Anomaly Detection — Scheduled AI Agent Activity Checks","item":"https://grantex.dev/anomaly"}]}]}</script>
 
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": [
-      {
-        "@type": "Question",
-        "name": "What anomalies does Grantex detect for AI agents?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "The current detector evaluates four SQL-backed patterns: high action volume, high failure rate, a new agent-principal pair, and off-hours activity. The API exposes additional built-in rule metadata, but those definitions are not all evaluated by the detector."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "How does Grantex anomaly detection integrate with Slack?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "The channel API accepts and stores Slack, generic webhook, and email configuration with severity filters. Automatic delivery from anomaly findings to those channels is not currently implemented; connect a delivery worker before relying on notifications."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Can I create custom anomaly detection rules?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "You can store, list, enable, disable, and delete custom rule definitions with a condition object and severity. The current detector does not evaluate those custom definitions automatically."
-        }
-      }
-    ]
-  }
-  </script>
-
-  <style>
+    <style>
     /* ── Design tokens ─────────────────────────────────────────────────────── */
     :root {
       --bg:       #0d1117;
@@ -651,7 +608,7 @@
       <div class="mockup-body">
         <div class="mockup-header">
           <h3>Anomaly Detection</h3>
-          <span class="status-badge">Monitoring active</span>
+          <span class="status-badge">Illustrative UI preview</span>
         </div>
         <div class="mockup-stats">
           <div class="mockup-stat">
@@ -674,19 +631,19 @@
         <div class="mockup-alerts">
           <div class="mockup-alert">
             <div class="dot" style="background:var(--danger)"></div>
-            <span class="rule">Token replay detected for ag_crm_bot</span>
+            <span class="rule">High action volume for ag_crm_bot</span>
             <span class="sev-badge sev-critical">CRITICAL</span>
             <span class="time">2m ago</span>
           </div>
           <div class="mockup-alert">
             <div class="dot" style="background:var(--warning)"></div>
-            <span class="rule">Velocity spike: 340 req/min for ag_data_sync</span>
+            <span class="rule">High failure rate for ag_data_sync</span>
             <span class="sev-badge sev-high">HIGH</span>
             <span class="time">8m ago</span>
           </div>
           <div class="mockup-alert">
             <div class="dot" style="background:var(--yellow)"></div>
-            <span class="rule">Scope escalation attempt: email:send requested</span>
+            <span class="rule">New agent-principal pair for ag_support_bot</span>
             <span class="sev-badge sev-medium">MEDIUM</span>
             <span class="time">14m ago</span>
           </div>
@@ -740,7 +697,7 @@
       <div class="feature-card">
         <span class="card-icon">&#x1F6AB;</span>
         <h3>One-click Revocation</h3>
-        <p>Revoke a misbehaving agent's grant directly from the alert. Cascading revocation stops all sub-agents immediately.</p>
+        <p>Use the alert action to request grant revocation. Enforcement changes only after protected services receive current grant state; local JWT validation alone is not immediate revocation.</p>
       </div>
     </div>
   </div>
@@ -749,12 +706,12 @@
 <!-- ── Built-in rules ────────────────────────────────────────────────────── -->
 <section id="rules">
   <div class="container">
-    <div class="section-label">Built-in rules</div>
-    <h2 class="section-title">10 Rules, Zero Configuration</h2>
+    <div class="section-label">Rule catalog and implemented checks</div>
+    <h2 class="section-title">Four evaluated checks; additional rules are illustrative</h2>
     <p class="section-sub">
-      Every Grantex account ships with 10 anomaly detection rules that cover
-      the most common agent security threats. Enable, disable, or tune them
-      from the dashboard.
+      The server currently evaluates four SQL-backed checks: high action volume, high failure rate,
+      new agent-principal pairs, and off-hours activity. The ten rows below are stored or illustrative
+      rule definitions; the remaining definitions are not active detectors today.
     </p>
     <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;">
       <table class="rules-table">
@@ -839,14 +796,14 @@
     <div class="section-label">Alert lifecycle</div>
     <h2 class="section-title">From Detection to Resolution</h2>
     <p class="section-sub">
-      Every anomaly follows a clear lifecycle with full traceability. Know
-      who responded, when, and what action was taken.
+      Finding APIs record lifecycle status, timestamps, and optional resolution notes.
+      Notification delivery and responder identity require the host application or a separate worker.
     </p>
     <div class="lifecycle">
       <div class="lifecycle-step">
         <div class="step-icon" style="background:rgba(248,81,73,0.12)">&#x1F6A8;</div>
         <div class="step-label">Detected</div>
-        <div class="step-desc">Rule triggers, alert created</div>
+        <div class="step-desc">Implemented SQL check stores a finding</div>
       </div>
       <div class="lifecycle-arrow">&rarr;</div>
       <div class="lifecycle-step">

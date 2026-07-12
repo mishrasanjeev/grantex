@@ -1,7 +1,8 @@
 ---
 title: "Release Status"
 sidebarTitle: "Release Status"
-description: "Current published Grantex SDK and MCP Auth versions, compatibility boundaries, and reproducible install commands."
+description: "Choose the current Grantex TypeScript, Python, Go, or MCP package with exact versions, runtime requirements, limitations, and reproducible install commands."
+keywords: ["Grantex SDK versions", "AI agent authorization SDK", "MCP authorization package", "release status"]
 ---
 
 ## Current published releases
@@ -26,6 +27,15 @@ repository.
   contract version.
 </Info>
 
+## Which Grantex package should I use?
+
+- **TypeScript application:** use `@grantex/sdk@0.3.13`.
+- **Python application:** use `grantex==0.3.14`.
+- **Go application:** use `github.com/mishrasanjeev/grantex-go@v0.1.10` with the [agent-ID workaround](/sdks/go/overview#known-v0110-limitations) and [REST/CLI audit-write workaround](/sdks/go/audit#log).
+- **MCP HTTP transport authorization:** use an established MCP-compatible authorization server and maintained MCP SDK that implement the current MCP authorization specification.
+- **Agent-specific MCP tool enforcement:** after transport authorization, use a primary Grantex SDK or direct JWKS validation at each tool boundary. Treat `@grantex/mcp-auth@2.0.2` as single-process evaluation software.
+- **Current revocation:** local JWT verification is insufficient by itself; perform an online state check or synchronize revocation data.
+
 ## Known limitations in the current published artifacts
 
 <Warning>
@@ -39,9 +49,9 @@ repository.
 <Warning>
   **MCP Auth `2.0.2`:** use a single process for evaluation only. Authorization
   codes are always process-local, `consentUi` does not create a page,
-  `onTokenIssued` is not called, middleware/introspection do not check current
-  revocation state, and the Grantex authorization code is not persisted for the
-  token handler. See [MCP Auth Server](/features/mcp-auth-server) for the detailed
+  `onTokenIssued` is not called, `allowedRedirectUris` is not a server-wide
+  allowlist, middleware/introspection do not check current revocation state, and
+  the Grantex authorization code is not persisted for the token handler. See [MCP Auth Server](/features/mcp-auth-server) for the detailed
   endpoint and deployment matrix.
 </Warning>
 
@@ -73,8 +83,9 @@ must be repeatable.
 
 ## How to read release information
 
-- [Machine-readable release snapshot](https://github.com/mishrasanjeev/grantex/blob/main/release-status.json)
-  drives the automated cross-surface version and registry checks.
+- [Public machine-readable release status](https://grantex.dev/release-status.json)
+  is the canonical retrieval URL for tools and agents. The same file is versioned
+  in the [GitHub repository](https://github.com/mishrasanjeev/grantex/blob/main/release-status.json) and drives automated cross-surface checks.
 - [Compatibility matrix](https://github.com/mishrasanjeev/grantex/blob/main/COMPATIBILITY.md)
   maps repository packages to artifact names, versions, and publication status.
 - [Repository changelog](https://github.com/mishrasanjeev/grantex/blob/main/CHANGELOG.md)

@@ -1,169 +1,90 @@
 # Grantex
 
-> Last updated: 2026-07-12
+> Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
-> Delegated authorization protocol for AI agents. What OAuth 2.0 is to humans, Grantex is to agents.
+Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal.
 
-Grantex is an open protocol (Apache 2.0) that lets AI agents request scoped, human-approved, revocable permissions via signed JWTs. Any service can verify token signatures and claims locally after retrieving the issuer's published JWKS; current revocation status requires an online check or synchronized revocation data.
+Use Grantex when an AI agent acts for a person or organization and a service must verify exactly what that agent may do. Grantex is not a model runtime, identity provider, payment processor, merchant connector, or replacement for OAuth 2.0.
 
-## Quick Facts
+Release snapshot verified: 2026-07-12. Packages are independently versioned. The protocol specification is frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft, not an IETF-adopted or endorsed standard.
 
-- Website: https://grantex.dev
-- Docs: https://docs.grantex.dev
-- GitHub: https://github.com/mishrasanjeev/grantex
-- Spec: https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md
-- IETF Draft: https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/
-- License: Apache 2.0
-- Protocol Version: 1.0 (Final, frozen)
-- Release status: https://docs.grantex.dev/release-status
-- Release snapshot verified: 2026-07-12
+## Start Here
 
-## SDKs
+- [Grantex AI Agent Authorization](https://docs.grantex.dev/introduction): Canonical product definition, architecture, scope, and standards status.
+- [AI Agent Authorization Quickstart](https://docs.grantex.dev/quickstart): Register an agent, request human consent, exchange a code, verify a grant token, and write audit records.
+- [Release Status](https://docs.grantex.dev/release-status): Exact published versions, runtime requirements, known limitations, and workarounds.
+- [Protocol Specification v1.0](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md): Frozen Grantex delegated authorization protocol.
+- [OpenAPI Contract](https://github.com/mishrasanjeev/grantex/blob/main/docs/openapi.yaml): Machine-readable API description.
+- [Full Grantex Implementation Brief](https://grantex.dev/llms-full.txt): Token-efficient implementation and decision guidance.
+- [Complete Documentation Corpus](https://docs.grantex.dev/llms-full.txt): Mintlify-generated full documentation context.
 
-- TypeScript: `npm install @grantex/sdk@0.3.13`
-- Python: `python -m pip install grantex==0.3.14`
-- Go: `go get github.com/mishrasanjeev/grantex-go@v0.1.10` (Go 1.26.1+)
-- MCP Authorization Server: `npm install @grantex/mcp-auth@2.0.2`
-- CLI: `npm install -g @grantex/cli`
+## Choose an Implementation
 
-## Framework Integrations
+- [TypeScript SDK](https://docs.grantex.dev/sdks/typescript/overview): `npm install @grantex/sdk@0.3.13` for Node.js 18+ ESM applications.
+- [Python SDK](https://docs.grantex.dev/sdks/python/overview): `python -m pip install grantex==0.3.14` for Python 3.9+ applications.
+- [Go SDK](https://docs.grantex.dev/sdks/go/overview): `go get github.com/mishrasanjeev/grantex-go@v0.1.10` for Go 1.26.1+; use the documented agent-ID and audit-write workarounds.
+- [MCP Authorization Server](https://docs.grantex.dev/features/mcp-auth-server): `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13`; version 2.0.2 is single-process evaluation software, not the recommended production enforcement path.
+- [CLI](https://docs.grantex.dev/integrations/cli): Manage agents, grants, tokens, audit records, and manifests from a terminal.
+- [Machine-Readable Release Status](https://grantex.dev/release-status.json): Canonical versions, install commands, package URLs, limitations, and workaround links.
 
-- Anthropic SDK: `npm install @grantex/anthropic @grantex/sdk`
-- LangChain: `npm install @grantex/langchain`
-- CrewAI: `pip install grantex-crewai`
-- OpenAI Agents SDK: `pip install grantex-openai-agents`
-- Google ADK: `pip install grantex-adk`
-- Vercel AI SDK: `npm install @grantex/vercel-ai`
-- AutoGen: `npm install @grantex/autogen`
-- MCP (Claude Desktop, Cursor, Windsurf): `npm install @grantex/mcp`
-- Express.js middleware: `npm install @grantex/express`
-- FastAPI middleware: `pip install grantex-fastapi`
-- Reverse-proxy gateway: `npm install @grantex/gateway`
+For MCP HTTP transport authorization, use an established MCP-compatible authorization server and maintained MCP SDK. Then use a primary Grantex SDK or direct JWKS validation at each tool boundary when agent-specific delegated authority is required. Treat MCP Auth 2.0.2 as evaluation only. Local JWT verification does not prove current revocation unless the verifier performs an online state check or synchronizes revocation data.
 
-## Key Packages
-- @grantex/gemma: Offline authorization for Gemma 4 on-device agents
-- @grantex/mcp-auth 2.0.2: OAuth 2.1 + PKCE endpoint package for MCP servers; review MCP Auth limitations before production use
-- @grantex/dpdp: DPDP Act 2023 + EU AI Act control mappings
+## AI Agent Frameworks
 
-## Agentic Commerce V1 Live Pilot
+- [Framework Integration Hub](https://grantex.dev/for/): Grantex packages and guides for agent frameworks, APIs, and multi-agent systems.
+- [OpenAI Agents SDK Authorization](https://grantex.dev/for/openai-agents): Scoped FunctionTool execution and grant verification.
+- [Anthropic and Claude Tool Authorization](https://grantex.dev/for/anthropic): Scope-enforced tool use for Anthropic SDK applications.
+- [LangChain Agent Permissions](https://grantex.dev/for/langchain): Authorize and audit LangChain tools.
+- [CrewAI Agent Permissions](https://grantex.dev/for/crewai): Per-agent scopes for multi-agent crews.
+- [Google ADK Authorization](https://grantex.dev/for/google-adk): Scoped authority for Agent Development Kit tools.
+- [Vercel AI SDK Authorization](https://grantex.dev/for/vercel-ai): TypeScript tool authorization.
+- [AutoGen Multi-Agent Authorization](https://grantex.dev/for/autogen): Identity, scoped functions, and delegation for AutoGen agents.
+- [MCP Authorization](https://grantex.dev/for/mcp): Grantex MCP tool server and MCP authorization boundaries.
+- [Express.js Enforcement](https://grantex.dev/for/express): JWT verification and per-route scope middleware.
+- [FastAPI Enforcement](https://grantex.dev/for/fastapi): Typed dependency-based authorization.
+- [Strands Agents](https://docs.grantex.dev/integrations/strands): TypeScript and Python scope-enforcement helpers.
+- [A2A Agent-to-Agent Authorization](https://docs.grantex.dev/integrations/a2a): Grant-token propagation for A2A tasks.
 
-- Live pilot merchant: `mch_shopify_mgx0n6_22` from `mgx0n6-22.myshopify.com`
-- Production commerce profile: `https://api.grantex.dev/.well-known/grantex-commerce`
-- Public education page: https://grantex.dev/commerce
-- End-to-end launch blog: https://docs.grantex.dev/blog/shopify-oacp-commerce-live-flow
-- Commerce docs: https://docs.grantex.dev/guides/commerce-v1-overview
-- Plural webhook URL: `https://api.grantex.dev/v1/webhooks/providers/plural`
-- Plural caveat: current credentials authenticate against UAT-compatible rails; do not claim production Plural settlement certification.
+## Core Security and Verification
 
-## Key Features
+- [How to Secure AI Agents](https://grantex.dev/vs/securing-ai-agents): Least privilege, consent, identity, audit, delegation, revocation, and budgets.
+- [Token Verification](https://docs.grantex.dev/guides/token-verification): JWKS retrieval, signature and claim validation, and current-revocation boundaries.
+- [Scope Enforcement](https://docs.grantex.dev/guides/scope-enforcement): Enforce tool permissions with custom or packaged manifests.
+- [Security Hardening](https://docs.grantex.dev/guides/security-hardening): Deployment and service controls.
+- [Security Assessment](https://docs.grantex.dev/security/audit-report): Published external assessment and remediation notes.
+- [Security Architecture](https://docs.grantex.dev/security/overview): Trust boundaries and attack analysis.
+- [Self-Hosting](https://docs.grantex.dev/guides/self-hosting): Deploy the Apache-2.0 reference implementation.
 
-- Scoped permissions: `resource:action[:constraint]` format (e.g., `payments:initiate:max_500`)
-- Human consent flow with plain-language UI
-- Offline token verification via JWKS (RS256 JWT)
-- Multi-agent delegation chains with scope narrowing
-- Central grant revocation (single grant or cascade); local JWT consumers must synchronize revocation state or use short token lifetimes
-- Hash-chained audit trail
-- FIDO2/WebAuthn passkey-based consent
-- W3C Verifiable Credentials (VC-JWT) issuance
-- SD-JWT selective disclosure
-- DID infrastructure (did:web:grantex.dev)
-- MPP Agent Passport for machine payments
-- x402 agent spend authorization
-- Budget controls with atomic debit
-- Event streaming (SSE + WebSocket)
-- Policy-as-code (OPA, Cedar)
-- Usage metering and custom domains
-- Terraform provider (5 resources, 2 data sources)
-- Conformance test suite
+## Comparisons and Direct Answers
 
-## How It Works (5 Steps)
+- [Comparison Hub](https://grantex.dev/vs/): Evidence-based comparisons and implementation guidance.
+- [Grantex vs OAuth 2.0](https://grantex.dev/vs/oauth): OAuth compatibility and agent-specific additions.
+- [Grantex vs API Keys](https://grantex.dev/vs/api-keys): Per-agent identity and scoped grants instead of shared credentials.
+- [MCP Authentication and Authorization](https://grantex.dev/vs/mcp-auth): MCP OAuth endpoint and enforcement choices.
+- [AI Agent Authorization Guide](https://docs.grantex.dev/blog/ai-agent-authorization-guide): Conceptual guide for scoped, human-approved agent access.
+- [LangChain Agent Permissions Guide](https://docs.grantex.dev/blog/langchain-agent-permissions): LangChain-specific implementation guidance.
+- [MCP Server OAuth Authentication Status](https://docs.grantex.dev/blog/mcp-server-oauth-authentication): Current MCP Auth package status and limitations.
 
-1. Developer registers an agent → gets a DID (`did:grantex:ag_...`)
-2. Agent requests authorization for specific scopes → user sees consent UI
-3. User approves → authorization code returned via redirect
-4. Code exchanged for signed grant token (RS256 JWT)
-5. A service validates the token using published JWKS; retrieving or refreshing keys may require a network call
+## Agentic Commerce and OACP
 
-## Compliance Coverage
+- [OACP Authority](https://grantex.dev/commerce): Open Agentic Commerce Protocol trust, policy, artifact, verification, and adapter authority.
+- [OACP Documentation](https://docs.grantex.dev/guides/oacp/overview): Canonical ownership and non-ownership boundaries.
+- [AgenticOrg Integration Boundary](https://docs.grantex.dev/guides/oacp/agenticorg-integration): Buyer and seller runtime responsibilities versus Grantex authority.
+- [MPP Agent Identity](https://grantex.dev/for/mpp): Verifiable agent passports and spending constraints for machine payments.
+- [x402 Agent Spend Authorization](https://grantex.dev/x402): Delegated authority for HTTP 402 payment flows.
 
-- OWASP Agentic Top 10 (Dec 2025): ASI-01 (goal hijacking), ASI-03 (identity abuse), ASI-05 (privilege escalation), ASI-10 (rogue agents)
-- EU AI Act: phased application dates vary by obligation and system class; Grantex provides technical control mappings, not a conformity determination
-- NIST AI RMF + EO 14110: Govern 1.1 (accountability), Map 5.1 (attribution), Measure 2.5 (audit trails)
-- SOC 2 readiness control mapping published; formal third-party attestation is not published
-- Full compliance matrix: https://docs.grantex.dev/guides/compliance-matrix
+## Machine-Readable Sources
 
-## Scope Enforcement
+- [Linked-Data Entity Graph](https://grantex.dev/ld.json): Grantex Organization, WebSite, WebPage, source-code, specification, and FAQ entities.
+- [Release Status JSON](https://grantex.dev/release-status.json): Registry-verified primary releases and limitation IDs.
+- [JWKS](https://api.grantex.dev/.well-known/jwks.json): Published token-verification keys.
+- [DID Document](https://grantex.dev/.well-known/did.json): Public `did:web:grantex.dev` verification methods.
+- [OpenAPI 3.1](https://github.com/mishrasanjeev/grantex/blob/main/docs/openapi.yaml): Auth service API contract.
+- [Sitemap](https://grantex.dev/sitemap.xml): Canonical public web URLs.
+- [GitHub Repository](https://github.com/mishrasanjeev/grantex): Apache-2.0 source, tests, issues, and release history.
 
-- `grantex.enforce(grant_token, connector, tool)` — verify JWT + check tool permission via manifest
-- `grantex.load_manifest(manifest)` / `load_manifests([...])` — load tool permission definitions
-- `grantex.wrap_tool(langchain_tool, connector, tool, grant_token)` — auto-enforce on LangChain tools
-- `grantex.enforceMiddleware(options)` — Express/Fastify middleware for scope enforcement
-- FastAPI: `from grantex.fastapi import GrantexEnforcer` — dependency injection for scope enforcement
-- `enforce_mode="permissive"` — log-only mode without blocking (for migration)
-- `ToolManifest(connector, tools)` — define custom connector permissions
-- `Permission.READ/WRITE/DELETE/ADMIN` — hierarchy: admin > delete > write > read
-- 53 pre-built manifests: from grantex.manifests.salesforce import manifest
-- CLI: grantex manifest generate ./path — auto-generate manifests from connector code
-- CLI: grantex manifest list — browse bundled manifests
-- CLI: grantex enforce test --token X --connector Y --tool Z — dry-run
-- Unknown tools denied by default (fail closed)
-- Custom manifests: inline, JSON file, or extend pre-built
-- Case study: AgenticOrg — 35 agents, 53 pre-built + 3 custom connectors, 339+ tools, all enforced
-- Custom manifests are the primary story — define manifests for any connector, no dependency on Grantex
+## Optional
 
-## Enterprise Hardening
-
-- SDK retry with exponential backoff + jitter in all 3 languages (configurable maxRetries, default 3)
-- Retries 429, 502, 503, 504 + network errors; respects Retry-After header
-- Rate limiting on every endpoint (100/min global, 5-30/min per-endpoint)
-- 7 HTTP security headers (HSTS, X-Frame-Options, X-Content-Type-Options, etc.)
-- Timing-safe admin authentication (crypto.timingSafeEqual)
-- HMAC-signed SSO state parameters
-- JWT exp claim validated in introspection
-- Scope format validation (max 256 chars, max 100 scopes)
-- Input sanitization (trimming) on all string fields
-- 1MB request body limit, CORS disabled by default
-- Database connection pools (max 20, idle 30s, connect 10s, lifetime 30min)
-- Token exchange wrapped in database transactions
-- Redis error handling with reconnection logging
-- Graceful shutdown (SIGTERM → stop workers → drain connections)
-- Deep health check (DB + Redis with 2s timeout, 503 on degraded)
-- Config validation on startup (exits if required vars missing)
-- Structured JSON logging via pino (zero console.log remaining)
-- Webhook retry with 20% jitter (prevents thundering herd)
-- The monorepo contains 29 packages; GitHub Actions is the source of truth for current test status
-- Security status: use `SECURITY.md`, the public audit report, and current GitHub Actions scans; do not infer current vulnerability status from this static file
-
-## SDK Coverage
-
-Current primary releases are TypeScript `@grantex/sdk@0.3.13`, Python
-`grantex==0.3.14`, and Go `github.com/mishrasanjeev/grantex-go@v0.1.10`.
-Known current-release limitations:
-- Go v0.1.10: derive the registered agent ID from `did:grantex:<agentId>`; use REST/CLI for audit writes because the typed payload omits required fields
-- MCP Auth 2.0.2: single-process evaluation only; process-local codes, metadata-only consent config, no live revocation lookup, and incomplete Grantex code handoff
-
-Coverage across the primary SDKs includes core authorization resources plus:
-- Offline JWT verification via JWKS
-- Retry with exponential backoff
-- PassportsClient for MPP agent identity
-- VaultService for encrypted credential storage
-- EventsClient with subscribe() for background streaming
-
-## Guides
-
-- Security Hardening: https://docs.grantex.dev/guides/security-hardening
-- Operations: https://docs.grantex.dev/guides/operations
-- Custom Manifests: https://docs.grantex.dev/guides/custom-manifests
-- Scope Enforcement: https://docs.grantex.dev/guides/scope-enforcement
-- Self-Hosting: https://docs.grantex.dev/guides/self-hosting
-- Deployment: https://github.com/mishrasanjeev/grantex/blob/main/DEPLOYMENT.md
-
-## Comparisons
-
-- vs OAuth 2.0: Grantex adds cryptographic agent identity, delegation chains, action-level audit, and central grant revocation; offline consumers must synchronize revocation state or use short token lifetimes
-- vs API keys: Grantex provides per-agent scoping, user consent, delegation, and revocation granularity
-- vs MCP Auth: Grantex works across all frameworks, not just MCP; adds VCs, FIDO2, budgets, and delegation
-
-## Documentation
-
-- Full docs: https://docs.grantex.dev/llms-full.txt
+- [State of AI Agent Security 2026](https://grantex.dev/report/state-of-agent-security-2026): Dated editorial sample and security recommendations; read its methodology and evidence boundaries.
+- [Blog](https://docs.grantex.dev/blog/introducing-grantex): Product, protocol, security, framework, and OACP articles.
+- [IETF Internet-Draft](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/): Individual Delegated Agent Authorization Protocol (DAAP) submission for discussion.
