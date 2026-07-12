@@ -3,19 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>State of AI Agent Security 2026 — Grantex</title>
-  <meta name="description" content="We audited how 30 popular AI agent projects handle authorization. 93% use unscoped API keys. Here's what we found.">
+  <title>AI Agent Authorization Security: 15-Project Review | Grantex</title>
+  <meta name="description" content="Documentation review of authorization and adjacent controls across 15 named open-source AI agent projects, with evidence limits and first-party sources.">
+  <meta name="author" content="Sanjeev Mishra">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <link rel="canonical" href="https://grantex.dev/report/state-of-agent-security-2026">
-  <meta property="og:title" content="State of AI Agent Security 2026">
-  <meta property="og:description" content="We audited 30 AI agent projects. 93% use unscoped API keys with no per-agent identity, no consent, and no revocation.">
+  <meta property="og:site_name" content="Grantex">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="AI Agent Authorization Security: 15-Project Review">
+  <meta property="og:description" content="Documentation review of authorization and adjacent controls across 15 named open-source AI agent projects, with evidence limits and first-party sources.">
   <meta property="og:url" content="https://grantex.dev/report/state-of-agent-security-2026">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Grantex report on authorization controls in open-source AI agent projects">
   <meta property="og:type" content="article">
-  <meta name="twitter:site" content="@grantex_dev">
+  <meta property="article:published_time" content="2026-03-15">
+  <meta property="article:modified_time" content="2026-07-12">
+  <meta property="article:author" content="Sanjeev Mishra">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="State of AI Agent Security 2026">
-  <meta name="twitter:description" content="We audited 30 AI agent projects. 93% use unscoped API keys with no per-agent identity, no consent, and no revocation.">
+  <meta name="twitter:title" content="AI Agent Authorization Security: 15-Project Review">
+  <meta name="twitter:description" content="Documentation review of authorization and adjacent controls across 15 named open-source AI agent projects, with evidence limits and first-party sources.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+  <meta name="twitter:image:alt" content="Grantex report on authorization controls in open-source AI agent projects">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://grantex.dev/#organization","name":"Grantex","url":"https://grantex.dev/"},{"@type":"WebSite","@id":"https://grantex.dev/#website","name":"Grantex","url":"https://grantex.dev/","publisher":{"@id":"https://grantex.dev/#organization"}},{"@type":"Person","@id":"https://grantex.dev/#sanjeev-mishra","name":"Sanjeev Mishra","url":"https://github.com/mishrasanjeev"},{"@type":"BreadcrumbList","@id":"https://grantex.dev/report/state-of-agent-security-2026#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"State of AI Agent Security 2026","item":"https://grantex.dev/report/state-of-agent-security-2026"}]},{"@type":"WebPage","@id":"https://grantex.dev/report/state-of-agent-security-2026#webpage","url":"https://grantex.dev/report/state-of-agent-security-2026","name":"AI Agent Authorization Security: 15-Project Review","description":"Documentation review of authorization and adjacent controls across 15 named open-source AI agent projects, with evidence limits and first-party sources.","isPartOf":{"@id":"https://grantex.dev/#website"},"breadcrumb":{"@id":"https://grantex.dev/report/state-of-agent-security-2026#breadcrumb"},"mainEntity":{"@id":"https://grantex.dev/report/state-of-agent-security-2026#report"},"datePublished":"2026-03-15","dateModified":"2026-07-12","inLanguage":"en"},{"@type":["Report","Article"],"@id":"https://grantex.dev/report/state-of-agent-security-2026#report","url":"https://grantex.dev/report/state-of-agent-security-2026","headline":"State of AI Agent Security 2026","alternativeHeadline":"AI Agent Authorization Security: 15-Project Review","description":"Documentation review of authorization and adjacent controls across 15 named open-source AI agent projects, with evidence limits and first-party sources.","image":"https://grantex.dev/og-image.png","mainEntityOfPage":{"@id":"https://grantex.dev/report/state-of-agent-security-2026#webpage"},"author":{"@id":"https://grantex.dev/#sanjeev-mishra"},"publisher":{"@id":"https://grantex.dev/#organization"},"datePublished":"2026-03-15","dateModified":"2026-07-12","inLanguage":"en","isAccessibleForFree":true,"articleSection":["Methodology","Evidence Boundaries","Project Evidence Review","Reported Security Context","OWASP Agentic Top 10 Mapping","Recommendations"],"keywords":["AI agent authorization","agent identity","user consent","granular revocation","agent audit logging","delegated authorization"]}]}</script>
   <style>
     :root {
       --bg: #0f172a;
@@ -38,6 +49,16 @@
       padding: 0 1rem;
     }
     .container { max-width: 760px; margin: 0 auto; padding: 3rem 0 4rem; }
+    .breadcrumbs {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+    .breadcrumbs [aria-current="page"] { color: var(--text); }
     .badge {
       display: inline-block;
       background: var(--accent);
@@ -199,228 +220,293 @@
 </head>
 <body>
 <div class="container">
+  <nav class="breadcrumbs" aria-label="Breadcrumb">
+    <a href="https://grantex.dev/">Grantex</a>
+    <span aria-hidden="true">/</span>
+    <span aria-current="page">State of AI Agent Security 2026</span>
+  </nav>
+
   <span class="badge">Research Report</span>
   <h1>State of AI Agent Security 2026</h1>
-  <p class="subtitle">We audited how 30 popular AI agent projects handle authorization. The results are alarming: nearly all of them rely on unscoped API keys with no per-agent identity, no user consent, and no revocation mechanism.</p>
-  <p class="meta">Published March 15, 2026 &middot; By <a href="https://github.com/mishrasanjeev">Sanjeev Mishra</a> &middot; Grantex Research</p>
+  <p class="subtitle">An evidence-aware documentation review of authorization and adjacent safety controls across 15 named open-source AI agent projects. It is not a leaderboard, benchmark, or ecosystem-wide finding.</p>
+  <p class="meta">Published <time datetime="2026-03-15">March 15, 2026</time> &middot; Revised <time datetime="2026-07-12">July 12, 2026</time> &middot; By <a href="https://github.com/mishrasanjeev">Sanjeev Mishra</a> &middot; Grantex Research</p>
 
   <div class="stat-grid">
     <div class="stat-card">
-      <div class="stat-number">93%</div>
-      <div class="stat-label">Use unscoped API keys</div>
+      <div class="stat-number">15</div>
+      <div class="stat-label">Named open-source projects carried forward from the original article</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">0%</div>
-      <div class="stat-label">Have per-agent identity</div>
+      <div class="stat-number yellow">Sources</div>
+      <div class="stat-label">First-party links support the project-specific observations retained here</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">97%</div>
-      <div class="stat-label">No user consent flow</div>
+      <div class="stat-number">No scores</div>
+      <div class="stat-label">No aggregate grade, ranking, or market-wide conclusion</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">100%</div>
-      <div class="stat-label">No per-agent revocation</div>
+      <div class="stat-number yellow">Living docs</div>
+      <div class="stat-label">Readers should re-check current documentation before deployment</div>
     </div>
   </div>
 
   <div class="toc">
     <h3>Table of Contents</h3>
     <ol>
-      <li><a href="#methodology">Methodology</a></li>
-      <li><a href="#findings">Key Findings</a></li>
-      <li><a href="#audit">Framework-by-Framework Audit</a></li>
-      <li><a href="#incidents">Real-World Incidents</a></li>
-      <li><a href="#owasp">OWASP Agentic Top 10 Alignment</a></li>
-      <li><a href="#recommendations">Recommendations</a></li>
+      <li><a href="#methodology">Methodology and disclosures</a></li>
+      <li><a href="#findings">Evidence boundaries</a></li>
+      <li><a href="#audit">Project evidence review</a></li>
+      <li><a href="#incidents">Reported security context</a></li>
+      <li><a href="#owasp">Interpretive OWASP mapping</a></li>
+      <li><a href="#recommendations">Authorization design questions</a></li>
     </ol>
   </div>
 
-  <h2 id="methodology">1. Methodology</h2>
-  <p>We analyzed 30 of the most popular open-source AI agent projects on GitHub, representing over <strong>500,000 combined stars</strong>. For each project, we evaluated six authorization capabilities:</p>
+  <h2 id="methodology">1. Methodology and Disclosures</h2>
+  <p>This revision examines public documentation for 15 named open-source AI agent projects. Its purpose is to help readers distinguish delegated authorization from adjacent controls such as human approval, runtime identity, tracing, and activity logs. It does not assign security grades or claim that documentation alone establishes how a deployment behaves.</p>
+
+  <h3>How the projects were selected</h3>
+  <p>The projects were carried forward from the original March 2026 article because that article had already named them as examples of agent frameworks, runtimes, and application builders. The selection was editorial. It was not generated by a reproducible market inventory, random sample, popularity threshold, GitHub-star ranking, or systematic search protocol. Inclusion does not imply that a project is more important, less secure, or more representative than a project that is absent.</p>
+
+  <h3>Publisher conflict</h3>
+  <p>Grantex publishes this report and develops delegated-authorization software for AI agents. It may benefit from interest in this problem area and is not an independent testing laboratory. Grantex is therefore not included as a scored comparison entry, and this revision removes the earlier aggregate scorecard. Product claims later on this page describe Grantex's documented design and are not findings about the sampled projects.</p>
+
+  <h3>Evidence method and limits</h3>
   <ul>
-    <li><strong>Scoped permissions</strong> &mdash; Can the agent be restricted to specific capabilities?</li>
-    <li><strong>Per-agent identity</strong> &mdash; Does each agent have a unique, verifiable identity?</li>
-    <li><strong>User consent</strong> &mdash; Does the end-user explicitly approve what the agent can do?</li>
-    <li><strong>Token/credential revocation</strong> &mdash; Can you revoke one agent's access without affecting others?</li>
-    <li><strong>Audit trail</strong> &mdash; Is there an immutable record of what each agent did?</li>
-    <li><strong>Delegation control</strong> &mdash; When agents call other agents, is authorization chained?</li>
+    <li>The review uses public repositories and first-party documentation. It is not a source-code audit, penetration test, hosted-edition review, vulnerability disclosure, compliance assessment, or maintainer-certified evaluation.</li>
+    <li>The original review did not preserve a search log, commit-level evidence archive, standardized query set, or maintainer confirmations. This revision does not reconstruct missing evidence or infer a numeric result from it.</li>
+    <li><strong>Documented observation</strong> means a linked first-party source expressly describes a relevant control. It does not establish completeness, secure configuration, production suitability, or equivalence to delegated authorization.</li>
+    <li><strong>Not established in this revision</strong> means the retained evidence is insufficient for a conclusion. It does not mean that a capability is absent.</li>
+    <li>Hosted, enterprise, plugin, cloud-platform, identity-provider, gateway, and custom-application controls may differ from public open-source functionality.</li>
+    <li>Projects and documentation change. Follow the repository and first-party links below and review the version actually being deployed.</li>
   </ul>
-  <p>We reviewed each project's documentation, source code, configuration files, and example applications. Projects were evaluated on their built-in authorization mechanisms, not on what a developer <em>could</em> build around them.</p>
 
-  <h2 id="findings">2. Key Findings</h2>
+  <h3>Authorization questions used as a reading guide</h3>
+  <ul>
+    <li><strong>Scoped authorization</strong> &mdash; Is authority restricted to a named agent, principal, audience, resource, action, constraint, and lifetime?</li>
+    <li><strong>Authenticated agent identity</strong> &mdash; Can the receiving service validate the acting agent as a distinct authorization subject?</li>
+    <li><strong>Approval or consent</strong> &mdash; What action or permission is presented, who approves it, and what durable authorization record results?</li>
+    <li><strong>Revocation</strong> &mdash; How does an enforcement point learn that one agent, grant, or token is no longer valid?</li>
+    <li><strong>Action evidence</strong> &mdash; Are execution records attributable to an agent, principal, authorization decision, scope, and outcome?</li>
+    <li><strong>Delegation control</strong> &mdash; When one agent invokes another, is authority narrowed and are depth, lifetime, and downstream revocation defined?</li>
+  </ul>
 
-  <h3>Finding 1: API keys are the universal authorization mechanism</h3>
-  <p>28 out of 30 projects (93%) rely exclusively on environment-variable API keys for authorization. The standard pattern is:</p>
-  <blockquote>Store your OpenAI API key in a <code>.env</code> file. The agent will use it for all operations.</blockquote>
-  <p>This key grants the agent the same permissions as the key owner. There is no mechanism to restrict <em>which</em> operations the agent can perform, <em>on whose behalf</em> it acts, or <em>when</em> the access expires.</p>
+  <h2 id="findings">2. What This Review Can and Cannot Support</h2>
 
-  <h3>Finding 2: Zero projects have per-agent identity</h3>
-  <p>Not a single project we reviewed assigns a unique, cryptographically verifiable identity to each agent instance. When multiple agents share the same API key (which is the default configuration), it is impossible to determine which agent performed which action.</p>
+  <h3>Documented oversight controls are relevant, but they are not interchangeable</h3>
+  <p>First-party materials for AutoGen, LangGraph, and OpenHands describe human feedback, interruption, confirmation, or logging mechanisms. Those controls can materially improve oversight. A pause button, approval callback, trace, or event history does not by itself establish that a receiving service received and enforced a scoped, time-limited, revocable grant from a specific principal.</p>
 
-  <h3>Finding 3: User consent is absent</h3>
-  <p>29 out of 30 projects (97%) have no mechanism for the end-user to approve what the agent is doing on their behalf. The developer decides what the agent can access at build time, not the user at runtime. The one partial exception is LangGraph's human-in-the-loop feature, which pauses execution for approval but does not issue scoped authorization tokens.</p>
+  <h3>Missing retained evidence is not evidence that a feature is missing</h3>
+  <p>For projects where this revision links only the repository, the appropriate conclusion is that this report has not retained enough stable, first-party evidence to characterize the control. It would be misleading to convert that evidence gap into a categorical “No.”</p>
 
-  <h3>Finding 4: Revocation is all-or-nothing</h3>
-  <p>Every project we reviewed treats revocation as a binary: rotate the API key, or don't. There is no way to revoke access for a single agent while leaving others operational. In multi-agent systems (which are the explicit use case for frameworks like CrewAI and AutoGen), this means one misbehaving agent forces a full credential rotation.</p>
+  <h3>The enforcement boundary matters more than framework labels</h3>
+  <p>An agent framework can expose hooks for approval, identity, policy, or telemetry while the application, gateway, identity provider, or protected service supplies the actual authorization decision. A deployment review should trace the complete path from principal approval through token or credential issuance to service-side enforcement, revocation state, and action records.</p>
 
-  <h3>Finding 5: Audit trails are application-level at best</h3>
-  <p>Only 4 projects (13%) include any form of action logging. Where it exists, it is opt-in, application-level, and not tied to an authorization grant. No project produces an audit trail that links a specific action to a specific agent, a specific user authorization, and a specific set of scopes.</p>
+  <h3>No aggregate benchmark is published</h3>
+  <p>This revision does not total projects, rank frameworks, or claim that one implementation is the default or only solution. The table is an evidence index for named projects, not a comparative scorecard.</p>
 
-  <h3>Finding 6: Delegation is uncontrolled</h3>
-  <p>In multi-agent frameworks (CrewAI, AutoGen, MetaGPT, OpenClaw), when one agent calls another, the child agent either inherits the parent's full credentials or receives its own independent key. No project implements scope narrowing, depth limits, or cascade revocation for delegated access.</p>
-
-  <h2 id="audit">3. Framework-by-Framework Audit</h2>
+  <h2 id="audit">3. Project Evidence Review</h2>
+  <p>The table preserves the 15-project scope of the original article and the canonical repository links. Project-specific observations appear only where a stable first-party source is linked. The absence of an observation is not an absence finding.</p>
 
   <table>
     <thead>
       <tr>
-        <th>Project</th>
-        <th>Stars</th>
-        <th>Scoped Perms</th>
-        <th>Agent ID</th>
-        <th>User Consent</th>
-        <th>Revocation</th>
-        <th>Audit</th>
-        <th>Delegation</th>
+        <th scope="col">Project</th>
+        <th scope="col">First-party material retained</th>
+        <th scope="col">Evidence-safe observation</th>
       </tr>
     </thead>
     <tbody>
-      <tr><td>OpenClaw</td><td>210k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td></tr>
-      <tr><td>Dify</td><td>130k</td><td class="partial">Partial</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td></tr>
-      <tr><td>RAGFlow</td><td>70k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
-      <tr><td>AutoGen</td><td>55k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
-      <tr><td>CrewAI</td><td>46k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
-      <tr><td>AutoGPT</td><td>42k</td><td class="fail">No</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td></tr>
-      <tr><td>MetaGPT</td><td>38k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
-      <tr><td>LangGraph</td><td>25k</td><td class="fail">No</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td></tr>
-      <tr><td>BabyAGI</td><td>20k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
-      <tr><td>SuperAGI</td><td>16k</td><td class="partial">Partial</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="partial">Partial</td><td class="fail">No</td></tr>
-      <tr><td>AgentGPT</td><td>14k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
-      <tr><td>OpenDevin</td><td>12k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
-      <tr><td>Camel</td><td>10k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
-      <tr><td>TaskWeaver</td><td>9k</td><td class="partial">Partial</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
-      <tr><td>OpenAI Swarm</td><td>8k</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td><td class="fail">No</td></tr>
+      <tr>
+        <td><a href="https://github.com/openclaw/openclaw">OpenClaw</a></td>
+        <td>Canonical repository</td>
+        <td>No control-specific first-party citation was retained for this revision; no absence conclusion is made.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/langgenius/dify">Dify</a></td>
+        <td>Canonical repository</td>
+        <td>No control-specific first-party citation was retained for this revision; hosted and open-source controls may differ.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/infiniflow/ragflow">RAGFlow</a></td>
+        <td>Canonical repository</td>
+        <td>No control-specific first-party citation was retained for this revision; no absence conclusion is made.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/microsoft/autogen">AutoGen</a></td>
+        <td><a href="https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html">Human-in-the-loop</a>; <a href="https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/logging.html">logging</a></td>
+        <td>AutoGen documents user feedback and approval patterns plus runtime and event logging. These are relevant oversight and observability controls, not proof of a grant-bound authorization system.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/crewAIInc/crewAI">CrewAI</a></td>
+        <td>Canonical repository</td>
+        <td>No control-specific first-party citation was retained for this revision; no absence conclusion is made.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/Significant-Gravitas/AutoGPT">AutoGPT</a></td>
+        <td>Canonical repository</td>
+        <td>The earlier article treated related approval and logging behavior as partial evidence, but this revision does not retain a stable first-party citation sufficient to restate that classification.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/FoundationAgents/MetaGPT">MetaGPT</a></td>
+        <td>Canonical repository</td>
+        <td>No control-specific first-party citation was retained for this revision; no absence conclusion is made.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/langchain-ai/langgraph">LangGraph</a></td>
+        <td><a href="https://docs.langchain.com/oss/python/langgraph/interrupts">Interrupts and human-in-the-loop</a></td>
+        <td>LangGraph documents pausing graph execution and resuming after external input or approval. That supports human oversight but does not alone establish scoped grant issuance or service-side enforcement.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/yoheinakajima/babyagi">BabyAGI</a></td>
+        <td>Canonical repository</td>
+        <td>No control-specific first-party citation was retained for this revision; no absence conclusion is made.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/TransformerOptimus/SuperAGI">SuperAGI</a></td>
+        <td>Canonical repository</td>
+        <td>The earlier article treated related logging as partial evidence, but this revision does not retain a stable first-party citation sufficient to restate that classification.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/reworkd/AgentGPT">AgentGPT</a></td>
+        <td>Canonical repository</td>
+        <td>No control-specific first-party citation was retained for this revision; no absence conclusion is made.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/OpenHands/OpenHands">OpenHands (formerly OpenDevin)</a></td>
+        <td><a href="https://docs.openhands.dev/sdk/guides/security">Security and action confirmation</a></td>
+        <td>OpenHands documents confirmation policies, action-risk analysis, rejection, and security decisions in event history. These are meaningful safety controls but are not automatically equivalent to delegated authorization.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/camel-ai/camel">CAMEL</a></td>
+        <td>Canonical repository</td>
+        <td>No control-specific first-party citation was retained for this revision; no absence conclusion is made.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/microsoft/TaskWeaver">TaskWeaver</a></td>
+        <td>Canonical repository</td>
+        <td>No control-specific first-party citation was retained for this revision; no absence conclusion is made.</td>
+      </tr>
+      <tr>
+        <td><a href="https://github.com/openai/swarm">OpenAI Swarm</a></td>
+        <td>Canonical repository</td>
+        <td>No control-specific first-party citation was retained for this revision; no absence conclusion is made.</td>
+      </tr>
     </tbody>
   </table>
-  <p class="source">Star counts as of March 2026. "Partial" indicates the feature exists in a limited form (e.g., opt-in logging, basic role separation) but does not meet the bar for production authorization.</p>
+  <p class="source">Evidence index revised July 12, 2026. Repository links identify the named projects; feature links support only the adjacent observations stated in their rows. No row is a security grade, certification, or finding that undocumented functionality is absent.</p>
 
-  <h3>Common patterns we observed</h3>
+  <h3>How to use this table</h3>
   <ul>
-    <li><strong>Environment variable API keys</strong> &mdash; every project uses <code>.env</code> files or <code>os.environ</code> for credentials</li>
-    <li><strong>Shared credentials across agents</strong> &mdash; multi-agent frameworks pass the same key to all agents in a crew/group</li>
-    <li><strong>No token expiry</strong> &mdash; API keys are long-lived with no built-in expiration</li>
-    <li><strong>"Human-in-the-loop" is not authorization</strong> &mdash; pausing for human approval is not the same as issuing a scoped, signed, revocable token</li>
+    <li>Start with the exact project version, deployment mode, and first-party documentation used by your application.</li>
+    <li>Separate human approval, tracing, and runtime identity from the authorization artifact and enforcement decision.</li>
+    <li>Test the protected service, not only the agent framework: verify issuer, audience, identity, scopes, expiry, revocation behavior, and denial paths.</li>
+    <li>Ask maintainers about controls that are not documented before drawing an absence conclusion.</li>
   </ul>
 
-  <h2 id="incidents">4. Real-World Incidents (2025&ndash;2026)</h2>
-  <p>This is not a theoretical risk. Major incidents have already occurred:</p>
+  <h2 id="incidents">4. Reported Security Context</h2>
+  <p>The third-party reports below provide context for why credential boundaries matter. They were not used to evaluate or rank the 15 projects, do not establish that a project's defaults caused an incident, and were not independently reproduced by Grantex Research.</p>
 
-  <h3>OpenClaw credential exposure (February 2026)</h3>
-  <p>Censys identified <strong>21,639 exposed OpenClaw instances</strong> publicly accessible on the internet. Misconfigured instances were leaking API keys, OAuth tokens, and plaintext credentials. With 210,000+ GitHub stars and rapid adoption, the blast radius was enormous.</p>
-  <p class="source">Source: <a href="https://www.reco.ai/blog/openclaw-the-ai-agent-security-crisis-unfolding-right-now">Reco.ai</a></p>
+  <h3>OpenClaw deployment exposure reporting</h3>
+  <p>A February 2026 Reco.ai article described publicly accessible or misconfigured OpenClaw deployments and reported credential exposure. Deployment-specific findings should not be generalized to every OpenClaw installation without examining configuration, version, and network controls.</p>
+  <p class="source">Third-party source: <a href="https://www.reco.ai/blog/openclaw-the-ai-agent-security-crisis-unfolding-right-now">Reco.ai</a></p>
 
-  <h3>MCP server authentication failures (February 2026)</h3>
-  <p>BlueRock Security analyzed over <strong>7,000 MCP servers</strong> and found that 36.7% were potentially vulnerable to SSRF. Trend Micro found <strong>492 MCP servers with zero client authentication and zero traffic encryption</strong> on the public internet.</p>
+  <h3>Moltbook database exposure reporting</h3>
+  <p>Wiz reported that a Moltbook database exposure included authentication tokens and account information. Moltbook is a separate service, and this report is included only as an example of the consequences of centralized credential exposure.</p>
+  <p class="source">Third-party source: <a href="https://www.wiz.io/blog/exposed-moltbook-database-reveals-millions-of-api-keys">Wiz</a></p>
 
-  <h3>Moltbook API key exposure (2026)</h3>
-  <p>The Moltbook database breach exposed <strong>1.5 million API authentication tokens</strong> and 35,000 email addresses, demonstrating the cascading impact of centralized credential storage.</p>
-  <p class="source">Source: <a href="https://www.wiz.io/blog/exposed-moltbook-database-reveals-millions-of-api-keys">Wiz.io</a></p>
+  <h3>Public cloud API key reporting</h3>
+  <p>The Hacker News reported cases in which publicly exposed Google Cloud API keys had broader access than their deployers intended. This illustrates a credential-configuration risk; it is not a finding about the projects in the review table.</p>
+  <p class="source">Third-party source: <a href="https://thehackernews.com/2026/02/thousands-of-public-google-cloud-api.html">The Hacker News</a></p>
 
-  <h3>Google Cloud API key misconfiguration (February 2026)</h3>
-  <p>Thousands of Google Cloud API keys deployed as billing tokens were discovered to have <strong>unrestricted access</strong>, effectively becoming live Gemini credentials on the public internet.</p>
-  <p class="source">Source: <a href="https://thehackernews.com/2026/02/thousands-of-public-google-cloud-api.html">The Hacker News</a></p>
-
-  <h2 id="owasp">5. OWASP Agentic Top 10 Alignment</h2>
-  <p>In December 2025, OWASP released the <a href="https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"><strong>Top 10 for Agentic Applications</strong></a>, peer-reviewed by 100+ security researchers. Several of the top risks directly map to the authorization gap we've documented:</p>
+  <h2 id="owasp">5. Interpretive OWASP Agentic Top 10 Mapping</h2>
+  <p>OWASP publishes the <a href="https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"><strong>Top 10 for Agentic Applications</strong></a>. The mapping below is Grantex Research's interpretation of how authorization design can relate to selected risk categories. It is not an OWASP assessment, endorsement, or finding that any sampled project violates an OWASP requirement.</p>
 
   <table>
     <thead>
       <tr>
-        <th>OWASP Risk</th>
-        <th>Description</th>
-        <th>Authorization Gap</th>
+        <th scope="col">OWASP Risk</th>
+        <th scope="col">Description</th>
+        <th scope="col">Potential authorization relevance</th>
       </tr>
     </thead>
     <tbody>
       <tr>
         <td><strong>ASI01</strong></td>
         <td>Agent Goal Hijacking</td>
-        <td>Unscoped API keys mean a hijacked agent has full access to all resources</td>
+        <td>Broad credentials can increase the impact of a successfully hijacked agent.</td>
       </tr>
       <tr>
         <td><strong>ASI03</strong></td>
-        <td>Identity & Privilege Abuse</td>
-        <td>No per-agent identity makes it impossible to attribute actions or enforce least-privilege</td>
+        <td>Identity &amp; Privilege Abuse</td>
+        <td>Distinct authenticated agent identities can improve attribution and least-privilege enforcement.</td>
       </tr>
       <tr>
         <td><strong>ASI05</strong></td>
-        <td>Privilege & Access Escalation</td>
-        <td>Without scope enforcement, agents can access any resource the API key allows</td>
+        <td>Privilege &amp; Access Escalation</td>
+        <td>Scope enforcement can constrain the resources and actions available to an agent.</td>
       </tr>
       <tr>
         <td><strong>ASI09</strong></td>
         <td>Human-Agent Trust Exploitation</td>
-        <td>No consent flow means users never approve what agents do on their behalf</td>
+        <td>Contextual consent and confirmation can help align sensitive actions with user intent.</td>
       </tr>
       <tr>
         <td><strong>ASI10</strong></td>
         <td>Rogue Agents</td>
-        <td>Without revocation, a compromised agent retains access indefinitely</td>
+        <td>Targeted revocation can shorten access after compromise or loss of trust.</td>
       </tr>
     </tbody>
   </table>
-
-  <blockquote>48% of cybersecurity professionals identify agentic AI as the number-one attack vector heading into 2026 &mdash; outranking deepfakes, ransomware, and supply chain compromise. Yet only 34% of enterprises have AI-specific security controls in place.<br><span class="source">&mdash; Dark Reading, 2026</span></blockquote>
-
   <h2 id="recommendations">6. Recommendations</h2>
-  <p>Based on our audit, we recommend that every AI agent deployment implement these six authorization primitives:</p>
+  <p>Independent of any project comparison, the following questions can be used as an authorization design checklist. The appropriate implementation depends on the deployment's threat model, data sensitivity, actors, and applicable legal obligations; this report is not legal or compliance advice.</p>
 
   <table>
     <thead>
       <tr>
-        <th>Primitive</th>
-        <th>What it means</th>
-        <th>Why it matters</th>
+        <th scope="col">Control</th>
+        <th scope="col">What it means</th>
+        <th scope="col">Why it can help</th>
       </tr>
     </thead>
     <tbody>
       <tr>
-        <td><strong>Scoped tokens</strong></td>
-        <td>Agents receive permissions for specific resources and actions only</td>
-        <td>Limits blast radius when an agent is compromised</td>
+        <td><strong>Scoped grants</strong></td>
+        <td>Give agents only the resources, actions, and duration needed for a task.</td>
+        <td>Limits the potential impact of credential theft, misuse, or goal hijacking.</td>
       </tr>
       <tr>
         <td><strong>Per-agent identity</strong></td>
-        <td>Each agent has a unique, cryptographically verifiable identity (e.g., DID)</td>
-        <td>Enables attribution, audit, and targeted revocation</td>
+        <td>Represent each agent as a distinct authenticated subject.</td>
+        <td>Supports attribution, policy enforcement, and targeted response.</td>
       </tr>
       <tr>
-        <td><strong>User consent</strong></td>
-        <td>End-users explicitly approve what agents can do on their behalf</td>
-        <td>Required by GDPR, EU AI Act, and emerging US AI regulations</td>
+        <td><strong>Contextual user consent</strong></td>
+        <td>Ask users to approve sensitive delegated actions or permission sets when appropriate.</td>
+        <td>Helps align agent activity with user intent and accountability expectations.</td>
       </tr>
       <tr>
         <td><strong>Granular revocation</strong></td>
-        <td>Revoke one agent's access without affecting others</td>
-        <td>Prevents credential rotation cascades in multi-agent systems</td>
+        <td>Invalidate one agent or grant without disrupting unrelated agents.</td>
+        <td>Reduces the need for broad shared-credential rotation during response.</td>
       </tr>
       <tr>
-        <td><strong>Audit trail</strong></td>
-        <td>Every agent action linked to a specific authorization grant</td>
-        <td>Required for compliance, forensics, and incident response</td>
+        <td><strong>Grant-bound audit records</strong></td>
+        <td>Link important actions to an agent identity, authorization grant, and enforced scope.</td>
+        <td>Supports assurance, investigation, and incident response.</td>
       </tr>
       <tr>
-        <td><strong>Delegation control</strong></td>
-        <td>Scope narrowing and depth limits when agents call other agents</td>
-        <td>Prevents privilege escalation in multi-agent pipelines</td>
+        <td><strong>Delegation controls</strong></td>
+        <td>Narrow scopes and set depth, lifetime, and revocation behavior when agents delegate.</td>
+        <td>Constrains privilege propagation in multi-agent workflows.</td>
       </tr>
     </tbody>
   </table>
+  <p>These controls do not by themselves establish security or regulatory compliance. Deployers should also use threat modeling, secure secret storage, sandboxing, network controls, monitoring, testing, and jurisdiction-specific review.</p>
 
-  <h3>How Grantex addresses these gaps</h3>
-  <p><a href="https://github.com/mishrasanjeev/grantex">Grantex</a> is an open protocol (Apache 2.0) that implements all six primitives as a standard. It provides signed JWT grant tokens with scoped claims, per-agent DIDs, user consent flows with optional FIDO2/WebAuthn passkeys, granular revocation with cascade, immutable audit trails, and delegation chains with depth limits and scope narrowing.</p>
-  <p>The protocol has an <a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">IETF Internet-Draft</a> submitted to the OAuth Working Group, a NIST NCCoE public comment filed, and a SOC 2 readiness control mapping published. Formal third-party SOC 2 attestation is not published. SDKs are available for TypeScript, Python, and Go, with integrations for LangChain, CrewAI, OpenAI Agents SDK, Vercel AI, Google ADK, AutoGen, MCP, Express.js, FastAPI, and Terraform.</p>
-
+  <h3>How Grantex is designed to address these control areas</h3>
+  <p><a href="https://github.com/mishrasanjeev/grantex">Grantex</a> is an Apache-2.0 delegated authorization protocol for AI agents. Its <a href="https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md">specification</a> describes signed grants with scoped claims, agent identifiers, consent workflows, targeted revocation, audit events, and bounded delegation. This is a description of the Grantex design, not a comparative benchmark result or proof that Grantex is the only implementation of these ideas. Review the current <a href="https://docs.grantex.dev/release-status">release status and known limitations</a> before deployment.</p>
+  <p>An <a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">individual IETF Internet-Draft</a> is publicly available. Internet-Draft publication does not imply IETF endorsement, OAuth Working Group adoption, consensus, or Internet Standard status. Project-authored control mappings and adapters are not third-party certifications or legal opinions. SDK and adapter coverage is version-specific; consult the repository's <a href="https://github.com/mishrasanjeev/grantex/blob/main/COMPATIBILITY.md">compatibility matrix</a> for the supported surface.</p>
   <div style="margin: 3rem 0; text-align: center;">
     <a href="https://github.com/mishrasanjeev/grantex" class="cta">View on GitHub</a>
     <a href="https://docs.grantex.dev" class="cta-secondary">Read the Docs</a>

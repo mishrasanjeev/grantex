@@ -4,90 +4,37 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- SEO -->
-  <title>Grantex MCP Auth Server — OAuth 2.1 for Any MCP Server</title>
-  <meta name="description" content="Drop-in OAuth 2.1 + PKCE authorization for any MCP server. Human consent, scoped access, central revocation. Certification application intake is available as a preview.">
-  <meta name="keywords" content="MCP auth, MCP OAuth, Model Context Protocol authorization, MCP server security, OAuth 2.1 MCP, PKCE MCP, MCP token introspection, MCP certification, Grantex MCP, AI agent authorization, MCP server auth, dynamic client registration MCP">
+  <!-- Search and social metadata -->
+  <title>Grantex MCP Auth 2.0.2 — OAuth Endpoint Evaluation Package</title>
+  <meta name="description" content="Evaluate OAuth 2.1 draft profile endpoints for MCP with @grantex/mcp-auth 2.0.2, including consent, state, handoff, hook, and revocation limits.">
+  <meta name="keywords" content="MCP auth, MCP OAuth, Model Context Protocol authorization, MCP server security, OAuth 2.1 draft profile MCP, PKCE MCP, MCP token introspection, Grantex MCP, AI agent authorization, dynamic client registration MCP">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/mcp">
+  <link rel="alternate" type="text/plain" href="/llms.txt" title="Grantex LLM index">
 
   <!-- OpenGraph -->
-  <meta property="og:title" content="Grantex MCP Auth Server — OAuth 2.1 for Any MCP Server">
-  <meta property="og:description" content="Drop-in OAuth 2.1 + PKCE authorization for any MCP server. Human consent, scoped access, central revocation. Certification application intake is available as a preview.">
+  <meta property="og:title" content="Grantex MCP Auth 2.0.2 — OAuth Endpoint Evaluation Package">
+  <meta property="og:description" content="Evaluate OAuth 2.1 draft profile endpoints for MCP with @grantex/mcp-auth 2.0.2, including consent, state, handoff, hook, and revocation limits.">
   <meta property="og:url" content="https://grantex.dev/mcp">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Grantex MCP authorization endpoint evaluation package">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Grantex">
+  <meta property="og:locale" content="en_US">
 
   <!-- Twitter Card -->
   <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Grantex MCP Auth Server — OAuth 2.1 for Any MCP Server">
-  <meta name="twitter:description" content="Drop-in OAuth 2.1 + PKCE authorization for any MCP server. Human consent, scoped access, central revocation.">
+  <meta name="twitter:title" content="Grantex MCP Auth 2.0.2 — OAuth Endpoint Evaluation Package">
+  <meta name="twitter:description" content="Evaluate OAuth 2.1 draft profile endpoints for MCP with @grantex/mcp-auth 2.0.2, including consent, state, handoff, hook, and revocation limits.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+  <meta name="twitter:image:alt" content="Grantex MCP authorization endpoint evaluation package">
 
-  <!-- JSON-LD Structured Data -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Grantex MCP Auth Server",
-    "applicationCategory": "DeveloperApplication",
-    "operatingSystem": "Any",
-    "url": "https://grantex.dev/mcp",
-    "description": "Drop-in OAuth 2.1 + PKCE authorization server for any MCP server. Human consent, scoped access, central revocation, and certification application preview.",
-    "license": "https://www.apache.org/licenses/LICENSE-2.0",
-    "codeRepository": "https://github.com/mishrasanjeev/grantex",
-    "applicationSubCategory": "Security",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "isPartOf": {
-      "@type": "SoftwareApplication",
-      "name": "Grantex",
-      "url": "https://grantex.dev"
-    }
-  }
-  </script>
-
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    "mainEntity": [
-      {
-        "@type": "Question",
-        "name": "What is the Grantex MCP Auth Server?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "The Grantex MCP Auth Server is a drop-in OAuth 2.1 + PKCE authorization server for any Model Context Protocol (MCP) server. It handles Dynamic Client Registration (RFC 7591), token introspection (RFC 7662), token revocation (RFC 7009), and PKCE S256 — in under 10 lines of code."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Why does my MCP server need OAuth 2.1?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "The MCP specification mandates OAuth 2.1 for transport-level auth. Without it, your MCP server uses API keys or hardcoded JWTs — which lack human consent, scoped permissions, audit trails, and revocation. Grantex MCP Auth Server adds all of these in a single npm install."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "What MCP certification functionality is available?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "The API accepts Bronze, Silver, and Gold certification applications and exposes their pending status. Automated conformance decisions, badge delivery, and automatic tier assignment are not currently implemented."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Can I self-host the MCP Auth Server?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Yes. The MCP Auth Server works in both managed (Grantex Cloud) and self-hosted modes. Self-hosted deployments use the same API — just point the Grantex SDK at your own auth service instance and bring your own persistent client store."
-        }
-      }
-    ]
-  }
-  </script>
+  <!-- Connected structured data; no invisible FAQ markup -->
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://grantex.dev/#organization","name":"Grantex","url":"https://grantex.dev/"},{"@type":"WebSite","@id":"https://grantex.dev/#website","name":"Grantex","url":"https://grantex.dev/","publisher":{"@id":"https://grantex.dev/#organization"}},{"@type":"WebPage","@id":"https://grantex.dev/mcp#webpage","url":"https://grantex.dev/mcp","name":"Grantex MCP Auth 2.0.2 — OAuth Endpoint Evaluation Package","description":"Evaluate OAuth 2.1 draft profile endpoints for MCP with @grantex/mcp-auth 2.0.2, including consent, state, handoff, hook, and revocation limits.","isPartOf":{"@id":"https://grantex.dev/#website"},"about":{"@id":"https://grantex.dev/mcp#source"}},{"@type":"SoftwareSourceCode","@id":"https://grantex.dev/mcp#source","name":"@grantex/mcp-auth","description":"Evaluate OAuth 2.1 draft profile endpoints for MCP with @grantex/mcp-auth 2.0.2, including consent, state, handoff, hook, and revocation limits.","codeRepository":"https://github.com/mishrasanjeev/grantex/tree/main/packages/mcp-auth","license":"https://www.apache.org/licenses/LICENSE-2.0","programmingLanguage":"TypeScript","runtimePlatform":"Node.js 18+","softwareVersion":"2.0.2","url":"https://www.npmjs.com/package/@grantex/mcp-auth","publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/mcp#webpage"}}]}</script>
 
   <style>
     /* ── Design tokens ─────────────────────────────────────────────────────── */
@@ -607,6 +554,7 @@
     }
     @media (max-width: 680px) {
       .deploy-grid { grid-template-columns: 1fr; }
+      .limit-grid { grid-template-columns: 1fr; }
     }
     .deploy-features {
       display: flex;
@@ -716,6 +664,32 @@
       color: var(--muted);
     }
 
+    /* ── Current release limitations ────────────────────────────────────────── */
+    .status-section { padding: 56px 0 64px; }
+    .status-panel {
+      padding: 28px;
+      background: rgba(210, 153, 34, 0.08);
+      border: 1px solid rgba(210, 153, 34, 0.45);
+      border-radius: var(--radius);
+    }
+    .status-panel h2 { margin-bottom: 10px; font-size: 24px; }
+    .status-panel > p { max-width: 860px; color: var(--muted); }
+    .limit-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 22px;
+    }
+    .limit-card {
+      padding: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .limit-card h3 { margin-bottom: 6px; color: var(--yellow); font-size: 15px; }
+    .limit-card p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .status-links { margin-top: 20px; font-size: 14px; }
+
     /* ── Responsive ────────────────────────────────────────────────────────── */
     @media (max-width: 640px) {
       section { padding: 56px 0; }
@@ -724,6 +698,7 @@
       .footer-inner { flex-direction: column; align-items: flex-start; }
       .cert-grid { grid-template-columns: 1fr; }
       .deploy-grid { grid-template-columns: 1fr; }
+      .limit-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -741,7 +716,8 @@
         <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
         <li><a href="/playground">Playground</a></li>
         <li><a href="/" >Home</a></li>
-        <li><a href="#quickstart">Quickstart</a></li>
+        <li><a href="#limitations">Limitations</a></li>
+        <li><a href="#quickstart">Evaluation setup</a></li>
         <li><a href="#certification">Certification</a></li>
         <li><a href="https://www.npmjs.com/package/@grantex/mcp-auth">npm</a></li>
         <li><a href="/dashboard" style="color:var(--accent);font-weight:600;">Dashboard</a></li>
@@ -753,99 +729,134 @@
 <!-- ── Hero ──────────────────────────────────────────────────────────────── -->
 <section class="hero">
   <div class="container">
-    <div class="hero-tag">@grantex/mcp-auth &mdash; GA Release</div>
-    <h1>Your MCP Server Needs<br>Real Authorization.</h1>
+    <div class="hero-tag">@grantex/mcp-auth 2.0.2 &mdash; evaluation release</div>
+    <h1>Evaluate OAuth 2.1 Draft-Profile Building Blocks for MCP.</h1>
     <p>
-      Drop-in OAuth 2.1 + PKCE authorization for any Model Context Protocol server.
-      Human consent, scoped access, central revocation, and a full audit trail &mdash;
-      in under 10 lines of code.
+      The package registers OAuth discovery, dynamic client registration, authorization,
+      token, introspection, and revocation endpoint surfaces, plus JWT middleware.
+      Version 2.0.2 has material state, consent, code-handoff, hook, and live-revocation
+      limitations and is not a production-ready authorization server.
     </p>
     <div class="hero-ctas">
-      <div class="install-hero" onclick="copyInstall('npm install @grantex/mcp-auth', this)">
-        <code>npm install @grantex/mcp-auth</code>
+      <div class="install-hero" onclick="copyInstall('npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13', this)">
+        <code>npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13</code>
         <span class="copy-hint">Copy</span>
       </div>
     </div>
     <div class="hero-ctas" style="margin-bottom:40px;">
-      <a href="https://docs.grantex.dev/features/mcp-auth-server" class="btn btn-primary">Read the Docs</a>
-      <a href="https://github.com/mishrasanjeev/grantex/tree/main/packages/mcp-auth" class="btn btn-secondary">View on GitHub</a>
+      <a href="https://docs.grantex.dev/features/mcp-auth-server" class="btn btn-primary">Read the status guide</a>
+      <a href="https://github.com/mishrasanjeev/grantex/tree/main/packages/mcp-auth" class="btn btn-secondary">Inspect the source</a>
     </div>
     <div class="badge-row">
-      <span class="badge"><span class="dot"></span>OAuth 2.1 + PKCE</span>
-      <span class="badge"><span class="dot"></span>RFC Compliant</span>
-      <span class="badge"><span class="dot"></span>15 min setup</span>
-      <span class="badge"><span class="dot"></span>Self-host or Managed</span>
+      <span class="badge"><span class="dot"></span>OAuth endpoint building blocks</span>
+      <span class="badge"><span class="dot"></span>PKCE S256 checks</span>
+      <span class="badge"><span class="dot"></span>Single-process evaluation</span>
+      <span class="badge"><span class="dot"></span>Node.js 18+ ESM</span>
       <span class="badge"><span class="dot"></span>Apache 2.0</span>
     </div>
   </div>
 </section>
 
-<!-- ── Comparison ────────────────────────────────────────────────────────── -->
+<!-- ── Published limitations ─────────────────────────────────────────────── -->
+<section id="limitations" class="status-section">
+  <div class="container">
+    <div class="status-panel">
+      <div class="section-label">Published package status</div>
+      <h2>Version 2.0.2 is for controlled, single-process evaluation.</h2>
+      <p>
+        These are implementation limits in the published npm artifact, not optional
+        production configuration. Evaluate the endpoint and middleware shape, but do not
+        rely on this release for end-to-end authorization issuance or horizontally scaled state.
+      </p>
+      <div class="limit-grid">
+        <div class="limit-card">
+          <h3>Process-local authorization codes</h3>
+          <p>Authorization codes always use a non-configurable in-memory store. They are not shared across processes or durable across restarts.</p>
+        </div>
+        <div class="limit-card">
+          <h3>No rendered consent page</h3>
+          <p>The <code>consentUi</code> option contributes discovery metadata only; the package does not register or render a consent route.</p>
+        </div>
+        <div class="limit-card">
+          <h3>Incomplete Grantex code handoff</h3>
+          <p>The Grantex authorization code is not persisted for the token handler, so the end-to-end authorization-code exchange can fail.</p>
+        </div>
+        <div class="limit-card">
+          <h3>No live revocation lookup</h3>
+          <p>Middleware and introspection validate JWT signatures and claims but do not query current Grantex revocation state.</p>
+        </div>
+        <div class="limit-card">
+          <h3>Token hook is not invoked</h3>
+          <p><code>onTokenIssued</code> is declared in the API but is not called by the 2.0.2 token path. Host applications cannot treat it as an audit hook.</p>
+        </div>
+        <div class="limit-card">
+          <h3>Client storage is only partial durability</h3>
+          <p>Client registrations default to process memory. A custom <code>ClientStore</code> can persist registrations, but it does not replace the process-local authorization-code store.</p>
+        </div>
+      </div>
+      <p class="status-links">
+        Canonical details:
+        <a href="https://docs.grantex.dev/features/mcp-auth-server">MCP Auth feature status</a>
+        &middot;
+        <a href="https://docs.grantex.dev/release-status">Grantex release status</a>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Capability status ─────────────────────────────────────────────────── -->
 <section id="comparison">
   <div class="container">
-    <div class="section-label">Why Not Just API Keys?</div>
-    <div class="section-title">Most MCP servers ship without real auth.</div>
+    <div class="section-label">Implemented Surface</div>
+    <div class="section-title">What version 2.0.2 provides—and what it does not.</div>
     <p class="section-sub">
-      API keys and hardcoded JWTs are fine for demos. For production, you need consent,
-      scoped permissions, revocation, and an audit trail.
+      The package is useful for inspecting endpoint registration, PKCE validation,
+      client registration, JWT claim checks, and scope middleware. The limitations
+      below prevent a production-readiness or full MCP authorization claim.
     </p>
     <table class="cmp-table">
       <thead>
         <tr>
-          <th>Capability</th>
-          <th>API Keys</th>
-          <th>Hardcoded JWT</th>
-          <th>Grantex MCP Auth</th>
+          <th>Area</th>
+          <th>Implemented in 2.0.2</th>
+          <th>Current boundary</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td>Human consent flow</td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="check">&#x2713;</span></td>
+          <td>Authorization endpoint</td>
+          <td><span class="partial">Request and PKCE validation</span></td>
+          <td>No consent page; Grantex code is not handed durably to the token path</td>
         </tr>
         <tr>
-          <td>Scoped permissions</td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="partial">Manual</span></td>
-          <td><span class="check">&#x2713;</span></td>
+          <td>Scoped middleware</td>
+          <td><span class="check">&#x2713;</span> JWT signature, claims, and required scopes</td>
+          <td>No current-revocation lookup</td>
         </tr>
         <tr>
-          <td>Token revocation endpoint</td>
-          <td><span class="partial">Rotate key</span></td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="check">&#x2713;</span></td>
+          <td>Revocation route</td>
+          <td><span class="partial">Forwards a revocation request</span></td>
+          <td>Subsequent middleware and introspection remain local checks</td>
         </tr>
         <tr>
-          <td>Audit trail</td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="check">&#x2713;</span></td>
+          <td>Audit integration</td>
+          <td><span class="partial">Host can add its own logging</span></td>
+          <td><code>onTokenIssued</code> is not invoked; no full audit trail is supplied</td>
         </tr>
         <tr>
-          <td>RFC standard</td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="partial">Partial</span></td>
-          <td><span class="check">&#x2713;</span></td>
+          <td>Dynamic client registration</td>
+          <td><span class="check">&#x2713;</span> Pluggable <code>ClientStore</code></td>
+          <td>Authorization codes remain process-local even with a durable client store</td>
         </tr>
         <tr>
-          <td>Dynamic Client Registration</td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="check">&#x2713;</span></td>
-        </tr>
-        <tr>
-          <td>Token introspection</td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="check">&#x2713;</span></td>
+          <td>Local JWT signature and claim validation; no live revocation query</td>
+          <td><span class="check">&#x2713;</span> JWT signature and claim validation</td>
+          <td>No online grant or revocation-state query</td>
         </tr>
         <tr class="grantex-row">
-          <td>MCP Spec compliant</td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="cross">&#x2715;</span></td>
-          <td><span class="check">&#x2713;</span></td>
+          <td>Deployment status</td>
+          <td><span class="partial">Single-process evaluation</span></td>
+          <td>No production, horizontal-scale, or full conformance claim</td>
         </tr>
       </tbody>
     </table>
@@ -856,10 +867,10 @@
 <section id="endpoints">
   <div class="container">
     <div class="section-label">What You Get</div>
-    <div class="section-title">Six RFC-compliant endpoints, one function call.</div>
+    <div class="section-title">Six endpoint routes registered by one function call.</div>
     <p class="section-sub">
       <code style="font-family:var(--mono);color:var(--accent2);">createMcpAuthServer()</code> registers
-      everything an MCP client needs to discover, register, authorize, and manage tokens.
+      the documented discovery and OAuth route surface for controlled evaluation. Route presence does not imply complete end-to-end issuance or conformance.
     </p>
     <table class="endpoint-table">
       <thead>
@@ -886,26 +897,26 @@
         <tr>
           <td><span class="method method-get">GET</span></td>
           <td class="path">/authorize</td>
-          <td>OAuth 2.1</td>
-          <td>Authorization (PKCE required)</td>
+          <td>OAuth 2.1 draft profile</td>
+          <td>PKCE-validated authorization request; no rendered consent route</td>
         </tr>
         <tr>
           <td><span class="method method-post">POST</span></td>
           <td class="path">/token</td>
-          <td>OAuth 2.1</td>
-          <td>Token endpoint (code + refresh)</td>
+          <td>OAuth 2.1 draft profile</td>
+          <td>Code and refresh handlers; authorization-code handoff is incomplete</td>
         </tr>
         <tr>
           <td><span class="method method-post">POST</span></td>
           <td class="path">/introspect</td>
           <td>RFC 7662</td>
-          <td>Token introspection</td>
+          <td>Local JWT signature and claim validation; no live revocation query</td>
         </tr>
         <tr>
           <td><span class="method method-post">POST</span></td>
           <td class="path">/revoke</td>
           <td>RFC 7009</td>
-          <td>Token revocation</td>
+          <td>Forwards a revocation request; local middleware state is unchanged</td>
         </tr>
       </tbody>
     </table>
@@ -916,10 +927,10 @@
 <section id="quickstart">
   <div class="container">
     <div class="section-label">Get Started</div>
-    <div class="section-title">Production-ready auth in three steps.</div>
+    <div class="section-title">Evaluate the endpoint surface in three steps.</div>
     <p class="section-sub">
-      Install the package, create the server, protect your routes. MCP clients auto-discover
-      your auth endpoints via the well-known metadata URL.
+      Pin the published packages, run one local process, and inspect the registered routes and middleware.
+      This setup does not repair the consent, code-handoff, hook, or live-revocation gaps.
     </p>
 
     <div class="flow">
@@ -928,10 +939,10 @@
         <div class="step-num">1</div>
         <div class="step-body">
           <h3>Install the package</h3>
-          <p>One dependency. Zero peer requirements beyond the Grantex SDK.</p>
+          <p>Install the exact evaluation release with its Grantex SDK dependency.</p>
           <div class="code-block">
             <button class="copy-btn" onclick="copyCode('code-install', this)">Copy</button>
-            <pre id="code-install"><span class="id">npm</span> <span class="id">install</span> <span class="str">@grantex/mcp-auth</span> <span class="str">@grantex/sdk</span></pre>
+            <pre id="code-install"><span class="id">npm</span> <span class="id">install</span> <span class="str">@grantex/mcp-auth@2.0.2</span> <span class="str">@grantex/sdk@0.3.13</span></pre>
           </div>
         </div>
       </div>
@@ -941,7 +952,7 @@
         <div class="step-num">2</div>
         <div class="step-body">
           <h3>Create the auth server</h3>
-          <p>Define your scopes and issuer. The server handles PKCE, DCR, introspection, and revocation automatically.</p>
+          <p>Define evaluation scopes and an issuer. The package registers the route surface and performs selected PKCE, client, JWT, and scope checks; review the limitations above before exercising token flow.</p>
           <div class="code-block">
             <button class="copy-btn" onclick="copyCode('code-server', this)">Copy</button>
 <pre id="code-server"><span class="kw">import</span> { <span class="id">Grantex</span> } <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
@@ -969,7 +980,7 @@
         <div class="step-num">3</div>
         <div class="step-body">
           <h3>Protect your MCP routes</h3>
-          <p>Drop in the Express or Hono middleware. Every request is verified against the JWKS, scopes are enforced, and decoded grant claims are available in your handler.</p>
+          <p>The Express or Hono middleware validates JWT signatures and claims against JWKS and enforces required scopes. It does not query current revocation state; add an online or synchronized revocation check before protected production actions.</p>
           <div class="code-block">
             <button class="copy-btn" onclick="copyCode('code-middleware', this)">Copy</button>
 <pre id="code-middleware"><span class="kw">import</span> <span class="id">express</span> <span class="kw">from</span> <span class="str">'express'</span>;
@@ -1027,161 +1038,89 @@
     </div>
   </div>
 </section>
-<!-- ── Managed vs Self-Hosted ────────────────────────────────────────────── -->
+<!-- ── Evaluation deployment boundary ────────────────────────────────────── -->
 <section id="deployment">
   <div class="container">
-    <div class="section-label">Deployment</div>
-    <div class="section-title">Managed or self-hosted. Same API.</div>
+    <div class="section-label">Deployment Boundary</div>
+    <div class="section-title">The Grantex backend can be hosted or self-hosted; MCP Auth 2.0.2 still keeps code state in one process.</div>
     <p class="section-sub">
-      Use Grantex Cloud for zero-infrastructure auth, or run the full stack on your own infrastructure.
-      The code is identical &mdash; just point the SDK at a different URL.
+      Changing the Grantex SDK base URL selects the Grantex backend used by the package.
+      It does not make MCP authorization-code state durable, add a consent page, repair
+      the code handoff, invoke the token hook, or add live revocation checks.
     </p>
-
-    <div class="deploy-toggle">
-      <button class="deploy-btn active" onclick="switchDeploy('managed', this)">Managed</button>
-      <button class="deploy-btn" onclick="switchDeploy('selfhost', this)">Self-Hosted</button>
-    </div>
-
-    <!-- Managed Panel -->
-    <div id="deploy-managed" class="deploy-panel active">
-      <div class="deploy-grid">
-        <div class="deploy-features">
-          <div class="deploy-feature">
-            <span class="check-icon">&#x2713;</span>
-            <div>
-              <h4>Zero infrastructure</h4>
-              <p>Grantex Cloud handles signing keys, JWKS hosting, and uptime.</p>
-            </div>
-          </div>
-          <div class="deploy-feature">
-            <span class="check-icon">&#x2713;</span>
-            <div>
-              <h4>Managed deployment</h4>
-              <p>Cloud Run deployment with health checks and CDN-backed public metadata endpoints.</p>
-            </div>
-          </div>
-          <div class="deploy-feature">
-            <span class="check-icon">&#x2713;</span>
-            <div>
-              <h4>Audit evidence tooling</h4>
-              <p>Export audit and authorization records for your own compliance review. No certification is implied.</p>
-            </div>
-          </div>
-          <div class="deploy-feature">
-            <span class="check-icon">&#x2713;</span>
-            <div>
-              <h4>Free tier included</h4>
-              <p>50,000 token exchanges per month. No credit card required.</p>
-            </div>
+    <div class="deploy-grid">
+      <div class="deploy-features">
+        <div class="deploy-feature">
+          <span class="check-icon">&#x2713;</span>
+          <div>
+            <h4>Hosted Grantex backend</h4>
+            <p>Use <code>https://api.grantex.dev</code> for the Grantex API calls made by the package. The MCP wrapper itself still runs in your single Node.js process.</p>
           </div>
         </div>
-        <div class="code-block">
-          <button class="copy-btn" onclick="copyCode('code-managed', this)">Copy</button>
-<pre id="code-managed"><span class="kw">const</span> <span class="id">server</span> = <span class="kw">await</span> <span class="fn">createMcpAuthServer</span>({
-  <span class="id">grantex</span>: <span class="kw">new</span> <span class="fn">Grantex</span>({
-    <span class="id">baseUrl</span>: <span class="str">'https://api.grantex.dev'</span>,
-    <span class="id">apiKey</span>:  <span class="id">process</span>.<span class="id">env</span>.<span class="id">GRANTEX_API_KEY</span>,
-  }),
-  <span class="id">agentId</span>: <span class="str">'ag_your_server'</span>,
-  <span class="id">scopes</span>:  [<span class="str">'tools:read'</span>, <span class="str">'tools:execute'</span>],
-  <span class="id">issuer</span>:  <span class="str">'https://mcp.yourcompany.com'</span>,
-});</pre>
+        <div class="deploy-feature">
+          <span class="check-icon">&#x2713;</span>
+          <div>
+            <h4>Self-hosted Grantex backend</h4>
+            <p>Point the SDK at your own Grantex service when evaluating the same route surface against self-hosted infrastructure.</p>
+          </div>
+        </div>
+        <div class="deploy-feature">
+          <span class="partial">Limit</span>
+          <div>
+            <h4>ClientStore is not a code store</h4>
+            <p>A durable <code>ClientStore</code> can persist registrations only. Authorization codes remain in the package's process-local map.</p>
+          </div>
+        </div>
+        <div class="deploy-feature">
+          <span class="partial">Limit</span>
+          <div>
+            <h4>No horizontal scale or restart durability</h4>
+            <p>Do not put multiple package processes behind a load balancer or expect pending authorization codes to survive a restart.</p>
+          </div>
         </div>
       </div>
-    </div>
-
-    <!-- Self-Hosted Panel -->
-    <div id="deploy-selfhost" class="deploy-panel">
-      <div class="deploy-grid">
-        <div class="deploy-features">
-          <div class="deploy-feature">
-            <span class="check-icon">&#x2713;</span>
-            <div>
-              <h4>Full data sovereignty</h4>
-              <p>All tokens, keys, and audit logs stay on your infrastructure.</p>
-            </div>
-          </div>
-          <div class="deploy-feature">
-            <span class="check-icon">&#x2713;</span>
-            <div>
-              <h4>Your persistent store</h4>
-              <p>Plug in Postgres, Redis, or any database via the ClientStore interface.</p>
-            </div>
-          </div>
-          <div class="deploy-feature">
-            <span class="check-icon">&#x2713;</span>
-            <div>
-              <h4>Docker + Helm + Terraform</h4>
-              <p>Deploy configs for Kubernetes, Cloud Run, ECS, and bare metal.</p>
-            </div>
-          </div>
-          <div class="deploy-feature">
-            <span class="check-icon">&#x2713;</span>
-            <div>
-              <h4>Air-gapped support</h4>
-              <p>Works offline once JWKS is cached. No outbound calls required at runtime.</p>
-            </div>
-          </div>
-        </div>
-        <div class="code-block">
-          <button class="copy-btn" onclick="copyCode('code-selfhost', this)">Copy</button>
-<pre id="code-selfhost"><span class="kw">const</span> <span class="id">server</span> = <span class="kw">await</span> <span class="fn">createMcpAuthServer</span>({
-  <span class="id">grantex</span>: <span class="kw">new</span> <span class="fn">Grantex</span>({
-    <span class="id">baseUrl</span>: <span class="str">'https://auth.your-company.internal'</span>,
-    <span class="id">apiKey</span>:  <span class="id">process</span>.<span class="id">env</span>.<span class="id">GRANTEX_API_KEY</span>,
-  }),
-  <span class="id">agentId</span>: <span class="str">'ag_internal_server'</span>,
-  <span class="id">scopes</span>:  [<span class="str">'internal:read'</span>, <span class="str">'internal:write'</span>],
-  <span class="id">issuer</span>:  <span class="str">'https://auth.your-company.internal'</span>,
-  <span class="cm">// Persistent storage for client registrations</span>
-  <span class="id">clientStore</span>: <span class="kw">new</span> <span class="fn">PostgresClientStore</span>(),
-});</pre>
-        </div>
+      <div class="status-panel">
+        <h2>Evaluation checklist</h2>
+        <p>Run one process, use non-production clients and principals, inspect the registered metadata and routes, test middleware signature/scope rejection, and plan separate consent, durable state, revocation-state, and audit integrations before production design.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ── Security ──────────────────────────────────────────────────────────── -->
+<!-- ── Implemented checks ────────────────────────────────────────────────── -->
 <section id="security">
   <div class="container">
-    <div class="section-label">Security</div>
-    <div class="section-title">OAuth 2.1 means no shortcuts.</div>
+    <div class="section-label">Implemented Checks</div>
+    <div class="section-title">Selected protocol and JWT checks are present, with explicit state and lifecycle gaps.</div>
     <p class="section-sub">
-      Every security decision follows the OAuth 2.1 specification. No implicit grant, no
-      password grant, no symmetric signing, no plain PKCE.
+      These checks are useful evaluation inputs. They do not, by themselves, establish
+      production readiness, complete OAuth or MCP conformance, live revocation, or an audit trail.
     </p>
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
-        <div style="font-size:28px;margin-bottom:12px;">&#x1f512;</div>
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">PKCE S256 Mandatory</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">The <code style="font-family:var(--mono);font-size:12px;">plain</code> method and implicit grant are rejected. Every authorization request requires S256 code challenge.</p>
+        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">PKCE S256 validation</h3>
+        <p style="color:var(--muted);font-size:14px;line-height:1.65;">The authorization route requires an S256 challenge and rejects the <code style="font-family:var(--mono);font-size:12px;">plain</code> method.</p>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
-        <div style="font-size:28px;margin-bottom:12px;">&#x1f511;</div>
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Asymmetric Signing Only</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">HS256 is explicitly rejected. Tokens are verified with RS256, ES256, PS256, or EdDSA via remote JWKS.</p>
+        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">JWT algorithm allowlist</h3>
+        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Middleware verifies supported asymmetric JWT algorithms against configured JWKS and rejects HS256.</p>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
-        <div style="font-size:28px;margin-bottom:12px;">&#x26a1;</div>
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Single-Use Auth Codes</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Authorization codes are consumed on first exchange. Replay attempts are rejected and logged as anomalies.</p>
+        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Process-local code consumption</h3>
+        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Codes in the local store are removed when consumed, but they are not durable or shared and the Grantex code handoff remains incomplete.</p>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
-        <div style="font-size:28px;margin-bottom:12px;">&#x1f6e1;</div>
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Per-Endpoint Rate Limits</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">10/min on authorize, 20/min on token, 30/min on introspect. Configurable per deployment.</p>
+        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Fixed route rate limits</h3>
+        <p style="color:var(--muted);font-size:14px;line-height:1.65;">The published package applies fixed limits of 10/min on authorize and 20/min on token and introspection routes.</p>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
-        <div style="font-size:28px;margin-bottom:12px;">&#x1f4dc;</div>
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Full Audit Trail</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Token issuance can invoke the configured <code style="font-family:var(--mono);font-size:12px;">onTokenIssued</code> callback. Host applications should log introspection and revocation and connect any event destinations they require.</p>
+        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Host-managed audit evidence</h3>
+        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Add explicit host logging for authorization, introspection, and revocation. Do not rely on <code style="font-family:var(--mono);font-size:12px;">onTokenIssued</code>; it is not invoked in 2.0.2.</p>
       </div>
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
-        <div style="font-size:28px;margin-bottom:12px;">&#x1f310;</div>
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Crypto-Grade Secrets</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Client secrets are generated with <code style="font-family:var(--mono);font-size:12px;">crypto.randomBytes(32)</code>. Auth codes use the same entropy source.</p>
+        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Cryptographic client secrets</h3>
+        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Default client secrets and local authorization codes use Node.js cryptographic random bytes.</p>
       </div>
     </div>
   </div>
@@ -1190,14 +1129,14 @@
 <!-- ── CTA Bottom ────────────────────────────────────────────────────────── -->
 <section class="cta-bottom" style="border-top:1px solid var(--border);">
   <div class="container">
-    <h2>Ship your MCP server with real auth.</h2>
+    <h2>Evaluate the MCP authorization endpoint surface.</h2>
     <p>
-      One package. Six authorization endpoints with PKCE, consent, scoped access,
-      token introspection, and revocation support.
+      Use the pinned 2.0.2 package in one controlled process to inspect its routes and middleware.
+      Review the state, consent, code-handoff, hook, and revocation-check limitations before designing a production authorization service.
     </p>
     <div class="hero-ctas">
-      <div class="install-hero" onclick="copyInstall('npm install @grantex/mcp-auth', this)">
-        <code>npm install @grantex/mcp-auth</code>
+      <div class="install-hero" onclick="copyInstall('npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13', this)">
+        <code>npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13</code>
         <span class="copy-hint">Copy</span>
       </div>
     </div>

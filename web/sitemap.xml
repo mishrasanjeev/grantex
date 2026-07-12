@@ -2,133 +2,106 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://grantex.dev/</loc>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
-    <loc>https://grantex.dev/for/mpp</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://grantex.dev/commerce</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://grantex.dev/for/langchain</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://grantex.dev/for/crewai</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://grantex.dev/for/openai-agents</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
+    <loc>https://grantex.dev/for</loc>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
     <loc>https://grantex.dev/for/anthropic</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://grantex.dev/for/google-adk</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://grantex.dev/for/vercel-ai</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
     <loc>https://grantex.dev/for/autogen</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
-    <loc>https://grantex.dev/for/mcp</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
+    <loc>https://grantex.dev/for/crewai</loc>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
     <loc>https://grantex.dev/for/express</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
     <loc>https://grantex.dev/for/fastapi</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
-    <loc>https://grantex.dev/vs/oauth</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
+    <loc>https://grantex.dev/for/google-adk</loc>
+    <lastmod>2026-07-12</lastmod>
+  </url>
+  <url>
+    <loc>https://grantex.dev/for/langchain</loc>
+    <lastmod>2026-07-12</lastmod>
+  </url>
+  <url>
+    <loc>https://grantex.dev/for/mcp</loc>
+    <lastmod>2026-07-12</lastmod>
+  </url>
+  <url>
+    <loc>https://grantex.dev/for/mpp</loc>
+    <lastmod>2026-07-12</lastmod>
+  </url>
+  <url>
+    <loc>https://grantex.dev/for/openai-agents</loc>
+    <lastmod>2026-07-12</lastmod>
+  </url>
+  <url>
+    <loc>https://grantex.dev/for/vercel-ai</loc>
+    <lastmod>2026-07-12</lastmod>
+  </url>
+  <url>
+    <loc>https://grantex.dev/vs</loc>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
     <loc>https://grantex.dev/vs/api-keys</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
     <loc>https://grantex.dev/vs/mcp-auth</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
+    <lastmod>2026-07-12</lastmod>
+  </url>
+  <url>
+    <loc>https://grantex.dev/vs/oauth</loc>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
     <loc>https://grantex.dev/vs/securing-ai-agents</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
     <loc>https://grantex.dev/report/state-of-agent-security-2026</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.9</priority>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
-    <loc>https://grantex.dev/gemma</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://grantex.dev/mcp</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://grantex.dev/dpdp</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://grantex.dev/registry</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
+    <loc>https://grantex.dev/commerce</loc>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
     <loc>https://grantex.dev/anomaly</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
-    <loc>https://grantex.dev/llms.txt</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
+    <loc>https://grantex.dev/dpdp</loc>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
-    <loc>https://grantex.dev/llms-full.txt</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
+    <loc>https://grantex.dev/gemma</loc>
+    <lastmod>2026-07-12</lastmod>
+  </url>
+  <url>
+    <loc>https://grantex.dev/mcp</loc>
+    <lastmod>2026-07-12</lastmod>
+  </url>
+  <url>
+    <loc>https://grantex.dev/registry</loc>
+    <lastmod>2026-07-12</lastmod>
   </url>
   <url>
     <loc>https://grantex.dev/x402</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
+    <lastmod>2026-07-12</lastmod>
   </url>
-
 </urlset>

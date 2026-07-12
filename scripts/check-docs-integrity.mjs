@@ -4,6 +4,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+import { validateSeoAeo } from './check-seo-aeo.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const docsRoot = path.join(root, 'docs');
@@ -399,11 +400,11 @@ async function loadReleaseSnapshot() {
     snapshot = JSON.parse(await fs.readFile(snapshotPath, 'utf8'));
   } catch (error) {
     failures.push('release-status.json is unreadable or invalid JSON: ' + error.message);
-    return { schemaVersion: 1, verifiedAt: '', artifacts: [] };
+    return { schemaVersion: 2, verifiedAt: '', artifacts: [] };
   }
 
-  if (snapshot.schemaVersion !== 1) {
-    failures.push('release-status.json must use schemaVersion 1');
+  if (snapshot.schemaVersion !== 2) {
+    failures.push('release-status.json must use schemaVersion 2');
   }
   if (typeof snapshot.verifiedAt !== 'string' || !isValidIsoDate(snapshot.verifiedAt)) {
     failures.push('release-status.json must have a verifiedAt date in YYYY-MM-DD format');
@@ -445,7 +446,7 @@ async function loadReleaseSnapshot() {
   const seenIds = new Set();
   const seenNames = new Set();
   for (const artifact of artifacts) {
-    for (const field of ['id', 'label', 'ecosystem', 'name', 'version', 'status', 'registryUrl']) {
+    for (const field of ['id', 'label', 'ecosystem', 'name', 'version', 'status', 'installCommand', 'runtime', 'registryUrl', 'packageUrl', 'documentationUrl']) {
       if (typeof artifact?.[field] !== 'string' || !artifact[field]) {
         failures.push('release-status.json artifact is missing string field ' + field);
       }
@@ -462,12 +463,32 @@ async function loadReleaseSnapshot() {
     if (artifact.id && expectedStatus.has(artifact.id) && artifact.status !== expectedStatus.get(artifact.id)) {
       failures.push('release-status.json artifact ' + artifact.id + ' must use status ' + expectedStatus.get(artifact.id));
     }
-    if (artifact.status === 'published-with-known-limitations' && (
-      !Array.isArray(artifact.limitations)
-      || artifact.limitations.length === 0
-      || artifact.limitations.some((item) => typeof item !== 'string' || !item)
-    )) {
-      failures.push('release-status.json artifact ' + artifact.id + ' must list its known limitations');
+    if (!Array.isArray(artifact.limitations)) {
+      failures.push('release-status.json artifact ' + artifact.id + ' limitations must be an array');
+    } else {
+      if (artifact.status === 'published-with-known-limitations' && artifact.limitations.length === 0) {
+        failures.push('release-status.json artifact ' + artifact.id + ' must list its known limitations');
+      }
+      const limitationIds = new Set();
+      for (const limitation of artifact.limitations) {
+        for (const field of ['id', 'summary', 'workaround', 'workaroundUrl']) {
+          if (typeof limitation?.[field] !== 'string' || !limitation[field]) {
+            failures.push('release-status.json artifact ' + artifact.id + ' has a limitation missing ' + field);
+          }
+        }
+        if (limitation?.id) {
+          if (limitationIds.has(limitation.id)) failures.push('release-status.json artifact ' + artifact.id + ' repeats limitation id ' + limitation.id);
+          limitationIds.add(limitation.id);
+        }
+        try {
+          const workaround = new URL(limitation?.workaroundUrl);
+          if (workaround.protocol !== 'https:' || workaround.hostname !== 'docs.grantex.dev') {
+            failures.push('release-status.json artifact ' + artifact.id + ' has a non-docs workaround URL');
+          }
+        } catch {
+          failures.push('release-status.json artifact ' + artifact.id + ' has an invalid workaround URL');
+        }
+      }
     }
 
     const expected = required.get(artifact.id);
@@ -497,7 +518,7 @@ async function loadReleaseSnapshot() {
   }
 
   const validArtifacts = artifacts.filter((artifact) => artifact
-    && ['id', 'label', 'ecosystem', 'name', 'version', 'status', 'registryUrl']
+    && ['id', 'label', 'ecosystem', 'name', 'version', 'status', 'installCommand', 'runtime', 'registryUrl', 'packageUrl', 'documentationUrl']
       .every((field) => typeof artifact[field] === 'string' && artifact[field]));
   return { ...snapshot, artifacts: validArtifacts };
 }
@@ -838,6 +859,7 @@ await validateLocks();
 await validateContexts();
 await validateYamlArtifacts();
 await validateOpenApi();
+failures.push(...await validateSeoAeo({ root, docsRoot, webRoot }));
 const releaseSnapshot = await validateReleaseCopy();
 if (live) {
   await validatePublishedVersions(releaseSnapshot);

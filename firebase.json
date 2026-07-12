@@ -34,30 +34,51 @@
         ]
       },
       {
-        "source": "sitemap.xml",
+        "source": "/sitemap.xml",
         "headers": [
-          { "key": "Cache-Control", "value": "public,max-age=3600" },
-          { "key": "Content-Type", "value": "application/xml" }
+          { "key": "Cache-Control", "value": "public,max-age=3600,s-maxage=3600,must-revalidate" },
+          { "key": "Content-Type", "value": "application/xml; charset=utf-8" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" }
         ]
       },
       {
-        "source": "robots.txt",
+        "source": "/robots.txt",
         "headers": [
-          { "key": "Cache-Control", "value": "public,max-age=86400" }
+          { "key": "Cache-Control", "value": "public,max-age=3600,s-maxage=3600,must-revalidate" },
+          { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" }
         ]
       },
       {
-        "source": "llms.txt",
+        "source": "/llms.txt",
         "headers": [
-          { "key": "Cache-Control", "value": "public,max-age=86400" },
-          { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+          { "key": "Cache-Control", "value": "public,max-age=3600,s-maxage=3600,must-revalidate" },
+          { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" }
         ]
       },
       {
-        "source": "llms-full.txt",
+        "source": "/llms-full.txt",
         "headers": [
-          { "key": "Cache-Control", "value": "public,max-age=86400" },
-          { "key": "Content-Type", "value": "text/plain; charset=utf-8" }
+          { "key": "Cache-Control", "value": "public,max-age=3600,s-maxage=3600,must-revalidate" },
+          { "key": "Content-Type", "value": "text/plain; charset=utf-8" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" }
+        ]
+      },
+      {
+        "source": "/ld.json",
+        "headers": [
+          { "key": "Cache-Control", "value": "public,max-age=3600,s-maxage=3600,must-revalidate" },
+          { "key": "Content-Type", "value": "application/ld+json; charset=utf-8" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" }
+        ]
+      },
+      {
+        "source": "/release-status.json",
+        "headers": [
+          { "key": "Cache-Control", "value": "public,max-age=300,s-maxage=300,must-revalidate" },
+          { "key": "Content-Type", "value": "application/json; charset=utf-8" },
+          { "key": "Access-Control-Allow-Origin", "value": "*" }
         ]
       },
       {

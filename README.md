@@ -2,7 +2,7 @@
 
 # Grantex
 
-### Delegated Authorization Protocol for AI Agents
+### Open-Source AI Agent Authorization and Delegated Access
 
 **What OAuth 2.0 is to humans, Grantex is to agents.**
 
@@ -24,7 +24,7 @@
 
 <br/>
 
-[Docs](https://docs.grantex.dev) | [Playground](https://grantex.dev/playground) | [Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) | [Dashboard](https://grantex.dev/dashboard) | [IETF Draft](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
+[Docs](https://docs.grantex.dev) | [Quickstart](https://docs.grantex.dev/quickstart) | [Release JSON](https://grantex.dev/release-status.json) | [LLM Index](https://grantex.dev/llms.txt) | [Spec](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) | [IETF Draft](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
 
 <br/>
 
@@ -34,9 +34,15 @@
 
 </div>
 
-## OACP Authority For Agentic Commerce
+## What is Grantex?
 
-Grantex is the OACP protocol, trust, policy, artifact, verification, and adapter authority for agentic commerce. AgenticOrg owns buyer and seller AI-agent runtime, merchant self-service onboarding, Shopify connector runtime, future merchant connector setup intent, buyer sessions, channel bridges, OACP cache, and provider-owned capability verification.
+Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
+
+Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal. Use Grantex when an AI agent acts for a person or organization and a relying service must verify exactly what that agent may do.
+
+## Open Agentic Commerce Protocol (OACP) Authority
+
+Open Agentic Commerce Protocol (OACP) is Grantex's agentic-commerce trust and artifact-authority layer. Grantex governs OACP policy, internal artifact issuance or refusal, verification, and compatibility adapters. AgenticOrg owns buyer and seller AI-agent runtime, merchant self-service onboarding, Shopify connector runtime, future merchant connector setup intent, buyer sessions, channel bridges, OACP cache, and provider-owned capability verification.
 
 Merchant systems such as Shopify, future WooCommerce/ERP sources, POS systems, and provider systems remain the source of record. Provider, bank, POS, and payment rails own mandate, payment, and in-store execution. Grantex signs and verifies artifacts; it is not a merchant connector runtime or a toll booth for every buyer and seller message.
 
@@ -71,7 +77,7 @@ Current public releases, verified 2026-07-12:
 | TypeScript SDK | `@grantex/sdk` `0.3.13` | `npm install @grantex/sdk@0.3.13` |
 | Python SDK | `grantex` `0.3.14` | `python -m pip install grantex==0.3.14` |
 | Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.1.10` (Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.1.10` |
-| MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | `npm install @grantex/mcp-auth@2.0.2` |
+| MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13` |
 
 > **Known published-package limits:** Go SDK `v0.1.10` does not populate
 > `Agent.ID` from the API's `agentId` response and its audit type omits two
@@ -88,7 +94,7 @@ Omit a version pin to install the registry's current latest release. See the [re
 - **@grantex/dpdp**: DPDP Act 2023 and EU AI Act control mappings
 - **Trust Registry**: Public DID verification registry — `grantex.dev/registry`
 - **`grantex verify`**: Token inspection CLI — no account needed
-- **Anomaly Detection**: 10 built-in rules, Slack/PagerDuty/Datadog integration
+- **Anomaly Detection**: Four implemented SQL-backed checks, lifecycle APIs, and stored rule/channel configuration; notification delivery requires a host worker
 
 ---
 
@@ -133,7 +139,7 @@ if (!auth.code) {
 ```bash
 python -m pip install grantex==0.3.14               # Python SDK
 go get github.com/mishrasanjeev/grantex-go@v0.1.10 # Go SDK (Go 1.26.1+)
-npm install @grantex/mcp-auth@2.0.2                 # MCP Authorization Server
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13 # MCP endpoint evaluation
 npm install -g @grantex/cli                         # Optional CLI tooling
 ```
 
@@ -152,7 +158,7 @@ AI agents are booking travel, sending emails, deploying code, and spending money
 - **No delegation control** — Agent A calls Agent B? Copy-paste credentials
 - **No spending limits** — an agent with a cloud API key can provision unlimited resources
 
-OAuth solved this for web apps. IAM solved it for cloud. **AI agents have nothing. Until now.**
+OAuth and IAM provide essential foundations, but many agent deployments still rely on shared credentials that do not identify the individual agent or encode its delegated authority.
 
 ---
 
@@ -230,10 +236,10 @@ console.log(grant.scopes);     // ['calendar:read', 'payments:initiate:max_500']
 await travelAgent.run({ grantToken: token.grantToken, task: 'Book cheapest flight to Delhi on March 1' });
 ```
 
-### 5. Log every action
+### 5. Record the action at the execution boundary
 
 ```typescript
-// Inside your agent — one audit API call
+// At the trusted execution boundary: explicitly record the outcome
 await grantex.audit.log({
   agentId: agent.id,
   agentDid: agent.did,
@@ -345,7 +351,7 @@ Grantex tokens are standard JWTs (RS256) extended with agent-specific claims. An
 | `agt` | The agent's DID — cryptographically verifiable identity |
 | `dev` | The developer org that built the agent |
 | `scp` | Exact scopes granted — services should check these |
-| `jti` | Unique token ID — used for real-time revocation |
+| `jti` | Unique token ID — used for grant-state and revocation checks |
 | `grnt` | Grant record ID — links token to the persisted grant |
 | `aud` | Intended audience (optional) — services should reject tokens with a mismatched `aud` |
 
@@ -398,20 +404,20 @@ delegated = grantex.grants.delegate(
 ## Advanced Features
 
 <details>
-<summary><strong>Enterprise SSO</strong> — OIDC + SAML 2.0 + LDAP with multi-IdP, JIT provisioning, and group mapping</summary>
+<summary><strong>Enterprise SSO</strong> - OIDC and SAML 2.0, plus an LDAP direct-bind preview</summary>
 
 ## Enterprise SSO
 
-Grantex provides full enterprise SSO support with OIDC, SAML 2.0, and LDAP protocols. Organizations can configure multiple identity provider connections, map email domains to specific IdPs, enforce SSO for all users, and automatically provision principals via JIT (Just-in-Time) provisioning.
+Grantex provides OIDC and SAML 2.0 enterprise SSO with multiple identity-provider connections, email-domain routing, enforcement, JIT provisioning, and group-to-scope mapping from identity-provider claims. The LDAP surface is a direct-bind preview: it authenticates a supplied directory identity but does not search directories or retrieve LDAP groups.
 
 **Key capabilities:**
-- **Multi-IdP connections** — Configure multiple OIDC, SAML 2.0, and LDAP identity providers per organization
+- **Multi-IdP connections** - Configure multiple OIDC and SAML 2.0 identity providers per organization; LDAP connection records support the direct-bind preview
 - **OIDC Discovery + JWKS verification** — Automatic endpoint discovery and cryptographic ID token verification
 - **SAML 2.0** — Full SAML response parsing with certificate-based signature verification
-- **LDAP / Active Directory** — Direct bind authentication against LDAP directories (OpenLDAP, Active Directory, FreeIPA)
+- **LDAP / Active Directory preview** - Direct-bind authentication only; directory search and LDAP group retrieval are not implemented
 - **Domain-based routing** — Automatically route users to the correct IdP based on their email domain
 - **JIT provisioning** — Auto-create or update principals on first SSO login
-- **Group-to-scope mapping** — Map IdP groups/roles to Grantex scopes
+- **Group-to-scope mapping** - Map OIDC or SAML group/role claims to Grantex scopes; this does not retrieve LDAP groups
 - **SSO enforcement** — Require SSO authentication for all users in an organization
 - **Session management** — Track, list, and revoke active SSO sessions
 
@@ -570,7 +576,7 @@ client.webauthn.delete_credential(credential_id)
 
 ## Verifiable Credentials
 
-Grantex can issue W3C Verifiable Credentials (VCs) alongside standard JWTs. While JWTs are optimized for real-time authorization, VCs provide a portable, tamper-proof, standards-compliant proof of authorization that can be presented to any verifier — including systems outside the Grantex ecosystem.
+Grantex can issue W3C Verifiable Credentials (VCs) alongside standard JWTs. While JWTs are optimized for real-time authorization, VCs provide a portable, tamper-evident, standards-based proof of authorization that can be presented to any verifier — including systems outside the Grantex ecosystem.
 
 ### Why VCs Matter for Agents
 
@@ -668,27 +674,26 @@ curl https://api.grantex.dev/.well-known/did.json
 
 ## MPP Agent Identity
 
-MPP (Machine Payments Protocol) defines how AI agents pay for services via HTTP 402 flows. Grantex adds the missing identity layer: an `AgentPassportCredential` (W3C VC 2.0) that lets any merchant verify *who* authorized a payment, *what* the agent is allowed to buy, and *how much* it can spend locally after retrieving the issuer's JWKS.
+MPP (Machine Payments Protocol) defines HTTP 402 payment flows for software clients. Grantex can attach an `AgentPassportCredential` based on W3C Verifiable Credentials 2.0 so a configured merchant can verify agent, principal, category, amount-limit, expiry, and delegation claims after obtaining the issuer keys and current status data. The credential carries authorization context; it does not prove that a payment settled, an order was approved, or a provider accepted the transaction.
 
 ### Why Agent Passports?
 
-When an agent makes an MPP payment today, the `source` field is a wallet address — no human name, no organization, no authorization chain. For $0.10 API calls, nobody cares. For $500 B2B procurement, this is a compliance blocker. Visa and Mastercard are building proprietary agent identity networks (Trusted Agent Protocol, AgentPay), but these are closed and non-interoperable.
+A wallet or payment-source identifier may not tell a merchant which internal agent is acting, which principal delegated authority, or which policy limits apply. An agent passport can supply that context when both sides integrate and enforce it.
 
-Grantex passports are the open, standards-based answer: a W3C VC 2.0 credential signed with Ed25519, carrying the full delegation chain from human to agent, with StatusList2021 revocation and a public trust registry.
+The current Grantex passport shape uses Ed25519 signatures, a W3C VC 2.0 data model, configured purchase categories, transaction ceilings, expiry, delegation context, and StatusList2021-style status data. A relying merchant must still validate the issuer, refresh keys and status according to its risk policy, enforce the claims at the protected action, and run its own payment, fraud, sanctions, order, and settlement controls.
 
 ### How It Works
 
 | Step | Who | What |
 |------|-----|------|
-| **1. Issue** | Human | Issues `AgentPassportCredential` via Grantex — W3C VC 2.0, Ed25519 signed, with categories (`inference`, `compute`), spending limit (50 USDC), and expiry (24h) |
-| **2. Store** | Agent | Receives and stores the passport credential |
-| **3. Pay** | Agent | Makes MPP payment request with `Authorization: Payment` header + `X-Grantex-Passport: <base64url-credential>` header |
-| **4. Verify** | Merchant | Calls `verifyPassport()` — checks the Ed25519 signature, expiry, categories, and amount limit using a JWKS cache that refreshes periodically |
-| **5. Deliver** | Merchant | Returns the resource — knows the human principal, org, and full delegation chain |
-| **6. Audit** | System | Every issuance, verification, and revocation is logged. Revoke anytime via StatusList2021 bit-flip |
+| **1. Issue** | Authorized application | Requests an `AgentPassportCredential` with configured categories, amount ceiling, delegation context, and expiry |
+| **2. Store** | Agent host | Stores the credential as sensitive authorization material |
+| **3. Present** | Agent host | Attaches the credential to a supported MPP request when the integration is configured |
+| **4. Verify** | Merchant service | Verifies signature, issuer, expiry, category, amount, and sufficiently current status data |
+| **5. Decide** | Merchant and payment systems | Apply merchant policy plus independent payment, order, provider, and settlement checks before execution |
+| **6. Record** | Each participating system | Records the events it is configured to observe; credential verification alone is not an execution or settlement audit log |
 
-> **Key insight**: The passport is a self-contained W3C VC. Merchants verify it locally using JWKS cached for one hour; the verifier fetches the keys initially and again when the cache expires.
-
+> **Verification boundary:** cached keys can support local signature checks after retrieval. Current revocation requires refreshed status data, and cache policy determines how quickly a relying service observes a change.
 ### Credential Structure
 
 | Field | Description |
@@ -1351,7 +1356,7 @@ See the [self-hosting guide](https://docs.grantex.dev/guides/self-hosting) for p
 
 Grantex is built as an **open protocol**, not a closed SaaS product. Here's why that matters:
 
-**Model-neutral.** Works with OpenAI, Anthropic, Google, Llama, Mistral — any model, any framework. No single AI provider can credibly own the authorization layer for their competitors' agents.
+**Model-neutral.** Grantex operates at the SDK or protected-service boundary rather than depending on one model provider. The project documents use with OpenAI, Anthropic, Google, Llama, and Mistral models.
 
 **Framework-native.** First-class integrations for LangChain, AutoGen, CrewAI, OpenAI Agents SDK, Google ADK, Strands Agents SDK, and plain code. Install one package, get Grantex in your existing stack.
 
@@ -1380,36 +1385,38 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 ## Integrations
 
+The primary SDK versions below are registry-verified as of 2026-07-12. For integration packages, “Published package” identifies a public package surface; check its registry page and compatibility notes before choosing a version.
+
 | Framework | Package | Install | Status |
 |-----------|---------|---------|--------|
-| **Gemma 4 (Offline Auth)** | `@grantex/gemma` | `npm install @grantex/gemma` | ✅ Shipped |
-| **Gemma 4 (Python)** | `grantex-gemma` | `pip install grantex-gemma` | ✅ Shipped |
-| **DPDP Compliance** | `@grantex/dpdp` | `npm install @grantex/dpdp` | ✅ Shipped |
-| **Adapters** | `@grantex/adapters` | `npm install @grantex/adapters` | ✅ Shipped |
-| **MCP Tool Server** | `@grantex/mcp` (`0.1.10`) | `npm install @grantex/mcp` | ✅ Shipped |
-| **MCP Authorization Server** | `@grantex/mcp-auth` (`2.0.2`) | `npm install @grantex/mcp-auth` | ⚠️ Published; evaluate documented limitations |
-| **Gateway** | `@grantex/gateway` | `npm install @grantex/gateway` | ✅ Shipped |
-| **Express.js** | `@grantex/express` | `npm install @grantex/express` | ✅ Shipped |
-| **FastAPI** | `grantex-fastapi` | `pip install grantex-fastapi` | ✅ Shipped |
-| **LangChain** | `@grantex/langchain` | `npm install @grantex/langchain` | ✅ Shipped |
-| **AutoGen / OpenAI** | `@grantex/autogen` | `npm install @grantex/autogen` | ✅ Shipped |
-| **CrewAI** | `grantex-crewai` | `pip install grantex-crewai` | ✅ Shipped |
-| **OpenAI Agents SDK** | `grantex-openai-agents` | `pip install grantex-openai-agents` | ✅ Shipped |
-| **Google ADK** | `grantex-adk` | `pip install grantex-adk` | ✅ Shipped |
-| **Strands Agents SDK (TypeScript)** | `@grantex/strands` | `npm install @grantex/strands` | ✅ Shipped |
-| **Strands Agents SDK (Python)** | `grantex-strands` | `pip install grantex-strands` | ✅ Shipped |
-| **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | ✅ Shipped |
-| **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | ✅ Shipped |
-| **TypeScript SDK** | `@grantex/sdk` (`0.3.13`) | `npm install @grantex/sdk` | ✅ Shipped |
-| **Python SDK** | `grantex` (`0.3.14`) | `python -m pip install grantex` | ✅ Shipped |
-| **Go SDK** | `grantex-go` (`v0.1.10`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go` | ✅ Shipped |
-| **CLI** | `@grantex/cli` | `npm install -g @grantex/cli` | ✅ Shipped |
-| **Conformance Suite** | `@grantex/conformance` | `npm install -g @grantex/conformance` | ✅ Shipped |
-| **A2A Bridge (TS)** | `@grantex/a2a` | `npm install @grantex/a2a` | ✅ Shipped |
-| **A2A Bridge (Py)** | `grantex-a2a` | `pip install grantex-a2a` | ✅ Shipped |
-| **Event Destinations** | `@grantex/destinations` | `npm install @grantex/destinations` | ✅ Shipped |
-| **Terraform Provider** | `terraform-provider-grantex` | `terraform { required_providers { grantex = { source = "mishrasanjeev/grantex" } } }` | ✅ Shipped |
-| **x402 Payment Protocol** | `@grantex/x402` | `npm install @grantex/x402` | ✅ Shipped |
+| **Gemma 4 (Offline Auth)** | `@grantex/gemma` | `npm install @grantex/gemma` | Published package |
+| **Gemma 4 (Python)** | `grantex-gemma` | `pip install grantex-gemma` | Published package |
+| **DPDP Compliance** | `@grantex/dpdp` | `npm install @grantex/dpdp` | Published package |
+| **Adapters** | `@grantex/adapters` | `npm install @grantex/adapters` | Published package |
+| **MCP Tool Server** | `@grantex/mcp` (`0.1.10`) | `npm install @grantex/mcp` | Published package |
+| **MCP Authorization Server** | `@grantex/mcp-auth` (`2.0.2`) | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13` | Published; single-process evaluation only |
+| **Gateway** | `@grantex/gateway` | `npm install @grantex/gateway` | Published package |
+| **Express.js** | `@grantex/express` | `npm install @grantex/express` | Published package |
+| **FastAPI** | `grantex-fastapi` | `pip install grantex-fastapi` | Published package |
+| **LangChain** | `@grantex/langchain` | `npm install @grantex/langchain` | Published package |
+| **AutoGen / OpenAI** | `@grantex/autogen` | `npm install @grantex/autogen` | Published package |
+| **CrewAI** | `grantex-crewai` | `pip install grantex-crewai` | Published package |
+| **OpenAI Agents SDK** | `grantex-openai-agents` | `pip install grantex-openai-agents` | Published package |
+| **Google ADK** | `grantex-adk` | `pip install grantex-adk` | Published package |
+| **Strands Agents SDK (TypeScript)** | `@grantex/strands` | `npm install @grantex/strands` | Published package |
+| **Strands Agents SDK (Python)** | `grantex-strands` | `pip install grantex-strands` | Published package |
+| **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | Published package |
+| **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | Published package |
+| **TypeScript SDK** | `@grantex/sdk` (`0.3.13`) | `npm install @grantex/sdk@0.3.13` | Registry-verified primary release |
+| **Python SDK** | `grantex` (`0.3.14`) | `python -m pip install grantex==0.3.14` | Registry-verified primary release |
+| **Go SDK** | `grantex-go` (`v0.1.10`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.1.10` | Registry-verified; workarounds documented |
+| **CLI** | `@grantex/cli` | `npm install -g @grantex/cli` | Published package |
+| **Conformance Suite** | `@grantex/conformance` | `npm install -g @grantex/conformance` | Published package |
+| **A2A Bridge (TS)** | `@grantex/a2a` | `npm install @grantex/a2a` | Published package |
+| **A2A Bridge (Py)** | `grantex-a2a` | `pip install grantex-a2a` | Published package |
+| **Event Destinations** | `@grantex/destinations` | `npm install @grantex/destinations` | Published package |
+| **Terraform Provider** | `terraform-provider-grantex` | `terraform { required_providers { grantex = { source = "mishrasanjeev/grantex" } } }` | Source present; verify registry before pinning |
+| **x402 Payment Protocol** | `@grantex/x402` | `npm install @grantex/x402` | Published package |
 
 ### Community x402 services
 
@@ -1663,19 +1670,19 @@ Walk through all 7 steps of the protocol: register an agent, authorize, exchange
 
 ## Roadmap
 
-All listed roadmap milestones through v2.4 are complete. These labels are historical product milestones, not a shared npm, PyPI, Go module, or monorepo release line; package versions vary independently, while the protocol specification remains v1.0 Final. See [ROADMAP.md](https://github.com/mishrasanjeev/grantex/blob/main/ROADMAP.md) for completed and active work.
+These labels are historical planning milestones. They record repository work, not current package publication, production readiness, or complete support for every highlighted capability. The [release-status guide](https://docs.grantex.dev/release-status), [compatibility matrix](COMPATIBILITY.md), and package-specific documentation are authoritative for current versions and limitations.
 
-| Milestone | Highlights | Status |
-|-----------|-----------|--------|
-| **v0.1 — Foundation** | Protocol spec, TypeScript & Python SDKs, auth service, consent UI, audit trail, multi-agent delegation, sandbox mode | ✅ Complete |
-| **v0.2 — Integrations** | LangChain, AutoGen, webhooks, Stripe billing, CLI | ✅ Complete |
-| **v0.3 — Enterprise** | CrewAI, Vercel AI, compliance exports, policy engine, SCIM/SSO, anomaly detection | ✅ Complete |
-| **v1.0 — Stable Protocol** | Protocol spec finalized (v1.0), security audit, SOC 2 readiness mapping, individual IETF Internet-Draft submission | ✅ Complete |
-| **v2.0 — Platform** | MCP Authorization Server, Credential Vault, 7 new adapters, webhook delivery log, examples | ✅ Complete |
-| **v2.1 — Enterprise Scale** | Event streaming, budget controls, observability, Terraform provider, gateway, conformance | ✅ Complete |
-| **v2.2 — Ecosystem** | OPA/Cedar policy backends, A2A protocol bridge, usage metering, custom domains, policy-as-code | ✅ Complete |
-| **v2.3 — Trust & Identity** | FIDO2/WebAuthn passkeys, W3C Verifiable Credentials, SD-JWT selective disclosure, DID infrastructure, StatusList2021 revocation, Mastercard Verifiable Intent | ✅ Complete |
-| **v2.4 — Enterprise SSO** | OIDC + SAML 2.0 + LDAP multi-IdP connections, OIDC Discovery + JWKS verification, LDAP directory authentication, domain-based routing, JIT provisioning, group-to-scope mapping, SSO enforcement, session management | ✅ Complete |
+| Milestone | Historical scope | Current interpretation |
+|-----------|------------------|------------------------|
+| **v0.1 - Foundation** | Protocol spec, TypeScript and Python SDKs, auth service, consent UI, audit trail, multi-agent delegation, sandbox mode | Historical source milestone |
+| **v0.2 - Integrations** | LangChain, AutoGen, webhooks, Stripe billing, CLI | Historical source milestone; verify package status |
+| **v0.3 - Enterprise** | CrewAI, Vercel AI, compliance exports, policy engine, SCIM/SSO, anomaly detection | Historical source milestone; feature boundaries vary |
+| **v1.0 - Stable Protocol** | Protocol specification v1.0, security material, SOC 2 readiness mapping, individual IETF Internet-Draft | Protocol v1.0 is final; mappings and the draft are not certifications or IETF endorsement |
+| **v2.0 - Platform** | MCP authorization package, Credential Vault, adapters, webhook delivery log, examples | Historical source milestone; MCP Auth 2.0.2 is single-process evaluation software |
+| **v2.1 - Enterprise Scale** | Event streaming, budget controls, observability, Terraform source, gateway, conformance | Historical source milestone; verify each deployment surface |
+| **v2.2 - Ecosystem** | OPA/Cedar backends, A2A bridge, usage metering, custom-domain registration, policy-as-code | Historical source milestone; custom-domain runtime routing varies |
+| **v2.3 - Trust and Identity** | Passkeys, Verifiable Credentials, SD-JWT, DID infrastructure, status data, intent mappings | Historical source milestone; mappings are not third-party certification |
+| **v2.4 - Enterprise SSO** | OIDC and SAML 2.0 multi-IdP support, JIT provisioning, group mapping, enforcement, sessions, LDAP direct-bind preview | Historical source milestone; LDAP directory search and group retrieval are not implemented |
 
 ---
 
@@ -1722,13 +1729,13 @@ Add your company logo here:
 ## FAQ
 
 **Is this just another auth library?**  
-No. Existing auth systems (Auth0, Okta, Supabase) are built for humans logging in. Grantex is built for autonomous agents acting on behalf of humans — a fundamentally different trust model with different primitives (delegation, scope chains, agent identity, real-time revocation, action audit trails).
+Human identity systems and Grantex solve different layers. Human auth establishes who the person is; Grantex carries the scoped authority that person or organization delegated to a specific agent. Current revocation requires an online state check or synchronized revocation data at the enforcement point.
 
 **Why not just use OAuth 2.0?**  
 OAuth 2.0 was designed for "user grants app permission to access their data." Agents introduce new requirements: the agent needs a verifiable identity separate from its creator, grants need to be chainable across multi-agent pipelines, and every autonomous action must be attributable and auditable. We extend OAuth 2.0 concepts but add the agent-specific primitives it lacks.
 
 **What about MCP (Model Context Protocol)?**  
-MCP solves tool connectivity — how agents access data and call functions. Grantex solves trust — proving that an agent is authorized to use those tools on behalf of a specific human. They're complementary. A Grantex-authorized agent uses MCP tools.
+MCP connects clients to tools and resources and defines optional OAuth-based authorization for HTTP transports. Grantex adds agent-specific delegated authority at the tool or service boundary: which agent may perform which action for which principal. The two layers are complementary.
 
 **Who owns the standard?**  
 The v1.0 protocol specification is open (Apache 2.0), and Grantex Inc. maintains the reference implementation. An active -01 document is published as an individual IETF Internet-Draft; that publication is not working-group adoption or IETF endorsement.

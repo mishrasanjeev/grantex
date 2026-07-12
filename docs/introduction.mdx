@@ -1,34 +1,37 @@
 ---
-title: "Introduction"
+title: "Grantex AI Agent Authorization"
 sidebarTitle: "Introduction"
-description: "Grantex is the open delegated authorization protocol for AI agents — what OAuth 2.0 is to humans, Grantex is to agents."
+description: "Learn how Grantex provides delegated authorization, verifiable identity, scoped permissions, human consent, and audit records for AI agents."
+keywords: ["AI agent authorization", "delegated authorization", "OAuth for AI agents", "agent identity", "agent permissions"]
 ---
 
 ## What is Grantex?
 
-AI agents are acting in the world — booking travel, sending emails, executing trades, managing files — on behalf of real humans. But the foundational trust infrastructure for this doesn't exist yet:
+AI agents are acting in the world — booking travel, sending emails, executing trades, managing files — on behalf of real humans. Many agent systems still rely on shared credentials and application-level controls that cannot answer these questions reliably:
 
 - No standard way to grant an agent **scoped, time-limited permissions** on your behalf
 - Services can't verify whether an agent is **genuinely authorized** by the claimed human
-- No **auditable, tamper-proof record** of what an agent did, when, and under whose authority
+- No **auditable, tamper-evident record** of what an agent did, when, and under whose authority
 - Multi-agent pipelines have no way to **chain authorization** — a sub-agent can't prove it was legitimately spawned
 
-Grantex solves this. It's an open protocol that lets humans authorize AI agents with **verifiable, revocable, audited grants** built on JWT and the OAuth 2.0 model.
+Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
+
+Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal.
 
 ## Key Properties
 
 <CardGroup cols={2}>
   <Card title="Model-Neutral" icon="microchip">
-    Works with OpenAI, Anthropic, Google, Llama, Mistral — any model, any framework.
+    Works with OpenAI, Anthropic, Google, Llama, and Mistral models. Framework adapters cover LangChain, Vercel AI SDK, and CrewAI; other stacks can integrate at the SDK or service boundary.
   </Card>
   <Card title="Framework-Native" icon="puzzle-piece">
     First-class integrations for LangChain, AutoGen, CrewAI, Vercel AI, OpenAI Agents SDK, Google ADK, and MCP.
   </Card>
   <Card title="Offline-Verifiable" icon="shield-check">
-    Services verify tokens using published JWKS — zero runtime dependency on Grantex infrastructure.
+    Services verify token signatures and claims using published JWKS after retrieving the keys. Current revocation still requires an online state check or synchronized revocation data.
   </Card>
-  <Card title="Compliance-Ready" icon="file-certificate">
-    Tamper-evident audit trail, compliance exports, and evidence packs for SOC 2 and GDPR.
+  <Card title="Compliance Evidence" icon="file-certificate">
+    Audit records, control mappings, exports, and evidence-pack tooling can support reviews such as SOC 2 and GDPR assessments; they do not by themselves establish certification or legal compliance.
   </Card>
 </CardGroup>
 
@@ -99,7 +102,7 @@ npm install -g @grantex/cli
                 ┌──────────────────────────┐
                 │  Any Service / API       │
                 │  Verifies via JWKS       │
-                │  No Grantex dep needed   │
+                │  No Grantex SDK needed   │
                 └──────────────────────────┘
 ```
 
@@ -107,18 +110,18 @@ npm install -g @grantex/cli
 
 <AccordionGroup>
   <Accordion title="Is this just another auth library?">
-    No. Existing auth systems (Auth0, Okta, Supabase) are built for humans logging in. Grantex is built for autonomous agents acting on behalf of humans — a fundamentally different trust model with different primitives (delegation, scope chains, agent identity, real-time revocation, action audit trails).
+    Human identity systems and Grantex solve different layers. Human auth establishes who the person is; Grantex carries the scoped authority that person or organization delegated to a specific agent. Current revocation requires an online state check or synchronized revocation data at the enforcement point.
   </Accordion>
   <Accordion title="Why not just use OAuth 2.0?">
     OAuth 2.0 was designed for "user grants app permission to access their data." Agents introduce new requirements: the agent needs a verifiable identity separate from its creator, grants need to be chainable across multi-agent pipelines, and every autonomous action must be attributable and auditable. We extend OAuth 2.0 concepts but add the agent-specific primitives it lacks.
   </Accordion>
   <Accordion title="What about MCP (Model Context Protocol)?">
-    MCP solves tool connectivity — how agents access data and call functions. Grantex solves trust — proving that an agent is authorized to use those tools on behalf of a specific human. They're complementary. A Grantex-authorized agent uses MCP tools.
+    MCP connects clients to tools and resources and defines optional OAuth-based authorization for HTTP transports. Grantex adds agent-specific delegated authority at the tool or service boundary: which agent may perform which action for which principal. The two layers are complementary.
   </Accordion>
   <Accordion title="Can I self-host?">
     Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See the [self-hosting guide](/guides/self-hosting).
   </Accordion>
   <Accordion title="Who owns the standard?">
-    The protocol spec is open (Apache 2.0). The goal is to contribute the spec to a neutral standards body (W3C, IETF, or CNCF) once it stabilizes. An [IETF Internet-Draft](/community/ietf-draft) has already been submitted.
+    The Grantex protocol specification is open under Apache 2.0 and frozen at v1.0. The related [Delegated Agent Authorization Protocol (DAAP) Internet-Draft](/community/ietf-draft) is an individual submission for discussion; it is not an IETF-adopted or endorsed standard.
   </Accordion>
 </AccordionGroup>

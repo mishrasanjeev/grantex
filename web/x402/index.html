@@ -3,40 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Grantex x402 — Agent Spend Authorization for HTTP 402 Payment Flows</title>
-<meta name="description" content="Add authorization to x402 payment flows. Grantex Delegation Tokens prove which agent was authorized to spend, with scope, limits, and audit trails.">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+<title>Grantex x402 — Authorization for Agent Payment Flows</title>
+<meta name="description" content="Add verifiable authorization claims to configured x402 payment requests, with merchant-enforced scope and limits plus optional audit logging.">
 <link rel="canonical" href="https://grantex.dev/x402">
+  <link rel="alternate" type="text/plain" href="/llms.txt" title="Grantex LLM index">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
 <!-- OpenGraph -->
-<meta property="og:title" content="Grantex x402 — Agent Spend Authorization for HTTP 402 Payment Flows">
-<meta property="og:description" content="Add authorization to x402 payment flows. Grantex Delegation Tokens prove which agent was authorized to spend, with scope, limits, and audit trails.">
+<meta property="og:title" content="Grantex x402 — Authorization for Agent Payment Flows">
+<meta property="og:description" content="Add verifiable authorization claims to configured x402 payment requests, with merchant-enforced scope and limits plus optional audit logging.">
 <meta property="og:url" content="https://grantex.dev/x402">
 <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Grantex authorization for x402 agent payments">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Grantex">
+  <meta property="og:locale" content="en_US">
 
 <!-- Twitter Card -->
 <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Grantex x402 — Agent Spend Authorization for HTTP 402 Payment Flows">
-<meta name="twitter:description" content="Add authorization to x402 payment flows. Grantex Delegation Tokens prove which agent was authorized to spend, with scope, limits, and audit trails.">
+<meta name="twitter:title" content="Grantex x402 — Authorization for Agent Payment Flows">
+<meta name="twitter:description" content="Add verifiable authorization claims to configured x402 payment requests, with merchant-enforced scope and limits plus optional audit logging.">
 <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+  <meta name="twitter:image:alt" content="Grantex authorization for x402 agent payments">
 
 <!-- JSON-LD -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  "name": "Grantex x402",
-  "applicationCategory": "DeveloperApplication",
-  "operatingSystem": "Any",
-  "url": "https://grantex.dev/x402",
-  "description": "Add authorization to x402 payment flows. Grantex Delegation Tokens prove which agent was authorized to spend, with scope, limits, and audit trails.",
-  "license": "https://www.apache.org/licenses/LICENSE-2.0",
-  "author": { "@type": "Organization", "name": "Grantex", "url": "https://grantex.dev" }
-}
-</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://grantex.dev/x402#webpage","url":"https://grantex.dev/x402","name":"Grantex x402 — Authorization for Agent Payment Flows","description":"Add verifiable authorization claims to configured x402 payment requests, with merchant-enforced scope and limits plus optional audit logging.","isPartOf":{"@id":"https://grantex.dev/#website"},"about":{"@id":"https://grantex.dev/x402#reference-implementation"},"breadcrumb":{"@id":"https://grantex.dev/x402#breadcrumb"},"dateModified":"2026-07-12","inLanguage":"en"},{"@type":"SoftwareSourceCode","@id":"https://grantex.dev/x402#reference-implementation","name":"Grantex x402 integration","url":"https://grantex.dev/x402","description":"Add verifiable authorization claims to configured x402 payment requests, with merchant-enforced scope and limits plus optional audit logging.","codeRepository":"https://github.com/mishrasanjeev/grantex","license":"https://www.apache.org/licenses/LICENSE-2.0","programmingLanguage":"TypeScript","author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/x402#webpage"}},{"@type":"BreadcrumbList","@id":"https://grantex.dev/x402#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"Grantex x402 — Authorization for Agent Payment Flows","item":"https://grantex.dev/x402"}]}]}</script>
 
 <!-- Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
@@ -133,7 +128,7 @@ footer .links{display:flex;gap:24px;justify-content:center;margin-bottom:12px}
 <div class="hero-badge">HTTP 402 + Grantex</div>
 <h1>Grantex &times; x402</h1>
 <p class="subtitle">Agent Spend Authorization for HTTP 402 Payment Flows</p>
-<p class="desc">The x402 protocol enables AI agents to pay for APIs with USDC on Base L2. Grantex adds the missing layer: proving the agent was <strong>authorized</strong> to spend. No compromised agents draining wallets. No unauthorized payments.</p>
+<p class="desc">This example applies Grantex authorization claims to an x402 flow using USDC on Base L2. A merchant integration can reject invalid or out-of-scope requests, but it does not replace payment validation or prevent wallet compromise.</p>
 <div class="hero-actions">
 <a href="/x402-playground/" class="btn btn-primary">Try the Playground</a>
 <a href="https://github.com/mishrasanjeev/grantex" class="btn btn-outline">View on GitHub</a>
@@ -146,7 +141,7 @@ footer .links{display:flex;gap:24px;justify-content:center;margin-bottom:12px}
 <section>
 <div class="container">
 <h2>The Gap in x402</h2>
-<p class="section-desc">x402 solves payments. Grantex solves authorization.</p>
+<p class="section-desc">x402 carries payment requirements; Grantex can add verifiable authorization context.</p>
 <div class="comparison">
 <div class="card">
 <h3><span class="icon-circle icon-red">!</span> Without Grantex</h3>
@@ -154,7 +149,7 @@ footer .links{display:flex;gap:24px;justify-content:center;margin-bottom:12px}
 </div>
 <div class="card highlight">
 <h3><span class="icon-circle icon-green">&check;</span> With Grantex</h3>
-<p>Every x402 payment carries a Grantex Delegation Token (GDT) &mdash; a W3C Verifiable Credential that encodes who authorized the spend, what scope it covers, the maximum spend limit, the expiry, and the full delegation chain.</p>
+<p>A configured x402 request can carry a Grantex Delegation Token (GDT) with signed principal, scope, limit, expiry, and delegation claims. The merchant must verify and enforce those claims before serving the protected action.</p>
 </div>
 </div>
 </div>
@@ -168,8 +163,8 @@ footer .links{display:flex;gap:24px;justify-content:center;margin-bottom:12px}
 <div class="steps">
 <div class="step"><h3>Issue GDT</h3><p>Principal issues a scoped delegation token: weather:read, $10/day, 24h expiry.</p></div>
 <div class="step"><h3>Attach to Request</h3><p>Agent sends the request with X-Grantex-GDT header containing the signed JWT.</p></div>
-<div class="step"><h3>Pay + Verify</h3><p>API returns 402, agent pays with USDC, API verifies both payment and GDT.</p></div>
-<div class="step"><h3>Audit Trail</h3><p>Every authorization event is logged: who, what, when, how much.</p></div>
+<div class="step"><h3>Pay + Verify</h3><p>API returns 402; the configured payment handler validates settlement and the merchant verifies the GDT before serving the protected response.</p></div>
+<div class="step"><h3>Audit Trail</h3><p>Integrated code can send selected authorization and payment events to the configured logger; the default logger is in-memory and not durable.</p></div>
 </div>
 </div>
 </section>
@@ -264,11 +259,11 @@ app.<span class="fn">get</span>(<span class="str">'/api/weather/forecast'</span>
 <h2>Features</h2>
 <div class="features">
 <div class="feature"><h3>W3C VC 2.0</h3><p>Standards-compliant Verifiable Credentials for interoperability.</p></div>
-<div class="feature"><h3>Ed25519 Signatures</h3><p>Fast, secure EdDSA cryptographic signatures. Offline verification.</p></div>
-<div class="feature"><h3>Spend Limits</h3><p>Per-period caps prevent wallet drain. $10/day, $100/week, etc.</p></div>
+<div class="feature"><h3>Ed25519 Signatures</h3><p>Ed25519 signature verification can use cached keys; current revocation state still requires refreshed status material.</p></div>
+<div class="feature"><h3>Spend Limits</h3><p>Signed limit claims must be enforced transactionally by the merchant or payment handler; claims alone do not prevent wallet drain.</p></div>
 <div class="feature"><h3>Revocation Registry</h3><p>Verification checks token revocation. Use a shared registry when enforcement spans multiple processes or services.</p></div>
-<div class="feature"><h3>Pluggable Audit Trail</h3><p>Issuance, verification, rejection, and payment events go to the configured audit logger; the default logger is in-memory.</p></div>
-<div class="feature"><h3>Base L2 Native</h3><p>Built for USDC on Base L2. Pluggable payment handlers for any chain.</p></div>
+<div class="feature"><h3>Pluggable Audit Trail</h3><p>Integrated issuance, verification, rejection, and payment paths can emit events to a configured logger; the default logger is in-memory.</p></div>
+<div class="feature"><h3>Base L2 Native</h3><p>The documented example targets USDC on Base L2. Other chains require a compatible payment handler and application-level testing.</p></div>
 </div>
 </div>
 </section>
@@ -286,7 +281,7 @@ Principal ──── issueGDT() ───── GDT (W3C VC 2.0 JWT)
                               402 Payment   GDT Verify
                                    |        |
                               Base L2 Pay   Audit Log
-                              (USDC)        (append-only)
+                              (USDC)        (configured)
                                    |
                               Revocation Registry
 </div>

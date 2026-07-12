@@ -1,7 +1,8 @@
 ---
-title: "Quickstart"
+title: "AI Agent Authorization Quickstart"
 sidebarTitle: "Quickstart"
-description: "Get up and running with Grantex in under 5 minutes."
+description: "Implement AI agent authorization with Grantex: register an agent, request consent, exchange a code, verify a JWT grant, and write audit records."
+keywords: ["AI agent authorization quickstart", "OAuth for AI agents", "scoped agent permissions", "JWT grant token"]
 ---
 
 ## 1. Install the SDK
@@ -48,6 +49,8 @@ console.log(agent.did);
 ```
 
 ```python Python
+import os
+
 from grantex import Grantex
 
 client = Grantex(api_key=os.environ["GRANTEX_API_KEY"])
@@ -202,7 +205,7 @@ grantex tokens exchange --code <code> --agent-id ag_01HXYZ...
 ```
 </CodeGroup>
 
-## 5. Verify the token offline
+## 5. Verify token signatures and claims locally
 
 <CodeGroup>
 ```typescript TypeScript
@@ -246,6 +249,12 @@ grantex tokens verify <jwt>
 # Shows: valid, grantId, scopes, principal, agent, expiresAt
 ```
 </CodeGroup>
+
+<Note>
+  Local verification retrieves or reuses the issuer's JWKS and checks the token's
+  signature and claims. It does not prove current revocation unless the verifier
+  performs an online state check or synchronizes revocation data.
+</Note>
 
 ## 6. Log every action
 
