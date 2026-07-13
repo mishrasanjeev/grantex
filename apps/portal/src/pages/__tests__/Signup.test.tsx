@@ -32,8 +32,15 @@ describe('Signup', () => {
 
   it('renders the signup form', () => {
     renderSignup();
-    expect(screen.getByLabelText('Name')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Email/)).toBeInTheDocument();
+    const name = screen.getByLabelText('Name');
+    const email = screen.getByLabelText(/Email/);
+    expect(screen.getByRole('main')).toBeInTheDocument();
+    expect(name).toHaveAttribute('name', 'name');
+    expect(name).toHaveAttribute('autocomplete', 'organization');
+    expect(name).toBeRequired();
+    expect(email).toHaveAttribute('name', 'email');
+    expect(email).toHaveAttribute('autocomplete', 'email');
+    expect(email).not.toBeRequired();
     expect(screen.getByRole('button', { name: 'Create Account' })).toBeInTheDocument();
   });
 
@@ -81,6 +88,7 @@ describe('Signup', () => {
     await user.type(screen.getByLabelText('Name'), 'Acme');
     await user.click(screen.getByRole('button', { name: 'Create Account' }));
     await waitFor(() => expect(screen.getByText('gx_live_key123')).toBeInTheDocument());
+    expect(screen.getByRole('main')).toBeInTheDocument();
     expect(screen.getByText('Account created')).toBeInTheDocument();
     expect(screen.getByText(/Save your API key/)).toBeInTheDocument();
   });

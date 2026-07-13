@@ -62,7 +62,7 @@ export function Signup() {
 
   if (newKey) {
     return (
-      <div className="min-h-screen bg-gx-bg flex items-center justify-center px-4">
+      <main className="min-h-screen bg-gx-bg flex items-center justify-center px-4">
         <Card className="w-full max-w-md">
           <div className="text-center mb-6">
             <div className="w-12 h-12 rounded-full bg-gx-accent/15 flex items-center justify-center mx-auto mb-3">
@@ -70,7 +70,7 @@ export function Signup() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-lg font-semibold text-gx-text">Account created</h2>
+            <h1 className="text-lg font-semibold text-gx-text">Account created</h1>
             <p className="text-sm text-gx-muted mt-1">
               Save your API key — you won&apos;t see it again.
             </p>
@@ -91,12 +91,12 @@ export function Signup() {
             Continue to Dashboard
           </Button>
         </Card>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gx-bg flex items-center justify-center px-4">
+    <main className="min-h-screen bg-gx-bg flex items-center justify-center px-4">
       <Card className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="font-mono text-xl font-bold text-gx-accent mb-1">
@@ -112,7 +112,10 @@ export function Signup() {
             </label>
             <input
               id="name"
+              name="name"
               type="text"
+              autoComplete="organization"
+              required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Acme Corp"
@@ -127,7 +130,9 @@ export function Signup() {
             </label>
             <input
               id="email"
+              name="email"
               type="email"
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="dev@acme.com"
@@ -147,6 +152,6 @@ export function Signup() {
           </Link>
         </p>
       </Card>
-    </div>
+    </main>
   );
 }

@@ -29,7 +29,7 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gx-bg flex items-center justify-center px-4">
+    <main className="min-h-screen bg-gx-bg flex items-center justify-center px-4">
       <Card className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="font-mono text-xl font-bold text-gx-accent mb-1">
@@ -45,7 +45,10 @@ export function Login() {
             </label>
             <input
               id="apiKey"
+              name="apiKey"
               type="password"
+              autoComplete="current-password"
+              required
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder="gx_live_..."
@@ -66,6 +69,6 @@ export function Login() {
           </Link>
         </p>
       </Card>
-    </div>
+    </main>
   );
 }
