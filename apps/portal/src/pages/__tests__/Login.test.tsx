@@ -30,7 +30,12 @@ describe('Login', () => {
 
   it('renders the login form with API key input', () => {
     renderLogin();
-    expect(screen.getByLabelText('API Key')).toBeInTheDocument();
+    const apiKeyInput = screen.getByLabelText('API Key');
+    expect(screen.getByRole('main')).toBeInTheDocument();
+    expect(apiKeyInput).toBeInTheDocument();
+    expect(apiKeyInput).toHaveAttribute('name', 'apiKey');
+    expect(apiKeyInput).toHaveAttribute('autocomplete', 'current-password');
+    expect(apiKeyInput).toBeRequired();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
     expect(screen.getByText(/Sign in to your developer dashboard/)).toBeInTheDocument();
   });
