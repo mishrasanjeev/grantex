@@ -9,7 +9,11 @@ data:
   PORT: {{ .Values.config.port | quote }}
   HOST: {{ .Values.config.host | quote }}
   JWT_ISSUER: {{ .Values.config.jwtIssuer | quote }}
+  CORS_ALLOWED_ORIGINS: {{ .Values.config.corsAllowedOrigins | quote }}
   METRICS_ENABLED: {{ .Values.metrics.enabled | quote }}
+  {{- with .Values.config.trustProxy }}
+  TRUST_PROXY: {{ . | quote }}
+  {{- end }}
   {{- if .Values.opentelemetry.enabled }}
   OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.opentelemetry.endpoint | quote }}
   OTEL_SERVICE_NAME: "grantex-auth-service"

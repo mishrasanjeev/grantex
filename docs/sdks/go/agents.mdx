@@ -3,6 +3,15 @@ title: "Agents"
 description: "Register and manage AI agents"
 ---
 
+<Warning>
+  Published Go SDK `v0.1.10` expects `id` while the API returns `agentId`, so its
+  `Agent.ID` remains empty. It also serializes optional registration zero values,
+  cannot update `status`, and cannot send an explicit empty `scopes` array.
+  Provide registration fields explicitly and use REST for status changes or scope
+  clearing. Repository source on `main` corrects these contracts with API-shaped
+  fixtures, but no corrected module tag has been published.
+</Warning>
+
 ## Register
 
 ```go

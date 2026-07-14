@@ -15,11 +15,18 @@ info:
     Public endpoints (health, JWKS, consent, SSO flow) require no authentication.
 
     ## Rate Limits
-    - **Global IP guard**: 500 requests/minute
+    - **Default Fastify IP policy (routes without an override)**: 5,000 requests/minute per source IP
+    - **Standard developer API-key - Free plan**: 100 requests/minute per developer
+    - **Standard developer API-key - Pro plan**: 500 requests/minute per developer
+    - **Standard developer API-key - Enterprise plan**: 2,000 requests/minute per developer
     - **POST /v1/authorize**: 10 requests/minute per developer
     - **POST /v1/token**: 20 requests/minute
     - **POST /v1/token/refresh**: 20 requests/minute
     - JWKS endpoint is allowlisted from rate limiting
+
+    A route-specific Fastify limit replaces the 5,000 requests/minute default for that route. The Redis-backed standard developer API-key plan budget is additional whenever standard API-key authentication applies.
+    Commerce, the SCIM Bearer data-plane routes under `/scim/v2/*`, admin, and other custom-auth routes do not consume these plan buckets; the standard API-key-authenticated `/v1/scim/tokens` management routes do.
+    These defaults describe repository source; verify managed-environment rollout separately.
   license:
     name: Apache 2.0
     url: https://opensource.org/licenses/Apache-2.0
@@ -223,7 +230,7 @@ components:
         hash:
           type: string
         prevHash:
-          type: string
+          type: [string, "null"]
         timestamp:
           type: string
           format: date-time

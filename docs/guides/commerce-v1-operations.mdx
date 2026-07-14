@@ -45,7 +45,7 @@ provider credentials, or secrets.
 
 Rate-limit evidence for M6C:
 
-- JWKS is the only route allowlisted from the global rate limiter.
+- JWKS is exempt from Fastify rate limiting.
 - `/.well-known/grantex-commerce` is limited to 60 requests per minute.
 - `/mcp` is limited to 600 requests per minute.
 - Provider webhooks are limited to 1000 requests per minute.
@@ -57,9 +57,10 @@ Rate-limit evidence for M6C:
 - Cart create is limited to 120 requests per minute.
 - Catalog search is limited to 600 requests per minute.
 
-These route-local limits are enforced with the existing Fastify rate-limit stack and do not weaken
-the global 500 requests per minute safety net. Spec-level caller-keyed budgets per merchant, agent,
-or provider remain an operations refinement if stricter production quota isolation is required.
+These route-local Fastify limits replace the 5,000 requests per minute Fastify default on those
+routes; they are not layered with that default. Commerce routes use custom authentication and do
+not consume the standard developer API-key plan bucket. Caller-keyed budgets per merchant, agent,
+or provider remain an open operations refinement for production quota isolation.
 
 ## Pilot SLA And Readiness Dashboard
 

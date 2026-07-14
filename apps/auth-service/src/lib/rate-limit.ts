@@ -13,8 +13,9 @@ export interface RateLimitResult {
  * the authenticated developer and has to key on IP. Call this from a route
  * handler once `request.developer` is known to apply a per-developer cap.
  *
- * Fixed-window counter in Redis: one key per (identifier, window), TTL set
- * on first increment so expired keys self-clean.
+ * Fixed-window counter in Redis: one key per (identifier, window). INCR and
+ * EXPIREAT execute in one transaction so a partial connection failure cannot
+ * leave a counter without a TTL.
  */
 export async function checkRateLimit(
   identifier: string,
@@ -26,14 +27,26 @@ export async function checkRateLimit(
   const windowIndex = Math.floor(nowSeconds / windowSeconds);
   const key = `ratelimit:${identifier}:${windowIndex}`;
 
-  const count = await redis.incr(key);
-  if (count === 1) {
-    await redis.expire(key, windowSeconds);
+  const windowEndSeconds = (windowIndex + 1) * windowSeconds;
+  const transaction = redis.multi();
+  transaction.incr(key);
+  transaction.expireat(key, windowEndSeconds);
+  const results = await transaction.exec();
+
+  const increment = results?.[0];
+  const expiry = results?.[1];
+  if (!increment || !expiry) {
+    throw new Error('Rate limit transaction did not return both results');
+  }
+  if (increment[0]) throw increment[0];
+  if (expiry[0]) throw expiry[0];
+
+  const count = Number(increment[1]);
+  if (!Number.isFinite(count)) {
+    throw new Error('Rate limit transaction returned an invalid count');
   }
 
-  // Reset is the time until the current window ends; derived from the window
-  // index rather than a second Redis TTL call, so this stays to one round-trip.
-  const resetSeconds = Math.max(1, (windowIndex + 1) * windowSeconds - nowSeconds);
+  const resetSeconds = Math.max(1, windowEndSeconds - nowSeconds);
 
   return {
     allowed: count <= max,

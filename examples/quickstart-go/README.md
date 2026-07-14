@@ -13,8 +13,12 @@ End-to-end demo of the core Grantex authorization lifecycle using the Go SDK.
 
 ## Prerequisites
 
-- Go 1.21+
+- Go 1.26.1+
 - Docker (for the local Grantex stack)
+
+> This example's `go.mod` replaces the public module with `../../packages/go-sdk`,
+> so it exercises corrected repository source. A successful local run does not
+> prove that published `v0.1.10` contains the agent-ID and audit-write fixes.
 
 ## Run
 
@@ -39,7 +43,7 @@ Token verified offline:
   principalId: test-user-001
   agentDid:    did:grantex:ag_01...
   scopes:      calendar:read, email:send
-Audit entry logged: aud_01...
+Audit entry logged: alog_01...
 Token revoked.
 Post-revocation verify: revoked
 
@@ -52,3 +56,4 @@ Done! Full authorization lifecycle complete.
 |---|---|---|
 | `GRANTEX_URL` | `http://localhost:3001` | Auth service base URL |
 | `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key (sandbox mode) |
+| `GRANTEX_ISSUER` | Derived from the JWKS URL | Optional expected JWT `iss`; set it when the auth service's `JWT_ISSUER` differs from the JWKS origin |

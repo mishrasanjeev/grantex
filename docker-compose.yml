@@ -43,8 +43,10 @@ services:
       AUTO_GENERATE_KEYS: "true"
       SEED_API_KEY: dev-api-key-local
       SEED_SANDBOX_KEY: sandbox-api-key-local
-      NODE_ENV: production
+      NODE_ENV: development
+      LOG_PRETTY: "false"
       PUBLIC_BASE_URL: http://localhost:3001
+      JWT_ISSUER: http://localhost:3001
       ADMIN_API_KEY: local-admin-api-key
       METRICS_API_KEY: local-metrics-api-key
       VAULT_ENCRYPTION_KEY: 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f

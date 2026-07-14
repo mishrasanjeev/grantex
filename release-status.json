@@ -19,7 +19,7 @@
   "selectionGuidance": {
     "typescriptApplication": "Use @grantex/sdk@0.3.13.",
     "pythonApplication": "Use grantex==0.3.14.",
-    "goApplication": "Use github.com/mishrasanjeev/grantex-go@v0.1.10 with the documented agent-ID and audit-write workarounds.",
+    "goApplication": "Use github.com/mishrasanjeev/grantex-go@v0.1.10 with the documented published-version workarounds.",
     "mcpProductionIntegration": "Use established MCP-compatible transport authorization first, then a primary Grantex SDK or direct JWKS validation for agent-specific tool enforcement; treat @grantex/mcp-auth@2.0.2 as single-process evaluation software.",
     "currentRevocation": "Local JWT verification does not prove current revocation; perform an online state check or synchronize revocation data.",
     "mcpTransportAuthorization": "For MCP HTTP transport authorization, use an established MCP-compatible authorization server and maintained MCP SDK that implement the current MCP authorization specification.",
@@ -78,6 +78,30 @@
           "summary": "LogAuditParams omits the API-required agentDid and principalId fields.",
           "workaround": "Use the REST API or CLI for audit writes.",
           "workaroundUrl": "https://docs.grantex.dev/sdks/go/audit#log"
+        },
+        {
+          "id": "go-list-response-metadata",
+          "summary": "Agent and audit list responses declare total, page, and pageSize fields that the API does not return.",
+          "workaround": "Use len(result.Agents) or len(result.Entries); do not rely on pagination metadata in v0.1.10.",
+          "workaroundUrl": "https://docs.grantex.dev/sdks/go/overview#known-v0110-limitations"
+        },
+        {
+          "id": "go-agent-write-payload",
+          "summary": "Agent registration sends optional zero values, while agent updates cannot send status or an explicit empty scopes array.",
+          "workaround": "Provide description and scopes explicitly on registration; use the REST API to change status or clear all scopes.",
+          "workaroundUrl": "https://docs.grantex.dev/sdks/go/agents"
+        },
+        {
+          "id": "go-audit-read-contract",
+          "summary": "AuditEntry omits developerId, and audit list parameters expose since, until, page, and pageSize filters that the API ignores.",
+          "workaround": "Use only agentId, grantId, principalId, and action filters; decode raw REST responses when developerId is required.",
+          "workaroundUrl": "https://docs.grantex.dev/sdks/go/audit"
+        },
+        {
+          "id": "go-query-encoding",
+          "summary": "List helpers concatenate query values without URL encoding reserved characters.",
+          "workaround": "Avoid reserved characters in typed list filters or issue the request directly with a net/url-encoded query string.",
+          "workaroundUrl": "https://docs.grantex.dev/sdks/go/overview#known-v0110-limitations"
         }
       ]
     },

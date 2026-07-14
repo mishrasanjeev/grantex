@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { isIP } from 'node:net';
 import {
   commercePublicDiscoveryMerchantAllowlist,
   isCommercePublicDiscoveryEnabled,
@@ -12,6 +13,38 @@ function required(name: string): string {
 
 function optional(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
+}
+
+export type TrustProxySetting = false | number | string[];
+
+export function parseTrustProxySetting(value: string | undefined): TrustProxySetting {
+  if (!value || value.trim() === '' || value.trim() === 'false') return false;
+
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) {
+    return parseIntegerSetting('TRUST_PROXY', trimmed, 1, 16);
+  }
+
+  const proxies = trimmed.split(',').map((entry) => entry.trim()).filter(Boolean);
+  if (proxies.length === 0 || proxies.some((entry) => !isProxyIpOrCidr(entry))) {
+    throw new Error('TRUST_PROXY must list trusted proxy IPs/CIDRs or a hop count from 1 to 16');
+  }
+  return proxies;
+}
+
+function isProxyIpOrCidr(value: string): boolean {
+  const slash = value.lastIndexOf('/');
+  if (slash === -1) return isIP(value) !== 0;
+  if (value.indexOf('/') !== slash) return false;
+
+  const address = value.slice(0, slash);
+  const prefix = value.slice(slash + 1);
+  const version = isIP(address);
+  if (version === 0 || !/^\d+$/.test(prefix)) return false;
+
+  const bits = version === 4 ? 32 : 128;
+  const prefixLength = Number(prefix);
+  return prefixLength >= 1 && prefixLength <= bits;
 }
 
 export function parseIntegerSetting(
@@ -65,6 +98,7 @@ function isValidVaultEncryptionKey(value: string): boolean {
 export const config = {
   port: integerSetting('PORT', '3001', 1, 65_535),
   host: optional('HOST', '0.0.0.0'),
+  trustProxy: parseTrustProxySetting(process.env['TRUST_PROXY']),
   databaseUrl: required('DATABASE_URL'),
   redisUrl: required('REDIS_URL'),
   rsaPrivateKey: process.env['RSA_PRIVATE_KEY'] ?? null,

@@ -138,6 +138,8 @@ curl http://localhost:3001/health
 |----------|---------|-------------|
 | `PORT` | `3001` | HTTP port |
 | `HOST` | `0.0.0.0` | Bind address |
+| `TRUST_PROXY` | `false` | Trusted proxy hop count (`1`-`16`) or comma-separated IP/CIDR allowlist used to derive the client IP |
+| `CORS_ALLOWED_ORIGINS` | `https://grantex.dev,https://portal.grantex.dev,http://localhost:5173` | Comma-separated exact browser origins allowed to call the API; use an empty value to disable cross-origin browser access |
 | `NODE_ENV` | `development` | `production` enables optimizations |
 | `LOG_LEVEL` | `info` | Pino log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal` |
 | `STRIPE_SECRET_KEY` | (none) | Stripe billing integration |
@@ -165,6 +167,21 @@ curl http://localhost:3001/health
 ### Startup Validation
 
 The service validates required configuration on startup. If `DATABASE_URL`, `REDIS_URL`, or JWT signing key is missing, the process exits with code 1 and logs which values are missing.
+
+### Trusted Proxy Configuration
+
+`TRUST_PROXY` controls whether Fastify may derive `request.ip` from
+`X-Forwarded-For`. It is disabled by default, so forwarding headers from direct
+clients are ignored. Set it only when the auth service can be reached
+exclusively through a proxy chain you control.
+
+The value may be a hop count from `1` to `16` or a comma-separated list of
+trusted proxy IP addresses/CIDRs. A numeric value trusts that many closest
+network hops. It is safe only when every request follows the same path and a
+shorter path cannot reach the service; otherwise a client may supply a
+forwarded address that falls inside the trusted distance. Prefer an explicit
+IP/CIDR allowlist when proxy addresses are stable. Unrestricted values such as
+`true`, `*`, `0.0.0.0/0`, and `::/0` are rejected.
 
 ---
 
@@ -203,7 +220,7 @@ pg_dump -U grantex -h localhost grantex > backup.sql
 ## Redis
 
 Used for:
-- Rate limiting (per-IP and per-endpoint)
+- Rate limiting (standard-auth developer/plan counters and explicitly Redis-backed route counters; default Fastify IP/route counters are process-local)
 - Token revocation cache (sub-second propagation)
 - Event pub/sub (SSE and WebSocket streams)
 - Usage metering counters
@@ -235,6 +252,8 @@ Before deploying to production:
 - [ ] Set `METRICS_API_KEY`, or explicitly disable metrics with `METRICS_ENABLED=false`
 - [ ] Enable TLS termination (via reverse proxy or cloud load balancer)
 - [ ] Configure firewall — only expose port 3001 (or your chosen port)
+- [ ] Configure `TRUST_PROXY` only for a verified, network-restricted proxy chain
+- [ ] Set `CORS_ALLOWED_ORIGINS` to the exact production browser origins that call the API
 - [ ] Restrict admin endpoints to internal network / VPN
 - [ ] Enable Redis authentication (`requirepass` in redis.conf)
 - [ ] Enable PostgreSQL SSL (`sslmode=require` in DATABASE_URL)
@@ -246,7 +265,7 @@ Before deploying to production:
 
 The auth service includes these security features out of the box:
 
-- Rate limiting on every endpoint (100/min global, 5-30/min per-endpoint)
+- Rate limiting: Fastify applies a 5,000/min per-IP default to routes without an override (JWKS exempt), while route-specific Fastify limits replace that default on those routes; Redis additionally enforces Free/Pro/Enterprise budgets of 100/500/2,000 per developer on standard-auth API-key routes
 - 7 HTTP security headers (HSTS, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, Cache-Control)
 - Timing-safe admin authentication
 - HMAC-signed SSO state parameters
@@ -254,7 +273,7 @@ The auth service includes these security features out of the box:
 - Scope format validation
 - Input sanitization (trimming) on all string fields
 - 1MB request body limit
-- CORS disabled by default (`origin: false`)
+- CORS uses a source default allowlist for `https://grantex.dev`, `https://portal.grantex.dev`, and `http://localhost:5173`; self-hosted deployments must set `CORS_ALLOWED_ORIGINS` to their exact production browser origins
 
 ---
 
@@ -322,6 +341,12 @@ cp deploy/nginx/nginx.conf /etc/nginx/sites-available/grantex
 ln -s /etc/nginx/sites-available/grantex /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx
 ```
+
+The bundled `docker-compose.prod.yml` uses `TRUST_PROXY=1` because Nginx is the
+only published HTTP service and the auth container is attached only to the
+internal network. If you add an upstream CDN/load balancer, expose the auth
+port directly, or create paths with different proxy counts, replace that value
+with the verified chain configuration before deployment.
 
 ---
 
@@ -509,7 +534,7 @@ Ensure your PostgreSQL `max_connections` and Redis `maxclients` can handle your 
 
 ### Rate Limiting
 
-Rate limits are per-IP by default. In a multi-instance setup, rate limiting uses the global rate limiter (shared across instances via the Fastify rate limit plugin).
+Standard-auth developer/plan counters use Redis and are shared across instances. Commerce, the SCIM Bearer data-plane (`/scim/v2/*`), admin, and other custom-auth routes are outside those plan counters and need an explicit quota policy; the standard-auth `/v1/scim/tokens` route does consume the developer plan budget. Fastify applies its process-local 5,000/min per-IP default to routes without an override, while a route-specific Fastify limit replaces that default for the route. The Redis plan budget is additional to the active Fastify per-IP policy. Every instance must use the same Redis deployment for plan budgets, and production ingress limits should stay above the 2,000/min Enterprise developer ceiling.
 
 ---
 

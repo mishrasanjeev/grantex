@@ -1,6 +1,7 @@
 # Grantex — Full Implementation Brief for AI Assistants
 
-> Last updated and release snapshot verified: 2026-07-12
+> Last updated: 2026-07-14
+> Public release snapshot verified: 2026-07-12
 
 Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
@@ -54,7 +55,7 @@ The Grantex protocol specification is open and frozen at version 1.0. The relate
 |---|---|---|
 | TypeScript or Node.js application | `@grantex/sdk@0.3.13` | Published; Node.js 18+ ESM |
 | Python application | `grantex==0.3.14` | Published; Python 3.9+ |
-| Go application | `github.com/mishrasanjeev/grantex-go@v0.1.10` | Published; Go 1.26.1+; two documented workarounds |
+| Go application | `github.com/mishrasanjeev/grantex-go@v0.1.10` | Published; Go 1.26.1+; documented workarounds required |
 | Service-side JWT enforcement | SDK verifier or direct verification with issuer JWKS | Signature and claim verification; add online or synchronized state for current revocation |
 | MCP HTTP transport authorization | Established MCP-compatible authorization server and maintained MCP SDK | Follow the current MCP authorization specification; a Grantex SDK alone does not provide this layer |
 | Agent-specific enforcement in MCP tools | Primary Grantex SDK or direct JWKS-backed validation | Add after transport authorization when the tool must verify delegated agent authority |
@@ -78,8 +79,14 @@ The SDKs, API contract, integrations, and protocol are independently versioned. 
 
 ### Go SDK v0.1.10
 
-- `Agent.ID` expects a JSON `id` field while the current API returns `agentId`. Derive the agent ID from the returned `did:grantex:<agentId>` value.
-- `LogAuditParams` omits the API-required `agentDid` and `principalId`. Use the REST API or CLI for audit writes.
+- `Agent.ID` expects `id` while the API returns `agentId`; derive it from the DID.
+- Registration sends optional zero values; updates cannot set status or clear scopes. Provide fields and use REST for those updates.
+- `LogAuditParams` omits required `agentDid` and `principalId`; use REST or CLI for audit writes.
+- `AuditEntry` omits `DeveloperID`; `Since`, `Until`, `Page`, and `PageSize` audit filters are ignored by the API.
+- Agent and audit list metadata is not returned; use slice lengths.
+- List helpers do not URL-encode reserved filter characters; avoid them or issue a `net/url`-encoded REST request.
+
+Repository source on `main` corrects these gaps, but no corrected Go module tag is published.
 - Guide: https://docs.grantex.dev/sdks/go/overview#known-v0110-limitations
 
 ### MCP Auth v2.0.2

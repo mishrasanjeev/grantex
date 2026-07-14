@@ -44,7 +44,16 @@ client := grantex.NewClient("your-api-key",
 ## Known v0.1.10 limitations
 
 - Registration returns `agentId`, while `Agent.ID` expects `id`; derive the ID from the returned DID.
+- Registration sends optional zero values; updates cannot set `status` or send an explicit empty `scopes` array. Provide registration fields explicitly and use REST for those updates.
 - The typed audit payload omits required fields; use the [REST or CLI audit-write workaround](/sdks/go/audit#log).
+- `AuditEntry` omits `DeveloperID`, and the SDK advertises `Since`, `Until`, `Page`, and `PageSize` audit filters that the API ignores.
+- Agent and audit list structs expose `Total`, `Page`, and `PageSize`, but the API returns only `agents` or `entries`; use the slice length for this release.
+- List helpers do not URL-encode reserved characters in filter values; avoid them or issue a REST request with a `net/url`-encoded query.
+
+<Info>
+  Repository source on `main` corrects all documented `v0.1.10` Agent/Audit contract gaps, removes unsupported audit filters, and URL-encodes query values, with API-shaped regression coverage.
+  No corrected module tag has been published. The pinned `v0.1.10` install and workarounds remain the supported public-release guidance.
+</Info>
 
 ## Quick Start
 

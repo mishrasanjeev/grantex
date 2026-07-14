@@ -39,7 +39,7 @@ The `failing` array can contain `"db"` (PostgreSQL unreachable), `"redis"` (Redi
 Wire this endpoint into your load balancer's health check. Use a 5-second interval and 3-consecutive-failure threshold for removing unhealthy instances.
 </Tip>
 
-The health endpoint is unauthenticated (`skipAuth: true`) and does not count against rate limits.
+The health endpoint is unauthenticated (`skipAuth: true`) but still consumes the 5,000/min default Fastify IP policy; only JWKS is exempt.
 
 ## Required Configuration
 
@@ -57,6 +57,18 @@ The auth service validates required environment variables at startup and **exits
 ### Full environment variable reference
 
 See the [Self-Hosting guide](/guides/self-hosting#5-environment-variable-reference) for common variables. `apps/auth-service/src/config.ts` in the deployed release is the authoritative configuration schema, including feature-specific validation.
+
+### Trusted Client IPs
+
+`TRUST_PROXY` defaults to `false`, so the service ignores forwarded client-IP
+headers and uses the direct socket address. Enable it only when the service is
+reachable exclusively through proxies you control. Accepted values are a fixed
+hop count from `1` to `16` or a comma-separated proxy IP/CIDR allowlist.
+
+Hop counts are safe only for a fixed network path with direct backend access
+blocked. If request paths have different lengths, use stable proxy IP/CIDR
+entries instead. Never enable blanket trust; broad values are rejected at
+startup.
 
 ### Startup sequence
 
@@ -146,8 +158,10 @@ WHERE datname = 'grantex' AND state = 'active';
 
 The auth service uses [ioredis](https://github.com/redis/ioredis) with lazy connect. Redis stores:
 
-- **Rate limit counters** -- one-minute request counts for global/route IP buckets and the per-developer authorization bucket
+- **Rate limit counters** -- standard developer API-key plan buckets and developer-keyed route buckets; active Fastify default/route policy counters remain process-local unless configured with a shared store
 - **Ephemeral token metadata** -- in-flight authorization request state
+
+Commerce, the SCIM Bearer data-plane routes under `/scim/v2/*`, admin, and other custom-auth routes do not consume the standard plan buckets; their active Fastify policies still apply. The standard API-key-authenticated `/v1/scim/tokens` management routes do consume the plan bucket.
 
 ### Reconnection behavior
 
@@ -161,7 +175,7 @@ ioredis automatically reconnects when the Redis connection drops. Default behavi
 
 Redis is not the source of truth. If Redis data is lost:
 
-- **Rate limits reset** -- clients get fresh windows (no security impact beyond a brief burst)
+- **Redis-backed limits reset** -- standard developer plan and developer-keyed route buckets start fresh, allowing a brief burst; process-local active Fastify IP policy counters are unaffected
 - **In-flight auth requests fail** -- users must restart the consent flow
 - **No permanent data is lost** -- PostgreSQL is the durable store
 
@@ -258,6 +272,7 @@ To upgrade, restart the service. New migration files are applied automatically. 
 ## Operational Checklist
 
 <Check>Health check is wired to your load balancer</Check>
+<Check>`TRUST_PROXY` is disabled or matches the verified, network-restricted proxy chain</Check>
 <Check>All required environment variables are set</Check>
 <Check>Database connection uses SSL (`sslmode=require`)</Check>
 <Check>Redis is on a private network with authentication</Check>

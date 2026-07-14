@@ -5,11 +5,13 @@ import type {
 } from 'fastify';
 import { getSql } from '../db/client.js';
 import { hashApiKey } from '../lib/hash.js';
+import { isPlanName, type PlanName } from '../lib/plans.js';
 
 export interface Developer {
   id: string;
   name: string;
   mode: 'live' | 'sandbox';
+  plan: PlanName;
 }
 
 declare module 'fastify' {
@@ -51,8 +53,17 @@ async function authenticateRequest(
   const keyHash = hashApiKey(apiKey);
 
   const sql = getSql();
-  const rows = await sql<{ id: string; name: string; mode: string }[]>`
-    SELECT id, name, mode FROM developers WHERE api_key_hash = ${keyHash} LIMIT 1
+  const rows = await sql<{ id: string; name: string; mode: string; plan: string }[]>`
+    SELECT d.id, d.name, d.mode,
+           COALESCE((
+             SELECT s.plan
+             FROM subscriptions s
+             WHERE s.developer_id = d.id
+             LIMIT 1
+           ), 'free') AS plan
+    FROM developers d
+    WHERE d.api_key_hash = ${keyHash}
+    LIMIT 1
   `;
 
   const dev = rows[0];
@@ -69,6 +80,7 @@ async function authenticateRequest(
     id: dev.id,
     name: dev.name,
     mode: dev.mode === 'sandbox' ? 'sandbox' : 'live',
+    plan: isPlanName(dev.plan) ? dev.plan : 'free',
   };
 }
 

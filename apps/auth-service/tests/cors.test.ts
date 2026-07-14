@@ -23,6 +23,7 @@ describe('CORS', () => {
     expect(res.statusCode).toBe(204);
     expect(res.headers['access-control-allow-origin']).toBe('https://grantex.dev');
     expect(res.headers['access-control-allow-methods']).toContain('POST');
+    expect(res.headers['x-ratelimit-limit']).toBe('5000');
   });
 
   it('allows preflight from http://localhost:5173 (dev)', async () => {
@@ -66,5 +67,7 @@ describe('CORS', () => {
     });
 
     expect(res.headers['access-control-allow-origin']).toBe('https://grantex.dev');
+    expect(res.headers['access-control-expose-headers']).toContain('X-RateLimit-Remaining');
+    expect(res.headers['access-control-expose-headers']).toContain('Retry-After');
   });
 });

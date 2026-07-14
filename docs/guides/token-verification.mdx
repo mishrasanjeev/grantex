@@ -103,7 +103,7 @@ with Grantex(api_key="gx_live_...") as client:
 ```
 </CodeGroup>
 
-**Trade-off:** Adds network latency and counts against the applicable [rate limits](/guides/rate-limits), including the 500 requests/minute global IP guard.
+**Trade-off:** Adds network latency and counts against the applicable [rate limits](/guides/rate-limits), including the active Fastify per-IP policy (the 5,000 requests/minute default on this route) and, for standard developer API-key calls, the caller's additional plan budget.
 
 ## Hybrid Approach
 

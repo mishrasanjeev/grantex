@@ -5,6 +5,7 @@ import { config } from './config.js';
 import rateLimit from '@fastify/rate-limit';
 import { errorsPlugin } from './plugins/errors.js';
 import { authPlugin } from './plugins/auth.js';
+import { dynamicRateLimitPlugin } from './plugins/dynamicRateLimit.js';
 import { jwksRoutes } from './routes/jwks.js';
 import { agentsRoutes } from './routes/agents.js';
 import { authorizeRoutes } from './routes/authorize.js';
@@ -53,11 +54,13 @@ import websocket from '@fastify/websocket';
 
 export type AppOptions = {
   logger?: boolean | object;
+  trustProxy?: false | number | string | string[];
 };
 
 const defaultLoggerOptions = {
   level: process.env.LOG_LEVEL || 'info',
   ...(process.env.NODE_ENV === 'development'
+    && process.env.LOG_PRETTY !== 'false'
     ? { transport: { target: 'pino-pretty' } }
     : {}),
 };
@@ -65,17 +68,35 @@ const defaultLoggerOptions = {
 export async function buildApp(opts: AppOptions = {}) {
   const app = Fastify({
     logger: opts.logger ?? defaultLoggerOptions,
+    trustProxy: opts.trustProxy ?? config.trustProxy,
     bodyLimit: 1_048_576,
     genReqId: () => randomUUID(),
   });
 
+  // Register before CORS so the global onRoute hook also attaches the
+  // default policy to the synthetic OPTIONS routes created by @fastify/cors.
+  await app.register(rateLimit, {
+    max: 5_000,
+    timeWindow: '1 minute',
+    keyGenerator: (req) => req.ip,
+    allowList: (req) => {
+      // Skip rate limiting only for JWKS (public key distribution must
+      // never be throttled). Other well-known routes, including the
+      // commerce publishing profile, keep their route override or this default.
+      return req.url === '/.well-known/jwks.json'
+        || req.url.startsWith('/.well-known/jwks.json?');
+    },
+  });
+
   // Browser clients (developer dashboard at grantex.dev/dashboard, local
   // Vite during development) need to call the API cross-origin. Fastify-cors
-  // intercepts OPTIONS preflight before the auth preHandler runs, so allowed
-  // origins get proper Access-Control-Allow-Origin headers while unknown
-  // origins still fail the browser's CORS check.
+  // handles OPTIONS at preValidation: after the pre-auth IP limiter's
+  // onRequest hook, but before the auth preHandler. Allowed origins receive
+  // Access-Control-Allow-Origin while unknown origins still fail the browser's
+  // CORS check.
   const allowedOrigins = new Set(config.corsAllowedOrigins);
   await app.register(cors, {
+    hook: 'preValidation',
     origin: (origin, cb) => {
       // Same-origin and non-browser callers have no Origin header — allow.
       if (!origin) return cb(null, true);
@@ -87,7 +108,12 @@ export async function buildApp(opts: AppOptions = {}) {
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
-    exposedHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
+    exposedHeaders: [
+      'X-RateLimit-Limit',
+      'X-RateLimit-Remaining',
+      'X-RateLimit-Reset',
+      'Retry-After',
+    ],
     maxAge: 600,
   });
   await app.register(websocket);
@@ -111,35 +137,31 @@ export async function buildApp(opts: AppOptions = {}) {
     }
   });
 
-  // Global rate limit: 500 requests/minute, keyed strictly by source IP.
+  // Default rate limit: 5,000 requests/minute, keyed by Fastify's request.ip.
+  // Forwarded client addresses are used only when TRUST_PROXY explicitly
+  // identifies the trusted proxy chain; otherwise spoofable forwarding
+  // headers are ignored and the direct socket address is used.
   // Earlier versions keyed on the Bearer token, which let an attacker
   // bypass the limiter by varying invalid tokens to mint fresh buckets
   // (each fake token got its own budget). IP-keying closes that hole.
   //
   // The number is deliberately generous — authenticated endpoints have
-  // per-developer caps on top (e.g., /v1/authorize uses checkRateLimit
-  // on developer.id for a 10/min bucket). This global net only needs
-  // to stop unauth'd abuse against public endpoints (signup, consent
-  // page, status lists) and shield the auth plugin from raw IP floods.
-  // Per-developer plan-based throughput belongs in post-auth limiters,
-  // not here.
-  await app.register(rateLimit, {
-    max: 500,
-    timeWindow: '1 minute',
-    keyGenerator: (req) => req.ip,
-    allowList: (req) => {
-      // Skip rate limiting only for JWKS (public key distribution must
-      // never be throttled). Other well-known routes, including the
-      // commerce publishing profile, keep their route/global limiters.
-      return req.url === '/.well-known/jwks.json'
-        || req.url.startsWith('/.well-known/jwks.json?');
-    },
-  });
+  // this no-override Fastify policy. A route-level rateLimit object replaces
+  // it for that route, normally with a lower per-IP ceiling. Standard
+  // developer API-key routes receive an additional Redis-backed plan bucket
+  // after authentication; /v1/authorize also uses a developer-keyed 10/min
+  // bucket. Keeping the default above the 2,000/min Enterprise budget avoids
+  // making that plan unreachable from one IP on routes without an override.
+  // Custom-auth routes skip the standard plan bucket and retain their route
+  // override or this default. The active Fastify policy shields public
+  // endpoints and the auth plugin from raw IP floods, while plan throughput
+  // belongs in the post-auth limiter.
 
   // Call directly on root app (not via app.register) so that error handler
   // and preHandler hooks apply to ALL routes registered at the root scope.
   await errorsPlugin(app);
   await authPlugin(app);
+  await dynamicRateLimitPlugin(app);
 
   // Metrics hook (records HTTP duration for all routes)
   await metricsHookPlugin(app);

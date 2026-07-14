@@ -4,7 +4,7 @@
  * registered as a Vitest setupFile and properly hoisted.
  */
 import { initKeys } from '../src/lib/crypto.js';
-import { buildApp } from '../src/server.js';
+import { buildApp, type AppOptions } from '../src/server.js';
 import { sqlMock, mockRedis } from './setup.js';
 
 export { sqlMock, mockRedis };
@@ -51,12 +51,12 @@ export const TEST_GRANT = {
 // ------------------------------------------------------------------
 let keysInitialized = false;
 
-export async function buildTestApp() {
+export async function buildTestApp(opts: AppOptions = {}) {
   if (!keysInitialized) {
     await initKeys();
     keysInitialized = true;
   }
-  return buildApp({ logger: false });
+  return buildApp({ logger: false, ...opts });
 }
 
 // ------------------------------------------------------------------

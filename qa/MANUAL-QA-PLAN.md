@@ -860,11 +860,20 @@ npx @grantex/conformance --base-url http://localhost:3001 --api-key dev-api-key-
 
 | ID | Test Case | Priority | Steps | Expected Result |
 |----|-----------|----------|-------|-----------------|
-| **RATE-001** | Global rate limit (100/min) | P1 | Send 101 requests to any endpoint within 1 minute | 101st request returns 429 with `Retry-After` header. |
+| **RATE-001** | Default Fastify IP policy (5,000/min) | P1 | Send 5,001 `GET /health` requests from one source IP within 1 minute | 5,001st request returns 429 with `Retry-After` header. |
 | **RATE-002** | Authorize rate limit (10/min) | P1 | POST `/v1/authorize` 11 times in 1 minute | 11th returns 429. |
 | **RATE-003** | Token exchange rate limit (20/min) | P1 | POST `/v1/token` 21 times in 1 minute | 21st returns 429. |
-| **RATE-004** | Rate limit headers present | P1 | Send any request | Response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`. |
+| **RATE-004** | Plan-aware authenticated budgets | P0 | Exercise Free, Pro, and Enterprise keys through their one-minute windows | Limits are 100, 500, and 2,000 per developer; the next request returns 429 with `RATE_LIMIT_EXCEEDED`. |
 | **RATE-005** | JWKS endpoint exempt from rate limiting | P2 | Fetch `/.well-known/jwks.json` many times rapidly | Never rate limited. |
+| **RATE-006** | Rate-limit headers identify the active budget | P1 | Send a successful authenticated request, then trigger a route-level `429` | Success reports the plan budget; rejection includes `Retry-After` and the blocking policy's headers. |
+| **RATE-007** | Developer budgets are isolated | P0 | Alternate requests using two developer API keys from the same source IP | Each developer has an independent plan counter. Both are also subject to the active Fastify IP policy; on a route without an override they share the 5,000/min source-IP bucket. |
+| **RATE-008** | Unknown or missing plan fails down to Free | P0 | Authenticate a developer whose subscription plan is absent or unrecognized | Request receives the 100/min Free budget. |
+| **RATE-009** | Redis transaction failure fails closed | P0 | Make the authenticated counter transaction fail before a protected handler | 503 with `RATE_LIMIT_UNAVAILABLE`; handler is not executed. |
+| **RATE-010** | Fastify override and plan both apply | P1 | Use an Enterprise key against a route with a lower Fastify route budget | The route override replaces the 5,000/min Fastify default and returns 429 before the additional 2,000/min plan budget is exhausted. |
+| **RATE-011** | Custom-auth plan boundary | P0 | Exercise Commerce, SCIM Bearer data-plane (`/scim/v2/*`), and admin/custom-auth routes, then call `/v1/scim/tokens` with a standard API key | Custom-auth routes retain their active Fastify policies without consuming a standard developer plan bucket; `/v1/scim/tokens` does consume it. |
+| **RATE-012** | Forwarded IP ignored by default | P0 | With `TRUST_PROXY=false`, vary `X-Forwarded-For` from the same socket | Requests share the direct-socket IP bucket; spoofed values do not create new buckets. |
+| **RATE-013** | Explicit trusted proxy derives client IP | P0 | Restrict backend access, configure the verified proxy chain, and send two client IPs through it | Each verified client IP receives an independent active Fastify source-IP bucket. |
+| **RATE-014** | Browser clients can read retry timing | P1 | Send an allowed-origin browser request that receives rate-limit headers | CORS exposes all `X-RateLimit-*` headers and `Retry-After`. |
 
 ---
 
@@ -984,7 +993,7 @@ pip install -e . && pytest tests/
 
 ```bash
 cd packages/go-sdk
-go test ./...   # Run 106 tests
+go test ./...
 ```
 
 ### Manual Verification
@@ -996,6 +1005,11 @@ go test ./...   # Run 106 tests
 | **SDKGO-003** | Offline JWT verification | P0 | `grantex.VerifyGrantToken(token, jwksUri)` | Returns `*VerifiedGrant`. |
 | **SDKGO-004** | Webhook HMAC verification | P1 | `grantex.VerifyWebhookSignature(body, secret, sig)` | Returns `true` for valid. |
 | **SDKGO-005** | PKCE S256 generation | P1 | `grantex.GeneratePKCE()` | Returns verifier and challenge. |
+| **SDKGO-006** | API `agentId` maps to `Agent.ID` | P0 | Register and list agents against API-shaped JSON fixtures | `Agent.ID` contains the server's `agentId` value. |
+| **SDKGO-007** | Audit write sends required wire fields | P0 | Call `Audit.Log` with `AgentDID` and `PrincipalID`; inspect the JSON request | Payload contains exact `agentDid` and `principalId` keys and the write succeeds. |
+| **SDKGO-008** | Agent write payload parity | P0 | Register with omitted optional fields, then update status and send an explicit empty scopes slice | Optional registration keys are omitted; update sends `status` and `scopes: []`. |
+| **SDKGO-009** | Audit read/filter parity | P0 | Decode API-shaped entries and list with all supported filters | `DeveloperID` is populated and only `agentId`, `grantId`, `principalId`, and `action` are sent. |
+| **SDKGO-010** | Query values are URL-encoded | P0 | Use filter values containing `+`, `@`, `:`, `&`, and `=` | Server receives the exact original values as single query parameters. |
 
 ---
 
@@ -1535,11 +1549,11 @@ Use this table to track test execution across modules. Copy for each test cycle.
 | M22: Billing | 4 | | | | | | |
 | M23: Compliance | 4 | | | | | | |
 | M24: Events (SSE/WS) | 5 | | | | | | |
-| M25: Rate Limiting | 5 | | | | | | |
+| M25: Rate Limiting | 14 | | | | | | |
 | M26: Developer Portal | 30 | | | | | | |
 | M27: TypeScript SDK | 10 | | | | | | |
 | M28: Python SDK | 9 | | | | | | |
-| M29: Go SDK | 5 | | | | | | |
+| M29: Go SDK | 10 | | | | | | |
 | M30: CLI Tool | 50 | | | | | | |
 | M31: Gateway | 10 | | | | | | |
 | M32: Express Middleware | 6 | | | | | | |
@@ -1558,7 +1572,7 @@ Use this table to track test execution across modules. Copy for each test cycle.
 | Security (Cross-cutting) | 12 | | | | | | |
 | Error Handling (Cross-cutting) | 5 | | | | | | |
 | Observability (Cross-cutting) | 3 | | | | | | |
-| **TOTAL** | **~424** | | | | | | |
+| **TOTAL** | **~456** | | | | | | |
 
 ---
 

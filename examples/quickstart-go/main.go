@@ -32,6 +32,7 @@ func main() {
 	baseURL := envOr("GRANTEX_URL", "http://localhost:3001")
 	apiKey := envOr("GRANTEX_API_KEY", "sandbox-api-key-local")
 
+	issuer := os.Getenv("GRANTEX_ISSUER")
 	client := grantex.NewClient(apiKey, grantex.WithBaseURL(baseURL))
 	ctx := context.Background()
 
@@ -70,6 +71,7 @@ func main() {
 	// ── 4. Verify the token offline ────────────────────────────────────
 	verified, err := grantex.VerifyGrantToken(ctx, token.GrantToken, grantex.VerifyOptions{
 		JwksURI:        baseURL + "/.well-known/jwks.json",
+		Issuer:         issuer,
 		RequiredScopes: []string{"calendar:read"},
 	})
 	if err != nil {
@@ -82,11 +84,13 @@ func main() {
 
 	// ── 5. Log an audit entry ──────────────────────────────────────────
 	entry, err := client.Audit.Log(ctx, grantex.LogAuditParams{
-		AgentID:  agent.ID,
-		GrantID:  token.GrantID,
-		Action:   "calendar.read",
-		Status:   "success",
-		Metadata: map[string]interface{}{"query": "today", "results": 3},
+		AgentID:     agent.ID,
+		AgentDID:    agent.DID,
+		GrantID:     token.GrantID,
+		PrincipalID: verified.PrincipalID,
+		Action:      "calendar.read",
+		Status:      "success",
+		Metadata:    map[string]interface{}{"query": "today", "results": 3},
 	})
 	if err != nil {
 		log.Fatal("audit:", err)

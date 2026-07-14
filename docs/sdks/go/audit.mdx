@@ -8,8 +8,14 @@ description: "Log and query tamper-evident audit entries"
 <Warning>
   Go SDK `v0.1.10` cannot create an audit entry through
   `client.Audit.Log`: its `LogAuditParams` omits the API-required `agentDid` and
-  `principalId` fields. Use the REST endpoint or CLI for writes until a corrected
-  Go SDK release is published. List and get operations below remain available.
+  `principalId` fields. Use the REST endpoint or CLI for writes.
+  List and get remain available, but `AuditEntry` omits `DeveloperID`; the SDK
+  advertises `Since`, `Until`, `Page`, and `PageSize` filters that the API ignores;
+  and list helpers do not URL-encode reserved characters in filter values. Use only
+  `AgentID`, `GrantID`, `PrincipalID`, and `Action`, and issue a URL-encoded REST
+  request when the missing field or reserved characters matter.
+  Repository source on `main` corrects these gaps with regression coverage, but no
+  corrected Go module tag has been published. This warning still applies to `v0.1.10`.
 </Warning>
 
 ```bash REST workaround
@@ -31,9 +37,9 @@ curl -X POST https://api.grantex.dev/v1/audit/log \
 
 ```go
 result, err := client.Audit.List(ctx, &grantex.ListAuditParams{
-    AgentID: "agent-id",
-    Action:  "email:read",
-    Since:   "2026-01-01T00:00:00Z",
+    AgentID:     "agent-id",
+    PrincipalID: "user-123",
+    Action:      "email:read",
 })
 for _, e := range result.Entries {
     fmt.Printf("[%s] %s: %s\n", e.Timestamp, e.Action, e.Status)
@@ -52,6 +58,11 @@ entry, err := client.Audit.Get(ctx, "entry-id")
 
 ### `AuditEntry`
 
+<Note>
+  This table describes repository source on `main`. Public `v0.1.10` omits
+  `DeveloperID`; use the REST response when that field is required.
+</Note>
+
 | Field | Type | Description |
 |-------|------|-------------|
 | `EntryID` | `string` | Entry ID |
@@ -59,6 +70,7 @@ entry, err := client.Audit.Get(ctx, "entry-id")
 | `AgentDID` | `string` | Agent DID |
 | `GrantID` | `string` | Grant ID |
 | `PrincipalID` | `string` | User ID |
+| `DeveloperID` | `string` | Owner developer ID (repository source on `main`; absent from public `v0.1.10`) |
 | `Action` | `string` | Action performed |
 | `Metadata` | `map[string]interface{}` | Custom metadata |
 | `Hash` | `string` | Entry hash (chain integrity) |

@@ -20,7 +20,9 @@ describe('GET /v1/events/stream (SSE)', () => {
 
   it('rejects when max connections exceeded', async () => {
     seedAuth();
-    mockRedis.incr.mockResolvedValueOnce(6); // Over the limit of 5
+    mockRedis.incr
+      .mockResolvedValueOnce(1) // Standard-auth plan budget
+      .mockResolvedValueOnce(6); // Over the connection limit of 5
 
     const res = await app.inject({
       method: 'GET',
@@ -35,7 +37,9 @@ describe('GET /v1/events/stream (SSE)', () => {
 
   it('uses guarded decrement when rejecting over-limit connections', async () => {
     seedAuth();
-    mockRedis.incr.mockResolvedValueOnce(6);
+    mockRedis.incr
+      .mockResolvedValueOnce(1) // Standard-auth plan budget
+      .mockResolvedValueOnce(6); // Over the connection limit
     mockRedis.eval.mockClear();
 
     await app.inject({

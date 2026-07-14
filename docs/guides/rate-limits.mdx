@@ -4,21 +4,32 @@ sidebarTitle: "Rate Limits"
 description: "Understand and work with Grantex API rate limits."
 ---
 
-Grantex applies layered one-minute rate limits. A global per-IP abuse guard protects every route, individual routes can define lower per-IP limits, and authorization creation also has a per-developer limiter. A request must pass every limiter that applies to it.
+Grantex applies one-minute fixed-window limits. Fastify applies one pre-auth policy: the 5,000 requests/minute per-IP default on a route without an override, or that route's configured policy. Standard developer API-key requests also consume a Redis-backed per-developer plan budget. A standard-auth request must pass both its active Fastify policy and its plan policy, so the more restrictive applicable budget wins.
+
+<Info>
+  Plan-aware authenticated throughput is implemented in current repository source. A managed deployment must be verified separately; source completion is not evidence that a hosted rollout has occurred.
+</Info>
 
 ## Default Limits
 
-| Endpoint | Limit | Notes |
-|----------|-------|-------|
-| **All endpoints** (global) | 500 req/min per IP | Baseline abuse guard; route limits can be lower |
-| `POST /v1/authorize` | 10 req/min per developer | Redis-backed developer limit in addition to global/route protection |
+| Layer or endpoint | Limit | Key and behavior |
+|-------------------|-------|------------------|
+| **Default Fastify IP policy** (routes without an override) | 5,000 req/min | Per source IP; public and authenticated traffic share this bucket on routes using the default |
+| **Standard API-key - Free plan** | 100 req/min | Per developer, across routes and source IPs |
+| **Standard API-key - Pro plan** | 500 req/min | Per developer, across routes and source IPs |
+| **Standard API-key - Enterprise plan** | 2,000 req/min | Per developer, across routes and source IPs |
+| `POST /v1/authorize` | 10 req/min | Additional Redis-backed per-developer authorization bucket; the Fastify default and plan budget also apply |
 | `POST /v1/token` | 20 req/min | Stricter — exchanges codes for tokens |
 | `POST /v1/token/refresh` | 20 req/min | Stricter — refreshes grant tokens |
 | `GET /.well-known/jwks.json` | **Exempt** | Public key distribution is never throttled |
 
+A route-specific Fastify `config.rateLimit` replaces the 5,000 requests/minute Fastify default for that route; those two Fastify policies are not stacked. The Redis-backed standard developer plan budget remains an additional policy when standard API-key authentication applies.
+
+Commerce, the SCIM Bearer data-plane routes under `/scim/v2/*`, admin, and other custom-auth routes remain outside the standard developer plan bucket. Their active Fastify policy still applies. The standard API-key-authenticated `/v1/scim/tokens` management routes do consume the plan bucket.
+
 ## Response Headers
 
-Every response includes rate limit headers so your application can track its budget:
+Protected responses include rate-limit headers so your application can track the policy represented by that response. Successful standard developer API-key responses report the developer's plan budget; a request rejected earlier by the active Fastify default or route policy reports that policy instead. Treat the active Fastify policy and Redis plan policy as separate applicable controls, and always honor a `429` plus `Retry-After`.
 
 | Header | Description |
 |--------|-------------|
@@ -33,13 +44,27 @@ When you exceed a rate limit, the API returns a `429 Too Many Requests` status w
 
 ```json
 {
-  "message": "Rate limit exceeded, retry in 42 seconds",
-  "code": "RATE_LIMITED",
+  "message": "Plan rate limit exceeded, retry in 42 seconds",
+  "code": "RATE_LIMIT_EXCEEDED",
   "requestId": "a1b2c3d4-e5f6-..."
 }
 ```
 
-The `Retry-After` header tells you the minimum number of seconds to wait. Generic route-limit responses are produced by `@fastify/rate-limit` and can use a different error code/message; clients should branch on HTTP status `429` and honor the header rather than matching message text.
+The `Retry-After` header tells you the minimum number of seconds to wait. Generic IP/route-limit responses are produced by `@fastify/rate-limit` and can use a different error code/message; clients should branch on HTTP status `429` and honor the header rather than matching message text.
+
+## Authenticated Limiter Availability
+
+The standard developer API-key plan limiter fails closed when its Redis transaction cannot be completed:
+
+```json
+{
+  "message": "Authenticated rate limiting is temporarily unavailable",
+  "code": "RATE_LIMIT_UNAVAILABLE",
+  "requestId": "a1b2c3d4-e5f6-..."
+}
+```
+
+This response uses `503 Service Unavailable`, not `429`. Retry it as a transient service failure; do not treat it as proof that the request reached the protected handler.
 
 ## Reading Rate Limits from SDKs
 
@@ -214,6 +239,6 @@ JWKS network request per call.
 
 ## Self-Hosted Deployments
 
-If you're running the Grantex auth service yourself, rate limits are fully configurable. The global limit is set in `apps/auth-service/src/server.ts` and per-route limits are set in individual route files.
+If you're running the Grantex auth service yourself, rate limits are configurable. The default Fastify IP policy is set in `apps/auth-service/src/server.ts`; a route-specific Fastify policy lives beside its route and replaces that default on the route. Standard developer API-key budgets and their window are defined in `apps/auth-service/src/plugins/dynamicRateLimit.ts` and remain additional. All instances must share Redis for standard developer budgets to remain global across the deployment. Fastify IP counters are process-local unless you configure a shared store or equivalent ingress enforcement.
 
 See the [Self-Hosting guide](/guides/self-hosting) for deployment instructions.

@@ -27,11 +27,20 @@ repository.
   contract version.
 </Info>
 
+## Repository changes awaiting publication
+
+<Info>
+  As of July 14, 2026, repository source on `main` corrects the documented Go
+  Agent/Audit read/write contracts, removes unsupported audit filters and list
+  metadata, and URL-encodes query values. No corrected Go module tag is published.
+  Standard developer API-key plan throughput is also source-only; custom-auth quotas and managed rollout remain separate.
+</Info>
+
 ## Which Grantex package should I use?
 
 - **TypeScript application:** use `@grantex/sdk@0.3.13`.
 - **Python application:** use `grantex==0.3.14`.
-- **Go application:** use `github.com/mishrasanjeev/grantex-go@v0.1.10` with the [agent-ID workaround](/sdks/go/overview#known-v0110-limitations) and [REST/CLI audit-write workaround](/sdks/go/audit#log).
+- **Go application:** use `github.com/mishrasanjeev/grantex-go@v0.1.10` with the [published-version workarounds](/sdks/go/overview#known-v0110-limitations), including the [REST/CLI audit-write workaround](/sdks/go/audit#log).
 - **MCP HTTP transport authorization:** use an established MCP-compatible authorization server and maintained MCP SDK that implement the current MCP authorization specification.
 - **Agent-specific MCP tool enforcement:** after transport authorization, use a primary Grantex SDK or direct JWKS validation at each tool boundary. Treat `@grantex/mcp-auth@2.0.2` as single-process evaluation software.
 - **Current revocation:** local JWT verification is insufficient by itself; perform an online state check or synchronize revocation data.
@@ -39,11 +48,20 @@ repository.
 ## Known limitations in the current published artifacts
 
 <Warning>
-  **Go SDK `v0.1.10`:** registration responses use `agentId`, but the published
-  `Agent.ID` field expects JSON `id`, so it remains empty. Derive the agent ID
-  from the returned `did:grantex:<agentId>` value for this release. Its
-  `LogAuditParams` also lacks the API-required `agentDid` and `principalId`;
-  submit audit records with the REST API or CLI.
+  **Go SDK `v0.1.10`:** registration responses use `agentId`, but `Agent.ID`
+  expects `id`; derive the ID from `did:grantex:<agentId>`. Registration also
+  sends optional zero values, while updates cannot set `status` or clear scopes;
+  provide registration fields and use REST for those updates.
+
+  `LogAuditParams` lacks required `agentDid` and `principalId`; use REST or CLI
+  for audit writes. `AuditEntry` omits `DeveloperID`, and `Since`, `Until`,
+  `Page`, and `PageSize` list filters are ignored by the API; use the four
+  supported filters and raw REST responses when `developerId` is required.
+
+  Agent and audit list metadata is not returned; use slice lengths. List helpers
+  also fail to URL-encode reserved filter characters; avoid those values or issue
+  a `net/url`-encoded REST request. These workarounds remain required until a
+  corrected module release is published.
 </Warning>
 
 <Warning>

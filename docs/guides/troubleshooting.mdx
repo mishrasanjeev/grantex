@@ -70,11 +70,18 @@ When you receive a `429 Too Many Requests` response:
 
 | Endpoint | Limit |
 |----------|-------|
-| Global IP guard (all endpoints) | 500 req/min |
+| Default Fastify IP policy (routes without an override) | 5,000 req/min |
+| Standard API-key - Free plan | 100 req/min per developer |
+| Standard API-key - Pro plan | 500 req/min per developer |
+| Standard API-key - Enterprise plan | 2,000 req/min per developer |
 | `POST /v1/authorize` | 10 req/min |
 | `POST /v1/token` | 20 req/min |
 | `POST /v1/token/refresh` | 20 req/min |
 | `GET /.well-known/jwks.json` | Exempt |
+
+A route-specific Fastify limit replaces the 5,000 req/min Fastify default on that route. The Redis-backed standard developer plan remains an additional policy wherever standard API-key authentication applies.
+
+Standard developer API-key plan exhaustion returns `429` with `RATE_LIMIT_EXCEEDED`. If the Redis-backed plan counter is unavailable, the request fails closed with `503` and `RATE_LIMIT_UNAVAILABLE`. Commerce, the SCIM Bearer data-plane routes under `/scim/v2/*`, admin, and other custom-auth routes do not consume this plan bucket; the standard API-key-authenticated `/v1/scim/tokens` management routes do.
 
 ## Plan Limit Exceeded (402)
 

@@ -53,7 +53,10 @@ func (s *WebAuthnService) RegisterVerify(ctx context.Context, params WebAuthnReg
 
 // ListCredentials lists all WebAuthn credentials for a principal.
 func (s *WebAuthnService) ListCredentials(ctx context.Context, principalID string) ([]WebAuthnCredential, error) {
-	resp, err := unmarshal[listWebAuthnCredentialsResponse](s.http.get(ctx, fmt.Sprintf("/v1/webauthn/credentials?principalId=%s", principalID)))
+	path := "/v1/webauthn/credentials" + buildQueryString(map[string]string{
+		"principalId": principalID,
+	})
+	resp, err := unmarshal[listWebAuthnCredentialsResponse](s.http.get(ctx, path))
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,14 @@ go get github.com/mishrasanjeev/grantex-go
 
 Requires Go 1.26.1 or newer, matching the module's `go.mod` directive.
 
+> **Published vs. repository source:** `v0.1.10` still has documented Agent and
+> Audit read/write contract gaps, exposes unsupported audit filters and list
+> metadata, and does not URL-encode reserved query values. See the [Go SDK overview](../../docs/sdks/go/overview.mdx#known-v0110-limitations)
+> for exact workarounds. This checkout corrects those contracts,
+> supports status and explicit scope clearing, removes no-op filters, and adds
+> API-shaped and query-encoding regression fixtures, but no corrected module tag
+> has been published yet.
+
 ## Quick Start
 
 ```go
@@ -19,6 +27,7 @@ import (
     "context"
     "fmt"
     "log"
+    "strings"
 
     grantex "github.com/mishrasanjeev/grantex-go"
 )
@@ -37,9 +46,16 @@ func main() {
         log.Fatal(err)
     }
 
+    // v0.1.10 does not populate agent.ID, so derive it from the returned DID.
+    const agentDIDPrefix = "did:grantex:"
+    if !strings.HasPrefix(agent.DID, agentDIDPrefix) {
+        log.Fatalf("unexpected agent DID: %q", agent.DID)
+    }
+    agentID := strings.TrimPrefix(agent.DID, agentDIDPrefix)
+
     // Create authorization request
     authReq, err := client.Authorize(ctx, grantex.AuthorizeParams{
-        AgentID:     agent.ID,
+        AgentID:     agentID,
         PrincipalID: "user-123",
         Scopes:      []string{"read:email", "send:email"},
         Audience:    "https://mail-api.example.com",
@@ -52,7 +68,7 @@ func main() {
     // Exchange code for token (after user consents)
     tokenResp, err := client.Tokens.Exchange(ctx, grantex.ExchangeTokenParams{
         Code:    "authorization-code",
-        AgentID: agent.ID,
+        AgentID: agentID,
     })
     if err != nil {
         log.Fatal(err)

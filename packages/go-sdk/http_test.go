@@ -246,15 +246,17 @@ func TestBuildQueryString(t *testing.T) {
 	}{
 		{"empty", map[string]string{}, ""},
 		{"nil values filtered", map[string]string{"a": "", "b": "1"}, "?b=1"},
+		{
+			"reserved characters encoded",
+			map[string]string{"principalId": "user+ops@example.com", "action": "data:read&export=true"},
+			"?action=data%3Aread%26export%3Dtrue&principalId=user%2Bops%40example.com",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := buildQueryString(tt.params)
-			if tt.want == "" && got != "" {
-				t.Errorf("expected empty, got %s", got)
-			}
-			if tt.want != "" && got == "" {
-				t.Errorf("expected %s, got empty", tt.want)
+			if got != tt.want {
+				t.Errorf("expected %q, got %q", tt.want, got)
 			}
 		})
 	}
