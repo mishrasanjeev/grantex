@@ -11,6 +11,7 @@ import (
 	"math"
 	"math/big"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -304,17 +305,15 @@ func unmarshalSlice[T any](data []byte, err error) ([]T, error) {
 }
 
 func buildQueryString(params map[string]string) string {
-	if len(params) == 0 {
-		return ""
-	}
-	var parts []string
+	values := url.Values{}
 	for k, v := range params {
 		if v != "" {
-			parts = append(parts, k+"="+v)
+			values.Set(k, v)
 		}
 	}
-	if len(parts) == 0 {
+	encoded := values.Encode()
+	if encoded == "" {
 		return ""
 	}
-	return "?" + strings.Join(parts, "&")
+	return "?" + encoded
 }

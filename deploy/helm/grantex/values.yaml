@@ -67,6 +67,12 @@ config:
   jwtIssuer: "https://your-domain.example.com"
   port: "3001"
   host: "0.0.0.0"
+  # Comma-separated browser origins allowed to call the API. Replace this
+  # placeholder with the exact production origins used by your deployment.
+  corsAllowedOrigins: "https://your-domain.example.com"
+  # Disabled by default. Set to a fixed hop count (1-16) or a comma-separated
+  # IP/CIDR allowlist only when network policy restricts direct pod access.
+  trustProxy: ""
 
 # External PostgreSQL connection string (required). Stored in the generated
 # Kubernetes Secret unless existingSecret is set.

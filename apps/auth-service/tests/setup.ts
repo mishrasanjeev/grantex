@@ -28,6 +28,7 @@ export const mockRedis = {
   decr: vi.fn().mockResolvedValue(0),
   expire: vi.fn().mockResolvedValue(1),
   eval: vi.fn().mockResolvedValue(0),
+  multi: vi.fn(),
   connect: vi.fn().mockResolvedValue(undefined),
   disconnect: vi.fn(),
   quit: vi.fn().mockResolvedValue(undefined),
@@ -42,6 +43,34 @@ export const mockRedis = {
 };
 // Returning self from duplicate() keeps the subscriber-side mocks in sync.
 mockRedis.duplicate.mockImplementation(() => mockRedis);
+
+function configureMockRedisMulti(): void {
+  mockRedis.multi.mockImplementation(() => {
+    let key = '';
+    let expiresAt = 0;
+    const commands = {
+      incr: vi.fn(),
+      expireat: vi.fn(),
+      exec: vi.fn(),
+    };
+    commands.incr.mockImplementation((value: string) => {
+      key = value;
+      return commands;
+    });
+    commands.expireat.mockImplementation((_key: string, value: number) => {
+      expiresAt = value;
+      return commands;
+    });
+    commands.exec.mockImplementation(async () => {
+      const count = await mockRedis.incr(key);
+      const ttl = Math.max(1, expiresAt - Math.floor(Date.now() / 1000));
+      const expiration = await mockRedis.expire(key, ttl);
+      return [[null, count], [null, expiration]];
+    });
+    return commands;
+  });
+}
+configureMockRedisMulti();
 
 export const mockStripe = {
   checkout: {
@@ -254,6 +283,8 @@ beforeEach(() => {
   mockRedis.incr.mockReset().mockResolvedValue(1);
   mockRedis.decr.mockReset().mockResolvedValue(0);
   mockRedis.expire.mockReset().mockResolvedValue(1);
+  mockRedis.multi.mockReset();
+  configureMockRedisMulti();
   mockRedis.sadd.mockReset().mockResolvedValue(1);
   mockRedis.sismember.mockReset().mockResolvedValue(0);
   mockRedis.srem.mockReset().mockResolvedValue(1);

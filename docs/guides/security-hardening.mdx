@@ -23,48 +23,67 @@ Every response from the auth service includes the following security headers:
 If you are running behind a reverse proxy (Nginx, Cloudflare, AWS ALB), make sure HSTS is not duplicated. The proxy typically handles TLS termination and HSTS, while the auth service adds the defense-in-depth headers.
 </Note>
 
+## Reverse Proxy Trust Boundary
+
+Forwarded addresses affect IP-based abuse controls and security logs, so they
+must cross an explicit trust boundary. `TRUST_PROXY` defaults to `false`; in
+that mode Fastify ignores `X-Forwarded-For` and uses the direct peer address.
+Enable it only when network controls force every request through your known
+proxy chain.
+
+A numeric value trusts the closest `1` to `16` hops. Use it only when the path is
+fixed and backend access is restricted to those proxies. If a shorter path can
+reach the service, attacker-supplied entries may fall within the trusted hop
+count. Prefer a comma-separated IP/CIDR allowlist for stable proxy addresses.
+Blanket values (`true`, `*`, `0.0.0.0/0`, and `::/0`) are rejected.
+
 ## Rate Limiting
 
-All endpoints are protected by per-IP sliding-window rate limits powered by Redis.
+The auth service applies fixed-window limits. Fastify enforces either its 5,000 req/min per-IP default or a route-specific Fastify override, while standard developer API-key requests also consume a Redis-backed plan budget. A standard-auth request must pass both its active Fastify policy and its plan policy.
 
-| Endpoint | Limit | Window |
+| Layer or endpoint | Limit | Window |
 |----------|-------|--------|
-| **All endpoints** (global IP guard) | 500 req | 1 minute |
+| **Default Fastify IP policy** (routes without an override) | 5,000 req | 1 minute |
+| **Standard API-key - Free plan** | 100 req | 1 minute |
+| **Standard API-key - Pro plan** | 500 req | 1 minute |
+| **Standard API-key - Enterprise plan** | 2,000 req | 1 minute |
 | `POST /v1/authorize` | 10 req | 1 minute |
 | `POST /v1/token` | 20 req | 1 minute |
 | `POST /v1/token/refresh` | 20 req | 1 minute |
 | `GET /.well-known/jwks.json` | **Exempt** | -- |
 
-When a client exceeds its limit, the API returns `429 Too Many Requests`; `Retry-After` gives the minimum seconds to wait. Rate-limited responses expose `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). The allow-listed JWKS endpoint is exempt and need not include those headers.
+A route-specific Fastify `config.rateLimit` replaces the 5,000 req/min Fastify default for that route; it does not create a second Fastify layer. The Redis-backed standard developer plan budget remains additional whenever standard API-key authentication applies.
+
+Commerce, the SCIM Bearer data-plane routes under `/scim/v2/*`, admin, and other custom-auth routes remain outside the standard developer plan bucket. Their active Fastify policy still applies. The standard API-key-authenticated `/v1/scim/tokens` management routes do consume the plan bucket.
+
+When a client exceeds its limit, the API returns `429 Too Many Requests`; `Retry-After` gives the minimum seconds to wait. Rate-limited responses expose `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). If Redis cannot complete the standard developer plan transaction, the request fails closed with `503` and `RATE_LIMIT_UNAVAILABLE`. The allow-listed JWKS endpoint is exempt and need not include those headers.
 
 See the full [Rate Limits guide](/guides/rate-limits) for SDK integration examples and retry strategies.
 
 ### Self-hosted tuning
 
-Rate limits are configured in `apps/auth-service/src/server.ts` (global) and in individual route files (per-endpoint). Adjust limits based on your traffic profile:
+Rate limits are configured in `apps/auth-service/src/server.ts` (Fastify default), `apps/auth-service/src/plugins/dynamicRateLimit.ts` (standard developer plan), and individual route files (Fastify overrides). A route override replaces the Fastify default, while the standard developer plan remains additional. Keep the default IP ceiling above the largest plan budget and share Redis across instances for the plan counters.
+Active Fastify default/route counters are process-local; configure a shared store or equivalent ingress enforcement when deployment-wide Fastify ceilings are required:
 
 ```typescript
 await app.register(rateLimit, {
-  max: 100,              // requests per window
+  max: 5_000,            // default requests per IP and window
   timeWindow: '1 minute',
   allowList: (req) => {
-    return req.url.startsWith('/.well-known/');
+    return req.url === '/.well-known/jwks.json'
+      || req.url.startsWith('/.well-known/jwks.json?');
   },
 });
 ```
 
 ## CORS Policy
 
-The auth service registers `@fastify/cors` with `origin: false`, which **disables** cross-origin requests by default. The hosted API is consumed by server-side SDKs over Bearer auth, so browsers are never expected to call it directly, and no `Access-Control-Allow-Origin` header is emitted.
+The auth service enables credentialed CORS only for exact origins listed in the comma-separated `CORS_ALLOWED_ORIGINS` setting. Repository defaults allow `https://grantex.dev`, `https://portal.grantex.dev`, and `http://localhost:5173`; an empty value disables browser cross-origin access. Same-origin and non-browser callers do not send an `Origin` header and continue normally.
 
-For self-hosted deployments that need browser-based consent flows or first-party dashboards to call the auth service, explicitly allow the origins you trust:
+Self-hosted deployments should replace the repository defaults with the exact production origins they trust. Do not use wildcard origins with credentialed requests:
 
-```typescript
-await app.register(cors, {
-  origin: ['https://your-app.com', 'https://portal.your-app.com'],
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  credentials: true,
-});
+```bash
+CORS_ALLOWED_ORIGINS=https://your-app.com,https://portal.your-app.com
 ```
 
 ## Admin API Authentication
@@ -149,6 +168,7 @@ API keys are never stored in plaintext. The auth service hashes every API key wi
 <Check>ADMIN_API_KEY is set to a strong random value</Check>
 <Check>RSA_PRIVATE_KEY is a real 2048-bit key (not auto-generated)</Check>
 <Check>TLS is terminated at the reverse proxy or load balancer</Check>
+<Check>`TRUST_PROXY` is disabled or restricted to the verified proxy chain</Check>
 <Check>Database and Redis are on private networks, not publicly accessible</Check>
 <Check>JWT_ISSUER matches your exact public URL</Check>
 <Check>Grant tokens use short TTLs with refresh tokens for long workflows</Check>

@@ -443,7 +443,7 @@ const { entries } = await grantex.audit.list({
 #### `grantex.audit.get(entryId)`
 
 ```typescript
-const entry = await grantex.audit.get('aud_01J...');
+const entry = await grantex.audit.get('alog_01J...');
 console.log(entry.hash);      // SHA-256 hash for tamper evidence
 console.log(entry.prevHash);   // previous entry hash (chain integrity)
 ```

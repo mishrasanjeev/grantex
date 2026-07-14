@@ -1,9 +1,6 @@
 package grantex
 
-import (
-	"context"
-	"fmt"
-)
+import "context"
 
 // AuditService handles audit logging and retrieval.
 type AuditService struct {
@@ -31,18 +28,6 @@ func (s *AuditService) List(ctx context.Context, params *ListAuditParams) (*List
 		}
 		if params.Action != "" {
 			q["action"] = params.Action
-		}
-		if params.Since != "" {
-			q["since"] = params.Since
-		}
-		if params.Until != "" {
-			q["until"] = params.Until
-		}
-		if params.Page > 0 {
-			q["page"] = fmt.Sprintf("%d", params.Page)
-		}
-		if params.PageSize > 0 {
-			q["pageSize"] = fmt.Sprintf("%d", params.PageSize)
 		}
 		path += buildQueryString(q)
 	}

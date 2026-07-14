@@ -79,12 +79,20 @@ Current public releases, verified 2026-07-12:
 | Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.1.10` (Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.1.10` |
 | MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13` |
 
-> **Known published-package limits:** Go SDK `v0.1.10` does not populate
-> `Agent.ID` from the API's `agentId` response and its audit type omits two
-> required fields. MCP Auth `2.0.2` keeps authorization codes in process memory,
-> does not render consent, and has an incomplete Grantex code handoff. See the
-> [release-status guide](https://docs.grantex.dev/release-status) for supported
-> workarounds and deployment boundaries.
+> **Known published-package limits:** Go SDK `v0.1.10` has documented Agent/Audit
+> read, write, filter, query-encoding, and list-metadata limitations. MCP Auth
+> `2.0.2` keeps authorization codes in process memory, does not render consent,
+> and has an incomplete Grantex code handoff. See the [release-status guide](https://docs.grantex.dev/release-status)
+> for exact workarounds and deployment boundaries.
+
+> **Repository development status (unreleased, July 14, 2026):** source on
+> `main` corrects all documented Go Agent/Audit contract gaps, removes no-op
+> audit filters and phantom list metadata, and URL-encodes query values. The auth
+> service also enforces Redis-backed Free/Pro/Enterprise developer budgets of
+> 100/500/2,000 requests per minute on API-key routes handled by the standard
+> auth plugin. Custom-auth quota policy remains open. No corrected Go tag or
+> managed-service rollout is claimed; the public versions and workarounds
+> above remain authoritative.
 
 Omit a version pin to install the registry's current latest release. See the [release-status documentation](https://docs.grantex.dev/release-status), [COMPATIBILITY.md](COMPATIBILITY.md) for the full package matrix, and [CHANGELOG.md](CHANGELOG.md) for release notes.
 
@@ -1409,7 +1417,7 @@ The primary SDK versions below are registry-verified as of 2026-07-12. For integ
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | Published package |
 | **TypeScript SDK** | `@grantex/sdk` (`0.3.13`) | `npm install @grantex/sdk@0.3.13` | Registry-verified primary release |
 | **Python SDK** | `grantex` (`0.3.14`) | `python -m pip install grantex==0.3.14` | Registry-verified primary release |
-| **Go SDK** | `grantex-go` (`v0.1.10`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.1.10` | Registry-verified; workarounds documented |
+| **Go SDK** | `grantex-go` (`v0.1.10`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.1.10` | Published with workarounds; source correction awaits a new tag |
 | **CLI** | `@grantex/cli` | `npm install -g @grantex/cli` | Published package |
 | **Conformance Suite** | `@grantex/conformance` | `npm install -g @grantex/conformance` | Published package |
 | **A2A Bridge (TS)** | `@grantex/a2a` | `npm install @grantex/a2a` | Published package |
@@ -1668,9 +1676,9 @@ Walk through all 7 steps of the protocol: register an agent, authorize, exchange
 
 ---
 
-## Roadmap
+## Product Roadmap
 
-These labels are historical planning milestones. They record repository work, not current package publication, production readiness, or complete support for every highlighted capability. The [release-status guide](https://docs.grantex.dev/release-status), [compatibility matrix](COMPATIBILITY.md), and package-specific documentation are authoritative for current versions and limitations.
+The current [product roadmap](ROADMAP.md) prioritizes a 2026.08 production-trust baseline: durable MCP authorization, primary-SDK parity and release safety, revocation-aware enforcement, plan throughput, and production Commerce consent. Repository progress is recorded under [Unreleased](CHANGELOG.md#unreleased); the [release-status guide](https://docs.grantex.dev/release-status), [compatibility matrix](COMPATIBILITY.md), and package-specific documentation remain authoritative for published versions, deployment status, and limitations. The labels below are historical source milestones, not release or production-readiness claims.
 
 | Milestone | Historical scope | Current interpretation |
 |-----------|------------------|------------------------|

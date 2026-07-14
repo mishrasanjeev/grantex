@@ -93,7 +93,7 @@
           "height": 630,
           "caption": "Grantex AI agent authorization"
         },
-        "dateModified": "2026-07-12",
+        "dateModified": "2026-07-14",
         "inLanguage": "en"
       },
       {
@@ -561,6 +561,7 @@
       line-height: 1.6;
     }
     .release-caveat strong { color: var(--text); }
+    .release-progress { display: block; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(210, 168, 255, 0.18); }
     .capability-heading {
       display: flex;
       align-items: baseline;
@@ -1396,10 +1397,16 @@
 
     <div class="release-caveat" role="note">
       <strong>Known published-package limits:</strong>
-      Go SDK v0.1.10 needs an agent-ID workaround after registration and cannot
-      send the current audit payload through its typed client. MCP Auth 2.0.2 is
+      Go SDK v0.1.10 needs workarounds for agent IDs and write payloads, audit
+      writes, reads, and filters, reserved query values, and list metadata. MCP Auth 2.0.2 is
       single-process evaluation software with in-memory code state, no rendered
       consent page, and an incomplete backend code handoff.
+      <span class="release-progress">
+        <strong>Repository progress (not published):</strong> source on <code>main</code>
+        corrects the documented Go gaps and implements standard developer API-key
+        Free/Pro/Enterprise throughput. Custom-auth quota policy remains open. The public
+        Go card remains <code>v0.1.10</code>, and no managed-service rollout is implied.
+      </span>
       <a href="https://docs.grantex.dev/release-status">Read the exact boundaries and workarounds.</a>
     </div>
 
@@ -3025,7 +3032,7 @@ func main() {
             <span class="check">&#x2713;</span>
             <div>
               <h4><a href="https://docs.grantex.dev/guides/usage-metering" style="color:inherit;text-decoration:none;">Usage Metering</a></h4>
-              <p>Real-time API usage tracking with Redis counters, daily rollup, and per-plan rate limits.</p>
+              <p>Repository source includes Redis usage counters, daily rollup, and standard developer API-key Free/Pro/Enterprise rate limits; custom-auth quota policy and managed deployment status are separate.</p>
             </div>
           </div>
           <div class="enterprise-feature">
@@ -3067,7 +3074,7 @@ func main() {
             <span class="check">&#x2713;</span>
             <div>
               <h4><a href="https://docs.grantex.dev/guides/security-hardening" style="color:inherit;text-decoration:none;">Security Hardening</a></h4>
-              <p>Rate limiting on every endpoint, HTTP security headers (HSTS, CSP, X-Frame-Options), HMAC-signed SSO state, timing-safe auth, scope validation, and 1MB body limits.</p>
+              <p>Fastify per-IP defaults or route overrides, plus additional standard-auth plan budgets (with JWKS exempt), HTTP security headers (HSTS, CSP, X-Frame-Options), HMAC-signed SSO state, timing-safe auth, scope validation, and 1MB body limits.</p>
             </div>
           </div>
           <div class="enterprise-feature">

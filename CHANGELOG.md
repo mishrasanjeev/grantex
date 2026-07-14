@@ -9,11 +9,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 - Added `audience` support to TypeScript, Python, and Go authorization requests.
 - Added missing TypeScript Vault documentation, package READMEs, JSON-LD contexts, and documentation health checks.
+- Added transactional Redis-backed throughput enforcement for developer API-key requests handled by the standard auth plugin, keyed by developer and plan: Free 100, Pro 500, and Enterprise 2,000 requests per 60 seconds. It runs after the active Fastify per-IP policy (the 5,000/min default or a route-specific override); exhaustion returns structured `429` headers, and counter unavailability fails closed with `503`.
+  Commerce, SCIM Bearer data-plane, admin, and other custom-auth routes remain outside these plan buckets.
 
 ### Changed
 - Published TypeScript SDK 0.3.13, Python SDK 0.3.14, and Go SDK v0.1.10 on 2026-07-11; synchronized the public release snapshot across the landing page, README, compatibility matrix, and SDK documentation.
 
 ### Fixed
+- Corrected the Go SDK source contract across Agent and Audit reads/writes: `agentId` mapping, optional registration fields, status updates, explicit scope clearing, required audit-write fields, `developerId` reads, and list envelopes.
+  Removed unsupported audit filters and URL-encoded query values, with API-shaped regression tests.
+  These fixes are not part of the currently published `v0.1.10` module.
 - Corrected SDK quick starts, audit payloads, verification examples, endpoint paths, usage semantics, package metadata, and OpenAPI coverage.
 - Fixed production issuer alias handling across offline verifiers and tightened Go grant-claim verification.
 - Hardened JWKS key selection and caching, LDAP bind framing and DN escaping, and production deployment-secret validation.
@@ -138,7 +143,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## v0.3.5 (2026-04-06)
 
 ### Added
-- Enterprise hardening: rate limiting on every endpoint, HTTP security headers (HSTS, CSP, X-Frame-Options), SDK retry with exponential backoff, structured JSON logging via pino, database connection pools, graceful shutdown
+- Enterprise hardening: Fastify per-IP rate limiting with endpoint overrides (JWKS exempt), HTTP security headers (HSTS, CSP, X-Frame-Options), SDK retry with exponential backoff, structured JSON logging via pino, database connection pools, graceful shutdown
 - Landing page: test coverage trust card, enterprise hardening features section
 - OWASP ZAP CI integration for security scanning
 

@@ -76,12 +76,17 @@ func TestWebAuthnRegisterVerify(t *testing.T) {
 }
 
 func TestWebAuthnListCredentials(t *testing.T) {
+	const principalID = "user+ops@example.com&tenant=a#frag"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/webauthn/credentials" || r.Method != http.MethodGet {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
-		if r.URL.Query().Get("principalId") != "user-1" {
-			t.Errorf("expected principalId=user-1, got %s", r.URL.Query().Get("principalId"))
+		if got := r.URL.Query().Get("principalId"); got != principalID {
+			t.Errorf("expected principalId=%q, got %q", principalID, got)
+		}
+		const wantRawQuery = "principalId=user%2Bops%40example.com%26tenant%3Da%23frag"
+		if r.URL.RawQuery != wantRawQuery {
+			t.Errorf("expected encoded query %q, got %q", wantRawQuery, r.URL.RawQuery)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(listWebAuthnCredentialsResponse{
@@ -94,7 +99,7 @@ func TestWebAuthnListCredentials(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient("test-key", WithBaseURL(server.URL))
-	creds, err := client.WebAuthn.ListCredentials(context.Background(), "user-1")
+	creds, err := client.WebAuthn.ListCredentials(context.Background(), principalID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

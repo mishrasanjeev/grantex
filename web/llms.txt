@@ -22,7 +22,7 @@ Release snapshot verified: 2026-07-12. Packages are independently versioned. The
 
 - [TypeScript SDK](https://docs.grantex.dev/sdks/typescript/overview): `npm install @grantex/sdk@0.3.13` for Node.js 18+ ESM applications.
 - [Python SDK](https://docs.grantex.dev/sdks/python/overview): `python -m pip install grantex==0.3.14` for Python 3.9+ applications.
-- [Go SDK](https://docs.grantex.dev/sdks/go/overview): `go get github.com/mishrasanjeev/grantex-go@v0.1.10` for Go 1.26.1+; use the documented agent-ID and audit-write workarounds.
+- [Go SDK](https://docs.grantex.dev/sdks/go/overview): `go get github.com/mishrasanjeev/grantex-go@v0.1.10` for Go 1.26.1+; use the documented published-version workarounds.
 - [MCP Authorization Server](https://docs.grantex.dev/features/mcp-auth-server): `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13`; version 2.0.2 is single-process evaluation software, not the recommended production enforcement path.
 - [CLI](https://docs.grantex.dev/integrations/cli): Manage agents, grants, tokens, audit records, and manifests from a terminal.
 - [Machine-Readable Release Status](https://grantex.dev/release-status.json): Canonical versions, install commands, package URLs, limitations, and workaround links.

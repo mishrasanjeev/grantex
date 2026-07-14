@@ -1,6 +1,7 @@
 # Grantex Compatibility Matrix
 
-Last updated: 2026-07-12
+Last updated: 2026-07-14
+Public release snapshot verified: 2026-07-12
 
 This repository uses package-specific versions; there is no monorepo-wide SDK or package release number. The protocol specification remains v1.0 Final, while repository metadata and package registries can move independently during a release.
 
@@ -54,17 +55,32 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 
 ## Known Published-Package Limitations
 
-- **Go SDK `v0.1.10`:** the API returns `agentId`, while `Agent.ID` expects an
-  `id` JSON field, so registration leaves `Agent.ID` empty. Derive the ID from
-  `did:grantex:<agentId>` for this release. `LogAuditParams` also omits the
-  required `agentDid` and `principalId` fields; use the REST endpoint or CLI for
-  audit writes.
+- **Go SDK `v0.1.10`:** the API returns `agentId`, while `Agent.ID` expects `id`,
+  so derive the ID from `did:grantex:<agentId>`. Registration sends optional
+  zero values; updates cannot set `status` or clear all scopes, so use REST for
+  those writes.
+  `LogAuditParams` omits required `agentDid` and `principalId`; use REST or CLI
+  for audit writes. `AuditEntry` omits `DeveloperID`, while `Since`, `Until`,
+  `Page`, and `PageSize` audit filters are ignored by the API.
+  Agent and audit list structs expose metadata the API does not return; use slice
+  lengths. List helpers also fail to URL-encode reserved characters in filter
+  values; avoid them or issue a `net/url`-encoded REST request.
+  See the Go SDK overview for the complete published-release workarounds. All are
+  corrected in repository source but require a new public module tag.
+
 - **MCP Auth `2.0.2`:** client registrations default to process memory and
   authorization codes always use a non-configurable process-local store.
   `consentUi` is metadata only, `onTokenIssued` is not invoked, local
   introspection/middleware do not check revocation, and the Grantex authorization
   code is not persisted for token exchange. Treat this release as single-process
   evaluation software until a corrected package is published.
+
+## Repository Source Ahead of Public Releases (updated 2026-07-14)
+
+| Surface | Repository `main` status | Publication or deployment status |
+| --- | --- | --- |
+| Go SDK parity | All documented Agent/Audit read/write gaps are corrected; unsupported audit filters and phantom list metadata are removed; query values are URL-encoded; API-shaped regression tests cover the contracts. | No corrected tag is published; every `v0.1.10` limitation above still applies. |
+| Standard-auth throughput | Auth service source enforces Redis-backed Free/Pro/Enterprise budgets of 100/500/2,000 requests per minute per developer on API-key routes handled by the standard auth plugin, after the active Fastify per-IP policy (the 5,000/min default or a route override). Commerce, SCIM Bearer data-plane, admin, and other custom-auth routes remain outside these plan buckets. | Source completion does not confirm managed-service deployment. |
 
 ## Installation Guidance
 

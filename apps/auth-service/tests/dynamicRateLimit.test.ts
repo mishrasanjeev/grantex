@@ -1,141 +1,112 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { getRateLimitForPlan, PLAN_RATE_LIMITS, dynamicRateLimitPlugin } from '../src/plugins/dynamicRateLimit.js';
-import { buildTestApp } from './helpers.js';
-import { sqlMock } from './setup.js';
-import type { FastifyInstance } from 'fastify';
+import Fastify from 'fastify';
+import { describe, it, expect } from 'vitest';
+import {
+  dynamicRateLimitPlugin,
+  getRateLimitForPlan,
+  PLAN_RATE_LIMITS,
+  PLAN_RATE_LIMIT_WINDOW_SECONDS,
+} from '../src/plugins/dynamicRateLimit.js';
+import { mockRedis } from './helpers.js';
 
-let app: FastifyInstance;
-
-beforeAll(async () => {
-  app = await buildTestApp();
-});
+async function buildPlanApp(plan: string | undefined = 'free') {
+  const app = Fastify({ logger: false });
+  app.addHook('preHandler', async (request) => {
+    (request as unknown as Record<string, unknown>).developer = {
+      id: 'dev_1',
+      name: 'Test Developer',
+      mode: 'live',
+      ...(plan === undefined ? {} : { plan }),
+    };
+  });
+  await dynamicRateLimitPlugin(app);
+  app.get('/test-rate', async (request) => ({ limit: request.planRateLimit }));
+  await app.ready();
+  return app;
+}
 
 describe('PLAN_RATE_LIMITS', () => {
-  it('has correct limits for each plan', () => {
-    expect(PLAN_RATE_LIMITS['free']).toBe(100);
-    expect(PLAN_RATE_LIMITS['pro']).toBe(500);
-    expect(PLAN_RATE_LIMITS['enterprise']).toBe(2000);
+  it('defines one-minute throughput for every plan', () => {
+    expect(PLAN_RATE_LIMITS).toEqual({ free: 100, pro: 500, enterprise: 2000 });
+    expect(PLAN_RATE_LIMIT_WINDOW_SECONDS).toBe(60);
   });
 });
 
 describe('getRateLimitForPlan', () => {
-  it('returns correct limit for free plan', () => {
-    expect(getRateLimitForPlan('free')).toBe(100);
-  });
-
-  it('returns correct limit for pro plan', () => {
-    expect(getRateLimitForPlan('pro')).toBe(500);
-  });
-
-  it('returns correct limit for enterprise plan', () => {
-    expect(getRateLimitForPlan('enterprise')).toBe(2000);
-  });
-
-  it('defaults to free when plan not recognized', () => {
-    expect(getRateLimitForPlan('unknown')).toBe(100);
-  });
-
-  it('defaults to free for empty string', () => {
-    expect(getRateLimitForPlan('')).toBe(100);
+  it.each([
+    ['free', 100],
+    ['pro', 500],
+    ['enterprise', 2000],
+    ['unknown', 100],
+    ['', 100],
+  ])('maps %s to %i requests per minute', (plan, expected) => {
+    expect(getRateLimitForPlan(plan)).toBe(expected);
   });
 });
 
 describe('dynamicRateLimitPlugin', () => {
-  it('registers correctly on Fastify', async () => {
-    // dynamicRateLimitPlugin decorates request with planRateLimit
-    const testApp = await buildTestApp();
-
-    // Register the plugin (it may already be registered via server.ts,
-    // but we can test standalone registration)
-    const standaloneApp = (await import('fastify')).default({ logger: false });
-    await dynamicRateLimitPlugin(standaloneApp);
-
-    // Verify decoration was added
-    expect(standaloneApp.hasRequestDecorator('planRateLimit')).toBe(true);
-
-    await standaloneApp.close();
+  it('registers the request decorator', async () => {
+    const app = Fastify({ logger: false });
+    await dynamicRateLimitPlugin(app);
+    expect(app.hasRequestDecorator('planRateLimit')).toBe(true);
+    await app.close();
   });
 
-  it('sets planRateLimit based on developer plan', async () => {
-    // We test by creating a test route that reads planRateLimit
-    const testApp = (await import('fastify')).default({ logger: false });
-    await dynamicRateLimitPlugin(testApp);
+  it('enforces the standard-auth developer plan and returns budget headers', async () => {
+    mockRedis.incr.mockResolvedValueOnce(1);
+    const app = await buildPlanApp('pro');
+    const response = await app.inject({ method: 'GET', url: '/test-rate' });
 
-    testApp.get('/test-rate', async (request) => {
-      // Simulate developer being set by auth plugin
-      (request as unknown as Record<string, unknown>).developer = { plan: 'pro' };
-      // Manually trigger preHandler hooks
-      return { limit: (request as { planRateLimit?: number }).planRateLimit };
-    });
-
-    await testApp.ready();
-
-    const res = await testApp.inject({
-      method: 'GET',
-      url: '/test-rate',
-    });
-
-    // The preHandler runs after route handler in inject, so planRateLimit
-    // should be the default (100) since developer is set inside handler, not before
-    expect(res.statusCode).toBe(200);
-
-    await testApp.close();
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ limit: 500 });
+    expect(response.headers['x-ratelimit-limit']).toBe('500');
+    expect(response.headers['x-ratelimit-remaining']).toBe('499');
+    expect(Number(response.headers['x-ratelimit-reset'])).toBeGreaterThan(0);
+    expect(mockRedis.incr).toHaveBeenCalledWith(
+      expect.stringMatching(/^ratelimit:developer:dev_1:plan:\d+$/),
+    );
+    await app.close();
   });
 
-  it('applies plan rate limit via preHandler when developer is set before route', async () => {
-    const testApp = (await import('fastify')).default({ logger: false });
-
-    // Add a preHandler hook that sets developer BEFORE the dynamic rate limit hook runs
-    // Hook registration order matters — Fastify runs them in order
-    testApp.addHook('preHandler', async (request) => {
-      (request as unknown as Record<string, unknown>).developer = { id: 'dev_1', name: 'Test', plan: 'enterprise' };
-    });
-
-    await dynamicRateLimitPlugin(testApp);
-
-    testApp.get('/test-rate-enterprise', async (request) => {
-      return { limit: (request as { planRateLimit?: number }).planRateLimit };
-    });
-
-    await testApp.ready();
-
-    const res = await testApp.inject({
-      method: 'GET',
-      url: '/test-rate-enterprise',
-    });
-
-    expect(res.statusCode).toBe(200);
-    const body = res.json<{ limit: number }>();
-    expect(body.limit).toBe(2000);
-
-    await testApp.close();
+  it('defaults unrecognized plans to the free budget', async () => {
+    const app = await buildPlanApp('legacy-plan');
+    const response = await app.inject({ method: 'GET', url: '/test-rate' });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['x-ratelimit-limit']).toBe('100');
+    await app.close();
   });
 
-  it('applies free rate limit when developer has no plan field', async () => {
-    const testApp = (await import('fastify')).default({ logger: false });
+  it('returns a structured 429 after the plan budget is exhausted', async () => {
+    mockRedis.incr.mockResolvedValueOnce(101);
+    const app = await buildPlanApp('free');
+    const response = await app.inject({ method: 'GET', url: '/test-rate' });
 
-    // Register developer hook BEFORE dynamic rate limit plugin
-    testApp.addHook('preHandler', async (request) => {
-      (request as unknown as Record<string, unknown>).developer = { id: 'dev_1', name: 'Test' };
-    });
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toMatchObject({ code: 'RATE_LIMIT_EXCEEDED' });
+    expect(response.headers['x-ratelimit-limit']).toBe('100');
+    expect(response.headers['x-ratelimit-remaining']).toBe('0');
+    expect(Number(response.headers['retry-after'])).toBeGreaterThan(0);
+    await app.close();
+  });
 
-    await dynamicRateLimitPlugin(testApp);
+  it('does not consume a plan budget without standard developer context', async () => {
+    const app = Fastify({ logger: false });
+    await dynamicRateLimitPlugin(app);
+    app.get('/public', async () => ({ ok: true }));
+    await app.ready();
+    const response = await app.inject({ method: 'GET', url: '/public' });
 
-    testApp.get('/test-rate-noplan', async (request) => {
-      return { limit: (request as { planRateLimit?: number }).planRateLimit };
-    });
+    expect(response.statusCode).toBe(200);
+    expect(mockRedis.incr).not.toHaveBeenCalled();
+    await app.close();
+  });
 
-    await testApp.ready();
+  it('fails closed when the counter transaction cannot set its expiry', async () => {
+    mockRedis.expire.mockRejectedValueOnce(new Error('redis unavailable'));
+    const app = await buildPlanApp('enterprise');
+    const response = await app.inject({ method: 'GET', url: '/test-rate' });
 
-    const res = await testApp.inject({
-      method: 'GET',
-      url: '/test-rate-noplan',
-    });
-
-    expect(res.statusCode).toBe(200);
-    const body = res.json<{ limit: number }>();
-    expect(body.limit).toBe(100); // defaults to free
-
-    await testApp.close();
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ code: 'RATE_LIMIT_UNAVAILABLE' });
+    await app.close();
   });
 });

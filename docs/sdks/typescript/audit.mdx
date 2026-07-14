@@ -37,7 +37,7 @@ const entry = await grantex.audit.log({
   metadata: { amount: 420, currency: 'USD', merchant: 'Air India' },
 });
 
-console.log(entry.entryId);   // 'aud_01HXYZ...'
+console.log(entry.entryId);   // 'alog_01HXYZ...'
 console.log(entry.hash);      // SHA-256 hash of this entry
 console.log(entry.prevHash);  // Hash of the previous entry (null for the first)
 console.log(entry.timestamp); // '2026-02-28T12:00:00Z'
@@ -200,7 +200,7 @@ for (const entry of result.entries) {
 Retrieve a single audit entry by its ID.
 
 ```typescript
-const entry = await grantex.audit.get('aud_01HXYZ...');
+const entry = await grantex.audit.get('alog_01HXYZ...');
 
 console.log(entry.action);   // 'payment.initiated'
 console.log(entry.hash);     // 'a1b2c3d4e5f6...'

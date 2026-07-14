@@ -27,13 +27,24 @@ Public endpoints (health, JWKS, consent UI, SSO flow) require no authentication.
 
 ## Rate Limits
 
+<Note>
+  These are current repository defaults. Source implementation does not by itself confirm that a managed environment has been deployed with the same configuration.
+</Note>
+
 | Endpoint | Limit |
 |----------|-------|
-| Global IP guard | 500 requests/minute |
+| Default Fastify IP policy (routes without an override) | 5,000 requests/minute per source IP |
+| Standard developer API-key - Free plan | 100 requests/minute per developer |
+| Standard developer API-key - Pro plan | 500 requests/minute per developer |
+| Standard developer API-key - Enterprise plan | 2,000 requests/minute per developer |
 | `POST /v1/authorize` | 10 requests/minute per developer |
 | `POST /v1/token` | 20 requests/minute |
 | `POST /v1/token/refresh` | 20 requests/minute |
 | `GET /.well-known/jwks.json` | Not rate-limited |
+
+A route-specific Fastify limit replaces the 5,000 requests/minute default for that route. The Redis-backed standard developer API-key plan budget is an additional policy whenever standard API-key authentication applies.
+
+Commerce, the SCIM Bearer data-plane routes under `/scim/v2/*`, admin, and other custom-auth routes do not consume the standard developer API-key plan bucket; their active Fastify policy still applies. The standard API-key-authenticated `/v1/scim/tokens` management routes do consume the plan bucket.
 
 ## OpenAPI Spec
 

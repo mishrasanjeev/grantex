@@ -166,6 +166,20 @@ export async function validateSeoAeo(options = {}) {
     if (actual.size !== expected.size || [...expected].some((id) => !actual.has(id))) {
       failures.push('release-status.json must publish all six MCP Auth 2.0.2 limitations');
     }
+
+    const goSdk = rootRelease.artifacts?.find((artifact) => artifact.id === 'go-sdk');
+    const expectedGo = new Set([
+      'go-agent-id-response-mapping',
+      'go-audit-write-payload',
+      'go-list-response-metadata',
+      'go-agent-write-payload',
+      'go-audit-read-contract',
+      'go-query-encoding',
+    ]);
+    const actualGo = new Set((goSdk?.limitations || []).map((item) => item.id));
+    if (actualGo.size !== expectedGo.size || [...expectedGo].some((id) => !actualGo.has(id))) {
+      failures.push('release-status.json must publish all six Go SDK v0.1.10 limitations');
+    }
   }
 
   let linkedData = { '@graph': [] };
@@ -260,7 +274,9 @@ export async function validateSeoAeo(options = {}) {
   for (const value of ['@grantex/sdk@0.3.13', 'grantex==0.3.14', 'grantex-go@v0.1.10', '@grantex/mcp-auth@2.0.2']) {
     if (!llmsFull.includes(value)) failures.push('web/llms-full.txt is missing current implementation selector ' + value);
   }
-  if (!/Last updated and release snapshot verified:\s+2026-07-12/.test(llmsFull)) {
+  const llmsUpdatedAt = llmsFull.match(/Last updated:\s+(\d{4}-\d{2}-\d{2})/)?.[1];
+  const llmsSnapshotAt = llmsFull.match(/Public release snapshot verified:\s+(\d{4}-\d{2}-\d{2})/)?.[1];
+  if (!llmsUpdatedAt || !llmsSnapshotAt || llmsSnapshotAt !== rootRelease?.verifiedAt || llmsUpdatedAt < llmsSnapshotAt) {
     failures.push('web/llms-full.txt must display its verified update date');
   }
   if (!llmsFull.includes('Delegated Agent Authorization Protocol (DAAP)')) {

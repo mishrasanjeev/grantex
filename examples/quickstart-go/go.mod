@@ -2,7 +2,7 @@ module github.com/mishrasanjeev/grantex/examples/quickstart-go
 
 go 1.26.1
 
-require github.com/mishrasanjeev/grantex-go v0.1.9
+require github.com/mishrasanjeev/grantex-go v0.1.10
 
 replace github.com/mishrasanjeev/grantex-go => ../../packages/go-sdk
 
