@@ -3209,7 +3209,7 @@ func main() {
       var current = tabs.indexOf(document.activeElement);
       if (current < 0) return;
 
-      var nextIndex = current;
+      var nextIndex;
       if (event.key === 'ArrowRight') nextIndex = (current + 1) % tabs.length;
       else if (event.key === 'ArrowLeft') nextIndex = (current - 1 + tabs.length) % tabs.length;
       else if (event.key === 'Home') nextIndex = 0;
