@@ -10,7 +10,7 @@
   "dependencies": {
     "@grantex/x402": "file:../../packages/x402",
     "express": "^4.21.0",
-    "express-rate-limit": "^8.5.2",
+    "express-rate-limit": "^8.6.0",
     "tsx": "^4.22.5"
   },
   "devDependencies": {
