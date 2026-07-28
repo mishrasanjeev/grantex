@@ -35,5 +35,6 @@ jobs:
             MPL-2.0,
             Unlicense,
             LicenseRef-scancode-unicode,
-            LicenseRef-scancode-google-patent-license-golang
+            LicenseRef-scancode-google-patent-license-golang,
+            LGPL-3.0-or-later
           comment-summary-in-pr: always
