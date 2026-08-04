@@ -32,7 +32,7 @@
     "dev": "node --loader ts-node/esm src/index.ts"
   },
   "dependencies": {
-    "chalk": "^5.3.0",
+    "chalk": "^6.0.0",
     "commander": "^15.0.0"
   },
   "overrides": {
