@@ -134,12 +134,6 @@
         ]
       },
       {
-        "source": "/playground",
-        "headers": [
-          { "key": "X-Robots-Tag", "value": "noindex,nofollow" }
-        ]
-      },
-      {
         "source": "/commerce-playground",
         "headers": [
           { "key": "X-Robots-Tag", "value": "noindex,nofollow" }
@@ -147,18 +141,6 @@
       },
       {
         "source": "/ph-gallery",
-        "headers": [
-          { "key": "X-Robots-Tag", "value": "noindex,nofollow" }
-        ]
-      },
-      {
-        "source": "/mpp-demo/**",
-        "headers": [
-          { "key": "X-Robots-Tag", "value": "noindex,nofollow" }
-        ]
-      },
-      {
-        "source": "/x402-playground/**",
         "headers": [
           { "key": "X-Robots-Tag", "value": "noindex,nofollow" }
         ]

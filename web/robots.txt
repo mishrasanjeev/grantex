@@ -1,6 +1,7 @@
 # Grantex public documentation and marketing content is crawlable.
 # Authentication, not robots.txt, protects non-public application state.
-# Public noindex app/demo shells remain crawlable so page-level noindex can be read.
+# Public demo pages remain crawlable and indexable; private app and operator shells
+# use page-level noindex so Google can process the directive without robots blocking.
 #
 # The explicit names below document known crawler purposes as of 2026-07-12.
 # Google-Extended, GPTBot, ClaudeBot, and Applebot-Extended are product/training
