@@ -9,10 +9,12 @@ import { vi, beforeEach } from 'vitest';
 // The factories use arrow functions, so the variables are captured
 // by binding (not by value) and are always resolved at call time.
 // ------------------------------------------------------------------
-export const sqlMock = Object.assign(vi.fn().mockResolvedValue([]), {
+const baseSqlMock = vi.fn().mockResolvedValue([]);
+export const sqlMock = Object.assign(baseSqlMock, {
   // Support sql.begin(async (tx) => { ... }) — passes sqlMock itself as the tx
   begin: vi.fn().mockImplementation(async (cb: (tx: unknown) => unknown) => cb(sqlMock)),
   json: vi.fn((value: unknown) => value),
+  unsafe: vi.fn((query: string, parameters: unknown[] = []) => baseSqlMock([query], ...parameters)),
 });
 
 export const mockRedis = {
@@ -269,6 +271,7 @@ vi.mock('@simplewebauthn/server/helpers', () => ({
 beforeEach(() => {
   sqlMock.mockReset();
   sqlMock.mockResolvedValue([]);
+  sqlMock.unsafe.mockClear();
   sqlMock.begin.mockReset();
   sqlMock.begin.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(sqlMock));
   sqlMock.json.mockReset();

@@ -15,15 +15,25 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
     const principalId = query['principalId'] ?? null;
     const status = query['status'] ?? null;
 
-    const rows = await sql`
+    const predicates = ['developer_id = $1'];
+    const parameters: string[] = [developerId];
+    for (const [column, value] of [
+      ['agent_id', agentId],
+      ['principal_id', principalId],
+      ['status', status],
+    ] as const) {
+      if (value !== null) {
+        parameters.push(value);
+        predicates.push(`${column} = $${parameters.length}`);
+      }
+    }
+
+    const rows = await sql.unsafe(`
       SELECT id, agent_id, principal_id, developer_id, scopes, status, issued_at, expires_at, revoked_at
       FROM grants
-      WHERE developer_id = ${developerId}
-        AND (${agentId}::text IS NULL OR agent_id = ${agentId ?? ''})
-        AND (${principalId}::text IS NULL OR principal_id = ${principalId ?? ''})
-        AND (${status}::text IS NULL OR status = ${status ?? ''})
+      WHERE ${predicates.join(' AND ')}
       ORDER BY issued_at DESC
-    `;
+    `, parameters);
 
     return reply.send({ grants: rows.map(toGrantResponse) });
   });

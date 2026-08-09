@@ -332,10 +332,9 @@ export async function searchCatalog(
        WHERE p.tenant_id = ${input.tenantId}
          AND p.merchant_id = ${input.merchantId}
          AND p.archived_at IS NULL
-         AND (${query}::text IS NULL
-              OR p.title ILIKE ('%' || ${query} || '%')
-              OR p.brand ILIKE ('%' || ${query} || '%')
-              OR p.product_id ILIKE ('%' || ${query} || '%'))
+         AND (${query}::text IS NULL OR
+              (COALESCE(p.title, '') || ' ' || COALESCE(p.brand, '') || ' ' || p.product_id)
+                ILIKE ('%' || ${query} || '%'))
          AND (${brand}::text IS NULL OR p.brand = ${brand})
          AND (${categoryPreset}::text IS NULL OR p.category_preset = ${categoryPreset})
          AND (
@@ -433,10 +432,9 @@ export async function listCatalogProducts(
            OR (${status}::text = 'active' AND p.archived_at IS NULL)
            OR (${status}::text = 'archived' AND p.archived_at IS NOT NULL)
          )
-         AND (${query}::text IS NULL
-              OR p.title ILIKE ('%' || ${query} || '%')
-              OR p.brand ILIKE ('%' || ${query} || '%')
-              OR p.product_id ILIKE ('%' || ${query} || '%'))
+         AND (${query}::text IS NULL OR
+              (COALESCE(p.title, '') || ' ' || COALESCE(p.brand, '') || ' ' || p.product_id)
+                ILIKE ('%' || ${query} || '%'))
          AND (${categoryPreset}::text IS NULL OR p.category_preset = ${categoryPreset})
          AND (
            ${cursor.updatedAt}::timestamptz IS NULL
