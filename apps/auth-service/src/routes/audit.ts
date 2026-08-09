@@ -128,16 +128,26 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
     const principalId = query['principalId'] ?? null;
     const action = query['action'] ?? null;
 
-    const rows = await sql`
+    const predicates = ['developer_id = $1'];
+    const parameters: string[] = [developerId];
+    for (const [column, value] of [
+      ['agent_id', agentId],
+      ['grant_id', grantId],
+      ['principal_id', principalId],
+      ['action', action],
+    ] as const) {
+      if (value !== null) {
+        parameters.push(value);
+        predicates.push(`${column} = $${parameters.length}`);
+      }
+    }
+
+    const rows = await sql.unsafe(`
       SELECT id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status
       FROM audit_entries
-      WHERE developer_id = ${developerId}
-        AND (${agentId}::text IS NULL OR agent_id = ${agentId ?? ''})
-        AND (${grantId}::text IS NULL OR grant_id = ${grantId ?? ''})
-        AND (${principalId}::text IS NULL OR principal_id = ${principalId ?? ''})
-        AND (${action}::text IS NULL OR action = ${action ?? ''})
+      WHERE ${predicates.join(' AND ')}
       ORDER BY timestamp ASC
-    `;
+    `, parameters);
 
     return reply.send({ entries: rows.map(toAuditResponse) });
   });

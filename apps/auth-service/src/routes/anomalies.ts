@@ -270,14 +270,13 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
     const developerId = request.developer.id;
     const unacknowledgedOnly = query['unacknowledged'] === 'true';
 
-    const rows = await sql`
+    const rows = await sql.unsafe(`
       SELECT id, type, severity, agent_id, principal_id, description, metadata,
              detected_at, acknowledged_at
       FROM anomalies
-      WHERE developer_id = ${developerId}
-        AND (${!unacknowledgedOnly} OR acknowledged_at IS NULL)
+      WHERE developer_id = $1${unacknowledgedOnly ? ' AND acknowledged_at IS NULL' : ''}
       ORDER BY detected_at DESC
-    `;
+    `, [developerId]);
 
     const anomalies = (rows as Array<Record<string, unknown>>).map(toResponse);
     return reply.send({ anomalies, total: anomalies.length });
@@ -333,17 +332,28 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    const rows = await sql`
+    const predicates = ['developer_id = $1'];
+    const parameters: Array<string | number> = [developerId];
+    for (const [column, value] of [
+      ['status', status],
+      ['severity', severity],
+      ['agent_id', agentId],
+    ] as const) {
+      if (value !== null) {
+        parameters.push(value);
+        predicates.push(`${column} = $${parameters.length}`);
+      }
+    }
+    parameters.push(limit);
+
+    const rows = await sql.unsafe(`
       SELECT id, type, severity, status, rule_id, rule_name, agent_id,
              description, context, metadata, detected_at, acknowledged_at, resolved_at
       FROM anomalies
-      WHERE developer_id = ${developerId}
-        AND (${status === null} OR status = ${status ?? ''})
-        AND (${severity === null} OR severity = ${severity ?? ''})
-        AND (${agentId === null} OR agent_id = ${agentId ?? ''})
+      WHERE ${predicates.join(' AND ')}
       ORDER BY detected_at DESC
-      LIMIT ${limit}
-    `;
+      LIMIT $${parameters.length}
+    `, parameters);
 
     const data = (rows as Array<Record<string, unknown>>).map(toAlertResponse);
     return reply.send({ data });

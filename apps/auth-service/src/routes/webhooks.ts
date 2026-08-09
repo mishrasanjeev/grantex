@@ -173,23 +173,23 @@ export async function webhooksRoutes(app: FastifyInstance): Promise<void> {
     const page = parsedPage;
     const pageSize = Math.min(100, parsedPageSize);
     const offset = (page - 1) * pageSize;
+    const deliveryPredicate = status === null ? '' : ' AND status = $2';
+    const filterParameters = status === null ? [webhookId] : [webhookId, status];
 
-    const countRows = await sql<{ count: string }[]>`
+    const countRows = await sql.unsafe<{ count: string }[]>(`
       SELECT COUNT(*) AS count FROM webhook_deliveries
-      WHERE webhook_id = ${webhookId}
-        AND (${status}::text IS NULL OR status = ${status ?? ''})
-    `;
+      WHERE webhook_id = $1${deliveryPredicate}
+    `, filterParameters);
     const total = parseInt(countRows[0]?.count ?? '0', 10);
 
-    const rows = await sql`
+    const rows = await sql.unsafe(`
       SELECT id, event_id, event_type, status, attempts, max_attempts, url,
              last_error, created_at, delivered_at
       FROM webhook_deliveries
-      WHERE webhook_id = ${webhookId}
-        AND (${status}::text IS NULL OR status = ${status ?? ''})
+      WHERE webhook_id = $1${deliveryPredicate}
       ORDER BY created_at DESC
-      LIMIT ${pageSize} OFFSET ${offset}
-    `;
+      LIMIT $${filterParameters.length + 1} OFFSET $${filterParameters.length + 2}
+    `, [...filterParameters, pageSize, offset]);
 
     return reply.send({
       deliveries: rows.map(r => ({
