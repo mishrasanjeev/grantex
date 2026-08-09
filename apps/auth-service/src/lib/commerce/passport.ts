@@ -205,10 +205,15 @@ export async function verifyCommercePassport(
       const claim = (err as { claim?: string }).claim;
       // Recover the unverified payload for error context (signature
       // already failed, but the raw values are useful for the caller).
-      let rawPayload: JWTPayload | null = null;
-      try { rawPayload = decodeJwt(token); } catch { /* ignore */ }
-      if (claim === 'aud') return { ok: false, error: { kind: 'wrong_audience', aud: rawPayload?.aud } };
-      if (claim === 'iss') return { ok: false, error: { kind: 'wrong_issuer', iss: rawPayload?.iss } };
+      let rawAudience: string | string[] | undefined;
+      let rawIssuer: string | undefined;
+      try {
+        const rawPayload = decodeJwt(token);
+        rawAudience = rawPayload.aud;
+        rawIssuer = rawPayload.iss;
+      } catch { /* ignore */ }
+      if (claim === 'aud') return { ok: false, error: { kind: 'wrong_audience', aud: rawAudience } };
+      if (claim === 'iss') return { ok: false, error: { kind: 'wrong_issuer', iss: rawIssuer } };
       if (claim === 'nbf' || reason === 'nbf') return { ok: false, error: { kind: 'not_yet_valid' } };
     }
     return {
