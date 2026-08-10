@@ -1,0 +1,4 @@
+interface:
+  display_name: "Use Grantex CLI"
+  short_description: "Operate Grantex safely from any agent shell"
+  default_prompt: "Use $use-grantex-cli to configure delegated authorization for this agent."

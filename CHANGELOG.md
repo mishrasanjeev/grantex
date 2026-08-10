@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Added
+- Prepared `@grantex/cli` 0.3.0 with one-command Agent Skills installation for Hermes, OpenClaw, portable `.agents/skills` workspaces, and custom skill roots.
+- Added the `use-grantex-cli` and `integrate-grantex` skills for safe JSON-first operations and service-boundary implementation guidance.
+- Added cross-platform token input from environment variables, files, and stdin, plus non-zero JSON-mode status codes for invalid or denied checks.
 - Added `audience` support to TypeScript, Python, and Go authorization requests.
 - Added missing TypeScript Vault documentation, package READMEs, JSON-LD contexts, and documentation health checks.
 - Added transactional Redis-backed throughput enforcement for developer API-key requests handled by the standard auth plugin, keyed by developer and plan: Free 100, Pro 500, and Enterprise 2,000 requests per 60 seconds. It runs after the active Fastify per-IP policy (the 5,000/min default or a route-specific override); exhaustion returns structured `429` headers, and counter unavailability fails closed with `503`.
@@ -27,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Reconciled landing-page examples and product claims with the implemented APIs and supported verification workflows.
 
 ### Documentation
+- Added dedicated Hermes, OpenClaw, and generic agent-CLI guides and made the support visible on the landing page, integration index, README, and machine-readable LLM guides.
 - Expanded the core OpenAPI description and aligned landing pages, SDK guides, compatibility data, deployment guidance, and release metadata.
 - Replaced unsupported certification, compliance, latency, cache, and automatic-audit claims with implementation-backed behavior.
 

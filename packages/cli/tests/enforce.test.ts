@@ -42,6 +42,7 @@ describe('enforceCommand()', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     setJsonMode(false);
+    process.exitCode = undefined;
   });
 
   it('registers the "enforce" command name', () => {
@@ -79,6 +80,33 @@ describe('enforceCommand()', () => {
       tool: 'query',
     });
     expect(console.log).toHaveBeenCalled();
+  });
+
+  it('test reads the token from an environment variable', async () => {
+    process.env['GRANTEX_TEST_TOKEN'] = 'env_jwt_token';
+    mockClient.enforce.mockResolvedValue(enforceAllowedResult);
+    try {
+      const cmd = enforceCommand();
+      cmd.exitOverride();
+      await cmd.parseAsync([
+        'node',
+        'test',
+        'test',
+        '--token-env',
+        'GRANTEX_TEST_TOKEN',
+        '--connector',
+        'salesforce',
+        '--tool',
+        'query',
+      ]);
+      expect(mockClient.enforce).toHaveBeenCalledWith({
+        grantToken: 'env_jwt_token',
+        connector: 'salesforce',
+        tool: 'query',
+      });
+    } finally {
+      delete process.env['GRANTEX_TEST_TOKEN'];
+    }
   });
 
   it('test outputs ALLOWED for permitted tool call', async () => {
@@ -264,6 +292,8 @@ describe('enforceCommand()', () => {
     const parsed = JSON.parse(output);
     expect(parsed.allowed).toBe(false);
     expect(parsed.reason).toContain('salesforce:delete');
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
   });
 
   // ── test with unknown connector ───────────────────────────────────────

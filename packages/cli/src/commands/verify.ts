@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import * as jose from 'jose';
 import { readFileSync } from 'node:fs';
 import { isJsonMode } from '../format.js';
+import { readTokenInput } from '../token-input.js';
 
 interface GrantTokenClaims {
   iss?: string;
@@ -44,27 +45,6 @@ interface VerifyResult {
   elapsedMs?: number;
   mode?: 'offline' | 'online';
   error?: string;
-}
-
-function readTokenInput(
-  tokenArg: string | undefined,
-  opts: { file?: string; stdin?: boolean },
-): string {
-  if (opts.stdin) {
-    // Read from stdin (piped input)
-    const fd = require('node:fs').openSync('/dev/stdin', 'r');
-    const buf = Buffer.alloc(1024 * 64);
-    const n = require('node:fs').readSync(fd, buf);
-    require('node:fs').closeSync(fd);
-    return buf.subarray(0, n).toString('utf8').trim();
-  }
-  if (opts.file) {
-    return readFileSync(opts.file, 'utf8').trim();
-  }
-  if (tokenArg) {
-    return tokenArg;
-  }
-  throw new Error('No token provided. Pass a token argument, --file <path>, or --stdin.');
 }
 
 function relativeTime(date: Date, now: Date): string {
@@ -240,6 +220,7 @@ export function verifyCommand(): Command {
     .option('--jwks-file <path>', 'Path to local JWKS JSON file')
     .option('--file <path>', 'Read token from a file')
     .option('--stdin', 'Read token from stdin')
+    .option('--env <name>', 'Read token from an environment variable')
     .action(async (tokenArg: string | undefined, opts: {
       verbose?: boolean;
       json?: boolean;
@@ -248,6 +229,7 @@ export function verifyCommand(): Command {
       jwksFile?: string;
       file?: string;
       stdin?: boolean;
+      env?: string;
     }) => {
       const startTime = performance.now();
       const useJson = opts.json || isJsonMode();
@@ -255,7 +237,11 @@ export function verifyCommand(): Command {
       // Read token
       let token: string;
       try {
-        token = readTokenInput(tokenArg, { file: opts.file, stdin: opts.stdin });
+        token = readTokenInput(tokenArg, {
+          file: opts.file,
+          stdin: opts.stdin,
+          env: opts.env,
+        });
       } catch (err) {
         if (useJson) {
           console.log(JSON.stringify({ status: 'error', error: (err as Error).message }));

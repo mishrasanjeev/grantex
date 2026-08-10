@@ -93,7 +93,7 @@
           "height": 630,
           "caption": "Grantex AI agent authorization"
         },
-        "dateModified": "2026-07-14",
+        "dateModified": "2026-08-10",
         "inLanguage": "en"
       },
       {
@@ -210,7 +210,7 @@
             "name": "How do I authorize tools used by AI agent frameworks?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Use a primary Grantex SDK to register the agent, request a grant, and exchange the authorization code, then enforce scopes at the service boundary with an SDK verifier or direct JWKS validation. Framework adapters are available for OpenAI Agents SDK, Anthropic, LangChain, CrewAI, Google ADK, Vercel AI, AutoGen, Express, FastAPI, and MCP."
+              "text": "Use a primary Grantex SDK to register the agent, request a grant, and exchange the authorization code, then enforce scopes at the service boundary with an SDK verifier or direct JWKS validation. Hermes, OpenClaw, and other shell-capable agents can install the portable Grantex Agent Skills and use the JSON CLI; no agent-specific SDK is required. Framework adapters are available for OpenAI Agents SDK, Anthropic, LangChain, CrewAI, Google ADK, Vercel AI, AutoGen, Express, FastAPI, and MCP."
             }
           },
           {
@@ -416,6 +416,29 @@
       border-radius: 50%;
       background: var(--accent);
     }
+    .hero-agent-support {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      max-width: 720px;
+      margin: -14px auto 32px;
+      padding: 9px 16px;
+      color: var(--muted);
+      background: rgba(88, 166, 255, 0.06);
+      border: 1px solid rgba(88, 166, 255, 0.28);
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .hero-agent-support span:first-child {
+      color: var(--accent);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+    .hero-agent-support a { color: var(--text); }
 
     /* ── Direct answer hub ────────────────────────────────────────────────── */
     .answers-section {
@@ -833,6 +856,83 @@
     }
     .install-cmd:hover .install-copy { color: var(--text); }
 
+    /* Agent CLI support */
+    .agent-cli-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 48px;
+      align-items: center;
+    }
+    .agent-cli-platforms {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 24px 0;
+    }
+    .agent-cli-platform {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+    .agent-cli-platform::before {
+      width: 7px;
+      height: 7px;
+      background: var(--accent);
+      border-radius: 50%;
+      content: '';
+    }
+    .agent-cli-terminal {
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+    }
+    .agent-cli-terminal-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 42px;
+      padding: 0 16px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .terminal-dot { width: 8px; height: 8px; border-radius: 50%; background: #30363d; }
+    .terminal-dot:first-child { background: #f85149; }
+    .terminal-dot:nth-child(2) { background: #d29922; }
+    .terminal-dot:nth-child(3) { background: var(--accent); margin-right: 6px; }
+    .agent-cli-terminal pre {
+      overflow-x: auto;
+      padding: 24px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+    .agent-cli-terminal .copy-btn { top: 8px; right: 10px; }
+    .agent-cli-boundary {
+      margin-top: 18px;
+      padding: 12px 14px;
+      color: var(--muted);
+      background: rgba(210, 153, 34, 0.06);
+      border: 1px solid rgba(210, 153, 34, 0.24);
+      border-radius: var(--radius);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .agent-cli-boundary strong { color: #d29922; }
+
     /* ── Integrations ──────────────────────────────────────────────────────── */
     .integrations-grid {
       display: flex;
@@ -1236,6 +1336,7 @@
       }
       .nav-links a:hover { background: var(--surface); }
       .release-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .agent-cli-layout { grid-template-columns: minmax(0, 1fr); gap: 32px; }
     }
     @media (max-width: 640px) {
       section { padding: 56px 0; }
@@ -1283,6 +1384,7 @@
         <li><a href="/dpdp">DPDP</a></li>
         <li><a href="/registry">Registry</a></li>
         <li><a href="#answers">Answers</a></li>
+        <li><a href="#agent-clis">Agent CLIs</a></li>
         <li><a href="#examples">Examples</a></li>
         <li><a href="/dashboard" style="color:var(--accent);font-weight:600;">Dashboard</a></li>
       </ul>
@@ -1299,6 +1401,14 @@
     <p>
       Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records. Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal.
     </p>
+    <div class="hero-agent-support" aria-label="Supported agent command-line environments">
+      <span>Agent CLI ready</span>
+      <a href="https://docs.grantex.dev/integrations/hermes">Hermes</a>
+      <span aria-hidden="true">&middot;</span>
+      <a href="https://docs.grantex.dev/integrations/openclaw">OpenClaw</a>
+      <span aria-hidden="true">&middot;</span>
+      <a href="https://docs.grantex.dev/integrations/agent-cli">Any shell-capable agent</a>
+    </div>
     <div class="hero-ctas">
       <a href="#quickstart" class="btn btn-primary"
          onclick="gtag('event','get_started_click',{event_category:'hero'})">
@@ -1356,7 +1466,7 @@
         <div class="section-label">Published releases</div>
         <h2 class="section-title">Current public releases</h2>
         <p class="release-intro">
-          Verified against npm, PyPI, and the Go module proxy on 12 July 2026.
+          Verified against npm, PyPI, and the Go module proxy on 10 August 2026.
           Grantex packages are independently versioned.
         </p>
       </div>
@@ -1510,7 +1620,7 @@
       </details>
       <details class="answer-card" data-faq-item>
         <summary>How do I authorize tools used by AI agent frameworks?</summary>
-        <p>Use a primary Grantex SDK to register the agent, request a grant, and exchange the authorization code, then enforce scopes at the service boundary with an SDK verifier or direct JWKS validation. Framework adapters are available for OpenAI Agents SDK, Anthropic, LangChain, CrewAI, Google ADK, Vercel AI, AutoGen, Express, FastAPI, and MCP.</p>
+        <p>Use a primary Grantex SDK to register the agent, request a grant, and exchange the authorization code, then enforce scopes at the service boundary with an SDK verifier or direct JWKS validation. Hermes, OpenClaw, and other shell-capable agents can install the portable Grantex Agent Skills and use the JSON CLI; no agent-specific SDK is required. Framework adapters are available for OpenAI Agents SDK, Anthropic, LangChain, CrewAI, Google ADK, Vercel AI, AutoGen, Express, FastAPI, and MCP.</p>
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Is @grantex/mcp-auth 2.0.2 ready for general production deployment?</summary>
@@ -2453,6 +2563,66 @@ func main() {
   </div>
 </section>
 
+<!-- Agent CLIs -->
+<section id="agent-clis">
+  <div class="container">
+    <div class="agent-cli-layout">
+      <div>
+        <div class="section-label">Agent-native CLI</div>
+        <h2 class="section-title">One CLI. Any agent.</h2>
+        <p class="section-sub" style="margin-bottom:0;">
+          Hermes, OpenClaw, and other shell-capable agents can install the same
+          portable skills and operate Grantex through predictable JSON. No
+          framework-specific SDK is required for the agent itself.
+        </p>
+        <div class="agent-cli-platforms" aria-label="Agent CLI compatibility">
+          <a class="agent-cli-platform" href="https://docs.grantex.dev/integrations/hermes">Hermes Agent</a>
+          <a class="agent-cli-platform" href="https://docs.grantex.dev/integrations/openclaw">OpenClaw</a>
+          <a class="agent-cli-platform" href="https://docs.grantex.dev/integrations/agent-cli">Agent Skills</a>
+          <span class="agent-cli-platform">Any CLI shell</span>
+        </div>
+        <p style="color:var(--muted);font-size:14px;line-height:1.7;">
+          The bundle teaches agents least-privilege consent, secret-safe token
+          handling, JSON parsing, revocation, and the difference between a CLI
+          preflight and real service-side enforcement.
+        </p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px;">
+          <a href="https://docs.grantex.dev/integrations/agent-cli" class="btn btn-primary"
+             onclick="gtag('event','agent_cli_docs_click',{event_category:'agent_cli'})">Agent CLI docs &rarr;</a>
+          <a href="https://github.com/mishrasanjeev/grantex/tree/main/skills" class="btn btn-secondary"
+             onclick="gtag('event','agent_skills_click',{event_category:'agent_cli'})">View the skills</a>
+        </div>
+      </div>
+      <div>
+        <div class="agent-cli-terminal">
+          <div class="agent-cli-terminal-header">
+            <span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span>
+            Install Grantex skills
+          </div>
+          <button type="button" class="copy-btn" aria-label="Copy agent skill install commands"
+                  onclick="copyCode('code-agent-cli', this, 'agent_cli_install_copy')">Copy</button>
+          <pre id="code-agent-cli"><span class="cm"># Install the JSON-first CLI</span>
+npm install -g @grantex/cli
+
+<span class="cm"># Choose the agent host</span>
+grantex agent install --target openclaw
+grantex agent install --target hermes
+grantex agent install --target portable
+
+<span class="cm"># Any other skill directory</span>
+grantex agent install --dir /path/to/skills</pre>
+        </div>
+        <div class="agent-cli-boundary">
+          <strong>Security boundary:</strong> the protected API, connector, or gateway
+          still verifies the grant and exact scope before executing the side effect.<br>
+          <strong>Release:</strong> the installer is prepared in CLI 0.3.0 source; confirm
+          the published version before installing from npm.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ── Integrations ───────────────────────────────────────────────────────── -->
 <section id="integrations">
   <div class="container">
@@ -2462,6 +2632,18 @@ func main() {
       Drop Grantex into any AI framework or language runtime.
     </p>
     <div class="integrations-grid">
+      <a href="https://docs.grantex.dev/integrations/hermes" class="integration-pill" style="text-decoration:none;">
+        <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">H</span>
+        Hermes Agent
+      </a>
+      <a href="https://docs.grantex.dev/integrations/openclaw" class="integration-pill" style="text-decoration:none;">
+        <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">OC</span>
+        OpenClaw
+      </a>
+      <a href="https://docs.grantex.dev/integrations/agent-cli" class="integration-pill" style="text-decoration:none;">
+        <span class="integration-icon" style="font-family:var(--mono);font-size:14px;font-weight:700;">&gt;_</span>
+        Any Agent CLI
+      </a>
       <a href="https://www.npmjs.com/package/@grantex/adapters" class="integration-pill" style="text-decoration:none;">
         <span class="integration-icon">&#x1F9E9;</span>
         Adapters (11)

@@ -1,0 +1,67 @@
+---
+title: "Hermes Agent"
+sidebarTitle: "Hermes Agent"
+description: "Install Grantex Agent Skills into Hermes and operate delegated authorization through the JSON CLI."
+---
+
+Hermes can use Grantex directly through its shell tools and on-demand skills. No Hermes-specific SDK is required.
+
+The one-command installer requires `@grantex/cli` 0.3.0 or newer; confirm the published version on the [release-status page](/release-status).
+
+## Install
+
+```bash
+npm install -g @grantex/cli
+grantex agent install --target hermes
+hermes skills list
+```
+
+The installer places both Grantex skills under `~/.hermes/skills/grantex/`. Start a new Hermes session so its skill inventory refreshes.
+
+<Info>
+  Hermes documents skills as `SKILL.md` folders loaded on demand, and exposes installed skills as slash commands. See the [Hermes skills guide](https://hermes-agent.nousresearch.com/docs/guides/work-with-skills).
+</Info>
+
+## Configure
+
+Inject the CLI credentials through the Hermes host environment or another approved secret mechanism:
+
+<CodeGroup>
+```bash Bash
+export GRANTEX_URL=https://api.grantex.dev
+export GRANTEX_KEY=YOUR_API_KEY
+grantex --json me
+```
+
+```powershell PowerShell
+$env:GRANTEX_URL = "https://api.grantex.dev"
+$env:GRANTEX_KEY = "YOUR_API_KEY"
+grantex --json me
+```
+</CodeGroup>
+
+Do not put the API key or grant tokens inside a skill, prompt, memory entry, or conversation.
+
+## Use
+
+Invoke the operational skill explicitly:
+
+```text
+/use-grantex-cli Register a calendar assistant with calendar:read only, then request consent for alice@example.com.
+```
+
+Or ask Hermes naturally to use `use-grantex-cli`. For implementation work, invoke `integrate-grantex` and ask it to add enforcement at the service boundary.
+
+Hermes should use JSON output and secret-safe token input:
+
+```bash
+grantex --json agents list
+grantex verify --env GRANTEX_GRANT_TOKEN --json
+grantex --json tokens verify --env GRANTEX_GRANT_TOKEN
+```
+
+## Trust boundary
+
+Keep the human consent step outside autonomous control. A Hermes-run CLI preflight helps plan and diagnose an action, but the API, connector, or gateway that performs the side effect must verify the grant again.
+
+See [Agent CLIs & Skills](/integrations/agent-cli) for the full shell contract and [Scope Enforcement](/guides/scope-enforcement) for production enforcement.

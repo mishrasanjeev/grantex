@@ -52,7 +52,7 @@
         "height": 630,
         "caption": "Grantex AI agent authorization"
       },
-      "dateModified": "2026-07-14",
+      "dateModified": "2026-08-10",
       "inLanguage": "en"
     },
     {
@@ -169,7 +169,7 @@
           "name": "How do I authorize tools used by AI agent frameworks?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Use a primary Grantex SDK to register the agent, request a grant, and exchange the authorization code, then enforce scopes at the service boundary with an SDK verifier or direct JWKS validation. Framework adapters are available for OpenAI Agents SDK, Anthropic, LangChain, CrewAI, Google ADK, Vercel AI, AutoGen, Express, FastAPI, and MCP."
+            "text": "Use a primary Grantex SDK to register the agent, request a grant, and exchange the authorization code, then enforce scopes at the service boundary with an SDK verifier or direct JWKS validation. Hermes, OpenClaw, and other shell-capable agents can install the portable Grantex Agent Skills and use the JSON CLI; no agent-specific SDK is required. Framework adapters are available for OpenAI Agents SDK, Anthropic, LangChain, CrewAI, Google ADK, Vercel AI, AutoGen, Express, FastAPI, and MCP."
           }
         },
         {

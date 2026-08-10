@@ -1,13 +1,22 @@
 ---
 title: "AI Agent Framework Integrations"
 sidebarTitle: "Overview"
-description: "Choose Grantex integrations for OpenAI Agents, Anthropic, LangChain, CrewAI, Google ADK, AutoGen, Vercel AI, MCP, Express, FastAPI, Strands, and A2A."
-keywords: ["AI agent framework integrations", "OpenAI Agents authorization", "LangChain permissions", "MCP authorization", "CrewAI security"]
+description: "Choose Grantex integrations for Hermes, OpenClaw, Agent Skills, OpenAI Agents, Anthropic, LangChain, CrewAI, Google ADK, AutoGen, MCP, and service frameworks."
+keywords: ["AI agent framework integrations", "Hermes Agent authorization", "OpenClaw authorization", "Agent Skills CLI", "MCP authorization"]
 ---
 
 ## Choose an AI agent integration
 
 <CardGroup cols={2}>
+  <Card title="Any Agent CLI" icon="terminal" href="/integrations/agent-cli">
+    Install portable Agent Skills and use the JSON CLI from any shell-capable agent.
+  </Card>
+  <Card title="Hermes Agent" icon="wand-magic-sparkles" href="/integrations/hermes">
+    Install the Grantex skill bundle into Hermes with one CLI command.
+  </Card>
+  <Card title="OpenClaw" icon="robot" href="/integrations/openclaw">
+    Add Grantex skills to an OpenClaw workspace and verify the installation.
+  </Card>
   <Card title="Service Provider Adapters" icon="puzzle-piece" href="/integrations/adapters">
     Pre-built integrations for 11 services: Google Calendar, Gmail, Drive, Stripe, Slack, GitHub, Notion, HubSpot, Salesforce, Linear, Jira.
   </Card>
@@ -92,6 +101,9 @@ keywords: ["AI agent framework integrations", "OpenAI Agents authorization", "La
 
 | Framework | Package | Install | Language |
 |-----------|---------|---------|----------|
+| Hermes Agent | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target hermes` | Any shell; 0.3.0 source prepared |
+| OpenClaw | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target openclaw` | Any shell; 0.3.0 source prepared |
+| Other Agent Skills clients | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target portable` | Any shell; 0.3.0 source prepared |
 | Adapters | `@grantex/adapters` | `npm install @grantex/adapters` | TypeScript |
 | MCP Auth Server | `@grantex/mcp-auth@2.0.2` | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13` | TypeScript; evaluation only |
 | Gateway | `@grantex/gateway` | `npm install @grantex/gateway` | TypeScript |

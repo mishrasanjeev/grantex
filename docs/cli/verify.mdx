@@ -12,6 +12,14 @@ description: "Inspect any Grantex grant token from the command line. See scopes,
 npm install -g @grantex/cli
 ```
 
+For unattended agents, keep the token out of process arguments:
+
+```bash
+grantex verify --env GRANTEX_GRANT_TOKEN --json
+grantex verify --file /run/secrets/grant.jwt --json
+printf '%s' "$GRANTEX_GRANT_TOKEN" | grantex verify --stdin --json
+```
+
 ## Usage
 
 ```bash

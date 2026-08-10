@@ -40,7 +40,7 @@ describe('createProgram()', () => {
 
   it('has the correct version', () => {
     const program = createProgram();
-    expect(program.version()).toBe('0.2.3');
+    expect(program.version()).toBe('0.3.0');
   });
 
   it('has a --json global option', () => {
@@ -49,7 +49,7 @@ describe('createProgram()', () => {
     expect(jsonOpt).toBeDefined();
   });
 
-  it('registers all 31 expected commands', () => {
+  it('registers all 32 expected commands', () => {
     const program = createProgram();
     const names = program.commands.map((c) => c.name());
 
@@ -59,7 +59,7 @@ describe('createProgram()', () => {
       'events', 'principal-sessions', 'credentials', 'dpdp', 'passports',
       'vault', 'webauthn', 'compliance', 'anomalies', 'billing',
       'scim', 'sso', 'verify', 'decode', 'audit-log', 'registry',
-      'init', 'manifest', 'enforce',
+      'init', 'manifest', 'enforce', 'agent',
     ];
 
     for (const name of expected) {

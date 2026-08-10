@@ -12,6 +12,17 @@ description: "Dry-run scope enforcement from the command line. Test whether a gr
 npm install -g @grantex/cli
 ```
 
+Prefer a secret-safe token source for agent automation:
+
+```bash
+grantex --json enforce test \
+  --token-env GRANTEX_GRANT_TOKEN \
+  --connector salesforce \
+  --tool create_lead
+```
+
+Use `--token-file <path>` or `--token-stdin` as alternatives. Allowed decisions exit `0`; denied or invalid decisions exit non-zero, including with `--json`.
+
 ---
 
 ## grantex enforce test

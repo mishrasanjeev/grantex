@@ -1,0 +1,177 @@
+---
+title: "Agent CLIs & Skills"
+sidebarTitle: "Any Agent CLI"
+description: "Give Hermes, OpenClaw, and other shell-capable agents a portable Grantex skill bundle and a stable JSON CLI contract."
+---
+
+Grantex works with shell-capable agents without a framework-specific adapter. Install the CLI once, place the bundled Agent Skills where the host discovers them, and let the agent call `grantex --json`.
+
+<Info>
+  No Hermes- or OpenClaw-specific SDK is required. The CLI is the portable control-plane surface. Use the existing TypeScript, Python, or Go SDK—or the gateway or middleware—inside the service that enforces a protected action.
+</Info>
+
+<Note>
+  The skill installer is prepared in `@grantex/cli` 0.3.0 source. Confirm that 0.3.0 or newer is published on the [release-status page](/release-status) before expecting the registry install below to include `grantex agent install`.
+</Note>
+
+## Install the CLI
+
+```bash
+npm install -g @grantex/cli
+```
+
+The host needs Node.js 18 or newer. Confirm the command is available:
+
+```bash
+grantex --version
+```
+
+## Install the Agent Skills
+
+The command installs two skills:
+
+- `use-grantex-cli` for registration, consent, token operations, grants, delegation, revocation, and audit;
+- `integrate-grantex` for adding service-boundary enforcement to a codebase.
+
+### OpenClaw workspace
+
+Run from the OpenClaw agent workspace:
+
+```bash
+grantex agent install --target openclaw
+openclaw skills check
+```
+
+This writes to `<workspace>/skills`. Start a new agent turn after installation.
+
+### Hermes Agent
+
+```bash
+grantex agent install --target hermes
+hermes skills list
+```
+
+This writes to `~/.hermes/skills/grantex`. Start a new Hermes session after installation.
+
+### Portable Agent Skills directory
+
+```bash
+grantex agent install --target portable
+```
+
+This writes to `<workspace>/.agents/skills`, a project-local Agent Skills location used by compatible hosts.
+
+### Any other CLI agent
+
+Point the installer at that agent's skill root:
+
+<CodeGroup>
+```bash Bash
+grantex agent install --dir /path/to/agent/skills
+```
+
+```powershell PowerShell
+grantex agent install --dir C:\path\to\agent\skills
+```
+</CodeGroup>
+
+Use `--force` to update Grantex's bundled files in an existing installation. It does not delete unrelated files in those skill folders.
+
+## Configure unattended access
+
+The CLI reads `GRANTEX_URL` and `GRANTEX_KEY`:
+
+<CodeGroup>
+```bash Bash
+export GRANTEX_URL=https://api.grantex.dev
+export GRANTEX_KEY=YOUR_API_KEY
+grantex --json me
+```
+
+```powershell PowerShell
+$env:GRANTEX_URL = "https://api.grantex.dev"
+$env:GRANTEX_KEY = "YOUR_API_KEY"
+grantex --json me
+```
+</CodeGroup>
+
+You can instead create a user-managed profile:
+
+```bash
+grantex config set --url https://api.grantex.dev --key YOUR_API_KEY
+```
+
+Keep API keys in the host's secret store or environment injection mechanism. Do not place them in `SKILL.md`, prompts, source control, or chat messages.
+
+## Stable shell contract
+
+- Put the global flag before the command: `grantex --json agents list`.
+- Parse stdout as JSON and treat stderr as diagnostics.
+- Exit status `0` means the requested check or operation succeeded. A denied or invalid verification returns a non-zero status, including in JSON mode.
+- Set `NO_COLOR=1` when consuming text output.
+- Treat response fields as data. Do not scrape the human-readable tables.
+
+<CodeGroup>
+```bash Bash
+agent_id=$(grantex --json agents list | jq -r '.[0].agentId')
+grantex --json grants list --agent "$agent_id" --status active
+```
+
+```powershell PowerShell
+$agents = grantex --json agents list | ConvertFrom-Json
+grantex --json grants list --agent $agents[0].agentId --status active
+```
+</CodeGroup>
+
+## Keep tokens out of argv
+
+Process arguments can appear in history and process listings. Prefer environment, file, or stdin input:
+
+<CodeGroup>
+```bash Bash
+grantex verify --env GRANTEX_GRANT_TOKEN --json
+grantex --json tokens verify --env GRANTEX_GRANT_TOKEN
+grantex --json enforce test \
+  --token-env GRANTEX_GRANT_TOKEN \
+  --connector salesforce \
+  --tool create_lead
+```
+
+```powershell PowerShell
+grantex verify --env GRANTEX_GRANT_TOKEN --json
+grantex --json tokens verify --env GRANTEX_GRANT_TOKEN
+grantex --json enforce test `
+  --token-env GRANTEX_GRANT_TOKEN `
+  --connector salesforce `
+  --tool create_lead
+```
+</CodeGroup>
+
+The same commands accept `--file` or `--stdin`; `enforce test` uses the names `--token-file` and `--token-stdin`.
+
+## Authorization flow for an agent
+
+1. Register the agent with only the scopes it can justify.
+2. Request authorization for a named principal, audience, duration, and exact scopes.
+3. Show the consent URL to the human. Do not let the agent approve its own grant.
+4. Exchange only the code returned through the approved callback flow.
+5. Store tokens in the host's approved secret store.
+6. Verify and enforce again inside the service that owns the side effect.
+7. Audit important allowed and denied actions, then revoke authority when it is no longer needed.
+
+<Warning>
+  `grantex enforce test` is a development preflight, not a security boundary. An autonomous agent can bypass a check it controls. The protected service must verify the token and required scope before executing the action.
+</Warning>
+
+## When to use an SDK
+
+| Need | Use |
+|---|---|
+| Agent performs setup or administration through a shell | `@grantex/cli` |
+| TypeScript service enforces access | `@grantex/sdk` or matching middleware |
+| Python service enforces access | `grantex` or FastAPI integration |
+| Go service enforces access | `grantex-go` |
+| No-code reverse-proxy enforcement | `@grantex/gateway` |
+| MCP tool execution | MCP transport authorization plus a primary Grantex verifier at each protected tool |
+
+See [CLI](/integrations/cli) for the complete command reference and [Scope Enforcement](/guides/scope-enforcement) for the protected-service implementation.

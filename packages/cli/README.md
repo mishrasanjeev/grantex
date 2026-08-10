@@ -2,7 +2,7 @@
 
 Command-line tool for the [Grantex](https://grantex.dev) delegated authorization protocol.
 
-83 commands covering the full Grantex API — agents, grants, tokens, policies, budgets, audit, compliance, credentials, and more. All commands support `--json` for machine-readable output.
+80+ commands covering the full Grantex API — agents, grants, tokens, policies, budgets, audit, compliance, credentials, and more. All commands support `--json` for machine-readable output. Portable Agent Skills let Hermes, OpenClaw, and other shell-capable agents use the same interface.
 
 > **[Homepage](https://grantex.dev)** | **[Docs](https://docs.grantex.dev)** | **[CLI Docs](https://docs.grantex.dev/integrations/cli)** | **[GitHub](https://github.com/mishrasanjeev/grantex)**
 
@@ -37,6 +37,39 @@ grantex --json tokens verify <jwt> | jq '.valid'
 ```
 
 Set `NO_COLOR=1` to disable colored output.
+
+## Agent CLI Integration
+
+Install the bundled `use-grantex-cli` and `integrate-grantex` skills with one command:
+
+```bash
+# OpenClaw workspace: ./skills
+grantex agent install --target openclaw
+
+# Hermes: ~/.hermes/skills/grantex
+grantex agent install --target hermes
+
+# Portable project location: ./.agents/skills
+grantex agent install --target portable
+
+# Any other agent skill root
+grantex agent install --dir /path/to/skills
+```
+
+Use `--force` to refresh existing bundled files. A Hermes- or OpenClaw-specific SDK is not required; application code should continue to use the TypeScript, Python, or Go SDK at the protected service boundary.
+
+### Secret-safe token input
+
+Avoid placing grant tokens in shell history or process arguments:
+
+```bash
+grantex verify --env GRANTEX_GRANT_TOKEN --json
+grantex --json tokens verify --env GRANTEX_GRANT_TOKEN
+grantex --json enforce test --token-env GRANTEX_GRANT_TOKEN \
+  --connector salesforce --tool create_lead
+```
+
+The verification commands also accept `--file` and `--stdin`; `enforce test` accepts `--token-file` and `--token-stdin`. Invalid or denied checks return a non-zero process status in JSON mode.
 
 ## Commands
 
@@ -299,6 +332,12 @@ grantex enforce test --token <jwt> --connector salesforce --tool delete_contact
 
 ```bash
 grantex init gemma [--dir ./grantex-gemma-starter]
+```
+
+### Agent Skills
+
+```bash
+grantex agent install [--target openclaw|hermes|portable] [--dir <skill-root>] [--force]
 ```
 
 ## Local Development
