@@ -149,7 +149,7 @@ if (!auth.code) {
 python -m pip install grantex==0.3.14               # Python SDK
 go get github.com/mishrasanjeev/grantex-go@v0.1.10 # Go SDK (Go 1.26.1+)
 npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13 # MCP endpoint evaluation
-npm install -g @grantex/cli                         # Optional CLI tooling
+npm install -g @grantex/cli@0.3.0                   # Optional CLI tooling
 ```
 
 ### Hermes, OpenClaw, and any agent CLI
@@ -157,7 +157,7 @@ npm install -g @grantex/cli                         # Optional CLI tooling
 Shell-capable agents use the same JSON-first CLI; no agent-specific SDK is required:
 
 ```bash
-npm install -g @grantex/cli
+npm install -g @grantex/cli@0.3.0
 grantex agent install --target openclaw  # writes ./skills
 grantex agent install --target hermes    # writes ~/.hermes/skills/grantex
 grantex agent install --target portable  # writes ./.agents/skills
@@ -1432,10 +1432,10 @@ The primary SDK versions below are registry-verified as of 2026-08-10. For integ
 | **TypeScript SDK** | `@grantex/sdk` (`0.3.13`) | `npm install @grantex/sdk@0.3.13` | Registry-verified primary release |
 | **Python SDK** | `grantex` (`0.3.14`) | `python -m pip install grantex==0.3.14` | Registry-verified primary release |
 | **Go SDK** | `grantex-go` (`v0.1.10`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.1.10` | Published with workarounds; source correction awaits a new tag |
-| **CLI** | `@grantex/cli` | `npm install -g @grantex/cli` | Published package |
-| **Hermes Agent** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target hermes` | 0.3.0 source prepared; no dedicated SDK needed |
-| **OpenClaw** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target openclaw` | 0.3.0 source prepared; no dedicated SDK needed |
-| **Portable Agent Skills** | `@grantex/cli` 0.3.0+ + `SKILL.md` | `grantex agent install --target portable` | 0.3.0 source prepared |
+| **CLI** | `@grantex/cli` (`0.3.0`) | `npm install -g @grantex/cli@0.3.0` | Registry-verified published package |
+| **Hermes Agent** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target hermes` | Published in 0.3.0; no dedicated SDK needed |
+| **OpenClaw** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target openclaw` | Published in 0.3.0; no dedicated SDK needed |
+| **Portable Agent Skills** | `@grantex/cli` 0.3.0+ + `SKILL.md` | `grantex agent install --target portable` | Published in 0.3.0 |
 | **Conformance Suite** | `@grantex/conformance` | `npm install -g @grantex/conformance` | Published package |
 | **A2A Bridge (TS)** | `@grantex/a2a` | `npm install @grantex/a2a` | Published package |
 | **A2A Bridge (Py)** | `grantex-a2a` | `pip install grantex-a2a` | Published package |

@@ -61,7 +61,7 @@ The Grantex protocol specification is open and frozen at version 1.0. The relate
 | Agent-specific enforcement in MCP tools | Primary Grantex SDK or direct JWKS-backed validation | Add after transport authorization when the tool must verify delegated agent authority |
 | MCP endpoint evaluation | `@grantex/mcp-auth@2.0.2` plus `@grantex/sdk@0.3.13` | Single-process evaluation only |
 | Terminal automation | `@grantex/cli` | Optional operational tooling |
-| Hermes, OpenClaw, or another shell-capable agent | `@grantex/cli` 0.3.0+ plus the bundled Agent Skills | 0.3.0 source prepared; no agent-specific SDK required; enforce again at the protected service |
+| Hermes, OpenClaw, or another shell-capable agent | Published `@grantex/cli@0.3.0` plus the bundled Agent Skills | No agent-specific SDK required; enforce again at the protected service |
 | Framework-specific tools | Named Grantex adapter plus its primary SDK where required | Verify each package's registry status before pinning |
 
 Primary reproducible installs:
@@ -71,17 +71,17 @@ npm install @grantex/sdk@0.3.13
 python -m pip install grantex==0.3.14
 go get github.com/mishrasanjeev/grantex-go@v0.1.10
 npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13
-npm install -g @grantex/cli
+npm install -g @grantex/cli@0.3.0
 ```
 
 The SDKs, API contract, integrations, and protocol are independently versioned. Do not infer one artifact's version from another.
 
 ## Agent CLI and Skills
 
-Hermes, OpenClaw, and other shell-capable agents can share the same machine-readable CLI and portable `SKILL.md` bundle. The installer is prepared in `@grantex/cli` 0.3.0 source; confirm the registry release before running the install commands:
+Hermes, OpenClaw, and other shell-capable agents can share the same machine-readable CLI and portable `SKILL.md` bundle. The installer is published in `@grantex/cli@0.3.0`:
 
 ```bash
-npm install -g @grantex/cli
+npm install -g @grantex/cli@0.3.0
 grantex agent install --target openclaw
 grantex agent install --target hermes
 grantex agent install --target portable

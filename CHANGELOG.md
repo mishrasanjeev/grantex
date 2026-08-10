@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Added
-- Prepared `@grantex/cli` 0.3.0 with one-command Agent Skills installation for Hermes, OpenClaw, portable `.agents/skills` workspaces, and custom skill roots.
+- Published `@grantex/cli` 0.3.0 on 2026-08-10 with one-command Agent Skills installation for Hermes, OpenClaw, portable `.agents/skills` workspaces, and custom skill roots.
 - Added the `use-grantex-cli` and `integrate-grantex` skills for safe JSON-first operations and service-boundary implementation guidance.
 - Added cross-platform token input from environment variables, files, and stdin, plus non-zero JSON-mode status codes for invalid or denied checks.
 - Added `audience` support to TypeScript, Python, and Go authorization requests.

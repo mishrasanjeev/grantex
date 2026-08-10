@@ -521,7 +521,7 @@
     }
     .release-grid {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 16px;
     }
     .release-card {
@@ -1479,6 +1479,12 @@
     </div>
 
     <div class="release-grid">
+      <a class="release-card" href="https://www.npmjs.com/package/@grantex/cli/v/0.3.0">
+        <span class="release-language">Agent CLI</span>
+        <span class="release-name">@grantex/cli</span>
+        <strong class="release-version">0.3.0</strong>
+        <span class="release-meta">npm &middot; published 10 Aug 2026 &middot; Agent Skills</span>
+      </a>
       <a class="release-card" href="https://www.npmjs.com/package/@grantex/sdk/v/0.3.13">
         <span class="release-language">TypeScript SDK</span>
         <span class="release-name">@grantex/sdk</span>
@@ -2097,10 +2103,10 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <code>go get github.com/mishrasanjeev/grantex-go@v0.1.10</code>
         <span class="install-copy">Copy</span>
       </button>
-      <button type="button" class="install-cmd" onclick="copyInstall('npm install -g @grantex/cli', this)"
+      <button type="button" class="install-cmd" onclick="copyInstall('npm install -g @grantex/cli@0.3.0', this)"
               aria-label="Copy the Grantex CLI install command">
         <span class="install-label">CLI</span>
-        <code>npm install -g @grantex/cli</code>
+        <code>npm install -g @grantex/cli@0.3.0</code>
         <span class="install-copy">Copy</span>
       </button>
     </div>
@@ -2230,7 +2236,7 @@ func main() {
         <div class="code-block">
           <button type="button" class="copy-btn" aria-label="Copy the CLI quickstart"
                   onclick="copyCode('code-cli', this, 'cli_quickstart_copy')">Copy</button>
-          <pre id="code-cli"><span class="cm"># npm install -g @grantex/cli</span>
+          <pre id="code-cli"><span class="cm"># npm install -g @grantex/cli@0.3.0</span>
 <span class="cm"># All commands support --json for AI agent / script use</span>
 
 <span class="cm"># 1. Request authorization (sandbox auto-approves)</span>
@@ -2602,7 +2608,7 @@ func main() {
           <button type="button" class="copy-btn" aria-label="Copy agent skill install commands"
                   onclick="copyCode('code-agent-cli', this, 'agent_cli_install_copy')">Copy</button>
           <pre id="code-agent-cli"><span class="cm"># Install the JSON-first CLI</span>
-npm install -g @grantex/cli
+npm install -g @grantex/cli@0.3.0
 
 <span class="cm"># Choose the agent host</span>
 grantex agent install --target openclaw
@@ -2615,8 +2621,8 @@ grantex agent install --dir /path/to/skills</pre>
         <div class="agent-cli-boundary">
           <strong>Security boundary:</strong> the protected API, connector, or gateway
           still verifies the grant and exact scope before executing the side effect.<br>
-          <strong>Release:</strong> the installer is prepared in CLI 0.3.0 source; confirm
-          the published version before installing from npm.
+          <strong>Release:</strong> published as <code>@grantex/cli@0.3.0</code> with
+          bundled Hermes, OpenClaw, and portable Agent Skills.
         </div>
       </div>
     </div>

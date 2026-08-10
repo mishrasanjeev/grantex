@@ -9,7 +9,7 @@ Only the following versions of Grantex components receive security patches:
 | Protocol spec | v1.0 | ✅ Yes |
 | `@grantex/sdk` | 0.3.x | ✅ Yes |
 | `grantex` (Python) | 0.3.x | ✅ Yes |
-| `@grantex/cli` | 0.2.x | ✅ Yes |
+| `@grantex/cli` | 0.3.x | ✅ Yes |
 | `github.com/mishrasanjeev/grantex-go` | 0.1.x | ✅ Yes |
 | `@grantex/mcp` | 0.1.x | ✅ Yes |
 | `@grantex/mcp-auth` | 2.0.x | ✅ Yes |

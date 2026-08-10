@@ -17,7 +17,7 @@
     "ietfDraftTitle": "Delegated Agent Authorization Protocol (DAAP)"
   },
   "selectionGuidance": {
-    "shellCapableAgent": "Use published @grantex/cli@0.2.5 for existing commands. The Agent Skills installer is source-prepared for 0.3.0 and is not yet published.",
+    "shellCapableAgent": "Use published @grantex/cli@0.3.0 for Hermes, OpenClaw, and other shell-capable agents. Install the bundled skills with grantex agent install; no agent-specific SDK is required.",
     "typescriptApplication": "Use @grantex/sdk@0.3.13.",
     "pythonApplication": "Use grantex==0.3.14.",
     "goApplication": "Use github.com/mishrasanjeev/grantex-go@v0.1.10 with the documented published-version workarounds.",
@@ -32,12 +32,12 @@
       "label": "CLI",
       "ecosystem": "npm",
       "name": "@grantex/cli",
-      "version": "0.2.5",
+      "version": "0.3.0",
       "status": "published",
-      "installCommand": "npm install -g @grantex/cli@0.2.5",
+      "installCommand": "npm install -g @grantex/cli@0.3.0",
       "runtime": "Node.js 18+; ESM",
       "registryUrl": "https://registry.npmjs.org/%40grantex%2Fcli/latest",
-      "packageUrl": "https://www.npmjs.com/package/@grantex/cli/v/0.2.5",
+      "packageUrl": "https://www.npmjs.com/package/@grantex/cli/v/0.3.0",
       "documentationUrl": "https://docs.grantex.dev/integrations/cli",
       "limitations": []
     },
