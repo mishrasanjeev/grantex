@@ -390,6 +390,14 @@
             ]
           },
           {
+            "group": "Agent CLIs",
+            "pages": [
+              "integrations/agent-cli",
+              "integrations/hermes",
+              "integrations/openclaw"
+            ]
+          },
+          {
             "group": "Framework Integrations",
             "pages": [
               "integrations/express",

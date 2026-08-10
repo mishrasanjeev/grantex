@@ -1,13 +1,13 @@
 ---
 title: "Release Status"
 sidebarTitle: "Release Status"
-description: "Choose the current Grantex TypeScript, Python, Go, or MCP package with exact versions, runtime requirements, limitations, and reproducible install commands."
-keywords: ["Grantex SDK versions", "AI agent authorization SDK", "MCP authorization package", "release status"]
+description: "Choose the current Grantex CLI, TypeScript, Python, Go, or MCP package with exact versions, runtime requirements, limitations, and reproducible install commands."
+keywords: ["Grantex CLI version", "Grantex SDK versions", "AI agent authorization SDK", "MCP authorization package", "release status"]
 ---
 
 ## Current published releases
 
-Last verified: **July 12, 2026**
+Last verified: **August 10, 2026**
 
 Grantex packages are versioned independently. There is no single version number
 that represents every SDK, integration, service, and protocol artifact in this
@@ -15,6 +15,7 @@ repository.
 
 | Surface | Current release | Status | Runtime requirement |
 |---|---:|---|---|
+| CLI | `@grantex/cli@0.2.5` | Published to npm | Node.js 18+; ESM |
 | TypeScript SDK | `@grantex/sdk@0.3.13` | Published to npm | Node.js 18+; ESM |
 | Python SDK | `grantex==0.3.14` | Published to PyPI | Python 3.9+ |
 | Go SDK | `github.com/mishrasanjeev/grantex-go@v0.1.10` | Published with known limitations | Go 1.26.1+ |
@@ -30,7 +31,9 @@ repository.
 ## Repository changes awaiting publication
 
 <Info>
-  As of July 14, 2026, repository source on `main` corrects the documented Go
+  As of August 10, 2026, `@grantex/cli` 0.3.0 source adds the Hermes,
+  OpenClaw, and portable Agent Skills installer, but that version is not yet
+  published. Repository source on `main` also corrects the documented Go
   Agent/Audit read/write contracts, removes unsupported audit filters and list
   metadata, and URL-encodes query values. No corrected Go module tag is published.
   Standard developer API-key plan throughput is also source-only; custom-auth quotas and managed rollout remain separate.
@@ -38,6 +41,7 @@ repository.
 
 ## Which Grantex package should I use?
 
+- **Hermes, OpenClaw, or another shell-capable agent:** use the published CLI for existing commands; the one-command Agent Skills installer requires the source-prepared, unpublished `@grantex/cli@0.3.0`.
 - **TypeScript application:** use `@grantex/sdk@0.3.13`.
 - **Python application:** use `grantex==0.3.14`.
 - **Go application:** use `github.com/mishrasanjeev/grantex-go@v0.1.10` with the [published-version workarounds](/sdks/go/overview#known-v0110-limitations), including the [REST/CLI audit-write workaround](/sdks/go/audit#log).
@@ -78,6 +82,10 @@ repository.
 Pin exact versions in applications, examples, CI, and deployment manifests:
 
 <CodeGroup>
+```bash CLI
+npm install -g @grantex/cli@0.2.5
+```
+
 ```bash TypeScript
 npm install @grantex/sdk@0.3.13
 ```
@@ -110,6 +118,7 @@ must be repeatable.
   records cross-project work. Its latest numbered entry can trail independently
   published SDK patches.
 - Package registries are authoritative for public availability:
+  [npm (`@grantex/cli`)](https://www.npmjs.com/package/@grantex/cli),
   [npm (`@grantex/sdk`)](https://www.npmjs.com/package/@grantex/sdk),
   [PyPI (`grantex`)](https://pypi.org/project/grantex/),
   [Go Packages](https://pkg.go.dev/github.com/mishrasanjeev/grantex-go), and

@@ -50,6 +50,7 @@ describe('tokensCommand()', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     setJsonMode(false);
+    process.exitCode = undefined;
   });
 
   it('registers the "tokens" command name', () => {
@@ -141,6 +142,19 @@ describe('tokensCommand()', () => {
     expect(console.log).toHaveBeenCalled();
   });
 
+  it('verify reads a token from an environment variable', async () => {
+    process.env['GRANTEX_TEST_TOKEN'] = 'env_jwt_token';
+    mockClient.tokens.verify.mockResolvedValue(verifyValidResponse);
+    try {
+      const cmd = tokensCommand();
+      cmd.exitOverride();
+      await cmd.parseAsync(['node', 'test', 'verify', '--env', 'GRANTEX_TEST_TOKEN']);
+      expect(mockClient.tokens.verify).toHaveBeenCalledWith('env_jwt_token');
+    } finally {
+      delete process.env['GRANTEX_TEST_TOKEN'];
+    }
+  });
+
   it('verify prints success for valid token', async () => {
     mockClient.tokens.verify.mockResolvedValue(verifyValidResponse);
     const cmd = tokensCommand();
@@ -180,7 +194,7 @@ describe('tokensCommand()', () => {
     expect(parsed.principal).toBe('user@test.com');
   });
 
-  it('verify --json outputs JSON even for invalid token (no exit)', async () => {
+  it('verify --json outputs JSON and sets a failing status for an invalid token', async () => {
     mockClient.tokens.verify.mockResolvedValue(verifyInvalidResponse);
     setJsonMode(true);
     const cmd = tokensCommand();
@@ -189,6 +203,8 @@ describe('tokensCommand()', () => {
     const output = (console.log as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
     const parsed = JSON.parse(output);
     expect(parsed.valid).toBe(false);
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
   });
 
   // ── refresh ───────────────────────────────────────────────────────────

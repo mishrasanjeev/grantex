@@ -1,0 +1,4 @@
+interface:
+  display_name: "Integrate Grantex"
+  short_description: "Add scoped agent authorization to tools"
+  default_prompt: "Use $integrate-grantex to add Grantex authorization to this project."

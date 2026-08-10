@@ -1,0 +1,83 @@
+---
+title: "OpenClaw"
+sidebarTitle: "OpenClaw"
+description: "Install Grantex Agent Skills in an OpenClaw workspace and use the JSON CLI for delegated authorization."
+---
+
+OpenClaw can load the same portable Grantex skills used by other Agent Skills-compatible hosts. No OpenClaw-specific Grantex SDK is required.
+
+The one-command installer requires `@grantex/cli` 0.3.0 or newer; confirm the published version on the [release-status page](/release-status).
+
+## Install in a workspace
+
+Run from the configured OpenClaw agent workspace:
+
+```bash
+npm install -g @grantex/cli
+grantex agent install --target openclaw
+openclaw skills check
+```
+
+The installer writes both skills to `<workspace>/skills`. Start a new OpenClaw turn after installation.
+
+<Info>
+  OpenClaw loads Agent Skills-compatible folders from its workspace and managed skill roots. See the [OpenClaw skills reference](https://docs.openclaw.ai/skills).
+</Info>
+
+To install for all local OpenClaw agents instead, select the managed skill root explicitly:
+
+<CodeGroup>
+```bash Bash
+grantex agent install --dir "$HOME/.openclaw/skills"
+openclaw skills check
+```
+
+```powershell PowerShell
+grantex agent install --dir "$HOME\.openclaw\skills"
+openclaw skills check
+```
+</CodeGroup>
+
+## Configure
+
+Expose credentials to the OpenClaw host with its secret or environment configuration:
+
+<CodeGroup>
+```bash Bash
+export GRANTEX_URL=https://api.grantex.dev
+export GRANTEX_KEY=YOUR_API_KEY
+grantex --json me
+```
+
+```powershell PowerShell
+$env:GRANTEX_URL = "https://api.grantex.dev"
+$env:GRANTEX_KEY = "YOUR_API_KEY"
+grantex --json me
+```
+</CodeGroup>
+
+Never embed API keys or grant tokens in `SKILL.md`, workspace instructions, prompts, or logs.
+
+## Use
+
+Ask OpenClaw to use `use-grantex-cli` for operational tasks or `integrate-grantex` for code changes. The skills instruct it to:
+
+- request least-privilege scopes;
+- preserve the human consent step;
+- consume JSON instead of human tables;
+- keep tokens out of process arguments; and
+- distinguish a CLI preflight from protected-service enforcement.
+
+Example shell calls:
+
+```text
+grantex --json grants list --status active
+grantex verify --env GRANTEX_GRANT_TOKEN --json
+grantex --json enforce test --token-env GRANTEX_GRANT_TOKEN --connector salesforce --tool create_lead
+```
+
+## Trust boundary
+
+An autonomous OpenClaw process must not be its own final authorization boundary. Verify the grant token, exact scope, and required current state inside the service, connector, or gateway before the side effect occurs.
+
+See [Agent CLIs & Skills](/integrations/agent-cli) for the full shell contract and [Scope Enforcement](/guides/scope-enforcement) for production enforcement.

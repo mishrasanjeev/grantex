@@ -241,4 +241,22 @@ describe('verifyCommand()', () => {
       fs.unlinkSync(tmpFile);
     }
   });
+
+  it('reads token from --env', async () => {
+    const { token } = await createTestJwt();
+    process.env['GRANTEX_TEST_TOKEN'] = token;
+
+    try {
+      setJsonMode(true);
+      const cmd = verifyCommand();
+      cmd.exitOverride();
+      await cmd.parseAsync(['node', 'test', '--env', 'GRANTEX_TEST_TOKEN', '--json']);
+
+      const output = (console.log as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+      const parsed = JSON.parse(output);
+      expect(parsed.grantId).toBe('grnt_01HXYZ');
+    } finally {
+      delete process.env['GRANTEX_TEST_TOKEN'];
+    }
+  });
 });

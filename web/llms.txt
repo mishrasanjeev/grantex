@@ -6,7 +6,7 @@ Grantex complements OAuth 2.0 and MCP: OAuth handles application and user author
 
 Use Grantex when an AI agent acts for a person or organization and a service must verify exactly what that agent may do. Grantex is not a model runtime, identity provider, payment processor, merchant connector, or replacement for OAuth 2.0.
 
-Release snapshot verified: 2026-07-12. Packages are independently versioned. The protocol specification is frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft, not an IETF-adopted or endorsed standard.
+Release snapshot verified: 2026-08-10. Packages are independently versioned. The protocol specification is frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft, not an IETF-adopted or endorsed standard.
 
 ## Start Here
 
@@ -25,12 +25,16 @@ Release snapshot verified: 2026-07-12. Packages are independently versioned. The
 - [Go SDK](https://docs.grantex.dev/sdks/go/overview): `go get github.com/mishrasanjeev/grantex-go@v0.1.10` for Go 1.26.1+; use the documented published-version workarounds.
 - [MCP Authorization Server](https://docs.grantex.dev/features/mcp-auth-server): `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13`; version 2.0.2 is single-process evaluation software, not the recommended production enforcement path.
 - [CLI](https://docs.grantex.dev/integrations/cli): Manage agents, grants, tokens, audit records, and manifests from a terminal.
+- [Agent CLIs and Skills](https://docs.grantex.dev/integrations/agent-cli): CLI 0.3.0 source prepares portable Grantex skills for Hermes, OpenClaw, or any shell-capable agent; confirm publication before using the registry install.
 - [Machine-Readable Release Status](https://grantex.dev/release-status.json): Canonical versions, install commands, package URLs, limitations, and workaround links.
 
 For MCP HTTP transport authorization, use an established MCP-compatible authorization server and maintained MCP SDK. Then use a primary Grantex SDK or direct JWKS validation at each tool boundary when agent-specific delegated authority is required. Treat MCP Auth 2.0.2 as evaluation only. Local JWT verification does not prove current revocation unless the verifier performs an online state check or synchronizes revocation data.
 
 ## AI Agent Frameworks
 
+- [Hermes Agent](https://docs.grantex.dev/integrations/hermes): Install `use-grantex-cli` and `integrate-grantex` under the Hermes skill root.
+- [OpenClaw](https://docs.grantex.dev/integrations/openclaw): Install the same portable skills in an OpenClaw workspace.
+- [Any Agent CLI](https://docs.grantex.dev/integrations/agent-cli): Use the JSON CLI contract or choose a custom Agent Skills directory.
 - [Framework Integration Hub](https://grantex.dev/for): Grantex packages and guides for agent frameworks, APIs, and multi-agent systems.
 - [OpenAI Agents SDK Authorization](https://grantex.dev/for/openai-agents): Scoped FunctionTool execution and grant verification.
 - [Anthropic and Claude Tool Authorization](https://grantex.dev/for/anthropic): Scope-enforced tool use for Anthropic SDK applications.

@@ -26,6 +26,26 @@ grantex config show
 
 Config is saved to `~/.grantex/config.json`. Environment variables override the config file.
 
+## Install skills for an agent CLI
+
+The CLI bundles `use-grantex-cli` and `integrate-grantex` as portable Agent Skills:
+
+```bash
+# OpenClaw workspace
+grantex agent install --target openclaw
+
+# Hermes Agent
+grantex agent install --target hermes
+
+# Project-local .agents/skills
+grantex agent install --target portable
+
+# Any custom skill root
+grantex agent install --dir /path/to/skills
+```
+
+See [Agent CLIs & Skills](/integrations/agent-cli) for discovery paths, activation checks, and security boundaries.
+
 ## JSON Output
 
 All commands support `--json` for machine-readable output. This is useful for scripting, piping into `jq`, or when using the CLI from AI coding assistants (Claude Code, Cursor, Codex, etc.).
@@ -37,6 +57,21 @@ grantex --json grants list --status active | jq '.[].id'
 ```
 
 To disable colored output, set the `NO_COLOR=1` environment variable.
+
+Denied and invalid checks return a non-zero exit status in JSON mode as well as text mode.
+
+## Secret-safe token input
+
+Avoid putting grant tokens in shell history or process arguments:
+
+```bash
+grantex verify --env GRANTEX_GRANT_TOKEN --json
+grantex --json tokens verify --env GRANTEX_GRANT_TOKEN
+grantex --json enforce test --token-env GRANTEX_GRANT_TOKEN \
+  --connector salesforce --tool create_lead
+```
+
+The verification commands also accept `--file` and `--stdin`. `enforce test` accepts `--token-file` and `--token-stdin`.
 
 ## Commands
 

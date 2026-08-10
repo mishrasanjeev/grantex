@@ -70,7 +70,7 @@ Start with the [OACP runtime launch closure PRD](docs/guides/oacp/runtime-launch
 
 Grantex components are independently versioned. The protocol specification remains **v1.0 Final**; SDK, MCP package, and roadmap milestone versions are separate release lines and do not represent a monorepo-wide version.
 
-Current public releases, verified 2026-07-12:
+Current public releases, verified 2026-08-10:
 
 | Component | Public version | Reproducible install |
 | --- | ---: | --- |
@@ -102,6 +102,7 @@ Omit a version pin to install the registry's current latest release. See the [re
 - **@grantex/dpdp**: DPDP Act 2023 and EU AI Act control mappings
 - **Trust Registry**: Public DID verification registry — `grantex.dev/registry`
 - **`grantex verify`**: Token inspection CLI — no account needed
+- **Agent CLI Skills**: One-command `SKILL.md` installation for Hermes, OpenClaw, and portable Agent Skills clients
 - **Anomaly Detection**: Four implemented SQL-backed checks, lifecycle APIs, and stored rule/channel configuration; notification delivery requires a host worker
 
 ---
@@ -150,6 +151,19 @@ go get github.com/mishrasanjeev/grantex-go@v0.1.10 # Go SDK (Go 1.26.1+)
 npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13 # MCP endpoint evaluation
 npm install -g @grantex/cli                         # Optional CLI tooling
 ```
+
+### Hermes, OpenClaw, and any agent CLI
+
+Shell-capable agents use the same JSON-first CLI; no agent-specific SDK is required:
+
+```bash
+npm install -g @grantex/cli
+grantex agent install --target openclaw  # writes ./skills
+grantex agent install --target hermes    # writes ~/.hermes/skills/grantex
+grantex agent install --target portable  # writes ./.agents/skills
+```
+
+The bundle installs `use-grantex-cli` for delegated-authorization operations and `integrate-grantex` for service-boundary implementation work. For a different host, use `grantex agent install --dir /path/to/skills`. Prefer `--env`, `--file`, or `--stdin` token inputs and keep final enforcement inside the protected service.
 
 > **29 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, Strands Agents SDK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. Use the compatibility matrix for versions, the changelog for release notes, and GitHub Actions for current CI status. Fully self-hostable. Apache 2.0.
 
@@ -1393,7 +1407,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 ## Integrations
 
-The primary SDK versions below are registry-verified as of 2026-07-12. For integration packages, “Published package” identifies a public package surface; check its registry page and compatibility notes before choosing a version.
+The primary SDK versions below are registry-verified as of 2026-08-10. For integration packages, “Published package” identifies a public package surface; check its registry page and compatibility notes before choosing a version.
 
 | Framework | Package | Install | Status |
 |-----------|---------|---------|--------|
@@ -1419,6 +1433,9 @@ The primary SDK versions below are registry-verified as of 2026-07-12. For integ
 | **Python SDK** | `grantex` (`0.3.14`) | `python -m pip install grantex==0.3.14` | Registry-verified primary release |
 | **Go SDK** | `grantex-go` (`v0.1.10`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.1.10` | Published with workarounds; source correction awaits a new tag |
 | **CLI** | `@grantex/cli` | `npm install -g @grantex/cli` | Published package |
+| **Hermes Agent** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target hermes` | 0.3.0 source prepared; no dedicated SDK needed |
+| **OpenClaw** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target openclaw` | 0.3.0 source prepared; no dedicated SDK needed |
+| **Portable Agent Skills** | `@grantex/cli` 0.3.0+ + `SKILL.md` | `grantex agent install --target portable` | 0.3.0 source prepared |
 | **Conformance Suite** | `@grantex/conformance` | `npm install -g @grantex/conformance` | Published package |
 | **A2A Bridge (TS)** | `@grantex/a2a` | `npm install @grantex/a2a` | Published package |
 | **A2A Bridge (Py)** | `grantex-a2a` | `pip install grantex-a2a` | Published package |

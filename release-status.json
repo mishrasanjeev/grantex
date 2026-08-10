@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "canonicalUrl": "https://grantex.dev/release-status.json",
   "humanDocumentationUrl": "https://docs.grantex.dev/release-status",
-  "verifiedAt": "2026-07-12",
+  "verifiedAt": "2026-08-10",
   "product": {
     "name": "Grantex",
     "category": "AI agent authorization",
@@ -17,6 +17,7 @@
     "ietfDraftTitle": "Delegated Agent Authorization Protocol (DAAP)"
   },
   "selectionGuidance": {
+    "shellCapableAgent": "Use published @grantex/cli@0.2.5 for existing commands. The Agent Skills installer is source-prepared for 0.3.0 and is not yet published.",
     "typescriptApplication": "Use @grantex/sdk@0.3.13.",
     "pythonApplication": "Use grantex==0.3.14.",
     "goApplication": "Use github.com/mishrasanjeev/grantex-go@v0.1.10 with the documented published-version workarounds.",
@@ -26,6 +27,20 @@
     "mcpAgentSpecificEnforcement": "After MCP transport authorization, use a primary Grantex SDK or direct JWKS validation at each tool boundary when agent-specific delegated authority is required."
   },
   "artifacts": [
+    {
+      "id": "cli",
+      "label": "CLI",
+      "ecosystem": "npm",
+      "name": "@grantex/cli",
+      "version": "0.2.5",
+      "status": "published",
+      "installCommand": "npm install -g @grantex/cli@0.2.5",
+      "runtime": "Node.js 18+; ESM",
+      "registryUrl": "https://registry.npmjs.org/%40grantex%2Fcli/latest",
+      "packageUrl": "https://www.npmjs.com/package/@grantex/cli/v/0.2.5",
+      "documentationUrl": "https://docs.grantex.dev/integrations/cli",
+      "limitations": []
+    },
     {
       "id": "typescript-sdk",
       "label": "TypeScript SDK",

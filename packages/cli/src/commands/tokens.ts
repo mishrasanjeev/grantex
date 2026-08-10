@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { requireClient } from '../client.js';
 import { printRecord, shortDate, isJsonMode } from '../format.js';
+import { readTokenInput } from '../token-input.js';
 
 export function tokensCommand(): Command {
   const cmd = new Command('tokens').description('Exchange, verify, refresh, and revoke grant tokens');
@@ -36,14 +37,36 @@ export function tokensCommand(): Command {
     });
 
   cmd
-    .command('verify <token>')
+    .command('verify [token]')
     .description('Verify a grant token (online check)')
-    .action(async (token: string) => {
+    .option('--file <path>', 'Read token from a file')
+    .option('--stdin', 'Read token from stdin')
+    .option('--env <name>', 'Read token from an environment variable')
+    .action(async (tokenArg: string | undefined, opts: {
+      file?: string;
+      stdin?: boolean;
+      env?: string;
+    }) => {
+      let token: string;
+      try {
+        token = readTokenInput(tokenArg, opts);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (isJsonMode()) {
+          console.log(JSON.stringify({ valid: false, error: message }));
+          process.exitCode = 1;
+          return;
+        }
+        console.error(chalk.red('\u2717') + ` ${message}`);
+        process.exit(1);
+        return;
+      }
       const client = await requireClient();
       const res = await client.tokens.verify(token);
 
       if (isJsonMode()) {
         console.log(JSON.stringify(res, null, 2));
+        if (!res.valid) process.exitCode = 1;
         return;
       }
 
