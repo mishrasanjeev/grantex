@@ -6,14 +6,14 @@ description: "Install Grantex Agent Skills in an OpenClaw workspace and use the 
 
 OpenClaw can load the same portable Grantex skills used by other Agent Skills-compatible hosts. No OpenClaw-specific Grantex SDK is required.
 
-The one-command installer requires `@grantex/cli` 0.3.0 or newer; confirm the published version on the [release-status page](/release-status).
+Published `@grantex/cli@0.3.0` includes the one-command OpenClaw skill installer.
 
 ## Install in a workspace
 
 Run from the configured OpenClaw agent workspace:
 
 ```bash
-npm install -g @grantex/cli
+npm install -g @grantex/cli@0.3.0
 grantex agent install --target openclaw
 openclaw skills check
 ```
