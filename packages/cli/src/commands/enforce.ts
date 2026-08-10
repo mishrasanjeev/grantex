@@ -62,6 +62,7 @@ export function enforceCommand(): Command {
         }
         console.log(chalk.red(`\n  ❌ No manifest found for connector '${opts.connector}'`));
         console.log(chalk.dim('  Run `grantex manifest list` to see available connectors.'));
+        process.exitCode = 1;
         return;
       }
 

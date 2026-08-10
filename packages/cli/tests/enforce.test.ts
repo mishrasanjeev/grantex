@@ -319,6 +319,7 @@ describe('enforceCommand()', () => {
     expect(allArgs).toContain('grantex manifest list');
     // enforce should not have been called
     expect(mockClient.enforce).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(1);
   });
 
   it('test --json with unknown connector outputs JSON error', async () => {
