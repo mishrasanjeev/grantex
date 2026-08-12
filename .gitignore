@@ -71,3 +71,7 @@ twitter-thread-full-session.md
 packages/mcp/.mcpregistry_*
 packages/mcp/mcp-publisher.exe
 awesome-mcp-servers-pr.md
+
+# Grantex impact video (local only)
+/assets/video/
+/scripts/video/
