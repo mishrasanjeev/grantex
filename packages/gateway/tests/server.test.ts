@@ -189,3 +189,37 @@ describe('createGatewayServer', () => {
     expect(response.statusCode).toBe(404);
   });
 });
+
+/**
+ * Traversal rejection is asserted at the unit level in matcher.test.ts rather
+ * than here: `inject` resolves `..` and `.` in the URL before the handler runs
+ * (verified — `/calendar/../payments/transfer` arrives as `/payments/transfer`),
+ * whereas a real Node HTTP server passes the raw request-target through
+ * untouched. Driving this path through `inject` would assert on a normalized
+ * URL that production never produces, which is why the gap went unnoticed.
+ */
+describe('path handling', () => {
+  let server: ReturnType<typeof createGatewayServer>;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    server = createGatewayServer(CONFIG);
+    vi.mocked(proxyRequest).mockResolvedValue(undefined);
+    vi.mocked(verifyGrantToken).mockResolvedValue(MOCK_GRANT);
+  });
+
+  afterEach(async () => {
+    await server.close();
+  });
+
+  it('still allows dots inside a path segment', async () => {
+    const response = await server.inject({
+      method: 'GET',
+      url: '/calendar/events/report.v2.json',
+      headers: { authorization: 'Bearer token' },
+    });
+
+    expect(response.statusCode).not.toBe(400);
+    expect(proxyRequest).toHaveBeenCalled();
+  });
+});

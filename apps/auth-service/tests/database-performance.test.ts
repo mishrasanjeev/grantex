@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
@@ -85,7 +85,10 @@ describe('database performance migrations', () => {
     expect(migrationSql.mock.calls).toHaveLength(2);
     expect((migrationSql.mock.calls[0]?.[0] as string[]).join('')).toContain('pg_advisory_lock');
     expect((migrationSql.mock.calls[1]?.[0] as string[]).join('')).toContain('pg_advisory_unlock');
-    expect(migrationSql.unsafe).toHaveBeenCalledTimes(86);
+    // Derived from the directory rather than hardcoded — a literal count turns
+    // every new migration into an unrelated test failure.
+    const migrationCount = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).length;
+    expect(migrationSql.unsafe).toHaveBeenCalledTimes(migrationCount);
     expect(migrationSql.release).toHaveBeenCalledOnce();
   });
 });

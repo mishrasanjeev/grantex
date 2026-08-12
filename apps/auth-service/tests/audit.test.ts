@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { buildTestApp, authHeader, seedAuth, sqlMock, TEST_AGENT, TEST_GRANT, TEST_DEVELOPER } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 import { computeAuditHash } from '../src/lib/hash.js';
+import { createHash } from 'node:crypto';
 
 let app: FastifyInstance;
 
@@ -212,5 +213,87 @@ describe('computeAuditHash', () => {
     const hash2 = computeAuditHash(fields);
     expect(hash1).toBe(hash2);
     expect(hash1).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  // metadata lives in a JSONB column and Postgres normalizes JSONB key order,
+  // so a hash that depends on insertion order cannot be recomputed from the
+  // stored row — which is the only thing that makes the chain verifiable.
+  it('is independent of metadata key order', () => {
+    const base = {
+      id: 'alog_001',
+      agentId: 'ag_001',
+      agentDid: 'did:grantex:ag_001',
+      grantId: 'grnt_001',
+      principalId: 'user_001',
+      developerId: 'dev_001',
+      action: 'invoke',
+      timestamp: '2026-01-01T00:00:00.000Z',
+      prevHash: null,
+      status: 'success',
+    };
+
+    const written = computeAuditHash({
+      ...base,
+      metadata: { zebra: 1, alpha: { yankee: true, bravo: [3, 2] }, mike: 'x' },
+    });
+    const readBack = computeAuditHash({
+      ...base,
+      metadata: { alpha: { bravo: [3, 2], yankee: true }, mike: 'x', zebra: 1 },
+    });
+
+    expect(readBack).toBe(written);
+  });
+
+  it('still reflects a change in metadata values', () => {
+    const base = {
+      id: 'alog_001',
+      agentId: 'ag_001',
+      agentDid: 'did:grantex:ag_001',
+      grantId: 'grnt_001',
+      principalId: 'user_001',
+      developerId: 'dev_001',
+      action: 'invoke',
+      timestamp: '2026-01-01T00:00:00.000Z',
+      prevHash: null,
+      status: 'success',
+    };
+
+    expect(computeAuditHash({ ...base, metadata: { amount: 10 } }))
+      .not.toBe(computeAuditHash({ ...base, metadata: { amount: 1000 } }));
+    // Array order is meaningful and must not be sorted away.
+    expect(computeAuditHash({ ...base, metadata: { items: [1, 2] } }))
+      .not.toBe(computeAuditHash({ ...base, metadata: { items: [2, 1] } }));
+  });
+
+  it('is unchanged for empty and single-key metadata', () => {
+    // Entries written before canonicalization must keep verifying.
+    expect(computeAuditHash({
+      id: 'alog_001',
+      agentId: 'ag_001',
+      agentDid: 'did:grantex:ag_001',
+      grantId: 'grnt_001',
+      principalId: 'user_001',
+      developerId: 'dev_001',
+      action: 'invoke',
+      metadata: {},
+      timestamp: '2026-01-01T00:00:00.000Z',
+      prevHash: null,
+      status: 'success',
+    })).toBe(
+      // sha256 of the exact serialization the previous implementation produced.
+      createHash('sha256').update(JSON.stringify({
+        id: 'alog_001',
+        agentId: 'ag_001',
+        agentDid: 'did:grantex:ag_001',
+        grantId: 'grnt_001',
+        principalId: 'user_001',
+        developerId: 'dev_001',
+        action: 'invoke',
+        metadata: {},
+        timestamp: '2026-01-01T00:00:00.000Z',
+        prevHash: null,
+        status: 'success',
+      })).digest('hex'),
+    );
   });
 });

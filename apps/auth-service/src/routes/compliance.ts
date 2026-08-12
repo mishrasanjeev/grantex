@@ -1,20 +1,73 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
+import { computeAuditHash } from '../lib/hash.js';
 
 type Framework = 'soc2' | 'gdpr' | 'all';
 
-function verifyChain(
-  entries: Array<Record<string, unknown>>,
-): { valid: boolean; checkedEntries: number; firstBrokenAt: string | null } {
+interface ChainIntegrity {
+  valid: boolean;
+  checkedEntries: number;
+  firstBrokenAt: string | null;
+  reason: 'link' | 'content' | null;
+}
+
+/**
+ * Verify the audit hash chain.
+ *
+ * Two independent properties have to hold, and checking only the first one
+ * makes the whole chain decorative:
+ *
+ *   1. Linkage — each entry's `previous_hash` matches its predecessor's `hash`.
+ *   2. Content — each entry's stored `hash` is what its own fields hash to.
+ *
+ * Without (2), editing an entry's action, status, principal or metadata in the
+ * database leaves every stored hash and link untouched, so the export still
+ * reports `valid: true` while the record it attests to has been rewritten.
+ */
+function verifyChain(entries: Array<Record<string, unknown>>): ChainIntegrity {
   let prevHash: string | null = null;
-  for (const entry of entries) {
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]!;
     const entryPrevHash = (entry['previous_hash'] as string | null) ?? null;
+
     if (prevHash !== null && entryPrevHash !== prevHash) {
-      return { valid: false, checkedEntries: entries.indexOf(entry), firstBrokenAt: entry['id'] as string };
+      return {
+        valid: false,
+        checkedEntries: i,
+        firstBrokenAt: entry['id'] as string,
+        reason: 'link',
+      };
     }
+
+    const timestamp = entry['timestamp'];
+    const recomputed = computeAuditHash({
+      id: entry['id'] as string,
+      agentId: entry['agent_id'] as string,
+      agentDid: entry['agent_did'] as string,
+      grantId: entry['grant_id'] as string,
+      principalId: entry['principal_id'] as string,
+      developerId: entry['developer_id'] as string,
+      action: entry['action'] as string,
+      metadata: (entry['metadata'] ?? {}) as Record<string, unknown>,
+      timestamp: timestamp instanceof Date ? timestamp.toISOString() : String(timestamp),
+      prevHash: entryPrevHash,
+      status: (entry['status'] as string | null) ?? 'success',
+    });
+
+    if (recomputed !== entry['hash']) {
+      return {
+        valid: false,
+        checkedEntries: i,
+        firstBrokenAt: entry['id'] as string,
+        reason: 'content',
+      };
+    }
+
     prevHash = entry['hash'] as string;
   }
-  return { valid: true, checkedEntries: entries.length, firstBrokenAt: null };
+
+  return { valid: true, checkedEntries: entries.length, firstBrokenAt: null, reason: null };
 }
 
 export async function complianceRoutes(app: FastifyInstance): Promise<void> {
@@ -199,7 +252,10 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
         WHERE developer_id = ${developerId}
           AND (${since}::timestamptz IS NULL OR timestamp >= ${since}::timestamptz)
           AND (${until}::timestamptz IS NULL OR timestamp <= ${until}::timestamptz)
-        ORDER BY timestamp ASC
+        -- Mirrors the chain builder's "timestamp DESC, id DESC" head lookup;
+        -- ordering on timestamp alone leaves same-millisecond entries in an
+        -- arbitrary order and the chain fails to verify.
+        ORDER BY timestamp ASC, id ASC
       `,
       sql`
         SELECT id, name, effect, priority, agent_id, principal_id, scopes,
@@ -316,7 +372,7 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
         AND (${until}::timestamptz IS NULL OR timestamp <= ${until}::timestamptz)
         AND (${agentId}::text IS NULL OR agent_id = ${agentId ?? ''})
         AND (${status}::text IS NULL OR status = ${status ?? ''})
-      ORDER BY timestamp ASC
+      ORDER BY timestamp ASC, id ASC
     `;
 
     const entries = rows.map((r) => ({

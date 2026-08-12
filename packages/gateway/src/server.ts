@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { verifyGrantToken, GrantexTokenError } from '@grantex/sdk';
 import type { GatewayConfig } from './types.js';
-import { matchRoute } from './matcher.js';
+import { matchRoute, isSafeRequestPath } from './matcher.js';
 import { proxyRequest } from './proxy.js';
 import { GatewayError } from './errors.js';
 import { log } from './logger.js';
@@ -25,6 +25,15 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
   app.all('/*', async (req, reply) => {
     const method = req.method;
     const path = req.url.split('?')[0]!;
+
+    // 0. Refuse paths whose authorized form can differ from the forwarded form
+    if (!isSafeRequestPath(path)) {
+      reply.status(400).send({
+        error: 'PATH_INVALID',
+        message: 'Request path contains traversal or unsupported characters',
+      });
+      return;
+    }
 
     // 1. Match route
     const match = matchRoute(method, path, config.routes);

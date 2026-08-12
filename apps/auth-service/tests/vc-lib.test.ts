@@ -6,7 +6,7 @@ import { sqlMock } from './setup.js';
 import {
   issueAgentGrantVC,
   verifyAgentGrantVC,
-  getOrCreateStatusList,
+  allocateStatusListIndex,
   revokeVCsByGrantIds,
 } from '../src/lib/vc.js';
 
@@ -14,31 +14,56 @@ beforeAll(async () => {
   await initKeys();
 });
 
-// ── getOrCreateStatusList ───────────────────────────────────────────────────
+// ── allocateStatusListIndex ─────────────────────────────────────────────────
 
-describe('getOrCreateStatusList', () => {
-  it('creates a new status list when none exists', async () => {
-    // SELECT existing → empty
-    sqlMock.mockResolvedValueOnce([]);
-    // INSERT new list
-    sqlMock.mockResolvedValueOnce([]);
+describe('allocateStatusListIndex', () => {
+  it('claims a slot from an existing list in a single statement', async () => {
+    // UPDATE ... RETURNING id, next_index - 1
+    sqlMock.mockResolvedValueOnce([{ id: 'vcsl_EXISTING', allocated_index: 5 }]);
 
-    const result = await getOrCreateStatusList('dev_TEST');
+    const result = await allocateStatusListIndex('dev_TEST');
 
-    expect(result.id).toMatch(/^vcsl_/);
-    expect(result.nextIndex).toBe(0);
+    expect(result).toEqual({ listId: 'vcsl_EXISTING', index: 5 });
+    // A read-then-increment pair would have taken two statements and could hand
+    // the same index to a concurrent issuer.
+    expect(sqlMock).toHaveBeenCalledTimes(1);
   });
 
-  it('returns existing status list', async () => {
-    sqlMock.mockResolvedValueOnce([{
-      id: 'vcsl_EXISTING',
-      next_index: 5,
-    }]);
+  it('creates a new list when none exists', async () => {
+    sqlMock.mockResolvedValueOnce([]);   // no list with capacity
+    sqlMock.mockResolvedValueOnce([]);   // advisory lock
+    sqlMock.mockResolvedValueOnce([]);   // re-check after lock
+    sqlMock.mockResolvedValueOnce([]);   // INSERT new list
 
-    const result = await getOrCreateStatusList('dev_TEST');
+    const result = await allocateStatusListIndex('dev_TEST');
 
-    expect(result.id).toBe('vcsl_EXISTING');
-    expect(result.nextIndex).toBe(5);
+    expect(result.listId).toMatch(/^vcsl_/);
+    expect(result.index).toBe(0);
+  });
+
+  it('rolls over to a new list once the current one is full', async () => {
+    // The claim query filters on next_index < size, so a full list returns no
+    // row and allocation falls through to creating the next list.
+    sqlMock.mockResolvedValueOnce([]);   // current list is full
+    sqlMock.mockResolvedValueOnce([]);   // advisory lock
+    sqlMock.mockResolvedValueOnce([]);   // still full after lock
+    sqlMock.mockResolvedValueOnce([]);   // INSERT rollover list
+
+    const result = await allocateStatusListIndex('dev_FULL');
+
+    expect(result.listId).toMatch(/^vcsl_/);
+    expect(result.index).toBe(0);
+  });
+
+  it('uses the list another caller created while waiting on the lock', async () => {
+    sqlMock.mockResolvedValueOnce([]);   // no list with capacity
+    sqlMock.mockResolvedValueOnce([]);   // advisory lock
+    // Another request created the list first; re-check finds it.
+    sqlMock.mockResolvedValueOnce([{ id: 'vcsl_RACED', allocated_index: 0 }]);
+
+    const result = await allocateStatusListIndex('dev_TEST');
+
+    expect(result).toEqual({ listId: 'vcsl_RACED', index: 0 });
   });
 });
 
@@ -46,13 +71,8 @@ describe('getOrCreateStatusList', () => {
 
 describe('issueAgentGrantVC', () => {
   it('creates a valid VC-JWT structure', async () => {
-    // getOrCreateStatusList: SELECT existing
-    sqlMock.mockResolvedValueOnce([{
-      id: 'vcsl_TEST1',
-      next_index: 0,
-    }]);
-    // UPDATE next_index
-    sqlMock.mockResolvedValueOnce([]);
+    // allocateStatusListIndex: single UPDATE ... RETURNING
+    sqlMock.mockResolvedValueOnce([{ id: 'vcsl_TEST1', allocated_index: 0 }]);
     // INSERT verifiable_credentials
     sqlMock.mockResolvedValueOnce([]);
 
@@ -99,13 +119,8 @@ describe('issueAgentGrantVC', () => {
   });
 
   it('includes FIDO evidence when provided', async () => {
-    // getOrCreateStatusList: SELECT existing
-    sqlMock.mockResolvedValueOnce([{
-      id: 'vcsl_TEST2',
-      next_index: 1,
-    }]);
-    // UPDATE next_index
-    sqlMock.mockResolvedValueOnce([]);
+    // allocateStatusListIndex: single UPDATE ... RETURNING
+    sqlMock.mockResolvedValueOnce([{ id: 'vcsl_TEST2', allocated_index: 1 }]);
     // INSERT verifiable_credentials
     sqlMock.mockResolvedValueOnce([]);
 
@@ -135,8 +150,7 @@ describe('issueAgentGrantVC', () => {
 describe('verifyAgentGrantVC', () => {
   it('succeeds for a valid VC-JWT', async () => {
     // Issue a VC first
-    sqlMock.mockResolvedValueOnce([{ id: 'vcsl_V1', next_index: 0 }]);
-    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ id: 'vcsl_V1', allocated_index: 0 }]);
     sqlMock.mockResolvedValueOnce([]);
 
     const { vcJwt } = await issueAgentGrantVC({
@@ -238,31 +252,80 @@ describe('revokeVCsByGrantIds', () => {
   });
 
   it('flips correct bits in status list', async () => {
+    const { gzipSync, gunzipSync } = await import('node:zlib');
+    const encoded = gzipSync(Buffer.alloc(16384, 0)).toString('base64url');
+
     // SELECT active VCs
     sqlMock.mockResolvedValueOnce([
-      { id: 'vc_R1', status_list_idx: 3 },
-      { id: 'vc_R2', status_list_idx: 7 },
+      { id: 'vc_R1', status_list_id: 'vcsl_BIT', status_list_idx: 3 },
+      { id: 'vc_R2', status_list_id: 'vcsl_BIT', status_list_idx: 7 },
     ]);
-    // UPDATE VCs to revoked
+    // setRevocationBits: SELECT ... FOR UPDATE
+    sqlMock.mockResolvedValueOnce([{ encoded_list: encoded }]);
+    // setRevocationBits: UPDATE encoded_list
     sqlMock.mockResolvedValueOnce([]);
-    // SELECT status list for bit flipping
-    const { gzipSync } = await import('node:zlib');
-    const emptyBits = Buffer.alloc(16384, 0);
-    const encoded = gzipSync(emptyBits).toString('base64url');
-    sqlMock.mockResolvedValueOnce([{
-      id: 'vcsl_BIT',
-      encoded_list: encoded,
-    }]);
-    // UPDATE status list with flipped bits
+    // UPDATE VCs to revoked
     sqlMock.mockResolvedValueOnce([]);
 
     await revokeVCsByGrantIds(['grnt_R1'], 'dev_TEST');
 
-    // Verify the UPDATE call was made with updated encoded_list
-    expect(sqlMock).toHaveBeenCalled();
-    // The 4th call (index 3) should be the status list update
-    const lastCallArgs = sqlMock.mock.calls[sqlMock.mock.calls.length - 1];
-    // The SQL template should contain the encoded_list update
-    expect(lastCallArgs).toBeDefined();
+    // The UPDATE that writes the list back carries the new bitstring as a
+    // template parameter; decode it and confirm both bits are set.
+    const updateCall = sqlMock.mock.calls.find((call) => {
+      const fragments = call[0] as unknown as string[];
+      return Array.isArray(fragments) && fragments.some((f) => f.includes('SET encoded_list'));
+    });
+    expect(updateCall).toBeDefined();
+
+    const written = updateCall![1] as string;
+    const bits = gunzipSync(Buffer.from(written, 'base64url'));
+    const bitAt = (i: number) => (bits[Math.floor(i / 8)]! >> (7 - (i % 8))) & 1;
+    expect(bitAt(3)).toBe(1);
+    expect(bitAt(7)).toBe(1);
+    expect(bitAt(4)).toBe(0);
+  });
+
+  it('groups revocations by the list each credential was allocated from', async () => {
+    const { gzipSync } = await import('node:zlib');
+    const encoded = gzipSync(Buffer.alloc(16384, 0)).toString('base64url');
+
+    // Two credentials sharing index 0 but living on different lists — the
+    // situation rollover creates. Flipping index 0 on one list must not be
+    // mistaken for revoking the other.
+    sqlMock.mockResolvedValueOnce([
+      { id: 'vc_A', status_list_id: 'vcsl_ONE', status_list_idx: 0 },
+      { id: 'vc_B', status_list_id: 'vcsl_TWO', status_list_idx: 0 },
+    ]);
+    sqlMock.mockResolvedValueOnce([{ encoded_list: encoded }]);  // list one SELECT
+    sqlMock.mockResolvedValueOnce([]);                            // list one UPDATE
+    sqlMock.mockResolvedValueOnce([{ encoded_list: encoded }]);  // list two SELECT
+    sqlMock.mockResolvedValueOnce([]);                            // list two UPDATE
+    sqlMock.mockResolvedValueOnce([]);                            // mark revoked
+
+    await revokeVCsByGrantIds(['grnt_A'], 'dev_TEST');
+
+    const listIdsTouched = sqlMock.mock.calls
+      .filter((call) => {
+        const fragments = call[0] as unknown as string[];
+        return Array.isArray(fragments) && fragments.some((f) => f.includes('FOR UPDATE'));
+      })
+      .map((call) => call[1] as string);
+
+    expect(listIdsTouched).toEqual(['vcsl_ONE', 'vcsl_TWO']);
+  });
+
+  it('skips credentials with no recorded status list', async () => {
+    sqlMock.mockResolvedValueOnce([
+      { id: 'vc_ORPHAN', status_list_id: null, status_list_idx: 2 },
+    ]);
+    sqlMock.mockResolvedValueOnce([]); // mark revoked
+
+    await revokeVCsByGrantIds(['grnt_O'], 'dev_TEST');
+
+    const touchedList = sqlMock.mock.calls.some((call) => {
+      const fragments = call[0] as unknown as string[];
+      return Array.isArray(fragments) && fragments.some((f) => f.includes('FOR UPDATE'));
+    });
+    expect(touchedList).toBe(false);
   });
 });

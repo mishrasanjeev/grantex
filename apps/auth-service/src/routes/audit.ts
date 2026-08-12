@@ -146,7 +146,10 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
       SELECT id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status
       FROM audit_entries
       WHERE ${predicates.join(' AND ')}
-      ORDER BY timestamp ASC
+      -- Must mirror the chain builder's "timestamp DESC, id DESC" head lookup.
+      -- Ordering on timestamp alone leaves same-millisecond entries in an
+      -- arbitrary order, so the hash chain fails to verify on read-back.
+      ORDER BY timestamp ASC, id ASC
     `, parameters);
 
     return reply.send({ entries: rows.map(toAuditResponse) });

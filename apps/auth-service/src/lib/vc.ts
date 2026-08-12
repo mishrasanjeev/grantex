@@ -6,6 +6,7 @@
  */
 
 import { SignJWT, jwtVerify, decodeJwt } from 'jose';
+import type postgres from 'postgres';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { getSql } from '../db/client.js';
 import { getKeyPair } from './crypto.js';
@@ -71,48 +72,130 @@ function decodeBitstring(encoded: string): Buffer {
 function setBit(bitstring: Buffer, index: number): void {
   const byteIndex = Math.floor(index / 8);
   const bitIndex = 7 - (index % 8); // MSB-first
+  // Out-of-range writes on a Buffer are silently discarded by Node, which would
+  // turn "credential revoked" into a no-op that still reports success.
+  if (!Number.isInteger(index) || byteIndex < 0 || byteIndex >= bitstring.length) {
+    throw new RangeError(`Status list index ${index} is outside the list capacity`);
+  }
   bitstring[byteIndex]! |= 1 << bitIndex;
 }
 
 function getBit(bitstring: Buffer, index: number): boolean {
   const byteIndex = Math.floor(index / 8);
   const bitIndex = 7 - (index % 8);
+  if (!Number.isInteger(index) || byteIndex < 0 || byteIndex >= bitstring.length) {
+    return false;
+  }
   return ((bitstring[byteIndex]! >> bitIndex) & 1) === 1;
 }
 
 // ── StatusList management ───────────────────────────────────────────────────
 
-export async function getOrCreateStatusList(
+export interface AllocatedStatusIndex {
+  listId: string;
+  index: number;
+}
+
+/**
+ * Claim the next free revocation slot for a developer.
+ *
+ * The claim is a single UPDATE so that concurrent issuance cannot hand the same
+ * index to two credentials — a read-then-increment pair does, and two
+ * credentials sharing an index also share a revocation bit, so revoking either
+ * one revokes both. Rolls onto a fresh list when the current one is full.
+ */
+export async function allocateStatusListIndex(
   developerId: string,
-): Promise<{ id: string; nextIndex: number }> {
+): Promise<AllocatedStatusIndex> {
   const sql = getSql();
 
-  // Try to find existing list
-  const existing = await sql`
-    SELECT id, next_index FROM vc_status_lists
-    WHERE developer_id = ${developerId} AND purpose = 'revocation'
-    LIMIT 1
-  `;
+  const claimed = await claimIndexFromExistingList(sql, developerId);
+  if (claimed) return claimed;
 
-  if (existing[0]) {
-    return {
-      id: existing[0]['id'] as string,
-      nextIndex: Number(existing[0]['next_index']),
-    };
-  }
+  // No list yet, or the newest one is full. Serialise creation per developer so
+  // a burst of concurrent issuance produces one new list rather than N.
+  return await sql.begin(async (_tx) => {
+    const tx = _tx as unknown as ReturnType<typeof postgres>;
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`vcsl:${developerId}`}, 0))`;
 
-  // Create new status list
-  const listId = newStatusListId();
-  const emptyBitstring = createEmptyBitstring();
-  const encoded = encodeBitstring(emptyBitstring);
+    const raced = await claimIndexFromExistingList(tx, developerId);
+    if (raced) return raced;
 
-  await sql`
-    INSERT INTO vc_status_lists (id, developer_id, purpose, encoded_list, size, next_index)
-    VALUES (${listId}, ${developerId}, 'revocation', ${encoded}, ${STATUS_LIST_SIZE}, 0)
-  `;
-
-  return { id: listId, nextIndex: 0 };
+    const listId = newStatusListId();
+    const encoded = encodeBitstring(createEmptyBitstring());
+    await tx`
+      INSERT INTO vc_status_lists (id, developer_id, purpose, encoded_list, size, next_index)
+      VALUES (${listId}, ${developerId}, 'revocation', ${encoded}, ${STATUS_LIST_SIZE}, 1)
+    `;
+    return { listId, index: 0 };
+  }) as AllocatedStatusIndex;
 }
+
+async function claimIndexFromExistingList(
+  sql: ReturnType<typeof postgres>,
+  developerId: string,
+): Promise<AllocatedStatusIndex | null> {
+  const rows = await sql`
+    UPDATE vc_status_lists
+    SET next_index = next_index + 1, updated_at = NOW()
+    WHERE id = (
+      SELECT id FROM vc_status_lists
+      WHERE developer_id = ${developerId}
+        AND purpose = 'revocation'
+        AND next_index < size
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1
+    )
+    RETURNING id, next_index - 1 AS allocated_index
+  `;
+
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    listId: row['id'] as string,
+    index: Number(row['allocated_index']),
+  };
+}
+
+/**
+ * Set revocation bits on one list.
+ *
+ * `SELECT ... FOR UPDATE` is required: the bitstring is gzipped in a text
+ * column, so flipping a bit is a read-modify-write. Two unsynchronised
+ * revocations would each decode the same snapshot and the second write would
+ * discard the first one's bit, leaving a revoked credential valid.
+ */
+async function setRevocationBits(
+  sql: ReturnType<typeof postgres>,
+  listId: string,
+  indices: number[],
+): Promise<void> {
+  if (indices.length === 0) return;
+
+  await sql.begin(async (_tx) => {
+    const tx = _tx as unknown as ReturnType<typeof postgres>;
+    const rows = await tx`
+      SELECT encoded_list FROM vc_status_lists WHERE id = ${listId} FOR UPDATE
+    `;
+    const row = rows[0];
+    if (!row) {
+      throw new Error(`Status list ${listId} not found; cannot record revocation`);
+    }
+
+    const bitstring = decodeBitstring(row['encoded_list'] as string);
+    for (const index of indices) {
+      setBit(bitstring, index);
+    }
+
+    await tx`
+      UPDATE vc_status_lists
+      SET encoded_list = ${encodeBitstring(bitstring)}, updated_at = NOW()
+      WHERE id = ${listId}
+    `;
+  });
+}
+
+export { setRevocationBits };
 
 // ── VC-JWT issuance ─────────────────────────────────────────────────────────
 
@@ -137,16 +220,10 @@ export async function issueAgentGrantVC(params: IssueVCParams): Promise<{
   const domain = config.didWebDomain;
   const issuerDid = `did:web:${domain}`;
 
-  // Get or create status list and allocate an index
-  const statusList = await getOrCreateStatusList(developerId);
-  const statusListIdx = statusList.nextIndex;
-
-  // Increment next_index
+  // Claim a revocation slot (atomic; rolls onto a new list when one fills up)
+  const { listId: statusListId, index: statusListIdx } =
+    await allocateStatusListIndex(developerId);
   const sql = getSql();
-  await sql`
-    UPDATE vc_status_lists SET next_index = next_index + 1, updated_at = NOW()
-    WHERE id = ${statusList.id}
-  `;
 
   // Build VC payload
   const now = Math.floor(Date.now() / 1000);
@@ -163,11 +240,11 @@ export async function issueAgentGrantVC(params: IssueVCParams): Promise<{
   };
 
   const credentialStatus = {
-    id: `${config.publicBaseUrl}/v1/credentials/status/${statusList.id}#${statusListIdx}`,
+    id: `${config.publicBaseUrl}/v1/credentials/status/${statusListId}#${statusListIdx}`,
     type: 'StatusList2021Entry',
     statusPurpose: 'revocation',
     statusListIndex: String(statusListIdx),
-    statusListCredential: `${config.publicBaseUrl}/v1/credentials/status/${statusList.id}`,
+    statusListCredential: `${config.publicBaseUrl}/v1/credentials/status/${statusListId}`,
   };
 
   const evidence: Record<string, unknown>[] = [];
@@ -204,12 +281,12 @@ export async function issueAgentGrantVC(params: IssueVCParams): Promise<{
     INSERT INTO verifiable_credentials (
       id, grant_id, developer_id, principal_id, agent_did,
       credential_type, format, credential_jwt, status,
-      status_list_idx, expires_at
+      status_list_id, status_list_idx, expires_at
     )
     VALUES (
       ${vcId}, ${grantId}, ${developerId}, ${principalId}, ${agentDid},
       'AgentGrantCredential', 'vc-jwt', ${vcJwt}, 'active',
-      ${statusListIdx}, ${expiresAt}
+      ${statusListId}, ${statusListIdx}, ${expiresAt}
     )
   `;
 
@@ -300,13 +377,30 @@ export async function revokeVCsByGrantIds(
 
   // Find all active VCs for these grants
   const vcRows = await sql`
-    SELECT id, status_list_idx FROM verifiable_credentials
+    SELECT id, status_list_id, status_list_idx FROM verifiable_credentials
     WHERE grant_id = ANY(${grantIds})
       AND developer_id = ${developerId}
       AND status = 'active'
   `;
 
   if (vcRows.length === 0) return;
+
+  // Flip the status-list bits *before* marking the rows revoked. If the bit
+  // write fails, the credential still reads as active everywhere rather than
+  // being recorded as revoked while verifiers keep accepting it.
+  const byList = new Map<string, number[]>();
+  for (const row of vcRows) {
+    const listId = row['status_list_id'] as string | null;
+    const idx = Number(row['status_list_idx']);
+    if (!listId || !Number.isInteger(idx)) continue;
+    const indices = byList.get(listId);
+    if (indices) indices.push(idx);
+    else byList.set(listId, [idx]);
+  }
+
+  for (const [listId, indices] of byList) {
+    await setRevocationBits(sql, listId, indices);
+  }
 
   // Mark VCs as revoked
   const vcIds = vcRows.map((r) => r['id'] as string);
@@ -315,31 +409,6 @@ export async function revokeVCsByGrantIds(
     SET status = 'revoked', revoked_at = NOW()
     WHERE id = ANY(${vcIds})
   `;
-
-  // Flip bits in the status list
-  const listRows = await sql`
-    SELECT id, encoded_list FROM vc_status_lists
-    WHERE developer_id = ${developerId} AND purpose = 'revocation'
-    LIMIT 1
-  `;
-
-  if (listRows[0]) {
-    const listId = listRows[0]['id'] as string;
-    const bitstring = decodeBitstring(listRows[0]['encoded_list'] as string);
-
-    for (const row of vcRows) {
-      const idx = Number(row['status_list_idx']);
-      if (idx >= 0 && idx < STATUS_LIST_SIZE) {
-        setBit(bitstring, idx);
-      }
-    }
-
-    const encoded = encodeBitstring(bitstring);
-    await sql`
-      UPDATE vc_status_lists SET encoded_list = ${encoded}, updated_at = NOW()
-      WHERE id = ${listId}
-    `;
-  }
 }
 
 // ── StatusList2021 credential builder ───────────────────────────────────────

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { SignJWT } from 'jose';
 import { getSql } from '../db/client.js';
 import { getKeyPair, getEdKeyPair, parseExpiresIn } from '../lib/crypto.js';
-import { getOrCreateStatusList } from '../lib/vc.js';
+import { allocateStatusListIndex, setRevocationBits } from '../lib/vc.js';
 import { emitEvent } from '../lib/events.js';
 import { config } from '../config.js';
 import { ulid } from 'ulid';
@@ -178,20 +178,16 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
       const now = new Date();
       const expiresAt = new Date(now.getTime() + expirySeconds * 1000);
 
-      // Allocate StatusList2021 index
-      const statusList = await getOrCreateStatusList(developerId);
-      const statusListIdx = statusList.nextIndex;
-      await sql`
-        UPDATE vc_status_lists SET next_index = next_index + 1, updated_at = NOW()
-        WHERE id = ${statusList.id}
-      `;
+      // Allocate StatusList2021 index (atomic; rolls onto a new list when full)
+      const { listId: statusListId, index: statusListIdx } =
+        await allocateStatusListIndex(developerId);
 
       const credentialStatus = {
-        id: `${config.publicBaseUrl}/v1/credentials/status/${statusList.id}#${statusListIdx}`,
+        id: `${config.publicBaseUrl}/v1/credentials/status/${statusListId}#${statusListIdx}`,
         type: 'StatusList2021Entry',
         statusPurpose: 'revocation',
         statusListIndex: String(statusListIdx),
-        statusListCredential: `${config.publicBaseUrl}/v1/credentials/status/${statusList.id}`,
+        statusListCredential: `${config.publicBaseUrl}/v1/credentials/status/${statusListId}`,
       };
 
       const credentialSubject: Record<string, unknown> = {
@@ -267,14 +263,16 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
           id, developer_id, agent_id, grant_id, principal_id, agent_did,
           organization_did, allowed_categories, max_amount, max_currency,
           payment_rails, delegation_depth, parent_passport_id,
-          credential_jwt, encoded_credential, status, status_list_idx, expires_at
+          credential_jwt, encoded_credential, status,
+          status_list_id, status_list_idx, expires_at
         )
         VALUES (
           ${passportId}, ${developerId}, ${agentId}, ${grantId}, ${principalId},
           ${agentDid}, ${`did:web:${domain}`}, ${allowedMPPCategories},
           ${maxTransactionAmount.amount}, ${maxTransactionAmount.currency || 'USDC'},
           ${paymentRails}, ${delegationDepth}, ${parentPassportId ?? null},
-          ${vcJwt}, ${encodedCredential}, 'active', ${statusListIdx}, ${expiresAt}
+          ${vcJwt}, ${encodedCredential}, 'active',
+          ${statusListId}, ${statusListIdx}, ${expiresAt}
         )
       `;
 
@@ -283,12 +281,12 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
         INSERT INTO verifiable_credentials (
           id, grant_id, developer_id, principal_id, agent_did,
           credential_type, format, credential_jwt, status,
-          status_list_idx, expires_at
+          status_list_id, status_list_idx, expires_at
         )
         VALUES (
           ${passportId}, ${grantId}, ${developerId}, ${principalId}, ${agentDid},
           'AgentPassportCredential', 'agent-passport', ${vcJwt}, 'active',
-          ${statusListIdx}, ${expiresAt}
+          ${statusListId}, ${statusListIdx}, ${expiresAt}
         )
       `;
 
@@ -401,7 +399,7 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
       const sql = getSql();
 
       const rows = await sql`
-        SELECT id, status, status_list_idx FROM mpp_passports
+        SELECT id, status, status_list_id, status_list_idx FROM mpp_passports
         WHERE id = ${id} AND developer_id = ${developerId}
       `;
 
@@ -420,6 +418,15 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
 
       const revokedAt = new Date();
 
+      // Flip the StatusList2021 bit first. Marking the row revoked while the
+      // published status list still reads "active" would report success to the
+      // caller while every verifier keeps accepting the passport.
+      const statusListId = passport['status_list_id'] as string | null;
+      const statusListIdx = Number(passport['status_list_idx']);
+      if (statusListId && Number.isInteger(statusListIdx)) {
+        await setRevocationBits(sql, statusListId, [statusListIdx]);
+      }
+
       // Mark as revoked in mpp_passports
       await sql`
         UPDATE mpp_passports SET status = 'revoked', revoked_at = ${revokedAt}
@@ -431,31 +438,6 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
         UPDATE verifiable_credentials SET status = 'revoked', revoked_at = ${revokedAt}
         WHERE id = ${id}
       `;
-
-      // Flip StatusList2021 bit
-      const statusListIdx = Number(passport['status_list_idx']);
-      const listRows = await sql`
-        SELECT id, encoded_list FROM vc_status_lists
-        WHERE developer_id = ${developerId} AND purpose = 'revocation'
-        LIMIT 1
-      `;
-      if (listRows[0]) {
-        const { gzipSync, gunzipSync } = await import('node:zlib');
-        const listId = listRows[0]['id'] as string;
-        const compressed = Buffer.from(listRows[0]['encoded_list'] as string, 'base64url');
-        const bitstring = Buffer.from(gunzipSync(compressed));
-
-        // Set the bit
-        const byteIndex = Math.floor(statusListIdx / 8);
-        const bitIndex = 7 - (statusListIdx % 8);
-        bitstring[byteIndex]! |= 1 << bitIndex;
-
-        const encoded = gzipSync(bitstring).toString('base64url');
-        await sql`
-          UPDATE vc_status_lists SET encoded_list = ${encoded}, updated_at = NOW()
-          WHERE id = ${listId}
-        `;
-      }
 
       // Audit
       emitEvent(developerId, 'passport.revoked', { passportId: id }).catch(() => {});
