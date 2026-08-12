@@ -26,6 +26,8 @@ export interface OidcDiscoveryDocument {
   token_endpoint: string;
   jwks_uri: string;
   userinfo_endpoint?: string;
+  /** RFC 8414. Absent on providers that predate PKCE metadata. */
+  code_challenge_methods_supported?: string[];
 }
 
 export interface SsoConnectionRow {
@@ -195,6 +197,78 @@ export async function verifyIdToken(
 /** Clear JWKS cache (useful in tests). */
 export function clearJwksCache(): void {
   jwksCache.clear();
+}
+
+// ── OIDC authorization-request state (nonce + PKCE) ───────────────────────
+
+/** Matches the signed state's own lifetime, so neither half outlives the other. */
+const OIDC_AUTH_REQUEST_TTL_MS = 10 * 60_000;
+
+export interface OidcAuthRequest {
+  /** PKCE verifier. Absent when the IdP does not advertise S256 support. */
+  codeVerifier?: string;
+  /** Value sent as the `nonce` authorization parameter. */
+  nonce: string;
+}
+
+function oidcAuthRequestKey(requestId: string): string {
+  return `sso:oidc:req:${requestId}`;
+}
+
+export function isSafeOidcRequestId(value: string): boolean {
+  return /^[A-Za-z0-9_-]{16,128}$/.test(value);
+}
+
+/**
+ * Persist the per-login secrets behind an opaque id.
+ *
+ * The PKCE verifier deliberately does not travel in the signed state: state is
+ * integrity-protected but not encrypted, it is base64url JSON that anyone
+ * holding the redirect can read, and a verifier the front channel can read
+ * provides no binding at all. Only the lookup id goes in the state.
+ */
+export async function saveOidcAuthRequest(
+  requestId: string,
+  data: OidcAuthRequest,
+): Promise<void> {
+  if (!isSafeOidcRequestId(requestId)) {
+    throw new Error('Refusing to store an invalid OIDC request id');
+  }
+  const stored = await getRedis().set(
+    oidcAuthRequestKey(requestId),
+    JSON.stringify(data),
+    'PX',
+    OIDC_AUTH_REQUEST_TTL_MS,
+    'NX',
+  );
+  if (stored !== 'OK') throw new Error('Unable to persist OIDC authorization request state');
+}
+
+/**
+ * Fetch and delete the stored request in one round trip. Consume-on-read also
+ * makes the surrounding state single-use: replaying a state whose entry is
+ * already gone fails instead of re-running the exchange.
+ */
+export async function consumeOidcAuthRequest(
+  requestId: string,
+): Promise<OidcAuthRequest | null> {
+  if (!isSafeOidcRequestId(requestId)) return null;
+  const raw = await getRedis().getdel(oidcAuthRequestKey(requestId));
+  if (raw === null || raw === undefined) return null;
+  try {
+    const parsed = JSON.parse(String(raw)) as OidcAuthRequest;
+    if (typeof parsed?.nonce !== 'string' || parsed.nonce.length === 0) return null;
+    if (parsed.codeVerifier !== undefined && typeof parsed.codeVerifier !== 'string') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** True when the provider advertises RFC 7636 S256 support. */
+export function supportsPkceS256(discovery: OidcDiscoveryDocument | null): boolean {
+  return Array.isArray(discovery?.code_challenge_methods_supported)
+    && discovery.code_challenge_methods_supported.includes('S256');
 }
 
 // ── SAML 2.0 Response parsing ─────────────────────────────────────────────

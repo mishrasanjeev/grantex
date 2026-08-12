@@ -43,22 +43,39 @@ vi.mock('../src/lib/sso.js', () => ({
   }),
   clearDiscoveryCache: vi.fn(),
   clearJwksCache: vi.fn(),
+  // OIDC nonce + PKCE binding. The default discovery mock above advertises no
+  // code_challenge_methods_supported, so PKCE stays off unless a test opts in.
+  saveOidcAuthRequest: vi.fn().mockResolvedValue(undefined),
+  consumeOidcAuthRequest: vi.fn().mockResolvedValue(null),
+  supportsPkceS256: vi.fn().mockReturnValue(false),
 }));
 
 import {
   resolveConnection,
   verifyIdToken,
   parseSamlResponse,
+  saveOidcAuthRequest,
+  consumeOidcAuthRequest,
+  supportsPkceS256,
 } from '../src/lib/sso.js';
 import { encrypt } from '../src/lib/vault-crypto.js';
+import { createHash } from 'node:crypto';
 import { setSafeFetchForTests } from '../src/lib/url-security.js';
 import { signSsoState, verifySsoState } from '../src/routes/sso.js';
 
 const mockedResolveConnection = vi.mocked(resolveConnection);
 const mockedVerifyIdToken = vi.mocked(verifyIdToken);
 const mockedParseSamlResponse = vi.mocked(parseSamlResponse);
+const mockedSaveOidcAuthRequest = vi.mocked(saveOidcAuthRequest);
+const mockedConsumeOidcAuthRequest = vi.mocked(consumeOidcAuthRequest);
+const mockedSupportsPkceS256 = vi.mocked(supportsPkceS256);
 
 let app: FastifyInstance;
+
+// Every OIDC login is bound to a stored nonce/PKCE entry, so the callback
+// fixtures carry a request id and the IdP echoes the nonce back.
+const OIDC_REQUEST_ID = 'reqfixture00000000000000';
+const OIDC_NONCE = 'fixture-nonce';
 
 function encryptedSsoSecret(value: string): string {
   return `vault:v1:${encrypt(value)}`;
@@ -77,7 +94,11 @@ afterEach(() => {
     email: 'alice@corp.com',
     name: 'Alice Smith',
     groups: ['Engineering'],
+    nonce: OIDC_NONCE,
   });
+  mockedSaveOidcAuthRequest.mockReset().mockResolvedValue(undefined);
+  mockedConsumeOidcAuthRequest.mockReset().mockResolvedValue({ nonce: OIDC_NONCE });
+  mockedSupportsPkceS256.mockReset().mockReturnValue(false);
   mockedParseSamlResponse.mockReset().mockResolvedValue({
     sub: 'saml_user_01',
     email: 'bob@corp.com',
@@ -604,7 +625,11 @@ describe('GET /sso/login (enterprise)', () => {
 describe('POST /sso/callback/oidc', () => {
   // State is created lazily because signSsoState depends on initKeys() which runs in beforeAll
   let state: string;
-  beforeAll(() => { state = signSsoState({ org: 'dev_TEST', connectionId: 'sso_CONN01' }); });
+  beforeAll(() => {
+    state = signSsoState({
+      org: 'dev_TEST', connectionId: 'sso_CONN01', oidcRequestId: OIDC_REQUEST_ID,
+    });
+  });
 
   it('rejects signed state after its ten-minute lifetime', () => {
     vi.useFakeTimers();
@@ -654,6 +679,7 @@ describe('POST /sso/callback/oidc', () => {
     const stateWithRedirect = signSsoState({
       org: 'dev_TEST',
       connectionId: 'sso_CONN01',
+      oidcRequestId: OIDC_REQUEST_ID,
       redirectUri: 'https://app.test/callback',
     });
     sqlMock.mockResolvedValueOnce([OIDC_CONNECTION_ROW]);
@@ -684,6 +710,7 @@ describe('POST /sso/callback/oidc', () => {
     const stateWithRedirect = signSsoState({
       org: 'dev_TEST',
       connectionId: 'sso_CONN01',
+      oidcRequestId: OIDC_REQUEST_ID,
       redirectUri: 'https://app.test/callback',
     });
 
@@ -934,7 +961,7 @@ describe('DELETE /v1/sso/config (legacy)', () => {
 
 describe('GET /sso/callback (legacy)', () => {
   it('exchanges code and returns user info', async () => {
-    const state = signSsoState({ org: 'dev_TEST' });
+    const state = signSsoState({ org: 'dev_TEST', oidcRequestId: OIDC_REQUEST_ID });
     sqlMock.mockResolvedValueOnce([SSO_CONFIG_ROW]);
 
     const idTokenPayload = Buffer.from(
@@ -962,7 +989,7 @@ describe('GET /sso/callback (legacy)', () => {
   });
 
   it('rejects legacy callback when ID token verification fails', async () => {
-    const state = signSsoState({ org: 'dev_TEST' });
+    const state = signSsoState({ org: 'dev_TEST', oidcRequestId: OIDC_REQUEST_ID });
     sqlMock.mockResolvedValueOnce([SSO_CONFIG_ROW]);
     mockedVerifyIdToken.mockRejectedValueOnce(new Error('bad signature'));
 
@@ -985,7 +1012,7 @@ describe('GET /sso/callback (legacy)', () => {
   });
 
   it('returns 502 when IdP token exchange fails', async () => {
-    const state = signSsoState({ org: 'dev_TEST' });
+    const state = signSsoState({ org: 'dev_TEST', oidcRequestId: OIDC_REQUEST_ID });
     sqlMock.mockResolvedValueOnce([SSO_CONFIG_ROW]);
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 400 }));
@@ -1142,5 +1169,207 @@ describe('POST /sso/callback/ldap', () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.json().message).toBe('Invalid LDAP credentials');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// OIDC nonce + PKCE binding
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('OIDC nonce and PKCE binding', () => {
+  function authorizeParams(url: string): URLSearchParams {
+    return new URL(url).searchParams;
+  }
+
+  it('sends a nonce on every OIDC authorize request', async () => {
+    mockedResolveConnection.mockResolvedValueOnce(OIDC_CONNECTION_ROW as never);
+
+    const res = await app.inject({ method: 'GET', url: '/sso/login?org=dev_TEST' });
+
+    expect(res.statusCode).toBe(200);
+    const params = authorizeParams(res.json().authorizeUrl);
+    expect(params.get('nonce')).toBeTruthy();
+    expect(params.get('nonce')!.length).toBeGreaterThanOrEqual(16);
+  });
+
+  it('stores the nonce server-side rather than in the state parameter', async () => {
+    mockedResolveConnection.mockResolvedValueOnce(OIDC_CONNECTION_ROW as never);
+    mockedSaveOidcAuthRequest.mockClear();
+
+    const res = await app.inject({ method: 'GET', url: '/sso/login?org=dev_TEST' });
+
+    const params = authorizeParams(res.json().authorizeUrl);
+    const nonce = params.get('nonce')!;
+    const state = params.get('state')!;
+
+    // State is signed but not encrypted, so anything inside it is readable by
+    // whoever holds the redirect.
+    const decodedState = JSON.parse(
+      Buffer.from(state.slice(0, state.indexOf('.')), 'base64url').toString('utf8'),
+    ) as Record<string, unknown>;
+    expect(decodedState['oidcRequestId']).toBeTruthy();
+    expect(JSON.stringify(decodedState)).not.toContain(nonce);
+
+    expect(mockedSaveOidcAuthRequest).toHaveBeenCalledTimes(1);
+    expect(mockedSaveOidcAuthRequest.mock.calls[0]![1]).toMatchObject({ nonce });
+  });
+
+  it('omits PKCE when the provider does not advertise S256', async () => {
+    mockedResolveConnection.mockResolvedValueOnce(OIDC_CONNECTION_ROW as never);
+    mockedSupportsPkceS256.mockReturnValueOnce(false);
+
+    const res = await app.inject({ method: 'GET', url: '/sso/login?org=dev_TEST' });
+
+    const params = authorizeParams(res.json().authorizeUrl);
+    expect(params.get('code_challenge')).toBeNull();
+    expect(params.get('code_challenge_method')).toBeNull();
+  });
+
+  it('sends an S256 challenge when the provider advertises support', async () => {
+    mockedResolveConnection.mockResolvedValueOnce(OIDC_CONNECTION_ROW as never);
+    mockedSupportsPkceS256.mockReturnValueOnce(true);
+    mockedSaveOidcAuthRequest.mockClear();
+
+    const res = await app.inject({ method: 'GET', url: '/sso/login?org=dev_TEST' });
+
+    const params = authorizeParams(res.json().authorizeUrl);
+    expect(params.get('code_challenge_method')).toBe('S256');
+
+    // The challenge on the wire must be S256(verifier), and the verifier itself
+    // must never appear in the front channel.
+    const stored = mockedSaveOidcAuthRequest.mock.calls[0]![1] as { codeVerifier?: string };
+    expect(stored.codeVerifier).toBeTruthy();
+    const expected = createHash('sha256').update(stored.codeVerifier!).digest('base64url');
+    expect(params.get('code_challenge')).toBe(expected);
+    expect(res.json().authorizeUrl).not.toContain(stored.codeVerifier!);
+  });
+
+  it('sends the code_verifier on the token exchange', async () => {
+    const state = signSsoState({
+      org: 'dev_TEST', connectionId: 'sso_CONN01', oidcRequestId: 'reqaaaaaaaaaaaaaaaaaaaaa',
+    });
+    mockedConsumeOidcAuthRequest.mockResolvedValueOnce({
+      nonce: 'expected-nonce', codeVerifier: 'the-verifier',
+    });
+    mockedVerifyIdToken.mockResolvedValueOnce({
+      sub: 'idp_user_01', nonce: 'expected-nonce',
+    } as never);
+    sqlMock.mockResolvedValueOnce([OIDC_CONNECTION_ROW]);
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ id_token: 'mock.id.token' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    setSafeFetchForTests(async (url, init) => fetch(url, init));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sso/callback/oidc',
+      headers: { 'content-type': 'application/json' },
+      payload: { code: 'auth_code_xyz', state },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const sentBody = String((fetchMock.mock.calls[0]![1] as { body: string }).body);
+    expect(new URLSearchParams(sentBody).get('code_verifier')).toBe('the-verifier');
+  });
+
+  it('rejects an ID token whose nonce does not match the request', async () => {
+    const state = signSsoState({
+      org: 'dev_TEST', connectionId: 'sso_CONN01', oidcRequestId: 'reqbbbbbbbbbbbbbbbbbbbbb',
+    });
+    mockedConsumeOidcAuthRequest.mockResolvedValueOnce({ nonce: 'expected-nonce' });
+    // A token minted for a different login — correctly signed, right issuer and
+    // audience, wrong nonce.
+    mockedVerifyIdToken.mockResolvedValueOnce({
+      sub: 'attacker', nonce: 'other-login',
+    } as never);
+    sqlMock.mockResolvedValueOnce([OIDC_CONNECTION_ROW]);
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: () => Promise.resolve({ id_token: 'mock.id.token' }),
+    }));
+    setSafeFetchForTests(async (url, init) => fetch(url, init));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sso/callback/oidc',
+      headers: { 'content-type': 'application/json' },
+      payload: { code: 'auth_code_xyz', state },
+    });
+
+    expect(res.statusCode).toBe(502);
+    expect(res.json().message).toBe('ID token nonce mismatch');
+  });
+
+  it('rejects an ID token carrying no nonce when one was requested', async () => {
+    const state = signSsoState({
+      org: 'dev_TEST', connectionId: 'sso_CONN01', oidcRequestId: 'reqccccccccccccccccccccc',
+    });
+    mockedConsumeOidcAuthRequest.mockResolvedValueOnce({ nonce: 'expected-nonce' });
+    mockedVerifyIdToken.mockResolvedValueOnce({ sub: 'idp_user_01' } as never);
+    sqlMock.mockResolvedValueOnce([OIDC_CONNECTION_ROW]);
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: () => Promise.resolve({ id_token: 'mock.id.token' }),
+    }));
+    setSafeFetchForTests(async (url, init) => fetch(url, init));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sso/callback/oidc',
+      headers: { 'content-type': 'application/json' },
+      payload: { code: 'auth_code_xyz', state },
+    });
+
+    expect(res.statusCode).toBe(502);
+  });
+
+  // The binding must not be optional. If a state lacking a request id were
+  // treated as "skip the nonce and PKCE checks", a request field would decide
+  // whether a security control runs.
+  it('refuses a state that carries no request id at all', async () => {
+    const state = signSsoState({ org: 'dev_TEST', connectionId: 'sso_CONN01' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sso/callback/oidc',
+      headers: { 'content-type': 'application/json' },
+      payload: { code: 'auth_code_xyz', state },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mockedVerifyIdToken).not.toHaveBeenCalled();
+  });
+
+  it('refuses a legacy-callback state that carries no request id', async () => {
+    const state = signSsoState({ org: 'dev_TEST' });
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/sso/callback?code=auth_code_xyz&state=${encodeURIComponent(state)}`,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mockedVerifyIdToken).not.toHaveBeenCalled();
+  });
+
+  it('refuses a state whose stored request was already consumed', async () => {
+    const state = signSsoState({
+      org: 'dev_TEST', connectionId: 'sso_CONN01', oidcRequestId: 'reqddddddddddddddddddddd',
+    });
+    // Consume-on-read: a second callback for the same state finds nothing.
+    mockedConsumeOidcAuthRequest.mockResolvedValueOnce(null);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/sso/callback/oidc',
+      headers: { 'content-type': 'application/json' },
+      payload: { code: 'auth_code_xyz', state },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('expired or already been used');
   });
 });

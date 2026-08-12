@@ -12,6 +12,11 @@ import {
   mapGroupsToScopes,
   jitProvision,
   createSsoSession,
+  saveOidcAuthRequest,
+  consumeOidcAuthRequest,
+  supportsPkceS256,
+  type OidcAuthRequest,
+  type OidcDiscoveryDocument,
   type SamlConnectionOptions,
   type SsoConnectionRow,
 } from '../lib/sso.js';
@@ -69,6 +74,14 @@ export function verifySsoState(state: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+/** Constant-time comparison of an ID token's `nonce` claim against the expected value. */
+function nonceMatches(claim: unknown, expected: string): boolean {
+  if (typeof claim !== 'string' || claim.length === 0) return false;
+  const claimBuf = Buffer.from(claim);
+  const expectedBuf = Buffer.from(expected);
+  return claimBuf.length === expectedBuf.length && crypto.timingSafeEqual(claimBuf, expectedBuf);
 }
 
 function connectionToResponse(row: SsoConnectionRow) {
@@ -662,17 +675,12 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         }
       }
 
-      const state = signSsoState({
-        org,
-        connectionId: conn.id,
-        ...(requestedRedirectUri ? { redirectUri: requestedRedirectUri } : {}),
-      });
-
       if (conn.protocol === 'oidc') {
         // Use OIDC Discovery to get the authorization endpoint
+        let discovery: OidcDiscoveryDocument | null = null;
         let authorizeEndpoint: string;
         try {
-          const discovery = await discoverOidcProvider(conn.issuer_url!);
+          discovery = await discoverOidcProvider(conn.issuer_url!);
           authorizeEndpoint = discovery.authorization_endpoint;
         } catch {
           // Fallback to /authorize
@@ -683,15 +691,63 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
           return reply.status(400).send({ message: endpointError, code: 'BAD_REQUEST', requestId: request.id });
         }
 
+        // Bind this authorization request to the eventual callback. The nonce
+        // ties the returned ID token to this request; PKCE ties the returned
+        // authorization code to it. Both secrets live in Redis behind an opaque
+        // id — putting the PKCE verifier in the state would hand it to the
+        // front channel and defeat the point.
+        const oidcRequestId = crypto.randomBytes(24).toString('base64url');
+        const nonce = crypto.randomBytes(24).toString('base64url');
+
+        // Only offer PKCE when the provider advertises S256. Sending a verifier
+        // to a token endpoint that never recorded a challenge makes some strict
+        // providers reject the exchange outright.
+        const usePkce = supportsPkceS256(discovery);
+        const codeVerifier = usePkce ? crypto.randomBytes(32).toString('base64url') : undefined;
+
+        try {
+          await saveOidcAuthRequest(oidcRequestId, {
+            nonce,
+            ...(codeVerifier !== undefined ? { codeVerifier } : {}),
+          });
+        } catch {
+          return reply.status(503).send({
+            message: 'Unable to start SSO login; please retry',
+            code: 'SSO_ERROR',
+            requestId: request.id,
+          });
+        }
+
+        const state = signSsoState({
+          org,
+          connectionId: conn.id,
+          oidcRequestId,
+          ...(requestedRedirectUri ? { redirectUri: requestedRedirectUri } : {}),
+        });
+
         const authorizeUrl = new URL(authorizeEndpoint);
         authorizeUrl.searchParams.set('client_id', conn.client_id!);
         authorizeUrl.searchParams.set('redirect_uri', requestedRedirectUri ?? '');
         authorizeUrl.searchParams.set('response_type', 'code');
         authorizeUrl.searchParams.set('scope', 'openid email profile');
         authorizeUrl.searchParams.set('state', state);
+        authorizeUrl.searchParams.set('nonce', nonce);
+        if (codeVerifier !== undefined) {
+          authorizeUrl.searchParams.set(
+            'code_challenge',
+            crypto.createHash('sha256').update(codeVerifier).digest('base64url'),
+          );
+          authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+        }
 
         return reply.send({ authorizeUrl: authorizeUrl.toString(), protocol: 'oidc', connectionId: conn.id });
       }
+
+      const state = signSsoState({
+        org,
+        connectionId: conn.id,
+        ...(requestedRedirectUri ? { redirectUri: requestedRedirectUri } : {}),
+      });
 
       if (conn.protocol === 'saml') {
         try {
@@ -735,7 +791,30 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       if (!statePayload) {
         return reply.status(400).send({ message: 'Invalid state parameter', code: 'BAD_REQUEST', requestId: request.id });
       }
-      const stateData = statePayload as unknown as { org: string; connectionId: string; redirectUri?: string };
+      const stateData = statePayload as unknown as {
+        org: string; connectionId: string; redirectUri?: string; oidcRequestId?: string;
+      };
+
+      // Consume the nonce/PKCE material bound to this login at /sso/login.
+      // Consume-on-read also makes the state single-use.
+      //
+      // The binding is mandatory. Treating a state that carries no request id
+      // as "skip the nonce and PKCE checks" would make a request field decide
+      // whether a security control runs, and that shape long outlives the
+      // migration it was meant to smooth. States issued before this change
+      // expire within ten minutes, so the only cost of requiring it is that a
+      // login started in that window has to be retried.
+      const authRequest: OidcAuthRequest | null =
+        typeof stateData.oidcRequestId === 'string'
+          ? await consumeOidcAuthRequest(stateData.oidcRequestId)
+          : null;
+      if (!authRequest) {
+        return reply.status(400).send({
+          message: 'SSO login request has expired or already been used; start the login again',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
       // OIDC callback handlers commonly forward only `code` and `state` from
       // the IdP, so the body's redirect_uri may be absent. The signed state
       // already integrity-protects the value supplied at /sso/login, so fall
@@ -788,6 +867,9 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
           redirect_uri: effectiveRedirectUri ?? '',
           client_id: conn.client_id!,
           client_secret: decryptSsoSecret(conn.client_secret, 'sso_connections.client_secret')!,
+          ...(authRequest?.codeVerifier !== undefined
+            ? { code_verifier: authRequest.codeVerifier }
+            : {}),
         }).toString(),
       }, {
         allowedProtocols: ['https:', 'http:'],
@@ -808,6 +890,17 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         claims = await verifyIdToken(idToken, conn.issuer_url!, conn.client_id!) as unknown as Record<string, unknown>;
       } catch {
         return reply.status(502).send({ message: 'ID token verification failed', code: 'SSO_ERROR' });
+      }
+
+      // OIDC Core 3.1.3.7: when the request carried a nonce the ID token MUST
+      // echo it. Comparing it here is what stops a token minted for a different
+      // login being replayed into this one.
+      if (!nonceMatches(claims['nonce'], authRequest.nonce)) {
+        return reply.status(502).send({
+          message: 'ID token nonce mismatch',
+          code: 'SSO_ERROR',
+          requestId: request.id,
+        });
       }
 
       // Extract groups from the configured attribute
@@ -1159,6 +1252,22 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       }
       org = statePayload['org'] as string;
 
+      // This route shares /sso/login's state, so it carries the same nonce and
+      // PKCE binding and enforces it identically — anything weaker here would
+      // stand as a downgrade path around the primary callback's checks.
+      const legacyRequestId = statePayload['oidcRequestId'];
+      const authRequest: OidcAuthRequest | null =
+        typeof legacyRequestId === 'string'
+          ? await consumeOidcAuthRequest(legacyRequestId)
+          : null;
+      if (!authRequest) {
+        return reply.status(400).send({
+          message: 'SSO login request has expired or already been used; start the login again',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+
       const sql = getSql();
       const rows = await sql<Array<Record<string, unknown>>>`
         SELECT issuer_url, client_id, client_secret, redirect_uri
@@ -1185,6 +1294,9 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
           redirect_uri: String(cfg['redirect_uri']),
           client_id: String(cfg['client_id']),
           client_secret: decryptSsoSecret(String(cfg['client_secret']), 'sso_configs.client_secret')!,
+          ...(authRequest?.codeVerifier !== undefined
+            ? { code_verifier: authRequest.codeVerifier }
+            : {}),
         }).toString(),
       }, {
         allowedProtocols: ['https:', 'http:'],
@@ -1204,6 +1316,14 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         claims = await verifyIdToken(idToken, issuerUrl, String(cfg['client_id'])) as unknown as Record<string, unknown>;
       } catch {
         return reply.status(502).send({ message: 'ID token verification failed', code: 'SSO_ERROR' });
+      }
+
+      if (!nonceMatches(claims['nonce'], authRequest.nonce)) {
+        return reply.status(502).send({
+          message: 'ID token nonce mismatch',
+          code: 'SSO_ERROR',
+          requestId: request.id,
+        });
       }
 
       return reply.send({
