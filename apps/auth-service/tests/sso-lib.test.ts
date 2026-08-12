@@ -4,6 +4,9 @@ import {
   mapGroupsToScopes,
   clearDiscoveryCache,
   clearJwksCache,
+  saveOidcAuthRequest,
+  consumeOidcAuthRequest,
+  supportsPkceS256,
 } from '../src/lib/sso.js';
 import {
   validateOutboundUrl,
@@ -324,5 +327,89 @@ describe('jitProvision', () => {
     const id = await jitProvision('dev_TEST', { sub: 'idp_user_new', email: 'new@corp.com' });
     expect(id).toMatch(/^scimuser_/);
     expect(sqlMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ── OIDC authorization-request store (nonce + PKCE) ────────────────────────
+
+describe('OIDC authorization-request store', () => {
+  beforeEach(() => {
+    mockRedis.set.mockReset().mockResolvedValue('OK');
+    mockRedis.getdel.mockReset().mockResolvedValue(null);
+  });
+
+  it('persists with a TTL and refuses to clobber an existing id', async () => {
+    await saveOidcAuthRequest('a'.repeat(24), { nonce: 'n1', codeVerifier: 'v1' });
+
+    const [key, value, pxFlag, ttl, nxFlag] = mockRedis.set.mock.calls[0]!;
+    expect(key).toBe(`sso:oidc:req:${'a'.repeat(24)}`);
+    expect(JSON.parse(String(value))).toEqual({ nonce: 'n1', codeVerifier: 'v1' });
+    expect(pxFlag).toBe('PX');
+    expect(ttl).toBe(10 * 60_000);
+    // NX: a second login must never overwrite a pending one.
+    expect(nxFlag).toBe('NX');
+  });
+
+  it('throws when the entry could not be stored', async () => {
+    mockRedis.set.mockResolvedValueOnce(null);
+
+    await expect(saveOidcAuthRequest('b'.repeat(24), { nonce: 'n1' })).rejects.toThrow();
+  });
+
+  it('rejects an unsafe request id rather than building a key from it', async () => {
+    await expect(saveOidcAuthRequest('short', { nonce: 'n1' })).rejects.toThrow();
+    await expect(saveOidcAuthRequest('../../etc/passwd', { nonce: 'n1' })).rejects.toThrow();
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it('consumes the entry so a replayed callback finds nothing', async () => {
+    mockRedis.getdel.mockResolvedValueOnce(JSON.stringify({ nonce: 'n1', codeVerifier: 'v1' }));
+
+    const first = await consumeOidcAuthRequest('c'.repeat(24));
+    expect(first).toEqual({ nonce: 'n1', codeVerifier: 'v1' });
+    // GETDEL, not GET — the read is what removes it.
+    expect(mockRedis.getdel).toHaveBeenCalledWith(`sso:oidc:req:${'c'.repeat(24)}`);
+
+    const second = await consumeOidcAuthRequest('c'.repeat(24));
+    expect(second).toBeNull();
+  });
+
+  it('returns null for a missing, malformed, or nonce-less entry', async () => {
+    mockRedis.getdel.mockResolvedValueOnce(null);
+    expect(await consumeOidcAuthRequest('d'.repeat(24))).toBeNull();
+
+    mockRedis.getdel.mockResolvedValueOnce('not json');
+    expect(await consumeOidcAuthRequest('d'.repeat(24))).toBeNull();
+
+    mockRedis.getdel.mockResolvedValueOnce(JSON.stringify({ codeVerifier: 'v1' }));
+    expect(await consumeOidcAuthRequest('d'.repeat(24))).toBeNull();
+  });
+
+  it('does not query redis for an unsafe request id', async () => {
+    expect(await consumeOidcAuthRequest('../../etc/passwd')).toBeNull();
+    expect(mockRedis.getdel).not.toHaveBeenCalled();
+  });
+});
+
+describe('supportsPkceS256', () => {
+  const base = {
+    issuer: 'https://idp.example.com',
+    authorization_endpoint: 'https://idp.example.com/authorize',
+    token_endpoint: 'https://idp.example.com/token',
+    jwks_uri: 'https://idp.example.com/jwks',
+  };
+
+  it('is true only when S256 is advertised', () => {
+    expect(supportsPkceS256({ ...base, code_challenge_methods_supported: ['S256'] })).toBe(true);
+    expect(supportsPkceS256({ ...base, code_challenge_methods_supported: ['S256', 'plain'] })).toBe(true);
+  });
+
+  it('is false when the metadata is absent, empty, or plain-only', () => {
+    // Discovery failed entirely — must not assume support.
+    expect(supportsPkceS256(null)).toBe(false);
+    expect(supportsPkceS256(base)).toBe(false);
+    expect(supportsPkceS256({ ...base, code_challenge_methods_supported: [] })).toBe(false);
+    // `plain` offers no binding over a front channel; treat it as unsupported.
+    expect(supportsPkceS256({ ...base, code_challenge_methods_supported: ['plain'] })).toBe(false);
   });
 });
