@@ -71,3 +71,63 @@ describe('Commerce audit append-only DDL (verified by reading the migration file
     expect(sql).toMatch(/GRANT INSERT, SELECT ON commerce_audit_events/);
   });
 });
+
+// The cursor's timestamp half is interpolated into a `::timestamptz` cast.
+// Buffer.from(x, 'base64url') never throws — it drops undecodable characters
+// and returns the remainder — so the try/catch that used to wrap the decode
+// caught nothing, and a cursor decoding to "notadate|xyz" reached Postgres as
+// `'notadate'::timestamptz` and surfaced as an unhandled 500.
+describe('GET /v1/commerce/audit/events — cursor validation', () => {
+  function cursorFor(value: string): string {
+    return Buffer.from(value, 'utf8').toString('base64url');
+  }
+
+  async function get(cursor: string) {
+    return app.inject({
+      method: 'GET',
+      url: `/v1/commerce/audit/events?cursor=${encodeURIComponent(cursor)}`,
+      headers: authHeader(),
+    });
+  }
+
+  it.each([
+    ['non-date timestamp half', cursorFor('notadate|caud_1')],
+    ['empty timestamp half', cursorFor('|caud_1')],
+    ['missing separator', cursorFor('2026-01-01T00:00:00.000Z')],
+    ['empty id half', cursorFor('2026-01-01T00:00:00.000Z|')],
+    ['loose date accepted by Date.parse', cursorFor('2026|caud_1')],
+    ['sql fragment in the timestamp half', cursorFor("now()')--|caud_1")],
+    ['undecodable base64url', '!!!not-base64!!!'],
+  ])('rejects %s with 422 rather than a 500', async (_label, cursor) => {
+    seedCommerceContext();
+
+    const res = await get(cursor);
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe('validation_failed');
+  });
+
+  it('accepts a cursor it previously emitted', async () => {
+    seedCommerceContext();
+    const occurredAt = new Date('2026-01-01T00:00:00.000Z');
+    sqlMock.mockResolvedValueOnce([
+      { id: 'caud_a', occurred_at: occurredAt, metadata: {} },
+      { id: 'caud_b', occurred_at: occurredAt, metadata: {} },
+      { id: 'caud_c', occurred_at: occurredAt, metadata: {} },
+    ]);
+
+    const first = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/audit/events?limit=2',
+      headers: authHeader(),
+    });
+    const emitted = first.json<{ next_cursor: string }>().next_cursor;
+    expect(emitted).toBeTruthy();
+
+    seedCommerceContext();
+    sqlMock.mockResolvedValueOnce([]);
+    const second = await get(emitted);
+
+    expect(second.statusCode).toBe(200);
+  });
+});

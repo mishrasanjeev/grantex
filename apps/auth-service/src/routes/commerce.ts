@@ -358,6 +358,42 @@ function asInt(v: unknown): number | null {
   return null;
 }
 
+export interface ListCursor {
+  timestamp: string;
+  id: string;
+}
+
+/**
+ * Decode an opaque keyset cursor of the form base64url("<iso-timestamp>|<id>").
+ * Returns null when the value is anything other than that.
+ *
+ * The timestamp half is interpolated into a `::timestamptz` cast, so it has to
+ * be validated here. `Buffer.from(value, 'base64url')` never throws — it drops
+ * characters it cannot decode and returns whatever is left — so a try/catch
+ * around the decode catches nothing, and a cursor decoding to "notadate|xyz"
+ * reached Postgres as `'notadate'::timestamptz` and came back as a 500.
+ */
+function parseListCursor(raw: string): ListCursor | null {
+  if (raw.length === 0 || raw.length > 512) return null;
+
+  const decoded = Buffer.from(raw, 'base64url').toString('utf8');
+  const separator = decoded.indexOf('|');
+  if (separator <= 0) return null;
+
+  const timestamp = decoded.slice(0, separator);
+  const id = decoded.slice(separator + 1);
+  if (id.length === 0 || id.length > 128) return null;
+
+  // Must round-trip as a real instant; Date.parse accepts far too much on its
+  // own (e.g. "2026" or "Mar 5"), so require the ISO form we emit.
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/.test(timestamp)) {
+    return null;
+  }
+  if (Number.isNaN(Date.parse(timestamp))) return null;
+
+  return { timestamp, id };
+}
+
 function validatePatchKeys(
   body: Record<string, unknown>,
   allowed: Set<string>,
@@ -3125,8 +3161,14 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     if (status !== null && !AGENT_STATUSES.has(status)) {
       fieldErrors['status'] = 'must be one of: active, disabled';
     }
+    let cursor: ListCursor | null = null;
     if (request.query.cursor !== undefined && typeof request.query.cursor !== 'string') {
       fieldErrors['cursor'] = 'must be a string';
+    } else if (request.query.cursor) {
+      cursor = parseListCursor(request.query.cursor);
+      if (cursor === null) {
+        fieldErrors['cursor'] = 'must be an opaque cursor returned by a previous page';
+      }
     }
 
     let merchantId = request.query.merchant_id ?? null;
@@ -3146,15 +3188,8 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
         { details: { fields: fieldErrors }, retryable: false });
     }
 
-    let cursorCreated: string | null = null;
-    let cursorId: string | null = null;
-    if (request.query.cursor) {
-      try {
-        const decoded = Buffer.from(request.query.cursor, 'base64url').toString('utf8');
-        const [created, id] = decoded.split('|');
-        if (created && id) { cursorCreated = created; cursorId = id; }
-      } catch { /* ignore malformed cursor */ }
-    }
+    const cursorCreated: string | null = cursor?.timestamp ?? null;
+    const cursorId: string | null = cursor?.id ?? null;
 
     const sql = getSql();
     const tenantId = request.commerceTenantId;
@@ -4138,15 +4173,18 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
     const sql = getSql();
     const tenantId = request.commerceTenantId;
     const limit = Math.min(Math.max(asInt(request.query.limit) ?? 25, 1), 100);
-    let cursorOccurred: string | null = null;
-    let cursorId: string | null = null;
+    let cursor: ListCursor | null = null;
     if (request.query.cursor) {
-      try {
-        const decoded = Buffer.from(request.query.cursor, 'base64url').toString('utf8');
-        const [occ, id] = decoded.split('|');
-        if (occ && id) { cursorOccurred = occ; cursorId = id; }
-      } catch { /* ignore malformed cursor */ }
+      cursor = parseListCursor(request.query.cursor);
+      if (cursor === null) {
+        throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+          details: { fields: { cursor: 'must be an opaque cursor returned by a previous page' } },
+          retryable: false,
+        });
+      }
     }
+    const cursorOccurred: string | null = cursor?.timestamp ?? null;
+    const cursorId: string | null = cursor?.id ?? null;
     const merchantId = isString(request.query.merchant_id) ? request.query.merchant_id : null;
     const agentId = isString(request.query.agent_id) ? request.query.agent_id : null;
     const eventType = isString(request.query.event_type) ? request.query.event_type : null;
