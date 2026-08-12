@@ -135,6 +135,18 @@ const jwksCache = new Map<string, { keySet: jose.JSONWebKeySet; fetchedAt: numbe
 const JWKS_TTL_MS = 3600_000;
 
 /**
+ * Signature algorithms accepted on an IdP ID token. Every asymmetric family an
+ * OIDC provider realistically uses is here; HMAC variants and `none` are not,
+ * because a JWKS only ever carries public keys.
+ */
+const ID_TOKEN_ALGORITHMS = [
+  'RS256', 'RS384', 'RS512',
+  'PS256', 'PS384', 'PS512',
+  'ES256', 'ES384', 'ES512',
+  'EdDSA',
+];
+
+/**
  * Verify an OIDC ID token's signature using the IdP's JWKS, and return the
  * payload claims. Rejects if the token is expired, malformed, or the
  * signature doesn't match.
@@ -168,6 +180,13 @@ export async function verifyIdToken(
   const { payload } = await jose.jwtVerify(idToken, JWKS, {
     issuer: discovery.issuer,
     audience: clientId,
+    // Restrict to asymmetric signatures. Without an allowlist the accepted
+    // algorithm is whatever the token header asks for, which is the input an
+    // algorithm-confusion attack controls. jose will not hand an RSA public key
+    // to HMAC today, so this is defence in depth rather than a live hole — but
+    // it makes the guarantee explicit and matches the RS256 pin the SDK's
+    // verifyGrantToken already applies.
+    algorithms: ID_TOKEN_ALGORITHMS,
   });
 
   return payload as unknown as IdTokenClaims;
