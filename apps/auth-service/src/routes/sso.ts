@@ -798,20 +798,22 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       // Consume the nonce/PKCE material bound to this login at /sso/login.
       // Consume-on-read also makes the state single-use.
       //
-      // A state without an oidcRequestId predates this binding. Those are still
-      // HMAC-signed by us and expire within ten minutes, so honouring them is
-      // not a downgrade an attacker can force — it only avoids failing logins
-      // that were already in flight across a deploy.
-      let authRequest: OidcAuthRequest | null = null;
-      if (stateData.oidcRequestId !== undefined) {
-        authRequest = await consumeOidcAuthRequest(stateData.oidcRequestId);
-        if (!authRequest) {
-          return reply.status(400).send({
-            message: 'SSO login request has expired or already been used',
-            code: 'BAD_REQUEST',
-            requestId: request.id,
-          });
-        }
+      // The binding is mandatory. Treating a state that carries no request id
+      // as "skip the nonce and PKCE checks" would make a request field decide
+      // whether a security control runs, and that shape long outlives the
+      // migration it was meant to smooth. States issued before this change
+      // expire within ten minutes, so the only cost of requiring it is that a
+      // login started in that window has to be retried.
+      const authRequest: OidcAuthRequest | null =
+        typeof stateData.oidcRequestId === 'string'
+          ? await consumeOidcAuthRequest(stateData.oidcRequestId)
+          : null;
+      if (!authRequest) {
+        return reply.status(400).send({
+          message: 'SSO login request has expired or already been used; start the login again',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
       }
       // OIDC callback handlers commonly forward only `code` and `state` from
       // the IdP, so the body's redirect_uri may be absent. The signed state
@@ -893,7 +895,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       // OIDC Core 3.1.3.7: when the request carried a nonce the ID token MUST
       // echo it. Comparing it here is what stops a token minted for a different
       // login being replayed into this one.
-      if (authRequest && !nonceMatches(claims['nonce'], authRequest.nonce)) {
+      if (!nonceMatches(claims['nonce'], authRequest.nonce)) {
         return reply.status(502).send({
           message: 'ID token nonce mismatch',
           code: 'SSO_ERROR',
@@ -1251,19 +1253,19 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       org = statePayload['org'] as string;
 
       // This route shares /sso/login's state, so it carries the same nonce and
-      // PKCE binding and must honour it — otherwise it would stand as a
-      // downgrade path around the checks the primary callback performs.
+      // PKCE binding and enforces it identically — anything weaker here would
+      // stand as a downgrade path around the primary callback's checks.
       const legacyRequestId = statePayload['oidcRequestId'];
-      let authRequest: OidcAuthRequest | null = null;
-      if (typeof legacyRequestId === 'string') {
-        authRequest = await consumeOidcAuthRequest(legacyRequestId);
-        if (!authRequest) {
-          return reply.status(400).send({
-            message: 'SSO login request has expired or already been used',
-            code: 'BAD_REQUEST',
-            requestId: request.id,
-          });
-        }
+      const authRequest: OidcAuthRequest | null =
+        typeof legacyRequestId === 'string'
+          ? await consumeOidcAuthRequest(legacyRequestId)
+          : null;
+      if (!authRequest) {
+        return reply.status(400).send({
+          message: 'SSO login request has expired or already been used; start the login again',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
       }
 
       const sql = getSql();
@@ -1316,7 +1318,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(502).send({ message: 'ID token verification failed', code: 'SSO_ERROR' });
       }
 
-      if (authRequest && !nonceMatches(claims['nonce'], authRequest.nonce)) {
+      if (!nonceMatches(claims['nonce'], authRequest.nonce)) {
         return reply.status(502).send({
           message: 'ID token nonce mismatch',
           code: 'SSO_ERROR',
