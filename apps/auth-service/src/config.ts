@@ -189,6 +189,11 @@ export const config = {
     2_147_483_647,
   ),
   commerceReconciliationLimit: integerSetting('COMMERCE_RECONCILIATION_LIMIT', '50', 1, 1_000),
+  // SPEC §9: implementations MUST enforce a developer-configurable delegation
+  // depth limit; the RECOMMENDED default is 3 and the hard cap is 10. The `max`
+  // argument is what enforces the hard cap — a larger value is rejected at boot
+  // rather than silently honoured.
+  maxDelegationDepth: integerSetting('MAX_DELEGATION_DEPTH', '3', 1, 10),
 } as const;
 
 if (!config.rsaPrivateKey && !config.autoGenerateKeys) {

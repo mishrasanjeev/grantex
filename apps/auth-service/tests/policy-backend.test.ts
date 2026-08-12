@@ -263,3 +263,66 @@ describe('PolicyDecision interface', () => {
     expect(decision.policyId).toBe('pol_1');
   });
 });
+
+// The decision must name the policy that actually matched. Re-deriving the id
+// by taking the first row attributed every decision to the highest-priority
+// policy, which made "why was this denied?" unanswerable from the audit trail.
+describe('BuiltinBackend — policy attribution', () => {
+  const AGENT_SPECIFIC = {
+    id: 'pol_specific', effect: 'deny' as const, priority: 100,
+    agent_id: 'ag_OTHER', principal_id: null, scopes: null,
+    time_of_day_start: null, time_of_day_end: null,
+  };
+  const CATCH_ALL = {
+    id: 'pol_catchall', effect: 'allow' as const, priority: 10,
+    agent_id: null, principal_id: null, scopes: null,
+    time_of_day_start: null, time_of_day_end: null,
+  };
+
+  it('reports the matched policy, not the highest-priority one', async () => {
+    const { BuiltinBackend } = await import('../src/lib/backends/builtin.js');
+    // Highest-priority policy is scoped to a different agent, so it cannot
+    // match; the lower-priority catch-all is what decides.
+    sqlMock.mockResolvedValueOnce([AGENT_SPECIFIC, CATCH_ALL]);
+
+    const decision = await new BuiltinBackend().evaluate({
+      agentId: 'ag_1',
+      principalId: 'user_1',
+      scopes: ['read'],
+      developerId: 'dev_TEST',
+    });
+
+    expect(decision.effect).toBe('allow');
+    expect(decision.policyId).toBe('pol_catchall');
+  });
+
+  it('reports the high-priority policy when it is the one that matches', async () => {
+    const { BuiltinBackend } = await import('../src/lib/backends/builtin.js');
+    sqlMock.mockResolvedValueOnce([{ ...AGENT_SPECIFIC, agent_id: 'ag_1' }, CATCH_ALL]);
+
+    const decision = await new BuiltinBackend().evaluate({
+      agentId: 'ag_1',
+      principalId: 'user_1',
+      scopes: ['read'],
+      developerId: 'dev_TEST',
+    });
+
+    expect(decision.effect).toBe('deny');
+    expect(decision.policyId).toBe('pol_specific');
+  });
+
+  it('returns no policyId when nothing matches', async () => {
+    const { BuiltinBackend } = await import('../src/lib/backends/builtin.js');
+    sqlMock.mockResolvedValueOnce([AGENT_SPECIFIC]);
+
+    const decision = await new BuiltinBackend().evaluate({
+      agentId: 'ag_1',
+      principalId: 'user_1',
+      scopes: ['read'],
+      developerId: 'dev_TEST',
+    });
+
+    expect(decision.effect).toBeNull();
+    expect(decision.policyId).toBeUndefined();
+  });
+});

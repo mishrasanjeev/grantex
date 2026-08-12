@@ -54,19 +54,57 @@ describe('evaluatePolicies', () => {
     expect(evaluatePolicies([policy], CTX)).toBeNull();
   });
 
-  it('skips when requested scopes are not a subset of policy scopes', () => {
+  // An allow policy may only match when it covers everything being requested;
+  // otherwise it would grant scopes it never listed.
+  it('skips an allow policy when requested scopes are not a subset of its scopes', () => {
     // Policy only covers 'read'; request includes 'write' too → no match
-    const policy: PolicyRow = { ...BASE, scopes: ['read'] };
+    const policy: PolicyRow = { ...BASE, effect: 'allow', scopes: ['read'] };
     expect(evaluatePolicies([policy], CTX)).toBeNull();
   });
 
-  it('matches when requested scopes are a subset of policy scopes', () => {
-    const policy: PolicyRow = { ...BASE, scopes: ['read', 'write', 'admin'] };
+  it('matches an allow policy when requested scopes are a subset of its scopes', () => {
+    const policy: PolicyRow = { ...BASE, effect: 'allow', scopes: ['read', 'write', 'admin'] };
+    expect(evaluatePolicies([policy], CTX)).toBe('allow');
+  });
+
+  it('matches an allow policy when requested scopes exactly equal its scopes', () => {
+    const policy: PolicyRow = { ...BASE, effect: 'allow', scopes: ['read', 'write'] };
+    expect(evaluatePolicies([policy], CTX)).toBe('allow');
+  });
+
+  // A deny policy matches on overlap. Requiring containment let a caller slip
+  // past a deny rule by requesting an unrelated scope alongside the blocked one.
+  it('matches a deny policy when only one requested scope is denied', () => {
+    const policy: PolicyRow = { ...BASE, effect: 'deny', scopes: ['read'] };
     expect(evaluatePolicies([policy], CTX)).toBe('deny');
   });
 
-  it('matches when requested scopes exactly equal policy scopes', () => {
-    const policy: PolicyRow = { ...BASE, scopes: ['read', 'write'] };
+  it('does not let an extra unrelated scope bypass a deny policy', () => {
+    const policy: PolicyRow = { ...BASE, effect: 'deny', scopes: ['payments:transfer'] };
+
+    expect(
+      evaluatePolicies([policy], { ...CTX, scopes: ['payments:transfer'] }),
+    ).toBe('deny');
+    expect(
+      evaluatePolicies([policy], { ...CTX, scopes: ['calendar:read', 'payments:transfer'] }),
+    ).toBe('deny');
+    expect(
+      evaluatePolicies([policy], {
+        ...CTX,
+        scopes: ['calendar:read', 'files:read', 'payments:transfer', 'profile:read'],
+      }),
+    ).toBe('deny');
+  });
+
+  it('skips a deny policy when no requested scope is denied', () => {
+    const policy: PolicyRow = { ...BASE, effect: 'deny', scopes: ['payments:transfer'] };
+    expect(
+      evaluatePolicies([policy], { ...CTX, scopes: ['calendar:read', 'files:read'] }),
+    ).toBeNull();
+  });
+
+  it('matches a deny policy when requested scopes exactly equal its scopes', () => {
+    const policy: PolicyRow = { ...BASE, effect: 'deny', scopes: ['read', 'write'] };
     expect(evaluatePolicies([policy], CTX)).toBe('deny');
   });
 

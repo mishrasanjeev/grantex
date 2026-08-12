@@ -437,3 +437,85 @@ describe('POST /v1/grants/delegate', () => {
     expect(body.verifiableCredential).toBeUndefined();
   });
 });
+
+// SPEC §9 requires a developer-configurable delegation depth limit (default 3,
+// hard cap 10). Depth was previously computed and signed but never compared
+// against anything, so chains could grow without bound.
+describe('POST /v1/grants/delegate — delegation depth limit', () => {
+  async function tokenAtDepth(depth: number): Promise<string> {
+    return signGrantToken({
+      sub: 'user_123',
+      agt: TEST_AGENT.did,
+      dev: TEST_DEVELOPER.id,
+      scp: ['read', 'write'],
+      jti: `tok_DEPTH${depth}`,
+      grnt: `grnt_DEPTH${depth}`,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      delegationDepth: depth,
+    });
+  }
+
+  function seedSuccessfulDelegation(): void {
+    seedAuth();
+    mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);       // parent token check
+    sqlMock.mockResolvedValueOnce([SUB_AGENT]);               // sub-agent lookup
+    sqlMock.mockResolvedValueOnce([]);                        // advisory lock
+    sqlMock.mockResolvedValueOnce([{ id: 'grnt_DEPTH' }]);    // parent re-check
+    sqlMock.mockResolvedValueOnce([]);                        // INSERT grants
+    sqlMock.mockResolvedValueOnce([]);                        // INSERT grant_tokens
+    sqlMock.mockResolvedValueOnce([]);                        // INSERT refresh_tokens
+  }
+
+  async function delegateFrom(token: string) {
+    return app.inject({
+      method: 'POST',
+      url: '/v1/grants/delegate',
+      headers: authHeader(),
+      payload: { parentGrantToken: token, subAgentId: SUB_AGENT.id, scopes: ['read'] },
+    });
+  }
+
+  it('allows delegation up to the configured depth', async () => {
+    // Default limit is 3, so a depth-2 parent may still produce a depth-3 child.
+    seedSuccessfulDelegation();
+    const res = await delegateFrom(await tokenAtDepth(2));
+
+    expect(res.statusCode).toBe(201);
+    const claims = decodeJwt(res.json<{ grantToken: string }>().grantToken);
+    expect(claims['delegationDepth']).toBe(3);
+  });
+
+  it('refuses to delegate past the configured depth', async () => {
+    seedAuth();
+    mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
+
+    const res = await delegateFrom(await tokenAtDepth(3));
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('DELEGATION_DEPTH_EXCEEDED');
+  });
+
+  it('refuses a parent already beyond the limit', async () => {
+    seedAuth();
+    mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
+
+    const res = await delegateFrom(await tokenAtDepth(9));
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('DELEGATION_DEPTH_EXCEEDED');
+  });
+
+  it('rejects before creating any grant rows', async () => {
+    seedAuth();
+    mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
+    sqlMock.begin.mockClear();
+
+    await delegateFrom(await tokenAtDepth(5));
+
+    expect(sqlMock.begin).not.toHaveBeenCalled();
+  });
+});

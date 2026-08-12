@@ -26,6 +26,28 @@ export interface PolicyContext {
 }
 
 /**
+ * Return the first matching policy, or `null` if none match.
+ *
+ * Policies must be provided in priority order (highest first).
+ *
+ * Callers that report *which* policy decided a request must use this rather
+ * than re-deriving it — picking the first row in the list instead attributes
+ * every decision to the highest-priority policy whether or not it matched.
+ */
+export function findMatchingPolicy(
+  policies: PolicyRow[],
+  ctx: PolicyContext,
+): PolicyRow | null {
+  const time = ctx.nowUtcHHMM ?? utcHHMM(new Date());
+
+  for (const policy of policies) {
+    if (matchesPolicy(policy, ctx, time)) return policy;
+  }
+
+  return null;
+}
+
+/**
  * Return the effect of the first matching policy, or `null` if none match.
  *
  * Policies must be provided in priority order (highest first).
@@ -34,14 +56,7 @@ export function evaluatePolicies(
   policies: PolicyRow[],
   ctx: PolicyContext,
 ): 'allow' | 'deny' | null {
-  const time = ctx.nowUtcHHMM ?? utcHHMM(new Date());
-
-  for (const policy of policies) {
-    if (!matchesPolicy(policy, ctx, time)) continue;
-    return policy.effect;
-  }
-
-  return null;
+  return findMatchingPolicy(policies, ctx)?.effect ?? null;
 }
 
 function matchesPolicy(
@@ -56,10 +71,20 @@ function matchesPolicy(
   if (policy.principal_id !== null && policy.principal_id !== ctx.principalId)
     return false;
 
-  // Scope condition: all requested scopes must be covered by the policy's scopes
+  // Scope condition. The two effects need opposite tests:
+  //
+  //   allow — every requested scope must be covered, otherwise the policy
+  //           would grant scopes it never listed.
+  //   deny  — any overlap is enough. Requiring containment here let a caller
+  //           slip past a deny rule by tacking an unrelated scope onto the
+  //           request: a deny on ['payments:transfer'] stopped matching as
+  //           soon as 'calendar:read' was requested alongside it.
   if (policy.scopes !== null) {
-    const allowed = new Set(policy.scopes);
-    if (!ctx.scopes.every((s) => allowed.has(s))) return false;
+    const policyScopes = new Set(policy.scopes);
+    const matches = policy.effect === 'deny'
+      ? ctx.scopes.some((s) => policyScopes.has(s))
+      : ctx.scopes.every((s) => policyScopes.has(s));
+    if (!matches) return false;
   }
 
   // Time-of-day condition
