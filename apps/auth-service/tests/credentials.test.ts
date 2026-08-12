@@ -496,23 +496,21 @@ describe('VC revocation cascade', () => {
 
     // SELECT active VCs
     sqlMock.mockResolvedValueOnce([
-      { id: 'vc_CASCADE1', status_list_idx: 0 },
-      { id: 'vc_CASCADE2', status_list_idx: 1 },
+      { id: 'vc_CASCADE1', status_list_id: 'vcsl_CASCADE', status_list_idx: 0 },
+      { id: 'vc_CASCADE2', status_list_id: 'vcsl_CASCADE', status_list_idx: 1 },
     ]);
-    // UPDATE VCs to revoked
-    sqlMock.mockResolvedValueOnce([]);
-    // SELECT status list
+    // setRevocationBits: SELECT ... FOR UPDATE
     const encodedList = createEmptyEncodedList();
-    sqlMock.mockResolvedValueOnce([{
-      id: 'vcsl_CASCADE',
-      encoded_list: encodedList,
-    }]);
-    // UPDATE status list
+    sqlMock.mockResolvedValueOnce([{ encoded_list: encodedList }]);
+    // setRevocationBits: UPDATE status list
+    sqlMock.mockResolvedValueOnce([]);
+    // UPDATE VCs to revoked
     sqlMock.mockResolvedValueOnce([]);
 
     await revokeVCsByGrantIds(['grnt_CASCADE1'], TEST_DEVELOPER.id);
 
-    // Verify SQL was called the right number of times
+    // Both credentials sit on one list, so a single locked read-modify-write
+    // covers them: SELECT VCs, SELECT list FOR UPDATE, UPDATE list, UPDATE VCs.
     expect(sqlMock).toHaveBeenCalledTimes(4);
   });
 

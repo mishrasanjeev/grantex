@@ -24,6 +24,17 @@ interface DebitBody {
   metadata?: Record<string, unknown>;
 }
 
+const MAX_PAGE_SIZE = 200;
+
+/** Returns null for anything that is not a whole number >= 1. */
+function parsePositiveInt(value: string | undefined, fallback: number): number | null {
+  if (value === undefined || value === '') return fallback;
+  if (!/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return null;
+  return parsed;
+}
+
 export async function budgetRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/budget/allocations — list all budget allocations for the developer
   app.get('/v1/budget/allocations', async (request, reply) => {
@@ -141,8 +152,21 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { grantId: string }; Querystring: { page?: string; pageSize?: string } }>('/v1/budget/transactions/:grantId', async (request, reply) => {
     const sql = getSql();
     const developerId = request.developer.id;
-    const page = parseInt((request.query as Record<string, string>)['page'] ?? '1', 10);
-    const pageSize = parseInt((request.query as Record<string, string>)['pageSize'] ?? '50', 10);
+    const query = request.query as Record<string, string | undefined>;
+
+    // These values reach LIMIT/OFFSET directly. Unvalidated, `page=0` produces a
+    // negative OFFSET and `page=abc` a NaN one — both are hard Postgres errors
+    // surfacing as a 500 — and an unbounded pageSize is a cheap way to ask for
+    // the entire table in one request.
+    const page = parsePositiveInt(query['page'], 1);
+    const pageSize = parsePositiveInt(query['pageSize'], 50);
+    if (page === null || pageSize === null || pageSize > MAX_PAGE_SIZE) {
+      return reply.status(400).send({
+        message: `page must be an integer >= 1 and pageSize an integer between 1 and ${MAX_PAGE_SIZE}`,
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
 
     const result = await listBudgetTransactions(sql, request.params.grantId, developerId, page, pageSize);
     return reply.send(result);

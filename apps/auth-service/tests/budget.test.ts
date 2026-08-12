@@ -520,4 +520,40 @@ describe('GET /v1/budget/transactions/:grantId', () => {
 
     expect(res.statusCode).toBe(200);
   });
+
+  // page and pageSize land in OFFSET and LIMIT. Left unvalidated these reach
+  // Postgres as a negative OFFSET or a NaN LIMIT and come back as a 500.
+  it.each([
+    ['page=0', 'page=0'],
+    ['negative page', 'page=-1'],
+    ['non-numeric page', 'page=abc'],
+    ['pageSize=0', 'pageSize=0'],
+    ['non-numeric pageSize', 'pageSize=abc'],
+    ['pageSize above the cap', 'pageSize=100000'],
+  ])('rejects %s', async (_label, query) => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/v1/budget/transactions/grnt_1?${query}`,
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('BAD_REQUEST');
+  });
+
+  it('accepts the maximum permitted page size', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/budget/transactions/grnt_1?pageSize=200',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+  });
 });

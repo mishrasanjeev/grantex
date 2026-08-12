@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchRoute } from '../src/matcher.js';
+import { matchRoute, isSafeRequestPath } from '../src/matcher.js';
 import type { RouteDefinition } from '../src/types.js';
 
 const ROUTES: RouteDefinition[] = [
@@ -86,5 +86,55 @@ describe('matchRoute', () => {
   it('does not match GET to payments (only POST configured)', () => {
     const result = matchRoute('GET', '/payments/intents', ROUTES);
     expect(result).toBeNull();
+  });
+});
+
+describe('isSafeRequestPath', () => {
+  // The gateway authorizes the literal request path but forwards it verbatim,
+  // and the upstream resolves `.`/`..` itself. A path whose two readings differ
+  // lets a `/calendar/**` token reach `/payments/transfer`. Node's HTTP server
+  // hands over the raw request-target, so this reaches the handler unnormalized.
+  it('rejects a parent-directory segment', () => {
+    expect(isSafeRequestPath('/calendar/../payments/transfer')).toBe(false);
+  });
+
+  it('rejects percent-encoded parent-directory segments', () => {
+    expect(isSafeRequestPath('/calendar/%2e%2e/payments/transfer')).toBe(false);
+    expect(isSafeRequestPath('/calendar/%2E%2E/payments/transfer')).toBe(false);
+  });
+
+  it('rejects a current-directory segment', () => {
+    expect(isSafeRequestPath('/calendar/./events')).toBe(false);
+    expect(isSafeRequestPath('/calendar/%2e/events')).toBe(false);
+  });
+
+  it('rejects a trailing traversal segment', () => {
+    expect(isSafeRequestPath('/calendar/events/..')).toBe(false);
+  });
+
+  it('rejects backslashes and null bytes', () => {
+    expect(isSafeRequestPath('/calendar\\..\\payments')).toBe(false);
+    expect(isSafeRequestPath('/calendar/%5c..%5cpayments')).toBe(false);
+    expect(isSafeRequestPath('/calendar/events%00.json')).toBe(false);
+  });
+
+  it('rejects malformed percent-encoding the upstream might decode differently', () => {
+    expect(isSafeRequestPath('/calendar/%zz')).toBe(false);
+  });
+
+  it('rejects a path that is not absolute', () => {
+    expect(isSafeRequestPath('calendar/events')).toBe(false);
+  });
+
+  it('accepts ordinary paths', () => {
+    expect(isSafeRequestPath('/calendar/events')).toBe(true);
+    expect(isSafeRequestPath('/calendar/events/123')).toBe(true);
+    expect(isSafeRequestPath('/')).toBe(true);
+  });
+
+  it('accepts dots and encoded characters inside a segment', () => {
+    expect(isSafeRequestPath('/calendar/events/report.v2.json')).toBe(true);
+    expect(isSafeRequestPath('/files/..hidden')).toBe(true);
+    expect(isSafeRequestPath('/search/a%20b')).toBe(true);
   });
 });

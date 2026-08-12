@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { buildTestApp, authHeader, seedAuth, sqlMock } from './helpers.js';
+import { computeAuditHash } from '../src/lib/hash.js';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
@@ -206,20 +207,42 @@ describe('GET /v1/compliance/evidence-pack', () => {
     delegation_depth: 0,
   };
 
-  const MOCK_AUDIT_ROW = {
-    id: 'alog_01',
-    agent_id: 'ag_01',
-    agent_did: 'did:grantex:ag_01',
-    grant_id: 'grnt_01',
-    principal_id: 'user_01',
-    developer_id: 'dev_TEST',
-    action: 'tool.run',
-    metadata: {},
-    hash: 'abc123',
-    previous_hash: null,
-    timestamp: '2026-01-15T12:00:00Z',
-    status: 'success',
-  };
+  // The chain check recomputes each entry's hash, so fixtures must carry a
+  // genuine one — a placeholder would (correctly) be reported as tampered.
+  function auditRow(overrides: Record<string, unknown> = {}) {
+    const row = {
+      id: 'alog_01',
+      agent_id: 'ag_01',
+      agent_did: 'did:grantex:ag_01',
+      grant_id: 'grnt_01',
+      principal_id: 'user_01',
+      developer_id: 'dev_TEST',
+      action: 'tool.run',
+      metadata: {},
+      previous_hash: null as string | null,
+      timestamp: '2026-01-15T12:00:00Z',
+      status: 'success',
+      ...overrides,
+    };
+    return {
+      ...row,
+      hash: computeAuditHash({
+        id: row.id,
+        agentId: row.agent_id,
+        agentDid: row.agent_did,
+        grantId: row.grant_id,
+        principalId: row.principal_id,
+        developerId: row.developer_id,
+        action: row.action,
+        metadata: row.metadata,
+        timestamp: row.timestamp,
+        prevHash: row.previous_hash,
+        status: row.status,
+      }),
+    };
+  }
+
+  const MOCK_AUDIT_ROW = auditRow();
 
   const MOCK_POLICY_ROW = {
     id: 'pol_01',
@@ -307,10 +330,11 @@ describe('GET /v1/compliance/evidence-pack', () => {
     sqlMock.mockResolvedValueOnce([POLICY_STATS]);
     sqlMock.mockResolvedValueOnce([SUB]);
     sqlMock.mockResolvedValueOnce([]);
-    // Two audit entries where second's previous_hash doesn't match first's hash
+    // Two well-formed entries whose linkage is broken: the second's
+    // previous_hash does not match the first's hash.
     sqlMock.mockResolvedValueOnce([
-      { ...MOCK_AUDIT_ROW, id: 'alog_01', hash: 'hash_a', previous_hash: null },
-      { ...MOCK_AUDIT_ROW, id: 'alog_02', hash: 'hash_b', previous_hash: 'WRONG_HASH' },
+      auditRow({ id: 'alog_01' }),
+      auditRow({ id: 'alog_02', previous_hash: 'WRONG_HASH' }),
     ]);
     sqlMock.mockResolvedValueOnce([]);
 
@@ -321,8 +345,43 @@ describe('GET /v1/compliance/evidence-pack', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ chainIntegrity: { valid: boolean; firstBrokenAt: string | null } }>();
+    const body = res.json<{ chainIntegrity: { valid: boolean; firstBrokenAt: string | null; reason: string | null } }>();
     expect(body.chainIntegrity.valid).toBe(false);
     expect(body.chainIntegrity.firstBrokenAt).toBe('alog_02');
+    expect(body.chainIntegrity.reason).toBe('link');
+  });
+
+  // Editing a stored entry leaves every hash and link untouched, so linkage
+  // alone still reads as intact. Only recomputing the entry's own hash catches it.
+  it('reports chain integrity broken when an entry has been edited in place', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([AGENT_STATS]);
+    sqlMock.mockResolvedValueOnce([GRANT_STATS]);
+    sqlMock.mockResolvedValueOnce([AUDIT_STATS]);
+    sqlMock.mockResolvedValueOnce([POLICY_STATS]);
+    sqlMock.mockResolvedValueOnce([SUB]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const first = auditRow({ id: 'alog_01' });
+    const second = auditRow({ id: 'alog_02', previous_hash: first.hash });
+    sqlMock.mockResolvedValueOnce([
+      first,
+      // Same hash and same linkage, but the recorded action was rewritten from
+      // 'tool.run' to 'tool.delete'.
+      { ...second, action: 'tool.delete' },
+    ]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/compliance/evidence-pack',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ chainIntegrity: { valid: boolean; firstBrokenAt: string | null; reason: string | null } }>();
+    expect(body.chainIntegrity.valid).toBe(false);
+    expect(body.chainIntegrity.firstBrokenAt).toBe('alog_02');
+    expect(body.chainIntegrity.reason).toBe('content');
   });
 });

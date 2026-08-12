@@ -126,6 +126,133 @@ describe('proxyRequest', () => {
     expect(fetchCall[1]?.body).toBe(JSON.stringify({ summary: 'Meeting' }));
   });
 
+  it('forwards a non-JSON body verbatim instead of re-encoding it', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 200,
+      headers: { entries: () => [].values() },
+      text: () => Promise.resolve(''),
+    }));
+
+    // The `*` content-type parser hands non-JSON bodies through as raw strings.
+    const req = mockReq({
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'summary=Meeting&when=today',
+    });
+    await proxyRequest(req, mockReply(), MOCK_GRANT, {
+      upstream: 'https://api.internal.com',
+    });
+
+    const body = vi.mocked(fetch).mock.calls[0]![1]?.body;
+    expect(body).toBe('summary=Meeting&when=today');
+    // JSON.stringify would have produced a quoted, escaped string.
+    expect(body).not.toBe('"summary=Meeting&when=today"');
+  });
+
+  it('does not forward a content-length that describes the original body', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 200,
+      headers: { entries: () => [].values() },
+      text: () => Promise.resolve(''),
+    }));
+
+    const req = mockReq({
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'content-length': '9999',
+        'content-encoding': 'gzip',
+      },
+      body: { summary: 'Meeting' },
+    });
+    await proxyRequest(req, mockReply(), MOCK_GRANT, {
+      upstream: 'https://api.internal.com',
+    });
+
+    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Record<string, string>;
+    expect(headers['content-length']).toBeUndefined();
+    expect(headers['content-encoding']).toBeUndefined();
+  });
+
+  it('strips hop-by-hop request headers', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 200,
+      headers: { entries: () => [].values() },
+      text: () => Promise.resolve(''),
+    }));
+
+    const req = mockReq({
+      headers: {
+        'content-type': 'application/json',
+        connection: 'keep-alive',
+        'transfer-encoding': 'chunked',
+        'proxy-authorization': 'Basic abc',
+        upgrade: 'websocket',
+        'x-custom': 'kept',
+      },
+    });
+    await proxyRequest(req, mockReply(), MOCK_GRANT, {
+      upstream: 'https://api.internal.com',
+    });
+
+    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Record<string, string>;
+    expect(headers['connection']).toBeUndefined();
+    expect(headers['transfer-encoding']).toBeUndefined();
+    expect(headers['proxy-authorization']).toBeUndefined();
+    expect(headers['upgrade']).toBeUndefined();
+    expect(headers['x-custom']).toBe('kept');
+  });
+
+  it('drops upstream content-encoding and content-length from the response', async () => {
+    // fetch already decoded the body, so the declared encoding and length no
+    // longer describe what the client receives.
+    const responseHeaders = new Map([
+      ['content-type', 'application/json'],
+      ['content-encoding', 'gzip'],
+      ['content-length', '42'],
+      ['x-upstream', 'kept'],
+    ]);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 200,
+      headers: { entries: () => responseHeaders.entries() },
+      text: () => Promise.resolve('{"data":"decoded plaintext"}'),
+    }));
+
+    const reply = mockReply();
+    await proxyRequest(mockReq(), reply, MOCK_GRANT, {
+      upstream: 'https://api.internal.com',
+    });
+
+    const forwarded = (reply as unknown as { headers: Record<string, string> }).headers;
+    expect(forwarded['content-encoding']).toBeUndefined();
+    expect(forwarded['content-length']).toBeUndefined();
+    expect(forwarded['content-type']).toBe('application/json');
+    expect(forwarded['x-upstream']).toBe('kept');
+  });
+
+  it('a client cannot spoof the Grantex context headers', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 200,
+      headers: { entries: () => [].values() },
+      text: () => Promise.resolve(''),
+    }));
+
+    const req = mockReq({
+      headers: {
+        'content-type': 'application/json',
+        'X-Grantex-Principal': 'user_attacker',
+        'X-Grantex-GrantId': 'grnt_attacker',
+      },
+    });
+    await proxyRequest(req, mockReply(), MOCK_GRANT, {
+      upstream: 'https://api.internal.com',
+    });
+
+    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Record<string, string>;
+    expect(headers['X-Grantex-Principal']).toBe('user_1');
+    expect(headers['X-Grantex-GrantId']).toBe('grnt_1');
+  });
+
   it('throws UPSTREAM_ERROR on network failure', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
 

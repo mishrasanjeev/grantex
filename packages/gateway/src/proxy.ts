@@ -8,6 +8,61 @@ export interface ProxyOptions {
   timeout?: number;
 }
 
+/**
+ * Headers that describe *this* hop and must not be relayed to the next one
+ * (RFC 9110 §7.6.1), plus the two the gateway replaces itself.
+ *
+ * `content-length` and `content-encoding` are dropped deliberately: the body is
+ * re-serialized below, so the inbound values describe bytes that no longer
+ * exist. Forwarding a stale content-length makes the upstream read a truncated
+ * body or block waiting for bytes that never arrive.
+ */
+const HOP_BY_HOP_REQUEST_HEADERS = new Set([
+  'authorization',
+  'host',
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'content-length',
+  'content-encoding',
+  'expect',
+]);
+
+/**
+ * `fetch` transparently decodes the upstream body, so the response reaching the
+ * client is neither the declared length nor the declared encoding. Relaying
+ * either one leaves the client trying to gunzip plain text.
+ */
+const SUPPRESSED_RESPONSE_HEADERS = new Set([
+  'content-encoding',
+  'content-length',
+  'transfer-encoding',
+  'connection',
+  'keep-alive',
+  'trailer',
+  'upgrade',
+]);
+
+/**
+ * Serialize the body Fastify parsed back into something the upstream can read.
+ *
+ * The gateway registers a `*` parser with `parseAs: 'string'`, so anything that
+ * is not JSON arrives as a raw string and must be forwarded verbatim —
+ * `JSON.stringify` would wrap it in quotes and escape it, turning `a=1&b=2`
+ * into `"a=1&b=2"` and breaking every form-encoded and text/plain upstream.
+ */
+function serializeBody(body: unknown): string | undefined {
+  if (body === undefined || body === null) return undefined;
+  if (typeof body === 'string') return body;
+  if (Buffer.isBuffer(body)) return body.toString('utf-8');
+  return JSON.stringify(body);
+}
+
 export async function proxyRequest(
   req: FastifyRequest,
   reply: FastifyReply,
@@ -19,11 +74,10 @@ export async function proxyRequest(
   // Build headers: strip Authorization, add upstream headers + Grantex context
   const headers: Record<string, string> = {};
 
-  // Forward original headers (except Authorization and Host)
+  // Forward original headers, minus this hop's own
   const rawHeaders = req.headers;
   for (const [key, value] of Object.entries(rawHeaders)) {
-    if (key.toLowerCase() === 'authorization') continue;
-    if (key.toLowerCase() === 'host') continue;
+    if (HOP_BY_HOP_REQUEST_HEADERS.has(key.toLowerCase())) continue;
     if (value !== undefined) {
       headers[key] = Array.isArray(value) ? value.join(', ') : value;
     }
@@ -36,7 +90,7 @@ export async function proxyRequest(
     }
   }
 
-  // Add Grantex context headers
+  // Add Grantex context headers last so a client cannot spoof them
   headers['X-Grantex-Principal'] = grant.principalId;
   headers['X-Grantex-Agent'] = grant.agentDid;
   headers['X-Grantex-GrantId'] = grant.grantId;
@@ -46,12 +100,14 @@ export async function proxyRequest(
   const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const body = req.method !== 'GET' && req.method !== 'HEAD' ? req.body : undefined;
+    const body = req.method !== 'GET' && req.method !== 'HEAD'
+      ? serializeBody(req.body)
+      : undefined;
 
     const response = await fetch(targetUrl, {
       method: req.method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body,
       signal: controller.signal,
     });
 
@@ -60,7 +116,7 @@ export async function proxyRequest(
 
     // Forward response headers
     for (const [key, value] of response.headers.entries()) {
-      if (key.toLowerCase() === 'transfer-encoding') continue;
+      if (SUPPRESSED_RESPONSE_HEADERS.has(key.toLowerCase())) continue;
       reply.header(key, value);
     }
 
@@ -69,6 +125,13 @@ export async function proxyRequest(
     reply.send(responseBody);
   } catch (err) {
     if (err instanceof GatewayError) throw err;
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new GatewayError(
+        'UPSTREAM_TIMEOUT',
+        `Upstream did not respond within ${timeout}ms`,
+        504,
+      );
+    }
     throw new GatewayError(
       'UPSTREAM_ERROR',
       `Failed to reach upstream: ${err instanceof Error ? err.message : String(err)}`,

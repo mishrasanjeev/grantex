@@ -6,7 +6,10 @@ export type PassportErrorCode =
   | 'CATEGORY_MISMATCH'
   | 'AMOUNT_EXCEEDED'
   | 'MISSING_PASSPORT'
-  | 'MALFORMED_CREDENTIAL';
+  | 'MALFORMED_CREDENTIAL'
+  | 'CREDENTIAL_MISMATCH'
+  | 'PASSPORT_NOT_YET_VALID'
+  | 'REVOCATION_CHECK_FAILED';
 
 export class PassportVerificationError extends Error {
   readonly code: PassportErrorCode;

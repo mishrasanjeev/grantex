@@ -6,7 +6,9 @@ export type GatewayErrorCode =
   | 'TOKEN_INVALID'
   | 'TOKEN_EXPIRED'
   | 'SCOPE_INSUFFICIENT'
-  | 'UPSTREAM_ERROR';
+  | 'UPSTREAM_ERROR'
+  | 'UPSTREAM_TIMEOUT'
+  | 'PATH_INVALID';
 
 export class GatewayError extends Error {
   readonly code: GatewayErrorCode;
