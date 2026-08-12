@@ -5,6 +5,7 @@ import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
 import { emitEvent } from '../lib/events.js';
 import { issueAgentGrantVC } from '../lib/vc.js';
 import { checkActiveGrantToken } from '../lib/active-grant-token.js';
+import { config } from '../config.js';
 
 interface DelegateBody {
   parentGrantToken: string;
@@ -75,6 +76,17 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
     const parentScp = parentClaims.scp;
     const parentExp = parentClaims.exp;
     const parentDepth = parentClaims.delegationDepth ?? 0;
+
+    // SPEC §9: the delegation chain has to terminate. Without this the depth was
+    // computed and signed but never compared against anything, so an agent could
+    // keep delegating to fresh sub-agents indefinitely.
+    if (parentDepth + 1 > config.maxDelegationDepth) {
+      return reply.status(403).send({
+        message: `Delegation depth limit reached: chains may not exceed ${config.maxDelegationDepth} hop(s)`,
+        code: 'DELEGATION_DEPTH_EXCEEDED',
+        requestId: request.id,
+      });
+    }
 
     // Validate scopes ⊆ parent scopes
     const invalidScopes = scopes.filter((s) => !parentScp.includes(s));

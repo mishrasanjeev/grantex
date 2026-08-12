@@ -6,7 +6,7 @@
  */
 
 import { getSql } from '../../db/client.js';
-import { evaluatePolicies, type PolicyRow } from '../policy.js';
+import { findMatchingPolicy, type PolicyRow } from '../policy.js';
 import type { PolicyBackend, PolicyEvalContext, PolicyDecision } from '../policy-backend.js';
 
 export class BuiltinBackend implements PolicyBackend {
@@ -21,20 +21,22 @@ export class BuiltinBackend implements PolicyBackend {
       ORDER BY priority DESC, created_at ASC
     `;
 
-    const effect = evaluatePolicies(policyRows, {
+    // Take the matched policy itself, not just its effect: the decision has to
+    // name the policy that actually decided it. Re-deriving the id by grabbing
+    // the first row attributed every decision to the highest-priority policy,
+    // regardless of which one matched.
+    const matchingPolicy = findMatchingPolicy(policyRows, {
       agentId: ctx.agentId,
       principalId: ctx.principalId,
       scopes: ctx.scopes,
       ...(ctx.time !== undefined ? { nowUtcHHMM: ctx.time } : {}),
     });
 
-    if (effect === null) return { effect: null };
+    if (matchingPolicy === null) return { effect: null };
 
-    // Find matching policy ID for traceability
-    const matchingPolicy = policyRows.find(() => true); // first match (simplified)
     return {
-      effect,
-      ...(matchingPolicy !== undefined ? { policyId: matchingPolicy.id } : {}),
+      effect: matchingPolicy.effect,
+      policyId: matchingPolicy.id,
     };
   }
 }
