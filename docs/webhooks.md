@@ -95,24 +95,41 @@ Every webhook POST has the same envelope:
 
 ## Verifying Signatures
 
-Every request includes an `X-Grantex-Signature` header with a hex-encoded HMAC-SHA256 signature of the raw request body:
+Every request carries a timestamped signature over `<timestamp>.<raw body>`:
 
 ```
-X-Grantex-Signature: sha256=<hex>
+X-Grantex-Timestamp: <unix seconds>
+X-Grantex-Signature-V2: sha256=<hex>
+X-Grantex-Signature: sha256=<hex>      # legacy, see below
 ```
+
+Verify against `X-Grantex-Signature-V2` and reject deliveries older than your
+tolerance (300 seconds by default). Both halves matter: the timestamp is inside
+the signed material, so it cannot be rewritten, and without it a captured
+delivery would stay valid forever.
+
+Each delivery attempt is signed at the moment it is sent, so a retry arriving
+after backoff carries a fresh timestamp rather than the time the event was
+queued.
+
+Always verify against the **raw** request body. A body that has been parsed and
+re-serialized will not hash to the same value.
 
 **TypeScript:**
 
 ```typescript
-import { verifyWebhookSignature } from '@grantex/sdk';
+import { verifyWebhook } from '@grantex/sdk';
 
 app.post('/webhooks/grantex', (req, res) => {
-  const sig = req.headers['x-grantex-signature'] as string;
-  const rawBody = req.rawBody; // must be the raw string/Buffer, not parsed JSON
+  const rawBody = req.rawBody; // raw string/Buffer, not parsed JSON
 
-  if (!verifyWebhookSignature(rawBody, sig, process.env.GRANTEX_WEBHOOK_SECRET!)) {
-    return res.status(401).send('Invalid signature');
-  }
+  const ok = verifyWebhook({
+    payload: rawBody,
+    signature: req.headers['x-grantex-signature-v2'] as string,
+    timestamp: req.headers['x-grantex-timestamp'] as string,
+    secret: process.env.GRANTEX_WEBHOOK_SECRET!,
+  });
+  if (!ok) return res.status(401).send('Invalid signature');
 
   const event = JSON.parse(rawBody);
   console.log('Received event:', event.type);
@@ -123,15 +140,20 @@ app.post('/webhooks/grantex', (req, res) => {
 **Python:**
 
 ```python
-from grantex import verify_webhook_signature
+from grantex import verify_webhook
 import os
 
 @app.route('/webhooks/grantex', methods=['POST'])
 def handle_webhook():
-    sig = request.headers.get('X-Grantex-Signature', '')
     raw_body = request.get_data(as_text=True)
 
-    if not verify_webhook_signature(raw_body, sig, os.environ['GRANTEX_WEBHOOK_SECRET']):
+    ok = verify_webhook(
+        raw_body,
+        request.headers.get('X-Grantex-Signature-V2', ''),
+        request.headers.get('X-Grantex-Timestamp', ''),
+        os.environ['GRANTEX_WEBHOOK_SECRET'],
+    )
+    if not ok:
         return 'Invalid signature', 401
 
     event = request.get_json()
@@ -139,8 +161,30 @@ def handle_webhook():
     return '', 200
 ```
 
-> Always verify signatures before trusting the payload. Use the raw request body — not the parsed JSON.
+**Go:**
 
+```go
+ok := grantex.VerifyWebhook(
+    rawBody,
+    r.Header.Get("X-Grantex-Signature-V2"),
+    r.Header.Get("X-Grantex-Timestamp"),
+    os.Getenv("GRANTEX_WEBHOOK_SECRET"),
+    grantex.DefaultWebhookToleranceSeconds,
+)
+if !ok {
+    http.Error(w, "Invalid signature", http.StatusUnauthorized)
+    return
+}
+```
+
+### Legacy `X-Grantex-Signature`
+
+The original header signs the body alone. Because it commits to nothing
+time-bound, a delivery captured once stays valid forever and can be replayed at
+any time. It is still sent so existing receivers keep working, and
+`verifyWebhookSignature` / `verify_webhook_signature` /
+`VerifyWebhookSignature` still verify it — but they are deprecated. Move to the
+timestamped header; the legacy one will be withdrawn.
 ---
 
 ## Managing Endpoints

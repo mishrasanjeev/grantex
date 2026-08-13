@@ -2,8 +2,33 @@ import { createHmac } from 'node:crypto';
 import { ulid } from 'ulid';
 import { getSql } from '../db/client.js';
 
+/**
+ * Legacy signature: HMAC over the payload alone.
+ *
+ * A signature that commits to nothing but the body stays valid forever, so a
+ * captured delivery can be replayed at any point. Kept only so receivers that
+ * have not yet moved to {@link signTimestampedWebhookPayload} keep working.
+ *
+ * @deprecated Use the timestamped scheme; this one carries no replay bound.
+ */
 export function signWebhookPayload(secret: string, payload: string): string {
   return 'sha256=' + createHmac('sha256', secret).update(payload).digest('hex');
+}
+
+/**
+ * Signature over `<unix-seconds>.<payload>`, sent alongside an
+ * `X-Grantex-Timestamp` header so the receiver can bound how old a delivery
+ * may be. Binding the timestamp into the signed material is what makes the
+ * bound meaningful — an unsigned timestamp header could simply be rewritten.
+ */
+export function signTimestampedWebhookPayload(
+  secret: string,
+  timestamp: string,
+  payload: string,
+): string {
+  return 'sha256=' + createHmac('sha256', secret)
+    .update(`${timestamp}.${payload}`)
+    .digest('hex');
 }
 
 /**
