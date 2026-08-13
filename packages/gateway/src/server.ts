@@ -9,16 +9,22 @@ import { log } from './logger.js';
 export function createGatewayServer(config: GatewayConfig): FastifyInstance {
   const app = Fastify({ logger: false });
 
-  // Capture raw body for proxying
-  app.addContentTypeParser('*', { parseAs: 'string' }, (_req, body, done) => {
+  // Capture the raw body so it can be relayed byte for byte.
+  //
+  // Parsing as a string decoded every request as UTF-8, which silently destroys
+  // any body that is not valid UTF-8 — a gzipped payload, an image, protobuf.
+  // Those bytes cannot be recovered afterwards, so the upstream received
+  // mojibake. A buffer keeps the payload intact, and the gateway never needs to
+  // look inside it: routing decisions use only the method and path.
+  //
+  // The built-in application/json and text/plain parsers are removed first;
+  // they take precedence over a '*' catch-all, so leaving them in place would
+  // let JSON be parsed and re-serialized — reordering keys, dropping the
+  // client's exact bytes, and rejecting payloads a proxy has no business
+  // validating.
+  app.removeAllContentTypeParsers();
+  app.addContentTypeParser('*', { parseAs: 'buffer' }, (_req, body, done) => {
     done(null, body);
-  });
-  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
-    try {
-      done(null, JSON.parse(body as string));
-    } catch {
-      done(null, body);
-    }
   });
 
   // Catch-all route

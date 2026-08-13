@@ -158,14 +158,13 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           )
         `;
 
-        const budgetRows = await tx`
-          SELECT remaining_budget FROM budget_allocations WHERE grant_id = ${grantId}
-        `;
-        const remainingBudget = budgetRows[0]?.['remaining_budget'];
-        const budgetAmount = remainingBudget !== undefined ? Number(remainingBudget) : undefined;
-        if (budgetAmount !== undefined && !Number.isFinite(budgetAmount)) {
-          routeError(500, 'Invalid budget allocation', 'INTERNAL_ERROR');
-        }
+        // No `bdg` claim at issuance. A budget is attached to a grant after the
+        // fact via POST /v1/budget/allocate, which requires the grant to already
+        // exist and be active — and this grant's id was generated a few lines
+        // above, inside this same transaction. Querying budget_allocations for
+        // it could therefore never return a row; it was a guaranteed-empty
+        // round trip on every token exchange. Refresh picks the budget up once
+        // one exists.
 
         // Signing is part of the transaction boundary. A key/configuration
         // failure must not consume the one-time code or persist unusable rows.
@@ -184,7 +183,6 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           jti,
           grnt: grantId,
           ...(audience ? { aud: audience } : {}),
-          ...(budgetAmount !== undefined ? { bdg: budgetAmount } : {}),
           exp: expTimestamp,
         }));
 

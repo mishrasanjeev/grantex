@@ -12,10 +12,14 @@ export interface ProxyOptions {
  * Headers that describe *this* hop and must not be relayed to the next one
  * (RFC 9110 §7.6.1), plus the two the gateway replaces itself.
  *
- * `content-length` and `content-encoding` are dropped deliberately: the body is
- * re-serialized below, so the inbound values describe bytes that no longer
- * exist. Forwarding a stale content-length makes the upstream read a truncated
- * body or block waiting for bytes that never arrive.
+ * `content-encoding` is deliberately *not* here: the body is relayed byte for
+ * byte, so an inbound `gzip` still describes it accurately and the upstream
+ * needs it to decode.
+ *
+ * `content-length` is dropped so fetch derives it from the body it actually
+ * sends. A forwarded length can disagree with reality — a caller passing an
+ * already-parsed object gets re-serialized here — and a stale one makes the
+ * upstream read a truncated body or block waiting for bytes that never arrive.
  */
 const HOP_BY_HOP_REQUEST_HEADERS = new Set([
   'authorization',
@@ -29,7 +33,6 @@ const HOP_BY_HOP_REQUEST_HEADERS = new Set([
   'transfer-encoding',
   'upgrade',
   'content-length',
-  'content-encoding',
   'expect',
 ]);
 
@@ -49,17 +52,20 @@ const SUPPRESSED_RESPONSE_HEADERS = new Set([
 ]);
 
 /**
- * Serialize the body Fastify parsed back into something the upstream can read.
+ * Hand the upstream exactly what the client sent.
  *
- * The gateway registers a `*` parser with `parseAs: 'string'`, so anything that
- * is not JSON arrives as a raw string and must be forwarded verbatim —
- * `JSON.stringify` would wrap it in quotes and escape it, turning `a=1&b=2`
- * into `"a=1&b=2"` and breaking every form-encoded and text/plain upstream.
+ * The gateway parses every content type as a buffer, so the normal path here is
+ * the passthrough: relay those bytes untouched. Decoding them to a string first
+ * would corrupt any non-UTF-8 payload, and `JSON.stringify` would wrap a
+ * form-encoded body in quotes, turning `a=1&b=2` into `"a=1&b=2"`.
+ *
+ * Strings and plain objects are still handled so a caller that supplies an
+ * already-parsed body — as the tests do — behaves sensibly.
  */
-function serializeBody(body: unknown): string | undefined {
+function serializeBody(body: unknown): string | Buffer | undefined {
   if (body === undefined || body === null) return undefined;
+  if (Buffer.isBuffer(body)) return body;
   if (typeof body === 'string') return body;
-  if (Buffer.isBuffer(body)) return body.toString('utf-8');
   return JSON.stringify(body);
 }
 

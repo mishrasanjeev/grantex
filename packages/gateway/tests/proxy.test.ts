@@ -161,7 +161,6 @@ describe('proxyRequest', () => {
       headers: {
         'content-type': 'application/json',
         'content-length': '9999',
-        'content-encoding': 'gzip',
       },
       body: { summary: 'Meeting' },
     });
@@ -170,8 +169,54 @@ describe('proxyRequest', () => {
     });
 
     const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Record<string, string>;
+    // fetch derives the length from what it actually sends.
     expect(headers['content-length']).toBeUndefined();
-    expect(headers['content-encoding']).toBeUndefined();
+  });
+
+  it('relays a binary body byte for byte', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 200,
+      headers: { entries: () => [].values() },
+      text: () => Promise.resolve(''),
+    }));
+
+    // Bytes that are not valid UTF-8. Decoding them to a string would replace
+    // each with U+FFFD and the original could never be recovered.
+    const binary = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0xff, 0xfe, 0x00, 0x80]);
+    const req = mockReq({
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream', 'content-encoding': 'gzip' },
+      body: binary,
+    });
+    await proxyRequest(req, mockReply(), MOCK_GRANT, {
+      upstream: 'https://api.internal.com',
+    });
+
+    const sent = vi.mocked(fetch).mock.calls[0]![1]?.body;
+    expect(Buffer.isBuffer(sent)).toBe(true);
+    expect(Buffer.compare(sent as Buffer, binary)).toBe(0);
+    expect(Buffer.from(String(sent), 'utf-8').equals(binary)).toBe(false);
+  });
+
+  it('forwards content-encoding, because the body is relayed unchanged', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 200,
+      headers: { entries: () => [].values() },
+      text: () => Promise.resolve(''),
+    }));
+
+    const req = mockReq({
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'content-encoding': 'gzip' },
+      body: Buffer.from([0x1f, 0x8b, 0x08]),
+    });
+    await proxyRequest(req, mockReply(), MOCK_GRANT, {
+      upstream: 'https://api.internal.com',
+    });
+
+    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Record<string, string>;
+    // Dropping this would leave the upstream unable to decode the payload.
+    expect(headers['content-encoding']).toBe('gzip');
   });
 
   it('strips hop-by-hop request headers', async () => {
