@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { startWebhookDeliveryWorker } from '../src/workers/webhookDelivery.js';
+import { createHmac } from 'node:crypto';
+import { startWebhookDeliveryWorker, stopWebhookDeliveryWorker } from '../src/workers/webhookDelivery.js';
 import { sqlMock } from './setup.js';
 import { setSafeFetchForTests } from '../src/lib/url-security.js';
 
@@ -195,5 +196,105 @@ describe('startWebhookDeliveryWorker', () => {
     expect(sqlMock).toHaveBeenCalledTimes(3);
 
     clearInterval(timer);
+  });
+});
+
+// ── Timestamped signature headers ──────────────────────────────────────────
+
+describe('webhook delivery signature headers', () => {
+  const SECRET = 'whsec_worker';
+  const PAYLOAD = '{"type":"grant.created"}';
+
+  const signedDelivery = {
+    id: 'whd_SIGN01',
+    url: 'https://example.com/webhook',
+    payload: PAYLOAD,
+    signature: 'sha256=legacyvalue',
+    secret: SECRET,
+    attempts: 0,
+    max_attempts: 5,
+  };
+
+  function sentHeaders(): Record<string, string> {
+    return (mockSafeFetch.mock.calls[0]![1] as { headers: Record<string, string> }).headers;
+  }
+
+  it('sends a timestamped signature alongside the legacy header', async () => {
+    sqlMock.mockResolvedValueOnce([signedDelivery]);
+    mockSafeFetch.mockResolvedValueOnce(new Response('', { status: 200 }));
+    sqlMock.mockResolvedValueOnce([]);
+
+    startWebhookDeliveryWorker(sqlMock as never, 60_000);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const headers = sentHeaders();
+    // Legacy header preserved so existing receivers keep working.
+    expect(headers['X-Grantex-Signature']).toBe('sha256=legacyvalue');
+
+    const timestamp = headers['X-Grantex-Timestamp']!;
+    expect(timestamp).toMatch(/^\d+$/);
+
+    const expected = 'sha256=' + createHmac('sha256', SECRET)
+      .update(`${timestamp}.${PAYLOAD}`)
+      .digest('hex');
+    expect(headers['X-Grantex-Signature-V2']).toBe(expected);
+  });
+
+  // Signing at enqueue time would date the signature to when the event was
+  // queued; a retry arriving after the backoff would then read as stale.
+  it('stamps each attempt with the time it is actually sent', async () => {
+    vi.setSystemTime(new Date('2026-08-13T00:00:00Z'));
+    sqlMock.mockResolvedValueOnce([signedDelivery]);
+    mockSafeFetch.mockResolvedValueOnce(new Response('', { status: 200 }));
+    sqlMock.mockResolvedValueOnce([]);
+
+    startWebhookDeliveryWorker(sqlMock as never, 60_000);
+    await vi.advanceTimersByTimeAsync(0);
+    const first = sentHeaders()['X-Grantex-Timestamp'];
+
+    stopWebhookDeliveryWorker();
+    mockSafeFetch.mockReset();
+    sqlMock.mockReset();
+
+    // Same row redelivered ten minutes later — well past any replay window.
+    vi.setSystemTime(new Date('2026-08-13T00:10:00Z'));
+    sqlMock.mockResolvedValueOnce([signedDelivery]);
+    mockSafeFetch.mockResolvedValueOnce(new Response('', { status: 200 }));
+    sqlMock.mockResolvedValueOnce([]);
+
+    startWebhookDeliveryWorker(sqlMock as never, 60_000);
+    await vi.advanceTimersByTimeAsync(0);
+    const second = sentHeaders()['X-Grantex-Timestamp'];
+
+    expect(Number(second) - Number(first!)).toBe(600);
+  });
+
+  it('omits the timestamped header when the endpoint secret is unavailable', async () => {
+    // LEFT JOIN: a delivery whose webhook row has since been deleted still
+    // goes out on the legacy header rather than failing outright.
+    sqlMock.mockResolvedValueOnce([{ ...signedDelivery, secret: null }]);
+    mockSafeFetch.mockResolvedValueOnce(new Response('', { status: 200 }));
+    sqlMock.mockResolvedValueOnce([]);
+
+    startWebhookDeliveryWorker(sqlMock as never, 60_000);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const headers = sentHeaders();
+    expect(headers['X-Grantex-Signature']).toBe('sha256=legacyvalue');
+    expect(headers['X-Grantex-Timestamp']).toBeUndefined();
+    expect(headers['X-Grantex-Signature-V2']).toBeUndefined();
+  });
+
+  it('leases the endpoint secret in the same statement as the delivery', async () => {
+    sqlMock.mockResolvedValueOnce([signedDelivery]);
+    mockSafeFetch.mockResolvedValueOnce(new Response('', { status: 200 }));
+    sqlMock.mockResolvedValueOnce([]);
+
+    startWebhookDeliveryWorker(sqlMock as never, 60_000);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const claimSql = (sqlMock.mock.calls[0]?.[0] as TemplateStringsArray).join(' ');
+    expect(claimSql).toContain('webhooks.secret');
+    expect(claimSql).toContain('LEFT JOIN webhooks');
   });
 });

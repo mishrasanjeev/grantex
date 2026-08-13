@@ -118,10 +118,14 @@ vi.mock('../src/lib/events.js', () => ({
 
 // Mock webhook delivery — keeps signWebhookPayload and enqueueWebhookDeliveries
 // available for webhook-specific tests.
-vi.mock('../src/lib/webhook.js', () => ({
-  enqueueWebhookDeliveries: vi.fn().mockResolvedValue(undefined),
-  signWebhookPayload: vi.fn().mockReturnValue('sha256=mock'),
-}));
+vi.mock('../src/lib/webhook.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/webhook.js')>();
+  return {
+    ...actual,
+    enqueueWebhookDeliveries: vi.fn().mockResolvedValue(undefined),
+    signWebhookPayload: vi.fn().mockReturnValue('sha256=mock'),
+  };
+});
 
 // Mock OpenTelemetry — prevent real tracing in tests
 vi.mock('@opentelemetry/api', () => {

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import time
 
 import httpx
+import pytest
 import respx
 
 from grantex import Grantex
-from grantex._webhook import verify_webhook_signature
+from grantex._webhook import verify_webhook, verify_webhook_signature
 
 BASE_URL = "http://test.local"
 
@@ -84,3 +86,93 @@ def test_verify_signature_bytes_payload() -> None:
     secret = "my-secret"
     sig = _make_sig(payload, secret)
     assert verify_webhook_signature(payload, sig, secret) is True
+
+
+# ── Timestamped verification (replay-bounded) ──────────────────────────────
+
+_TS_SECRET = "whsec_test"
+_TS_PAYLOAD = '{"id":"evt_1","type":"grant.created"}'
+
+
+def _sign(timestamp: str, payload: str, secret: str = _TS_SECRET) -> str:
+    signed = timestamp.encode() + b"." + payload.encode()
+    return "sha256=" + hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
+
+
+def _now() -> int:
+    return int(time.time())
+
+
+def test_verify_webhook_accepts_fresh_delivery():
+    ts = str(_now())
+    assert verify_webhook(_TS_PAYLOAD, _sign(ts, _TS_PAYLOAD), ts, _TS_SECRET) is True
+
+
+def test_verify_webhook_accepts_bytes_body():
+    ts = str(_now())
+    assert verify_webhook(
+        _TS_PAYLOAD.encode(), _sign(ts, _TS_PAYLOAD), ts, _TS_SECRET
+    ) is True
+
+
+def test_verify_webhook_rejects_replay_after_window():
+    # The whole point: a delivery captured today must not verify tomorrow.
+    ts = str(_now() - 301)
+    assert verify_webhook(_TS_PAYLOAD, _sign(ts, _TS_PAYLOAD), ts, _TS_SECRET) is False
+
+
+def test_verify_webhook_accepts_inside_window():
+    ts = str(_now() - 299)
+    assert verify_webhook(_TS_PAYLOAD, _sign(ts, _TS_PAYLOAD), ts, _TS_SECRET) is True
+
+
+def test_verify_webhook_honours_custom_tolerance():
+    ts = str(_now() - 60)
+    sig = _sign(ts, _TS_PAYLOAD)
+    assert verify_webhook(_TS_PAYLOAD, sig, ts, _TS_SECRET, tolerance_seconds=30) is False
+    assert verify_webhook(_TS_PAYLOAD, sig, ts, _TS_SECRET, tolerance_seconds=120) is True
+
+
+def test_verify_webhook_rejects_future_dated_delivery():
+    ts = str(_now() + 3600)
+    assert verify_webhook(_TS_PAYLOAD, _sign(ts, _TS_PAYLOAD), ts, _TS_SECRET) is False
+
+
+def test_verify_webhook_rejects_rewritten_timestamp():
+    # The signature covers the timestamp, so refreshing the header alone fails.
+    signed_at = str(_now() - 3600)
+    sig = _sign(signed_at, _TS_PAYLOAD)
+    assert verify_webhook(_TS_PAYLOAD, sig, str(_now()), _TS_SECRET) is False
+
+
+def test_verify_webhook_rejects_tampered_body():
+    ts = str(_now())
+    sig = _sign(ts, _TS_PAYLOAD)
+    assert verify_webhook('{"id":"evt_1","type":"grant.deleted"}', sig, ts, _TS_SECRET) is False
+
+
+def test_verify_webhook_rejects_wrong_secret():
+    ts = str(_now())
+    sig = _sign(ts, _TS_PAYLOAD, "whsec_other")
+    assert verify_webhook(_TS_PAYLOAD, sig, ts, _TS_SECRET) is False
+
+
+def test_verify_webhook_rejects_legacy_payload_only_signature():
+    ts = str(_now())
+    legacy = "sha256=" + hmac.new(
+        _TS_SECRET.encode(), _TS_PAYLOAD.encode(), hashlib.sha256
+    ).hexdigest()
+    assert verify_webhook(_TS_PAYLOAD, legacy, ts, _TS_SECRET) is False
+
+
+@pytest.mark.parametrize("timestamp", ["", "not-a-time", "-100", "9" * 40])
+def test_verify_webhook_rejects_bad_timestamps(timestamp):
+    assert verify_webhook(
+        _TS_PAYLOAD, _sign(timestamp, _TS_PAYLOAD), timestamp, _TS_SECRET
+    ) is False
+
+
+@pytest.mark.parametrize("signature", ["", "garbage", "sha256=", "sha256=zz"])
+def test_verify_webhook_rejects_bad_signatures(signature):
+    ts = str(_now())
+    assert verify_webhook(_TS_PAYLOAD, signature, ts, _TS_SECRET) is False

@@ -156,7 +156,7 @@ SsoSessionListResponse = ListSsoSessionsResponse
 
 from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
-from ._webhook import verify_webhook_signature
+from ._webhook import verify_webhook, verify_webhook_signature
 from .manifest import ToolManifest, Permission, EnforceResult
 from ._fastapi import GrantexEnforcer
 
@@ -175,6 +175,7 @@ __all__ = [
     # Standalone verify
     "verify_grant_token",
     # Webhook signature verification
+    "verify_webhook",
     "verify_webhook_signature",
     # Errors
     "GrantexError",

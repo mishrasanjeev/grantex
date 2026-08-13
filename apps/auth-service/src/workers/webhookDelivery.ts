@@ -2,12 +2,14 @@ import type postgres from 'postgres';
 import { webhookDeliveriesTotal } from '../lib/metrics.js';
 import { config } from '../config.js';
 import { safeFetch } from '../lib/url-security.js';
+import { signTimestampedWebhookPayload } from '../lib/webhook.js';
 
 interface PendingDelivery {
   id: string;
   url: string;
   payload: string;
   signature: string;
+  secret: string | null;
   attempts: number;
   max_attempts: number;
 }
@@ -32,7 +34,7 @@ async function processDeliveries(sql: ReturnType<typeof postgres>): Promise<void
   // the two-minute lease (20 rows / 5 workers * 10-second request timeout).
   const rows = await sql<PendingDelivery[]>`
     WITH due AS (
-      SELECT id
+      SELECT id, webhook_id
       FROM webhook_deliveries
       WHERE status = 'pending'
         AND next_retry_at <= NOW()
@@ -43,9 +45,10 @@ async function processDeliveries(sql: ReturnType<typeof postgres>): Promise<void
     UPDATE webhook_deliveries AS delivery
     SET next_retry_at = NOW() + INTERVAL '2 minutes'
     FROM due
+    LEFT JOIN webhooks ON webhooks.id = due.webhook_id
     WHERE delivery.id = due.id
     RETURNING delivery.id, delivery.url, delivery.payload, delivery.signature,
-              delivery.attempts, delivery.max_attempts
+              webhooks.secret, delivery.attempts, delivery.max_attempts
   `;
 
   let nextRowIndex = 0;
@@ -65,11 +68,33 @@ async function processDelivery(
   const nextAttempt = row.attempts + 1;
 
   try {
+    // The timestamped signature is computed per attempt, not once at enqueue.
+    // Signing it alongside the payload at enqueue time would make the timestamp
+    // describe when the event was queued, and a retry arriving after the
+    // exponential backoff (up to eight minutes) would then fall outside any
+    // sensible replay window and be rejected as stale.
+    //
+    // Inside the try so a failure here is recorded against this delivery rather
+    // than rejecting out of the batch and stalling every other row in it.
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const timestampedSignature = row.secret
+      ? signTimestampedWebhookPayload(row.secret, timestamp, row.payload)
+      : null;
+
     const res = await safeFetch(row.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // Legacy, payload-only and therefore replayable indefinitely. Retained
+        // so existing receivers keep working; remove once they have moved to
+        // the timestamped header.
         'X-Grantex-Signature': row.signature,
+        ...(timestampedSignature !== null
+          ? {
+              'X-Grantex-Timestamp': timestamp,
+              'X-Grantex-Signature-V2': timestampedSignature,
+            }
+          : {}),
         'User-Agent': 'Grantex-Webhooks/0.1',
       },
       body: row.payload,

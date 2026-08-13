@@ -5,7 +5,7 @@ export { Grantex } from './client.js';
 export { verifyGrantToken } from './verify.js';
 
 // Webhook signature verification
-export { verifyWebhookSignature } from './webhook.js';
+export { verifyWebhookSignature, verifyWebhook, type VerifyWebhookOptions } from './webhook.js';
 
 // PKCE helper
 export { generatePkce, type PkceChallenge } from './pkce.js';
