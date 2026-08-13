@@ -223,3 +223,90 @@ describe('path handling', () => {
     expect(proxyRequest).toHaveBeenCalled();
   });
 });
+
+describe('request body handling', () => {
+  let server: ReturnType<typeof createGatewayServer>;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    server = createGatewayServer(CONFIG);
+    vi.mocked(proxyRequest).mockResolvedValue(undefined);
+    vi.mocked(verifyGrantToken).mockResolvedValue(MOCK_GRANT);
+  });
+
+  afterEach(async () => {
+    await server.close();
+  });
+
+  function bodyGivenToProxy(): unknown {
+    return (vi.mocked(proxyRequest).mock.calls[0]![0] as { body: unknown }).body;
+  }
+
+  // The content-type parser used to decode every body as UTF-8. Bytes that are
+  // not valid UTF-8 became U+FFFD and were unrecoverable by the time the proxy
+  // saw them, so the upstream received mojibake.
+  it('preserves a non-UTF-8 body through the parser', async () => {
+    const binary = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0xff, 0xfe, 0x00, 0x80, 0xc3, 0x28]);
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/calendar/events',
+      headers: {
+        authorization: 'Bearer token',
+        'content-type': 'application/octet-stream',
+      },
+      payload: binary,
+    });
+
+    expect(response.statusCode).not.toBe(400);
+    const received = bodyGivenToProxy();
+    expect(Buffer.isBuffer(received)).toBe(true);
+    expect(Buffer.compare(received as Buffer, binary)).toBe(0);
+  });
+
+  it('preserves a JSON body exactly as sent, without reformatting', async () => {
+    // Key order and whitespace survive, so a body the client signed still
+    // hashes to the same value downstream.
+    const raw = '{"b":2,  "a":1}';
+
+    await server.inject({
+      method: 'POST',
+      url: '/calendar/events',
+      headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
+      payload: raw,
+    });
+
+    const received = bodyGivenToProxy();
+    expect(Buffer.isBuffer(received)).toBe(true);
+    expect((received as Buffer).toString('utf-8')).toBe(raw);
+  });
+
+  it('preserves a form-encoded body', async () => {
+    const raw = 'summary=Meeting&when=today';
+
+    await server.inject({
+      method: 'POST',
+      url: '/calendar/events',
+      headers: {
+        authorization: 'Bearer token',
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      payload: raw,
+    });
+
+    expect((bodyGivenToProxy() as Buffer).toString('utf-8')).toBe(raw);
+  });
+
+  it('still accepts a malformed JSON body rather than rejecting it', async () => {
+    // A proxy has no business validating the payload; that is the upstream's call.
+    const response = await server.inject({
+      method: 'POST',
+      url: '/calendar/events',
+      headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
+      payload: '{not valid json',
+    });
+
+    expect(response.statusCode).not.toBe(400);
+    expect((bodyGivenToProxy() as Buffer).toString('utf-8')).toBe('{not valid json');
+  });
+});
