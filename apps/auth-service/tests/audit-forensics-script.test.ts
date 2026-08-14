@@ -126,6 +126,34 @@ describe('audit-chain-forensics.mjs', () => {
       expect(filtered.status, filtered.stderr).toBe(0);
       expect((JSON.parse(filtered.stdout) as { rows: Array<{ id: string }> }).rows)
         .toEqual([expect.objectContaining({ id: 'alog_BC' })]);
+
+      const summary = runForensics(
+        fixture,
+        '--developer', 'dev_B',
+        '--limit', '1',
+        '--summary-only',
+        '--json',
+        '--fail-on-findings',
+      );
+      expect(summary.status, summary.stderr).toBe(0);
+      expect(summary.stdout).not.toContain('alog_BC');
+      expect(summary.stdout).not.toContain('dev_B');
+      expect(summary.stdout).not.toContain('storedHash');
+      expect(JSON.parse(summary.stdout)).toMatchObject({
+        scope: 'single-developer',
+        summary: {
+          rowsExamined: 1,
+          developersExamined: 1,
+          verification: {
+            explained: 1,
+            unexplained: 0,
+            inconclusive: 0,
+            formats: { A: 0, B: 0, C: 0, 'B/C': 1 },
+          },
+          linkage: { intactDevelopers: 1, brokenDevelopers: 0 },
+          hasFindings: false,
+        },
+      });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -157,6 +185,40 @@ describe('audit-chain-forensics.mjs', () => {
       expect(json.stdout).not.toContain('customer-secret');
       expect((JSON.parse(json.stdout) as { rows: Array<{ id: string; metaParseError: string | null }> }).rows)
         .toContainEqual(expect.objectContaining({ id: 'alog_INVALID', metaParseError: 'invalid_json' }));
+
+      const summary = runForensics(
+        fixture,
+        '--limit', '0',
+        '--budget', '1',
+        '--summary-only',
+        '--json',
+        '--fail-on-findings',
+      );
+      expect(summary.status, summary.stderr).toBe(2);
+      expect(summary.stdout).not.toContain('alog_');
+      expect(summary.stdout).not.toContain('dev_');
+      expect(summary.stdout).not.toContain('customer-secret');
+      expect(summary.stdout).not.toContain('storedHash');
+      expect(summary.stdout).not.toContain('zebra');
+      expect(JSON.parse(summary.stdout)).toMatchObject({
+        scope: 'all-developers',
+        summary: {
+          rowsExamined: 3,
+          developersExamined: 3,
+          storage: {
+            metadataEncoding: { object: 1, string: 2 },
+            invalidJsonStrings: 1,
+          },
+          verification: {
+            explained: 1,
+            unexplained: 1,
+            inconclusive: 1,
+            formats: { A: 0, B: 0, C: 1, 'B/C': 0 },
+          },
+          linkage: { intactDevelopers: 3, brokenDevelopers: 0 },
+          hasFindings: true,
+        },
+      });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -56,6 +56,10 @@
  *
  *   node apps/auth-service/scripts/audit-chain-forensics.mjs --file rows.json
  *
+ *   # Privacy-safe whole-database gate (no row/tenant identifiers in output):
+ *   node apps/auth-service/scripts/audit-chain-forensics.mjs \
+ *     --url "$DATABASE_URL" --limit 0 --summary-only --json --fail-on-findings
+ *
  * Cloud SQL private instances need the Auth Proxy first:
  *   cloud-sql-proxy --port 5433 grantex-prod:us-central1:<instance>
  *   ... then --url "postgres://user:pw@127.0.0.1:5433/dbname"
@@ -68,12 +72,16 @@
  *   --limit <n>        Rows to examine, oldest first (default 20, 0 = all)
  *   --budget <n>       Cap on the permutation fallback, used only for rows whose
  *                      metadata is stored as an object (default 200000)
+ *   --summary-only     Emit aggregate counts only. Suppresses row IDs, tenant
+ *                      IDs, hashes, metadata key names, and metadata values.
+ *   --fail-on-findings Exit 2 if any row is unexplained/inconclusive or any
+ *                      per-developer previous_hash linkage is broken.
  *   --show-metadata    Print metadata values. Off by default — audit metadata is
  *                      customer data and this output tends to land in logs.
  *   --json             Machine-readable output
  *
- * Exit codes: 0 = ran successfully (regardless of findings), 1 = usage or
- * connection error. Findings are never an error exit; this is a diagnostic.
+ * Exit codes: 0 = ran successfully, 1 = usage or connection error, 2 = findings
+ * when --fail-on-findings is set. Without that flag, findings remain exit 0.
  */
 
 import { createHash } from 'node:crypto';
@@ -88,6 +96,8 @@ function parseArgs(argv) {
     developer: null,
     limit: 20,
     budget: 200000,
+    summaryOnly: false,
+    failOnFindings: false,
     showMetadata: false,
     json: false,
   };
@@ -99,6 +109,8 @@ function parseArgs(argv) {
       case '--developer': out.developer = argv[++i]; break;
       case '--limit': out.limit = Number(argv[++i]); break;
       case '--budget': out.budget = Number(argv[++i]); break;
+      case '--summary-only': out.summaryOnly = true; break;
+      case '--fail-on-findings': out.failOnFindings = true; break;
       case '--show-metadata': out.showMetadata = true; break;
       case '--json': out.json = true; break;
       case '--help': case '-h': out.help = true; break;
@@ -107,6 +119,7 @@ function parseArgs(argv) {
   }
   if (!Number.isSafeInteger(out.limit) || out.limit < 0) throw new Error('--limit must be a non-negative integer');
   if (!Number.isSafeInteger(out.budget) || out.budget < 1) throw new Error('--budget must be a positive integer');
+  if (out.summaryOnly && out.showMetadata) throw new Error('--summary-only cannot be combined with --show-metadata');
   return out;
 }
 
@@ -477,6 +490,86 @@ const ERA_LABEL = {
   'B/C': 'Era B or C (indistinguishable — insertion order already equals canonical)',
 };
 
+function summarize(rows, results) {
+  const encodingCounts = {};
+  const formats = { A: 0, B: 0, C: 0, 'B/C': 0 };
+  let explained = 0;
+  let unexplained = 0;
+  let inconclusive = 0;
+  let invalidJsonStrings = 0;
+  let subMillisecondTimestamps = 0;
+
+  for (const result of results) {
+    encodingCounts[result.metaEncoding] = (encodingCounts[result.metaEncoding] ?? 0) + 1;
+    if (result.metaParseError) invalidJsonStrings += 1;
+    if (result.subMillisecond) subMillisecondTimestamps += 1;
+    if (result.era) {
+      explained += 1;
+      formats[result.era] += 1;
+    } else if (result.truncated) {
+      inconclusive += 1;
+    } else {
+      unexplained += 1;
+    }
+  }
+
+  const metadataEncoding = Object.fromEntries(
+    Object.entries(encodingCounts).sort(([left], [right]) => left.localeCompare(right)),
+  );
+  const linkage = linkageByDeveloper(rows);
+  const brokenDevelopers = linkage.filter((group) => group.broken).length;
+
+  return {
+    rowsExamined: results.length,
+    developersExamined: linkage.length,
+    storage: {
+      metadataEncoding,
+      invalidJsonStrings,
+    },
+    verification: {
+      explained,
+      unexplained,
+      inconclusive,
+      formats,
+      subMillisecondTimestamps,
+    },
+    linkage: {
+      intactDevelopers: linkage.length - brokenDevelopers,
+      brokenDevelopers,
+    },
+    hasFindings: unexplained > 0
+      || inconclusive > 0
+      || invalidJsonStrings > 0
+      || brokenDevelopers > 0,
+  };
+}
+
+function reportSummary(summary, drift, opts) {
+  const line = '─'.repeat(78);
+  console.log(`\n${line}\nAUDIT CHAIN FORENSICS — SUMMARY ONLY\n${line}`);
+  console.log(`Scope          : ${opts.developer ? 'single developer' : 'all developers'}`);
+  console.log(`Rows examined  : ${summary.rowsExamined}`);
+  console.log(`Developers     : ${summary.developersExamined}`);
+  console.log(`Era C source   : inline transcription of src/lib/hash.ts — ${drift}`);
+  console.log('\nMetadata encoding:');
+  for (const [encoding, count] of Object.entries(summary.storage.metadataEncoding)) {
+    console.log(`  ${String(encoding).padEnd(12)} ${count}`);
+  }
+  console.log(`  invalid JSON ${summary.storage.invalidJsonStrings}`);
+  console.log('\nHash verification:');
+  console.log(`  explained    ${summary.verification.explained}`);
+  console.log(`  unexplained  ${summary.verification.unexplained}`);
+  console.log(`  inconclusive ${summary.verification.inconclusive}`);
+  for (const format of ['A', 'B', 'C', 'B/C']) {
+    console.log(`  Era ${format.padEnd(3)}      ${summary.verification.formats[format]}`);
+  }
+  console.log(`  sub-ms time  ${summary.verification.subMillisecondTimestamps}`);
+  console.log('\nLinkage:');
+  console.log(`  intact       ${summary.linkage.intactDevelopers}`);
+  console.log(`  broken       ${summary.linkage.brokenDevelopers}`);
+  console.log(`\nResult         : ${summary.hasFindings ? 'FINDINGS REQUIRE REVIEW' : 'CLEAN'}\n`);
+}
+
 function report(rows, results, drift, opts) {
   const line = '─'.repeat(78);
   console.log(`\n${line}\nAUDIT CHAIN FORENSICS\n${line}`);
@@ -590,7 +683,7 @@ async function main() {
   try { opts = parseArgs(process.argv.slice(2)); }
   catch (err) {
     console.error(`error: ${err.message}\n`);
-    console.error('usage: audit-chain-forensics.mjs [--url <conn> | --file <path>] [--developer <id>] [--limit <n>]');
+    console.error('usage: audit-chain-forensics.mjs [--url <conn> | --file <path>] [--developer <id>] [--limit <n>] [--summary-only] [--fail-on-findings] [--json]');
     process.exit(1);
   }
   if (opts.help) {
@@ -612,6 +705,21 @@ async function main() {
 
   const drift = await distDriftCheck();
   const results = rows.map((row) => analyzeRow(row, opts.budget));
+  const summary = summarize(rows, results);
+
+  if (opts.summaryOnly) {
+    if (opts.json) {
+      console.log(JSON.stringify({
+        eraCSource: `inline (${drift})`,
+        scope: opts.developer ? 'single-developer' : 'all-developers',
+        summary,
+      }, null, 2));
+    } else {
+      reportSummary(summary, drift, opts);
+    }
+    if (opts.failOnFindings && summary.hasFindings) process.exitCode = 2;
+    return;
+  }
 
   if (opts.json) {
     // Metadata values are customer data; withheld unless explicitly requested,
@@ -622,9 +730,10 @@ async function main() {
       rows: emitted,
       linkage: linkageByDeveloper(rows),
     }, null, 2));
-    return;
+  } else {
+    report(rows, results, drift, opts);
   }
-  report(rows, results, drift, opts);
+  if (opts.failOnFindings && summary.hasFindings) process.exitCode = 2;
 }
 
 await main();

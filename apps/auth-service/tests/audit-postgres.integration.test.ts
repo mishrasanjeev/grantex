@@ -5,6 +5,12 @@ import { describe, expect, it } from 'vitest';
 import { computeAuditHash, matchStoredAuditHash } from '../src/lib/hash.js';
 
 const databaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
+const ci = process.env['CI']?.trim().toLowerCase();
+if ((ci === 'true' || ci === '1') && !databaseUrl) {
+  throw new Error(
+    'AUDIT_INTEGRATION_DATABASE_URL must be set in CI; refusing to skip the real-Postgres audit integration tests',
+  );
+}
 const describePostgres = databaseUrl ? describe : describe.skip;
 
 describePostgres('audit metadata write/read integration (Postgres)', () => {
