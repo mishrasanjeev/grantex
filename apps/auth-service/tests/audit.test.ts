@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { buildTestApp, authHeader, seedAuth, sqlMock, TEST_AGENT, TEST_GRANT, TEST_DEVELOPER } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
-import { computeAuditHash } from '../src/lib/hash.js';
+import {
+  auditMetadataForResponse,
+  computeAuditHash,
+  matchStoredAuditHash,
+} from '../src/lib/hash.js';
 import { createHash } from 'node:crypto';
 
 let app: FastifyInstance;
@@ -64,6 +68,7 @@ describe('POST /v1/audit/log', () => {
     expect(body.status).toBe('success');
     expect(body.entryId).toBe(auditEntry.id);
     expect(sqlMock.begin).toHaveBeenCalledTimes(1);
+    expect(sqlMock.json).toHaveBeenCalledWith({ tool: 'search' });
     const allSql = sqlMock.mock.calls.map((call) => (call[0] as TemplateStringsArray).join(' ')).join('\n');
     expect(allSql).toContain('pg_advisory_xact_lock');
   });
@@ -148,6 +153,24 @@ describe('GET /v1/audit/entries', () => {
     const body = res.json<{ entries: Array<{ entryId: string }> }>();
     expect(body.entries).toHaveLength(1);
     expect(body.entries[0]!.entryId).toBe(auditEntry.id);
+  });
+
+  it('decodes legacy string-encoded metadata in responses', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      ...auditEntry,
+      metadata: JSON.stringify({ zebra: 1, alpha: { bravo: true } }),
+    }]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/audit/entries',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ entries: Array<{ metadata: unknown }> }>().entries[0]!.metadata)
+      .toEqual({ zebra: 1, alpha: { bravo: true } });
   });
 
   it('accepts filter query params', async () => {
@@ -295,5 +318,113 @@ describe('computeAuditHash', () => {
         status: 'success',
       })).digest('hex'),
     );
+  });
+
+  it('matches current hashes after decoding legacy string storage', () => {
+    const fields = {
+      id: 'alog_C',
+      agentId: 'ag_001',
+      agentDid: 'did:grantex:ag_001',
+      grantId: 'grnt_001',
+      principalId: 'user_001',
+      developerId: 'dev_001',
+      action: 'invoke',
+      metadata: { zebra: 1, alpha: { yankee: true, bravo: [3, 2] } },
+      timestamp: '2026-08-13T00:00:00.000Z',
+      prevHash: null,
+      status: 'success',
+    };
+    const storedHash = computeAuditHash(fields);
+
+    expect(matchStoredAuditHash({
+      ...fields,
+      metadata: JSON.stringify(fields.metadata),
+    }, storedHash)).toBe('C');
+  });
+
+  it('matches exact Era A and Era B hashes without rewriting metadata', () => {
+    const metadata = { zebra: 1, alpha: { yankee: true, bravo: [3, 2] } };
+    const base = {
+      id: 'alog_legacy',
+      agentId: 'ag_001',
+      agentDid: 'did:grantex:ag_001',
+      grantId: 'grnt_001',
+      principalId: 'user_001',
+      developerId: 'dev_001',
+      action: 'invoke',
+      metadata,
+      timestamp: '2026-03-01T00:00:00.000Z',
+      prevHash: 'previous',
+      status: 'success',
+    };
+    const eraAHash = createHash('sha256').update(JSON.stringify({
+      id: base.id,
+      agentId: base.agentId,
+      agentDid: base.agentDid,
+      grantId: base.grantId,
+      principalId: base.principalId,
+      developerId: base.developerId,
+      action: base.action,
+      metadata,
+      timestamp: base.timestamp,
+      previousHash: base.prevHash,
+    })).digest('hex');
+    const eraBHash = createHash('sha256').update(JSON.stringify({
+      id: base.id,
+      agentId: base.agentId,
+      agentDid: base.agentDid,
+      grantId: base.grantId,
+      principalId: base.principalId,
+      developerId: base.developerId,
+      action: base.action,
+      metadata,
+      timestamp: base.timestamp,
+      prevHash: base.prevHash,
+      status: base.status,
+    })).digest('hex');
+    const stored = { ...base, metadata: JSON.stringify(metadata) };
+
+    expect(matchStoredAuditHash(stored, eraAHash)).toBe('A');
+    expect(matchStoredAuditHash(stored, eraBHash)).toBe('B');
+  });
+
+  it('reports B/C when insertion-order and canonical bytes are identical', () => {
+    const fields = {
+      id: 'alog_ambiguous',
+      agentId: 'ag_001',
+      agentDid: 'did:grantex:ag_001',
+      grantId: 'grnt_001',
+      principalId: 'user_001',
+      developerId: 'dev_001',
+      action: 'invoke',
+      metadata: { alpha: 1, zebra: 2 },
+      timestamp: '2026-08-13T00:00:00.000Z',
+      prevHash: null,
+      status: 'success',
+    };
+
+    expect(matchStoredAuditHash(
+      { ...fields, metadata: JSON.stringify(fields.metadata) },
+      computeAuditHash(fields),
+    )).toBe('B/C');
+  });
+
+  it('does not normalize malformed legacy metadata into a valid hash', () => {
+    const fields = {
+      id: 'alog_bad',
+      agentId: 'ag_001',
+      agentDid: 'did:grantex:ag_001',
+      grantId: 'grnt_001',
+      principalId: 'user_001',
+      developerId: 'dev_001',
+      action: 'invoke',
+      metadata: 'customer-secret-value',
+      timestamp: '2026-08-13T00:00:00.000Z',
+      prevHash: null,
+      status: 'success',
+    };
+
+    expect(matchStoredAuditHash(fields, '0'.repeat(64))).toBeNull();
+    expect(auditMetadataForResponse(fields.metadata)).toBe(fields.metadata);
   });
 });

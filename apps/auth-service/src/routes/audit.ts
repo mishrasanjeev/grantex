@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
+import type postgres from 'postgres';
 import { getSql, type TxSql } from '../db/client.js';
+import { toAuditEntryResponse } from '../lib/audit-entry.js';
 import { newAuditEntryId } from '../lib/ids.js';
 import { computeAuditHash } from '../lib/hash.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
@@ -98,7 +100,7 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
         INSERT INTO audit_entries (id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status)
         VALUES (
           ${id}, ${agentId}, ${agentDid}, ${grantId}, ${principalId},
-          ${developerId}, ${action}, ${JSON.stringify(metadata)}, ${hash},
+          ${developerId}, ${action}, ${tx.json(metadata as postgres.JSONValue)}, ${hash},
           ${prevHash}, ${timestamp}, ${status}
         )
         RETURNING id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status
@@ -114,7 +116,7 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
       });
     }
     if (!createdRow) throw new Error('Audit entry insert returned no row');
-    return reply.status(201).send(toAuditResponse(createdRow));
+    return reply.status(201).send(toAuditEntryResponse(createdRow));
   });
 
   // GET /v1/audit/entries
@@ -152,7 +154,7 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
       ORDER BY timestamp ASC, id ASC
     `, parameters);
 
-    return reply.send({ entries: rows.map(toAuditResponse) });
+    return reply.send({ entries: rows.map(toAuditEntryResponse) });
   });
 
   // GET /v1/audit/:id
@@ -167,23 +169,6 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
     if (!entry) {
       return reply.status(404).send({ message: 'Audit entry not found', code: 'NOT_FOUND', requestId: request.id });
     }
-    return reply.send(toAuditResponse(entry));
+    return reply.send(toAuditEntryResponse(entry));
   });
-}
-
-function toAuditResponse(row: Record<string, unknown>) {
-  return {
-    entryId: row['id'],
-    agentId: row['agent_id'],
-    agentDid: row['agent_did'],
-    grantId: row['grant_id'],
-    principalId: row['principal_id'],
-    developerId: row['developer_id'],
-    action: row['action'],
-    metadata: row['metadata'],
-    hash: row['hash'],
-    prevHash: row['previous_hash'],
-    timestamp: row['timestamp'],
-    status: row['status'] ?? 'success',
-  };
 }

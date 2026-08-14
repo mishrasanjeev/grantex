@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { buildTestApp, authHeader, seedAuth, sqlMock } from './helpers.js';
 import { computeAuditHash } from '../src/lib/hash.js';
 import type { FastifyInstance } from 'fastify';
+import { createHash } from 'node:crypto';
 
 let app: FastifyInstance;
 
@@ -259,7 +260,7 @@ describe('GET /v1/compliance/evidence-pack', () => {
   };
 
   /** Primes 9 mock slots: 1 auth + 8 concurrent SQL calls in Promise.all order. */
-  function seedEvidencePack() {
+  function seedEvidencePack(auditFixture: Array<Record<string, unknown>> = [MOCK_AUDIT_ROW]) {
     seedAuth();
     // Promise.all order: agentStats, grantStats, auditStats, policyStats, sub,
     //                    full grants, full audit, full policies
@@ -269,7 +270,7 @@ describe('GET /v1/compliance/evidence-pack', () => {
     sqlMock.mockResolvedValueOnce([POLICY_STATS]);
     sqlMock.mockResolvedValueOnce([SUB]);
     sqlMock.mockResolvedValueOnce([MOCK_GRANT_ROW]);
-    sqlMock.mockResolvedValueOnce([MOCK_AUDIT_ROW]);
+    sqlMock.mockResolvedValueOnce(auditFixture);
     sqlMock.mockResolvedValueOnce([MOCK_POLICY_ROW]);
   }
 
@@ -320,6 +321,62 @@ describe('GET /v1/compliance/evidence-pack', () => {
     expect(body.meta.since).toBe('2026-01-01T00:00:00Z');
     expect(body.meta.until).toBe('2026-12-31T00:00:00Z');
     expect(body.meta.framework).toBe('soc2');
+  });
+
+  it('decodes and verifies current hashes stored with legacy string encoding', async () => {
+    const metadata = { zebra: 1, alpha: { yankee: true, bravo: [3, 2] } };
+    const current = auditRow({ id: 'alog_encoded', metadata });
+    seedEvidencePack([{ ...current, metadata: JSON.stringify(metadata) }]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/compliance/evidence-pack',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      auditEntries: Array<{ metadata: unknown }>;
+      chainIntegrity: { valid: boolean; checkedEntries: number };
+    }>();
+    expect(body.auditEntries[0]!.metadata).toEqual(metadata);
+    expect(body.chainIntegrity).toMatchObject({ valid: true, checkedEntries: 1 });
+  });
+
+  it('verifies an exact Era B row from its preserved metadata string', async () => {
+    const metadata = { zebra: 1, alpha: { yankee: true, bravo: [3, 2] } };
+    const row = auditRow({
+      id: 'alog_era_b',
+      metadata,
+      timestamp: '2026-03-01T00:00:00.000Z',
+    });
+    const legacyHash = createHash('sha256').update(JSON.stringify({
+      id: row.id,
+      agentId: row.agent_id,
+      agentDid: row.agent_did,
+      grantId: row.grant_id,
+      principalId: row.principal_id,
+      developerId: row.developer_id,
+      action: row.action,
+      metadata,
+      timestamp: row.timestamp,
+      prevHash: row.previous_hash,
+      status: row.status,
+    })).digest('hex');
+    seedEvidencePack([{
+      ...row,
+      metadata: JSON.stringify(metadata),
+      hash: legacyHash,
+    }]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/compliance/evidence-pack',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ chainIntegrity: { valid: boolean } }>().chainIntegrity.valid).toBe(true);
   });
 
   it('reports chain integrity broken when hash chain is invalid', async () => {
