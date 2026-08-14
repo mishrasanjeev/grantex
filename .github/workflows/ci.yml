@@ -33,6 +33,22 @@ jobs:
   auth-service:
     name: Auth Service
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: grantex_test
+          POSTGRES_PASSWORD: grantex_test
+          POSTGRES_DB: grantex_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grantex_test -d grantex_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AUDIT_INTEGRATION_DATABASE_URL: postgres://grantex_test:grantex_test@127.0.0.1:5432/grantex_test
     defaults:
       run:
         working-directory: apps/auth-service

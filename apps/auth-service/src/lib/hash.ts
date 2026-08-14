@@ -27,6 +27,49 @@ export interface AuditHashFields {
   status: string;
 }
 
+export type StoredAuditHashFields = Omit<AuditHashFields, 'metadata'> & {
+  metadata: unknown;
+};
+
+export type AuditHashFormat = 'A' | 'B' | 'C' | 'B/C';
+
+interface DecodedAuditMetadata {
+  value: Record<string, unknown>;
+  /** Exact JSON.stringify(metadata) bytes retained by the legacy JSONB string. */
+  legacyJson: string | null;
+}
+
+function isMetadataObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Decode the historical JSONB-string representation without mutating storage.
+ *
+ * audit.ts passed JSON.stringify(metadata) to a JSONB parameter from the first
+ * release through the Era-C canonicalization change. postgres.js serialized
+ * that string again, so the column contains a JSONB string whose value is the
+ * original JSON text. Keeping `legacyJson` lets Eras A/B be verified byte for
+ * byte while `value` supplies the logical object needed by Era C and API reads.
+ */
+function decodeAuditMetadata(value: unknown): DecodedAuditMetadata | null {
+  if (value === null || value === undefined) return { value: {}, legacyJson: null };
+  if (isMetadataObject(value)) return { value, legacyJson: null };
+  if (typeof value !== 'string') return null;
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return isMetadataObject(parsed) ? { value: parsed, legacyJson: value } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Return the logical metadata object for API responses, preserving corrupt data verbatim. */
+export function auditMetadataForResponse(value: unknown): unknown {
+  return decodeAuditMetadata(value)?.value ?? value;
+}
+
 /**
  * Deterministic JSON with object keys sorted.
  *
@@ -48,24 +91,78 @@ function canonicalJson(value: unknown): string {
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(',')}}`;
 }
 
-export function computeAuditHash(fields: AuditHashFields): string {
-  // Built field-by-field rather than via JSON.stringify on a literal so that
-  // only `metadata` gains canonical ordering. The scalar fields keep their
-  // existing serialization, so hashes of entries with empty, single-key, or
-  // already-sorted metadata are byte-identical to those written before this
-  // change and continue to verify.
-  const canonical = '{'
+function auditPrefix(fields: Omit<AuditHashFields, 'metadata'>): string {
+  return '{'
     + `"id":${JSON.stringify(fields.id)},`
     + `"agentId":${JSON.stringify(fields.agentId)},`
     + `"agentDid":${JSON.stringify(fields.agentDid)},`
     + `"grantId":${JSON.stringify(fields.grantId)},`
     + `"principalId":${JSON.stringify(fields.principalId)},`
     + `"developerId":${JSON.stringify(fields.developerId)},`
-    + `"action":${JSON.stringify(fields.action)},`
-    + `"metadata":${canonicalJson(fields.metadata ?? {})},`
+    + `"action":${JSON.stringify(fields.action)},`;
+}
+
+function computeAuditHashWithMetadataJson(
+  fields: Omit<AuditHashFields, 'metadata'>,
+  metadataJson: string,
+): string {
+  return sha256hex(auditPrefix(fields)
+    + `"metadata":${metadataJson},`
     + `"timestamp":${JSON.stringify(fields.timestamp)},`
     + `"prevHash":${JSON.stringify(fields.prevHash)},`
     + `"status":${JSON.stringify(fields.status)}`
-    + '}';
-  return sha256hex(canonical);
+    + '}');
+}
+
+function computeEraAAuditHash(
+  fields: Omit<AuditHashFields, 'metadata'>,
+  metadataJson: string,
+): string {
+  return sha256hex(auditPrefix(fields)
+    + `"metadata":${metadataJson},`
+    + `"timestamp":${JSON.stringify(fields.timestamp)},`
+    + `"previousHash":${JSON.stringify(fields.prevHash)}`
+    + '}');
+}
+
+export function computeAuditHash(fields: AuditHashFields): string {
+  // Built field-by-field rather than via JSON.stringify on a literal so that
+  // only `metadata` gains canonical ordering. The scalar fields keep their
+  // existing serialization, so hashes of entries with empty, single-key, or
+  // already-sorted metadata are byte-identical to those written before this
+  // change and continue to verify.
+  const { metadata, ...scalars } = fields;
+  return computeAuditHashWithMetadataJson(scalars, canonicalJson(metadata ?? {}));
+}
+
+/**
+ * Match a stored row against every hash layout the service has emitted.
+ *
+ * This is deliberately read-only compatibility logic. It never rewrites
+ * metadata or hashes. Eras A/B are attempted only when the exact historical
+ * JSON text survived in the legacy JSONB string; object-encoded rows are
+ * checked canonically as Era C without an unbounded permutation search.
+ */
+export function matchStoredAuditHash(
+  fields: StoredAuditHashFields,
+  storedHash: string,
+): AuditHashFormat | null {
+  const decoded = decodeAuditMetadata(fields.metadata);
+  if (!decoded) return null;
+
+  const { metadata: _metadata, ...scalars } = fields;
+  const currentMatches = computeAuditHash({ ...scalars, metadata: decoded.value }) === storedHash;
+
+  let eraBMatches = false;
+  let eraAMatches = false;
+  if (decoded.legacyJson !== null) {
+    eraBMatches = computeAuditHashWithMetadataJson(scalars, decoded.legacyJson) === storedHash;
+    eraAMatches = computeEraAAuditHash(scalars, decoded.legacyJson) === storedHash;
+  }
+
+  if (eraAMatches) return 'A';
+  if (eraBMatches && currentMatches) return 'B/C';
+  if (currentMatches) return 'C';
+  if (eraBMatches) return 'B';
+  return null;
 }

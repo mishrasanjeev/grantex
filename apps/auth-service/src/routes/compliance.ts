@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
-import { computeAuditHash } from '../lib/hash.js';
+import { toAuditEntryResponse } from '../lib/audit-entry.js';
+import { matchStoredAuditHash } from '../lib/hash.js';
 
 type Framework = 'soc2' | 'gdpr' | 'all';
 
@@ -41,7 +42,7 @@ function verifyChain(entries: Array<Record<string, unknown>>): ChainIntegrity {
     }
 
     const timestamp = entry['timestamp'];
-    const recomputed = computeAuditHash({
+    const matchedFormat = matchStoredAuditHash({
       id: entry['id'] as string,
       agentId: entry['agent_id'] as string,
       agentDid: entry['agent_did'] as string,
@@ -49,13 +50,13 @@ function verifyChain(entries: Array<Record<string, unknown>>): ChainIntegrity {
       principalId: entry['principal_id'] as string,
       developerId: entry['developer_id'] as string,
       action: entry['action'] as string,
-      metadata: (entry['metadata'] ?? {}) as Record<string, unknown>,
+      metadata: entry['metadata'],
       timestamp: timestamp instanceof Date ? timestamp.toISOString() : String(timestamp),
       prevHash: entryPrevHash,
       status: (entry['status'] as string | null) ?? 'success',
-    });
+    }, entry['hash'] as string);
 
-    if (recomputed !== entry['hash']) {
+    if (matchedFormat === null) {
       return {
         valid: false,
         checkedEntries: i,
@@ -285,20 +286,7 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
       delegationDepth: r['delegation_depth'] ?? 0,
     }));
 
-    const entries = (auditRows as Array<Record<string, unknown>>).map((r) => ({
-      entryId: r['id'],
-      agentId: r['agent_id'],
-      agentDid: r['agent_did'],
-      grantId: r['grant_id'],
-      principalId: r['principal_id'],
-      developerId: r['developer_id'],
-      action: r['action'],
-      metadata: r['metadata'],
-      hash: r['hash'],
-      prevHash: r['previous_hash'] ?? null,
-      timestamp: r['timestamp'],
-      status: r['status'] ?? 'success',
-    }));
+    const entries = (auditRows as Array<Record<string, unknown>>).map(toAuditEntryResponse);
 
     const policyList = (policyRows as Array<Record<string, unknown>>).map((r) => ({
       id: r['id'],
@@ -375,20 +363,7 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
       ORDER BY timestamp ASC, id ASC
     `;
 
-    const entries = rows.map((r) => ({
-      entryId: r['id'],
-      agentId: r['agent_id'],
-      agentDid: r['agent_did'],
-      grantId: r['grant_id'],
-      principalId: r['principal_id'],
-      developerId: r['developer_id'],
-      action: r['action'],
-      metadata: r['metadata'],
-      hash: r['hash'],
-      prevHash: r['previous_hash'] ?? null,
-      timestamp: r['timestamp'],
-      status: r['status'] ?? 'success',
-    }));
+    const entries = rows.map(toAuditEntryResponse);
 
     return reply.send({
       generatedAt: new Date().toISOString(),
