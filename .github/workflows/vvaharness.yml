@@ -92,7 +92,7 @@ jobs:
 
       - name: Upload VVAH SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v4.37.6
+        uses: github/codeql-action/upload-sarif@v4.37.7
         with:
           sarif_file: security-scan/vvaharness.sarif
         continue-on-error: true
