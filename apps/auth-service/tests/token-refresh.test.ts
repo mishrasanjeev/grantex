@@ -60,6 +60,11 @@ describe('POST /v1/token/refresh', () => {
     expect(typeof body.refreshToken).toBe('string');
     expect(body.refreshToken).not.toBe('ref_EXISTING'); // rotated
 
+    const consumeCall = sqlMock.mock.calls.find((call) =>
+      (call[0] as TemplateStringsArray).join(' ').includes('replay_expires_at = LEAST')
+    );
+    expect(consumeCall).toContain(300);
+
     // Verify JWT claims
     const claims = decodeJwt(body.grantToken);
     expect(claims.sub).toBe('user_123');

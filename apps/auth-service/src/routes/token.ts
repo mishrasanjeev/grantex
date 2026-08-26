@@ -30,7 +30,7 @@ interface RouteError {
   code: string;
 }
 
-const REFRESH_TOKEN_REPLAY_WINDOW_SECONDS = 120;
+const REFRESH_TOKEN_REPLAY_WINDOW_SECONDS = 300;
 const REFRESH_TOKEN_ALREADY_USED = 'Refresh token already used';
 
 function routeError(statusCode: number, message: string, code = 'BAD_REQUEST'): never {
@@ -429,7 +429,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           }
 
           // The previous refresh response may have been lost after commit.
-          // During the short replay window, return the already-rotated refresh
+          // During the five-minute replay window, return the already-rotated refresh
           // token and mint a fresh access JWT; do not rotate again.
           responseRefreshToken = rotatedToTokenId;
           refreshReplay = true;

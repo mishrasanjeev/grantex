@@ -49,7 +49,7 @@ tokenResp, err := client.Tokens.Refresh(ctx, grantex.RefreshTokenParams{
 ```
 
 <Warning>
-Always store and use the newest `RefreshToken`. If the HTTP response is lost after the server commits the rotation, retry the same previous refresh token immediately; during a short replay-recovery window, Grantex returns the already-rotated refresh token instead of rotating again. After that window, or once the rotated child token has been used, the previous refresh token is rejected.
+Always store and use the newest `RefreshToken`. If the HTTP response is lost after the server commits the rotation, retry the same previous refresh token immediately; during a five-minute (300-second) replay-recovery window, Grantex returns the already-rotated refresh token instead of rotating again. After that window, or once the rotated child token has been used, the previous refresh token is rejected.
 </Warning>
 
 ### Parameters
