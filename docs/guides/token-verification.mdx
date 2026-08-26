@@ -203,4 +203,4 @@ new_token = client.tokens.refresh(RefreshTokenParams(
 ```
 </CodeGroup>
 
-Refresh tokens are single-use. Each refresh returns a new refresh token, forming a rotation chain. If a refresh response is lost after the server commits, retry the same previous refresh token immediately; Grantex can return the already-rotated refresh token during a short replay-recovery window. After that window, or once the rotated child token has been used, reuse is rejected — this detects token theft without stranding callers after a lost response.
+Refresh tokens are single-use. Each refresh returns a new refresh token, forming a rotation chain. If a refresh response is lost after the server commits, retry the same previous refresh token immediately; Grantex can return the already-rotated refresh token during a five-minute (300-second) replay-recovery window. After that window, or once the rotated child token has been used, reuse is rejected — this detects token theft without stranding callers after a lost response.

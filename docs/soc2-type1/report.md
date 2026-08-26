@@ -343,7 +343,7 @@ The organization demonstrates a commitment to integrity and ethical values.
 
 | Control | Description | Evidence |
 |---------|-------------|----------|
-| C1.2.1 Refresh token single-use rotation | Refresh tokens are single-use. The authorization server invalidates a refresh token on first use and issues a new one; a short replay-recovery window can return the already-rotated child token if the first response was lost, but reuse is rejected after the window or after the child token is used. | `apps/auth-service/src/routes/token.ts` |
+| C1.2.1 Refresh token single-use rotation | Refresh tokens are single-use. The authorization server invalidates a refresh token on first use and issues a new one; a five-minute (300-second) replay-recovery window can return the already-rotated child token if the first response was lost, but reuse is rejected after the window or after the child token is used. | `apps/auth-service/src/routes/token.ts` |
 | C1.2.2 Redis TTL-based expiry | Redis keys for JTI tracking are set with a TTL matching the token's expiry, ensuring that revocation and replay-prevention records are automatically purged after tokens expire, limiting long-term data accumulation. | `apps/auth-service/src/routes/tokens.ts` |
 
 ---
