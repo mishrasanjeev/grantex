@@ -72,9 +72,9 @@ console.log(token.refreshToken); // 'rt_01HXYZ...'
 
 ## tokens.refresh()
 
-Refresh a grant token using a refresh token. Returns a new grant token and a new refresh token (the old refresh token is invalidated). The `grantId` stays the same.
+Refresh a grant token using a refresh token. Returns a new grant token and a new refresh token. The `grantId` stays the same.
 
-Refresh tokens are single-use and rotated on every refresh per SPEC §7.4.
+Refresh tokens are single-use and rotated on every refresh per SPEC §7.4. If the HTTP response is lost after the server commits the rotation, retry the same previous refresh token immediately. During a short replay-recovery window, Grantex returns the already-rotated refresh token instead of rotating again. After that window, or once the rotated child token has been used, the previous refresh token is rejected.
 
 ```typescript
 const newToken = await grantex.tokens.refresh({
@@ -83,7 +83,7 @@ const newToken = await grantex.tokens.refresh({
 });
 
 console.log(newToken.grantToken);   // new RS256 JWT
-console.log(newToken.refreshToken); // new refresh token (old one invalidated)
+console.log(newToken.refreshToken); // new refresh token; store this value
 console.log(newToken.grantId);      // same grant ID
 ```
 
@@ -102,7 +102,7 @@ console.log(newToken.grantId);      // same grant ID
 Returns the same shape as `exchange()` — see above for field descriptions.
 
 <Warning>
-Each refresh token can only be used once. If you attempt to reuse a refresh token, the request will be rejected with a `400` error. Always store and use the new `refreshToken` from the response.
+Always store and use the newest `refreshToken` from the response. The previous refresh token is only accepted briefly to recover a lost response and will be rejected with a `400` error after the recovery window or after the rotated token is used.
 </Warning>
 
 ---

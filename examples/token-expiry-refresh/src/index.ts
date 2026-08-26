@@ -9,7 +9,8 @@
  *   3. Wait for the token to expire, detect expiry (offline + online)
  *   4. Refresh the expired token — get a new JWT with the same grantId
  *   5. Use the refreshed token successfully
- *   6. Demonstrate refresh token rotation (old refresh token is single-use)
+ *   6. Demonstrate refresh response recovery for a lost HTTP response
+ *   7. Demonstrate refresh token rotation (old refresh tokens cannot keep being reused)
  *
  * Prerequisites:
  *   docker compose up          # from repo root
@@ -148,20 +149,36 @@ async function main(): Promise<void> {
   const refreshedOnline = await grantex.tokens.verify(refreshed.grantToken);
   console.log('Online verification:  valid =', refreshedOnline.valid);
 
-  // ── 7. Refresh token rotation (single-use) ────────────────────
+  // ── 7. Refresh response recovery ──────────────────────────────
+  console.log('\n--- Refresh response recovery window ---');
+  console.log('Retrying the original refresh token immediately (simulates a lost HTTP response)...');
+
+  const recovered = await grantex.tokens.refresh({
+    refreshToken: savedRefreshToken,
+    agentId,
+  });
+  console.log('Recovered refresh token matches first rotation:', recovered.refreshToken === refreshed.refreshToken);
+
+  // ── 8. Refresh token rotation (single-use) ────────────────────
   console.log('\n--- Refresh token rotation (single-use enforcement) ---');
-  console.log('Attempting to reuse the old refresh token...');
+  console.log('Advancing the rotation chain with the current refresh token...');
+
+  await grantex.tokens.refresh({
+    refreshToken: recovered.refreshToken,
+    agentId,
+  });
+  console.log('Attempting to reuse the original refresh token after the chain moved forward...');
 
   try {
     await grantex.tokens.refresh({
-      refreshToken: savedRefreshToken,  // already used!
+      refreshToken: savedRefreshToken,
       agentId,
     });
     console.log('ERROR: should not reach here');
   } catch (err) {
-    console.log('Blocked! Old refresh token rejected.');
+    console.log('Blocked! Original refresh token rejected.');
     console.log('  Error:', (err as Error).message);
-    console.log('  Reason: Refresh tokens are single-use and rotate on each refresh.');
+    console.log('  Reason: Refresh tokens are single-use; recovery only works before the rotated child is used.');
   }
 
   console.log('\nDone! Token expiry and refresh lifecycle complete.');

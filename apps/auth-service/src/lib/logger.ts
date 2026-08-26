@@ -24,9 +24,13 @@ export interface AppLogger {
  * In production the output is newline-delimited JSON.
  * In development, if `pino-pretty` is installed, human-readable output is used.
  */
+export function shouldUsePrettyLogger(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV === 'development' && env.LOG_PRETTY !== 'false';
+}
+
 export const logger: AppLogger = pino({
   level: process.env.LOG_LEVEL || 'info',
-  ...(process.env.NODE_ENV === 'development'
+  ...(shouldUsePrettyLogger()
     ? { transport: { target: 'pino-pretty' } }
     : {}),
 });

@@ -10,7 +10,8 @@ Demonstrates time-bound grant tokens with automatic expiry detection and refresh
 4. **Detects expiry** — offline verification throws, online verification returns `valid: false`
 5. **Refreshes the token** — gets a new JWT with the same `grantId`
 6. **Uses the refreshed token** — verifies it works with full scope access
-7. **Refresh token rotation** — old refresh token is rejected (single-use enforcement)
+7. **Refresh response recovery** — retry the previous refresh token immediately to recover the already-rotated token
+8. **Refresh token rotation** — old refresh tokens cannot keep being reused
 
 ## Prerequisites
 
@@ -65,10 +66,15 @@ Token refreshed successfully!
 Offline verification: PASSED
 Online verification:  valid = true
 
+--- Refresh response recovery window ---
+Retrying the original refresh token immediately (simulates a lost HTTP response)...
+Recovered refresh token matches first rotation: true
+
 --- Refresh token rotation (single-use enforcement) ---
-Attempting to reuse the old refresh token...
-Blocked! Old refresh token rejected.
-  Reason: Refresh tokens are single-use and rotate on each refresh.
+Advancing the rotation chain with the current refresh token...
+Attempting to reuse the original refresh token after the chain moved forward...
+Blocked! Original refresh token rejected.
+  Reason: Refresh tokens are single-use; recovery only works before the rotated child is used.
 
 Done! Token expiry and refresh lifecycle complete.
 ```

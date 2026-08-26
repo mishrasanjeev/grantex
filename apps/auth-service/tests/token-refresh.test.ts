@@ -14,6 +14,9 @@ const validRefreshRow = {
   grant_id: 'grnt_EXISTING',
   is_used: false,
   refresh_expires_at: new Date(Date.now() + 86400_000 * 30).toISOString(),
+  used_at: null,
+  rotated_to_token_id: null,
+  replay_expires_at: null,
   agent_id: TEST_AGENT.id,
   principal_id: 'user_123',
   developer_id: TEST_DEVELOPER.id,
@@ -28,11 +31,11 @@ describe('POST /v1/token/refresh', () => {
     seedAuth();
     // Refresh token lookup (JOIN grants + agents)
     sqlMock.mockResolvedValueOnce([validRefreshRow]);
-    // UPDATE refresh_tokens SET is_used = true
+    // INSERT refresh_tokens (new)
+    sqlMock.mockResolvedValueOnce([]);
+    // UPDATE refresh_tokens SET is_used = true + rotation replay metadata
     sqlMock.mockResolvedValueOnce([{ id: 'ref_EXISTING' }]);
     // INSERT grant_tokens
-    sqlMock.mockResolvedValueOnce([]);
-    // INSERT refresh_tokens (new)
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
@@ -76,8 +79,8 @@ describe('POST /v1/token/refresh', () => {
       parent_agent_did: 'did:grantex:ag_PARENT',
       delegation_depth: 2,
     }]);
-    sqlMock.mockResolvedValueOnce([{ id: 'ref_EXISTING' }]);
     sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ id: 'ref_EXISTING' }]);
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
@@ -99,6 +102,10 @@ describe('POST /v1/token/refresh', () => {
   it('returns 400 when the refresh token was consumed concurrently', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([validRefreshRow]);
+    // INSERT refresh_tokens (new) succeeds inside the transaction but rolls
+    // back when the guarded consume UPDATE below observes concurrent use.
+    sqlMock.mockResolvedValueOnce([]);
+    // UPDATE refresh_tokens SET is_used = true ... RETURNING id
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({
@@ -110,6 +117,123 @@ describe('POST /v1/token/refresh', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().message).toBe('Refresh token already used');
+  });
+
+  it('recovers a lost refresh response by replaying the already-rotated refresh token inside the replay window', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      ...validRefreshRow,
+      is_used: true,
+      used_at: new Date(Date.now() - 5_000).toISOString(),
+      rotated_to_token_id: 'ref_ROTATED',
+      replay_expires_at: new Date(Date.now() + 60_000).toISOString(),
+    }]);
+    // SELECT rotated child refresh token
+    sqlMock.mockResolvedValueOnce([{
+      id: 'ref_ROTATED',
+      grant_id: 'grnt_EXISTING',
+      is_used: false,
+      expires_at: new Date(Date.now() + 86400_000).toISOString(),
+    }]);
+    // INSERT grant_tokens for the fresh replayed access JWT
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token/refresh',
+      headers: authHeader(),
+      payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{
+      grantToken: string;
+      expiresAt: string;
+      scopes: string[];
+      refreshToken: string;
+      grantId: string;
+    }>();
+
+    expect(body.refreshToken).toBe('ref_ROTATED');
+    expect(body.grantId).toBe('grnt_EXISTING');
+    expect(body.scopes).toEqual(['read', 'write']);
+    const claims = decodeJwt(body.grantToken);
+    expect(claims['grnt']).toBe('grnt_EXISTING');
+
+    const sqlText = sqlMock.mock.calls.map((call) => (call[0] as TemplateStringsArray).join(' ')).join('\n');
+    expect(sqlText).toContain('FROM refresh_tokens');
+    expect(sqlText).toContain('WHERE id = ');
+    expect(sqlText).not.toContain('rotated_to_token_id =');
+  });
+
+  it('rejects a used refresh token after the replay window expires', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      ...validRefreshRow,
+      is_used: true,
+      used_at: new Date(Date.now() - 180_000).toISOString(),
+      rotated_to_token_id: 'ref_ROTATED',
+      replay_expires_at: new Date(Date.now() - 1_000).toISOString(),
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token/refresh',
+      headers: authHeader(),
+      payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toBe('Refresh token already used');
+  });
+
+  it('rejects replay recovery once the rotated child refresh token was used', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      ...validRefreshRow,
+      is_used: true,
+      used_at: new Date(Date.now() - 5_000).toISOString(),
+      rotated_to_token_id: 'ref_ROTATED',
+      replay_expires_at: new Date(Date.now() + 60_000).toISOString(),
+    }]);
+    sqlMock.mockResolvedValueOnce([{
+      id: 'ref_ROTATED',
+      grant_id: 'grnt_EXISTING',
+      is_used: true,
+      expires_at: new Date(Date.now() + 86400_000).toISOString(),
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token/refresh',
+      headers: authHeader(),
+      payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toBe('Refresh token already used');
+  });
+
+  it('does not recover a used refresh token if the grant was revoked after rotation', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      ...validRefreshRow,
+      is_used: true,
+      grant_status: 'revoked',
+      used_at: new Date(Date.now() - 5_000).toISOString(),
+      rotated_to_token_id: 'ref_ROTATED',
+      replay_expires_at: new Date(Date.now() + 60_000).toISOString(),
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token/refresh',
+      headers: authHeader(),
+      payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toBe('Grant has been revoked');
   });
 
   it('returns 400 for already-used refresh token', async () => {

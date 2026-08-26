@@ -67,6 +67,16 @@ describe('database performance migrations', () => {
     expect(source).toContain('migrationSql.release()');
   });
 
+  it('stores refresh-token replay recovery metadata', () => {
+    const sql = readFileSync(join(migrationsDir, '088_refresh_token_replay_window.sql'), 'utf8');
+
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS used_at TIMESTAMPTZ');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS rotated_to_token_id TEXT');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS replay_expires_at TIMESTAMPTZ');
+    expect(sql).toContain('refresh_tokens_rotated_to_token_id_fkey');
+    expect(sql).toMatch(/REFERENCES refresh_tokens\(id\)/);
+  });
+
   it('holds the migration lock while every file runs and releases the connection', async () => {
     const migrationSql = Object.assign(vi.fn().mockResolvedValue([]), {
       unsafe: vi.fn().mockResolvedValue([]),

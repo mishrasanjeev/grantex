@@ -30,6 +30,9 @@ interface RouteError {
   code: string;
 }
 
+const REFRESH_TOKEN_REPLAY_WINDOW_SECONDS = 120;
+const REFRESH_TOKEN_ALREADY_USED = 'Refresh token already used';
+
 function routeError(statusCode: number, message: string, code = 'BAD_REQUEST'): never {
   throw { statusCode, message, code } satisfies RouteError;
 }
@@ -319,13 +322,16 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     let grantExpiresAt!: Date;
     let jwt!: string;
     const jti = newTokenId();
-    const newRefreshId = newRefreshTokenId();
+    let responseRefreshToken!: string;
+    let refreshReplay = false;
 
     try {
       await sql.begin(async (_tx) => {
         const tx = _tx as unknown as TxSql;
         const rows = await tx`
-          SELECT rt.id AS refresh_id, rt.grant_id, rt.is_used, rt.expires_at AS refresh_expires_at,
+          SELECT rt.id AS refresh_id, rt.grant_id, rt.is_used,
+                 rt.expires_at AS refresh_expires_at, rt.used_at,
+                 rt.rotated_to_token_id, rt.replay_expires_at,
                  g.agent_id, g.principal_id, g.developer_id, g.scopes, g.status AS grant_status,
                  g.expires_at AS grant_expires_at, g.audience,
                  g.parent_grant_id, g.delegation_depth,
@@ -347,12 +353,6 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         if (row['agent_id'] !== agentId) {
           routeError(400, 'Agent mismatch');
         }
-        if (row['is_used']) {
-          routeError(400, 'Refresh token already used');
-        }
-        if (new Date(row['refresh_expires_at'] as string) < new Date()) {
-          routeError(400, 'Refresh token expired');
-        }
         if (row['grant_status'] === 'revoked') {
           routeError(400, 'Grant has been revoked');
         }
@@ -366,9 +366,9 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         grantId = row['grant_id'] as string;
         scopes = row['scopes'] as string[];
         grantExpiresAt = new Date(row['grant_expires_at'] as string);
-        const now = Date.now();
+        const now = new Date();
         // Refresh tokens cannot outlive the underlying grant.
-        const refreshExpiresAt = new Date(Math.min(now + 30 * 86400 * 1000, grantExpiresAt.getTime()));
+        const refreshExpiresAt = new Date(Math.min(now.getTime() + 30 * 86400 * 1000, grantExpiresAt.getTime()));
 
         const remainingBudget = row['remaining_budget'];
         const budgetAmount = remainingBudget !== null && remainingBudget !== undefined
@@ -382,9 +382,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         const parentAgt = row['parent_agent_did'] as string | null | undefined;
         const delegationDepth = Number(row['delegation_depth'] ?? 0);
 
-        // Sign before rotating the single-use refresh token. A signer failure
-        // rolls the transaction back and leaves the caller able to retry.
-        jwt = await signGrantToken({
+        const signRefreshedGrantToken = () => signGrantToken({
           sub: row['principal_id'] as string,
           agt: row['agent_did'] as string,
           dev: row['developer_id'] as string,
@@ -399,25 +397,86 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           exp: Math.floor(grantExpiresAt.getTime() / 1000),
         });
 
+        if (row['is_used']) {
+          const replayExpiresAt = row['replay_expires_at'] !== null && row['replay_expires_at'] !== undefined
+            ? new Date(row['replay_expires_at'] as string)
+            : null;
+          const rotatedToTokenId = row['rotated_to_token_id'];
+          if (
+            typeof rotatedToTokenId !== 'string'
+            || rotatedToTokenId.length === 0
+            || replayExpiresAt === null
+            || Number.isNaN(replayExpiresAt.getTime())
+            || replayExpiresAt <= now
+          ) {
+            routeError(400, REFRESH_TOKEN_ALREADY_USED);
+          }
+
+          const rotatedRows = await tx`
+            SELECT id, grant_id, is_used, expires_at
+            FROM refresh_tokens
+            WHERE id = ${rotatedToTokenId}
+            FOR UPDATE
+          `;
+          const rotated = rotatedRows[0];
+          if (
+            !rotated
+            || rotated['grant_id'] !== grantId
+            || rotated['is_used']
+            || new Date(rotated['expires_at'] as string) <= now
+          ) {
+            routeError(400, REFRESH_TOKEN_ALREADY_USED);
+          }
+
+          // The previous refresh response may have been lost after commit.
+          // During the short replay window, return the already-rotated refresh
+          // token and mint a fresh access JWT; do not rotate again.
+          responseRefreshToken = rotatedToTokenId;
+          refreshReplay = true;
+          jwt = await signRefreshedGrantToken();
+          await tx`
+            INSERT INTO grant_tokens (jti, grant_id, expires_at)
+            VALUES (${jti}, ${grantId}, ${grantExpiresAt})
+          `;
+          return;
+        }
+
+        if (new Date(row['refresh_expires_at'] as string) < now) {
+          routeError(400, 'Refresh token expired');
+        }
+
+        const newRefreshId = newRefreshTokenId();
+        responseRefreshToken = newRefreshId;
+
+        // Sign before rotating the single-use refresh token. A signer failure
+        // rolls the transaction back and leaves the caller able to retry.
+        jwt = await signRefreshedGrantToken();
+
+        await tx`
+          INSERT INTO refresh_tokens (id, grant_id, expires_at)
+          VALUES (${newRefreshId}, ${grantId}, ${refreshExpiresAt})
+        `;
+
         const updated = await tx`
           UPDATE refresh_tokens
-          SET is_used = true
+          SET is_used = true,
+              used_at = NOW(),
+              rotated_to_token_id = ${newRefreshId},
+              replay_expires_at = LEAST(
+                NOW() + (${REFRESH_TOKEN_REPLAY_WINDOW_SECONDS} * INTERVAL '1 second'),
+                ${refreshExpiresAt}
+              )
           WHERE id = ${row['refresh_id'] as string}
             AND is_used = false
           RETURNING id
         `;
         if (!updated[0]) {
-          routeError(400, 'Refresh token already used');
+          routeError(400, REFRESH_TOKEN_ALREADY_USED);
         }
 
         await tx`
           INSERT INTO grant_tokens (jti, grant_id, expires_at)
           VALUES (${jti}, ${grantId}, ${grantExpiresAt})
-        `;
-
-        await tx`
-          INSERT INTO refresh_tokens (id, grant_id, expires_at)
-          VALUES (${newRefreshId}, ${grantId}, ${refreshExpiresAt})
         `;
       });
     } catch (err) {
@@ -439,13 +498,13 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       scopes,
       expiresAt: grantExpiresAt.toISOString(),
     };
-    emitEvent(developerId, 'token.issued', { tokenId: jti, ...eventData }).catch(() => {});
+    emitEvent(developerId, 'token.issued', { tokenId: jti, refreshReplay, ...eventData }).catch(() => {});
 
     return reply.status(201).send({
       grantToken: jwt,
       expiresAt: grantExpiresAt.toISOString(),
       scopes,
-      refreshToken: newRefreshId,
+      refreshToken: responseRefreshToken,
       grantId,
     });
   });
