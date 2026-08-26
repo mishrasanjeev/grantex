@@ -119,11 +119,13 @@ If `POST /v1/token/refresh` returns 400:
 
 | Error message | Cause | Fix |
 |---------------|-------|-----|
-| "Refresh token already used" | Token was already used (single-use rotation) | Use the new refresh token from the previous refresh response |
+| "Refresh token already used" | Token was already used and is outside the replay-recovery window, or its rotated child token was already used | Use the newest refresh token you stored, or re-authorize if the response containing it was lost and recovery has expired |
 | "Refresh token expired" | Token's 30-day TTL has elapsed | Re-authorize to get a fresh token pair |
 | "Grant has been revoked" | The underlying grant was revoked | Re-authorize the agent |
 | "Agent mismatch" | `agentId` doesn't match the grant's agent | Use the correct agent ID |
 | "Invalid refresh token" | Token ID not found | Check you're passing the correct refresh token value |
+
+If a refresh request times out or the connection drops, retry the same refresh token immediately. Grantex can recover the already-rotated refresh token for a short window without extending the rotation chain.
 
 ## Error Codes Reference
 

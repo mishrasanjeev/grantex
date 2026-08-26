@@ -72,16 +72,24 @@ async function test_token_refresh() {
   const newVerify = await grantex.tokens.verify(refreshed.grantToken);
   ok(newVerify.valid === true, 'Refreshed token is valid');
 
-  // Old refresh token should be invalidated (rotated)
+  // If the refresh response is lost after commit, retrying the previous
+  // refresh token should recover the same already-rotated child token.
+  const recovered = await grantex.tokens.refresh({ refreshToken, agentId });
+  ok(recovered.refreshToken === refreshed.refreshToken, 'Previous refresh token replay recovers rotated refreshToken');
+  ok(recovered.grantId === grantId, 'Replay recovery preserves grantId');
+
+  // Once the rotated child token is used, the old token can no longer recover.
+  const advanced = await grantex.tokens.refresh({ refreshToken: recovered.refreshToken, agentId });
+  ok(!!advanced.refreshToken, 'Current refresh token advances the rotation chain');
   try {
-    await grantex.tokens.refresh({ refreshToken, agentId }); // replay old refresh token
-    ok(false, 'Old refresh token replay should fail');
+    await grantex.tokens.refresh({ refreshToken, agentId });
+    ok(false, 'Old refresh token should fail after rotated child is used');
   } catch (err) {
-    ok(err instanceof GrantexApiError, `Old refresh token rejected (${err.statusCode})`);
+    ok(err instanceof GrantexApiError, `Old refresh token rejected after child use (${err.statusCode})`);
   }
 
   // Offline verify the refreshed token
-  const offlineVerified = await verifyGrantToken(refreshed.grantToken, { jwksUri: JWKS_URI });
+  const offlineVerified = await verifyGrantToken(advanced.grantToken, { jwksUri: JWKS_URI });
   ok(offlineVerified.grantId === grantId, 'Offline verify refreshed token — same grantId');
 }
 

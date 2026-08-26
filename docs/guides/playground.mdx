@@ -24,7 +24,7 @@ The playground walks you through the complete Grantex lifecycle:
 | **2. Authorize** | `POST /v1/authorize` | Starts an authorization request. In sandbox mode, the auth code is returned directly (no consent redirect). |
 | **3. Exchange Token** | `POST /v1/token` | Exchanges the authorization code for a signed RS256 grant token JWT and a refresh token. |
 | **4. Verify Token** | `POST /v1/tokens/verify` | Verifies the grant token online — returns validity, scopes, principal, and agent info. |
-| **5. Refresh Token** | `POST /v1/token/refresh` | Uses the refresh token to get a new grant token with the same grant ID. The old refresh token is consumed. |
+| **5. Refresh Token** | `POST /v1/token/refresh` | Uses the refresh token to get a new grant token with the same grant ID. The old refresh token is consumed, with a short replay-recovery window for lost responses. |
 | **6. Revoke Token** | `POST /v1/tokens/revoke` | Revokes the grant token by its JTI, making it permanently invalid. |
 | **7. Verify After Revocation** | `POST /v1/tokens/verify` | Verifies the revoked token again — confirms it now returns `valid: false`. |
 

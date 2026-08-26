@@ -347,7 +347,7 @@ Response:
 | Standard agent tasks | 8 hours |
 | Long-running background agents | 24 hours (max) |
 
-Refresh tokens are single-use and rotated on every refresh.
+Refresh tokens are single-use and rotated on every refresh. Authorization Servers MAY allow a short idempotent replay of the immediately previous refresh token solely to recover a lost refresh response; replay returns the already-rotated refresh token and MUST NOT extend the rotation chain.
 
 Implementations caching revocation state MUST NOT cache for longer than **5 minutes**. High-stakes scopes (`payments:initiate`, `email:send`, `files:write`) SHOULD always use online verification.
 

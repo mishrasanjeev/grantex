@@ -139,6 +139,9 @@ describe('metrics instrumentation', () => {
       grant_id: 'grnt_1',
       is_used: false,
       refresh_expires_at: new Date(Date.now() + 86400_000).toISOString(),
+      used_at: null,
+      rotated_to_token_id: null,
+      replay_expires_at: null,
       agent_id: 'ag_1',
       agent_did: 'did:grantex:ag_1',
       principal_id: 'user_1',
@@ -147,11 +150,11 @@ describe('metrics instrumentation', () => {
       grant_status: 'active',
       grant_expires_at: new Date(Date.now() + 86400_000).toISOString(),
     }]);
-    // mark old used
+    // insert new refresh
+    sqlMock.mockResolvedValueOnce([]);
+    // mark old used with replay metadata
     sqlMock.mockResolvedValueOnce([{ id: 'ref_1' }]);
     // insert new token
-    sqlMock.mockResolvedValueOnce([]);
-    // insert new refresh
     sqlMock.mockResolvedValueOnce([]);
 
     const res = await app.inject({

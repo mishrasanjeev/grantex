@@ -38,7 +38,7 @@ tokenResp, err := client.Tokens.Exchange(ctx, grantex.ExchangeTokenParams{
 
 ## Refresh
 
-Exchange a refresh token for a new grant token. Refresh tokens are single-use — each refresh returns a new refresh token.
+Exchange a refresh token for a new grant token. Refresh tokens are single-use, and each successful rotation returns a new refresh token.
 
 ```go
 tokenResp, err := client.Tokens.Refresh(ctx, grantex.RefreshTokenParams{
@@ -49,7 +49,7 @@ tokenResp, err := client.Tokens.Refresh(ctx, grantex.RefreshTokenParams{
 ```
 
 <Warning>
-Refresh tokens are single-use. Each call returns a new `RefreshToken` that you must store. The old refresh token is invalidated immediately.
+Always store and use the newest `RefreshToken`. If the HTTP response is lost after the server commits the rotation, retry the same previous refresh token immediately; during a short replay-recovery window, Grantex returns the already-rotated refresh token instead of rotating again. After that window, or once the rotated child token has been used, the previous refresh token is rejected.
 </Warning>
 
 ### Parameters

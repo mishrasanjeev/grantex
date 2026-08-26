@@ -1187,8 +1187,11 @@ paths:
       summary: Refresh a grant token
       description: |
         Exchanges a refresh token for a new grant token and rotated refresh token.
-        The old refresh token is marked as used and cannot be reused (single-use rotation per SPEC §7.4).
-        Returns the same grantId with a new JWT and new refresh token.
+        The old refresh token is marked as used after rotation (single-use rotation per SPEC §7.4).
+        If the response is lost after the rotation commits, the immediately previous refresh token may be
+        retried for a short replay-recovery window; the server returns the already-rotated refresh token and
+        does not rotate the chain again. After that window, or once the rotated child token has been used,
+        the old refresh token is rejected. Returns the same grantId with a new JWT and refresh token.
 
         **Rate limit: 20 requests/minute.**
       x-rateLimit:

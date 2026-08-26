@@ -432,7 +432,7 @@ Content-Type: application/json
   "expiresAt": "2026-02-02T00:00:00Z"
 }
 ]]></sourcecode>
-        <t>Refresh tokens are single-use. The Authorization Server <bcp14>MUST</bcp14> rotate the refresh token on every use. Refresh tokens <bcp14>MUST</bcp14> be invalidated when the underlying Grant is revoked.</t>
+        <t>Refresh tokens are single-use. The Authorization Server <bcp14>MUST</bcp14> rotate the refresh token on every accepted non-replay use. To recover from a lost token response, the Authorization Server <bcp14>MAY</bcp14> allow a short idempotent replay of the immediately previous refresh token; replay <bcp14>MUST</bcp14> return the already-rotated refresh token and <bcp14>MUST NOT</bcp14> extend the rotation chain. Refresh tokens <bcp14>MUST</bcp14> be invalidated when the underlying Grant is revoked.</t>
       </section>
     </section>
     <section anchor="grant-token-format">

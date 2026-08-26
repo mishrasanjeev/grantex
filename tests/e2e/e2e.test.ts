@@ -31,8 +31,8 @@ async function authorizeAndGetCode(
   const auth = await grantex.authorize({ agentId, userId, scopes });
 
   // Sandbox mode returns code directly
-  if ('code' in auth && typeof (auth as Record<string, unknown>).code === 'string') {
-    return { code: (auth as Record<string, unknown>).code as string, authRequestId: auth.authRequestId };
+  if ('code' in auth && typeof (auth as unknown as Record<string, unknown>).code === 'string') {
+    return { code: (auth as unknown as Record<string, unknown>).code as string, authRequestId: auth.authRequestId };
   }
 
   // Live mode: programmatically approve via internal endpoint
@@ -62,9 +62,21 @@ beforeAll(async () => {
 
   // Pre-register shared agents (stays within free plan limit of 200)
   const [agent1, agent2, agent3] = await Promise.all([
-    grantex.agents.register({ name: `e2e-main-${Date.now()}`, scopes: ['calendar:read', 'email:send', 'files:read'] }),
-    grantex.agents.register({ name: `e2e-parent-${Date.now()}`, scopes: ['calendar:read', 'email:send'] }),
-    grantex.agents.register({ name: `e2e-sub-${Date.now()}`, scopes: ['calendar:read'] }),
+    grantex.agents.register({
+      name: `e2e-main-${Date.now()}`,
+      description: 'Main agent for e2e auth flow tests',
+      scopes: ['calendar:read', 'email:send', 'files:read'],
+    }),
+    grantex.agents.register({
+      name: `e2e-parent-${Date.now()}`,
+      description: 'Parent agent for e2e delegation tests',
+      scopes: ['calendar:read', 'email:send'],
+    }),
+    grantex.agents.register({
+      name: `e2e-sub-${Date.now()}`,
+      description: 'Sub-agent for e2e delegation tests',
+      scopes: ['calendar:read'],
+    }),
   ]);
   mainAgent = { agentId: agent1.agentId, did: agent1.did };
   delegateAgent = { agentId: agent2.agentId, did: agent2.did };
@@ -77,6 +89,7 @@ describe('E2E: Full Auth Flow', () => {
   let grantToken: string;
   let grantId: string;
   let refreshToken: string;
+  let previousRefreshToken: string;
   let tokenId: string;
 
   it('should create an authorization request and get a code', async () => {
@@ -129,20 +142,44 @@ describe('E2E: Full Auth Flow', () => {
   });
 
   it('should refresh the grant token', async () => {
+    previousRefreshToken = refreshToken;
     const result = await grantex.tokens.refresh({ refreshToken, agentId: mainAgent.agentId });
 
     expect(result.grantToken).toBeDefined();
     expect(result.grantId).toBe(grantId);
     expect(result.refreshToken).toBeDefined();
-    expect(result.refreshToken).not.toBe(refreshToken);
+    expect(result.refreshToken).not.toBe(previousRefreshToken);
 
     grantToken = result.grantToken;
     refreshToken = result.refreshToken!;
   });
 
-  it('should fail to reuse the old refresh token', async () => {
+  it('should recover a lost refresh response by replaying the previous refresh token', async () => {
+    const result = await grantex.tokens.refresh({
+      refreshToken: previousRefreshToken,
+      agentId: mainAgent.agentId,
+    });
+
+    expect(result.grantToken).toBeDefined();
+    expect(result.grantId).toBe(grantId);
+    expect(result.refreshToken).toBe(refreshToken);
+
+    grantToken = result.grantToken;
+  });
+
+  it('should reject the old refresh token after the rotated child is used', async () => {
+    const staleRefreshToken = previousRefreshToken;
+    previousRefreshToken = refreshToken;
+
+    const result = await grantex.tokens.refresh({ refreshToken, agentId: mainAgent.agentId });
+    expect(result.refreshToken).toBeDefined();
+    expect(result.refreshToken).not.toBe(refreshToken);
+
+    grantToken = result.grantToken;
+    refreshToken = result.refreshToken!;
+
     await expect(
-      grantex.tokens.refresh({ refreshToken: 'already-used-token', agentId: mainAgent.agentId }),
+      grantex.tokens.refresh({ refreshToken: staleRefreshToken, agentId: mainAgent.agentId }),
     ).rejects.toThrow();
   });
 
