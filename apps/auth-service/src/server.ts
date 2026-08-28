@@ -54,7 +54,7 @@ import websocket from '@fastify/websocket';
 
 export type AppOptions = {
   logger?: boolean | object;
-  trustProxy?: false | number | string | string[];
+  trustProxy?: false | string | string[];
 };
 
 const defaultLoggerOptions = {

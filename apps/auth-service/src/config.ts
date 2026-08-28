@@ -15,19 +15,15 @@ function optional(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
 
-export type TrustProxySetting = false | number | string[];
+export type TrustProxySetting = false | string[];
 
 export function parseTrustProxySetting(value: string | undefined): TrustProxySetting {
   if (!value || value.trim() === '' || value.trim() === 'false') return false;
 
   const trimmed = value.trim();
-  if (/^\d+$/.test(trimmed)) {
-    return parseIntegerSetting('TRUST_PROXY', trimmed, 1, 16);
-  }
-
   const proxies = trimmed.split(',').map((entry) => entry.trim()).filter(Boolean);
   if (proxies.length === 0 || proxies.some((entry) => !isProxyIpOrCidr(entry))) {
-    throw new Error('TRUST_PROXY must list trusted proxy IPs/CIDRs or a hop count from 1 to 16');
+    throw new Error('TRUST_PROXY must list trusted proxy IPs/CIDRs');
   }
   return proxies;
 }
