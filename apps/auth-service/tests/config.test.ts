@@ -22,8 +22,6 @@ describe('configuration parsing', () => {
     expect(parseTrustProxySetting(undefined)).toBe(false);
     expect(parseTrustProxySetting('false')).toBe(false);
     expect(parseTrustProxySetting(' false ')).toBe(false);
-    expect(parseTrustProxySetting('1')).toBe(1);
-    expect(parseTrustProxySetting('16')).toBe(16);
     expect(parseTrustProxySetting('127.0.0.1/32, 10.0.0.0/8')).toEqual([
       '127.0.0.1/32',
       '10.0.0.0/8',
@@ -38,6 +36,8 @@ describe('configuration parsing', () => {
     expect(() => parseTrustProxySetting('true')).toThrow(/TRUST_PROXY/);
     expect(() => parseTrustProxySetting('*')).toThrow(/TRUST_PROXY/);
     expect(() => parseTrustProxySetting('0.0.0.0/0')).toThrow(/TRUST_PROXY/);
+    expect(() => parseTrustProxySetting('1')).toThrow(/TRUST_PROXY/);
+    expect(() => parseTrustProxySetting('16')).toThrow(/TRUST_PROXY/);
     expect(() => parseTrustProxySetting('0')).toThrow(/TRUST_PROXY/);
     expect(() => parseTrustProxySetting('::/0')).toThrow(/TRUST_PROXY/);
     expect(() => parseTrustProxySetting('17')).toThrow(/TRUST_PROXY/);
