@@ -513,3 +513,7 @@ Default limits per endpoint:
 ## License
 
 Apache-2.0
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

@@ -67,3 +67,7 @@ Each example has its own README with expected output and environment variable op
 - **Sandbox mode** auto-approves authorization requests so you can test the full token lifecycle without a consent UI.
 - The **LangChain** and **Vercel AI** examples work without an `OPENAI_API_KEY` — they invoke tools directly to demonstrate the Grantex integration. Set the key to use a real LLM.
 - All examples point at `http://localhost:3001` by default. Override with the `GRANTEX_URL` environment variable.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

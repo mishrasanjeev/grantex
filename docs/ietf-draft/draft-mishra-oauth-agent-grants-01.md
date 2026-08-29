@@ -20,8 +20,8 @@ pi: [toc, sortrefs, symrefs]
 
 author:
   - fullname: Sanjeev Kumar
-    organization: Grantex
-    email: mishra.sanjeev@gmail.com
+    organization: Orchestrum Technologies LLP / Grantex
+    email: sanjeev@orchestrum.in
     uri: https://grantex.dev
 
 normative:

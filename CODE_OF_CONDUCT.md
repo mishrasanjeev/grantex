@@ -19,3 +19,7 @@ way that they deem appropriate to the circumstances.
 
 This Code of Conduct is adapted from the
 [Contributor Covenant](https://www.contributor-covenant.org), version 2.1.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

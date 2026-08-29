@@ -424,3 +424,7 @@ Stop implementation or rollout if any of these occur:
   Plural are changed without a separate approved rollout.
 - UCP, ACP, AP2, schema.org, A2A, MPP, or provider certification is claimed
   before implementation and conformance evidence exists.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

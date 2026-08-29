@@ -2,6 +2,11 @@
 
 Thanks for your interest in contributing. Grantex is an open protocol for delegated AI agent authorization — contributions help shape a safer agentic internet.
 
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner:
+Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in),
+[mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com). Contributions are
+accepted under the Apache License 2.0 unless a file states otherwise.
+
 ---
 
 ## Where to Start

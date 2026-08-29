@@ -87,3 +87,7 @@ Use this before declaring done:
 2. For each affected surface, did I read the current doc and compare it to the code?
 3. Did I avoid editing surfaces the change did not touch?
 4. Is there a single clean PR for the follow-up, or a clear statement that none was needed?
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

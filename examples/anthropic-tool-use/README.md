@@ -67,3 +67,7 @@ Done! Anthropic SDK integration demo complete.
 | `GRANTEX_URL` | `http://localhost:3001` | Auth service base URL |
 | `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key (sandbox mode) |
 | `ANTHROPIC_API_KEY` | — | Anthropic key (optional, enables Claude tool use) |
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

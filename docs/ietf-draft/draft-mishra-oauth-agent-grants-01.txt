@@ -3,7 +3,7 @@
 
 
 Web Authorization Protocol                                      S. Kumar
-Internet-Draft                                                   Grantex
+Internet-Draft                          Orchestrum Technologies LLP/Grantex
 Intended status: Informational                              2 March 2026
 Expires: 3 September 2026
 
@@ -2200,8 +2200,8 @@ Acknowledgements
 Author's Address
 
    Sanjeev Kumar
-   Grantex
-   Email: mishra.sanjeev@gmail.com
+   Orchestrum Technologies LLP / Grantex
+   Email: sanjeev@orchestrum.in
    URI:   https://grantex.dev
 
 

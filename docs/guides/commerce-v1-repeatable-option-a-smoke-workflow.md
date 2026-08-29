@@ -189,3 +189,7 @@ Manual or later C2D:
 - Running hosted smoke requests
 - Running AgenticOrg real-staging eval against an approved smoke URL
 - Cleanup command execution
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

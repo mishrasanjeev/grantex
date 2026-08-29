@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Grantex",
-  "description": "Documentation and API reference for Grantex AI agent authorization, delegated OAuth grants, agent identity, scoped permissions, MCP authorization, verification, and audit.",
+  "description": "Documentation and API reference for Grantex AI agent authorization, delegated OAuth grants, agent identity, scoped permissions, MCP authorization, verification, and audit. Grantex is owned by Orchestrum Technologies LLP; inventor and owner: Sanjeev Kumar.",
   "seo": {
     "indexing": "navigable",
     "metatags": {
@@ -38,6 +38,7 @@
             "group": "Getting Started",
             "pages": [
               "introduction",
+              "ownership",
               "quickstart",
               "release-status",
               "local-development"

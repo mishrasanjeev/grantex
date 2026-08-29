@@ -2,6 +2,11 @@
   "name": "@grantex/mcp-auth",
   "version": "2.0.2",
   "description": "OAuth 2.1 + PKCE authorization server for MCP servers, powered by Grantex",
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar.",
   "homepage": "https://grantex.dev/for/mcp",
   "bugs": {
     "url": "https://github.com/mishrasanjeev/grantex/issues"

@@ -21,3 +21,7 @@ npm install && npm start
 4. Demonstrates scope enforcement — a read-only token is blocked from creating events
 
 The adapter handles grant token verification, scope checking, and audit logging automatically.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

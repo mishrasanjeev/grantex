@@ -13,9 +13,9 @@
     <title abbrev="DAAP">Delegated Agent Authorization Protocol (DAAP)</title>
     <seriesInfo name="Internet-Draft" value="draft-mishra-oauth-agent-grants-00"/>
     <author fullname="Sanjeev Kumar">
-      <organization>Grantex</organization>
+      <organization>Orchestrum Technologies LLP / Grantex</organization>
       <address>
-        <email>mishra.sanjeev@gmail.com</email>
+        <email>sanjeev@orchestrum.in</email>
         <uri>https://grantex.dev</uri>
       </address>
     </author>

@@ -26,3 +26,7 @@ npm start
 3. Decodes and inspects the GDT claims
 4. Verifies the GDT standalone
 5. Fetches weather data via x402 (automatic 402 → pay → retry)
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

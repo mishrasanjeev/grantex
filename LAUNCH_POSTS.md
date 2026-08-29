@@ -348,3 +348,7 @@ GitHub: https://github.com/mishrasanjeev/grantex
 4. **Reddit r/programming** — wait 1-2 hours after HN to avoid looking spammy
 5. **Reddit r/MachineLearning** — same day, different angle (focus on agent safety)
 6. **Reddit r/LocalLLaMA** — most casual tone, focus on practical use case
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

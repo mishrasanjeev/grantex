@@ -114,3 +114,7 @@ print(result.scopes)
 - **Algorithm pinning**: RS256 is hardcoded in all three verification layers (auth service, TypeScript SDK, Python SDK). The `alg` header in the token cannot override this.
 - **Replay prevention**: Every token's `jti` is tracked. Presenting a previously-seen `jti` returns `valid: false`.
 - **Minimum key size**: The auth service enforces a minimum 2048-bit RSA modulus on all signing keys.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

@@ -92,3 +92,7 @@ Treat this as a preflight only. An agent can bypass its own client-side command.
 - Never treat `decode` as verification.
 - Never describe a CLI preflight or local JWT decode as service-side enforcement.
 - Record security-relevant success and denial events without logging secrets.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

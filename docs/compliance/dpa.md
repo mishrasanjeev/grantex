@@ -5,13 +5,14 @@
 
 This template forms the basis of the Data Processing Addendum that Grantex offers to customers of the hosted service. It is published so procurement teams can review the terms before requesting a signed copy. The signed copy that the parties execute will be a PDF derived from this template, countersigned by both parties; this Markdown file does not constitute that signed agreement.
 
-Customers requiring a signed DPA should email `security@grantex.dev` with their legal counter-party details.
+Customers requiring a signed DPA should email `security@grantex.dev` with their legal counter-party details. Ownership or IP questions may also be sent to `sanjeev@orchestrum.in` or `mishra.sanjeev@gmail.com`.
 
 ---
 
 ## 1. Parties
 
-- **Processor:** Grantex maintainers (the entity operating `api.grantex.dev`; legal entity name **TBD** pending company formation / counsel review).
+- **Processor:** Orchestrum Technologies LLP, owner and operator of the hosted Grantex service at `api.grantex.dev`.
+- **Inventor and owner contact:** Sanjeev Kumar (`sanjeev@orchestrum.in`, `mishra.sanjeev@gmail.com`).
 - **Controller:** the customer organization identified in the executed cover sheet.
 
 This addendum supplements the Apache 2.0 license of the open-source software and any commercial agreement covering the hosted service. In a conflict, the executed cover sheet governs.

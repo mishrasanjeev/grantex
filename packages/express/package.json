@@ -2,6 +2,11 @@
   "name": "@grantex/express",
   "version": "0.1.5",
   "description": "Express.js middleware for Grantex grant token verification and scope-based authorization",
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar.",
   "homepage": "https://grantex.dev/for/express",
   "bugs": {
     "url": "https://github.com/mishrasanjeev/grantex/issues"

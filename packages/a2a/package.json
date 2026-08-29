@@ -2,6 +2,11 @@
   "name": "@grantex/a2a",
   "version": "0.1.3",
   "description": "Google A2A protocol bridge for Grantex — inject grant tokens into agent-to-agent communication",
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar.",
   "homepage": "https://grantex.dev",
   "bugs": {
     "url": "https://github.com/mishrasanjeev/grantex/issues"

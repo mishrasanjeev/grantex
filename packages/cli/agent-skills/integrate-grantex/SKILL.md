@@ -67,3 +67,7 @@ Then use `grantex --json ...` for registration, authorization, grants, verificat
 - Keep upstream credentials behind the protected service; do not give them directly to the agent.
 - Never silently request broader authority after a denial.
 - Treat `@grantex/mcp-auth@2.0.2` as evaluation-only unless its documented release limitations have been resolved in the selected version. For production MCP enforcement, prefer a primary SDK or direct verification at the tool boundary.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

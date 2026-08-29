@@ -242,3 +242,7 @@ JWKS network request per call.
 If you're running the Grantex auth service yourself, rate limits are configurable. The default Fastify IP policy is set in `apps/auth-service/src/server.ts`; a route-specific Fastify policy lives beside its route and replaces that default on the route. Standard developer API-key budgets and their window are defined in `apps/auth-service/src/plugins/dynamicRateLimit.ts` and remain additional. All instances must share Redis for standard developer budgets to remain global across the deployment. Fastify IP counters are process-local unless you configure a shared store or equivalent ingress enforcement.
 
 See the [Self-Hosting guide](/guides/self-hosting) for deployment instructions.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

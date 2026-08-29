@@ -189,3 +189,7 @@ The roadmap is reviewed monthly. Completed source-level task increments may be r
 - React to existing issues to signal demand.
 - Contact [design@grantex.dev](mailto:design@grantex.dev) for enterprise design-partner work.
 - Submit a pull request that includes tests, documentation, and the relevant roadmap exit criteria.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

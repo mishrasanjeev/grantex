@@ -2,6 +2,11 @@
   "name": "@grantex/mpp",
   "version": "0.1.2",
   "description": "Grantex agent identity and delegation for MPP (Machine Payments Protocol)",
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar.",
   "homepage": "https://grantex.dev",
   "bugs": {
     "url": "https://github.com/mishrasanjeev/grantex/issues"

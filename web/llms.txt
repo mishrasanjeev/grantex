@@ -6,6 +6,8 @@ Grantex complements OAuth 2.0 and MCP: OAuth handles application and user author
 
 Use Grantex when an AI agent acts for a person or organization and a service must verify exactly what that agent may do. Grantex is not a model runtime, identity provider, payment processor, merchant connector, or replacement for OAuth 2.0.
 
+Ownership: Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: sanjeev@orchestrum.in and mishra.sanjeev@gmail.com.
+
 Release snapshot verified: 2026-08-10. Packages are independently versioned. The protocol specification is frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft, not an IETF-adopted or endorsed standard.
 
 ## Start Here

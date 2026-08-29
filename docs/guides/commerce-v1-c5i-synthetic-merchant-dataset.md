@@ -63,3 +63,7 @@ The validator rejects production-looking merchant IDs, realistic merchant names,
 ## Gate Posture
 
 Grantex read-only public discovery remains fail-closed for production. This dataset does not change `COMMERCE_PUBLIC_DISCOVERY_ENABLED`, does not set `COMMERCE_PUBLIC_DISCOVERY_MERCHANT_ALLOWLIST`, and does not alter checkout, payment, live payment, or live Plural gates.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

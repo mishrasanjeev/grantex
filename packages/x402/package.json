@@ -2,6 +2,11 @@
   "name": "@grantex/x402",
   "version": "0.1.2",
   "description": "Grantex Delegation Tokens for x402 payment flows — agent spend authorization with W3C Verifiable Credentials",
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar.",
   "homepage": "https://grantex.dev/x402",
   "bugs": {
     "url": "https://github.com/mishrasanjeev/grantex/issues"

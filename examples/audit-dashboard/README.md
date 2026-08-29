@@ -93,3 +93,7 @@ Done! Audit dashboard demo complete.
 |----------|---------|-------------|
 | `GRANTEX_URL` | `http://localhost:3001` | Base URL of the Grantex auth service |
 | `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key. Use a sandbox key for auto-approval |
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

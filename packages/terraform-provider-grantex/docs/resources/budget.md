@@ -30,3 +30,7 @@ resource "grantex_budget_allocation" "agent_budget" {
 - `id` (String) - The unique identifier for the budget allocation.
 - `remaining_budget` (Float) - The remaining budget amount.
 - `created_at` (String) - The timestamp when the budget allocation was created.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
