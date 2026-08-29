@@ -819,7 +819,7 @@ async function validatePublishedVersions(releaseSnapshot) {
 
 async function validateLiveUrls(publicContent) {
   const urls = new Set();
-  const pattern = /https:\/\/(?:docs\.)?grantex\.dev[^\s"'<>)]*/g;
+  const pattern = /https:\/\/(?:docs\.)?grantex\.dev[^\s"',<>)]*/g;
   for (const { text } of publicContent) {
     for (const match of text.matchAll(pattern)) {
       const url = match[0]
