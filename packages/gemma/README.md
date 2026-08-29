@@ -597,4 +597,4 @@ See [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRIB
 
 ## Ownership
 
-Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

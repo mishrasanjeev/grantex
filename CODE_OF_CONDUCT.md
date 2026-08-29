@@ -8,7 +8,7 @@ providing a welcoming and inclusive experience for everyone.
 ## Reporting
 
 If you experience or witness unacceptable behavior, please report it by opening
-an issue or contacting the maintainers at **sanjeev@grantex.dev**.
+an issue or contacting the maintainers at **sanjeev@orchestrum.in or mishra.sanjeev@gmail.com**.
 
 ## Enforcement
 
@@ -22,4 +22,4 @@ This Code of Conduct is adapted from the
 
 ## Ownership
 
-Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

@@ -8,7 +8,7 @@ This draft is published so customers and end users can review Grantex's privacy 
 
 ## 1. Who we are
 
-Grantex is an open protocol and a hosted developer service owned and operated by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. For privacy questions or to exercise the rights below, contact `security@grantex.dev`; ownership or IP questions may also be sent to `sanjeev@orchestrum.in` or `mishra.sanjeev@gmail.com`.
+Grantex is an open protocol and a hosted developer service owned and operated by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. For privacy questions or to exercise the rights below, contact `sanjeev@orchestrum.in or mishra.sanjeev@gmail.com`; ownership or IP questions may also be sent to `sanjeev@orchestrum.in` or `mishra.sanjeev@gmail.com`.
 
 ## 2. What we collect and why
 
@@ -60,7 +60,7 @@ Depending on where you live, you have some or all of the following rights:
 - **Withdrawal of consent** at any time, with no effect on lawfulness of earlier processing.
 - **Lodge a complaint** with your local supervisory authority (e.g., EU DPA, the UK ICO, the Indian DPB).
 
-Exercise any of these by emailing `security@grantex.dev`. We aim to respond within 30 days.
+Exercise any of these by emailing `sanjeev@orchestrum.in or mishra.sanjeev@gmail.com`. We aim to respond within 30 days.
 
 ## 7. Children
 
@@ -80,6 +80,6 @@ Material changes to this policy will be announced via the public CHANGELOG and t
 
 ## 11. Contact
 
-Privacy and security: `security@grantex.dev`
+Privacy and security: `sanjeev@orchestrum.in or mishra.sanjeev@gmail.com`
 
 Ownership and IP: `sanjeev@orchestrum.in`, `mishra.sanjeev@gmail.com`

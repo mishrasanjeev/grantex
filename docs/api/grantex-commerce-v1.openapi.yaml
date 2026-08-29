@@ -5,8 +5,7 @@ info:
   description: >-
     Authorization-as-a-service for agent-initiated commerce actions.
     Grantex is owned by Orchestrum Technologies LLP. Inventor and owner:
-    Sanjeev Kumar. Ownership contact: sanjeev@orchestrum.in and
-    mishra.sanjeev@gmail.com.
+    Sanjeev Kumar. Ownership contact: sanjeev@orchestrum.in or mishra.sanjeev@gmail.com.
     Source of truth: GRANTEX_COMMERCE_V1_BUILD_SPEC.md.
     Milestone 1 (Foundations) implements feature flags, tenant boundary,
     merchant/agent/product/variant models, the electronics_appliances

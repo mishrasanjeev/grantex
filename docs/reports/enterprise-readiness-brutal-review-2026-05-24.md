@@ -181,7 +181,7 @@ These are claims-vs-reality, legal-risk, or broken-critical-path items. **Do not
 - **H-3** Add 7 enterprise buyer pages: SLA, Support Tiers, Pricing, Data Residency, BYOK, Audit Log Retention, Incident Response Runbook.
 - **H-4** Single canonical API URL. `quickstart.mdx:20` says `https://api.grantex.dev`; `openapi.yaml:29` says `https://api.grantex.dev` (Cloud Run internal); `api-reference/introduction.mdx:12` echoes the Cloud Run URL. Pick one. Set up `api.grantex.dev` as a stable alias if not already.
 - **H-5** Bump `docs/openapi.yaml:4` from `0.1.3` to whatever matches the SDK; add standardized error schema across every operation; fix missing `operationId`s; link Postman collection + environment from `docs.json` (currently orphaned).
-- **H-6** Consolidate contact emails. `CODE_OF_CONDUCT.md:11` says `sanjeev@grantex.dev`; `SECURITY.md:39` says `security@grantex.dev`. Pick canonical aliases and use them.
+- **H-6** Consolidate contact emails. `CODE_OF_CONDUCT.md:11` says `sanjeev@orchestrum.in or mishra.sanjeev@gmail.com`; `SECURITY.md:39` says `sanjeev@orchestrum.in or mishra.sanjeev@gmail.com`. Pick canonical aliases and use them.
 - **H-7** Tweets/launch posts at root (`tweet-gemma.md`, `twitterposts.md`, `DEVTO_ARTICLE.md`, `LAUNCH_POSTS.md`) should be in `docs/marketing/` or deleted; they currently clutter the repo root.
 - **H-8** `LICENSE` line 170 says “Copyright 2026” — change to `2024-2026`.
 - **H-9** CONTRIBUTING.md missing DCO/CLA mention. Add DCO requirement (`Signed-off-by:` on commits) — enterprise-OSS table stakes.
