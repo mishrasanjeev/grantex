@@ -28,7 +28,7 @@
 
 <br/>
 
-**Ownership:** Grantex is owned by **Orchestrum Technologies LLP**. Inventor and owner: **Sanjeev Kumar**. Contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+**Ownership:** Grantex is owned by **Orchestrum Technologies LLP**. Inventor and owner: **Sanjeev Kumar**. Contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
 
 <br/>
 
@@ -1785,7 +1785,7 @@ Yes. The reference implementation is fully open-source. Docker Compose deploy in
 
 Protocol specification and SDKs: [Apache 2.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 
-Product ownership: Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+Product ownership: Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
 
 ---
 

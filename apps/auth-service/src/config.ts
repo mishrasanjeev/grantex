@@ -139,7 +139,7 @@ export const config = {
   usageMeteringEnabled: process.env['USAGE_METERING_ENABLED'] === 'true',
   // Email (Resend)
   emailApiKey: process.env['RESEND_API_KEY'] ?? null,
-  emailFrom: optional('EMAIL_FROM', 'Grantex <noreply@grantex.dev>'),
+  emailFrom: optional('EMAIL_FROM', 'Grantex <sanjeev@orchestrum.in>'),
   // Ed25519 key for VC Data Integrity proofs (optional)
   ed25519PrivateKey: process.env['ED25519_PRIVATE_KEY'] ?? null,
   // DID Web domain

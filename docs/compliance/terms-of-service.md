@@ -80,6 +80,6 @@ We may revise these Terms; material changes will be announced at least 30 days i
 
 ## 16. Contact
 
-Security and service contact: `security@grantex.dev`
+Security and service contact: `sanjeev@orchestrum.in or mishra.sanjeev@gmail.com`
 
 Ownership and IP: `sanjeev@orchestrum.in`, `mishra.sanjeev@gmail.com`

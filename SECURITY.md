@@ -44,7 +44,7 @@ If you are running a version not listed above, please upgrade before reporting.
 
 Report via one of:
 
-- **Email**: [security@grantex.dev](mailto:security@grantex.dev)
+- **Email**: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com)
 - **GitHub Security Advisories**: [Report a vulnerability](https://github.com/mishrasanjeev/grantex/security/advisories/new)
 
 Include in your report:
@@ -58,7 +58,7 @@ Include in your report:
 
 If a report contains exploit code, customer data, or other material you do not
 want to send in cleartext, request our PGP key by emailing
-`security@grantex.dev` with the subject **"PGP key request"** and we will reply
+`sanjeev@orchestrum.in or mishra.sanjeev@gmail.com` with the subject **"PGP key request"** and we will reply
 with the current public key and its fingerprint within one business day. No
 public PGP-key URL is currently published, so email is the source of truth.
 Do not assume any key you find on a public key server is ours unless
@@ -92,7 +92,7 @@ mitigation) is available.
 
 We follow a **coordinated disclosure** model:
 
-1. Reporter submits vulnerability to `security@grantex.dev`.
+1. Reporter submits vulnerability to `sanjeev@orchestrum.in or mishra.sanjeev@gmail.com`.
 2. We triage, reproduce, and confirm within 7 business days.
 3. We develop and test a fix, keeping the reporter in the loop.
 4. We publish a patched release and a CVE (if applicable).
@@ -153,7 +153,7 @@ What we do offer:
 
 If you are reporting to us under a third-party VDP platform (e.g. HackerOne,
 Bugcrowd) on behalf of one of our customers: please also send a copy to
-`security@grantex.dev` so we can triage in parallel.
+`sanjeev@orchestrum.in or mishra.sanjeev@gmail.com` so we can triage in parallel.
 
 ---
 

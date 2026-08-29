@@ -57,6 +57,6 @@ See `docs/self-hosting.md` for the full operator runbook.
 
 ## Contact
 
-Residency or transfer questions: `security@grantex.dev`.
+Residency or transfer questions: `sanjeev@orchestrum.in or mishra.sanjeev@gmail.com`.
 
 Ownership and IP: `sanjeev@orchestrum.in`, `mishra.sanjeev@gmail.com`.

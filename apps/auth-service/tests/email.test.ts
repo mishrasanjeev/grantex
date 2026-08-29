@@ -7,7 +7,7 @@ vi.unmock('../src/lib/email.js');
 const { mockConfig, mockFetch } = vi.hoisted(() => {
   const mockConfig = {
     emailApiKey: null as string | null,
-    emailFrom: 'Grantex <noreply@grantex.dev>',
+    emailFrom: 'Grantex <sanjeev@orchestrum.in>',
   };
   const mockFetch = vi.fn();
   return { mockConfig, mockFetch };
@@ -20,7 +20,7 @@ import { sendEmail, verificationEmailHtml } from '../src/lib/email.js';
 
 beforeEach(() => {
   mockConfig.emailApiKey = null;
-  mockConfig.emailFrom = 'Grantex <noreply@grantex.dev>';
+  mockConfig.emailFrom = 'Grantex <sanjeev@orchestrum.in>';
   mockFetch.mockReset();
 });
 
@@ -50,7 +50,7 @@ describe('sendEmail', () => {
         'Authorization': 'Bearer test-resend-key',
       },
       body: JSON.stringify({
-        from: 'Grantex <noreply@grantex.dev>',
+        from: 'Grantex <sanjeev@orchestrum.in>',
         to: 'user@example.com',
         subject: 'Welcome',
         html: '<p>Hello</p>',

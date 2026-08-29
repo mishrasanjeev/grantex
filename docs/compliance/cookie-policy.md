@@ -47,6 +47,6 @@ Use your browser's standard "Clear site data" controls for `grantex.dev` and `do
 
 ## Contact
 
-Cookie or tracking questions: `security@grantex.dev`.
+Cookie or tracking questions: `sanjeev@orchestrum.in or mishra.sanjeev@gmail.com`.
 
 Ownership and IP: `sanjeev@orchestrum.in`, `mishra.sanjeev@gmail.com`.

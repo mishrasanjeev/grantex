@@ -51,6 +51,6 @@ Adding a new sub-processor requires:
 
 ## Contact
 
-Procurement and DPA questions: `security@grantex.dev` (see `SECURITY.md` for the canonical contact).
+Procurement and DPA questions: `sanjeev@orchestrum.in or mishra.sanjeev@gmail.com` (see `SECURITY.md` for the canonical contact).
 
 Ownership and IP: `sanjeev@orchestrum.in`, `mishra.sanjeev@gmail.com`.

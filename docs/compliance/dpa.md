@@ -5,7 +5,7 @@
 
 This template forms the basis of the Data Processing Addendum that Grantex offers to customers of the hosted service. It is published so procurement teams can review the terms before requesting a signed copy. The signed copy that the parties execute will be a PDF derived from this template, countersigned by both parties; this Markdown file does not constitute that signed agreement.
 
-Customers requiring a signed DPA should email `security@grantex.dev` with their legal counter-party details. Ownership or IP questions may also be sent to `sanjeev@orchestrum.in` or `mishra.sanjeev@gmail.com`.
+Customers requiring a signed DPA should email `sanjeev@orchestrum.in or mishra.sanjeev@gmail.com` with their legal counter-party details. Ownership or IP questions may also be sent to `sanjeev@orchestrum.in` or `mishra.sanjeev@gmail.com`.
 
 ---
 
