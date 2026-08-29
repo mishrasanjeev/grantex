@@ -1180,6 +1180,11 @@
       padding: 40px 0;
     }
     .footer-inner {
+      display: grid;
+      gap: 18px;
+    }
+    .footer-main,
+    .footer-bottom {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -1201,9 +1206,39 @@
     }
     .footer-links a { color: var(--muted); }
     .footer-links a:hover { color: var(--text); text-decoration: none; }
+    .footer-bottom {
+      gap: 14px 20px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(139, 148, 158, 0.16);
+    }
     .footer-copy {
       font-size: 12px;
       color: var(--muted);
+    }
+    .footer-meta {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+      text-align: right;
+    }
+    .footer-meta strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .footer-meta a {
+      color: var(--muted);
+      text-decoration: none;
+      text-underline-offset: 3px;
+    }
+    .footer-meta a:hover {
+      color: var(--text);
+      text-decoration: underline;
     }
 
     /* ── Threat stats ──────────────────────────────────────────────────────── */
@@ -1411,8 +1446,13 @@
       .answer-grid,
       .install-commands { grid-template-columns: 1fr; }
       .tab-btn { padding: 10px 14px; }
-      .footer-inner { flex-direction: column; align-items: flex-start; }
+      .footer-main,
+      .footer-bottom { align-items: flex-start; flex-direction: column; }
       .footer-links { width: 100%; gap: 10px 16px; }
+      .footer-meta {
+        justify-content: flex-start;
+        text-align: left;
+      }
     }
   </style>
 </head>
@@ -3387,26 +3427,33 @@ grantex agent install --dir /path/to/skills</pre>
 <footer>
   <div class="container">
     <div class="footer-inner">
-      <span class="footer-logo">grantex</span>
-      <ul class="footer-links">
-        <li><a href="https://docs.grantex.dev">Docs</a></li>
-        <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
-        <li><a href="/gemma">Gemma 4</a></li>
-        <li><a href="/mcp">MCP Auth</a></li>
-        <li><a href="/dpdp">DPDP</a></li>
-        <li><a href="/registry">Registry</a></li>
-        <li><a href="/anomaly">Anomaly</a></li>
-        <li><a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">IETF Draft</a></li>
-        <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
-      </ul>
-      <ul class="footer-links" aria-label="Legal and procurement">
-        <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/SECURITY.md">Security</a></li>
-      </ul>
-      <span class="footer-copy">&copy; 2026 Orchestrum Technologies LLP</span>
+      <div class="footer-main">
+        <span class="footer-logo">grantex</span>
+        <ul class="footer-links">
+          <li><a href="https://docs.grantex.dev">Docs</a></li>
+          <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
+          <li><a href="/gemma">Gemma 4</a></li>
+          <li><a href="/mcp">MCP Auth</a></li>
+          <li><a href="/dpdp">DPDP</a></li>
+          <li><a href="/registry">Registry</a></li>
+          <li><a href="/anomaly">Anomaly</a></li>
+          <li><a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">IETF Draft</a></li>
+          <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
+        </ul>
+      </div>
+      <div class="footer-bottom">
+        <ul class="footer-links" aria-label="Legal and procurement">
+          <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/SECURITY.md">Security</a></li>
+        </ul>
+        <div class="footer-meta" aria-label="Ownership and contact">
+          <span class="footer-copy">&copy; 2026</span>
+          <span>Owner: <strong>Orchestrum Technologies LLP</strong></span>
+          <span>Inventor/owner: <strong>Sanjeev Kumar</strong></span>
+          <span>Contact: <a href="mailto:sanjeev@orchestrum.in">sanjeev@orchestrum.in</a> or <a href="mailto:mishra.sanjeev@gmail.com">mishra.sanjeev@gmail.com</a></span>
+        </div>
+      </div>
     </div>
   </div>
-      <p class="ownership-notice">Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Contact: <a href="mailto:sanjeev@orchestrum.in">sanjeev@orchestrum.in</a> or <a href="mailto:mishra.sanjeev@gmail.com">mishra.sanjeev@gmail.com</a>.</p>
-
 </footer>
 
 <!-- ── Scripts ────────────────────────────────────────────────────────────── -->
