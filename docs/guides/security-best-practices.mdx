@@ -22,11 +22,14 @@ Never store grant tokens in browser `localStorage`, cookies, or client-side stor
 
 ### Refresh Token Storage
 
-Refresh tokens have a 30-day TTL and are single-use. Store them with the same care as API keys:
+Refresh tokens are single-use and last up to 30 days, capped by the underlying grant expiration. Store them with the same care as API keys:
 
 - Encrypt at rest (e.g., envelope encryption with a KMS)
 - Restrict access to the service that performs token refresh
 - Never log refresh tokens — redact them in your logging pipeline
+- Always store the newest refresh token returned by the server
+- If a refresh response is lost, retry the same previous refresh token immediately; recovery is bounded to five minutes while the grant remains active
+- Do not use refresh as a grant extension mechanism; after the grant expires, start a new authorization request
 
 ## Scope Design
 

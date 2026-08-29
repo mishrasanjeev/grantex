@@ -22,7 +22,7 @@ This document reports on the conformance status of the Grantex reference impleme
 | `/v1/agents` | POST | Yes | ULID-based agent IDs, DID generation |
 | `/v1/authorize` | POST | Yes | PKCE S256 supported |
 | `/v1/token` | POST | Yes | RS256 JWT, refresh token rotation |
-| `/v1/token/refresh` | POST | Yes | Single-use rotation per SPEC §7.4 |
+| `/v1/token/refresh` | POST | Yes | Active-grant single-use rotation with bounded lost-response recovery |
 | `/v1/tokens/verify` | POST | Yes | Online verification with revocation check |
 | `/v1/tokens/revoke` | POST | Yes | JTI-based revocation, 204 response |
 | `/v1/grants` | GET | Yes | Filtered by developer |
@@ -147,7 +147,7 @@ The `@grantex/conformance` package (v0.1.4) provides an automated test suite tha
 - Cascade revocation (3-level delegation tree)
 - Hash chain verification
 - RS256 algorithm enforcement (rejects `none`, `HS256`)
-- Refresh token single-use rotation
+- Refresh token single-use rotation, capped by grant expiration
 - Rate limiting behavior
 - Budget atomic debit concurrency
 - Event streaming connectivity

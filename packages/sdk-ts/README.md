@@ -342,8 +342,10 @@ console.log(token.refreshToken); // for token refresh
 | `grantToken` | `string` | Signed RS256 JWT — the agent's bearer credential |
 | `grantId` | `string` | Grant record ID |
 | `scopes` | `string[]` | Scopes the user approved |
-| `expiresAt` | `string` | Token expiry (ISO 8601) |
-| `refreshToken` | `string` | Refresh token for obtaining new grant tokens |
+| `expiresAt` | `string` | Underlying grant expiry (ISO 8601) |
+| `refreshToken` | `string` | Refresh token for rotating credentials while the grant remains active |
+
+Refresh tokens are single-use and rotate on every accepted refresh. If a refresh response is lost after the server commits rotation, retry the same previous refresh token immediately; Grantex can return the already-rotated token pair for five minutes (300 seconds) while the grant remains active. Refresh does not extend `expiresAt`; after the grant expires, re-authorize.
 
 ---
 

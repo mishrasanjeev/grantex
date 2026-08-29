@@ -37,7 +37,7 @@ All examples use the sandbox key by default.
 | [`nextjs-starter`](./nextjs-starter/) | Next.js interactive consent flow with callback handling | `@grantex/sdk` |
 | [`openai-agents`](./openai-agents/) | OpenAI Agents SDK with scope enforcement | `grantex`, `grantex-openai-agents` |
 | [`google-adk`](./google-adk/) | Google ADK with scoped function tools | `grantex`, `grantex-adk` |
-| [`token-expiry-refresh`](./token-expiry-refresh/) | Time-bound grants with expiry detection and refresh token rotation | `@grantex/sdk` |
+| [`token-expiry-refresh`](./token-expiry-refresh/) | Active-grant refresh rotation, 300-second lost-response recovery, and expired-grant re-authorization | `@grantex/sdk` |
 | [`audit-dashboard`](./audit-dashboard/) | Audit trail querying, filtering, metrics, and hash chain verification | `@grantex/sdk` |
 | [`multi-agent-email-flow`](./multi-agent-email-flow/) | Multi-agent delegation with failure handling and audit trail | `@grantex/sdk` |
 | [`gemma-raspberry-pi`](./gemma-raspberry-pi/) | Gemma 4 smart home agent on Raspberry Pi with offline auth | `grantex-gemma` |

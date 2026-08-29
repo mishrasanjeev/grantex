@@ -2953,10 +2953,10 @@ grantex agent install --dir /path/to/skills</pre>
       <a href="https://github.com/mishrasanjeev/grantex/tree/main/examples/token-expiry-refresh"
          class="example-card" style="text-decoration:none;">
         <div class="example-lang">TypeScript</div>
-        <h3>Token Expiry &amp; Refresh</h3>
+        <h3>Token Refresh &amp; Rotation</h3>
         <p>
-          Time-bound grant tokens with automatic expiry detection, refresh token
-          rotation, and single-use refresh enforcement.
+          Active-grant refresh rotation, 300-second lost-response recovery,
+          single-use enforcement, and the expired-grant re-authorization boundary.
         </p>
         <div class="example-packages">
           <span class="example-pkg">@grantex/sdk</span>
@@ -3262,7 +3262,7 @@ grantex agent install --dir /path/to/skills</pre>
             <span class="check">&#x2713;</span>
             <div>
               <h4><a href="https://docs.grantex.dev/guides/security-hardening" style="color:inherit;text-decoration:none;">Security Hardening</a></h4>
-              <p>Fastify per-IP defaults or route overrides, plus additional standard-auth plan budgets (with JWKS exempt), HTTP security headers (HSTS, CSP, X-Frame-Options), HMAC-signed SSO state, timing-safe auth, scope validation, and 1MB body limits.</p>
+              <p>Fastify per-IP defaults or route overrides, plus additional standard-auth plan budgets (with JWKS exempt), HTTP security headers, HMAC-signed SSO state, timing-safe auth, scope validation, bounded refresh-token recovery, and 1MB body limits.</p>
             </div>
           </div>
           <div class="enterprise-feature">

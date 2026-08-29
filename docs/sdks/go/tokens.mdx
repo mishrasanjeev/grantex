@@ -31,14 +31,14 @@ tokenResp, err := client.Tokens.Exchange(ctx, grantex.ExchangeTokenParams{
 | Field | Type | Description |
 |-------|------|-------------|
 | `GrantToken` | `string` | JWT grant token |
-| `ExpiresAt` | `string` | ISO 8601 token expiry |
+| `ExpiresAt` | `string` | ISO 8601 grant expiry |
 | `Scopes` | `[]string` | Granted scopes |
-| `RefreshToken` | `string` | Refresh token for rotation |
+| `RefreshToken` | `string` | Refresh token for active-grant rotation |
 | `GrantID` | `string` | Grant record ID |
 
 ## Refresh
 
-Exchange a refresh token for a new grant token. Refresh tokens are single-use, and each successful rotation returns a new refresh token.
+Exchange a refresh token for a new grant token while the underlying grant remains active. Refresh tokens are single-use, and each successful rotation returns a new refresh token without extending `ExpiresAt`.
 
 ```go
 tokenResp, err := client.Tokens.Refresh(ctx, grantex.RefreshTokenParams{
@@ -46,10 +46,11 @@ tokenResp, err := client.Tokens.Refresh(ctx, grantex.RefreshTokenParams{
     AgentID:      "agent-id",
 })
 // tokenResp.RefreshToken is a NEW refresh token — store it
+// tokenResp.ExpiresAt is the same grant expiration
 ```
 
 <Warning>
-Always store and use the newest `RefreshToken`. If the HTTP response is lost after the server commits the rotation, retry the same previous refresh token immediately; during a five-minute (300-second) replay-recovery window, Grantex returns the already-rotated refresh token instead of rotating again. After that window, or once the rotated child token has been used, the previous refresh token is rejected.
+Always store and use the newest `RefreshToken`. If the HTTP response is lost after the server commits the rotation, retry the same previous refresh token immediately; during a five-minute (300-second) replay-recovery window, Grantex returns the already-rotated refresh token instead of rotating again while the grant remains active. After that window, once the rotated child token has been used, or after grant expiration, the previous refresh token is rejected.
 </Warning>
 
 ### Parameters
@@ -61,7 +62,7 @@ Always store and use the newest `RefreshToken`. If the HTTP response is lost aft
 
 ### Response
 
-Same `ExchangeTokenResponse` as Exchange — includes a new `GrantToken` and `RefreshToken`.
+Same `ExchangeTokenResponse` as Exchange — includes a new `GrantToken` and `RefreshToken` with the same `GrantID` and `ExpiresAt`.
 
 ## Verify
 
