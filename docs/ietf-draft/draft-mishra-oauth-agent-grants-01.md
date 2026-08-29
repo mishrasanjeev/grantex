@@ -363,7 +363,7 @@ Response `200 OK`:
 }
 ~~~
 
-Refresh tokens are single-use. The Authorization Server MUST rotate the refresh token on every accepted non-replay use. To recover from a lost token response, the Authorization Server MAY allow a short idempotent replay of the immediately previous refresh token; replay MUST return the already-rotated refresh token and MUST NOT extend the rotation chain. Refresh tokens MUST be invalidated when the underlying Grant is revoked.
+Refresh tokens are single-use and MUST NOT outlive the underlying Grant. The Authorization Server MUST rotate the refresh token on every accepted non-replay use. To recover from a lost token response, the Authorization Server MAY allow a short idempotent replay of the immediately previous refresh token while the Grant remains active; replay MUST return the already-rotated refresh token and MUST NOT extend the rotation chain or the Grant lifetime. Refresh tokens MUST be invalidated when the underlying Grant is expired or revoked.
 
 # Grant Token Format {#grant-token-format}
 

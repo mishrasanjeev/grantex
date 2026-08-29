@@ -91,7 +91,7 @@ Add to `~/.codeium/windsurf/mcp_config.json`:
 |---|---|
 | `grantex_token_exchange` | Exchange authorization code for a signed grant token (RS256 JWT) |
 | `grantex_token_verify` | Verify a grant token — check scopes, expiry, and revocation status |
-| `grantex_token_refresh` | Refresh a grant token using a refresh token |
+| `grantex_token_refresh` | Rotate credentials for an active grant using a refresh token |
 | `grantex_token_revoke` | Revoke a grant token by JTI |
 
 ### Grant Management (4)

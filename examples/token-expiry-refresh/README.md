@@ -1,6 +1,6 @@
 # Token Refresh & Rotation
 
-Demonstrates time-bound grants, refresh token rotation, lost-response recovery, and the re-authorization boundary after a grant expires.
+Demonstrates active-grant refresh rotation, lost-response recovery, and the re-authorization boundary after a grant expires.
 
 ## What it does
 

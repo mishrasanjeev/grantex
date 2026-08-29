@@ -368,7 +368,7 @@
         <span class="step-badge badge-pending" id="badge5">Pending</span>
       </div>
       <div class="step-body">
-        <div class="step-desc">Exchange the single-use refresh token for a new grant token. The old refresh token is invalidated (rotation).</div>
+        <div class="step-desc">Exchange the single-use refresh token for a new grant token while the grant is active. A lost response can be recovered for 300 seconds; refresh does not extend grant expiry.</div>
         <div class="panel">
           <div class="panel-label"><span class="method method-post">POST</span> /v1/token/refresh</div>
           <pre id="req5"></pre>

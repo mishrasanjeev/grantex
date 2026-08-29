@@ -56,7 +56,7 @@ The Manage function allocates risk management resources. DAAP contributes throug
 | AI RMF Category | DAAP Capability | Implementation |
 |-----------------|-----------------|----------------|
 | MANAGE 1.1 — Risk treatment | Real-time grant revocation | `DELETE /v1/grants/:id` atomically revokes the grant and all descendant grants. Sub-second propagation. |
-| MANAGE 2.2 — Mechanisms to supersede | Token revocation + refresh rotation | Individual tokens revocable by JTI. Refresh tokens are single-use with automatic rotation and a bounded replay-recovery window for lost refresh responses. |
+| MANAGE 2.2 — Mechanisms to supersede | Token revocation + refresh rotation | Individual tokens are revocable by JTI. Refresh tokens are single-use, capped by grant expiration, and include a bounded replay-recovery window for lost refresh responses without extending the grant lifetime. |
 | MANAGE 3.1 — Response plans | Event streaming + webhooks | Real-time SSE/WebSocket event streams for `grant.created`, `grant.revoked`, `token.issued`, `budget.threshold`, `budget.exhausted`. Webhooks persist delivery attempts and retry failures with a finite cap. |
 | MANAGE 4.1 — Incident response | Cascade revocation + anomaly alerts | Revoking a parent grant atomically revokes all sub-agent grants. Anomaly detection surfaces high-severity behavioral deviations. |
 

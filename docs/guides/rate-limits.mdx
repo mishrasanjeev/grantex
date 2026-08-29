@@ -20,7 +20,7 @@ Grantex applies one-minute fixed-window limits. Fastify applies one pre-auth pol
 | **Standard API-key - Enterprise plan** | 2,000 req/min | Per developer, across routes and source IPs |
 | `POST /v1/authorize` | 10 req/min | Additional Redis-backed per-developer authorization bucket; the Fastify default and plan budget also apply |
 | `POST /v1/token` | 20 req/min | Stricter — exchanges codes for tokens |
-| `POST /v1/token/refresh` | 20 req/min | Stricter — refreshes grant tokens |
+| `POST /v1/token/refresh` | 20 req/min | Stricter — refreshes active grant tokens |
 | `GET /.well-known/jwks.json` | **Exempt** | Public key distribution is never throttled |
 
 A route-specific Fastify `config.rateLimit` replaces the 5,000 requests/minute Fastify default for that route; those two Fastify policies are not stacked. The Redis-backed standard developer plan budget remains an additional policy when standard API-key authentication applies.

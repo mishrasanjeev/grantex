@@ -239,7 +239,14 @@ const token = await grantex.tokens.exchange({
 console.log(token.grantToken);  // RS256 JWT — pass this to your agent
 console.log(token.scopes);      // ['calendar:read', 'payments:initiate:max_500']
 console.log(token.grantId);     // 'grnt_01HXYZ...'
+console.log(token.refreshToken); // store securely for active-grant rotation
 ```
+
+Refresh tokens are single-use and rotate on every accepted refresh. If the
+refresh HTTP response is lost after the server commits, retry the same previous
+refresh token immediately; Grantex can recover the already-rotated token pair
+for five minutes (300 seconds). Refresh does not extend `token.expiresAt`; after
+the grant expires, start a new authorization request.
 
 ### 4. Verify the token and use it
 
@@ -1654,7 +1661,7 @@ Walk through all 7 steps of the protocol: register an agent, authorize, exchange
 | [`quickstart-go`](examples/quickstart-go) | Core authorization lifecycle using the Go SDK | `go run .` |
 | [`multi-agent-email-flow`](examples/multi-agent-email-flow) | Multi-agent email automation with delegation, enforcement, and cascade revocation | `npm start` |
 | [`audit-dashboard`](examples/audit-dashboard) | Audit trail querying, filtering, and hash chain integrity verification | `npm start` |
-| [`token-expiry-refresh`](examples/token-expiry-refresh) | Time-bound grant tokens with automatic expiry detection and refresh rotation | `npm start` |
+| [`token-expiry-refresh`](examples/token-expiry-refresh) | Active-grant refresh rotation, 300-second lost-response recovery, and expired-grant re-authorization | `npm start` |
 | [`x402-agent-demo`](examples/x402-agent-demo) | AI agent using Grantex Delegation Token + x402 payments | `npm start` |
 | [`x402-weather-api`](examples/x402-weather-api) | Express server with x402 payment flow + GDT enforcement | `npm start` |
 

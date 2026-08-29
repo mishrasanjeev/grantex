@@ -50,8 +50,8 @@ with Grantex(api_key="gx_live_...") as client:
 | `grant_token`   | `str`             | The JWT grant token.                             |
 | `grant_id`      | `str`             | The unique grant identifier.                     |
 | `scopes`        | `tuple[str, ...]` | The approved scopes.                             |
-| `expires_at`    | `str`             | ISO 8601 timestamp when the token expires.       |
-| `refresh_token` | `str`             | A refresh token for obtaining new grant tokens.  |
+| `expires_at`    | `str`             | ISO 8601 timestamp when the underlying grant expires. |
+| `refresh_token` | `str`             | A refresh token for rotating credentials while the grant remains active. |
 
 ### Exchange with PKCE
 
@@ -68,9 +68,9 @@ with Grantex(api_key="gx_live_...") as client:
 
 ## Refresh
 
-Refresh a grant token using a refresh token. Returns a new grant token and a new refresh token. The `grant_id` stays the same.
+Refresh a grant token using a refresh token while the underlying grant remains active. Returns a new grant token and a new refresh token. The `grant_id` and `expires_at` stay the same.
 
-Refresh tokens are single-use and rotated on every refresh per SPEC §7.4. If the HTTP response is lost after the server commits the rotation, retry the same previous refresh token immediately. During a five-minute (300-second) replay-recovery window, Grantex returns the already-rotated refresh token instead of rotating again. After that window, or once the rotated child token has been used, the previous refresh token is rejected.
+Refresh tokens are single-use and rotated on every refresh per SPEC §7.4. Refresh does not extend the grant lifetime; after `expires_at`, the caller must re-authorize. If the HTTP response is lost after the server commits the rotation, retry the same previous refresh token immediately. During a five-minute (300-second) replay-recovery window, Grantex returns the already-rotated refresh token instead of rotating again while the grant remains active. After that window, or once the rotated child token has been used, the previous refresh token is rejected.
 
 ```python
 from grantex import Grantex, RefreshTokenParams
@@ -84,6 +84,7 @@ with Grantex(api_key="gx_live_...") as client:
     print(f"New grant token: {new_token.grant_token}")
     print(f"New refresh token: {new_token.refresh_token}")
     print(f"Same grant ID: {new_token.grant_id}")
+    print(f"Same grant expiration: {new_token.expires_at}")
 ```
 
 ### RefreshTokenParams
@@ -98,7 +99,7 @@ with Grantex(api_key="gx_live_...") as client:
 Returns an `ExchangeTokenResponse` — same shape as `exchange()`. See above for field descriptions.
 
 <Warning>
-Each refresh token can only be used once. If you attempt to reuse a refresh token, the request will be rejected with a `400` error. Always store and use the new `refresh_token` from the response.
+Each refresh token can only be used once. Always store and use the new `refresh_token` from the response. The previous token is accepted only for lost-response recovery during the five-minute window while the grant remains active; after the window, after the rotated child token is used, or after grant expiration, reuse is rejected with a `400` error.
 </Warning>
 
 ## Verify
