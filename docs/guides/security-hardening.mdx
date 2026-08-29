@@ -109,11 +109,11 @@ Default token lifetimes:
 | Token type | Default TTL |
 |------------|-------------|
 | Grant token | Matches the `expiresIn` parameter on authorization (e.g., `24h`) |
-| Refresh token | 30 days, single-use |
+| Refresh token | Up to 30 days, capped by grant expiration, single-use |
 | Principal session token | Matches `expiresIn` from `POST /v1/principal-sessions` |
 
 <Tip>
-Use short-lived grant tokens (1-4 hours) combined with refresh tokens for long-running workflows. This limits the blast radius of a compromised token.
+Use grant lifetimes that match the authorized workflow. Refresh tokens rotate credentials while the grant remains active; they do not extend an expired grant.
 </Tip>
 
 ## Scope Format Validation
