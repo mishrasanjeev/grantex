@@ -1,17 +1,16 @@
-# Token Expiry & Refresh
+# Token Refresh & Rotation
 
-Demonstrates time-bound grant tokens with automatic expiry detection and refresh token rotation.
+Demonstrates time-bound grants, refresh token rotation, lost-response recovery, and the re-authorization boundary after a grant expires.
 
 ## What it does
 
-1. **Registers an agent** and authorizes with a short-lived token (10 seconds)
-2. **Uses the token** successfully before expiry (offline + online verification)
-3. **Waits for expiry** with a visible countdown
-4. **Detects expiry** — offline verification throws, online verification returns `valid: false`
-5. **Refreshes the token** — gets a new JWT with the same `grantId`
-6. **Uses the refreshed token** — verifies it works with full scope access
-7. **Refresh response recovery** — retry the previous refresh token immediately to recover the already-rotated token
-8. **Refresh token rotation** — old refresh tokens cannot keep being reused
+1. **Registers an agent** and authorizes an active grant
+2. **Uses the token** successfully while the grant is active (offline + online verification)
+3. **Refreshes the token** — gets a new JWT and rotated refresh token for the same `grantId`
+4. **Uses the refreshed token** — verifies it works with full scope access
+5. **Refresh response recovery** — retry the previous refresh token immediately to recover the already-rotated token
+6. **Refresh token rotation** — old refresh tokens cannot keep being reused
+7. **Expired grant boundary** — proves that an expired grant must be re-authorized rather than refreshed
 
 ## Prerequisites
 
@@ -33,34 +32,26 @@ npm start
 ## Expected output
 
 ```
-=== Token Expiry & Refresh Demo ===
+=== Token Refresh & Rotation Demo ===
 
 Agent registered: ag_01...
 
---- Authorizing with 10s TTL ---
+--- Authorizing an active grant (5m) ---
 Grant token received:
   grantId:      grnt_01...
   scopes:       calendar:read, email:send
-  expiresAt:    2026-03-30T12:00:10.000Z
+  expiresAt:    2026-03-30T12:05:00.000Z
   refreshToken: ref_01HXYZ...
 
 --- Using token before expiry ---
 Offline verification: PASSED
 Online verification:  valid = true
 
---- Waiting 12s for token to expire ---
-  Token should now be expired.
-
---- Detecting expiry ---
-Offline verification: EXPIRED
-  Error: "exp" claim timestamp check failed
-Online verification:  valid = false (expected: false)
-
 --- Refreshing token ---
 Token refreshed successfully!
-  grantId:       grnt_01... (same as original)
-  new expiresAt: 2026-03-30T12:00:22.000Z
-  scopes:        calendar:read, email:send
+  grantId:   grnt_01... (same as original)
+  expiresAt: 2026-03-30T12:05:00.000Z (grant lifetime unchanged)
+  scopes:    calendar:read, email:send
 
 --- Using refreshed token ---
 Offline verification: PASSED
@@ -76,7 +67,14 @@ Attempting to reuse the original refresh token after the chain moved forward...
 Blocked! Original refresh token rejected.
   Reason: Refresh tokens are single-use; recovery only works before the rotated child is used.
 
-Done! Token expiry and refresh lifecycle complete.
+--- Expired grant boundary ---
+Creating a short-lived grant (3s) to show the re-authorization boundary...
+Waiting 5s for the grant to expire...
+Online verification after expiry: valid = false (expected: false)
+Refresh after grant expiry blocked.
+  Reason: Refresh rotates credentials for an active grant; expired grants require re-authorization.
+
+Done! Token refresh lifecycle complete.
 ```
 
 ## Environment variables
@@ -85,4 +83,10 @@ Done! Token expiry and refresh lifecycle complete.
 |----------|---------|-------------|
 | `GRANTEX_URL` | `http://localhost:3001` | Base URL of the Grantex auth service |
 | `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key. Use a sandbox key for auto-approval |
-| `TOKEN_TTL` | `10s` | Grant token time-to-live (e.g. `10s`, `1m`, `1h`) |
+| `GRANT_TTL` | `5m` | Active grant lifetime used for refresh rotation |
+| `EXPIRED_GRANT_TTL` | `3s` | Short grant lifetime used only for the expired-grant boundary check |
+| `TOKEN_TTL` | unset | Backward-compatible alias for `EXPIRED_GRANT_TTL` |
+
+## Refresh boundary
+
+`expiresIn` controls the underlying grant lifetime. Refresh rotates credentials for that active grant and does not extend the grant's `expiresAt`. If the refresh response is lost after the server commits rotation, retry the previous refresh token immediately; Grantex can return the already-rotated refresh token during the five-minute recovery window. After the grant expires, the caller must re-authorize.

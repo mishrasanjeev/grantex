@@ -61,20 +61,20 @@ console.log(token.refreshToken); // 'rt_01HXYZ...'
 </ResponseField>
 
 <ResponseField name="expiresAt" type="string">
-  ISO 8601 timestamp when the grant token expires.
+  ISO 8601 timestamp when the underlying grant expires.
 </ResponseField>
 
 <ResponseField name="refreshToken" type="string">
-  A refresh token for obtaining new grant tokens without re-authorization.
+  A refresh token for rotating credentials while the grant remains active.
 </ResponseField>
 
 ---
 
 ## tokens.refresh()
 
-Refresh a grant token using a refresh token. Returns a new grant token and a new refresh token. The `grantId` stays the same.
+Refresh a grant token using a refresh token while the underlying grant remains active. Returns a new grant token and a new refresh token. The `grantId` and `expiresAt` stay the same.
 
-Refresh tokens are single-use and rotated on every refresh per SPEC §7.4. If the HTTP response is lost after the server commits the rotation, retry the same previous refresh token immediately. During a five-minute (300-second) replay-recovery window, Grantex returns the already-rotated refresh token instead of rotating again. After that window, or once the rotated child token has been used, the previous refresh token is rejected.
+Refresh tokens are single-use and rotated on every refresh per SPEC §7.4. Refresh does not extend the grant lifetime; after `expiresAt`, the caller must re-authorize. If the HTTP response is lost after the server commits the rotation, retry the same previous refresh token immediately. During a five-minute (300-second) replay-recovery window, Grantex returns the already-rotated refresh token instead of rotating again. After that window, or once the rotated child token has been used, the previous refresh token is rejected.
 
 ```typescript
 const newToken = await grantex.tokens.refresh({
@@ -85,6 +85,7 @@ const newToken = await grantex.tokens.refresh({
 console.log(newToken.grantToken);   // new RS256 JWT
 console.log(newToken.refreshToken); // new refresh token; store this value
 console.log(newToken.grantId);      // same grant ID
+console.log(newToken.expiresAt);    // same grant expiration
 ```
 
 ### Parameters
@@ -102,7 +103,7 @@ console.log(newToken.grantId);      // same grant ID
 Returns the same shape as `exchange()` — see above for field descriptions.
 
 <Warning>
-Always store and use the newest `refreshToken` from the response. The previous refresh token is only accepted for five minutes to recover a lost response and will be rejected with a `400` error after the recovery window or after the rotated token is used.
+Always store and use the newest `refreshToken` from the response. The previous refresh token is only accepted for five minutes to recover a lost response while the grant remains active, and will be rejected with a `400` error after the recovery window, after the rotated token is used, or after the grant expires.
 </Warning>
 
 ---

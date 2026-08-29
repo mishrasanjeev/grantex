@@ -175,7 +175,7 @@ rotation refresh explicitly.
 
 ## Token Refresh
 
-When a grant token expires, use the refresh token to obtain a new one without re-prompting the user:
+Before a grant expires, use the refresh token to rotate credentials and obtain a fresh JWT for the same active grant:
 
 <CodeGroup>
 ```typescript TypeScript
@@ -187,6 +187,7 @@ const newToken = await grantex.tokens.refresh({
 // newToken.grantToken — new JWT
 // newToken.refreshToken — new refresh token (old one is invalidated)
 // newToken.grantId — same grant, new token
+// newToken.expiresAt — same underlying grant expiration
 ```
 
 ```python Python
@@ -200,7 +201,8 @@ new_token = client.tokens.refresh(RefreshTokenParams(
 # new_token.grant_token — new JWT
 # new_token.refresh_token — new refresh token (old one is invalidated)
 # new_token.grant_id — same grant, new token
+# new_token.expires_at — same underlying grant expiration
 ```
 </CodeGroup>
 
-Refresh tokens are single-use. Each refresh returns a new refresh token, forming a rotation chain. If a refresh response is lost after the server commits, retry the same previous refresh token immediately; Grantex can return the already-rotated refresh token during a five-minute (300-second) replay-recovery window. After that window, or once the rotated child token has been used, reuse is rejected — this detects token theft without stranding callers after a lost response.
+Refresh tokens are single-use. Each refresh returns a new refresh token, forming a rotation chain. Refresh does not extend the underlying grant's `expiresAt`; after the grant expires, the caller must re-authorize. If a refresh response is lost after the server commits, retry the same previous refresh token immediately; Grantex can return the already-rotated refresh token during a five-minute (300-second) replay-recovery window while the grant remains active. After that window, or once the rotated child token has been used, reuse is rejected — this detects token theft without stranding callers after a lost response.

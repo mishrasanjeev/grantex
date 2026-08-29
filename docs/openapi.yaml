@@ -1186,12 +1186,13 @@ paths:
       tags: [Tokens]
       summary: Refresh a grant token
       description: |
-        Exchanges a refresh token for a new grant token and rotated refresh token.
+        Exchanges a refresh token for a new grant token and rotated refresh token while the underlying grant remains active.
+        Refresh does not extend the grant expiration; after the grant expires, the caller must re-authorize.
         The old refresh token is marked as used after rotation (single-use rotation per SPEC §7.4).
         If the response is lost after the rotation commits, the immediately previous refresh token may be
         retried for a five-minute (300-second) replay-recovery window; the server returns the already-rotated refresh token and
         does not rotate the chain again. After that window, or once the rotated child token has been used,
-        the old refresh token is rejected. Returns the same grantId with a new JWT and refresh token.
+        the old refresh token is rejected. Returns the same grantId and expiresAt with a new JWT and refresh token.
 
         **Rate limit: 20 requests/minute.**
       x-rateLimit:
