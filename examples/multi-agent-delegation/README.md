@@ -20,3 +20,7 @@ npm install && npm start
 3. Parent delegates a subset of scopes (`calendar:read` only) to the child
 4. Verifies the child token shows delegation metadata (`delegationDepth`, `parentAgentDid`)
 5. Revokes the parent grant — cascade revocation automatically revokes the child grant
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

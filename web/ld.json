@@ -4,9 +4,17 @@
     {
       "@type": "Organization",
       "@id": "https://grantex.dev/#organization",
-      "name": "Grantex",
-      "alternateName": "Grantex AI Agent Authorization",
+      "name": "Orchestrum Technologies LLP",
+      "alternateName": [
+        "Grantex",
+        "Grantex AI Agent Authorization"
+      ],
+      "legalName": "Orchestrum Technologies LLP",
       "url": "https://grantex.dev/",
+      "email": [
+        "sanjeev@orchestrum.in",
+        "mishra.sanjeev@gmail.com"
+      ],
       "logo": {
         "@type": "ImageObject",
         "@id": "https://grantex.dev/#logo",
@@ -14,7 +22,35 @@
         "contentUrl": "https://grantex.dev/favicon.svg",
         "caption": "Grantex"
       },
-      "description": "Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records."
+      "founder": {
+        "@id": "https://grantex.dev/#sanjeev-kumar"
+      },
+      "contactPoint": [
+        {
+          "@type": "ContactPoint",
+          "contactType": "ownership and IP",
+          "email": "sanjeev@orchestrum.in"
+        },
+        {
+          "@type": "ContactPoint",
+          "contactType": "ownership and IP",
+          "email": "mishra.sanjeev@gmail.com"
+        }
+      ],
+      "description": "Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Grantex is an open-source delegated authorization protocol and reference implementation for AI agents."
+    },
+    {
+      "@type": "Person",
+      "@id": "https://grantex.dev/#sanjeev-kumar",
+      "name": "Sanjeev Kumar",
+      "email": [
+        "sanjeev@orchestrum.in",
+        "mishra.sanjeev@gmail.com"
+      ],
+      "affiliation": {
+        "@id": "https://grantex.dev/#organization"
+      },
+      "url": "https://github.com/mishrasanjeev"
     },
     {
       "@type": "WebSite",
@@ -89,7 +125,17 @@
           "name": "Grantex Machine-Readable Release Status"
         }
       ],
-      "keywords": "AI agent authorization, delegated authorization for AI agents, OAuth for AI agents, agent identity, agent permissions, human consent, least privilege, JWT verification, MCP authorization, multi-agent delegation, AI agent audit"
+      "keywords": "AI agent authorization, delegated authorization for AI agents, OAuth for AI agents, agent identity, agent permissions, human consent, least privilege, JWT verification, MCP authorization, multi-agent delegation, AI agent audit",
+      "author": {
+        "@id": "https://grantex.dev/#sanjeev-kumar"
+      },
+      "creator": {
+        "@id": "https://grantex.dev/#sanjeev-kumar"
+      },
+      "copyrightHolder": {
+        "@id": "https://grantex.dev/#organization"
+      },
+      "copyrightYear": 2026
     },
     {
       "@type": "TechArticle",
@@ -101,12 +147,15 @@
       "version": "1.0",
       "license": "https://www.apache.org/licenses/LICENSE-2.0",
       "author": {
-        "@id": "https://grantex.dev/#organization"
+        "@id": "https://grantex.dev/#sanjeev-kumar"
       },
       "publisher": {
         "@id": "https://grantex.dev/#organization"
       },
-      "inLanguage": "en"
+      "inLanguage": "en",
+      "copyrightHolder": {
+        "@id": "https://grantex.dev/#organization"
+      }
     },
     {
       "@type": "FAQPage",

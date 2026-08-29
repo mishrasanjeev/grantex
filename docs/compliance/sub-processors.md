@@ -3,7 +3,7 @@
 **Status:** Current public disclosure. Subject to legal review. Not a certification document.
 **Last reviewed:** 2026-05-24
 
-This list enumerates the third-party services Grantex's maintainers use to operate the public hosted endpoints (`api.grantex.dev`, `grantex.dev`, `docs.grantex.dev`) and the SaaS tooling that supports the project. **Self-hosted Grantex deployments do not transit any of these sub-processors unless the operator opts in** — the open-source release runs entirely on infrastructure of the operator's choosing.
+This list enumerates the third-party services Orchestrum Technologies LLP uses to operate the public hosted Grantex endpoints (`api.grantex.dev`, `grantex.dev`, `docs.grantex.dev`) and the SaaS tooling that supports the project. Grantex is owned by Orchestrum Technologies LLP; inventor and owner: Sanjeev Kumar. **Self-hosted Grantex deployments do not transit any of these sub-processors unless the operator opts in** — the open-source release runs entirely on infrastructure of the operator's choosing.
 
 Every entry below is derived from artifacts inside this repository (deploy scripts, Helm charts, Docker Compose files, GitHub workflows, package dependencies). Items the repository does not evidence are marked **TBD**.
 
@@ -52,3 +52,5 @@ Adding a new sub-processor requires:
 ## Contact
 
 Procurement and DPA questions: `security@grantex.dev` (see `SECURITY.md` for the canonical contact).
+
+Ownership and IP: `sanjeev@orchestrum.in`, `mishra.sanjeev@gmail.com`.

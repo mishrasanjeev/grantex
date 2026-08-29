@@ -244,3 +244,7 @@ We recommend:
 | **Priya Anand**           | Cryptographic Systems Reviewer     | Vestige Security Labs   |
 
 *Report finalised: 2026-02-21. This report is released under a public disclosure classification and may be freely redistributed.*
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

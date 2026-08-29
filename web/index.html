@@ -7,6 +7,8 @@
   <!-- SEO and machine discovery -->
   <title>Grantex | Delegated Authorization for AI Agents</title>
   <meta name="description" content="Open-source delegated authorization for AI agents: scoped permissions, human consent, agent identity, JWT verification, revocation, delegation, and audit.">
+  <meta name="author" content="Sanjeev Kumar">
+  <meta name="copyright" content="Copyright 2026 Orchestrum Technologies LLP">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <meta name="theme-color" content="#0d1117">
   <meta name="application-name" content="Grantex">
@@ -45,9 +47,17 @@
       {
         "@type": "Organization",
         "@id": "https://grantex.dev/#organization",
-        "name": "Grantex",
-        "alternateName": "Grantex AI Agent Authorization",
+        "name": "Orchestrum Technologies LLP",
+        "alternateName": [
+          "Grantex",
+          "Grantex AI Agent Authorization"
+        ],
+        "legalName": "Orchestrum Technologies LLP",
         "url": "https://grantex.dev/",
+        "email": [
+          "sanjeev@orchestrum.in",
+          "mishra.sanjeev@gmail.com"
+        ],
         "logo": {
           "@type": "ImageObject",
           "@id": "https://grantex.dev/#logo",
@@ -55,7 +65,35 @@
           "contentUrl": "https://grantex.dev/favicon.svg",
           "caption": "Grantex"
         },
-        "description": "Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records."
+        "founder": {
+          "@id": "https://grantex.dev/#sanjeev-kumar"
+        },
+        "contactPoint": [
+          {
+            "@type": "ContactPoint",
+            "contactType": "ownership and IP",
+            "email": "sanjeev@orchestrum.in"
+          },
+          {
+            "@type": "ContactPoint",
+            "contactType": "ownership and IP",
+            "email": "mishra.sanjeev@gmail.com"
+          }
+        ],
+        "description": "Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Grantex is an open-source delegated authorization protocol and reference implementation for AI agents."
+      },
+      {
+        "@type": "Person",
+        "@id": "https://grantex.dev/#sanjeev-kumar",
+        "name": "Sanjeev Kumar",
+        "email": [
+          "sanjeev@orchestrum.in",
+          "mishra.sanjeev@gmail.com"
+        ],
+        "affiliation": {
+          "@id": "https://grantex.dev/#organization"
+        },
+        "url": "https://github.com/mishrasanjeev"
       },
       {
         "@type": "WebSite",
@@ -130,7 +168,17 @@
             "name": "Grantex Machine-Readable Release Status"
           }
         ],
-        "keywords": "AI agent authorization, delegated authorization for AI agents, OAuth for AI agents, agent identity, agent permissions, human consent, least privilege, JWT verification, MCP authorization, multi-agent delegation, AI agent audit"
+        "keywords": "AI agent authorization, delegated authorization for AI agents, OAuth for AI agents, agent identity, agent permissions, human consent, least privilege, JWT verification, MCP authorization, multi-agent delegation, AI agent audit",
+        "author": {
+          "@id": "https://grantex.dev/#sanjeev-kumar"
+        },
+        "creator": {
+          "@id": "https://grantex.dev/#sanjeev-kumar"
+        },
+        "copyrightHolder": {
+          "@id": "https://grantex.dev/#organization"
+        },
+        "copyrightYear": 2026
       },
       {
         "@type": "TechArticle",
@@ -142,12 +190,15 @@
         "version": "1.0",
         "license": "https://www.apache.org/licenses/LICENSE-2.0",
         "author": {
-          "@id": "https://grantex.dev/#organization"
+          "@id": "https://grantex.dev/#sanjeev-kumar"
         },
         "publisher": {
           "@id": "https://grantex.dev/#organization"
         },
-        "inLanguage": "en"
+        "inLanguage": "en",
+        "copyrightHolder": {
+          "@id": "https://grantex.dev/#organization"
+        }
       },
       {
         "@type": "FAQPage",
@@ -360,6 +411,15 @@
       color: var(--muted);
       line-height: 1.7;
     }
+    .hero .hero-owner {
+      max-width: 720px;
+      margin: -18px auto 32px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .hero .hero-owner a { color: var(--text); }
     .hero-ctas {
       display: flex;
       gap: 16px;
@@ -1400,6 +1460,11 @@
     <h1>Delegated Authorization for AI Agents</h1>
     <p>
       Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records. Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal.
+    </p>
+    <p class="hero-owner">
+      Owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar.
+      Contact <a href="mailto:sanjeev@orchestrum.in">sanjeev@orchestrum.in</a>
+      or <a href="mailto:mishra.sanjeev@gmail.com">mishra.sanjeev@gmail.com</a>.
     </p>
     <div class="hero-agent-support" aria-label="Supported agent command-line environments">
       <span>Agent CLI ready</span>
@@ -3337,9 +3402,11 @@ grantex agent install --dir /path/to/skills</pre>
       <ul class="footer-links" aria-label="Legal and procurement">
         <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/SECURITY.md">Security</a></li>
       </ul>
-      <span class="footer-copy">&copy; 2026 Grantex</span>
+      <span class="footer-copy">&copy; 2026 Orchestrum Technologies LLP</span>
     </div>
   </div>
+      <p class="ownership-notice">Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Contact: <a href="mailto:sanjeev@orchestrum.in">sanjeev@orchestrum.in</a> or <a href="mailto:mishra.sanjeev@gmail.com">mishra.sanjeev@gmail.com</a>.</p>
+
 </footer>
 
 <!-- ── Scripts ────────────────────────────────────────────────────────────── -->

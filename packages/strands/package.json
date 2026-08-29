@@ -2,6 +2,11 @@
   "name": "@grantex/strands",
   "version": "0.1.1",
   "description": "Strands Agents SDK integration for the Grantex delegated authorization protocol",
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar.",
   "homepage": "https://grantex.dev/for/strands",
   "bugs": {
     "url": "https://github.com/mishrasanjeev/grantex/issues"

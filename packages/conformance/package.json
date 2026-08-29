@@ -2,6 +2,11 @@
   "name": "@grantex/conformance",
   "version": "0.1.8",
   "description": "Conformance test suite for the Grantex protocol",
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar.",
   "homepage": "https://grantex.dev",
   "bugs": {
     "url": "https://github.com/mishrasanjeev/grantex/issues"

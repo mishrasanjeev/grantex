@@ -50,7 +50,7 @@ Alternatively, paste the XML into the [IETF Author Tools](https://author-tools.i
 1. Render the XML as above, or use `kdrfc` to produce the `.xml` file directly.
 2. Go to **https://datatracker.ietf.org/submit/**.
 3. Upload `draft-mishra-oauth-agent-grants-01.xml` (or `.txt`).
-4. The Datatracker will validate the document, assign a submission ID, and send a confirmation email to the address listed in the author block (`mishra.sanjeev@gmail.com`).
+4. The Datatracker will validate the document, assign a submission ID, and send a confirmation email to the address listed in the author block (`sanjeev@orchestrum.in`).
 5. Confirm the submission via the email link.
 
 The draft will appear at:
@@ -110,3 +110,7 @@ The expiry date is shown on the Datatracker page for the draft.
 | RFC 8693 | Token Exchange | Related — DAAP delegation vs. general token exchange |
 | RFC 7662 | Token Introspection | Related — DAAP `/v1/tokens/verify` serves a similar role |
 | RFC 8725 | JWT Best Practices | Algorithm restriction guidance |
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

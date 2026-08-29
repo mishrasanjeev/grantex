@@ -379,3 +379,7 @@ Open findings from the security assessment are remediation items for the readine
 ---
 
 *This readiness mapping is released under a public disclosure classification and may be freely redistributed. It is not a SOC 2 Type I report, does not rely on a CPA firm, and must not be presented as certification.*
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

@@ -23,5 +23,10 @@
   "overrides": {
     "postcss": "^8.5.24",
     "sharp": "^0.35.3"
-  }
+  },
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar."
 }

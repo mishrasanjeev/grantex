@@ -2,10 +2,10 @@
 
 ## 1. Product Summary
 
-**Product name:** Grantex Commerce  
-**Product type:** New product line under Grantex, integrated with AgenticOrg  
-**Primary positioning:** Trusted agentic commerce infrastructure for merchants  
-**Primary users:** Merchants, payment partners, commerce platforms, AI agent platforms, enterprise operations teams  
+**Product name:** Grantex Commerce
+**Product type:** New product line under Grantex, integrated with AgenticOrg
+**Primary positioning:** Trusted agentic commerce infrastructure for merchants
+**Primary users:** Merchants, payment partners, commerce platforms, AI agent platforms, enterprise operations teams
 **Primary partner rail:** Pine Labs / Plural for payments, checkout, affordability, POS, settlement, and merchant reach
 
 Grantex Commerce lets merchants safely accept AI-agent-led commerce across online and offline channels. It combines Grantex's delegated authorization and audit layer, AgenticOrg's merchant AI employees, Pine Labs/Plural payment rails, and UCP/ACP/MCP interoperability.
@@ -4142,3 +4142,7 @@ Grantex Commerce is a new product line that makes merchants safely usable by AI 
 The product should make this sentence true:
 
 > Any merchant using Pine/Plural can safely accept AI-agent-led commerce with verifiable consent, scoped payment authority, merchant policy controls, UCP/ACP/MCP interoperability, AgenticOrg merchant agents, and complete auditability.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

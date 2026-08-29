@@ -3,7 +3,7 @@
 **Status:** Current public disclosure. Subject to legal review. Not a certification document.
 **Last reviewed:** 2026-05-24
 
-This page describes where Grantex stores and processes customer data on the **hosted** offering (`api.grantex.dev`), and the residency choices available to operators running their **own** Grantex deployment.
+This page describes where Grantex stores and processes customer data on the **hosted** offering (`api.grantex.dev`), and the residency choices available to operators running their **own** Grantex deployment. Grantex is owned by Orchestrum Technologies LLP; inventor and owner: Sanjeev Kumar.
 
 ## Hosted Grantex (`api.grantex.dev`) — single region today
 
@@ -58,3 +58,5 @@ See `docs/self-hosting.md` for the full operator runbook.
 ## Contact
 
 Residency or transfer questions: `security@grantex.dev`.
+
+Ownership and IP: `sanjeev@orchestrum.in`, `mishra.sanjeev@gmail.com`.

@@ -5,5 +5,10 @@
     "@grantex/sdk": "file:packages/sdk-ts",
     "vitest": "^4.0.18",
     "yaml": "^2.9.0"
-  }
+  },
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar."
 }

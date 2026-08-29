@@ -1362,3 +1362,7 @@ Total: ~13 days.
 | New CLI commands | **4** (manifest generate/list/validate, enforce test) |
 | New doc pages | **7** |
 | Updated doc pages | **5** |
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

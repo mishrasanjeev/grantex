@@ -28,6 +28,10 @@
 
 <br/>
 
+**Ownership:** Grantex is owned by **Orchestrum Technologies LLP**. Inventor and owner: **Sanjeev Kumar**. Contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+
+<br/>
+
 <img src="docs/images/flow-diagram.svg" alt="Grantex Protocol Flow" width="100%"/>
 
 <br/>
@@ -1770,7 +1774,7 @@ OAuth 2.0 was designed for "user grants app permission to access their data." Ag
 MCP connects clients to tools and resources and defines optional OAuth-based authorization for HTTP transports. Grantex adds agent-specific delegated authority at the tool or service boundary: which agent may perform which action for which principal. The two layers are complementary.
 
 **Who owns the standard?**  
-The v1.0 protocol specification is open (Apache 2.0), and Grantex Inc. maintains the reference implementation. An active -01 document is published as an individual IETF Internet-Draft; that publication is not working-group adoption or IETF endorsement.
+The v1.0 protocol specification is open (Apache 2.0). Grantex is owned by Orchestrum Technologies LLP, and Sanjeev Kumar is listed as inventor and owner. Orchestrum Technologies LLP maintains the reference implementation. An active -01 document is published as an individual IETF Internet-Draft; that publication is not working-group adoption or IETF endorsement.
 
 **Can I self-host?**  
 Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the complete guide or the [self-hosting docs](https://docs.grantex.dev/guides/self-hosting).
@@ -1780,6 +1784,8 @@ Yes. The reference implementation is fully open-source. Docker Compose deploy in
 ## License
 
 Protocol specification and SDKs: [Apache 2.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
+
+Product ownership: Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
 
 ---
 

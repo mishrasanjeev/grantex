@@ -8,6 +8,8 @@ version = "0.1.5"
 description = "FastAPI middleware for Grantex grant token verification and scope-based authorization"
 readme = "README.md"
 license = { text = "Apache-2.0" }
+authors = [{ name = "Sanjeev Kumar", email = "sanjeev@orchestrum.in" }]
+maintainers = [{ name = "Orchestrum Technologies LLP", email = "sanjeev@orchestrum.in" }, { name = "Sanjeev Kumar", email = "mishra.sanjeev@gmail.com" }]
 requires-python = ">=3.9"
 keywords = ["grantex", "fastapi", "middleware", "authorization", "oauth", "jwt", "ai-agents", "scope-enforcement", "grant-token", "token-verification", "agent-permissions"]
 classifiers = [

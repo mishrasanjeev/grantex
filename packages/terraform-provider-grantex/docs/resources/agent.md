@@ -38,3 +38,7 @@ Agents can be imported using the agent ID:
 ```shell
 terraform import grantex_agent.calendar_bot <agent_id>
 ```
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

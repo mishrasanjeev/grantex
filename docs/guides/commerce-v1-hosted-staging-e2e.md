@@ -203,3 +203,7 @@ python -m pytest tests/evals/test_commerce_sales_agent_evals.py -q --hosted-stag
 ```
 
 Those AgenticOrg commands are a command plan. They must not be treated as passing hosted evidence until the demo/eval supports non-mocked staging connectors and redacted reporting.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

@@ -84,3 +84,7 @@ For substantial reviews, use:
 3. Residual risks or testing gaps
 
 Do not propose code changes unless asked. Focus on surfacing the most important gaps with defensible reasoning.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

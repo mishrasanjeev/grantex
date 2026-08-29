@@ -9,6 +9,8 @@ description = "Grantex scope enforcement for Strands Agents SDK"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}
+authors = [{ name = "Sanjeev Kumar", email = "sanjeev@orchestrum.in" }]
+maintainers = [{ name = "Orchestrum Technologies LLP", email = "sanjeev@orchestrum.in" }, { name = "Sanjeev Kumar", email = "mishra.sanjeev@gmail.com" }]
 keywords = ["grantex", "strands", "ai-agents", "authorization", "oauth", "tools", "scope-enforcement", "delegated-auth", "agent-permissions"]
 classifiers = [
     "Development Status :: 4 - Beta",

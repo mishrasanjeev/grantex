@@ -1,5 +1,13 @@
 # Security Policy
 
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner:
+Sanjeev Kumar. Ownership questions can be sent to
+[sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or
+[mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com). Security
+vulnerability reports should still use the reporting channels below.
+
 ## Supported Versions
 
 Only the following versions of Grantex components receive security patches:

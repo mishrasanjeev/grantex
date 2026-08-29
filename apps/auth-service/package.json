@@ -2,6 +2,11 @@
   "name": "@grantex/auth-service",
   "version": "0.1.0",
   "description": "Grantex auth service — issues RS256 grant tokens",
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar.",
   "type": "module",
   "scripts": {
     "dev": "node --env-file=.env --watch dist/index.js",

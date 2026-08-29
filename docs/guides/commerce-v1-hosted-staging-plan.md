@@ -259,3 +259,7 @@ Risk/cost tradeoffs:
 ## M9 Confirmation
 
 No deploy was performed. No merge was performed. No production config was changed. No production Commerce V1 flag was enabled. No live payment or live Plural path was enabled. No cloud resources were created by this planning document.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

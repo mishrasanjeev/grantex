@@ -40,3 +40,7 @@ If both are set, the provider configuration takes precedence.
 
 - `api_key` (String, Sensitive) - The API key for authenticating with the Grantex API. Can also be set via the `GRANTEX_API_KEY` environment variable.
 - `base_url` (String) - The base URL for the Grantex API. Defaults to `https://api.grantex.dev`.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

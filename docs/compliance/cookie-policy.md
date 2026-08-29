@@ -4,7 +4,7 @@
 **Last reviewed:** 2026-05-24
 **Applies to:** the marketing site (`grantex.dev`), the documentation site (`docs.grantex.dev`), and the developer portal (`grantex.dev/dashboard`).
 
-This page describes the cookies and similar storage mechanisms used by the public Grantex sites today, based on what is wired up in this repository. **Self-hosted Grantex deployments serve the marketing site only if the operator publishes it; the analytics cookie below is in the source under the maintainers' GA ID and is easy to remove for a fork.**
+This page describes the cookies and similar storage mechanisms used by the public Grantex sites today, based on what is wired up in this repository. Grantex is owned by Orchestrum Technologies LLP; inventor and owner: Sanjeev Kumar. **Self-hosted Grantex deployments serve the marketing site only if the operator publishes it; the analytics cookie below is in the source under the Orchestrum-controlled GA ID and is easy to remove for a fork.**
 
 ## Categories in use
 
@@ -48,3 +48,5 @@ Use your browser's standard "Clear site data" controls for `grantex.dev` and `do
 ## Contact
 
 Cookie or tracking questions: `security@grantex.dev`.
+
+Ownership and IP: `sanjeev@orchestrum.in`, `mishra.sanjeev@gmail.com`.

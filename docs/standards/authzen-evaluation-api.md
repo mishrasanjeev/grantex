@@ -1,7 +1,7 @@
 # AuthZEN PDP Evaluation API Alignment
 
 **Date:** 2026-03-02
-**Author:** Sanjeev Kumar (mishra.sanjeev@gmail.com)
+**Author:** Sanjeev Kumar, Orchestrum Technologies LLP (sanjeev@orchestrum.in; mishra.sanjeev@gmail.com)
 **Status:** Informational
 
 ## Overview

@@ -25,3 +25,7 @@ Server starts on `http://localhost:3402`. On startup, it generates demo keys and
 1. Request without payment → `402 Payment Required`
 2. Request with payment but no GDT → `403 Forbidden`
 3. Request with payment + valid GDT → `200 OK` with weather data
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

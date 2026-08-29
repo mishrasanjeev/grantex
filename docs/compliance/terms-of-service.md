@@ -4,7 +4,7 @@
 **Last reviewed:** 2026-05-24
 **Applies to:** the hosted Grantex services at `grantex.dev` and `api.grantex.dev`.
 
-The open-source Grantex software is licensed separately under the Apache License 2.0 (see `LICENSE`); these Terms govern only your use of the hosted service operated by the Grantex maintainers.
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. The open-source Grantex software is licensed separately under the Apache License 2.0 (see `LICENSE`); these Terms govern only your use of the hosted service operated by Orchestrum Technologies LLP.
 
 ## 1. Acceptance
 
@@ -55,7 +55,7 @@ Each party will protect the other's non-public information with at least the sam
 ## 10. Intellectual property
 
 - The open-source software is yours to use under the Apache 2.0 license.
-- The "Grantex" name, logo, and the hosted-service branding remain ours.
+- The "Grantex" name, logo, hosted-service branding, and product ownership remain with Orchestrum Technologies LLP. Sanjeev Kumar is listed as inventor and owner.
 - Feedback you provide may be used to improve the service without obligation, but Grantex will not publicly attribute negative feedback to you without consent.
 
 ## 11. Warranties and disclaimers
@@ -80,4 +80,6 @@ We may revise these Terms; material changes will be announced at least 30 days i
 
 ## 16. Contact
 
-`security@grantex.dev`
+Security and service contact: `security@grantex.dev`
+
+Ownership and IP: `sanjeev@orchestrum.in`, `mishra.sanjeev@gmail.com`

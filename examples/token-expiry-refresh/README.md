@@ -90,3 +90,7 @@ Done! Token refresh lifecycle complete.
 ## Refresh boundary
 
 `expiresIn` controls the underlying grant lifetime. Refresh rotates credentials for that active grant and does not extend the grant's `expiresAt`. If the refresh response is lost after the server commits rotation, retry the previous refresh token immediately; Grantex can return the already-rotated refresh token during the five-minute recovery window. After the grant expires, the caller must re-authorize.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

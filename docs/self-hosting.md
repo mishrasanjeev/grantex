@@ -342,3 +342,7 @@ Before going live, verify each item:
 - [ ] Health checks are wired into your load balancer or uptime monitor
 - [ ] CPU and memory limits are set to prevent runaway containers
 - [ ] Log forwarding is configured (stdout → your observability stack)
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

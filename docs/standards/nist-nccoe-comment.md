@@ -1,11 +1,11 @@
 # Draft NIST NCCoE Public Comment: AI Agent Authorization
 
-**Prepared by:** Sanjeev Kumar, Grantex Project
+**Prepared by:** Sanjeev Kumar, Orchestrum Technologies LLP / Grantex Project
 **Date:** 2026-03-02
 **Subject:** Response to NCCoE AI Challenge Areas — Delegated Authorization for AI Agents
 
 **Publication status:** Repository draft. No public submission receipt or NIST response is attached; this document does not imply NIST acceptance or endorsement.
-**Contact:** mishra.sanjeev@gmail.com
+**Contact:** sanjeev@orchestrum.in; mishra.sanjeev@gmail.com
 **Project:** https://github.com/mishrasanjeev/grantex
 
 ---

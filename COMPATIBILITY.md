@@ -100,3 +100,7 @@ Unpinned install commands resolve to the registry's current release. For reprodu
 - Treat package versions as independent and publish package-specific release notes for every release.
 - Add release automation that verifies changed package source never reuses an already-published version and updates this matrix at publication time.
 - Define and automate a supported Go toolchain policy for the SDK (Go 1.26.1) and Terraform provider (Go 1.25.0).
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

@@ -371,3 +371,7 @@ Rollback is deletion, not traffic migration:
 5. Delete smoke-only secrets.
 6. Delete smoke image tags if they are no longer needed.
 7. Confirm production services, production DB, production Redis, production secrets, live payment flags, and live Plural settings were untouched.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

@@ -670,3 +670,7 @@ dry-run/remediation chain for real merchant readiness while C6T prepares
 public-safe IETF and NIST draft materials. The next implementation chain should
 avoid external submission, public protocol publication, certification claims,
 public discovery, and live checkout until explicit approvals and evidence exist.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

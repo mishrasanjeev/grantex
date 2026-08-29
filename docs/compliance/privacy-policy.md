@@ -8,7 +8,7 @@ This draft is published so customers and end users can review Grantex's privacy 
 
 ## 1. Who we are
 
-Grantex is an open protocol and a hosted developer service operated by the Grantex maintainers (the legal entity name and registered office are **TBD** pending company formation). For privacy questions or to exercise the rights below, contact `security@grantex.dev`.
+Grantex is an open protocol and a hosted developer service owned and operated by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. For privacy questions or to exercise the rights below, contact `security@grantex.dev`; ownership or IP questions may also be sent to `sanjeev@orchestrum.in` or `mishra.sanjeev@gmail.com`.
 
 ## 2. What we collect and why
 
@@ -80,4 +80,6 @@ Material changes to this policy will be announced via the public CHANGELOG and t
 
 ## 11. Contact
 
-`security@grantex.dev`
+Privacy and security: `security@grantex.dev`
+
+Ownership and IP: `sanjeev@orchestrum.in`, `mishra.sanjeev@gmail.com`

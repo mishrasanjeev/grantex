@@ -186,3 +186,7 @@ Reset must be staging-only and explicitly approved:
 ## M10 Confirmation
 
 This current pass does not create resources. It does not deploy. It does not merge. It does not change production config. It does not enable production Commerce V1. It does not enable live payments. It does not enable live Plural. It does not write real secret values.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

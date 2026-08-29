@@ -44,3 +44,7 @@ go get github.com/mishrasanjeev/grantex-go  # Go
 Whether you're securing a single agent or orchestrating 50 across enterprise systems — you're in the right place.
 
 Let us know what you're working on!
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

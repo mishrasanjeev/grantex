@@ -34,3 +34,7 @@ Open [http://localhost:3000](http://localhost:3000) and click **Start Demo**.
 5. **Results** — The callback page displays the grant ID, scopes, truncated JWT, and audit trail
 
 All SDK calls happen server-side in API routes — the API key never reaches the browser.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

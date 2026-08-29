@@ -50,3 +50,7 @@ Policies can be imported using the policy ID:
 ```shell
 terraform import grantex_policy.business_hours_only <policy_id>
 ```
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

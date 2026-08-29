@@ -1200,3 +1200,7 @@ This should be called once during application startup, not on every request.
 | `EnforceResult` dataclass | `allowed`, `reason`, `grant_id`, `agent_did`, `scopes`, `permission`, `connector`, `tool` | `grantex>=0.3.3` |
 
 **Grantex v0.3.3 is already published on PyPI.** Install and implement this fix in AgenticOrg.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
