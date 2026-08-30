@@ -88,7 +88,7 @@
         "height": 630,
         "caption": "Grantex AI agent authorization"
       },
-      "dateModified": "2026-08-10",
+      "dateModified": "2026-08-30",
       "inLanguage": "en"
     },
     {
@@ -202,7 +202,7 @@
           "name": "Which Grantex SDK should I install?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Use @grantex/sdk@0.3.13 for TypeScript, grantex==0.3.14 for Python, and github.com/mishrasanjeev/grantex-go@v0.1.10 for Go. Review release status before upgrading because packages are independently versioned and Go v0.1.10 has documented workarounds."
+            "text": "Use @grantex/sdk@0.4.1 for TypeScript, grantex==0.3.14 for Python, and github.com/mishrasanjeev/grantex-go@v0.1.10 for Go. Review release status before upgrading because packages are independently versioned and Go v0.1.10 has documented workarounds."
           }
         },
         {

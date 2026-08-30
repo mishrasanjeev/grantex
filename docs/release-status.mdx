@@ -7,7 +7,7 @@ keywords: ["Grantex CLI version", "Grantex SDK versions", "AI agent authorizatio
 
 ## Current published releases
 
-Last verified: **August 10, 2026**
+Last verified: **August 30, 2026**
 
 Grantex packages are versioned independently. There is no single version number
 that represents every SDK, integration, service, and protocol artifact in this
@@ -16,17 +16,18 @@ repository.
 | Surface | Current release | Status | Runtime requirement |
 |---|---:|---|---|
 | CLI | `@grantex/cli@0.3.0` | Published to npm with bundled Agent Skills | Node.js 18+; ESM |
-| TypeScript SDK | `@grantex/sdk@0.3.13` | Published to npm | Node.js 18+; ESM |
+| TypeScript SDK | `@grantex/sdk@0.4.1` | Published to npm | Node.js 18+; ESM |
+| x402 Payment Protocol | `@grantex/x402@0.2.0` | Published to npm; external custody remains operator-supplied | Node.js 20+; ESM |
 | Python SDK | `grantex==0.3.14` | Published to PyPI | Python 3.9+ |
 | Go SDK | `github.com/mishrasanjeev/grantex-go@v0.1.10` | Published with known limitations | Go 1.26.1+ |
 | MCP Auth server | `@grantex/mcp-auth@2.0.2` | Published with known limitations | Node.js 18+; ESM |
 | OpenAPI contract | `0.4.0` | Unreleased repository contract with prepaid wallets | Independent of public SDK versions |
 
 <Note>
-Repository source carries unreleased `@grantex/sdk@0.4.0` prepaid-wallet
-clients and `@grantex/x402@0.2.0` official x402 v2 support. The published SDK
-row above remains the public registry truth; do not assume those source versions
-are installable from npm until a release is separately verified.
+`@grantex/sdk@0.4.1` and `@grantex/x402@0.2.0` were registry-verified after
+publication on August 30, 2026. Installing them does not provision external
+custody, principal notification delivery, or merchant idempotency storage; see
+[Prepaid Wallet Production Readiness](/guides/prepaid-wallet-production).
 </Note>
 
 <Info>
@@ -49,7 +50,8 @@ are installable from npm until a release is separately verified.
 ## Which Grantex package should I use?
 
 - **Hermes, OpenClaw, or another shell-capable agent:** use published `@grantex/cli@0.3.0`; install its bundled skills with `grantex agent install`. No agent-specific SDK is required.
-- **TypeScript application:** use `@grantex/sdk@0.3.13`.
+- **TypeScript application:** use `@grantex/sdk@0.4.1`.
+- **x402 prepaid-wallet application:** use `@grantex/x402@0.2.0` with `@grantex/sdk@0.4.1`; keep external custody disabled until an operator adapter passes review.
 - **Python application:** use `grantex==0.3.14`.
 - **Go application:** use `github.com/mishrasanjeev/grantex-go@v0.1.10` with the [published-version workarounds](/sdks/go/overview#known-v0110-limitations), including the [REST/CLI audit-write workaround](/sdks/go/audit#log).
 - **MCP HTTP transport authorization:** use an established MCP-compatible authorization server and maintained MCP SDK that implement the current MCP authorization specification.
@@ -94,7 +96,11 @@ npm install -g @grantex/cli@0.3.0
 ```
 
 ```bash TypeScript
-npm install @grantex/sdk@0.3.13
+npm install @grantex/sdk@0.4.1
+```
+
+```bash x402
+npm install @grantex/x402@0.2.0 @grantex/sdk@0.4.1
 ```
 
 ```bash Python
@@ -106,7 +112,7 @@ go get github.com/mishrasanjeev/grantex-go@v0.1.10
 ```
 
 ```bash MCP Auth
-npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.4.1
 ```
 </CodeGroup>
 

@@ -128,12 +128,12 @@
       <h2>Recommended production pattern today</h2>
       <ol>
         <li>Implement the current MCP authorization specification with an established authorization server and maintained MCP SDK.</li>
-        <li>Use <code>@grantex/sdk@0.3.13</code> or direct JWKS validation for the Grantex agent grant.</li>
+        <li>Use <code>@grantex/sdk@0.4.1</code> or direct JWKS validation for the Grantex agent grant.</li>
         <li>Validate issuer, audience, signature, expiry, principal, and required tool scope at the MCP resource server.</li>
         <li>Check or synchronize current grant state where revocation must take effect before token expiry.</li>
         <li>Log tool execution separately when you need an audit record; token verification alone is not an execution log.</li>
       </ol>
-      <pre><code>npm install @grantex/sdk@0.3.13
+      <pre><code>npm install @grantex/sdk@0.4.1
 
 // At the MCP tool boundary:
 // 1. verify the signed grant token

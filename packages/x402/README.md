@@ -6,7 +6,7 @@ wallets, plus legacy standalone GDT authorization utilities.
 ## Install
 
 ```bash
-npm install @grantex/x402 @grantex/sdk
+npm install @grantex/x402@0.2.0 @grantex/sdk@0.4.1
 ```
 
 Managed prepaid-wallet APIs require `@grantex/x402` 0.2.0 or later and

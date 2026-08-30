@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "canonicalUrl": "https://grantex.dev/release-status.json",
   "humanDocumentationUrl": "https://docs.grantex.dev/release-status",
-  "verifiedAt": "2026-08-10",
+  "verifiedAt": "2026-08-30",
   "product": {
     "name": "Grantex",
     "category": "AI agent authorization",
@@ -18,7 +18,7 @@
   },
   "selectionGuidance": {
     "shellCapableAgent": "Use published @grantex/cli@0.3.0 for Hermes, OpenClaw, and other shell-capable agents. Install the bundled skills with grantex agent install; no agent-specific SDK is required.",
-    "typescriptApplication": "Use @grantex/sdk@0.3.13.",
+    "typescriptApplication": "Use @grantex/sdk@0.4.1.",
     "pythonApplication": "Use grantex==0.3.14.",
     "goApplication": "Use github.com/mishrasanjeev/grantex-go@v0.1.10 with the documented published-version workarounds.",
     "mcpProductionIntegration": "Use established MCP-compatible transport authorization first, then a primary Grantex SDK or direct JWKS validation for agent-specific tool enforcement; treat @grantex/mcp-auth@2.0.2 as single-process evaluation software.",
@@ -37,7 +37,7 @@
       "hostedMetadataUrl": "https://grantex.dev/.well-known/oauth-authorization-server",
       "documentationUrl": "https://docs.grantex.dev/guides/oauth-agent-grants",
       "implementationReportUrl": "https://github.com/mishrasanjeev/grantex/blob/main/docs/ietf-draft/implementation-report.md",
-      "sdkAvailability": "repository-source; verify a post-0.3.13 npm release before importing OAuthAgentClient",
+      "sdkAvailability": "published in @grantex/sdk@0.4.1",
       "evidence": {
         "authServiceTestsPassed": 2097,
         "typescriptSdkTestsPassed": 444,
@@ -71,14 +71,35 @@
       "label": "TypeScript SDK",
       "ecosystem": "npm",
       "name": "@grantex/sdk",
-      "version": "0.3.13",
+      "version": "0.4.1",
       "status": "published",
-      "installCommand": "npm install @grantex/sdk@0.3.13",
+      "installCommand": "npm install @grantex/sdk@0.4.1",
       "runtime": "Node.js 18+; ESM",
       "registryUrl": "https://registry.npmjs.org/%40grantex%2Fsdk/latest",
-      "packageUrl": "https://www.npmjs.com/package/@grantex/sdk/v/0.3.13",
+      "packageUrl": "https://www.npmjs.com/package/@grantex/sdk/v/0.4.1",
       "documentationUrl": "https://docs.grantex.dev/sdks/typescript/overview",
       "limitations": []
+    },
+    {
+      "id": "x402",
+      "label": "x402 Payment Protocol",
+      "ecosystem": "npm",
+      "name": "@grantex/x402",
+      "version": "0.2.0",
+      "status": "published",
+      "installCommand": "npm install @grantex/x402@0.2.0 @grantex/sdk@0.4.1",
+      "runtime": "Node.js 20+; ESM",
+      "registryUrl": "https://registry.npmjs.org/%40grantex%2Fx402/latest",
+      "packageUrl": "https://www.npmjs.com/package/@grantex/x402/v/0.2.0",
+      "documentationUrl": "https://docs.grantex.dev/integrations/x402",
+      "limitations": [
+        {
+          "id": "x402-external-custody-adapter",
+          "summary": "External custody wallets fail closed until an operator supplies a provider adapter; sandbox_ledger does not represent external funds.",
+          "workaround": "Use sandbox_ledger only for an explicitly internal ledger, or implement and independently test provider funding, reservation, settlement, reconciliation, duplicate-event handling, and recovery before enabling external custody.",
+          "workaroundUrl": "https://docs.grantex.dev/guides/prepaid-wallet-production#choose-the-custody-mode-honestly"
+        }
+      ]
     },
     {
       "id": "python-sdk",
@@ -152,7 +173,7 @@
       "name": "@grantex/mcp-auth",
       "version": "2.0.2",
       "status": "published-with-known-limitations",
-      "installCommand": "npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.3.13",
+      "installCommand": "npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.4.1",
       "runtime": "Node.js 18+; ESM; one process for evaluation",
       "registryUrl": "https://registry.npmjs.org/%40grantex%2Fmcp-auth/latest",
       "packageUrl": "https://www.npmjs.com/package/@grantex/mcp-auth/v/2.0.2",
