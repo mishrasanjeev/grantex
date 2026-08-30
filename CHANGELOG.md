@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Published TypeScript SDK 0.3.13, Python SDK 0.3.14, and Go SDK v0.1.10 on 2026-07-11; synchronized the public release snapshot across the landing page, README, compatibility matrix, and SDK documentation.
 
 ### Fixed
+- Corrected the TypeScript SDK `User-Agent` version and tied its regression test to `package.json` so future package bumps cannot publish a stale runtime identifier.
 - Hardened live authorization so policy decisions cannot replace authenticated Principal consent; bound redirects, resources, scopes, and registered agent keys through issuance and delegation.
 - Made refresh rotation recoverable for 300 seconds only when the authenticated caller repeats the same old token and idempotency key; recovery returns the exact committed token response and survives a server restart without extending any lifetime.
 - Corrected the Go SDK source contract across Agent and Audit reads/writes: `agentId` mapping, optional registration fields, status updates, explicit scope clearing, required audit-write fields, `developerId` reads, and list envelopes.
