@@ -116,6 +116,7 @@ export type {
   // Audit
   LogAuditParams,
   AuditEntry,
+  AuditCheckpoint,
   ListAuditParams,
   ListAuditResponse,
   // Verify

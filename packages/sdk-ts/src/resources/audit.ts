@@ -1,6 +1,7 @@
 import type { HttpClient } from '../http.js';
 import type {
   AuditEntry,
+  AuditCheckpoint,
   ListAuditParams,
   ListAuditResponse,
   LogAuditParams,
@@ -25,6 +26,10 @@ export class AuditClient {
 
   get(entryId: string): Promise<AuditEntry> {
     return this.#http.get<AuditEntry>(`/v1/audit/${entryId}`);
+  }
+
+  checkpoint(): Promise<AuditCheckpoint> {
+    return this.#http.post<AuditCheckpoint>('/v1/audit/checkpoints');
   }
 }
 

@@ -33,6 +33,11 @@ jobs:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
         run: npx vitest run --testTimeout=120000 tests/e2e/e2e.test.ts
 
+      - name: DAAP security hardening
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run --testTimeout=120000 tests/e2e/daap-hardening.test.ts
+
       - name: Live-mode consent flow (via grantex.dev Firebase rewrites)
         env:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app

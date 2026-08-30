@@ -14,7 +14,7 @@
 
 <rfc ipr="trust200902" docName="draft-mishra-oauth-agent-grants-02" category="info" submissionType="IETF" tocInclude="true" sortRefs="true" symRefs="true">
   <front>
-    <title abbrev="DAAP">Delegated Agent Authorization Protocol (DAAP)</title>
+    <title abbrev="DAAP">OAuth Profile for Delegated AI Agent Authorization</title>
 
     <author fullname="Sanjeev Kumar">
       <organization>Orchestrum Technologies LLP</organization>
@@ -28,14 +28,23 @@
 
     <area>Security</area>
     <workgroup>Web Authorization Protocol</workgroup>
-    <keyword>AI agents</keyword> <keyword>authorization</keyword> <keyword>OAuth</keyword> <keyword>delegation</keyword> <keyword>JWT</keyword> <keyword>grant token</keyword>
+    <keyword>AI agents</keyword> <keyword>authorization</keyword> <keyword>OAuth</keyword> <keyword>delegation</keyword> <keyword>sender-constrained tokens</keyword>
 
     <abstract>
 
 
-<?line 93?>
+<?line 61?>
 
-<t>Artificial intelligence (AI) agents increasingly take actions on behalf of human users across third-party services. This document defines the Delegated Agent Authorization Protocol (DAAP), an OAuth-based profile for issuing, constraining, verifying, refreshing, delegating, revoking, and auditing agent grants. DAAP combines cryptographic agent identity, human consent, JWT grant tokens, online verification, cascade revocation, tamper-evident audit records, policy evaluation, budget controls, event delivery, and credential-vault integration. The protocol is model-neutral and framework-agnostic. Grantex is one reference implementation, not a required deployment or trust provider.</t>
+<t>AI agents increasingly invoke protected APIs on behalf of human users. This
+document defines an OAuth profile for identifying an agent client instance,
+obtaining an authenticated user's consent, issuing resource-bound and
+sender-constrained access tokens, attenuating authority through OAuth Token
+Exchange, and rotating refresh tokens safely. The profile uses existing OAuth
+and JOSE mechanisms wherever possible and defines no new JWT claims or OAuth
+endpoints. Operational facilities such as policy engines, audit stores,
+budgets, event streams, and credential vaults are outside the interoperable
+core. Grantex is an incomplete reference implementation and is not required
+for conformance.</t>
 
 
 
@@ -48,1470 +57,563 @@
   <middle>
 
 
-<?line 97?>
+<?line 74?>
 
 <section anchor="introduction"><name>Introduction</name>
 
-<t>Deployed AI agents operate across arbitrary third-party services using credentials and permissions that belong to the human users they serve. Today, no interoperable standard exists for:</t>
+<t>OAuth deployments already support software acting for users. AI agent
+deployments add operational pressure because agent instances can be created
+dynamically, can call high-impact APIs, and can delegate work to other agent
+instances. These characteristics do not justify replacing OAuth. They do
+justify a strict profile that removes unsafe choices and makes the acting
+client, user, resource, and sender key explicit.</t>
+
+<t>This document profiles OAuth 2.0 <xref target="RFC6749"/> and the OAuth 2.0 Security Best
+Current Practice <xref target="RFC9700"/>. It uses pushed authorization requests (PAR)
+<xref target="RFC9126"/>, Proof Key for Code Exchange (PKCE) <xref target="RFC7636"/>, resource indicators
+<xref target="RFC8707"/>, JWT access tokens <xref target="RFC9068"/>, sender constraints, and OAuth Token
+Exchange <xref target="RFC8693"/>.</t>
+
+<t>The term "DAAP" is a convenient name for this profile. It is not a new
+authorization framework, a new credential format, or a claim that an AI agent
+is a legal person.</t>
+
+<section anchor="scope"><name>Scope</name>
+
+<t>This document specifies:</t>
 
 <t><list style="numbers" type="1">
-  <t>Verifying that an agent is who it claims to be</t>
-  <t>Confirming that a specific human authorized a specific agent to perform a specific action</t>
-  <t>Revoking that authorization in real time across all active tokens</t>
-  <t>Producing a tamper-evident record of agent activity</t>
+  <t>security metadata associated with an agent's OAuth client registration;</t>
+  <t>an authorization-code flow with authenticated human consent;</t>
+  <t>resource-bound, sender-constrained JWT access tokens;</t>
+  <t>attenuated delegation using OAuth Token Exchange; and</t>
+  <t>refresh-token rotation requirements, including bounded recovery from a
+lost successful response.</t>
 </list></t>
 
-<t>OAuth 2.0 <xref target="RFC6749"/> and its extensions address authorization for applications acting on behalf of users, but were not designed for the AI agent use case, which introduces distinct requirements:</t>
+<t>This document does not standardize agent orchestration, model selection,
+policy languages, payments, budget ledgers, audit storage APIs, event delivery,
+credential vaults, SCIM, SSO configuration, or vendor deployment endpoints.
+Those features can be useful, but they require separate specifications and
+security analysis.</t>
 
-<t><list style="symbols">
-  <t><strong>Agent identity</strong>: Unlike OAuth clients, AI agents are runtime entities that may be spawned dynamically and must carry a persistent cryptographic identity independent of the authorization server.</t>
-  <t><strong>Multi-agent delegation</strong>: An agent may spawn sub-agents, each of which requires a grant scoped to a subset of the parent's permissions, with the entire delegation tree revocable by the original principal.</t>
-  <t><strong>Tamper-evident audit trail</strong>: Regulated environments require a cryptographically linked record of agent activity that is verifiable without trust in the audit log operator.</t>
-  <t><strong>Policy-driven automation</strong>: High-volume agent deployments require automated authorization decisions (auto-approve, auto-deny) without per-request human interaction, while preserving the human principal's ability to revoke at any time.</t>
-  <t><strong>Budget controls</strong>: Agents acting in financial contexts require per-grant spending limits with atomic debit semantics and threshold alerts.</t>
-  <t><strong>Real-time observability</strong>: Operators require real-time event streams for monitoring agent activity, grant lifecycle events, and budget threshold crossings.</t>
-</list></t>
-
-<t>DAAP addresses these requirements as a layered profile of OAuth 2.0 concepts, reusing RFC-standard JWT, JWK, metadata, and proof-of-possession primitives wherever possible.</t>
-
+</section>
 <section anchor="discussion-venues"><name>Discussion Venues</name>
 
-<t>Discussion of this draft is requested on the IETF OAuth Working Group mailing list:</t>
+<t>Discussion of this document is intended for the OAuth Working Group mailing
+list at <spanx style="verb">oauth@ietf.org</spanx>. The archive is at
+<spanx style="verb">https://mailarchive.ietf.org/arch/browse/oauth/</spanx>.</t>
+
+<t>Author contact:</t>
 
 <t><list style="symbols">
-  <t>Author contact (primary): Sanjeev Kumar, <eref target="mailto:mishra.sanjeev@gmail.com">mishra.sanjeev@gmail.com</eref></t>
-  <t>Author contact (alternate): Sanjeev Kumar, <eref target="mailto:sanjeev@orchestrum.in">sanjeev@orchestrum.in</eref></t>
-  <t>Mailing list: <eref target="mailto:oauth@ietf.org">oauth@ietf.org</eref></t>
-  <t>Archive: <eref target="https://mailarchive.ietf.org/arch/browse/oauth/">https://mailarchive.ietf.org/arch/browse/oauth/</eref></t>
-  <t>Working group: <eref target="https://datatracker.ietf.org/wg/oauth/">https://datatracker.ietf.org/wg/oauth/</eref></t>
-  <t>Source repository: <eref target="https://github.com/mishrasanjeev/grantex">https://github.com/mishrasanjeev/grantex</eref></t>
-  <t>Issue tracker: <eref target="https://github.com/mishrasanjeev/grantex/issues">https://github.com/mishrasanjeev/grantex/issues</eref></t>
+  <t>Primary: <spanx style="verb">mishra.sanjeev@gmail.com</spanx></t>
+  <t>Alternate: <spanx style="verb">sanjeev@orchestrum.in</spanx></t>
 </list></t>
 
-<t>This is an individual Internet-Draft. Publication as an Internet-Draft does not imply IETF endorsement, OAuth Working Group adoption, or IETF consensus.</t>
+<t>Source and issue tracking are maintained at
+<spanx style="verb">https://github.com/mishrasanjeev/grantex/tree/main/docs/ietf-draft</spanx>.</t>
 
 </section>
 <section anchor="changes-since-01"><name>Changes Since -01</name>
 
-<t>This revision makes the following changes:</t>
+<t>Revision -02:</t>
 
 <t><list style="symbols">
-  <t>Updates the author organization and prominently identifies both the primary and alternate author contact addresses.</t>
-  <t>Clarifies that DAAP is vendor-neutral and that Grantex is a reference implementation rather than a required authority, DID method, JSON-LD context, or policy path.</t>
-  <t>Adds a bounded lost-response recovery rule for refresh token rotation. Authorization Servers <bcp14>MAY</bcp14> replay the immediately previous refresh token response for no more than 300 seconds and only while the Grant remains active.</t>
-  <t>Adds explicit alignment with the OAuth 2.0 Security Best Current Practice, PKCE, Pushed Authorization Requests, DPoP, mutual TLS, and Protected Resource Metadata.</t>
-  <t>Adds discussion venue metadata and a broader relationship-to-existing-work appendix for OAuth identity chaining, transaction tokens, agent authorization use cases, and multi-agent collaboration drafts.</t>
-  <t>Expands security and privacy considerations for sender-constrained tokens, refresh-token replay recovery, audit-log minimization, retention, and cross-domain correlation.</t>
-  <t>Updates implementation-status text to reflect the current Grantex reference implementation and SDK versions.</t>
-</list></t>
-
-</section>
-<section anchor="changes-since-00"><name>Changes Since -00</name>
-
-<t>This revision adds the following extensions:</t>
-
-<t><list style="symbols">
-  <t>Budget Controls (<xref target="budget-controls"/>): per-grant spending limits with the <spanx style="verb">bdg</spanx> JWT claim, atomic debit operations, and threshold alerting.</t>
-  <t>Event Streaming (<xref target="event-streaming"/>): SSE and WebSocket endpoints for real-time event delivery.</t>
-  <t>Credential Vault (<xref target="credential-vault"/>): encrypted per-user credential storage with token-to-credential exchange.</t>
-  <t>External Policy Backends (<xref target="external-policy-backends"/>): integration with OPA and Cedar as policy evaluation targets.</t>
-  <t>Implementation Report (Appendix B): conformance results and SDK coverage.</t>
-  <t>Updated Conformance Requirements (<xref target="conformance"/>) with <bcp14>OPTIONAL</bcp14> extensions for Budget, Events, Vault, and Policy Backends.</t>
+  <t>narrows the document to an OAuth profile and removes proprietary Grantex
+endpoint paths from the normative protocol;</t>
+  <t>requires authenticated human consent and prohibits policy automation from
+impersonating that consent;</t>
+  <t>requires exact redirect URI matching, <spanx style="verb">state</spanx>, PKCE S256, PAR, and a resource
+indicator;</t>
+  <t>requires sender-constrained access and refresh tokens;</t>
+  <t>uses the standard <spanx style="verb">scope</spanx>, <spanx style="verb">client_id</spanx>, <spanx style="verb">cnf</spanx>, and <spanx style="verb">act</spanx> claims rather than
+registering duplicate short claims;</t>
+  <t>defines safety properties for bounded lost-response refresh recovery;</t>
+  <t>makes DID use optional and requires proof of possession for any advertised
+agent key;</t>
+  <t>moves audit, budget, policy, events, and credential-vault behavior outside
+the interoperable core; and</t>
+  <t>reports the Grantex implementation as partial rather than conformant.</t>
 </list></t>
 
 </section>
 <section anchor="requirements-language"><name>Requirements Language</name>
 
-<t>The key words "<bcp14>MUST</bcp14>", "<bcp14>MUST NOT</bcp14>", "<bcp14>REQUIRED</bcp14>", "<bcp14>SHALL</bcp14>", "<bcp14>SHALL
-NOT</bcp14>", "<bcp14>SHOULD</bcp14>", "<bcp14>SHOULD NOT</bcp14>", "<bcp14>RECOMMENDED</bcp14>", "<bcp14>NOT RECOMMENDED</bcp14>",
-"<bcp14>MAY</bcp14>", and "<bcp14>OPTIONAL</bcp14>" in this document are to be interpreted as
-described in BCP 14 <xref target="RFC2119"/> <xref target="RFC8174"/> when, and only when, they
-appear in all capitals, as shown here.</t>
-
-<?line -18?>
+<t>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+"OPTIONAL" in this document are to be interpreted as described in BCP 14
+<xref target="RFC2119"/> <xref target="RFC8174"/> when, and only when, they appear in all capitals, as
+shown here.</t>
 
 </section>
 <section anchor="terminology"><name>Terminology</name>
 
-<t>The following terms are used throughout this document:</t>
+<t>This document uses the OAuth roles defined by <xref target="RFC6749"/> and the following
+terms:</t>
 
-<dl newline="true">
+<dl>
   <dt>Agent:</dt>
   <dd>
-    <t>An AI-powered software process that takes autonomous actions on behalf of a Principal. An Agent has a persistent cryptographic identity (DID) and must obtain an explicit grant from its Principal before acting on their behalf.</t>
+    <t>Software that plans or performs actions. An Agent is not itself an OAuth
+role.</t>
+  </dd>
+  <dt>Agent Client Instance:</dt>
+  <dd>
+    <t>An OAuth client instance that executes agent software. Its OAuth <spanx style="verb">client_id</spanx>
+identifies its registration, not a human or legal identity.</t>
   </dd>
   <dt>Principal:</dt>
   <dd>
-    <t>The human user who authorizes an Agent to act on their behalf. The Principal is the subject (<spanx style="verb">sub</spanx>) of any Grant Token issued by the authorization server.</t>
+    <t>The human resource owner whose authority is delegated. A deployment can use
+a non-human resource owner only when its trust and authorization model is
+defined outside this profile.</t>
   </dd>
-  <dt>Developer:</dt>
+  <dt>Agent Key:</dt>
   <dd>
-    <t>The organization or individual who built and operates the Agent. The Developer authenticates to the authorization server using an API key.</t>
+    <t>An asymmetric key controlled by the Agent Client Instance and used for DPoP
+or mutual-TLS sender constraint.</t>
   </dd>
-  <dt>Authorization Server:</dt>
+  <dt>Delegated Token:</dt>
   <dd>
-    <t>A server implementing this specification that issues Grant Tokens, maintains the grant registry, and provides the JWKS endpoint for offline verification.</t>
-  </dd>
-  <dt>Service:</dt>
-  <dd>
-    <t>Any API or platform that receives requests from an Agent. Services <bcp14>MUST</bcp14> verify Grant Tokens before acting on agent requests.</t>
-  </dd>
-  <dt>Grant:</dt>
-  <dd>
-    <t>A persistent record of permission given by a Principal to an Agent for a specific set of Scopes. A Grant is represented to the Agent as a Grant Token.</t>
-  </dd>
-  <dt>Grant Token:</dt>
-  <dd>
-    <t>A signed JWT <xref target="RFC7519"/> representing a valid, non-revoked Grant. Grant Tokens are short-lived credentials carrying agent-specific claims defined in <xref target="grant-token-format"/>.</t>
-  </dd>
-  <dt>Scope:</dt>
-  <dd>
-    <t>A named permission string following the format <spanx style="verb">resource:action[:constraint]</spanx> as defined in <xref target="scope-format"/>.</t>
-  </dd>
-  <dt>DID:</dt>
-  <dd>
-    <t>A Decentralized Identifier <xref target="DID-CORE"/> used as the Agent's cryptographic identity. DAAP does not require a specific DID method. Examples in this document use <spanx style="verb">did:example</spanx> values.</t>
-  </dd>
-  <dt>Policy:</dt>
-  <dd>
-    <t>A rule evaluated by the Policy Engine (<xref target="policy-engine"/>) that automatically approves or denies an authorization request before the consent UI is shown to the Principal.</t>
-  </dd>
-  <dt>Anomaly:</dt>
-  <dd>
-    <t>A behavioral deviation from an agent's established activity baseline, detected by the runtime monitoring system defined in <xref target="anomaly-detection"/>.</t>
-  </dd>
-  <dt>Budget Allocation:</dt>
-  <dd>
-    <t>A per-grant spending limit that constrains the total monetary value of actions an Agent may take under a single Grant.</t>
+    <t>An access token issued by OAuth Token Exchange whose authority is derived
+from another token and attenuated in scope, resource, lifetime, or all three.</t>
   </dd>
 </dl>
 
 </section>
 </section>
-<section anchor="agent-identity"><name>Agent Identity</name>
+<section anchor="security-model"><name>Security Model</name>
 
-<section anchor="did-format"><name>DID Format</name>
+<t>The authorization server is trusted to authenticate the Principal, display an
+accurate authorization request, enforce registered client metadata, issue
+tokens, and process revocation. A resource server is trusted to validate tokens
+and enforce scopes for its own resource identifier.</t>
 
-<t>Every Agent registered with a DAAP-compliant Authorization Server is associated with a Decentralized Identifier. The DID method is deployment-specific and outside the scope of this document. Authorization Servers <bcp14>MAY</bcp14> issue Agent DIDs directly or <bcp14>MAY</bcp14> accept externally controlled Agent DIDs after proof of control.</t>
+<t>An Agent Client Instance is not trusted merely because a developer registered
+it or supplied an API key. Developer authentication and Principal
+authentication are separate security events. A developer credential MUST NOT
+be accepted as proof that the Principal approved a live authorization request.</t>
 
-<t>For examples, this document uses DIDs of the form:</t>
+<t>For a live authorization, the authorization server MUST authenticate the
+Principal using a method appropriate to the risk of the requested authority.
+Phishing-resistant authentication is RECOMMENDED for high-impact scopes.
+Sandbox deployments MAY use test principals and simulated consent when they
+are clearly isolated from production resources and credentials.</t>
 
-<figure><artwork><![CDATA[
-did:example:agent:<agent_id>
-]]></artwork></figure>
-
-<t>where <spanx style="verb">&lt;agent_id&gt;</spanx> is an opaque stable identifier. Implementations that mint their own identifiers <bcp14>SHOULD</bcp14> use collision-resistant values such as ULIDs <xref target="ULID"/> or randomly generated identifiers with at least 128 bits of entropy.</t>
-
-<t>Example:</t>
-
-<figure><artwork><![CDATA[
-did:example:agent:ag_01HXYZ123abcDEF456ghi
-]]></artwork></figure>
-
-<t>The <spanx style="verb">did:example</spanx> method and identifiers in this document are illustrative only.</t>
-
-</section>
-<section anchor="identity-document"><name>Identity Document</name>
-
-<t>The DID resolves to an identity document at the Authorization Server. The document <bcp14>MUST</bcp14> contain the following fields:</t>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "@context": "https://schemas.example/daap/identity/v1",
-  "id": "did:example:agent:ag_01HXYZ123abcDEF456ghi",
-  "developer": "org_yourcompany",
-  "name": "travel-booker",
-  "description": "Books flights and hotels on behalf of users",
-  "declaredScopes": ["calendar:read", "payments:initiate:max_500"],
-  "status": "active",
-  "createdAt": "2026-02-01T00:00:00Z",
-  "verificationMethod": [{
-    "id": "did:example:agent:ag_01HXYZ123abcDEF456ghi#key-1",
-    "type": "JsonWebKey2020",
-    "publicKeyJwk": { "..." : "..." }
-  }]
-}
-]]></sourcecode></figure>
+<t>An automated policy decision MAY deny, narrow, or require escalation of a
+request. It MUST NOT replace the Principal's authenticated approval unless a
+separate, explicitly authorized non-human resource-owner model applies.</t>
 
 </section>
-<section anchor="key-management"><name>Key Management</name>
+<section anchor="agent-client-registration"><name>Agent Client Registration</name>
 
-<t>Authorization Servers <bcp14>MUST</bcp14> adhere to the following key management requirements:</t>
+<t>An Agent Client Instance uses an OAuth client registration. Registration can
+be provisioned administratively or by a standards-based dynamic registration
+mechanism; the registration wire protocol is outside this document.</t>
+
+<t>The registration MUST bind:</t>
 
 <t><list style="symbols">
-  <t>Authorization Servers <bcp14>MUST</bcp14> use RS256 (RSASSA-PKCS1-v1_5 using SHA-256) <xref target="RFC7518"/> for signing Grant Tokens.</t>
-  <t>Private signing keys <bcp14>MUST</bcp14> never be transmitted or stored outside the Authorization Server's trust boundary.</t>
-  <t>Public keys <bcp14>MUST</bcp14> be published at <spanx style="verb">/.well-known/jwks.json</spanx> as a JWK Set <xref target="RFC7517"/>.</t>
-  <t>Key rotation <bcp14>MUST</bcp14> be supported without changing the Agent's DID or invalidating existing, unexpired Grant Tokens. Rotated keys <bcp14>MUST</bcp14> remain in the JWKS until all tokens signed with them have expired.</t>
-  <t>Protected resource metadata <xref target="RFC9728"/> and authorization server metadata <xref target="RFC8414"/> <bcp14>SHOULD</bcp14> be used to discover issuer, JWKS, and verification endpoints rather than hard-coding deployment-specific paths.</t>
+  <t>one or more exact redirect URIs for authorization-code clients;</t>
+  <t>the resources the client is permitted to request;</t>
+  <t>the scopes the client is permitted to request; and</t>
+  <t>key metadata sufficient to sender-constrain tokens.</t>
 </list></t>
 
+<t>The authorization server MUST reject redirect URIs containing fragments and
+MUST apply the redirect URI rules from <xref target="RFC9700"/>. Production web redirect
+URIs MUST use HTTPS, except for loopback redirects explicitly permitted for
+native applications.</t>
+
+<t>The Agent Key MUST be asymmetric. The registration MUST NOT contain private
+key parameters. Before treating a key as controlled by an Agent Client
+Instance, the authorization server MUST verify possession through DPoP
+<xref target="RFC9449"/>, mutual TLS <xref target="RFC8705"/>, or another protocol that proves possession
+of the corresponding private key.</t>
+
+<section anchor="optional-did-association"><name>Optional DID Association</name>
+
+<t>A deployment MAY associate an Agent Client Instance with a DID <xref target="DID-CORE"/>.
+DID support is not required by this profile. If a DID is placed in a token or
+shown to a Principal, it MUST resolve to a document that contains the verified
+Agent Key or a verifiable delegation to that key. An opaque database identifier
+with a <spanx style="verb">did:</spanx> prefix is not sufficient.</t>
+
+<t>Key rotation MUST preserve an auditable relationship between the old and new
+keys, invalidate future use of the retired key, and avoid silently changing the
+meaning of already-issued sender-constrained tokens.</t>
+
 </section>
 </section>
-<section anchor="scope-format"><name>Scope Format and Registry</name>
+<section anchor="authorization"><name>Authorization</name>
 
-<section anchor="format"><name>Format</name>
+<section anchor="pushed-authorization-request"><name>Pushed Authorization Request</name>
 
-<t>Scopes are permission strings of the form:</t>
-
-<figure><artwork><![CDATA[
-resource:action[:constraint]
-]]></artwork></figure>
-
-<t>where:</t>
+<t>Clients conforming to this profile MUST use PAR <xref target="RFC9126"/>. The pushed request
+MUST contain, at minimum:</t>
 
 <t><list style="symbols">
-  <t><spanx style="verb">resource</spanx> identifies the data or service being accessed (e.g., <spanx style="verb">calendar</spanx>, <spanx style="verb">payments</spanx>, <spanx style="verb">email</spanx>)</t>
-  <t><spanx style="verb">action</spanx> identifies the operation (e.g., <spanx style="verb">read</spanx>, <spanx style="verb">write</spanx>, <spanx style="verb">send</spanx>, <spanx style="verb">initiate</spanx>, <spanx style="verb">delete</spanx>)</t>
-  <t><spanx style="verb">constraint</spanx> is an optional limiting parameter (e.g., <spanx style="verb">max_500</spanx> for a spending limit)</t>
+  <t><spanx style="verb">client_id</spanx>;</t>
+  <t><spanx style="verb">response_type=code</spanx>;</t>
+  <t>an exact registered <spanx style="verb">redirect_uri</spanx>;</t>
+  <t><spanx style="verb">scope</spanx>;</t>
+  <t>a high-entropy <spanx style="verb">state</spanx> value;</t>
+  <t><spanx style="verb">code_challenge</spanx> and <spanx style="verb">code_challenge_method=S256</spanx>; and</t>
+  <t>exactly one <spanx style="verb">resource</spanx> value identifying the target resource server.</t>
 </list></t>
 
-</section>
-<section anchor="standard-scope-registry"><name>Standard Scope Registry</name>
+<t>The authorization server MUST reject an unregistered redirect URI, a resource
+outside the client's registration, or a scope outside the client's registered
+scope set. It MUST NOT apply prefix, wildcard, or substring matching to a
+redirect URI.</t>
 
-<t>The following scopes constitute the normative standard registry. Implementations <bcp14>MUST</bcp14> support all standard scopes that are relevant to the resources they expose:</t>
-
-<texttable>
-      <ttcol align='left'>Scope</ttcol>
-      <ttcol align='left'>Description</ttcol>
-      <c><spanx style="verb">calendar:read</spanx></c>
-      <c>Read calendar events</c>
-      <c><spanx style="verb">calendar:write</spanx></c>
-      <c>Create, modify, and delete calendar events</c>
-      <c><spanx style="verb">email:read</spanx></c>
-      <c>Read email messages</c>
-      <c><spanx style="verb">email:send</spanx></c>
-      <c>Send emails on the Principal's behalf</c>
-      <c><spanx style="verb">email:delete</spanx></c>
-      <c>Delete email messages</c>
-      <c><spanx style="verb">files:read</spanx></c>
-      <c>Read files and documents</c>
-      <c><spanx style="verb">files:write</spanx></c>
-      <c>Create and modify files</c>
-      <c><spanx style="verb">payments:read</spanx></c>
-      <c>View payment history and balances</c>
-      <c><spanx style="verb">payments:initiate</spanx></c>
-      <c>Initiate payments of any amount</c>
-      <c><spanx style="verb">payments:initiate:max_N</spanx></c>
-      <c>Initiate payments up to N in the account's base currency</c>
-      <c><spanx style="verb">profile:read</spanx></c>
-      <c>Read profile and identity information</c>
-      <c><spanx style="verb">contacts:read</spanx></c>
-      <c>Read address book and contacts</c>
-</texttable>
+<t>The client then sends the returned <spanx style="verb">request_uri</spanx> to the authorization endpoint
+as defined by <xref target="RFC9126"/>. The authorization endpoint MUST reject a request URI
+that is expired, already consumed where single use is enforced, issued to a
+different client, or altered.</t>
 
 </section>
-<section anchor="custom-scopes"><name>Custom Scopes</name>
+<section anchor="principal-interaction"><name>Principal Interaction</name>
 
-<t>Services <bcp14>MAY</bcp14> define custom scopes using reverse-domain notation per <xref target="RFC3986"/>:</t>
+<t>The authorization server MUST authenticate the Principal independently of the
+developer or Agent Client Instance. The consent view MUST show, in language the
+Principal can understand:</t>
 
-<figure><artwork><![CDATA[
-com.stripe.charges:create:max_5000
-io.github.issues:create
-]]></artwork></figure>
+<t><list style="symbols">
+  <t>the Agent Client Instance and responsible developer;</t>
+  <t>the target resource;</t>
+  <t>the requested scopes and their consequences;</t>
+  <t>the requested duration; and</t>
+  <t>material delegation or transaction constraints.</t>
+</list></t>
 
-<t>Custom scopes <bcp14>MUST</bcp14> use reverse-domain notation to avoid collisions with the standard registry.</t>
+<t>Approval and denial MUST both be bound to the authenticated Principal and the
+specific authorization request. The authorization server MUST prevent login
+CSRF, consent CSRF, clickjacking, and reuse of approval artifacts.</t>
 
-</section>
-<section anchor="scope-display-requirements"><name>Scope Display Requirements</name>
-
-<t>Authorization Servers <bcp14>MUST</bcp14> maintain a human-readable description for each scope in their registry. Consent UIs <bcp14>MUST</bcp14> display human-readable descriptions to Principals, never raw scope strings.</t>
-
-</section>
-</section>
-<section anchor="grant-flow"><name>Grant Authorization Flow</name>
-
-<section anchor="overview"><name>Overview</name>
-
-<t>The DAAP grant flow is modelled on the OAuth 2.0 Authorization Code flow <xref target="RFC6749"/> with the following adaptations: the client is always a Developer (identified by an API key), the resource owner is a Principal identified by the Developer's internal user identifier, and the resulting token carries agent-specific claims.</t>
-
-<figure><artwork type="ascii-art"><![CDATA[
-Developer App          Authorization Server       Principal
-     |                         |                      |
-     | POST /v1/authorize       |                      |
-     | {agentId, principalId,  |                      |
-     |  scopes, redirectUri}    |                      |
-     |------------------------>|                      |
-     |                         |                      |
-     |<------------------------|                      |
-     | {authRequestId,          |                      |
-     |  consentUrl}             |                      |
-     |                         |                      |
-     | redirect user --------------------------------->|
-     |                         | consent UI displayed |
-     |                         |<---------------------|
-     |                         | Principal approves   |
-     |                         |                      |
-     |<------------------------------------------------|
-     | redirectUri?code=AUTH_CODE                      |
-     |                         |                      |
-     | POST /v1/token           |                      |
-     | {code, agentId}          |                      |
-     |------------------------>|                      |
-     |<------------------------|                      |
-     | {grantToken,             |                      |
-     |  refreshToken}           |                      |
-]]></artwork></figure>
+<t>The client MUST verify that the returned <spanx style="verb">state</spanx> exactly matches its stored
+value before exchanging the authorization code.</t>
 
 </section>
-<section anchor="authorization-request"><name>Authorization Request</name>
+<section anchor="authorization-code-exchange"><name>Authorization Code Exchange</name>
 
-<t>The Developer initiates the flow by sending:</t>
+<t>The client exchanges the authorization code at the OAuth token endpoint using
+<spanx style="verb">grant_type=authorization_code</spanx>, the code, the same <spanx style="verb">redirect_uri</spanx>, and the
+PKCE <spanx style="verb">code_verifier</spanx>.</t>
 
-<figure><sourcecode type="http"><![CDATA[
-POST /v1/authorize
-Authorization: Bearer <api_key>
-Content-Type: application/json
-
-{
-  "agentId": "ag_01HXYZ123abc",
-  "principalId": "user_abc123",
-  "scopes": ["calendar:read", "payments:initiate:max_500"],
-  "expiresIn": "24h",
-  "redirectUri": "https://client.example/auth/callback",
-  "state": "<csrf_token>",
-  "audience": "https://resource.example"
-}
-]]></sourcecode></figure>
-
-<t>The <spanx style="verb">audience</spanx> field is <bcp14>OPTIONAL</bcp14>. When present, it <bcp14>MUST</bcp14> be embedded as the <spanx style="verb">aud</spanx> claim in the issued Grant Token. The <spanx style="verb">state</spanx> parameter is <bcp14>REQUIRED</bcp14> and <bcp14>MUST</bcp14> be validated by the Developer's callback handler to prevent CSRF attacks. The <spanx style="verb">redirectUri</spanx> <bcp14>MUST</bcp14> match a URI pre-registered for the Agent at the Authorization Server.</t>
-
-<t>Authorization Servers <bcp14>MUST</bcp14> reject requests whose <spanx style="verb">redirectUri</spanx> does not exactly match a pre-registered value for the specified <spanx style="verb">agentId</spanx>.</t>
-
-<t>Response <spanx style="verb">200 OK</spanx>:</t>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "authRequestId": "areq_01HXYZ...",
-  "consentUrl": "https://consent.example.com/authorize?req=eyJ...",
-  "expiresAt": "2026-02-01T00:15:00Z"
-}
-]]></sourcecode></figure>
-
-</section>
-<section anchor="consent-ui-requirements"><name>Consent UI Requirements</name>
-
-<t>Authorization Servers <bcp14>MUST</bcp14> render a consent UI to the Principal that displays all of the following before the Principal approves or denies:</t>
+<t>The authorization server MUST:</t>
 
 <t><list style="numbers" type="1">
-  <t>The Agent's registered name and description</t>
-  <t>The Developer's registered organization name</t>
-  <t>The full list of requested scopes with human-readable descriptions</t>
-  <t>The token expiry period</t>
-  <t>A prominent deny/cancel action that is at least as visually prominent as the approve action</t>
+  <t>authenticate or otherwise identify the client as required for its client
+type;</t>
+  <t>require exact <spanx style="verb">redirect_uri</spanx> equality with the authorization request;</t>
+  <t>validate the S256 verifier;</t>
+  <t>bind the code to the client, Principal, resource, and approved scopes; and</t>
+  <t>consume the code atomically with successful token issuance.</t>
 </list></t>
 
-</section>
-<section anchor="token-exchange"><name>Token Exchange</name>
-
-<t>After Principal approval, the Authorization Server calls <spanx style="verb">redirectUri?code=AUTH_CODE&amp;state=STATE</spanx>.</t>
-
-<figure><sourcecode type="http"><![CDATA[
-POST /v1/token
-Authorization: Bearer <api_key>
-Content-Type: application/json
-
-{
-  "code": "AUTH_CODE",
-  "agentId": "ag_01HXYZ123abc"
-}
-]]></sourcecode></figure>
-
-<t>Response <spanx style="verb">200 OK</spanx>:</t>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "grantToken": "eyJhbGciOiJSUzI1NiJ9...",
-  "refreshToken": "ref_01HXYZ...",
-  "grantId": "grnt_01HXYZ...",
-  "scopes": ["calendar:read", "payments:initiate:max_500"],
-  "expiresAt": "2026-02-02T00:00:00Z"
-}
-]]></sourcecode></figure>
-
-<t>Refresh tokens are single-use and <bcp14>MUST NOT</bcp14> outlive the underlying Grant. The Authorization Server <bcp14>MUST</bcp14> rotate the refresh token on every accepted non-replay use. To recover from a lost token response, the Authorization Server <bcp14>MAY</bcp14> allow idempotent replay of the immediately previous refresh token for no more than 300 seconds while the Grant remains active. Replay <bcp14>MUST</bcp14> return the already-rotated token response and <bcp14>MUST NOT</bcp14> extend the rotation chain, replay window, or Grant lifetime. Refresh tokens <bcp14>MUST</bcp14> be invalidated when the underlying Grant is expired or revoked.</t>
-
-</section>
-<section anchor="token-refresh"><name>Token Refresh</name>
-
-<t>Before the Grant expires, the Developer may refresh the Grant Token by sending:</t>
-
-<figure><sourcecode type="http"><![CDATA[
-POST /v1/token/refresh
-Authorization: Bearer <api_key>
-Content-Type: application/json
-
-{
-  "refreshToken": "ref_01HXYZ...",
-  "agentId": "ag_01HXYZ123abc"
-}
-]]></sourcecode></figure>
-
-<t>Response <spanx style="verb">200 OK</spanx>:</t>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "grantToken": "eyJhbGciOiJSUzI1NiJ9...",
-  "refreshToken": "ref_01NEW...",
-  "grantId": "grnt_01HXYZ...",
-  "scopes": ["calendar:read", "payments:initiate:max_500"],
-  "expiresAt": "2026-02-02T00:00:00Z"
-}
-]]></sourcecode></figure>
-
-<t>The response's <spanx style="verb">expiresAt</spanx> value is the expiry of the underlying Grant and <bcp14>MUST NOT</bcp14> be extended by refresh. Clients <bcp14>MUST</bcp14> persist and use the newest <spanx style="verb">refreshToken</spanx> returned by the Authorization Server.</t>
+<t>An error while signing or storing tokens MUST leave the authorization code
+usable for a later retry or MUST produce an unambiguous terminal error. It MUST
+NOT create a partially committed grant.</t>
 
 </section>
 </section>
-<section anchor="grant-token-format"><name>Grant Token Format</name>
+<section anchor="access-tokens"><name>Access Tokens</name>
 
-<section anchor="jose-header"><name>JOSE Header</name>
+<t>Authorization servers conforming to this profile issue JWT access tokens
+<xref target="RFC7519"/> as profiled by <xref target="RFC9068"/>. The JWK Set requirements of <xref target="RFC7517"/>,
+the JOSE requirements of <xref target="RFC7518"/>, JWT validation
+guidance in <xref target="RFC8725"/>, and authorization-server metadata in <xref target="RFC8414"/>
+apply.</t>
 
-<figure><sourcecode type="json"><![CDATA[
-{
-  "alg": "RS256",
-  "typ": "JWT",
-  "kid": "<key_id>"
-}
-]]></sourcecode></figure>
+<t>The authorization server metadata MUST publish a <spanx style="verb">jwks_uri</spanx>. A JWKS document
+alone is not authorization-server metadata and MUST NOT be described as
+conformance with <xref target="RFC8414"/>.</t>
 
-<t>The <spanx style="verb">alg</spanx> field <bcp14>MUST</bcp14> be <spanx style="verb">RS256</spanx>. Authorization Servers <bcp14>MUST NOT</bcp14> issue tokens with any other algorithm. Verifiers <bcp14>MUST</bcp14> explicitly reject tokens with any <spanx style="verb">alg</spanx> value other than <spanx style="verb">RS256</spanx>, including <spanx style="verb">none</spanx> and <spanx style="verb">HS256</spanx>.</t>
+<section anchor="claims"><name>Claims</name>
 
-</section>
-<section anchor="jwt-claims"><name>JWT Claims</name>
+<t>The token MUST contain the claims required by <xref target="RFC9068"/>, including <spanx style="verb">iss</spanx>,
+<spanx style="verb">sub</spanx>, <spanx style="verb">aud</spanx>, <spanx style="verb">exp</spanx>, <spanx style="verb">iat</spanx>, <spanx style="verb">jti</spanx>, and <spanx style="verb">client_id</spanx>. Granted scopes MUST use the
+standard space-delimited <spanx style="verb">scope</spanx> claim.</t>
 
-<figure><sourcecode type="json"><![CDATA[
-{
-  "iss": "https://as.example.com",
-  "sub": "user_abc123",
-  "aud": "https://resource.example",
-  "agt": "did:example:agent:ag_01HXYZ123abc",
-  "dev": "org_yourcompany",
-  "grnt": "grnt_01HXYZ...",
-  "scp": ["calendar:read", "payments:initiate:max_500"],
-  "bdg": 5000,
-  "iat": 1709000000,
-  "exp": 1709086400,
-  "jti": "tok_01HXYZ987xyz"
-}
-]]></sourcecode></figure>
+<t><spanx style="verb">aud</spanx> MUST identify the single resource requested during authorization. Tokens
+without the expected audience MUST be rejected by the resource server.</t>
 
-<t>The following claims are defined by this specification:</t>
+<t>The token MUST be sender-constrained:</t>
 
-<texttable>
-      <ttcol align='left'>Claim</ttcol>
-      <ttcol align='left'>Type</ttcol>
-      <ttcol align='left'>Required</ttcol>
-      <ttcol align='left'>Description</ttcol>
-      <c><spanx style="verb">iss</spanx></c>
-      <c>string</c>
-      <c><bcp14>REQUIRED</bcp14></c>
-      <c>Authorization Server identifier URI</c>
-      <c><spanx style="verb">sub</spanx></c>
-      <c>string</c>
-      <c><bcp14>REQUIRED</bcp14></c>
-      <c>Principal identifier</c>
-      <c><spanx style="verb">aud</spanx></c>
-      <c>string</c>
-      <c><bcp14>OPTIONAL</bcp14></c>
-      <c>Intended audience (target service URI)</c>
-      <c><spanx style="verb">agt</spanx></c>
-      <c>string</c>
-      <c><bcp14>REQUIRED</bcp14></c>
-      <c>Agent DID</c>
-      <c><spanx style="verb">dev</spanx></c>
-      <c>string</c>
-      <c><bcp14>REQUIRED</bcp14></c>
-      <c>Developer organization identifier</c>
-      <c><spanx style="verb">grnt</spanx></c>
-      <c>string</c>
-      <c><bcp14>REQUIRED</bcp14></c>
-      <c>Grant identifier (used for revocation lookup)</c>
-      <c><spanx style="verb">scp</spanx></c>
-      <c>string[]</c>
-      <c><bcp14>REQUIRED</bcp14></c>
-      <c>Array of granted scope strings</c>
-      <c><spanx style="verb">bdg</spanx></c>
-      <c>number</c>
-      <c><bcp14>OPTIONAL</bcp14></c>
-      <c>Remaining budget amount (see <xref target="budget-controls"/>)</c>
-      <c><spanx style="verb">iat</spanx></c>
-      <c>NumericDate</c>
-      <c><bcp14>REQUIRED</bcp14></c>
-      <c>Issued-at time</c>
-      <c><spanx style="verb">exp</spanx></c>
-      <c>NumericDate</c>
-      <c><bcp14>REQUIRED</bcp14></c>
-      <c>Expiration time</c>
-      <c><spanx style="verb">jti</spanx></c>
-      <c>string</c>
-      <c><bcp14>REQUIRED</bcp14></c>
-      <c>Unique token identifier (for replay prevention)</c>
-</texttable>
+<t><list style="symbols">
+  <t>a DPoP-bound token carries the public-key thumbprint in <spanx style="verb">cnf.jkt</spanx> as defined
+by <xref target="RFC9449"/>; or</t>
+  <t>an mTLS-bound token carries the certificate thumbprint in <spanx style="verb">cnf</spanx> as defined by
+<xref target="RFC8705"/>.</t>
+</list></t>
+
+<t>An authorization server MUST NOT emit <spanx style="verb">cnf</spanx> solely because a public key was
+uploaded. It MUST first establish proof of possession. The resource server MUST
+verify the DPoP proof or mutual-TLS binding on every protected request.</t>
+
+<t>This profile defines no short aliases for <spanx style="verb">scope</spanx>, <spanx style="verb">client_id</spanx>, <spanx style="verb">act</spanx>, or
+<spanx style="verb">authorization_details</spanx>. Private implementation claims MAY be used only under
+collision-resistant names and MUST NOT be required for interoperability.</t>
 
 </section>
-<section anchor="token-validation"><name>Token Validation</name>
+<section anchor="validation"><name>Validation</name>
 
-<t>Services receiving a Grant Token <bcp14>MUST</bcp14> verify all of the following:</t>
+<t>A resource server MUST validate at least:</t>
 
 <t><list style="numbers" type="1">
-  <t>The token signature is valid, verified using the JWK Set published at <spanx style="verb">{iss}/.well-known/jwks.json</spanx>, with the key identified by <spanx style="verb">kid</spanx>.</t>
-  <t>The <spanx style="verb">alg</spanx> header value is <spanx style="verb">RS256</spanx>. Tokens with any other <spanx style="verb">alg</spanx> <bcp14>MUST</bcp14> be rejected.</t>
-  <t>The <spanx style="verb">exp</spanx> claim has not passed (allowing for a reasonable clock skew of no more than 300 seconds).</t>
-  <t>If the service has a registered audience identifier, the <spanx style="verb">aud</spanx> claim matches that identifier.</t>
-  <t>The <spanx style="verb">scp</spanx> array contains all scopes required for the requested operation.</t>
-  <t>If the <spanx style="verb">bdg</spanx> claim is present and the operation has a cost, the <spanx style="verb">bdg</spanx> value is sufficient for the operation.</t>
-  <t>For high-stakes operations (see <xref target="token-lifetime"/>), the token has not been revoked via the online verification endpoint.</t>
-  <t>For deployments requiring proof-of-possession, the presented token is bound to the expected sender key using DPoP <xref target="RFC9449"/>, mutual TLS <xref target="RFC8705"/>, or an equivalent sender-constraining mechanism.</t>
+  <t>an explicitly allowed signature algorithm and a valid signature;</t>
+  <t><spanx style="verb">iss</spanx> against the configured authorization server;</t>
+  <t><spanx style="verb">aud</spanx> against the resource server's identifier;</t>
+  <t><spanx style="verb">exp</spanx>, <spanx style="verb">iat</spanx>, and any applicable not-before constraint;</t>
+  <t>the required values in <spanx style="verb">scope</spanx>;</t>
+  <t>the sender constraint represented by <spanx style="verb">cnf</spanx>; and</t>
+  <t>revocation or token status when the deployment's risk model requires online
+state.</t>
 </list></t>
 
-</section>
-<section anchor="token-lifetime"><name>Token Lifetime Guidance</name>
-
-<texttable>
-      <ttcol align='left'>Use Case</ttcol>
-      <ttcol align='left'>Recommended Maximum TTL</ttcol>
-      <c>High-stakes actions (<spanx style="verb">payments:initiate</spanx>, <spanx style="verb">email:send</spanx>, <spanx style="verb">files:write</spanx>)</c>
-      <c>1 hour</c>
-      <c>Standard agent tasks</c>
-      <c>8 hours</c>
-      <c>Long-running background agents</c>
-      <c>24 hours</c>
-</texttable>
-
-<t>Implementations caching revocation state <bcp14>MUST NOT</bcp14> cache for longer than 300 seconds (5 minutes). Services processing high-stakes scopes (<spanx style="verb">payments:initiate</spanx>, <spanx style="verb">email:send</spanx>, <spanx style="verb">files:write</spanx>) <bcp14>SHOULD</bcp14> perform online verification for each token use and <bcp14>SHOULD</bcp14> require sender-constrained tokens.</t>
+<t>The resource server MUST NOT treat signature verification alone as sufficient
+authorization.</t>
 
 </section>
 </section>
-<section anchor="revocation"><name>Token Revocation</name>
+<section anchor="delegation"><name>Delegation</name>
 
-<section anchor="revoke-a-grant"><name>Revoke a Grant</name>
+<t>Delegation uses OAuth Token Exchange <xref target="RFC8693"/>. The delegating token is the
+<spanx style="verb">subject_token</spanx>. When an agent or service is acting as a distinct actor, the
+authorization server represents that chain using the standard <spanx style="verb">act</spanx> claim.</t>
 
-<figure><sourcecode type="http"><![CDATA[
-DELETE /v1/grants/{grantId}
-Authorization: Bearer <principal_token>
-]]></sourcecode></figure>
+<t>The authorization server MUST authenticate the requesting client and validate
+the subject token before exchange. It MUST reject a requested scope that is not
+contained in the subject token, and it MUST reject a resource that is broader
+than or inconsistent with the original authorization.</t>
 
-<t>Effect: all active Grant Tokens issued under this Grant are immediately invalidated. The Grant record is marked <spanx style="verb">revoked</spanx> with a timestamp.</t>
-
-</section>
-<section anchor="revoke-a-specific-token"><name>Revoke a Specific Token</name>
-
-<figure><sourcecode type="http"><![CDATA[
-POST /v1/tokens/revoke
-Authorization: Bearer <api_key>
-Content-Type: application/json
-
-{
-  "jti": "tok_01HXYZ987xyz"
-}
-]]></sourcecode></figure>
-
-<t>Response: <spanx style="verb">204 No Content</spanx>.</t>
-
-</section>
-<section anchor="online-verification"><name>Online Verification</name>
-
-<figure><sourcecode type="http"><![CDATA[
-POST /v1/tokens/verify
-Authorization: Bearer <api_key>
-Content-Type: application/json
-
-{
-  "token": "eyJhbGciOiJSUzI1NiJ9..."
-}
-]]></sourcecode></figure>
-
-<t>Response <spanx style="verb">200 OK</spanx>:</t>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "valid": true,
-  "grantId": "grnt_01HXYZ...",
-  "scopes": ["calendar:read"],
-  "principal": "user_abc123",
-  "agent": "did:example:agent:ag_01HXYZ123abc",
-  "expiresAt": "2026-02-02T00:00:00Z"
-}
-]]></sourcecode></figure>
-
-</section>
-<section anchor="jti-replay-prevention"><name>JTI Replay Prevention</name>
-
-<t>Authorization Servers <bcp14>MUST</bcp14> issue a unique <spanx style="verb">jti</spanx> value for each Grant Token and <bcp14>MUST</bcp14> retain enough state to revoke or audit that token for the token's lifetime. Online token verification <bcp14>MUST</bcp14> distinguish verification from token consumption: a normal verification request <bcp14>MUST NOT</bcp14> make a reusable Grant Token invalid solely because the same <spanx style="verb">jti</spanx> was verified before.</t>
-
-<t>If a deployment defines a one-time-use token profile, the Authorization Server <bcp14>MUST</bcp14> mark the <spanx style="verb">jti</spanx> as consumed only at the protected action boundary or at an explicitly defined consumption endpoint. Reuse of a consumed <spanx style="verb">jti</spanx> <bcp14>MUST</bcp14> be rejected and <bcp14>SHOULD</bcp14> produce an anomaly event. For bearer-token deployments, replay resistance <bcp14>SHOULD</bcp14> be provided with sender-constrained tokens as described in <xref target="security-considerations"/>.</t>
-
-</section>
-</section>
-<section anchor="audit-trail"><name>Audit Trail</name>
-
-<section anchor="log-entry-schema"><name>Log Entry Schema</name>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "entryId": "alog_01HXYZ...",
-  "agentId": "did:example:agent:ag_01HXYZ123abc",
-  "grantId": "grnt_01HXYZ...",
-  "principalId": "user_abc123",
-  "developerId": "org_yourcompany",
-  "action": "payment.initiated",
-  "status": "success",
-  "metadata": {
-    "amount": 420,
-    "currency": "USD",
-    "merchant": "Air India"
-  },
-  "timestamp": "2026-02-01T12:34:56.789Z",
-  "hash": "sha256:abc123...",
-  "prevHash": "sha256:xyz789..."
-}
-]]></sourcecode></figure>
-
-<t><spanx style="verb">action</spanx> values use the format <spanx style="verb">resource.verb</spanx> (e.g., <spanx style="verb">payment.initiated</spanx>, <spanx style="verb">email.sent</spanx>). <spanx style="verb">status</spanx> <bcp14>MUST</bcp14> be one of <spanx style="verb">success</spanx>, <spanx style="verb">failure</spanx>, or <spanx style="verb">blocked</spanx>.</t>
-
-</section>
-<section anchor="hash-chain"><name>Hash Chain</name>
-
-<t>Each entry's <spanx style="verb">hash</spanx> is computed as a SHA-256 digest <xref target="RFC4648"/> over a canonical representation of the entry:</t>
-
-<figure><artwork><![CDATA[
-hash = SHA-256(canonical_json(entry_without_hash) || prevHash)
-]]></artwork></figure>
-
-<t>where <spanx style="verb">canonical_json</spanx> serializes all fields as a JSON object <xref target="RFC8259"/> with keys sorted alphabetically, and <spanx style="verb">prevHash</spanx> is the <spanx style="verb">null</spanx> string for the first entry in a chain. This construction makes any retrospective modification to a historical entry detectable, as it invalidates all subsequent hashes.</t>
-
-</section>
-<section anchor="audit-log-requirements"><name>Audit Log Requirements</name>
+<t>A delegated token:</t>
 
 <t><list style="symbols">
-  <t>Audit log entries <bcp14>MUST</bcp14> be append-only at the API level. No update or delete endpoints for audit entries are permitted.</t>
-  <t>The Authorization Server <bcp14>MUST</bcp14> reject requests to modify or delete audit entries.</t>
-  <t>The complete audit log for a Grant <bcp14>MUST</bcp14> remain accessible after the Grant is revoked, for a minimum retention period determined by the deployment's compliance requirements.</t>
-  <t>Audit entries <bcp14>MUST NOT</bcp14> contain bearer tokens, refresh tokens, private keys, raw upstream credentials, or other secret values. Implementations <bcp14>SHOULD</bcp14> minimize personal data in audit entries and <bcp14>SHOULD</bcp14> support redaction or export filtering for fields not required by the deployment's audit purpose.</t>
+  <t>MUST NOT expire later than the subject token;</t>
+  <t>MUST be sender-constrained to the receiving Agent Client Instance;</t>
+  <t>MUST use a scope set no broader than the subject token;</t>
+  <t>MUST preserve the Principal as <spanx style="verb">sub</spanx> unless another specification defines a
+subject transition; and</t>
+  <t>MUST represent the current actor and any nested actor chain as specified by
+<xref target="RFC8693"/>.</t>
 </list></t>
 
-</section>
-</section>
-<section anchor="delegation"><name>Multi-Agent Delegation</name>
+<t>Deployments SHOULD bound delegation depth and SHOULD support revoking all
+tokens derived from a root authorization. Database parent identifiers and
+cascade algorithms are implementation details, not JWT claims defined here.</t>
 
-<section anchor="delegation-token-claims"><name>Delegation Token Claims</name>
-
-<t>When Agent A spawns Agent B, B's Grant Token <bcp14>MUST</bcp14> carry delegation claims linking it to the original Principal's authorization:</t>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "sub": "user_abc123",
-  "agt": "did:example:agent:ag_B_456",
-  "parentAgt": "did:example:agent:ag_A_123",
-  "parentGrnt": "grnt_parentXYZ",
-  "scp": ["email:read"],
-  "delegationDepth": 1
-}
-]]></sourcecode></figure>
-
-<t>Additional delegation claims:</t>
-
-<texttable>
-      <ttcol align='left'>Claim</ttcol>
-      <ttcol align='left'>Type</ttcol>
-      <ttcol align='left'>Description</ttcol>
-      <c><spanx style="verb">parentAgt</spanx></c>
-      <c>string</c>
-      <c>DID of the delegating (parent) Agent</c>
-      <c><spanx style="verb">parentGrnt</spanx></c>
-      <c>string</c>
-      <c>Grant ID of the parent Grant</c>
-      <c><spanx style="verb">delegationDepth</spanx></c>
-      <c>integer</c>
-      <c>Number of hops from the root Grant; 0 for root Grants</c>
-</texttable>
+<t>Cross-domain delegation should be evaluated against OAuth Identity and
+Authorization Chaining <xref target="I-D.ietf-oauth-identity-chaining"/> rather than creating
+an incompatible chain format.</t>
 
 </section>
-<section anchor="delegation-rules"><name>Delegation Rules</name>
+<section anchor="refresh-tokens"><name>Refresh Tokens</name>
 
-<t><list style="symbols">
-  <t>Sub-agent scopes <bcp14>MUST</bcp14> be a strict subset of the parent Grant's <spanx style="verb">scp</spanx> array. Authorization Servers <bcp14>MUST</bcp14> reject delegation requests whose requested scopes are not fully contained in the parent token's <spanx style="verb">scp</spanx> claim.</t>
-  <t><spanx style="verb">delegationDepth</spanx> <bcp14>MUST</bcp14> be incremented by exactly 1 at each hop.</t>
-  <t>Implementations <bcp14>MUST</bcp14> enforce a developer-configurable delegation depth limit. The <bcp14>RECOMMENDED</bcp14> default limit is <strong>3</strong>. Implementations <bcp14>MUST</bcp14> enforce a hard cap of <strong>10</strong> regardless of developer configuration.</t>
-  <t>The expiry of a delegated Grant Token <bcp14>MUST NOT</bcp14> exceed <spanx style="verb">min(parent_token_exp, now + requested_expires_in)</spanx>.</t>
-</list></t>
+<t>Refresh-token handling MUST follow <xref target="RFC9700"/>. Public clients MUST use refresh
+token rotation or sender-constrained refresh tokens. This profile requires
+both rotation and sender constraint for Agent Client Instances.</t>
 
-</section>
-<section anchor="delegation-endpoint"><name>Delegation Endpoint</name>
+<t>On a successful refresh, the authorization server MUST invalidate the
+presented refresh token and return a new refresh token atomically. The new
+access token MUST NOT expand the original resource, scope, delegation, sender
+binding, or grant lifetime.</t>
 
-<figure><sourcecode type="http"><![CDATA[
-POST /v1/grants/delegate
-Authorization: Bearer <api_key>
-Content-Type: application/json
+<section anchor="lost-response-recovery"><name>Lost-Response Recovery</name>
 
-{
-  "parentGrantToken": "eyJhbGciOiJSUzI1NiJ9...",
-  "subAgentId": "ag_01HXYZ_sub",
-  "scopes": ["email:read"],
-  "expiresIn": "1h"
-}
-]]></sourcecode></figure>
+<t>Network failure can occur after the authorization server commits rotation but
+before the client receives the response. A deployment MAY provide bounded
+recovery for this case. The transport syntax for a recovery key is an
+implementation extension and is not part of core conformance.</t>
 
-<t>The Authorization Server <bcp14>MUST</bcp14>:</t>
+<t>If recovery is provided, all of the following requirements apply:</t>
 
 <t><list style="numbers" type="1">
-  <t>Validate that the parent Grant has not been revoked.</t>
-  <t>Reject with <spanx style="verb">400</spanx> if any requested scope is not present in the parent token's <spanx style="verb">scp</spanx> claim.</t>
-  <t>Reject with <spanx style="verb">400</spanx> if the resulting <spanx style="verb">delegationDepth</spanx> would exceed the configured limit.</t>
-  <t>Reject with <spanx style="verb">404</spanx> if <spanx style="verb">subAgentId</spanx> does not belong to the authenticated Developer.</t>
-  <t>Compute expiry as <spanx style="verb">min(parent token exp, now + expiresIn)</spanx>.</t>
+  <t>Before its first attempt, the client generates a high-entropy recovery key
+and persists it with the old refresh token until the response is durable.</t>
+  <t>Every transport retry of that same refresh request uses the same recovery
+key. A new logical refresh operation uses a new key.</t>
+  <t>The authorization server binds recovery state to the authenticated client,
+Agent Client Instance, old refresh token, and recovery key.</t>
+  <t>Recovery returns the exact committed access token and rotated refresh token;
+it MUST NOT mint a new token, extend a lifetime, or rotate again.</t>
+  <t>Recovery is allowed only while the rotated child refresh token is active and
+unused.</t>
+  <t>The recovery window MUST be short and bounded. This profile RECOMMENDS no
+more than 300 seconds.</t>
+  <t>A different or missing recovery key, an expired recovery window, or an
+already-used child token is treated as refresh-token reuse and MUST fail.</t>
 </list></t>
 
-<t>Response <spanx style="verb">201 Created</spanx>:</t>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "grantToken": "eyJhbGciOiJSUzI1NiJ9...",
-  "grantId": "grnt_01HXYZ_sub",
-  "scopes": ["email:read"],
-  "expiresAt": "2026-02-01T01:00:00Z"
-}
-]]></sourcecode></figure>
-
-</section>
-<section anchor="cascade-revocation"><name>Cascade Revocation</name>
-
-<t>Revoking a Grant via <spanx style="verb">DELETE /v1/grants/:id</spanx> <bcp14>MUST</bcp14> atomically revoke all descendant Grants -- that is, all Grants whose <spanx style="verb">parent_grant_id</spanx> traces back to the revoked Grant at any depth. Authorization Servers <bcp14>SHOULD</bcp14> implement this as a single recursive database transaction to eliminate any window during which descendant tokens remain valid.</t>
+<t>A server crash before transaction commit leaves the old token unused and the
+client can retry normally. A crash after commit is the lost-response case above
+and requires durable recovery state. Implementations MUST test both boundaries.</t>
 
 </section>
 </section>
-<section anchor="conformance"><name>Conformance Requirements</name>
+<section anchor="operational-extensions"><name>Operational Extensions</name>
 
-<t>A conformant DAAP Authorization Server <bcp14>MUST</bcp14> expose the following endpoints:</t>
-
-<texttable>
-      <ttcol align='left'>Endpoint</ttcol>
-      <ttcol align='left'>Description</ttcol>
-      <c><spanx style="verb">POST /v1/agents</spanx></c>
-      <c>Register an Agent</c>
-      <c><spanx style="verb">POST /v1/authorize</spanx></c>
-      <c>Initiate the grant authorization flow</c>
-      <c><spanx style="verb">POST /v1/token</spanx></c>
-      <c>Exchange authorization code for Grant Token</c>
-      <c><spanx style="verb">POST /v1/token/refresh</spanx></c>
-      <c>Rotate a refresh token for a new Grant Token</c>
-      <c><spanx style="verb">POST /v1/tokens/verify</spanx></c>
-      <c>Online token verification</c>
-      <c><spanx style="verb">POST /v1/tokens/revoke</spanx></c>
-      <c>Revoke a specific token by JTI</c>
-      <c><spanx style="verb">GET /v1/grants</spanx></c>
-      <c>List a Principal's active Grants</c>
-      <c><spanx style="verb">GET /v1/grants/:id</spanx></c>
-      <c>Retrieve a single Grant</c>
-      <c><spanx style="verb">DELETE /v1/grants/:id</spanx></c>
-      <c>Revoke a Grant (cascades to all descendants)</c>
-      <c><spanx style="verb">POST /v1/grants/delegate</spanx></c>
-      <c>Issue a delegated sub-agent Grant</c>
-      <c><spanx style="verb">POST /v1/audit/log</spanx></c>
-      <c>Write an audit log entry</c>
-      <c><spanx style="verb">GET /v1/audit/entries</spanx></c>
-      <c>Query the audit log</c>
-      <c><spanx style="verb">GET /v1/audit/:id</spanx></c>
-      <c>Retrieve a single audit log entry</c>
-      <c><spanx style="verb">GET /.well-known/jwks.json</spanx></c>
-      <c>JWK Set for offline token verification</c>
-      <c><spanx style="verb">GET /health</spanx></c>
-      <c>Health check</c>
-</texttable>
-
-<t>The following endpoints are <bcp14>OPTIONAL</bcp14>. Implementations that choose to support an optional extension <bcp14>MUST</bcp14> implement it as specified in this document:</t>
+<t>The following topics are intentionally outside core conformance:</t>
 
 <t><list style="symbols">
-  <t><strong>Policy Engine</strong>: <spanx style="verb">POST /v1/policies</spanx>, <spanx style="verb">GET /v1/policies</spanx>, <spanx style="verb">GET /v1/policies/:id</spanx>, <spanx style="verb">PATCH /v1/policies/:id</spanx>, <spanx style="verb">DELETE /v1/policies/:id</spanx></t>
-  <t><strong>Webhooks</strong>: <spanx style="verb">POST /v1/webhooks</spanx>, <spanx style="verb">GET /v1/webhooks</spanx>, <spanx style="verb">DELETE /v1/webhooks/:id</spanx></t>
-  <t><strong>Anomaly Detection</strong>: <spanx style="verb">POST /v1/anomalies/detect</spanx>, <spanx style="verb">GET /v1/anomalies</spanx>, <spanx style="verb">PATCH /v1/anomalies/:id/acknowledge</spanx></t>
-  <t><strong>Enterprise SCIM 2.0</strong>: <spanx style="verb">/scim/v2/</spanx> endpoints as defined in RFC 7642/7643/7644</t>
-  <t><strong>SSO (OIDC)</strong>: <spanx style="verb">POST /v1/sso/config</spanx>, <spanx style="verb">GET /sso/login</spanx>, <spanx style="verb">GET /sso/callback</spanx></t>
-  <t><strong>Budget Controls</strong>: <spanx style="verb">POST /v1/budget/allocate</spanx>, <spanx style="verb">POST /v1/budget/debit</spanx>, <spanx style="verb">GET /v1/budget/balance/:grantId</spanx>, <spanx style="verb">GET /v1/budget/transactions/:grantId</spanx> (see <xref target="budget-controls"/>)</t>
-  <t><strong>Event Streaming</strong>: <spanx style="verb">GET /v1/events/stream</spanx> (SSE), <spanx style="verb">GET /v1/events/ws</spanx> (WebSocket) (see <xref target="event-streaming"/>)</t>
-  <t><strong>Credential Vault</strong>: <spanx style="verb">POST /v1/vault/credentials</spanx>, <spanx style="verb">GET /v1/vault/credentials</spanx>, <spanx style="verb">DELETE /v1/vault/credentials/:id</spanx>, <spanx style="verb">POST /v1/vault/exchange</spanx> (see <xref target="credential-vault"/>)</t>
-  <t><strong>External Policy Backends</strong>: OPA (<spanx style="verb">POST /v1/data/daap/authz</spanx>) and Cedar (<spanx style="verb">POST /v1/is_authorized</spanx>) integration (see <xref target="external-policy-backends"/>)</t>
+  <t>tamper-evident audit storage and external witnessing;</t>
+  <t>policy decision points and policy languages;</t>
+  <t>financial budgets and atomic debit ledgers;</t>
+  <t>event streams and webhooks;</t>
+  <t>credential vaults;</t>
+  <t>anomaly detection; and</t>
+  <t>enterprise provisioning and SSO configuration.</t>
 </list></t>
 
-</section>
-<section anchor="budget-controls"><name>Budget Controls</name>
+<t>An implementation MUST NOT claim that an operator-signed hash chain is
+operator-independent evidence. Such a claim requires publication to or
+countersignature by an independent witness. If JSON records are hashed across
+implementations, canonicalization should use the JSON Canonicalization Scheme
+<xref target="RFC8785"/> and SHA-256 should be specified using <xref target="RFC6234"/>.</t>
+
+<t>Financial constraints should use structured authorization details
+<xref target="RFC9396"/>, including an unambiguous amount representation and currency,
+rather than a bare numeric JWT claim.</t>
+
+<t>Potential extension documents are listed in the source repository. Their
+presence does not imply IETF submission, adoption, or interoperability.</t>
 
-<section anchor="purpose"><name>Purpose</name>
-
-<t>Budget Controls provide per-grant spending limits that constrain the total monetary value of actions an Agent may perform under a single Grant. This extension is critical for agents operating in financial contexts (e.g., <spanx style="verb">payments:initiate</spanx>) where unconstrained spending could cause irreversible harm.</t>
-
-</section>
-<section anchor="budget-allocation"><name>Budget Allocation</name>
-
-<t>A Developer allocates a budget to a Grant by sending:</t>
-
-<figure><sourcecode type="http"><![CDATA[
-POST /v1/budget/allocate
-Authorization: Bearer <api_key>
-Content-Type: application/json
-
-{
-  "grantId": "grnt_01HXYZ...",
-  "amount": 10000,
-  "currency": "USD"
-}
-]]></sourcecode></figure>
-
-<t>Response <spanx style="verb">201 Created</spanx>:</t>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "id": "bdgt_01HXYZ...",
-  "grantId": "grnt_01HXYZ...",
-  "initialBudget": 10000,
-  "remainingBudget": 10000,
-  "currency": "USD",
-  "createdAt": "2026-02-01T00:00:00Z"
-}
-]]></sourcecode></figure>
-
-<t>A Grant <bcp14>MUST NOT</bcp14> have more than one active budget allocation. Authorization Servers <bcp14>MUST</bcp14> reject allocation requests for Grants that already have an active allocation.</t>
-
-</section>
-<section anchor="budget-debit"><name>Budget Debit</name>
-
-<t>Services debit from a Grant's budget using an atomic operation:</t>
-
-<figure><sourcecode type="http"><![CDATA[
-POST /v1/budget/debit
-Authorization: Bearer <api_key>
-Content-Type: application/json
-
-{
-  "grantId": "grnt_01HXYZ...",
-  "amount": 250,
-  "description": "Flight booking - DEL to BOM",
-  "metadata": { "merchant": "Air India" }
-}
-]]></sourcecode></figure>
-
-<t>Response <spanx style="verb">200 OK</spanx>:</t>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "remaining": 9750,
-  "transactionId": "btxn_01HXYZ..."
-}
-]]></sourcecode></figure>
-
-<t>Authorization Servers <bcp14>MUST</bcp14> implement budget debit as an atomic operation (e.g., <spanx style="verb">UPDATE ... WHERE remaining &gt;= amount</spanx>). If the remaining budget is insufficient, the Authorization Server <bcp14>MUST</bcp14> respond with <spanx style="verb">402 Payment Required</spanx> and the error code <spanx style="verb">INSUFFICIENT_BUDGET</spanx>.</t>
-
-</section>
-<section anchor="the-bdg-jwt-claim"><name>The <spanx style="verb">bdg</spanx> JWT Claim</name>
-
-<t>When a Grant has an active budget allocation, the Authorization Server <bcp14>SHOULD</bcp14> include the <spanx style="verb">bdg</spanx> claim in issued Grant Tokens. The value <bcp14>MUST</bcp14> be the remaining budget amount at the time of token issuance.</t>
-
-<t>Services receiving a Grant Token with a <spanx style="verb">bdg</spanx> claim <bcp14>MAY</bcp14> use it for local pre-flight budget checks. However, the <spanx style="verb">bdg</spanx> claim is advisory -- the atomic debit endpoint remains the authoritative mechanism for budget enforcement.</t>
-
-</section>
-<section anchor="threshold-alerts"><name>Threshold Alerts</name>
-
-<t>Authorization Servers implementing Budget Controls <bcp14>MUST</bcp14> emit events when budget utilization crosses predefined thresholds:</t>
-
-<texttable>
-      <ttcol align='left'>Threshold</ttcol>
-      <ttcol align='left'>Event Type</ttcol>
-      <ttcol align='left'>Description</ttcol>
-      <c>50% consumed</c>
-      <c><spanx style="verb">budget.threshold</spanx></c>
-      <c>Warning: half of the budget has been consumed</c>
-      <c>80% consumed</c>
-      <c><spanx style="verb">budget.threshold</spanx></c>
-      <c>Alert: budget is running low</c>
-      <c>100% consumed</c>
-      <c><spanx style="verb">budget.exhausted</spanx></c>
-      <c>Budget fully consumed; subsequent debits will fail</c>
-</texttable>
-
-<t>These events <bcp14>MUST</bcp14> be delivered via the configured webhook endpoints and <bcp14>SHOULD</bcp14> be delivered via the event streaming endpoints (<xref target="event-streaming"/>) if the extension is supported.</t>
-
-</section>
-<section anchor="budget-balance-and-transaction-history"><name>Budget Balance and Transaction History</name>
-
-<figure><sourcecode type="http"><![CDATA[
-GET /v1/budget/balance/{grantId}
-Authorization: Bearer <api_key>
-]]></sourcecode></figure>
-
-<t>Returns the current <spanx style="verb">BudgetAllocation</spanx> object.</t>
-
-<figure><sourcecode type="http"><![CDATA[
-GET /v1/budget/transactions/{grantId}
-Authorization: Bearer <api_key>
-]]></sourcecode></figure>
-
-<t>Returns a paginated list of all debit transactions for the specified Grant's budget.</t>
-
-</section>
-</section>
-<section anchor="event-streaming"><name>Event Streaming</name>
-
-<section anchor="purpose-1"><name>Purpose</name>
-
-<t>Event Streaming provides real-time delivery of authorization lifecycle events to connected clients. This extension complements webhooks by offering a persistent connection model suitable for dashboards, monitoring systems, and real-time alerting.</t>
-
-</section>
-<section anchor="event-types"><name>Event Types</name>
-
-<texttable>
-      <ttcol align='left'>Event Type</ttcol>
-      <ttcol align='left'>Description</ttcol>
-      <c><spanx style="verb">grant.created</spanx></c>
-      <c>A new Grant has been issued</c>
-      <c><spanx style="verb">grant.revoked</spanx></c>
-      <c>A Grant has been revoked</c>
-      <c><spanx style="verb">token.issued</spanx></c>
-      <c>A new Grant Token has been issued</c>
-      <c><spanx style="verb">budget.threshold</spanx></c>
-      <c>A budget threshold has been crossed</c>
-      <c><spanx style="verb">budget.exhausted</spanx></c>
-      <c>A budget has been fully consumed</c>
-</texttable>
-
-</section>
-<section anchor="sse-endpoint"><name>SSE Endpoint</name>
-
-<figure><sourcecode type="http"><![CDATA[
-GET /v1/events/stream
-Authorization: Bearer <api_key>
-Accept: text/event-stream
-]]></sourcecode></figure>
-
-<t>The Authorization Server <bcp14>MUST</bcp14> implement Server-Sent Events <xref target="SSE"/> delivery. Events are formatted as:</t>
-
-<figure><artwork><![CDATA[
-event: grant.created
-data: {"grantId":"grnt_01","agentId":"ag_01"}
-
-event: budget.threshold
-data: {"grantId":"grnt_01","threshold":80,"remaining":2000}
-]]></artwork></figure>
-
-</section>
-<section anchor="websocket-endpoint"><name>WebSocket Endpoint</name>
-
-<figure><sourcecode type="http"><![CDATA[
-GET /v1/events/ws
-Upgrade: websocket
-Connection: Upgrade
-Authorization: Bearer <api_key>
-]]></sourcecode></figure>
-
-<t>WebSocket connections receive the same event payloads as SSE, serialized as JSON messages. The Authorization Server <bcp14>MUST</bcp14> send periodic ping frames (<bcp14>RECOMMENDED</bcp14> interval: 30 seconds) to detect stale connections.</t>
-
-</section>
-<section anchor="connection-limits"><name>Connection Limits</name>
-
-<t>Authorization Servers <bcp14>MUST</bcp14> enforce a maximum number of concurrent event streaming connections per Developer. The <bcp14>RECOMMENDED</bcp14> limit is <strong>5</strong> concurrent connections. When the limit is exceeded, the Authorization Server <bcp14>MUST</bcp14> reject new connections with <spanx style="verb">429 Too Many Requests</spanx>.</t>
-
-</section>
-<section anchor="event-delivery-guarantees"><name>Event Delivery Guarantees</name>
-
-<t>Event Streaming provides at-most-once delivery semantics. For guaranteed delivery, Developers <bcp14>SHOULD</bcp14> use webhooks, which provide at-least-once delivery with persistent retry.</t>
-
-</section>
-</section>
-<section anchor="credential-vault"><name>Credential Vault</name>
-
-<section anchor="purpose-2"><name>Purpose</name>
-
-<t>The Credential Vault provides encrypted per-user credential storage, enabling a token-to-credential exchange pattern where an Agent presents a valid Grant Token and receives the associated service credentials in return. This eliminates the need for Agents to store long-lived secrets directly.</t>
-
-</section>
-<section anchor="credential-storage"><name>Credential Storage</name>
-
-<figure><sourcecode type="http"><![CDATA[
-POST /v1/vault/credentials
-Authorization: Bearer <api_key>
-Content-Type: application/json
-
-{
-  "principalId": "user_abc123",
-  "service": "stripe",
-  "credentials": {
-    "apiKey": "sk_live_...",
-    "webhookSecret": "whsec_..."
-  },
-  "scopes": ["payments:initiate"]
-}
-]]></sourcecode></figure>
-
-<t>Credentials <bcp14>MUST</bcp14> be encrypted at rest using AES-256-GCM or an equivalent authenticated encryption algorithm. The encryption key <bcp14>MUST</bcp14> be derived from a key management system (KMS) that is separate from the database storing the ciphertext.</t>
-
-</section>
-<section anchor="credential-exchange"><name>Credential Exchange</name>
-
-<t>An Agent exchanges a valid Grant Token for the associated credentials:</t>
-
-<figure><sourcecode type="http"><![CDATA[
-POST /v1/vault/exchange
-Authorization: Bearer <grant_token>
-Content-Type: application/json
-
-{
-  "service": "stripe"
-}
-]]></sourcecode></figure>
-
-<t>The Authorization Server <bcp14>MUST</bcp14> verify the Grant Token before returning credentials. The response <bcp14>MUST</bcp14> only include credentials whose required scopes are a subset of the Grant Token's <spanx style="verb">scp</spanx> claim.</t>
-
-</section>
-<section anchor="credential-lifecycle"><name>Credential Lifecycle</name>
-
-<t><list style="symbols">
-  <t>Credentials <bcp14>MUST</bcp14> be automatically deleted when the associated Principal revokes all Grants for the associated Agent.</t>
-  <t>Developers <bcp14>MAY</bcp14> delete credentials at any time via <spanx style="verb">DELETE /v1/vault/credentials/:id</spanx>.</t>
-  <t>The Authorization Server <bcp14>MUST</bcp14> log all credential access events in the audit trail.</t>
-</list></t>
-
-</section>
-</section>
-<section anchor="external-policy-backends"><name>External Policy Backends</name>
-
-<section anchor="purpose-3"><name>Purpose</name>
-
-<t>While the built-in Policy Engine (<xref target="policy-engine"/>) is sufficient for simple allow/deny rules, production deployments often require integration with dedicated policy decision points (PDPs) that support richer policy languages. This extension defines the integration pattern for two external policy backends: Open Policy Agent (OPA) <xref target="OPA"/> and Cedar <xref target="CEDAR"/>.</t>
-
-</section>
-<section anchor="policy-evaluation-context"><name>Policy Evaluation Context</name>
-
-<t>Authorization Servers <bcp14>MUST</bcp14> construct the following evaluation context and send it to the configured external backend:</t>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "subject": {
-    "type": "agent",
-    "id": "did:example:agent:ag_01HXYZ123abc",
-    "developer": "org_yourcompany"
-  },
-  "resource": {
-    "type": "grant",
-    "scopes": ["calendar:read", "payments:initiate:max_500"]
-  },
-  "action": {
-    "name": "authorize"
-  },
-  "context": {
-    "principalId": "user_abc123",
-    "timestamp": "2026-02-01T12:00:00Z",
-    "ipAddress": "203.0.113.42"
-  }
-}
-]]></sourcecode></figure>
-
-<t>This evaluation context is intentionally aligned with the OpenID AuthZEN <xref target="AUTHZEN"/> subject/resource/action/context model.</t>
-
-</section>
-<section anchor="opa-integration"><name>OPA Integration</name>
-
-<t>Authorization Servers supporting OPA <bcp14>MUST</bcp14> send a POST request to the configured OPA endpoint:</t>
-
-<figure><sourcecode type="http"><![CDATA[
-POST {OPA_URL}/v1/data/daap/authz
-Content-Type: application/json
-
-{
-  "input": { ... evaluation context ... }
-}
-]]></sourcecode></figure>
-
-<t>The OPA response <bcp14>MUST</bcp14> contain:</t>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "result": {
-    "allow": true
-  }
-}
-]]></sourcecode></figure>
-
-<t>If <spanx style="verb">result.allow</spanx> is <spanx style="verb">false</spanx>, the Authorization Server <bcp14>MUST</bcp14> deny the authorization request. OPA policies are written in Rego.</t>
-
-</section>
-<section anchor="cedar-integration"><name>Cedar Integration</name>
-
-<t>Authorization Servers supporting Cedar <bcp14>MUST</bcp14> send a POST request to the configured Cedar endpoint:</t>
-
-<figure><sourcecode type="http"><![CDATA[
-POST {CEDAR_URL}/v1/is_authorized
-Content-Type: application/json
-
-{
-  "principal": "Agent::\"did:example:agent:ag_01HXYZ123abc\"",
-  "action": "Action::\"authorize\"",
-  "resource": "Grant::\"grnt_01HXYZ...\"",
-  "context": { ... }
-}
-]]></sourcecode></figure>
-
-<t>The Cedar response <bcp14>MUST</bcp14> contain:</t>
-
-<figure><sourcecode type="json"><![CDATA[
-{
-  "decision": "Allow"
-}
-]]></sourcecode></figure>
-
-<t>If <spanx style="verb">decision</spanx> is <spanx style="verb">"Deny"</spanx>, the Authorization Server <bcp14>MUST</bcp14> deny the authorization request.</t>
-
-</section>
-<section anchor="timeout-and-fallback"><name>Timeout and Fallback</name>
-
-<t>Authorization Servers <bcp14>MUST</bcp14> enforce a timeout on external policy backend requests. The <bcp14>RECOMMENDED</bcp14> timeout is <strong>5 seconds</strong>. If the backend does not respond within the timeout, the Authorization Server <bcp14>MUST</bcp14> apply a configurable fallback policy:</t>
-
-<texttable>
-      <ttcol align='left'>Fallback Mode</ttcol>
-      <ttcol align='left'>Behavior</ttcol>
-      <c><spanx style="verb">deny</spanx> (default)</c>
-      <c>Deny the authorization request</c>
-      <c><spanx style="verb">allow</spanx></c>
-      <c>Allow the authorization request (use with caution)</c>
-      <c><spanx style="verb">builtin</spanx></c>
-      <c>Fall back to the built-in Policy Engine</c>
-</texttable>
-
-<t>The fallback mode <bcp14>MUST</bcp14> be configurable by the Developer. The default <bcp14>MUST</bcp14> be <spanx style="verb">deny</spanx> (fail-closed).</t>
-
-</section>
-</section>
-<section anchor="policy-engine"><name>Policy Engine</name>
-
-<section anchor="purpose-4"><name>Purpose</name>
-
-<t>The Policy Engine evaluates developer-defined rules against each authorization request before the consent UI is displayed. Policies enable developers to auto-approve routine low-risk requests and auto-deny requests that violate organizational constraints.</t>
-
-</section>
-<section anchor="effects"><name>Effects</name>
-
-<texttable>
-      <ttcol align='left'>Effect</ttcol>
-      <ttcol align='left'>Description</ttcol>
-      <c><spanx style="verb">auto_approve</spanx></c>
-      <c>Grant Token issued immediately without showing the consent UI</c>
-      <c><spanx style="verb">auto_deny</spanx></c>
-      <c>Authorization request rejected immediately with <spanx style="verb">403 Forbidden</spanx></c>
-</texttable>
-
-</section>
-<section anchor="condition-fields"><name>Condition Fields</name>
-
-<texttable>
-      <ttcol align='left'>Field</ttcol>
-      <ttcol align='left'>Type</ttcol>
-      <ttcol align='left'>Description</ttcol>
-      <c><spanx style="verb">scopes</spanx></c>
-      <c>string[]</c>
-      <c>Matches when the requested scopes are a subset of this list</c>
-      <c><spanx style="verb">principalId</spanx></c>
-      <c>string</c>
-      <c>Matches a specific Principal identifier</c>
-      <c><spanx style="verb">agentId</spanx></c>
-      <c>string</c>
-      <c>Matches a specific Agent identifier</c>
-      <c><spanx style="verb">timeWindow</spanx></c>
-      <c>object</c>
-      <c>Time constraint with start hour, end hour, and ISO weekday integers from 1 through 7, where 1 is Monday and 7 is Sunday</c>
-</texttable>
-
-</section>
-<section anchor="evaluation-order"><name>Evaluation Order</name>
-
-<t>Policy evaluation <bcp14>MUST</bcp14> follow this order:</t>
-
-<t><list style="numbers" type="1">
-  <t>If an external policy backend (<xref target="external-policy-backends"/>) is configured, the evaluation context is sent to the backend first. If the backend returns a decision, that decision is final.</t>
-  <t><spanx style="verb">auto_deny</spanx> rules are evaluated first. The first matching deny rule wins and the request is rejected immediately.</t>
-  <t><spanx style="verb">auto_approve</spanx> rules are evaluated next. The first matching allow rule causes the Grant Token to be issued.</t>
-  <t>If no rule matches, the consent UI is displayed to the Principal.</t>
-</list></t>
-
-<t>This ordering ensures that restrictive policies cannot be bypassed by a conflicting allow rule.</t>
-
-</section>
-</section>
-<section anchor="anomaly-detection"><name>Anomaly Detection</name>
-
-<section anchor="purpose-5"><name>Purpose</name>
-
-<t>The anomaly detection system monitors Agent behavior at runtime against each Agent's established activity baseline. It identifies behavioral deviations and surfaces them to Developers for review.</t>
-
-</section>
-<section anchor="non-blocking-requirement"><name>Non-Blocking Requirement</name>
-
-<t>Anomaly detection <bcp14>MUST NOT</bcp14> block token issuance. Detection operates asynchronously as an advisory layer. Authorization Servers <bcp14>MUST NOT</bcp14> delay Grant Token responses pending anomaly analysis.</t>
-
-</section>
-<section anchor="anomaly-types"><name>Anomaly Types</name>
-
-<texttable>
-      <ttcol align='left'>Type</ttcol>
-      <ttcol align='left'>Description</ttcol>
-      <c><spanx style="verb">unusual_scope_access</spanx></c>
-      <c>Agent requested scopes outside its established pattern</c>
-      <c><spanx style="verb">high_frequency</spanx></c>
-      <c>Token issuance rate significantly exceeds the agent's baseline</c>
-      <c><spanx style="verb">off_hours_activity</spanx></c>
-      <c>Activity detected outside the Principal's normal active hours</c>
-      <c><spanx style="verb">new_principal</spanx></c>
-      <c>Agent is requesting access for a previously unserved Principal</c>
-      <c><spanx style="verb">cascade_delegation</spanx></c>
-      <c>Delegation chain depth approaching or exceeding configured limits</c>
-</texttable>
-
-</section>
-<section anchor="severity-levels"><name>Severity Levels</name>
-
-<t>Anomaly severity <bcp14>MUST</bcp14> be one of: <spanx style="verb">low</spanx>, <spanx style="verb">medium</spanx>, <spanx style="verb">high</spanx>, <spanx style="verb">critical</spanx>.</t>
-
-</section>
 </section>
 <section anchor="security-considerations"><name>Security Considerations</name>
 
-<section anchor="oauth-security-baseline"><name>OAuth Security Baseline</name>
+<t>The OAuth threat model and mitigations in <xref target="RFC9700"/> apply. This section calls
+out agent-specific consequences.</t>
 
-<t>DAAP deployments <bcp14>MUST</bcp14> follow the OAuth 2.0 Security Best Current Practice <xref target="RFC9700"/> for all OAuth-derived flows. Public clients <bcp14>MUST</bcp14> use PKCE <xref target="RFC7636"/> with the S256 challenge method. Confidential clients <bcp14>SHOULD</bcp14> also use PKCE when using authorization-code-derived flows.</t>
+<section anchor="consent-substitution"><name>Consent Substitution</name>
 
-<t>Authorization Servers <bcp14>SHOULD</bcp14> support Pushed Authorization Requests <xref target="RFC9126"/> for high-risk or high-value authorization requests, especially when requests carry payment scopes, credential-vault access, or multi-agent delegation parameters. JWT-Secured Authorization Requests <xref target="RFC9101"/> <bcp14>MAY</bcp14> be used when request-object integrity or non-repudiation is required.</t>
-
-<t>Protected Resource Metadata <xref target="RFC9728"/> <bcp14>SHOULD</bcp14> be used by resource servers to publish issuer, authorization server, and token-verification metadata. DAAP clients and services <bcp14>SHOULD</bcp14> prefer metadata discovery over hard-coded issuer and verification URLs.</t>
-
-</section>
-<section anchor="algorithm-restrictions"><name>Algorithm Restrictions</name>
-
-<t>All Grant Tokens <bcp14>MUST</bcp14> be signed with RS256 (RSASSA-PKCS1-v1_5 with SHA-256). Symmetric signing algorithms, including HS256, are NOT PERMITTED. All verifiers <bcp14>MUST</bcp14> explicitly reject tokens presenting <spanx style="verb">alg: none</spanx> or any symmetric algorithm, regardless of library defaults. This prevents algorithm confusion attacks as described in <xref target="RFC8725"/>.</t>
-
-<t>RSA key moduli <bcp14>MUST</bcp14> be at least 2048 bits. Authorization Servers generating or importing signing keys <bcp14>MUST</bcp14> enforce this minimum.</t>
+<t>A developer API key, policy-engine decision, or agent assertion is not the
+Principal's consent. Conflating these identities lets the party requesting
+authority approve its own request. Live consent therefore requires independent
+Principal authentication and request-bound approval.</t>
 
 </section>
-<section anchor="token-replay-prevention"><name>Token Replay Prevention</name>
+<section anchor="redirect-and-authorization-request-integrity"><name>Redirect and Authorization Request Integrity</name>
 
-<t>Every issued Grant Token carries a unique <spanx style="verb">jti</spanx> claim. Authorization Servers providing online verification <bcp14>MUST</bcp14> track issued <spanx style="verb">jti</spanx> values for token revocation and audit correlation. Verification alone <bcp14>MUST NOT</bcp14> consume a reusable token. Deployments requiring one-time-use tokens <bcp14>MUST</bcp14> define an explicit token-consumption boundary and reject a consumed <spanx style="verb">jti</spanx> after that boundary.</t>
-
-<t>Bearer tokens are vulnerable to misuse if leaked. DAAP deployments <bcp14>SHOULD</bcp14> use sender-constrained access tokens for high-stakes operations. Acceptable mechanisms include DPoP <xref target="RFC9449"/>, mutual TLS certificate-bound access tokens <xref target="RFC8705"/>, or a profile that provides equivalent proof-of-possession semantics.</t>
-
-</section>
-<section anchor="refresh-token-recovery"><name>Refresh Token Recovery</name>
-
-<t>Refresh token rotation can fail at the transport boundary: the Authorization Server may commit the rotation and issue a response that never reaches the caller. To reduce needless user re-authorization, an Authorization Server <bcp14>MAY</bcp14> keep enough durable state to replay the already-issued token response for the immediately previous refresh token.</t>
-
-<t>This recovery is not a second use of the old refresh token. The replay window <bcp14>MUST</bcp14> be no longer than 300 seconds, <bcp14>MUST</bcp14> be tied to the same Grant, <bcp14>MUST</bcp14> return the same already-rotated successor response, and <bcp14>MUST NOT</bcp14> extend the refresh-token chain, replay window, or Grant lifetime. If the Grant is expired or revoked, replay <bcp14>MUST</bcp14> fail.</t>
+<t>Exact redirect matching, PAR, PKCE S256, and <spanx style="verb">state</spanx> are mandatory. These
+controls address different attacks and are not substitutes for one another.
+Clients MUST keep <spanx style="verb">state</spanx>, the PKCE verifier, and the PAR request association
+confidential until the flow completes.</t>
 
 </section>
-<section anchor="csrf-and-redirect-uri-security"><name>CSRF and Redirect URI Security</name>
+<section anchor="audience-and-sender-binding"><name>Audience and Sender Binding</name>
 
-<t>The <spanx style="verb">state</spanx> parameter in the authorization request <bcp14>MUST</bcp14> be a cryptographically random, unpredictable value generated per-request. Developer callback handlers <bcp14>MUST</bcp14> validate the returned <spanx style="verb">state</spanx> value against the value sent in the original request.</t>
-
-<t>Redirect URIs <bcp14>MUST</bcp14> be pre-registered by the Developer for each Agent. Authorization Servers <bcp14>MUST</bcp14> perform exact-match comparison of the <spanx style="verb">redirectUri</spanx> in each authorization request against the pre-registered set. Prefix matching and wildcard matching are NOT PERMITTED.</t>
-
-</section>
-<section anchor="scope-reduction-for-delegation"><name>Scope Reduction for Delegation</name>
-
-<t>Delegated Grant Tokens <bcp14>MUST</bcp14> carry a scope set that is a strict subset of the parent Grant's scope set. Authorization Servers <bcp14>MUST</bcp14> enforce this at token issuance time; it <bcp14>MUST NOT</bcp14> be enforced only at verification time.</t>
+<t>Bearer tokens are especially hazardous for autonomous software because agents
+may pass data through tools, logs, prompts, and subprocesses. Resource binding
+limits where a token can be used; sender constraint limits who can use it.
+This profile requires both.</t>
 
 </section>
-<section anchor="revocation-propagation"><name>Revocation Propagation</name>
+<section anchor="agent-key-enrollment"><name>Agent-Key Enrollment</name>
 
-<t>Authorization Servers <bcp14>MUST</bcp14> propagate grant revocation to all descendant grants atomically. The maximum allowable latency between a revocation request and the invalidation of all descendant tokens via the online verification endpoint is implementation-defined, but implementations <bcp14>SHOULD</bcp14> target sub-second propagation.</t>
-
-<t>Implementations caching revocation state <bcp14>MUST NOT</bcp14> cache for longer than 300 seconds.</t>
-
-</section>
-<section anchor="consent-ui-integrity"><name>Consent UI Integrity</name>
-
-<t>Consent UIs <bcp14>MUST</bcp14> display the agent name, developer name, all requested scopes with human-readable descriptions, token expiry, and a prominent deny/cancel action. This information <bcp14>MUST</bcp14> be sourced from the Authorization Server's registry, not from the authorization request itself, to prevent a malicious Developer from displaying misleading scope descriptions.</t>
+<t>Accepting an uploaded public key without proof of possession enables an
+attacker to register somebody else's key or create unusable identities.
+Authorization servers MUST verify possession and MUST define secure key
+rotation and recovery procedures.</t>
 
 </section>
-<section anchor="audit-log-integrity"><name>Audit Log Integrity</name>
+<section anchor="delegation-1"><name>Delegation</name>
 
-<t>The hash-chain construction defined in <xref target="audit-trail"/> ensures that any modification to a historical audit entry is detectable. Implementations <bcp14>MUST</bcp14> store audit log entries in an append-only manner and <bcp14>MUST</bcp14> expose no API for modification or deletion of audit entries. Audit log export implementations <bcp14>SHOULD</bcp14> verify the hash chain before serving exports.</t>
-
-<t>Audit integrity does not remove the need for data minimization. Implementations <bcp14>MUST NOT</bcp14> record bearer tokens, refresh tokens, private keys, upstream credentials, or raw authentication secrets in audit entries.</t>
-
-</section>
-<section anchor="enterprise-identity-security"><name>Enterprise Identity Security</name>
-
-<t>SSO callback handlers <bcp14>MUST</bcp14> validate both the <spanx style="verb">state</spanx> (CSRF protection) and <spanx style="verb">nonce</spanx> (replay protection) parameters before establishing a session. ID tokens received in the SSO callback <bcp14>MUST</bcp14> be cryptographically verified against the identity provider's JWKS endpoint before any claims are trusted.</t>
-
-<t>SCIM provisioning endpoints <bcp14>MUST</bcp14> authenticate via a credential (SCIM Bearer token) that is entirely separate from the Developer API key infrastructure. Compromise of a Developer API key <bcp14>MUST NOT</bcp14> grant access to SCIM provisioning endpoints, and vice versa.</t>
+<t>Every delegation hop increases the attack surface. Scope and resource
+attenuation, bounded lifetime, sender constraint, depth limits, and root
+revocation SHOULD be enforced together. A textual claim that an agent is a
+sub-agent is not sufficient.</t>
 
 </section>
-<section anchor="budget-security"><name>Budget Security</name>
+<section anchor="refresh-reuse"><name>Refresh Reuse</name>
 
-<t>Budget debit operations <bcp14>MUST</bcp14> be implemented as atomic database operations (e.g., <spanx style="verb">UPDATE ... SET remaining = remaining - amount WHERE remaining &gt;= amount</spanx>). Non-atomic implementations risk race conditions that could allow spending beyond the allocated budget.</t>
-
-<t>The <spanx style="verb">bdg</spanx> JWT claim is advisory and <bcp14>MUST NOT</bcp14> be used as the sole mechanism for budget enforcement. Services <bcp14>MUST</bcp14> use the atomic debit endpoint for authoritative budget checks.</t>
+<t>Recovery must not become a replay grace period. Only the same authenticated and
+request-bound retry can receive the previously committed response. Any other
+reuse can indicate token theft and SHOULD trigger family revocation or another
+risk-appropriate incident response.</t>
 
 </section>
-<section anchor="credential-vault-security"><name>Credential Vault Security</name>
+<section anchor="logging"><name>Logging</name>
 
-<t>Credentials stored in the Vault <bcp14>MUST</bcp14> be encrypted at rest using authenticated encryption (AES-256-GCM or equivalent). Encryption keys <bcp14>MUST</bcp14> be managed by a dedicated KMS and <bcp14>MUST NOT</bcp14> be stored alongside the ciphertext.</t>
-
-<t>All credential access events (store, retrieve, exchange, delete) <bcp14>MUST</bcp14> be logged in the audit trail with the credential identifier but NOT the credential value.</t>
+<t>Authorization servers and resource servers MUST NOT log authorization codes,
+refresh tokens, access tokens, DPoP private keys, PKCE verifiers, recovery keys,
+or upstream credentials. Security logs SHOULD record enough non-secret context
+to investigate consent, delegation, refresh reuse, and revocation events.</t>
 
 </section>
 </section>
 <section anchor="privacy-considerations"><name>Privacy Considerations</name>
 
-<t>DAAP records can reveal sensitive relationships among Principals, Agents, Developers, services, and resources. Implementations <bcp14>MUST</bcp14> minimize personal data in Grant Tokens, audit entries, event payloads, webhook deliveries, and exported compliance evidence.</t>
+<t>Agent authorization data can reveal a Principal's services, activities,
+relationships, and intended actions. Implementations SHOULD minimize token
+claims and consent records, use pairwise subject identifiers where appropriate,
+and avoid placing personal data in globally resolvable agent documents.</t>
 
-<t>Grant Tokens <bcp14>SHOULD</bcp14> use pairwise or deployment-scoped Principal identifiers rather than globally correlatable user identifiers when cross-service correlation is not required. Audience-restricted tokens <bcp14>SHOULD</bcp14> be used whenever a Grant is intended for a specific resource server.</t>
+<t>Resource indicators and fine-grained scopes can themselves be sensitive. They
+SHOULD be disclosed only to parties that require them. Audit retention and
+export must have a defined purpose, access policy, retention period, and
+deletion process.</t>
 
-<t>Audit logs <bcp14>SHOULD</bcp14> store only the fields required for security, dispute resolution, compliance, and forensic purposes. Deployments <bcp14>SHOULD</bcp14> define retention periods, deletion procedures, export controls, and redaction behavior before enabling long-lived audit storage. Exported evidence <bcp14>SHOULD</bcp14> avoid secrets and <bcp14>SHOULD</bcp14> redact personal data not necessary for the receiving auditor or relying party.</t>
-
-<t>Event streams and webhooks can leak activity timing and authorization metadata. Implementations <bcp14>MUST</bcp14> authenticate event consumers, <bcp14>SHOULD</bcp14> authorize event subscriptions by Developer and tenant, and <bcp14>SHOULD</bcp14> avoid sending more detail than is required for the event type.</t>
-
-<t>Cross-domain and multi-agent delegation create correlation risk. Authorization Servers and Services <bcp14>SHOULD</bcp14> avoid sharing stable Agent, Principal, or Developer identifiers with parties that do not need them. Where stable identifiers are required for accountability, deployments <bcp14>SHOULD</bcp14> document the purpose and retention period.</t>
-
-</section>
-<section anchor="iana"><name>IANA Considerations</name>
-
-<section anchor="jwt-claims-registration"><name>JWT Claims Registration</name>
-
-<t>This document requests registration of the following claims in the IANA "JSON Web Token Claims" registry established by <xref target="RFC7519"/>. The short claim names are provisional pending OAuth Working Group review. Implementations experimenting before registration <bcp14>MAY</bcp14> use collision-resistant private claim names to avoid conflicts.</t>
-
-<dl newline="true">
-  <dt><spanx style="verb">agt</spanx>:</dt>
-  <dd>
-    <t>Claim Name: <spanx style="verb">agt</spanx></t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Claim Description: Agent Decentralized Identifier</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Change Controller: IETF</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Specification Document: This document, <xref target="grant-token-format"/></t>
-  </dd>
-  <dt><spanx style="verb">dev</spanx>:</dt>
-  <dd>
-    <t>Claim Name: <spanx style="verb">dev</spanx></t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Claim Description: Developer organization identifier</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Change Controller: IETF</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Specification Document: This document, <xref target="grant-token-format"/></t>
-  </dd>
-  <dt><spanx style="verb">grnt</spanx>:</dt>
-  <dd>
-    <t>Claim Name: <spanx style="verb">grnt</spanx></t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Claim Description: Grant identifier for revocation lookup</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Change Controller: IETF</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Specification Document: This document, <xref target="grant-token-format"/></t>
-  </dd>
-  <dt><spanx style="verb">scp</spanx>:</dt>
-  <dd>
-    <t>Claim Name: <spanx style="verb">scp</spanx></t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Claim Description: Array of granted authorization scope strings</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Change Controller: IETF</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Specification Document: This document, <xref target="grant-token-format"/></t>
-  </dd>
-  <dt><spanx style="verb">bdg</spanx>:</dt>
-  <dd>
-    <t>Claim Name: <spanx style="verb">bdg</spanx></t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Claim Description: Remaining budget amount for the Grant</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Change Controller: IETF</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Specification Document: This document, <xref target="budget-controls"/></t>
-  </dd>
-  <dt><spanx style="verb">parentAgt</spanx>:</dt>
-  <dd>
-    <t>Claim Name: <spanx style="verb">parentAgt</spanx></t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Claim Description: DID of the delegating parent Agent</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Change Controller: IETF</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Specification Document: This document, <xref target="delegation"/></t>
-  </dd>
-  <dt><spanx style="verb">parentGrnt</spanx>:</dt>
-  <dd>
-    <t>Claim Name: <spanx style="verb">parentGrnt</spanx></t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Claim Description: Grant identifier of the parent Grant</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Change Controller: IETF</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Specification Document: This document, <xref target="delegation"/></t>
-  </dd>
-  <dt><spanx style="verb">delegationDepth</spanx>:</dt>
-  <dd>
-    <t>Claim Name: <spanx style="verb">delegationDepth</spanx></t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Claim Description: Number of delegation hops from the root Grant</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Change Controller: IETF</t>
-  </dd>
-  <dt/>
-  <dd>
-    <t>Specification Document: This document, <xref target="delegation"/></t>
-  </dd>
-</dl>
+<t>Delegation chains reveal relationships among services and actors. A resource
+server should receive only the chain information needed for its authorization
+decision.</t>
 
 </section>
-<section anchor="well-known-uri-registration"><name>Well-Known URI Registration</name>
+<section anchor="iana-considerations"><name>IANA Considerations</name>
 
-<t>No new Well-Known URIs are defined by this specification. Implementations use the existing <spanx style="verb">/.well-known/jwks.json</spanx> path established by <xref target="RFC8414"/>.</t>
+<t>This document requests no IANA actions. It uses claims, parameters, endpoints,
+and confirmation methods defined by existing OAuth and JOSE specifications.
+Any future wire-level recovery key or agent-specific authorization detail will
+require separate specification and appropriate registry review.</t>
 
 </section>
+<section anchor="relationship-to-other-work"><name>Relationship to Other Work</name>
+
+<t>OAuth Identity and Authorization Chaining Across Domains
+<xref target="I-D.ietf-oauth-identity-chaining"/> addresses identity and authorization
+continuity across trust domains. Implementations should use that work for
+cross-domain chains rather than defining private equivalents.</t>
+
+<t>OAuth Transaction Tokens address short-lived, purpose-bound tokens for a
+transaction <xref target="I-D.ietf-oauth-transaction-tokens"/>. They may complement this
+profile for multi-service call chains; this document does not redefine
+transaction tokens.</t>
+
+<t>The agent authorization use-cases draft
+<xref target="I-D.chen-oauth-agent-authz-use-cases"/> surveys emerging scenarios and gaps.
+The multi-agent collaboration draft
+<xref target="I-D.song-oauth-ai-agent-collaborate-authz"/> explores group authorization.
+This profile focuses more narrowly on a high-assurance OAuth authorization and
+delegation baseline and does not claim to supersede either effort.</t>
+
+</section>
+<section anchor="implementation-status"><name>Implementation Status</name>
+
+<t>This section follows the intent of <xref target="RFC7942"/> and is expected to be removed
+before publication as an RFC.</t>
+
+<t>Grantex provides an implementation-specific JSON API inspired by this profile.
+As of 2026-08-30 it implements exact registered redirects and resources for
+profile-aware agents, PKCE S256 checks, live-consent WebAuthn checks,
+resource-bound JWTs, key-thumbprint <spanx style="verb">cnf</spanx> claims, scope attenuation,
+refresh-token rotation, and bounded request-bound recovery.</t>
+
+<t>It is not yet a conformant implementation of this profile. In particular, its
+custom <spanx style="verb">/v1/authorize</spanx> and <spanx style="verb">/v1/token</spanx> endpoints are not the standard OAuth
+authorization and token endpoints; PAR is not implemented; DPoP proofs are not
+validated at protected resources; legacy agent registrations can omit profile
+metadata; and live Principal passkey enrollment is not yet anchored in an
+independent identity-provider ceremony. The repository's implementation report
+tracks these gaps.</t>
+
+</section>
+<section anchor="acknowledgements"><name>Acknowledgements</name>
+
+<t>The author thanks reviewers in the OAuth community whose published work on
+OAuth security, identity chaining, transaction tokens, and agent authorization
+helped narrow this document.</t>
+
 </section>
 
 
@@ -1552,33 +654,17 @@ Content-Type: application/json
   <seriesInfo name="RFC" value="8174"/>
   <seriesInfo name="DOI" value="10.17487/RFC8174"/>
 </reference>
-<reference anchor="RFC7636">
+<reference anchor="RFC6749">
   <front>
-    <title>Proof Key for Code Exchange by OAuth Public Clients</title>
-    <author fullname="N. Sakimura" initials="N." role="editor" surname="Sakimura"/>
-    <author fullname="J. Bradley" initials="J." surname="Bradley"/>
-    <author fullname="N. Agarwal" initials="N." surname="Agarwal"/>
-    <date month="September" year="2015"/>
+    <title>The OAuth 2.0 Authorization Framework</title>
+    <author fullname="D. Hardt" initials="D." role="editor" surname="Hardt"/>
+    <date month="October" year="2012"/>
     <abstract>
-      <t>OAuth 2.0 public clients utilizing the Authorization Code Grant are susceptible to the authorization code interception attack. This specification describes the attack as well as a technique to mitigate against the threat through the use of Proof Key for Code Exchange (PKCE, pronounced "pixy").</t>
+      <t>The OAuth 2.0 authorization framework enables a third-party application to obtain limited access to an HTTP service, either on behalf of a resource owner by orchestrating an approval interaction between the resource owner and the HTTP service, or by allowing the third-party application to obtain access on its own behalf. This specification replaces and obsoletes the OAuth 1.0 protocol described in RFC 5849. [STANDARDS-TRACK]</t>
     </abstract>
   </front>
-  <seriesInfo name="RFC" value="7636"/>
-  <seriesInfo name="DOI" value="10.17487/RFC7636"/>
-</reference>
-<reference anchor="RFC7519">
-  <front>
-    <title>JSON Web Token (JWT)</title>
-    <author fullname="M. Jones" initials="M." surname="Jones"/>
-    <author fullname="J. Bradley" initials="J." surname="Bradley"/>
-    <author fullname="N. Sakimura" initials="N." surname="Sakimura"/>
-    <date month="May" year="2015"/>
-    <abstract>
-      <t>JSON Web Token (JWT) is a compact, URL-safe means of representing claims to be transferred between two parties. The claims in a JWT are encoded as a JSON object that is used as the payload of a JSON Web Signature (JWS) structure or as the plaintext of a JSON Web Encryption (JWE) structure, enabling the claims to be digitally signed or integrity protected with a Message Authentication Code (MAC) and/or encrypted.</t>
-    </abstract>
-  </front>
-  <seriesInfo name="RFC" value="7519"/>
-  <seriesInfo name="DOI" value="10.17487/RFC7519"/>
+  <seriesInfo name="RFC" value="6749"/>
+  <seriesInfo name="DOI" value="10.17487/RFC6749"/>
 </reference>
 <reference anchor="RFC7517">
   <front>
@@ -1604,17 +690,33 @@ Content-Type: application/json
   <seriesInfo name="RFC" value="7518"/>
   <seriesInfo name="DOI" value="10.17487/RFC7518"/>
 </reference>
-<reference anchor="RFC6749">
+<reference anchor="RFC7519">
   <front>
-    <title>The OAuth 2.0 Authorization Framework</title>
-    <author fullname="D. Hardt" initials="D." role="editor" surname="Hardt"/>
-    <date month="October" year="2012"/>
+    <title>JSON Web Token (JWT)</title>
+    <author fullname="M. Jones" initials="M." surname="Jones"/>
+    <author fullname="J. Bradley" initials="J." surname="Bradley"/>
+    <author fullname="N. Sakimura" initials="N." surname="Sakimura"/>
+    <date month="May" year="2015"/>
     <abstract>
-      <t>The OAuth 2.0 authorization framework enables a third-party application to obtain limited access to an HTTP service, either on behalf of a resource owner by orchestrating an approval interaction between the resource owner and the HTTP service, or by allowing the third-party application to obtain access on its own behalf. This specification replaces and obsoletes the OAuth 1.0 protocol described in RFC 5849. [STANDARDS-TRACK]</t>
+      <t>JSON Web Token (JWT) is a compact, URL-safe means of representing claims to be transferred between two parties. The claims in a JWT are encoded as a JSON object that is used as the payload of a JSON Web Signature (JWS) structure or as the plaintext of a JSON Web Encryption (JWE) structure, enabling the claims to be digitally signed or integrity protected with a Message Authentication Code (MAC) and/or encrypted.</t>
     </abstract>
   </front>
-  <seriesInfo name="RFC" value="6749"/>
-  <seriesInfo name="DOI" value="10.17487/RFC6749"/>
+  <seriesInfo name="RFC" value="7519"/>
+  <seriesInfo name="DOI" value="10.17487/RFC7519"/>
+</reference>
+<reference anchor="RFC7636">
+  <front>
+    <title>Proof Key for Code Exchange by OAuth Public Clients</title>
+    <author fullname="N. Sakimura" initials="N." role="editor" surname="Sakimura"/>
+    <author fullname="J. Bradley" initials="J." surname="Bradley"/>
+    <author fullname="N. Agarwal" initials="N." surname="Agarwal"/>
+    <date month="September" year="2015"/>
+    <abstract>
+      <t>OAuth 2.0 public clients utilizing the Authorization Code Grant are susceptible to the authorization code interception attack. This specification describes the attack as well as a technique to mitigate against the threat through the use of Proof Key for Code Exchange (PKCE, pronounced "pixy").</t>
+    </abstract>
+  </front>
+  <seriesInfo name="RFC" value="7636"/>
+  <seriesInfo name="DOI" value="10.17487/RFC7636"/>
 </reference>
 <reference anchor="RFC8414">
   <front>
@@ -1630,46 +732,21 @@ Content-Type: application/json
   <seriesInfo name="RFC" value="8414"/>
   <seriesInfo name="DOI" value="10.17487/RFC8414"/>
 </reference>
-<reference anchor="RFC4648">
+<reference anchor="RFC8693">
   <front>
-    <title>The Base16, Base32, and Base64 Data Encodings</title>
-    <author fullname="S. Josefsson" initials="S." surname="Josefsson"/>
-    <date month="October" year="2006"/>
+    <title>OAuth 2.0 Token Exchange</title>
+    <author fullname="M. Jones" initials="M." surname="Jones"/>
+    <author fullname="A. Nadalin" initials="A." surname="Nadalin"/>
+    <author fullname="B. Campbell" initials="B." role="editor" surname="Campbell"/>
+    <author fullname="J. Bradley" initials="J." surname="Bradley"/>
+    <author fullname="C. Mortimore" initials="C." surname="Mortimore"/>
+    <date month="January" year="2020"/>
     <abstract>
-      <t>This document describes the commonly used base 64, base 32, and base 16 encoding schemes. It also discusses the use of line-feeds in encoded data, use of padding in encoded data, use of non-alphabet characters in encoded data, use of different encoding alphabets, and canonical encodings. [STANDARDS-TRACK]</t>
+      <t>This specification defines a protocol for an HTTP- and JSON-based Security Token Service (STS) by defining how to request and obtain security tokens from OAuth 2.0 authorization servers, including security tokens employing impersonation and delegation.</t>
     </abstract>
   </front>
-  <seriesInfo name="RFC" value="4648"/>
-  <seriesInfo name="DOI" value="10.17487/RFC4648"/>
-</reference>
-<reference anchor="RFC3986">
-  <front>
-    <title>Uniform Resource Identifier (URI): Generic Syntax</title>
-    <author fullname="T. Berners-Lee" initials="T." surname="Berners-Lee"/>
-    <author fullname="R. Fielding" initials="R." surname="Fielding"/>
-    <author fullname="L. Masinter" initials="L." surname="Masinter"/>
-    <date month="January" year="2005"/>
-    <abstract>
-      <t>A Uniform Resource Identifier (URI) is a compact sequence of characters that identifies an abstract or physical resource. This specification defines the generic URI syntax and a process for resolving URI references that might be in relative form, along with guidelines and security considerations for the use of URIs on the Internet. The URI syntax defines a grammar that is a superset of all valid URIs, allowing an implementation to parse the common components of a URI reference without knowing the scheme-specific requirements of every possible identifier. This specification does not define a generative grammar for URIs; that task is performed by the individual specifications of each URI scheme. [STANDARDS-TRACK]</t>
-    </abstract>
-  </front>
-  <seriesInfo name="STD" value="66"/>
-  <seriesInfo name="RFC" value="3986"/>
-  <seriesInfo name="DOI" value="10.17487/RFC3986"/>
-</reference>
-<reference anchor="RFC8259">
-  <front>
-    <title>The JavaScript Object Notation (JSON) Data Interchange Format</title>
-    <author fullname="T. Bray" initials="T." role="editor" surname="Bray"/>
-    <date month="December" year="2017"/>
-    <abstract>
-      <t>JavaScript Object Notation (JSON) is a lightweight, text-based, language-independent data interchange format. It was derived from the ECMAScript Programming Language Standard. JSON defines a small set of formatting rules for the portable representation of structured data.</t>
-      <t>This document removes inconsistencies with other specifications of JSON, repairs specification errors, and offers experience-based interoperability guidance.</t>
-    </abstract>
-  </front>
-  <seriesInfo name="STD" value="90"/>
-  <seriesInfo name="RFC" value="8259"/>
-  <seriesInfo name="DOI" value="10.17487/RFC8259"/>
+  <seriesInfo name="RFC" value="8693"/>
+  <seriesInfo name="DOI" value="10.17487/RFC8693"/>
 </reference>
 <reference anchor="RFC8705">
   <front>
@@ -1685,6 +762,32 @@ Content-Type: application/json
   </front>
   <seriesInfo name="RFC" value="8705"/>
   <seriesInfo name="DOI" value="10.17487/RFC8705"/>
+</reference>
+<reference anchor="RFC8707">
+  <front>
+    <title>Resource Indicators for OAuth 2.0</title>
+    <author fullname="B. Campbell" initials="B." surname="Campbell"/>
+    <author fullname="J. Bradley" initials="J." surname="Bradley"/>
+    <author fullname="H. Tschofenig" initials="H." surname="Tschofenig"/>
+    <date month="February" year="2020"/>
+    <abstract>
+      <t>This document specifies an extension to the OAuth 2.0 Authorization Framework defining request parameters that enable a client to explicitly signal to an authorization server about the identity of the protected resource(s) to which it is requesting access.</t>
+    </abstract>
+  </front>
+  <seriesInfo name="RFC" value="8707"/>
+  <seriesInfo name="DOI" value="10.17487/RFC8707"/>
+</reference>
+<reference anchor="RFC9068">
+  <front>
+    <title>JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens</title>
+    <author fullname="V. Bertocci" initials="V." surname="Bertocci"/>
+    <date month="October" year="2021"/>
+    <abstract>
+      <t>This specification defines a profile for issuing OAuth 2.0 access tokens in JSON Web Token (JWT) format. Authorization servers and resource servers from different vendors can leverage this profile to issue and consume access tokens in an interoperable manner.</t>
+    </abstract>
+  </front>
+  <seriesInfo name="RFC" value="9068"/>
+  <seriesInfo name="DOI" value="10.17487/RFC9068"/>
 </reference>
 <reference anchor="RFC9126">
   <front>
@@ -1735,20 +838,6 @@ Content-Type: application/json
   <seriesInfo name="RFC" value="9700"/>
   <seriesInfo name="DOI" value="10.17487/RFC9700"/>
 </reference>
-<reference anchor="RFC9728">
-  <front>
-    <title>OAuth 2.0 Protected Resource Metadata</title>
-    <author fullname="M.B. Jones" initials="M.B." surname="Jones"/>
-    <author fullname="P. Hunt" initials="P." surname="Hunt"/>
-    <author fullname="A. Parecki" initials="A." surname="Parecki"/>
-    <date month="April" year="2025"/>
-    <abstract>
-      <t>This specification defines a metadata format that an OAuth 2.0 client or authorization server can use to obtain the information needed to interact with an OAuth 2.0 protected resource.</t>
-    </abstract>
-  </front>
-  <seriesInfo name="RFC" value="9728"/>
-  <seriesInfo name="DOI" value="10.17487/RFC9728"/>
-</reference>
 
 
 
@@ -1758,33 +847,33 @@ Content-Type: application/json
 
 
 
-<reference anchor="RFC7662">
+<reference anchor="RFC6234">
   <front>
-    <title>OAuth 2.0 Token Introspection</title>
-    <author fullname="J. Richer" initials="J." role="editor" surname="Richer"/>
-    <date month="October" year="2015"/>
+    <title>US Secure Hash Algorithms (SHA and SHA-based HMAC and HKDF)</title>
+    <author fullname="D. Eastlake 3rd" initials="D." surname="Eastlake 3rd"/>
+    <author fullname="T. Hansen" initials="T." surname="Hansen"/>
+    <date month="May" year="2011"/>
     <abstract>
-      <t>This specification defines a method for a protected resource to query an OAuth 2.0 authorization server to determine the active state of an OAuth 2.0 token and to determine meta-information about this token. OAuth 2.0 deployments can use this method to convey information about the authorization context of the token from the authorization server to the protected resource.</t>
+      <t>Federal Information Processing Standard, FIPS</t>
     </abstract>
   </front>
-  <seriesInfo name="RFC" value="7662"/>
-  <seriesInfo name="DOI" value="10.17487/RFC7662"/>
+  <seriesInfo name="RFC" value="6234"/>
+  <seriesInfo name="DOI" value="10.17487/RFC6234"/>
 </reference>
-<reference anchor="RFC8693">
+<reference anchor="RFC7942">
   <front>
-    <title>OAuth 2.0 Token Exchange</title>
-    <author fullname="M. Jones" initials="M." surname="Jones"/>
-    <author fullname="A. Nadalin" initials="A." surname="Nadalin"/>
-    <author fullname="B. Campbell" initials="B." role="editor" surname="Campbell"/>
-    <author fullname="J. Bradley" initials="J." surname="Bradley"/>
-    <author fullname="C. Mortimore" initials="C." surname="Mortimore"/>
-    <date month="January" year="2020"/>
+    <title>Improving Awareness of Running Code: The Implementation Status Section</title>
+    <author fullname="Y. Sheffer" initials="Y." surname="Sheffer"/>
+    <author fullname="A. Farrel" initials="A." surname="Farrel"/>
+    <date month="July" year="2016"/>
     <abstract>
-      <t>This specification defines a protocol for an HTTP- and JSON-based Security Token Service (STS) by defining how to request and obtain security tokens from OAuth 2.0 authorization servers, including security tokens employing impersonation and delegation.</t>
+      <t>This document describes a simple process that allows authors of Internet-Drafts to record the status of known implementations by including an Implementation Status section. This will allow reviewers and working groups to assign due consideration to documents that have the benefit of running code, which may serve as evidence of valuable experimentation and feedback that have made the implemented protocols more mature.</t>
+      <t>This process is not mandatory. Authors of Internet-Drafts are encouraged to consider using the process for their documents, and working groups are invited to think about applying the process to all of their protocol specifications. This document obsoletes RFC 6982, advancing it to a Best Current Practice.</t>
     </abstract>
   </front>
-  <seriesInfo name="RFC" value="8693"/>
-  <seriesInfo name="DOI" value="10.17487/RFC8693"/>
+  <seriesInfo name="BCP" value="205"/>
+  <seriesInfo name="RFC" value="7942"/>
+  <seriesInfo name="DOI" value="10.17487/RFC7942"/>
 </reference>
 <reference anchor="RFC8725">
   <front>
@@ -1801,6 +890,21 @@ Content-Type: application/json
   <seriesInfo name="RFC" value="8725"/>
   <seriesInfo name="DOI" value="10.17487/RFC8725"/>
 </reference>
+<reference anchor="RFC8785">
+  <front>
+    <title>JSON Canonicalization Scheme (JCS)</title>
+    <author fullname="A. Rundgren" initials="A." surname="Rundgren"/>
+    <author fullname="B. Jordan" initials="B." surname="Jordan"/>
+    <author fullname="S. Erdtman" initials="S." surname="Erdtman"/>
+    <date month="June" year="2020"/>
+    <abstract>
+      <t>Cryptographic operations like hashing and signing need the data to be expressed in an invariant format so that the operations are reliably repeatable. One way to address this is to create a canonical representation of the data. Canonicalization also permits data to be exchanged in its original form on the "wire" while cryptographic operations performed on the canonicalized counterpart of the data in the producer and consumer endpoints generate consistent results.</t>
+      <t>This document describes the JSON Canonicalization Scheme (JCS). This specification defines how to create a canonical representation of JSON data by building on the strict serialization methods for JSON primitives defined by ECMAScript, constraining JSON data to the Internet JSON (I-JSON) subset, and by using deterministic property sorting.</t>
+    </abstract>
+  </front>
+  <seriesInfo name="RFC" value="8785"/>
+  <seriesInfo name="DOI" value="10.17487/RFC8785"/>
+</reference>
 <reference anchor="RFC9396">
   <front>
     <title>OAuth 2.0 Rich Authorization Requests</title>
@@ -1814,21 +918,6 @@ Content-Type: application/json
   </front>
   <seriesInfo name="RFC" value="9396"/>
   <seriesInfo name="DOI" value="10.17487/RFC9396"/>
-</reference>
-<reference anchor="RFC9101">
-  <front>
-    <title>The OAuth 2.0 Authorization Framework: JWT-Secured Authorization Request (JAR)</title>
-    <author fullname="N. Sakimura" initials="N." surname="Sakimura"/>
-    <author fullname="J. Bradley" initials="J." surname="Bradley"/>
-    <author fullname="M. Jones" initials="M." surname="Jones"/>
-    <date month="August" year="2021"/>
-    <abstract>
-      <t>The authorization request in OAuth 2.0 described in RFC 6749 utilizes query parameter serialization, which means that authorization request parameters are encoded in the URI of the request and sent through user agents such as web browsers. While it is easy to implement, it means that a) the communication through the user agents is not integrity protected and thus, the parameters can be tainted, b) the source of the communication is not authenticated, and c) the communication through the user agents can be monitored. Because of these weaknesses, several attacks to the protocol have now been put forward.</t>
-      <t>This document introduces the ability to send request parameters in a JSON Web Token (JWT) instead, which allows the request to be signed with JSON Web Signature (JWS) and encrypted with JSON Web Encryption (JWE) so that the integrity, source authentication, and confidentiality properties of the authorization request are attained. The request can be sent by value or by reference.</t>
-    </abstract>
-  </front>
-  <seriesInfo name="RFC" value="9101"/>
-  <seriesInfo name="DOI" value="10.17487/RFC9101"/>
 </reference>
 
 <reference anchor="I-D.ietf-oauth-identity-chaining">
@@ -1977,51 +1066,6 @@ Content-Type: application/json
     <date year="2022" month="July" day="19"/>
   </front>
 </reference>
-<reference anchor="ULID" target="https://github.com/ulid/spec">
-  <front>
-    <title>Universally Unique Lexicographically Sortable Identifier</title>
-    <author initials="A." surname="Feerasta" fullname="Alizain Feerasta">
-      <organization></organization>
-    </author>
-    <date year="2016"/>
-  </front>
-</reference>
-<reference anchor="SSE" target="https://html.spec.whatwg.org/multipage/server-sent-events.html">
-  <front>
-    <title>Server-Sent Events</title>
-    <author >
-      <organization>WHATWG</organization>
-    </author>
-    <date year="2024"/>
-  </front>
-</reference>
-<reference anchor="OPA" target="https://www.openpolicyagent.org/docs/latest/">
-  <front>
-    <title>Open Policy Agent</title>
-    <author >
-      <organization>Styra</organization>
-    </author>
-    <date year="2024"/>
-  </front>
-</reference>
-<reference anchor="CEDAR" target="https://www.cedarpolicy.com/">
-  <front>
-    <title>Cedar Policy Language</title>
-    <author >
-      <organization>Amazon Web Services</organization>
-    </author>
-    <date year="2024"/>
-  </front>
-</reference>
-<reference anchor="AUTHZEN" target="https://openid.net/specs/openid-authzen-authorization-api-1_0.html">
-  <front>
-    <title>OpenID AuthZEN Authorization API</title>
-    <author >
-      <organization>OpenID Foundation</organization>
-    </author>
-    <date year="2024"/>
-  </front>
-</reference>
 
 
     </references>
@@ -2029,124 +1073,70 @@ Content-Type: application/json
 </references>
 
 
-<?line 1228?>
+<?line 567?>
 
-<section anchor="relationship-to-oauth-work"><name>Relationship to OAuth Work</name>
+<section anchor="non-normative-grantex-mapping"><name>Non-Normative Grantex Mapping</name>
 
-<t>DAAP shares OAuth 2.0's fundamental grant model but differs in the following respects:</t>
-
-<t><strong>versus RFC 6749 (OAuth 2.0):</strong>
-OAuth 2.0 defines a general-purpose delegated authorization framework. DAAP specializes this for AI agents by: adding cryptographic agent identity (DID); defining agent-specific JWT claims (<spanx style="verb">agt</spanx>, <spanx style="verb">dev</spanx>, <spanx style="verb">grnt</spanx>, <spanx style="verb">scp</spanx>, <spanx style="verb">bdg</spanx>); mandating RS256 exclusively; and adding the delegation, audit, policy, anomaly detection, budget controls, event streaming, credential vault, and external policy backend subsystems.</t>
-
-<t><strong>versus RFC 8693 (Token Exchange):</strong>
-Token Exchange <xref target="RFC8693"/> enables a client to exchange one token for another, including impersonation and delegation use cases. DAAP's delegation model serves a narrower purpose -- chaining AI agent sub-authorizations back to a human principal -- and adds depth-limiting and cascade revocation semantics not present in RFC 8693.</t>
-
-<t><strong>versus RFC 7662 (Token Introspection):</strong>
-Token Introspection <xref target="RFC7662"/> defines an endpoint for resource servers to query token metadata. DAAP's <spanx style="verb">/v1/tokens/verify</spanx> endpoint serves a similar purpose but returns DAAP-specific fields (<spanx style="verb">agent</spanx>, <spanx style="verb">principal</spanx>, <spanx style="verb">scopes</spanx>) and is used by agent-side SDKs rather than resource servers.</t>
-
-<t><strong>versus OAuth 2.0 Security Best Current Practice:</strong>
-The OAuth 2.0 Security Best Current Practice <xref target="RFC9700"/> is the security baseline for DAAP deployments. DAAP adds agent-specific identity, grant, policy, budget, and audit semantics; it does not relax OAuth security requirements.</t>
-
-<t><strong>versus Rich Authorization Requests:</strong>
-Rich Authorization Requests <xref target="RFC9396"/> provide structured authorization details for OAuth requests. DAAP scope constraints and budget requests can be expressed as a dedicated RAR profile in future revisions. This draft keeps the core DAAP model independent of any single request-encoding profile.</t>
-
-<t><strong>versus OAuth Identity Chaining:</strong>
-OAuth Identity and Authorization Chaining Across Domains <xref target="I-D.ietf-oauth-identity-chaining"/> preserves identity and authorization information across domains. DAAP focuses on AI-agent authorization grants rooted in a Principal's consent, including agent identity, delegation depth, budget limits, audit records, and cascade revocation. These models are complementary: DAAP can carry or reference identity-chain context when operating across administrative domains.</t>
-
-<t><strong>versus Transaction Tokens:</strong>
-OAuth Transaction Tokens <xref target="I-D.ietf-oauth-transaction-tokens"/> propagate user, workload, and authorization context across a call chain. DAAP Grant Tokens authorize an Agent to act under a Principal's grant. A future profile may define how DAAP grant identifiers and Agent DIDs are represented inside transaction tokens.</t>
-
-<t><strong>versus Agent Authorization Use Cases and Gap Analysis:</strong>
-Agent authorization use cases and gap analysis <xref target="I-D.chen-oauth-agent-authz-use-cases"/> catalog the broader problem space for agent authorization. DAAP is one concrete protocol profile addressing consent, agent identity, revocation, auditability, and policy enforcement. Further OAuth WG discussion is needed to decide whether DAAP remains a single profile or is split into smaller reusable pieces.</t>
-
-<t><strong>versus Multi-AI Agent Collaboration:</strong>
-The OAuth extension for multi-AI agent collaboration <xref target="I-D.song-oauth-ai-agent-collaborate-authz"/> focuses on group and sub-agent coordination fields. DAAP's delegation model is narrower: each delegated grant is linked to the root Principal grant, scope attenuation is mandatory, and cascade revocation is required.</t>
-
-</section>
-<section anchor="implementation-report"><name>Implementation Report</name>
-
-<t>This appendix documents the conformance status of the Grantex reference implementation and SDK coverage as of August 2026. A detailed implementation report is available at <spanx style="verb">docs/ietf-draft/implementation-report.md</spanx> in the Grantex repository.</t>
-
-<section anchor="reference-authorization-server"><name>Reference Authorization Server</name>
-
-<t>The Grantex authorization server (Fastify + PostgreSQL + Redis) implements all <bcp14>REQUIRED</bcp14> endpoints and the following <bcp14>OPTIONAL</bcp14> extensions:</t>
+<t>This appendix is informative. It helps reviewers compare the profile with the
+Grantex reference implementation; it does not define interoperable endpoints.</t>
 
 <texttable>
-      <ttcol align='left'>Extension</ttcol>
-      <ttcol align='left'>Status</ttcol>
-      <ttcol align='left'>Notes</ttcol>
-      <c>Policy Engine</c>
-      <c>Implemented</c>
-      <c>Built-in + OPA + Cedar backends</c>
-      <c>Webhooks</c>
-      <c>Implemented</c>
-      <c>Persistent retry with exponential backoff</c>
-      <c>Anomaly Detection</c>
-      <c>Implemented</c>
-      <c>5 anomaly types, async worker</c>
-      <c>SCIM 2.0</c>
-      <c>Implemented</c>
-      <c>Full RFC 7643 compliance</c>
-      <c>SSO (OIDC)</c>
-      <c>Implemented</c>
-      <c>Authorization Code + PKCE</c>
-      <c>Budget Controls</c>
-      <c>Implemented</c>
-      <c>Atomic debit, threshold alerts</c>
-      <c>Event Streaming</c>
-      <c>Implemented</c>
-      <c>SSE + WebSocket</c>
-      <c>Credential Vault</c>
-      <c>Implemented</c>
-      <c>AES-256-GCM encryption</c>
-      <c>External Policy Backends</c>
-      <c>Implemented</c>
-      <c>OPA + Cedar with timeout/fallback</c>
+      <ttcol align='left'>Profile operation</ttcol>
+      <ttcol align='left'>Grantex implementation-specific path</ttcol>
+      <c>Agent registration metadata</c>
+      <c><spanx style="verb">POST /v1/agents</spanx></c>
+      <c>Authorization request</c>
+      <c><spanx style="verb">POST /v1/authorize</spanx></c>
+      <c>Principal consent</c>
+      <c><spanx style="verb">POST /v1/consent/{id}/approve</spanx></c>
+      <c>Code exchange</c>
+      <c><spanx style="verb">POST /v1/token</spanx></c>
+      <c>Refresh rotation</c>
+      <c><spanx style="verb">POST /v1/token/refresh</spanx></c>
+      <c>Token status</c>
+      <c><spanx style="verb">POST /v1/tokens/verify</spanx></c>
+      <c>Grant revocation</c>
+      <c><spanx style="verb">DELETE /v1/grants/{id}</spanx></c>
+      <c>Delegation</c>
+      <c><spanx style="verb">POST /v1/grants/delegate</spanx></c>
+      <c>Authorization-server metadata</c>
+      <c><spanx style="verb">GET /.well-known/oauth-authorization-server</spanx></c>
+      <c>Signing keys</c>
+      <c><spanx style="verb">GET /.well-known/jwks.json</spanx></c>
 </texttable>
 
-<t>The reference implementation includes automated unit, integration, conformance, and end-to-end suites covering the required protocol surface and implemented optional extensions.</t>
+<t>The implementation transports its refresh recovery key in an
+<spanx style="verb">Idempotency-Key</spanx> HTTP request header. That header use is implementation
+specific in this revision and is not required for DAAP core conformance.</t>
 
 </section>
-<section anchor="sdk-coverage"><name>SDK Coverage</name>
+<section anchor="candidate-extension-documents"><name>Candidate Extension Documents</name>
 
-<texttable>
-      <ttcol align='left'>SDK</ttcol>
-      <ttcol align='left'>Language</ttcol>
-      <ttcol align='left'>Version</ttcol>
-      <ttcol align='left'>Core</ttcol>
-      <ttcol align='left'>Budget</ttcol>
-      <ttcol align='left'>Events</ttcol>
-      <ttcol align='left'>Vault</ttcol>
-      <c><spanx style="verb">@grantex/sdk</spanx></c>
-      <c>TypeScript</c>
-      <c>0.3.13</c>
-      <c>Full</c>
-      <c>Full</c>
-      <c>Full</c>
-      <c>Full</c>
-      <c><spanx style="verb">grantex</spanx></c>
-      <c>Python</c>
-      <c>0.3.14</c>
-      <c>Full</c>
-      <c>Full</c>
-      <c>Full</c>
-      <c>Full</c>
-      <c><spanx style="verb">grantex-go</spanx></c>
-      <c>Go</c>
-      <c>repository module</c>
-      <c>Full</c>
-      <c>Full</c>
-      <c>Full</c>
-      <c>Full</c>
-</texttable>
+<t>The following subjects should be developed independently if there is community
+interest:</t>
 
-<t>The <spanx style="verb">@grantex/conformance</spanx> package is maintained at version 0.1.8 in the reference repository.</t>
+<t><list style="numbers" type="1">
+  <t>externally witnessed agent audit checkpoints;</t>
+  <t>financial authorization details and atomic budget settlement;</t>
+  <t>agent delegation lifecycle and cascade revocation profiles; and</t>
+  <t>operational event, policy, and credential-handling interfaces.</t>
+</list></t>
+
+<t>Separating these topics keeps security assumptions, registries, and consensus
+boundaries reviewable.</t>
 
 </section>
-</section>
-<section numbered="false" anchor="acknowledgements"><name>Acknowledgements</name>
+<section anchor="authors-address"><name>Author's Address</name>
 
-<t>The authors thank the members of the IETF OAuth Working Group for prior art in delegated authorization, and the W3C Decentralized Identifier Working Group for the DID specification that DAAP builds upon for agent identity.</t>
+<t>Sanjeev Kumar</t>
+
+<t>Orchestrum Technologies LLP</t>
+
+<t>Email: <spanx style="verb">mishra.sanjeev@gmail.com</spanx></t>
+
+<t>Alternate email: <spanx style="verb">sanjeev@orchestrum.in</spanx></t>
+
+<t>URI: <spanx style="verb">https://grantex.dev</spanx></t>
 
 </section>
 
@@ -2154,425 +1144,211 @@ The OAuth extension for multi-AI agent collaboration <xref target="I-D.song-oaut
   </back>
 
 <!-- ##markdown-source:
-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
-j3K5EG7H5/i6D1r/D20CYZjf5wAA
+H4sIAAAAAAAAA41cbXPbRpL+Pr9iKvmQ2yuS8lvsWK6tWsVSdpU4kU5SNnV1
+dRWCwJCEDQI8DCiZSfzfr5/unsEApJykttYUCcxr99NPv8xMp1PTlV3lTu0X
+V2e7bm2v22ZZVs4um9aeu8qtss4V9uzSnq1c3Vk807Tlb1lXNvUXJlssWndP
+L5+fnV1/YYomr7MNNVa02bKbbkq/brNpk9FL0wzvT1dtVnd++uSZyanhVdPu
+T21ZLxvjdwt63FOr3X5LLVxe3H1nym17art257tnT568ppey1mWn9tblu7bs
+9uahaT+s2ma3PbW/uMVwcJhJ1+RNZQrq6dQ+e/Ls5fTJN9PnT8wHt6c3i1Nj
+7RRT46F5/itLm+BveFn4UyHLEX7wri5cO82b2ndtVta0TF3zwdXeGN9ldfFr
+VjU1dbx33mzLU/s/NJqJ9U3btW7p6dN+gw//a4x0KsNZ7qpK1vA2q987d29/
+2G2yln6ztmlXWa1jO7VXbb521PVuY+9cvq6bqlmVztt37675abfJyurUyibM
+vLT2jxW+neXNhp+hZTy1667b+tOTE94b93FWuHtj6qbdUEf3DsO6+e7ts6dP
+X+vHb56+eqEfX756Eb599fXTV/3Hb/qP8YGXz1+GFl48DS188/L18/Dx1ZOv
++4+hsddPXobGXj99Flp4/SJ2/PrVkyenxkCKhkN++ex56OXV6xfPYtPP+l6+
+CR9fP3/NTV9Oz2el65YqtGVBkkGSNs3XtMNlvTryDG1+7bMcmzIVAQgP0f7U
+A+nHx9+mO++meeZdfM439So8V+qjJLhVtmhakl15DQ+fX55P317dXJzy5gXF
+PXc5vdFmVfkbyeAlD3lZutbb/6AX/N/s/dPZky/klaxdua7f8oeHh9nD8xkJ
+1sndzUlRFtRv60742V4qVfZIyZ6/5T+jRj2bPnk1fframOmUdGcBRcg7Y6JO
+kW7npLKeVq7a0x/3tD52S4rpcoaV60tvSVUXbp1VS9ss7ZqEvba0Qq2f2bt1
+6YEpuw2gp3BLUjJv6XeBqm0CVbJRyz11hAe4d5tXJf4pa+hj7iamWXSyjfwM
+tYGXckY4dPmVt9Bm+nJiCYt2eLB1vtm1uZsuml1d0HuFOaL4WZ4771X/Jzbr
+OlfvSBbRkyBKt7fdmqBqtdbR3+FZc/GRJKteuQlatrQw8hIBA3W81gatz5au
+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
+fATTCWEAAA==
 
 -->
 

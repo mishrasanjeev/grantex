@@ -31,6 +31,7 @@ const VALID_PAYLOAD = {
   exp: 1700086400,
   jti: 'tok_01HXYZ987xyz',
   grnt: 'grant_01',
+  client_id: 'ag_01HXYZ123abc',
 };
 
 describe('verifyGrantToken', () => {
@@ -54,6 +55,7 @@ describe('verifyGrantToken', () => {
     expect(result.principalId).toBe('user_abc123');
     expect(result.agentDid).toBe('did:grantex:ag_01HXYZ123abc');
     expect(result.developerId).toBe('org_test');
+    expect(result.clientId).toBe('ag_01HXYZ123abc');
     expect(result.scopes).toEqual(['calendar:read', 'payments:initiate:max_500']);
     expect(result.issuedAt).toBe(1700000000);
     expect(result.expiresAt).toBe(1700086400);
@@ -330,6 +332,7 @@ describe('mapOnlineVerifyToVerifiedGrant', () => {
 
     const result = mapOnlineVerifyToVerifiedGrant('any.token');
     expect(result.principalId).toBe('user_abc123');
+    expect(result.clientId).toBe('ag_01HXYZ123abc');
     expect(result.scopes).toEqual(['calendar:read', 'payments:initiate:max_500']);
   });
 

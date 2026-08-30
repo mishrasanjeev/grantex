@@ -9,6 +9,13 @@ beforeAll(async () => {
 });
 
 describe('POST /v1/agents', () => {
+  const publicJwk = {
+    kty: 'OKP',
+    crv: 'Ed25519',
+    x: '11qYAYLefJXI2v-AXGNENLwL8Y6R1TsA5G4nsiq8PZQ',
+    use: 'sig',
+  };
+
   it('registers an agent and returns 201', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([]);               // advisory lock
@@ -84,6 +91,74 @@ describe('POST /v1/agents', () => {
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  it('registers exact redirect, resource, and public-key constraints', async () => {
+    seedAuth();
+    const keyedAgent = {
+      ...TEST_AGENT,
+      did: `did:web:grantex.dev:agents:${TEST_AGENT.id}`,
+      redirect_uris: ['https://client.example/callback'],
+      resource_servers: ['https://api.example/resource'],
+      public_jwk: publicJwk,
+      key_thumbprint: 'registered-thumbprint',
+    };
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);
+    sqlMock.mockResolvedValueOnce([keyedAgent]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/agents',
+      headers: authHeader(),
+      payload: {
+        name: 'Bound Agent',
+        scopes: ['read'],
+        redirectUris: ['https://client.example/callback'],
+        resourceServers: ['https://api.example/resource'],
+        publicJwk,
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({
+      did: keyedAgent.did,
+      redirectUris: keyedAgent.redirect_uris,
+      resourceServers: keyedAgent.resource_servers,
+      publicJwk,
+      keyThumbprint: 'registered-thumbprint',
+      keyBindingConfigured: true,
+    });
+  });
+
+  it('rejects private key material in publicJwk', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/agents',
+      headers: authHeader(),
+      payload: { name: 'Unsafe Agent', publicJwk: { ...publicJwk, d: 'private' } },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('private key field');
+  });
+
+  it('rejects key-agreement keys that cannot verify agent proofs', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/agents',
+      headers: authHeader(),
+      payload: {
+        name: 'Wrong Key Type',
+        publicJwk: { ...publicJwk, crv: 'X25519' },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('Ed25519');
   });
 
   it('returns 401 without auth', async () => {

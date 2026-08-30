@@ -20,11 +20,16 @@ export interface GrantTokenPayload {
   sub: string;
   agt: string;
   dev: string;
+  clientId?: string;
   scp: string[];
   jti: string;
   grnt?: string;
   aud?: string;
   exp: number;
+  iat?: number;
+  cnf?: { jkt: string };
+  act?: Record<string, unknown>;
+  authorizationDetails?: Array<Record<string, unknown>>;
   parentAgt?: string;
   parentGrnt?: string;
   delegationDepth?: number;
@@ -35,6 +40,7 @@ export interface VerifiedGrantTokenClaims {
   sub: string;
   agt: string;
   dev: string;
+  clientId?: string;
   scp: string[];
   jti: string;
   grnt: string;
@@ -46,6 +52,10 @@ export interface VerifiedGrantTokenClaims {
   parentGrnt?: string;
   delegationDepth?: number;
   bdg?: number;
+  scope?: string;
+  cnf?: { jkt: string };
+  act?: Record<string, unknown>;
+  authorizationDetails?: Array<Record<string, unknown>>;
 }
 
 let _keyPair: KeyPair | null = null;
@@ -105,7 +115,14 @@ export async function signGrantToken(
   const builder = new SignJWT({
     agt: payload.agt,
     dev: payload.dev,
+    ...(payload.clientId !== undefined ? { client_id: payload.clientId } : {}),
     scp: payload.scp,
+    scope: payload.scp.join(' '),
+    ...(payload.cnf !== undefined ? { cnf: payload.cnf } : {}),
+    ...(payload.act !== undefined ? { act: payload.act } : {}),
+    ...(payload.authorizationDetails !== undefined
+      ? { authorization_details: payload.authorizationDetails }
+      : {}),
     ...(payload.grnt !== undefined ? { grnt: payload.grnt } : {}),
     ...(payload.parentAgt !== undefined ? { parentAgt: payload.parentAgt } : {}),
     ...(payload.parentGrnt !== undefined ? { parentGrnt: payload.parentGrnt } : {}),
@@ -116,7 +133,7 @@ export async function signGrantToken(
     .setIssuer(config.jwtIssuer)
     .setSubject(payload.sub)
     .setJti(payload.jti)
-    .setIssuedAt()
+    .setIssuedAt(payload.iat)
     .setExpirationTime(payload.exp);
 
   if (payload.aud !== undefined) {
@@ -124,6 +141,29 @@ export async function signGrantToken(
   }
 
   return builder.sign(privateKey);
+}
+
+export async function signAuditCheckpoint(payload: {
+  developerId: string;
+  headEntryId: string;
+  headHash: string;
+  entryCount: number;
+  checkpointId: string;
+}): Promise<string> {
+  const { privateKey, kid } = getKeyPair();
+  return new SignJWT({
+    typ: 'grantex-audit-checkpoint+jwt',
+    developer_id: payload.developerId,
+    head_entry_id: payload.headEntryId,
+    head_hash: payload.headHash,
+    entry_count: payload.entryCount,
+  })
+    .setProtectedHeader({ alg: 'RS256', kid, typ: 'JWT' })
+    .setIssuer(config.jwtIssuer)
+    .setJti(payload.checkpointId)
+    .setIssuedAt()
+    .setExpirationTime('10m')
+    .sign(privateKey);
 }
 
 export async function verifyGrantToken(
@@ -150,6 +190,7 @@ export async function verifyGrantToken(
     sub,
     agt,
     dev,
+    ...(typeof payload['client_id'] === 'string' ? { clientId: payload['client_id'] } : {}),
     scp,
     jti,
     grnt: typeof payload['grnt'] === 'string' ? payload['grnt'] : jti,
@@ -161,6 +202,16 @@ export async function verifyGrantToken(
     ...(payload['parentGrnt'] !== undefined ? { parentGrnt: payload['parentGrnt'] as string } : {}),
     ...(payload['delegationDepth'] !== undefined ? { delegationDepth: payload['delegationDepth'] as number } : {}),
     ...(payload['bdg'] !== undefined ? { bdg: payload['bdg'] as number } : {}),
+    ...(typeof payload['scope'] === 'string' ? { scope: payload['scope'] } : {}),
+    ...(payload['cnf'] && typeof payload['cnf'] === 'object'
+      ? { cnf: payload['cnf'] as { jkt: string } }
+      : {}),
+    ...(payload['act'] && typeof payload['act'] === 'object'
+      ? { act: payload['act'] as Record<string, unknown> }
+      : {}),
+    ...(Array.isArray(payload['authorization_details'])
+      ? { authorizationDetails: payload['authorization_details'] as Array<Record<string, unknown>> }
+      : {}),
   };
 }
 

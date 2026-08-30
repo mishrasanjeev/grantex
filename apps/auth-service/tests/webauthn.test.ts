@@ -300,7 +300,7 @@ describe('POST /v1/webauthn/assert/options', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json().message).toContain('FIDO not required');
+    expect(res.json().message).toContain('Passkey verification is not required');
   });
 
   it('returns 400 when principal has no FIDO credentials', async () => {
@@ -355,7 +355,7 @@ describe('POST /v1/webauthn/assert/options', () => {
     expect(body.publicKey.challenge).toBeDefined();
   });
 
-  it('returns 400 when FIDO is not required for a live developer', async () => {
+  it('requires a registered principal passkey for every live request', async () => {
     // Auth request lookup
     sqlMock.mockResolvedValueOnce([{
       principal_id: 'user_123',
@@ -371,7 +371,7 @@ describe('POST /v1/webauthn/assert/options', () => {
     });
 
     expect(res.statusCode).toBe(400);
-    expect(res.json().message).toContain('FIDO not required');
+    expect(res.json().message).toContain('No FIDO credentials registered');
   });
 
   it('does not require auth (public endpoint)', async () => {

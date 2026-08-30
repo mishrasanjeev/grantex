@@ -3,7 +3,7 @@ import { test, expectStatus, expectString, expectArray, expectIsoDate } from '..
 
 export const tokenRefreshSuite: SuiteDefinition = {
   name: 'token-refresh',
-  description: 'Token refresh — single-use rotation per SPEC §7.4',
+  description: 'Token refresh rotation and request-bound response recovery',
   optional: true,
   run: async (ctx: SuiteContext): Promise<TestResult[]> => {
     const results: TestResult[] = [];
@@ -29,7 +29,7 @@ export const tokenRefreshSuite: SuiteDefinition = {
           }>('/v1/token/refresh', {
             refreshToken: flow.refreshToken,
             agentId,
-          });
+          }, { 'Idempotency-Key': 'conformance-refresh-success-0001' });
           expectStatus(res, 201);
           expectString(res.body.grantToken, 'grantToken');
           expectString(res.body.refreshToken, 'refreshToken');
@@ -52,7 +52,7 @@ export const tokenRefreshSuite: SuiteDefinition = {
 
     results.push(
       await test(
-        'POST /v1/token/refresh rejects used refresh token (single-use)',
+        'POST /v1/token/refresh replays the exact committed response only for the same idempotency key',
         '§7.4',
         async () => {
           const flow = await ctx.flow.executeFullFlow({
@@ -62,19 +62,38 @@ export const tokenRefreshSuite: SuiteDefinition = {
           });
 
           // First refresh — succeeds
-          const first = await ctx.http.post<{ grantId: string }>('/v1/token/refresh', {
+          const key = 'conformance-refresh-recovery-0001';
+          const first = await ctx.http.post<{
+            grantToken: string;
+            refreshToken: string;
+            grantId: string;
+          }>('/v1/token/refresh', {
             refreshToken: flow.refreshToken,
             agentId,
-          });
+          }, { 'Idempotency-Key': key });
           expectStatus(first, 201);
           ctx.cleanup.trackGrant(first.body.grantId);
 
-          // Second refresh with same token — rejected
-          const second = await ctx.http.post('/v1/token/refresh', {
+          const recovered = await ctx.http.post<{
+            grantToken: string;
+            refreshToken: string;
+            grantId: string;
+          }>('/v1/token/refresh', {
             refreshToken: flow.refreshToken,
             agentId,
-          });
-          expectStatus(second, 400);
+          }, { 'Idempotency-Key': key });
+          expectStatus(recovered, 201);
+          if (recovered.body.grantToken !== first.body.grantToken
+              || recovered.body.refreshToken !== first.body.refreshToken
+              || recovered.body.grantId !== first.body.grantId) {
+            throw new Error('Recovery did not return the exact committed refresh response');
+          }
+
+          const mismatched = await ctx.http.post('/v1/token/refresh', {
+            refreshToken: flow.refreshToken,
+            agentId,
+          }, { 'Idempotency-Key': 'conformance-refresh-different-0002' });
+          expectStatus(mismatched, 400);
         },
       ),
     );
@@ -148,7 +167,7 @@ export const tokenRefreshSuite: SuiteDefinition = {
           }>('/v1/token/refresh', {
             refreshToken: flow.refreshToken,
             agentId,
-          });
+          }, { 'Idempotency-Key': 'conformance-refresh-verify-0001' });
           expectStatus(refreshRes, 201);
           ctx.cleanup.trackGrant(refreshRes.body.grantId);
 

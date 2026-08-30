@@ -81,6 +81,7 @@ describe('TokensClient', () => {
     const result = await grantex.tokens.refresh({
       refreshToken: 'rt_old',
       agentId: 'ag_01',
+      idempotencyKey: 'refresh-attempt-0000000000000001',
     });
 
     expect(result.grantToken).toBe('eyJ.new...');
@@ -90,9 +91,12 @@ describe('TokensClient', () => {
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/v1\/token\/refresh$/);
     expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>)['Idempotency-Key'])
+      .toBe('refresh-attempt-0000000000000001');
     const body = JSON.parse(init.body as string);
     expect(body.refreshToken).toBe('rt_old');
     expect(body.agentId).toBe('ag_01');
+    expect(body).not.toHaveProperty('idempotencyKey');
   });
 
   it('revoke() POSTs to /v1/tokens/revoke', async () => {

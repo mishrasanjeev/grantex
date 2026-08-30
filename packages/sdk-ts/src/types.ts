@@ -52,12 +52,21 @@ export interface RegisterAgentParams {
   name: string;
   description: string;
   scopes: string[];
+  /** Exact callback URIs accepted for this Agent. */
+  redirectUris?: string[];
+  /** RFC 8707 resource identifiers this Agent may request. */
+  resourceServers?: string[];
+  /** Public asymmetric JWK used to bind grants to the Agent key. */
+  publicJwk?: Record<string, unknown>;
 }
 
 export interface UpdateAgentParams {
   name?: string;
   description?: string;
   scopes?: string[];
+  redirectUris?: string[];
+  resourceServers?: string[];
+  publicJwk?: Record<string, unknown>;
 }
 
 export interface Agent {
@@ -73,6 +82,11 @@ export interface Agent {
   developerId: string;
   createdAt: string;
   updatedAt: string;
+  redirectUris?: string[];
+  resourceServers?: string[];
+  publicJwk?: Record<string, unknown> | null;
+  keyThumbprint?: string | null;
+  keyBindingConfigured?: boolean;
 }
 
 export interface ListAgentsResponse {
@@ -90,6 +104,8 @@ export interface AuthorizeParams {
   audience?: string;
   expiresIn?: string;
   redirectUri?: string;
+  /** Opaque CSRF correlation value; required when redirectUri is used. */
+  state?: string;
   /** PKCE S256 code challenge (from generatePkce()) */
   codeChallenge?: string;
   /** Must be 'S256' when codeChallenge is provided */
@@ -154,6 +170,8 @@ export interface VerifiedGrant {
   agentDid: string;
   /** Developer org (dev claim) */
   developerId: string;
+  /** OAuth client registration identifier (`client_id` claim), when present. */
+  clientId?: string;
   /** Granted scopes (scp claim) */
   scopes: string[];
   /** Token issued-at timestamp (seconds since epoch) */
@@ -182,6 +200,8 @@ export interface ExchangeTokenParams {
   agentId: string;
   /** PKCE code verifier (from generatePkce()) — required if codeChallenge was sent in authorize */
   codeVerifier?: string;
+  /** Must exactly match the URI used in authorize when one was supplied. */
+  redirectUri?: string;
   /** Request a verifiable credential alongside the grant token */
   credentialFormat?: 'jwt' | 'vc-jwt' | 'both';
 }
@@ -199,6 +219,8 @@ export interface ExchangeTokenResponse {
 export interface RefreshTokenParams {
   refreshToken: string;
   agentId: string;
+  /** Stable across a retry of a response-lost refresh request. Generated when omitted. */
+  idempotencyKey?: string;
 }
 
 export interface VerifyTokenResponse {
@@ -264,6 +286,16 @@ export interface ListAuditResponse {
   entries: AuditEntry[];
 }
 
+export interface AuditCheckpoint {
+  checkpointId: string;
+  headEntryId: string;
+  headHash: string;
+  headTimestamp: string;
+  entryCount: number;
+  signedCheckpoint: string;
+  witnessRequired: true;
+}
+
 // ─── Webhooks ─────────────────────────────────────────────────────────────────
 
 export type WebhookEventType = 'grant.created' | 'grant.revoked' | 'token.issued';
@@ -309,6 +341,7 @@ export interface GrantTokenPayload {
   sub: string;
   agt: string;
   dev: string;
+  client_id?: string;
   scp: string[];
   iat: number;
   exp: number;

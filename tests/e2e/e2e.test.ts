@@ -90,6 +90,8 @@ describe('E2E: Full Auth Flow', () => {
   let grantId: string;
   let refreshToken: string;
   let previousRefreshToken: string;
+  let refreshRecoveryKey: string;
+  let refreshedGrantToken: string;
   let tokenId: string;
 
   it('should create an authorization request and get a code', async () => {
@@ -143,7 +145,12 @@ describe('E2E: Full Auth Flow', () => {
 
   it('should refresh the grant token', async () => {
     previousRefreshToken = refreshToken;
-    const result = await grantex.tokens.refresh({ refreshToken, agentId: mainAgent.agentId });
+    refreshRecoveryKey = `e2e-refresh-${Date.now()}-recovery`;
+    const result = await grantex.tokens.refresh({
+      refreshToken,
+      agentId: mainAgent.agentId,
+      idempotencyKey: refreshRecoveryKey,
+    });
 
     expect(result.grantToken).toBeDefined();
     expect(result.grantId).toBe(grantId);
@@ -151,6 +158,7 @@ describe('E2E: Full Auth Flow', () => {
     expect(result.refreshToken).not.toBe(previousRefreshToken);
 
     grantToken = result.grantToken;
+    refreshedGrantToken = result.grantToken;
     refreshToken = result.refreshToken!;
   });
 
@@ -158,9 +166,10 @@ describe('E2E: Full Auth Flow', () => {
     const result = await grantex.tokens.refresh({
       refreshToken: previousRefreshToken,
       agentId: mainAgent.agentId,
+      idempotencyKey: refreshRecoveryKey,
     });
 
-    expect(result.grantToken).toBeDefined();
+    expect(result.grantToken).toBe(refreshedGrantToken);
     expect(result.grantId).toBe(grantId);
     expect(result.refreshToken).toBe(refreshToken);
 

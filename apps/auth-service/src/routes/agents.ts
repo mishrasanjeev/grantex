@@ -2,11 +2,21 @@ import type { FastifyInstance } from 'fastify';
 import { getSql, type TxSql } from '../db/client.js';
 import { newAgentId } from '../lib/ids.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
+import {
+  validateAgentPublicJwk,
+  validateRedirectUris,
+  validateResourceServers,
+} from '../lib/agent-security.js';
+import type { JWK } from 'jose';
+import { config } from '../config.js';
 
 interface RegisterAgentBody {
   name: string;
   description?: string;
   scopes?: string[];
+  redirectUris?: string[];
+  resourceServers?: string[];
+  publicJwk?: JWK;
 }
 
 interface UpdateAgentBody {
@@ -14,6 +24,9 @@ interface UpdateAgentBody {
   description?: string;
   scopes?: string[];
   status?: string;
+  redirectUris?: string[];
+  resourceServers?: string[];
+  publicJwk?: JWK;
 }
 
 const VALID_AGENT_STATUSES = new Set(['active', 'suspended']);
@@ -25,7 +38,14 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return reply.status(400).send({ message: 'name is required', code: 'BAD_REQUEST', requestId: request.id });
     }
-    const { name, description = '', scopes = [] } = body as Partial<RegisterAgentBody>;
+    const {
+      name,
+      description = '',
+      scopes = [],
+      redirectUris: rawRedirectUris = [],
+      resourceServers: rawResourceServers = [],
+      publicJwk: rawPublicJwk,
+    } = body as Partial<RegisterAgentBody>;
     if (typeof name !== 'string' || name.trim().length === 0) {
       return reply.status(400).send({ message: 'name is required', code: 'BAD_REQUEST', requestId: request.id });
     }
@@ -40,11 +60,33 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ message: 'Too many scopes (max 100)', code: 'BAD_REQUEST', requestId: request.id });
     }
 
+    let redirectUris: string[];
+    let resourceServers: string[];
+    let publicJwk: JWK | null = null;
+    let keyThumbprint: string | null = null;
+    try {
+      redirectUris = validateRedirectUris(rawRedirectUris);
+      resourceServers = validateResourceServers(rawResourceServers);
+      if (rawPublicJwk !== undefined) {
+        const validated = await validateAgentPublicJwk(rawPublicJwk);
+        publicJwk = validated.jwk;
+        keyThumbprint = validated.thumbprint;
+      }
+    } catch (err) {
+      return reply.status(400).send({
+        message: err instanceof Error ? err.message : 'Invalid agent security metadata',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
     const sql = getSql();
     const developerId = request.developer.id;
 
     const id = newAgentId();
-    const did = `did:grantex:${id}`;
+    const did = keyThumbprint
+      ? `did:web:${config.didWebDomain}:agents:${id}`
+      : `did:grantex:${id}`;
     let limitExceeded: { plan: string; limit: number } | undefined;
     let createdRow: Record<string, unknown> | undefined;
 
@@ -71,9 +113,17 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const rows = await tx`
-        INSERT INTO agents (id, did, developer_id, name, description, scopes)
-        VALUES (${id}, ${did}, ${developerId}, ${name.trim()}, ${description}, ${scopes})
-        RETURNING id, did, developer_id, name, description, scopes, status, created_at, updated_at
+        INSERT INTO agents (
+          id, did, developer_id, name, description, scopes,
+          redirect_uris, resource_servers, public_jwk, key_thumbprint
+        )
+        VALUES (
+          ${id}, ${did}, ${developerId}, ${name.trim()}, ${description}, ${scopes},
+          ${redirectUris}, ${resourceServers}, ${publicJwk ? tx.json(publicJwk) : null}, ${keyThumbprint}
+        )
+        RETURNING id, did, developer_id, name, description, scopes, status,
+                  redirect_uris, resource_servers, public_jwk, key_thumbprint,
+                  created_at, updated_at
       `;
       createdRow = rows[0];
     });
@@ -95,7 +145,9 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/agents', async (request, reply) => {
     const sql = getSql();
     const rows = await sql`
-      SELECT id, did, developer_id, name, description, scopes, status, created_at, updated_at
+      SELECT id, did, developer_id, name, description, scopes, status,
+             redirect_uris, resource_servers, public_jwk, key_thumbprint,
+             created_at, updated_at
       FROM agents
       WHERE developer_id = ${request.developer.id}
       ORDER BY created_at DESC
@@ -107,7 +159,9 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { id: string } }>('/v1/agents/:id', async (request, reply) => {
     const sql = getSql();
     const rows = await sql`
-      SELECT id, did, developer_id, name, description, scopes, status, created_at, updated_at
+      SELECT id, did, developer_id, name, description, scopes, status,
+             redirect_uris, resource_servers, public_jwk, key_thumbprint,
+             created_at, updated_at
       FROM agents
       WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
     `;
@@ -125,9 +179,10 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return reply.status(400).send({ message: 'No fields to update', code: 'BAD_REQUEST', requestId: request.id });
     }
-    const { name, description, scopes, status } = body as UpdateAgentBody;
+    const { name, description, scopes, status, redirectUris, resourceServers, publicJwk } = body as UpdateAgentBody;
 
-    if (name === undefined && description === undefined && scopes === undefined && status === undefined) {
+    if (name === undefined && description === undefined && scopes === undefined && status === undefined
+        && redirectUris === undefined && resourceServers === undefined && publicJwk === undefined) {
       return reply.status(400).send({ message: 'No fields to update', code: 'BAD_REQUEST', requestId: request.id });
     }
     if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
@@ -149,17 +204,48 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    let validatedRedirectUris: string[] | undefined;
+    let validatedResourceServers: string[] | undefined;
+    let validatedPublicJwk: JWK | undefined;
+    let keyThumbprint: string | undefined;
+    try {
+      if (redirectUris !== undefined) validatedRedirectUris = validateRedirectUris(redirectUris);
+      if (resourceServers !== undefined) validatedResourceServers = validateResourceServers(resourceServers);
+      if (publicJwk !== undefined) {
+        const validated = await validateAgentPublicJwk(publicJwk);
+        validatedPublicJwk = validated.jwk;
+        keyThumbprint = validated.thumbprint;
+      }
+    } catch (err) {
+      return reply.status(400).send({
+        message: err instanceof Error ? err.message : 'Invalid agent security metadata',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+
+    const keyedDid = keyThumbprint
+      ? `did:web:${config.didWebDomain}:agents:${request.params.id}`
+      : null;
+
     // Use COALESCE so unset fields keep their current values — single SQL call, no fragments
     const rows = await sql`
       UPDATE agents
       SET
+        did         = COALESCE(${keyedDid}, did),
         name        = COALESCE(${name?.trim() ?? null}, name),
         description = COALESCE(${description ?? null}, description),
         scopes      = COALESCE(${scopes ?? null}, scopes),
         status      = COALESCE(${status ?? null}, status),
+        redirect_uris = COALESCE(${validatedRedirectUris ?? null}, redirect_uris),
+        resource_servers = COALESCE(${validatedResourceServers ?? null}, resource_servers),
+        public_jwk = COALESCE(${validatedPublicJwk ? sql.json(validatedPublicJwk) : null}, public_jwk),
+        key_thumbprint = COALESCE(${keyThumbprint ?? null}, key_thumbprint),
         updated_at  = NOW()
       WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
-      RETURNING id, did, developer_id, name, description, scopes, status, created_at, updated_at
+      RETURNING id, did, developer_id, name, description, scopes, status,
+                redirect_uris, resource_servers, public_jwk, key_thumbprint,
+                created_at, updated_at
     `;
     const agent = rows[0];
     if (!agent) {
@@ -208,6 +294,11 @@ function toAgentResponse(row: Record<string, unknown>) {
     name: row['name'],
     description: row['description'],
     scopes: row['scopes'],
+    redirectUris: row['redirect_uris'] ?? [],
+    resourceServers: row['resource_servers'] ?? [],
+    publicJwk: row['public_jwk'] ?? null,
+    keyThumbprint: row['key_thumbprint'] ?? null,
+    keyBindingConfigured: typeof row['key_thumbprint'] === 'string' && row['key_thumbprint'].length > 0,
     status: row['status'],
     createdAt: row['created_at'],
     updatedAt: row['updated_at'],

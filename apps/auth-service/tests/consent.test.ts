@@ -219,7 +219,7 @@ describe('POST /v1/consent/:id/approve', () => {
     });
 
     expect(res.statusCode).toBe(403);
-    expect(res.json<{ code: string }>().code).toBe('FIDO_REQUIRED');
+    expect(res.json<{ code: string }>().code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
   });
 
   it('approves a live request after WebAuthn assertion verification', async () => {
@@ -237,7 +237,7 @@ describe('POST /v1/consent/:id/approve', () => {
       url: '/v1/consent/areq_TEST01/approve',
     });
     expect(firstApprove.statusCode).toBe(403);
-    expect(firstApprove.json<{ code: string }>().code).toBe('FIDO_REQUIRED');
+    expect(firstApprove.json<{ code: string }>().code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
 
     sqlMock.mockResolvedValueOnce([{
       principal_id: 'user_123',
@@ -365,6 +365,7 @@ describe('POST /v1/consent/:id/deny', () => {
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{
       fido_required: true,
+      mode: 'sandbox',
       fido_verified: false,
       status: 'pending',
       expires_at: FUTURE,
@@ -377,5 +378,24 @@ describe('POST /v1/consent/:id/deny', () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.json<{ code: string }>().code).toBe('FIDO_REQUIRED');
+  });
+
+  it('requires principal verification for live denial even when developer FIDO is optional', async () => {
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{
+      fido_required: false,
+      mode: 'live',
+      fido_verified: false,
+      status: 'pending',
+      expires_at: FUTURE,
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/consent/areq_TEST01/deny',
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ code: string }>().code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
   });
 });

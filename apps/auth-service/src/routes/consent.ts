@@ -214,6 +214,35 @@ const CONSENT_HTML = `<!DOCTYPE html>
     }
   }
 
+  async function denyRequest(allowVerificationRetry) {
+    const res = await fetch('/v1/consent/' + encodeURIComponent(reqId) + '/deny', { method: 'POST' });
+    if (res.status === 403) {
+      let body = {};
+      try { body = await res.json(); } catch (e) {}
+      if (allowVerificationRetry && (body.code === 'FIDO_REQUIRED' || body.code === 'PRINCIPAL_VERIFICATION_REQUIRED')) {
+        await verifyPrincipalPresence();
+        return denyRequest(false);
+      }
+      showError(body.message || 'Denial requires additional verification.');
+      return;
+    }
+    if (!res.ok && res.status !== 404) { showError(await responseMessage(res, 'Failed to deny. Please try again.')); return; }
+    const body = await res.json();
+    if (body.redirectUri) {
+      const url = new URL(body.redirectUri);
+      url.searchParams.set('error', 'access_denied');
+      if (body.state) url.searchParams.set('state', body.state);
+      location.href = url.toString();
+    } else {
+      el.innerHTML =
+        '<div class="status-screen">' +
+          '<div class="status-icon">&#10007;</div>' +
+          '<h2>Denied</h2>' +
+          '<p>You have denied access. You may close this window.</p>' +
+        '</div>';
+    }
+  }
+
   if (!reqId) { showError('Missing request ID'); return; }
 
   let data;
@@ -262,22 +291,7 @@ const CONSENT_HTML = `<!DOCTYPE html>
     this.disabled = true;
     document.getElementById('btn-approve').disabled = true;
     try {
-      const res = await fetch('/v1/consent/' + encodeURIComponent(reqId) + '/deny', { method: 'POST' });
-      if (!res.ok && res.status !== 404) { showError('Failed to deny. Please try again.'); return; }
-      const body = await res.json();
-      if (body.redirectUri) {
-        const url = new URL(body.redirectUri);
-        url.searchParams.set('error', 'access_denied');
-        if (body.state) url.searchParams.set('state', body.state);
-        location.href = url.toString();
-      } else {
-        el.innerHTML =
-          '<div class="status-screen">' +
-            '<div class="status-icon">&#10007;</div>' +
-            '<h2>Denied</h2>' +
-            '<p>You have denied access. You may close this window.</p>' +
-          '</div>';
-      }
+      await denyRequest(true);
     } catch (e) {
       showError('Network error. Please try again.');
     }
@@ -317,10 +331,11 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         agent_description: string | null;
         agent_did: string;
         fido_required: boolean;
+        mode: string;
       }[]>`
         SELECT ar.id, ar.scopes, ar.expires_at, ar.status, ar.redirect_uri, ar.state,
                a.name AS agent_name, a.description AS agent_description, a.did AS agent_did,
-               d.fido_required
+               d.fido_required, d.mode
         FROM auth_requests ar
         JOIN agents a ON a.id = ar.agent_id
         JOIN developers d ON d.id = ar.developer_id
@@ -346,12 +361,13 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         scopeDescriptions: row.scopes.map(describeScope),
         expiresAt: row.expires_at,
         status: row.status,
-        fidoRequired: Boolean(row.fido_required),
+        fidoRequired: row.mode === 'live' || Boolean(row.fido_required),
       });
     },
   );
 
-  // POST /v1/consent/:id/approve — principal approves (public)
+  // POST /v1/consent/:id/approve — the request is public, but a live
+  // decision succeeds only after a WebAuthn assertion bound to this request.
   app.post<{ Params: { id: string } }>(
     '/v1/consent/:id/approve',
     { config: { skipAuth: true } },
@@ -368,7 +384,7 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
           AND EXISTS (
             SELECT 1 FROM developers d
             WHERE d.id = auth_requests.developer_id
-              AND (d.fido_required = FALSE OR auth_requests.fido_verified = TRUE)
+              AND (d.mode = 'sandbox' OR auth_requests.fido_verified = TRUE)
           )
         RETURNING id, code, redirect_uri, state
       `;
@@ -376,17 +392,17 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
       const row = rows[0];
       if (!row) {
         const fidoCheck = await sql`
-          SELECT d.fido_required, ar.fido_verified, ar.status, ar.expires_at
+          SELECT d.fido_required, d.mode, ar.fido_verified, ar.status, ar.expires_at
           FROM auth_requests ar
           JOIN developers d ON d.id = ar.developer_id
           WHERE ar.id = ${request.params.id}
         `;
         const fc = fidoCheck[0];
         if (fc && fc['status'] === 'pending' && new Date(fc['expires_at'] as string) > new Date()) {
-          if (fc['fido_required'] && !fc['fido_verified']) {
+          if ((fc['mode'] === 'live' || fc['fido_required']) && !fc['fido_verified']) {
             return reply.status(403).send({
-              message: 'FIDO verification required before approval',
-              code: 'FIDO_REQUIRED',
+              message: 'Principal passkey verification is required before approval',
+              code: fc['mode'] === 'live' ? 'PRINCIPAL_VERIFICATION_REQUIRED' : 'FIDO_REQUIRED',
               requestId: request.id,
             });
           }
@@ -401,7 +417,8 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  // POST /v1/consent/:id/deny — principal denies (public)
+  // POST /v1/consent/:id/deny — live denial also requires proof of the
+  // Principal so an attacker cannot invalidate a captured consent URL.
   app.post<{ Params: { id: string } }>(
     '/v1/consent/:id/deny',
     { config: { skipAuth: true } },
@@ -416,7 +433,7 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
           AND EXISTS (
             SELECT 1 FROM developers d
             WHERE d.id = auth_requests.developer_id
-              AND (d.fido_required = FALSE OR auth_requests.fido_verified = TRUE)
+              AND (d.mode = 'sandbox' OR auth_requests.fido_verified = TRUE)
           )
         RETURNING id, redirect_uri, state
       `;
@@ -424,17 +441,17 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
       const row = rows[0];
       if (!row) {
         const proofCheck = await sql`
-          SELECT d.fido_required, ar.fido_verified, ar.status, ar.expires_at
+          SELECT d.fido_required, d.mode, ar.fido_verified, ar.status, ar.expires_at
           FROM auth_requests ar
           JOIN developers d ON d.id = ar.developer_id
           WHERE ar.id = ${request.params.id}
         `;
         const pc = proofCheck[0];
         if (pc && pc['status'] === 'pending' && new Date(pc['expires_at'] as string) > new Date()
-            && pc['fido_required'] && !pc['fido_verified']) {
+            && (pc['mode'] === 'live' || pc['fido_required']) && !pc['fido_verified']) {
           return reply.status(403).send({
-            message: 'FIDO verification required before denial',
-            code: 'FIDO_REQUIRED',
+            message: 'Principal passkey verification is required before denial',
+            code: pc['mode'] === 'live' ? 'PRINCIPAL_VERIFICATION_REQUIRED' : 'FIDO_REQUIRED',
             requestId: request.id,
           });
         }

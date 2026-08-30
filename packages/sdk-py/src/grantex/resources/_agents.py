@@ -16,12 +16,21 @@ class AgentsClient:
         name: str,
         scopes: List[str],
         description: str = "",
+        redirect_uris: List[str] | None = None,
+        resource_servers: List[str] | None = None,
+        public_jwk: dict[str, Any] | None = None,
     ) -> Agent:
         body: dict[str, Any] = {
             "name": name,
             "description": description,
             "scopes": scopes,
         }
+        if redirect_uris is not None:
+            body["redirectUris"] = redirect_uris
+        if resource_servers is not None:
+            body["resourceServers"] = resource_servers
+        if public_jwk is not None:
+            body["publicJwk"] = public_jwk
         data = self._http.post("/v1/agents", body)
         return Agent.from_dict(data)
 
@@ -40,6 +49,9 @@ class AgentsClient:
         name: str | None = None,
         description: str | None = None,
         scopes: Optional[List[str]] = None,
+        redirect_uris: Optional[List[str]] = None,
+        resource_servers: Optional[List[str]] = None,
+        public_jwk: dict[str, Any] | None = None,
     ) -> Agent:
         body: dict[str, Any] = {}
         if name is not None:
@@ -48,6 +60,12 @@ class AgentsClient:
             body["description"] = description
         if scopes is not None:
             body["scopes"] = scopes
+        if redirect_uris is not None:
+            body["redirectUris"] = redirect_uris
+        if resource_servers is not None:
+            body["resourceServers"] = resource_servers
+        if public_jwk is not None:
+            body["publicJwk"] = public_jwk
         data = self._http.post(f"/v1/agents/{agent_id}", body)
         return Agent.from_dict(data)
 

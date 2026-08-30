@@ -11,6 +11,7 @@ import { parseExpiresIn } from '../lib/crypto.js';
 import { checkRateLimit } from '../lib/rate-limit.js';
 import { assertValidRedirectUri } from '../lib/url-security.js';
 import { isValidPkceChallenge } from '../lib/pkce.js';
+import { validateResourceServers } from '../lib/agent-security.js';
 
 const AUTHORIZE_MAX_PER_MINUTE = 10;
 const AUTHORIZE_WINDOW_SECONDS = 60;
@@ -94,6 +95,17 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     if (audience !== undefined && (typeof audience !== 'string' || audience.length === 0 || audience.length > 1024)) {
       return reply.status(400).send({ message: 'audience must be a non-empty string of at most 1024 characters', code: 'BAD_REQUEST', requestId: request.id });
     }
+    if (audience !== undefined) {
+      try {
+        validateResourceServers([audience]);
+      } catch (err) {
+        return reply.status(400).send({
+          message: err instanceof Error ? err.message : 'Invalid audience resource URI',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+    }
 
     // PKCE parameters are a pair. S256 challenges are fixed-length base64url digests.
     const hasCodeChallenge = codeChallenge !== undefined;
@@ -141,11 +153,68 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Verify agent belongs to this developer
-    const agentRows = await sql`
-      SELECT id FROM agents WHERE id = ${agentId} AND developer_id = ${developerId} AND status = 'active'
+    const agentRows = await sql<{
+      id: string;
+      scopes: string[];
+      redirect_uris: string[];
+      resource_servers: string[];
+      key_thumbprint: string | null;
+    }[]>`
+      SELECT id, scopes, redirect_uris, resource_servers, key_thumbprint
+      FROM agents
+      WHERE id = ${agentId} AND developer_id = ${developerId} AND status = 'active'
     `;
-    if (!agentRows[0]) {
+    const agent = agentRows[0];
+    if (!agent) {
       return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
+    }
+
+    const registeredScopes = Array.isArray(agent.scopes) ? agent.scopes : [];
+    if (registeredScopes.length > 0 && scopes.some((scope) => !registeredScopes.includes(scope))) {
+      return reply.status(400).send({
+        message: 'Requested scopes exceed the Agent registration',
+        code: 'INVALID_SCOPE',
+        requestId: request.id,
+      });
+    }
+
+    const registeredRedirectUris = Array.isArray(agent.redirect_uris) ? agent.redirect_uris : [];
+    if (registeredRedirectUris.length > 0 && redirectUri === undefined) {
+      return reply.status(400).send({
+        message: 'redirectUri is required for this Agent',
+        code: 'REDIRECT_URI_REQUIRED',
+        requestId: request.id,
+      });
+    }
+    if (redirectUri !== undefined && !registeredRedirectUris.includes(redirectUri)) {
+      return reply.status(400).send({
+        message: 'redirectUri does not exactly match a registered URI for this Agent',
+        code: 'REDIRECT_URI_MISMATCH',
+        requestId: request.id,
+      });
+    }
+    if (redirectUri !== undefined && (typeof state !== 'string' || state.length < 32)) {
+      return reply.status(400).send({
+        message: 'state with at least 32 characters is required when redirectUri is used',
+        code: 'STATE_REQUIRED',
+        requestId: request.id,
+      });
+    }
+
+    const registeredResources = Array.isArray(agent.resource_servers) ? agent.resource_servers : [];
+    if (registeredResources.length > 0 && audience === undefined) {
+      return reply.status(400).send({
+        message: 'audience is required for this Agent',
+        code: 'RESOURCE_REQUIRED',
+        requestId: request.id,
+      });
+    }
+    if (audience !== undefined && !registeredResources.includes(audience)) {
+      return reply.status(400).send({
+        message: 'audience does not exactly match a registered resource for this Agent',
+        code: 'RESOURCE_MISMATCH',
+        requestId: request.id,
+      });
     }
 
     // Evaluate policies via pluggable backend (builtin, OPA, or Cedar)
@@ -181,11 +250,17 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
 
     const isSandbox = request.developer.mode === 'sandbox';
     const isPolicyAllow = policyEffect === 'allow';
-    const autoApprove = isSandbox || isPolicyAllow;
+    // Policy may deny, narrow, or flag a request, but it must never stand in
+    // for the Principal's approval in live mode.
+    const autoApprove = isSandbox;
     const autoCode = autoApprove ? ulid() : null;
 
     await sql`
-      INSERT INTO auth_requests (id, agent_id, principal_id, developer_id, scopes, redirect_uri, state, expires_in, expires_at, audience, status, code, code_challenge, code_challenge_method)
+      INSERT INTO auth_requests (
+        id, agent_id, principal_id, developer_id, scopes, redirect_uri, state,
+        expires_in, expires_at, audience, status, code, code_challenge,
+        code_challenge_method, agent_key_thumbprint
+      )
       VALUES (
         ${id}, ${agentId}, ${principalId}, ${developerId}, ${scopes},
         ${redirectUri ?? null}, ${state ?? null}, ${expiresIn}, ${expiresAt},
@@ -193,7 +268,8 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
         ${autoApprove ? 'approved' : 'pending'},
         ${autoCode},
         ${codeChallenge ?? null},
-        ${codeChallengeMethod ?? null}
+        ${codeChallengeMethod ?? null},
+        ${agent.key_thumbprint ?? null}
       )
     `;
 
@@ -211,7 +287,6 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     } else if (isPolicyAllow) {
       responseBody['policyEnforced'] = true;
       responseBody['effect'] = 'allow';
-      responseBody['code'] = autoCode;
     }
 
     authorizeTotal.inc({ status: 'success' });

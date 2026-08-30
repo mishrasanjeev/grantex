@@ -11,11 +11,13 @@ import { incrementUsage } from '../lib/usage.js';
 import { issueAgentGrantVC } from '../lib/vc.js';
 import { issueSDJWT } from '../lib/sd-jwt.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
+import { createHash, timingSafeEqual } from 'node:crypto';
 
 interface TokenBody {
   code: string;
   agentId: string;
   codeVerifier?: string;
+  redirectUri?: string;
   credentialFormat?: 'jwt' | 'vc-jwt' | 'sd-jwt' | 'both' | 'agent-passport';
 }
 
@@ -32,6 +34,22 @@ interface RouteError {
 
 const REFRESH_TOKEN_REPLAY_WINDOW_SECONDS = 300;
 const REFRESH_TOKEN_ALREADY_USED = 'Refresh token already used';
+
+function refreshReplayRequestHash(
+  developerId: string,
+  agentId: string,
+  refreshToken: string,
+  idempotencyKey: string,
+): string {
+  return createHash('sha256')
+    .update(`grantex-refresh-replay:v2\0${developerId}\0${agentId}\0${refreshToken}\0${idempotencyKey}`)
+    .digest('hex');
+}
+
+function replayHashMatches(stored: unknown, candidate: string | null): boolean {
+  if (typeof stored !== 'string' || stored.length !== 64 || candidate === null || candidate.length !== 64) return false;
+  return timingSafeEqual(Buffer.from(stored, 'hex'), Buffer.from(candidate, 'hex'));
+}
 
 function routeError(statusCode: number, message: string, code = 'BAD_REQUEST'): never {
   throw { statusCode, message, code } satisfies RouteError;
@@ -53,7 +71,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     if (typeof body !== 'object' || body === null || Array.isArray(body)) {
       return reply.status(400).send({ message: 'Request body must be a JSON object', code: 'BAD_REQUEST', requestId: request.id });
     }
-    const { code, agentId, codeVerifier, credentialFormat } = body;
+    const { code, agentId, codeVerifier, redirectUri, credentialFormat } = body;
 
     if (typeof code !== 'string' || code.length === 0 || code.length > 512
         || typeof agentId !== 'string' || agentId.length === 0 || agentId.length > 256) {
@@ -65,6 +83,9 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     }
     if (codeVerifier !== undefined && typeof codeVerifier !== 'string') {
       return reply.status(400).send({ message: 'codeVerifier must be a string', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    if (redirectUri !== undefined && (typeof redirectUri !== 'string' || redirectUri.length === 0 || redirectUri.length > 2048)) {
+      return reply.status(400).send({ message: 'redirectUri must be a non-empty string', code: 'BAD_REQUEST', requestId: request.id });
     }
     if (credentialFormat !== undefined
         && !['jwt', 'vc-jwt', 'sd-jwt', 'both', 'agent-passport'].includes(credentialFormat)) {
@@ -88,7 +109,8 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         const authRows = await tx`
           SELECT ar.id, ar.agent_id, ar.principal_id, ar.developer_id,
                  ar.scopes, ar.expires_in, ar.expires_at, ar.status,
-                 ar.audience, ar.code_challenge, a.did AS agent_did
+                 ar.audience, ar.redirect_uri, ar.code_challenge,
+                 ar.agent_key_thumbprint, a.did AS agent_did
           FROM auth_requests ar
           JOIN agents a ON a.id = ar.agent_id
           WHERE ar.code = ${code}
@@ -104,6 +126,11 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         }
         if (new Date(authReq['expires_at'] as string) < new Date()) {
           routeError(400, 'Auth request expired');
+        }
+
+        const registeredRedirectUri = authReq['redirect_uri'];
+        if (typeof registeredRedirectUri === 'string' && redirectUri !== registeredRedirectUri) {
+          routeError(400, 'redirectUri must exactly match the authorization request', 'REDIRECT_URI_MISMATCH');
         }
 
         const storedChallenge = authReq['code_challenge'] as string | null;
@@ -149,7 +176,10 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         }
 
         await tx`
-          INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at, audience)
+          INSERT INTO grants (
+            id, agent_id, principal_id, developer_id, scopes, expires_at,
+            audience, agent_key_thumbprint
+          )
           VALUES (
             ${grantId},
             ${authReq['agent_id'] as string},
@@ -157,7 +187,8 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             ${authReq['developer_id'] as string},
             ${authReq['scopes'] as string[]},
             ${expiresAt},
-            ${authReq['audience'] as string | null}
+            ${authReq['audience'] as string | null},
+            ${authReq['agent_key_thumbprint'] as string | null}
           )
         `;
 
@@ -182,10 +213,14 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           sub: authReq['principal_id'] as string,
           agt: authReq['agent_did'] as string,
           dev: authReq['developer_id'] as string,
+          clientId: authReq['agent_id'] as string,
           scp: authReq['scopes'] as string[],
           jti,
           grnt: grantId,
           ...(audience ? { aud: audience } : {}),
+          ...(typeof authReq['agent_key_thumbprint'] === 'string'
+            ? { cnf: { jkt: authReq['agent_key_thumbprint'] } }
+            : {}),
           exp: expTimestamp,
         }));
 
@@ -315,13 +350,26 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
 
     const sql = getSql();
     const developerId = request.developer.id;
+    const rawIdempotencyKey = request.headers['idempotency-key'];
+    const idempotencyKey = Array.isArray(rawIdempotencyKey) ? rawIdempotencyKey[0] : rawIdempotencyKey;
+    if (idempotencyKey !== undefined && (idempotencyKey.length < 16 || idempotencyKey.length > 256)) {
+      return reply.status(400).send({
+        message: 'Idempotency-Key must contain 16 to 256 characters',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    const replayRequestHash = idempotencyKey
+      ? refreshReplayRequestHash(developerId, agentId, refreshToken, idempotencyKey)
+      : null;
 
     let row!: Record<string, unknown>;
     let grantId!: string;
     let scopes!: string[];
     let grantExpiresAt!: Date;
     let jwt!: string;
-    const jti = newTokenId();
+    let jti = newTokenId();
+    let issuedAt = Math.floor(Date.now() / 1000);
     let responseRefreshToken!: string;
     let refreshReplay = false;
 
@@ -331,12 +379,14 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         const rows = await tx`
           SELECT rt.id AS refresh_id, rt.grant_id, rt.is_used,
                  rt.expires_at AS refresh_expires_at, rt.used_at,
-                 rt.rotated_to_token_id, rt.replay_expires_at,
+                  rt.rotated_to_token_id, rt.replay_expires_at,
+                  rt.replay_request_hash, rt.replay_jti, rt.replay_issued_at,
+                  rt.replay_grant_token,
                  g.agent_id, g.principal_id, g.developer_id, g.scopes, g.status AS grant_status,
-                 g.expires_at AS grant_expires_at, g.audience,
+                  g.expires_at AS grant_expires_at, g.audience, g.agent_key_thumbprint,
                  g.parent_grant_id, g.delegation_depth,
                  a.did AS agent_did, parent_agent.did AS parent_agent_did,
-                 ba.remaining_budget
+                  ba.remaining_budget, ba.currency AS budget_currency
           FROM refresh_tokens rt
           JOIN grants g ON g.id = rt.grant_id
           JOIN agents a ON a.id = g.agent_id
@@ -371,10 +421,20 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         const refreshExpiresAt = new Date(Math.min(now.getTime() + 30 * 86400 * 1000, grantExpiresAt.getTime()));
 
         const remainingBudget = row['remaining_budget'];
+        const remainingBudgetText = remainingBudget !== null && remainingBudget !== undefined
+          ? String(remainingBudget)
+          : undefined;
         const budgetAmount = remainingBudget !== null && remainingBudget !== undefined
           ? Number(remainingBudget)
           : undefined;
         if (budgetAmount !== undefined && !Number.isFinite(budgetAmount)) {
+          routeError(500, 'Invalid budget allocation', 'INTERNAL_ERROR');
+        }
+        const budgetCurrency = typeof row['budget_currency'] === 'string' ? row['budget_currency'] : undefined;
+        if (remainingBudgetText !== undefined
+            && (!/^(0|[1-9]\d*)(\.\d+)?$/.test(remainingBudgetText)
+              || !budgetCurrency
+              || !/^[A-Z]{3}$/.test(budgetCurrency))) {
           routeError(500, 'Invalid budget allocation', 'INTERNAL_ERROR');
         }
         const audience = row['audience'] as string | null | undefined;
@@ -386,13 +446,28 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           sub: row['principal_id'] as string,
           agt: row['agent_did'] as string,
           dev: row['developer_id'] as string,
+          clientId: row['agent_id'] as string,
           scp: scopes,
           jti,
           grnt: grantId,
+          iat: issuedAt,
           ...(audience ? { aud: audience } : {}),
+          ...(typeof row['agent_key_thumbprint'] === 'string'
+            ? { cnf: { jkt: row['agent_key_thumbprint'] } }
+            : {}),
           ...(budgetAmount !== undefined ? { bdg: budgetAmount } : {}),
+          ...(remainingBudgetText !== undefined && budgetCurrency
+            ? {
+                authorizationDetails: [{
+                  type: 'urn:grantex:params:oauth:authorization-details:budget',
+                  amount: remainingBudgetText,
+                  currency: budgetCurrency,
+                }],
+              }
+            : {}),
           ...(parentAgt ? { parentAgt } : {}),
           ...(parentGrnt ? { parentGrnt } : {}),
+          ...(parentAgt ? { act: { sub: parentAgt } } : {}),
           ...(delegationDepth > 0 ? { delegationDepth } : {}),
           exp: Math.floor(grantExpiresAt.getTime() / 1000),
         });
@@ -409,6 +484,14 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             || Number.isNaN(replayExpiresAt.getTime())
             || replayExpiresAt <= now
           ) {
+            routeError(400, REFRESH_TOKEN_ALREADY_USED);
+          }
+          const replayIssuedAt = Number(row['replay_issued_at']);
+          if (!replayHashMatches(row['replay_request_hash'], replayRequestHash)
+              || typeof row['replay_jti'] !== 'string'
+              || typeof row['replay_grant_token'] !== 'string'
+              || row['replay_grant_token'].length === 0
+              || !Number.isSafeInteger(replayIssuedAt)) {
             routeError(400, REFRESH_TOKEN_ALREADY_USED);
           }
 
@@ -428,16 +511,14 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             routeError(400, REFRESH_TOKEN_ALREADY_USED);
           }
 
-          // The previous refresh response may have been lost after commit.
-          // During the five-minute replay window, return the already-rotated refresh
-          // token and mint a fresh access JWT; do not rotate again.
+          // The previous response may have been lost after commit. The same
+          // idempotency key reproduces the original token identity and returns
+          // the already-rotated child without extending any lifetime.
           responseRefreshToken = rotatedToTokenId;
           refreshReplay = true;
-          jwt = await signRefreshedGrantToken();
-          await tx`
-            INSERT INTO grant_tokens (jti, grant_id, expires_at)
-            VALUES (${jti}, ${grantId}, ${grantExpiresAt})
-          `;
+          jti = row['replay_jti'];
+          issuedAt = replayIssuedAt;
+          jwt = row['replay_grant_token'];
           return;
         }
 
@@ -462,6 +543,10 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           SET is_used = true,
               used_at = NOW(),
               rotated_to_token_id = ${newRefreshId},
+              replay_request_hash = ${replayRequestHash},
+              replay_jti = ${jti},
+              replay_issued_at = ${issuedAt},
+              replay_grant_token = ${jwt},
               replay_expires_at = LEAST(
                 NOW() + (${REFRESH_TOKEN_REPLAY_WINDOW_SECONDS} * INTERVAL '1 second'),
                 ${refreshExpiresAt}

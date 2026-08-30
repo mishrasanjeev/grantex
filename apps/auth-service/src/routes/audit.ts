@@ -5,6 +5,8 @@ import { toAuditEntryResponse } from '../lib/audit-entry.js';
 import { newAuditEntryId } from '../lib/ids.js';
 import { computeAuditHash } from '../lib/hash.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
+import { signAuditCheckpoint } from '../lib/crypto.js';
+import { ulid } from 'ulid';
 
 interface AuditLogBody {
   agentId: string;
@@ -155,6 +157,57 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
     `, parameters);
 
     return reply.send({ entries: rows.map(toAuditEntryResponse) });
+  });
+
+  // POST /v1/audit/checkpoints — sign the current chain head for export to
+  // an independent timestamping, transparency-log, or evidence system.
+  app.post('/v1/audit/checkpoints', async (request, reply) => {
+    const sql = getSql();
+    const developerId = request.developer.id;
+    const rows = await sql<{
+      id: string;
+      hash: string;
+      timestamp: string;
+      entry_count: string;
+    }[]>`
+      SELECT id, hash, timestamp,
+             COUNT(*) OVER () AS entry_count
+      FROM audit_entries
+      WHERE developer_id = ${developerId}
+      ORDER BY timestamp DESC, id DESC
+      LIMIT 1
+    `;
+    const head = rows[0];
+    if (!head) {
+      return reply.status(409).send({
+        message: 'Cannot checkpoint an empty audit chain',
+        code: 'AUDIT_CHAIN_EMPTY',
+        requestId: request.id,
+      });
+    }
+
+    const entryCount = Number(head.entry_count);
+    if (!Number.isSafeInteger(entryCount) || entryCount < 1) {
+      throw new Error('Invalid audit entry count');
+    }
+    const checkpointId = `achk_${ulid()}`;
+    const signedCheckpoint = await signAuditCheckpoint({
+      developerId,
+      headEntryId: head.id,
+      headHash: head.hash,
+      entryCount,
+      checkpointId,
+    });
+
+    return reply.status(201).send({
+      checkpointId,
+      headEntryId: head.id,
+      headHash: head.hash,
+      headTimestamp: head.timestamp,
+      entryCount,
+      signedCheckpoint,
+      witnessRequired: true,
+    });
   });
 
   // GET /v1/audit/:id

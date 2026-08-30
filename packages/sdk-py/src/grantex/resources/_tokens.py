@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from .._http import HttpClient
 from .._types import ExchangeTokenParams, ExchangeTokenResponse, RefreshTokenParams, VerifyTokenResponse
 
@@ -13,7 +15,12 @@ class TokensClient:
         return ExchangeTokenResponse.from_dict(data)
 
     def refresh(self, params: RefreshTokenParams) -> ExchangeTokenResponse:
-        data = self._http.post("/v1/token/refresh", params.to_dict())
+        idempotency_key = params.idempotency_key or str(uuid4())
+        data = self._http.post(
+            "/v1/token/refresh",
+            params.to_dict(),
+            headers={"Idempotency-Key": idempotency_key},
+        )
         return ExchangeTokenResponse.from_dict(data)
 
     def verify(self, token: str) -> VerifyTokenResponse:

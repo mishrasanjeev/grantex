@@ -103,11 +103,22 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
 
     // Look up sub-agent
     const agentRows = await sql`
-      SELECT id, did FROM agents WHERE id = ${subAgentId} AND developer_id = ${developerId} AND status = 'active'
+      SELECT id, did, scopes, key_thumbprint
+      FROM agents
+      WHERE id = ${subAgentId} AND developer_id = ${developerId} AND status = 'active'
     `;
     const subAgent = agentRows[0];
     if (!subAgent) {
       return reply.status(404).send({ message: 'Sub-agent not found', code: 'NOT_FOUND', requestId: request.id });
+    }
+    const registeredSubAgentScopes = Array.isArray(subAgent['scopes']) ? subAgent['scopes'] as string[] : [];
+    const unregisteredScopes = scopes.filter((scope) => !registeredSubAgentScopes.includes(scope));
+    if (registeredSubAgentScopes.length > 0 && unregisteredScopes.length > 0) {
+      return reply.status(400).send({
+        message: `Requested scopes exceed sub-agent registration: ${unregisteredScopes.join(', ')}`,
+        code: 'INVALID_SCOPE',
+        requestId: request.id,
+      });
     }
 
     // Compute expiry: min(parent exp, now + expiresIn)
@@ -140,9 +151,15 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       sub: parentClaims['sub'] as string,
       agt: subAgent['did'] as string,
       dev: developerId,
+      clientId: subAgentId,
       scp: scopes,
       jti,
       grnt: grantId,
+      ...(typeof parentClaims.aud === 'string' ? { aud: parentClaims.aud } : {}),
+      ...(typeof subAgent['key_thumbprint'] === 'string'
+        ? { cnf: { jkt: subAgent['key_thumbprint'] as string } }
+        : {}),
+      act: { sub: parentAgt },
       exp: expTimestamp,
       ...(parentAgt !== undefined ? { parentAgt } : {}),
       parentGrnt,
@@ -169,7 +186,10 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       parentStillActive = true;
 
       await tx`
-        INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at, parent_grant_id, delegation_depth)
+        INSERT INTO grants (
+          id, agent_id, principal_id, developer_id, scopes, expires_at,
+          audience, parent_grant_id, delegation_depth, agent_key_thumbprint
+        )
         VALUES (
           ${grantId},
           ${subAgentId},
@@ -177,8 +197,10 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
           ${developerId},
           ${scopes},
           ${expiresAt},
+          ${typeof parentClaims.aud === 'string' ? parentClaims.aud : null},
           ${parentGrnt},
-          ${delegationDepth}
+          ${delegationDepth},
+          ${subAgent['key_thumbprint'] as string | null}
         )
       `;
       await tx`

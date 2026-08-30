@@ -38,3 +38,8 @@ func (s *AuditService) List(ctx context.Context, params *ListAuditParams) (*List
 func (s *AuditService) Get(ctx context.Context, entryID string) (*AuditEntry, error) {
 	return unmarshal[AuditEntry](s.http.get(ctx, "/v1/audit/"+entryID))
 }
+
+// Checkpoint signs the current audit-chain head for external witnessing.
+func (s *AuditService) Checkpoint(ctx context.Context) (*AuditCheckpoint, error) {
+	return unmarshal[AuditCheckpoint](s.http.post(ctx, "/v1/audit/checkpoints", nil))
+}

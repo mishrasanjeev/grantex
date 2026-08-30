@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { buildTestApp } from './helpers.js';
+import { buildTestApp, sqlMock } from './helpers.js';
 import { initEdKey } from '../src/lib/crypto.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -114,5 +114,43 @@ describe('GET /.well-known/did.json', () => {
       // No authorization header
     });
     expect(res.statusCode).toBe(200);
+  });
+});
+
+describe('GET /agents/:id/did.json', () => {
+  it('resolves an active keyed agent without authentication', async () => {
+    const publicJwk = { kty: 'OKP', crv: 'Ed25519', x: '11qYAYLefJXI2v-AXGNENLwL8Y6R1TsA5G4nsiq8PZQ' };
+    sqlMock.mockResolvedValueOnce([{
+      id: 'ag_KEYED',
+      did: 'did:web:grantex.dev:agents:ag_KEYED',
+      public_jwk: publicJwk,
+      key_thumbprint: 'thumbprint',
+      status: 'active',
+    }]);
+
+    const res = await app.inject({ method: 'GET', url: '/agents/ag_KEYED/did.json' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      id: 'did:web:grantex.dev:agents:ag_KEYED',
+      verificationMethod: [{
+        id: 'did:web:grantex.dev:agents:ag_KEYED#thumbprint',
+        controller: 'did:web:grantex.dev:agents:ag_KEYED',
+        publicKeyJwk: publicJwk,
+      }],
+    });
+  });
+
+  it('does not resolve suspended or unkeyed agents', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      id: 'ag_SUSPENDED',
+      did: 'did:web:grantex.dev:agents:ag_SUSPENDED',
+      public_jwk: { kty: 'OKP' },
+      key_thumbprint: 'thumbprint',
+      status: 'suspended',
+    }]);
+
+    const res = await app.inject({ method: 'GET', url: '/agents/ag_SUSPENDED/did.json' });
+    expect(res.statusCode).toBe(404);
   });
 });

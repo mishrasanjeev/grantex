@@ -7,6 +7,7 @@ import {
   matchStoredAuditHash,
 } from '../src/lib/hash.js';
 import { createHash } from 'node:crypto';
+import { decodeJwt } from 'jose';
 
 let app: FastifyInstance;
 
@@ -214,6 +215,46 @@ describe('GET /v1/audit/:id', () => {
     });
 
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('POST /v1/audit/checkpoints', () => {
+  it('signs the current chain head and requires an external witness', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      id: auditEntry.id,
+      hash: auditEntry.hash,
+      timestamp: auditEntry.timestamp,
+      entry_count: '17',
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/audit/checkpoints',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ signedCheckpoint: string; witnessRequired: boolean; entryCount: number }>();
+    expect(body.witnessRequired).toBe(true);
+    expect(body.entryCount).toBe(17);
+    expect(decodeJwt(body.signedCheckpoint)).toMatchObject({
+      head_hash: auditEntry.hash,
+      entry_count: 17,
+      developer_id: TEST_DEVELOPER.id,
+    });
+  });
+
+  it('rejects checkpointing an empty chain', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/audit/checkpoints',
+      headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('AUDIT_CHAIN_EMPTY');
   });
 });
 

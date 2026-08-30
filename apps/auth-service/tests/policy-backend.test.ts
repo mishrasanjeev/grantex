@@ -9,7 +9,7 @@ beforeAll(async () => {
 });
 
 describe('Policy Backend — Builtin (default)', () => {
-  it('allows when policy effect is allow', async () => {
+  it('records a policy allow but still requires principal consent', async () => {
     seedAuth();
     // Subscription query
     sqlMock.mockResolvedValueOnce([{ plan: 'pro' }]);
@@ -35,7 +35,8 @@ describe('Policy Backend — Builtin (default)', () => {
     const body = res.json();
     expect(body.policyEnforced).toBe(true);
     expect(body.effect).toBe('allow');
-    expect(body.code).toBeDefined();
+    expect(body.consentUrl).toBeDefined();
+    expect(body.code).toBeUndefined();
   });
 
   it('denies when policy effect is deny', async () => {

@@ -104,7 +104,7 @@ export const tokenSuite: SuiteDefinition = {
           }>('/v1/token/refresh', {
             refreshToken: flow.refreshToken,
             agentId,
-          });
+          }, { 'Idempotency-Key': 'conformance-token-refresh-0001' });
           expectStatus(refreshRes, 201);
           expectString(refreshRes.body.grantToken, 'grantToken');
           expectString(refreshRes.body.refreshToken, 'refreshToken');
@@ -130,7 +130,7 @@ export const tokenSuite: SuiteDefinition = {
 
     results.push(
       await test(
-        'POST /v1/token/refresh rejects used refresh token (400)',
+        'POST /v1/token/refresh rejects a used token with a different request key (400)',
         '§7.4',
         async () => {
           const flow = await ctx.flow.executeFullFlow({
@@ -143,7 +143,7 @@ export const tokenSuite: SuiteDefinition = {
           const first = await ctx.http.post<{ grantId: string }>('/v1/token/refresh', {
             refreshToken: flow.refreshToken,
             agentId,
-          });
+          }, { 'Idempotency-Key': 'conformance-token-first-0001' });
           expectStatus(first, 201);
           ctx.cleanup.trackGrant(first.body.grantId);
 
@@ -151,7 +151,7 @@ export const tokenSuite: SuiteDefinition = {
           const second = await ctx.http.post('/v1/token/refresh', {
             refreshToken: flow.refreshToken,
             agentId,
-          });
+          }, { 'Idempotency-Key': 'conformance-token-second-0002' });
           expectStatus(second, 400);
         },
       ),

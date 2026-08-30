@@ -95,15 +95,16 @@ func TestVerifyGrantTokenValid(t *testing.T) {
 
 	now := time.Now()
 	tokenStr := signTestToken(t, key, jwt.MapClaims{
-		"iss":  jwksServer.URL,
-		"sub":  "user-123",
-		"agt":  "did:grantex:agent-1",
-		"dev":  "dev-456",
-		"scp":  []string{"read:email", "send:email"},
-		"iat":  now.Unix(),
-		"exp":  now.Add(1 * time.Hour).Unix(),
-		"jti":  "token-789",
-		"grnt": "grant-abc",
+		"iss":       jwksServer.URL,
+		"sub":       "user-123",
+		"agt":       "did:grantex:agent-1",
+		"dev":       "dev-456",
+		"scp":       []string{"read:email", "send:email"},
+		"iat":       now.Unix(),
+		"exp":       now.Add(1 * time.Hour).Unix(),
+		"jti":       "token-789",
+		"grnt":      "grant-abc",
+		"client_id": "agent-1",
 	})
 
 	grant, err := VerifyGrantToken(context.Background(), tokenStr, VerifyOptions{
@@ -126,6 +127,9 @@ func TestVerifyGrantTokenValid(t *testing.T) {
 	}
 	if grant.DeveloperID != "dev-456" {
 		t.Errorf("expected dev-456, got %s", grant.DeveloperID)
+	}
+	if grant.ClientID == nil || *grant.ClientID != "agent-1" {
+		t.Errorf("expected agent-1 client_id, got %v", grant.ClientID)
 	}
 	if len(grant.Scopes) != 2 {
 		t.Errorf("expected 2 scopes, got %d", len(grant.Scopes))

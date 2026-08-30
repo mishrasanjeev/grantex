@@ -161,3 +161,27 @@ func TestAuditGet(t *testing.T) {
 		t.Errorf("expected dev-1, got %s", entry.DeveloperID)
 	}
 }
+
+func TestAuditCheckpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/audit/checkpoints" || r.Method != http.MethodPost {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"checkpointId": "achk_01", "headEntryId": "entry-1",
+			"headHash": "abc123", "headTimestamp": "2026-08-30T00:00:00Z",
+			"entryCount": 17, "signedCheckpoint": "signed.jwt", "witnessRequired": true,
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL))
+	checkpoint, err := client.Audit.Checkpoint(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if checkpoint.SignedCheckpoint != "signed.jwt" || !checkpoint.WitnessRequired {
+		t.Fatalf("unexpected checkpoint: %#v", checkpoint)
+	}
+}

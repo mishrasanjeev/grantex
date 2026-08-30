@@ -17,6 +17,7 @@ from ._types import (
     SignupParams,
     SignupResponse,
     Anomaly,
+    AuditCheckpoint,
     AuditEntry,
     AuthorizationRequest,
     AuthorizeParams,
@@ -188,6 +189,7 @@ __all__ = [
     # Types
     "Agent",
     "Anomaly",
+    "AuditCheckpoint",
     "AuditEntry",
     "DetectAnomaliesResponse",
     "ListAnomaliesResponse",

@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Added
+- Added profile-aware agent registration metadata, resolvable keyed agent DID documents, standard OAuth `scope` and `client_id` token claims, resource and redirect binding, signed audit checkpoints, and maintained SDK coverage for those custom API features.
 - Published `@grantex/cli` 0.3.0 on 2026-08-10 with one-command Agent Skills installation for Hermes, OpenClaw, portable `.agents/skills` workspaces, and custom skill roots.
 - Added the `use-grantex-cli` and `integrate-grantex` skills for safe JSON-first operations and service-boundary implementation guidance.
 - Added cross-platform token input from environment variables, files, and stdin, plus non-zero JSON-mode status codes for invalid or denied checks.
@@ -19,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Published TypeScript SDK 0.3.13, Python SDK 0.3.14, and Go SDK v0.1.10 on 2026-07-11; synchronized the public release snapshot across the landing page, README, compatibility matrix, and SDK documentation.
 
 ### Fixed
+- Hardened live authorization so policy decisions cannot replace authenticated Principal consent; bound redirects, resources, scopes, and registered agent keys through issuance and delegation.
+- Made refresh rotation recoverable for 300 seconds only when the authenticated caller repeats the same old token and idempotency key; recovery returns the exact committed token response and survives a server restart without extending any lifetime.
 - Corrected the Go SDK source contract across Agent and Audit reads/writes: `agentId` mapping, optional registration fields, status updates, explicit scope clearing, required audit-write fields, `developerId` reads, and list envelopes.
   Removed unsupported audit filters and URL-encoded query values, with API-shaped regression tests.
   These fixes are not part of the currently published `v0.1.10` module.

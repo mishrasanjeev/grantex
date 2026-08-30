@@ -12,9 +12,11 @@ export class ConformanceHttpClient {
     method: string,
     path: string,
     body?: unknown,
+    headers?: Record<string, string>,
   ): Promise<HttpResponse<T>> {
     return this.doRequest<T>(method, path, body, {
       Authorization: `Bearer ${this.apiKey}`,
+      ...headers,
     });
   }
 
@@ -30,8 +32,12 @@ export class ConformanceHttpClient {
     return this.request<T>('GET', path);
   }
 
-  async post<T = unknown>(path: string, body?: unknown): Promise<HttpResponse<T>> {
-    return this.request<T>('POST', path, body);
+  async post<T = unknown>(
+    path: string,
+    body?: unknown,
+    headers?: Record<string, string>,
+  ): Promise<HttpResponse<T>> {
+    return this.request<T>('POST', path, body, headers);
   }
 
   async patch<T = unknown>(path: string, body?: unknown): Promise<HttpResponse<T>> {

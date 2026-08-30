@@ -126,6 +126,9 @@ func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*V
 		IssuedAt:    iat.Unix(),
 		ExpiresAt:   exp.Unix(),
 	}
+	if clientID, ok := claims["client_id"].(string); ok {
+		grant.ClientID = &clientID
+	}
 
 	// Grant ID (falls back to jti)
 	if grnt, ok := claims["grnt"].(string); ok {

@@ -19,6 +19,9 @@ const validAuthRequest = {
   expires_at: new Date(Date.now() + 86400_000).toISOString(),
   status: 'approved',
   agent_did: TEST_AGENT.did,
+  redirect_uri: null,
+  code_challenge: null,
+  agent_key_thumbprint: null,
 };
 
 describe('POST /v1/token', () => {
@@ -62,6 +65,7 @@ describe('POST /v1/token', () => {
     expect(claims.sub).toBe('user_123');
     expect(claims['agt']).toBe(TEST_AGENT.did);
     expect(claims['dev']).toBe(TEST_DEVELOPER.id);
+    expect(claims['client_id']).toBe(TEST_AGENT.id);
     expect(claims['scp']).toEqual(['read', 'write']);
     expect(claims['grnt']).toBeDefined();
   });
@@ -167,6 +171,51 @@ describe('POST /v1/token', () => {
     });
 
     expect(res.statusCode).toBe(400);
+  });
+
+  it('requires the token request redirectUri to match the authorization request', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      ...validAuthRequest,
+      redirect_uri: 'https://client.example/callback',
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token',
+      headers: authHeader(),
+      payload: {
+        code: 'valid-code-123',
+        agentId: TEST_AGENT.id,
+        redirectUri: 'https://attacker.example/callback',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('REDIRECT_URI_MISMATCH');
+  });
+
+  it('binds the access token to the registered agent key', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      ...validAuthRequest,
+      agent_key_thumbprint: 'agent-jwk-thumbprint',
+    }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token',
+      headers: authHeader(),
+      payload: { code: 'valid-code-123', agentId: TEST_AGENT.id },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(decodeJwt(res.json<{ grantToken: string }>().grantToken).cnf)
+      .toEqual({ jkt: 'agent-jwk-thumbprint' });
   });
 
   it('succeeds without verifiableCredential when VC issuance fails (best-effort)', async () => {

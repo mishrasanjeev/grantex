@@ -33,6 +33,7 @@ def _make_verified_grant() -> VerifiedGrant:
         scopes=tuple(MOCK_JWT_PAYLOAD["scp"]),
         issued_at=MOCK_JWT_PAYLOAD["iat"],
         expires_at=MOCK_JWT_PAYLOAD["exp"],
+        client_id=MOCK_JWT_PAYLOAD["client_id"],
     )
 
 
@@ -58,6 +59,7 @@ def test_valid_token_returns_verified_grant(mocker: pytest.FixtureRequest) -> No
     assert result.token_id == expected.token_id
     assert result.grant_id == expected.grant_id
     assert result.principal_id == expected.principal_id
+    assert result.client_id == expected.client_id
     assert result.scopes == expected.scopes
 
 

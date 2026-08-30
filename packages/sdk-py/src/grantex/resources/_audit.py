@@ -3,7 +3,7 @@ from __future__ import annotations
 from urllib.parse import urlencode
 
 from .._http import HttpClient
-from .._types import AuditEntry, ListAuditParams, ListAuditResponse, LogAuditParams
+from .._types import AuditCheckpoint, AuditEntry, ListAuditParams, ListAuditResponse, LogAuditParams
 from typing import Any
 
 
@@ -43,6 +43,10 @@ class AuditClient:
     def get(self, entry_id: str) -> AuditEntry:
         data = self._http.get(f"/v1/audit/{entry_id}")
         return AuditEntry.from_dict(data)
+
+    def checkpoint(self) -> AuditCheckpoint:
+        data = self._http.post("/v1/audit/checkpoints")
+        return AuditCheckpoint.from_dict(data)
 
 
 def _build_query(params: dict[str, object]) -> str:

@@ -1,5 +1,6 @@
 import type { HttpClient } from '../http.js';
 import type { ExchangeTokenParams, ExchangeTokenResponse, RefreshTokenParams, VerifyTokenResponse } from '../types.js';
+import { randomUUID } from 'node:crypto';
 
 export class TokensClient {
   readonly #http: HttpClient;
@@ -13,7 +14,10 @@ export class TokensClient {
   }
 
   refresh(params: RefreshTokenParams): Promise<ExchangeTokenResponse> {
-    return this.#http.post<ExchangeTokenResponse>('/v1/token/refresh', params);
+    const { idempotencyKey = randomUUID(), ...body } = params;
+    return this.#http.post<ExchangeTokenResponse>('/v1/token/refresh', body, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
   }
 
   verify(token: string): Promise<VerifyTokenResponse> {

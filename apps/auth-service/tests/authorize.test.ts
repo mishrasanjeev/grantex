@@ -299,7 +299,7 @@ describe('POST /v1/authorize — policy engine', () => {
     expect(body.code).toBe('POLICY_DENIED');
   });
 
-  it('auto-approves and returns code when an allow policy matches', async () => {
+  it('records an allow decision without bypassing live principal consent', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([]);                       // subscription lookup
     sqlMock.mockResolvedValueOnce([{ count: '0' }]);         // grant count
@@ -315,10 +315,69 @@ describe('POST /v1/authorize — policy engine', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    const body = res.json<{ policyEnforced: boolean; effect: string; code: string }>();
+    const body = res.json<{ policyEnforced: boolean; effect: string; code?: string }>();
     expect(body.policyEnforced).toBe(true);
     expect(body.effect).toBe('allow');
-    expect(body.code).toBeDefined();
+    expect(body.code).toBeUndefined();
+  });
+
+  it('enforces exact registered redirects, resources, and scopes', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);
+    sqlMock.mockResolvedValueOnce([{
+      id: TEST_AGENT.id,
+      scopes: ['read'],
+      redirect_uris: ['https://client.example/callback'],
+      resource_servers: ['https://resource.example'],
+      key_thumbprint: 'registered-thumbprint',
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        principalId: 'user_123',
+        scopes: ['write'],
+        redirectUri: 'https://client.example/callback',
+        state: 'state-value-with-at-least-32-characters',
+        audience: 'https://resource.example',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ code: string }>().code).toBe('INVALID_SCOPE');
+  });
+
+  it('rejects a redirect URI not registered to the Agent', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);
+    sqlMock.mockResolvedValueOnce([{
+      id: TEST_AGENT.id,
+      scopes: ['read'],
+      redirect_uris: ['https://client.example/callback'],
+      resource_servers: [],
+      key_thumbprint: null,
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        principalId: 'user_123',
+        scopes: ['read'],
+        redirectUri: 'https://attacker.example/callback',
+        state: 'state-value-with-at-least-32-characters',
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ code: string }>().code).toBe('REDIRECT_URI_MISMATCH');
   });
 });
 

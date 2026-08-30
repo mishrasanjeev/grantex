@@ -141,12 +141,13 @@ export function claimsToVerifiedGrant(payload: GrantTokenPayload): VerifiedGrant
     principalId: payload.sub,
     agentDid: payload.agt,
     developerId: payload.dev,
+    ...(payload.client_id !== undefined ? { clientId: payload.client_id } : {}),
     scopes: payload.scp,
     issuedAt: payload.iat,
     expiresAt: payload.exp,
     ...(payload.parentAgt !== undefined ? { parentAgentDid: payload.parentAgt } : {}),
-      ...(payload.parentGrnt !== undefined ? { parentGrantId: payload.parentGrnt } : {}),
-      ...(payload.delegationDepth !== undefined ? { delegationDepth: payload.delegationDepth } : {}),
+    ...(payload.parentGrnt !== undefined ? { parentGrantId: payload.parentGrnt } : {}),
+    ...(payload.delegationDepth !== undefined ? { delegationDepth: payload.delegationDepth } : {}),
   };
 }
 

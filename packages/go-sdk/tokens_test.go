@@ -77,6 +77,9 @@ func TestTokensRefresh(t *testing.T) {
 		if r.URL.Path != "/v1/token/refresh" || r.Method != http.MethodPost {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
+		if got := r.Header.Get("Idempotency-Key"); got != "refresh-attempt-0000000000000001" {
+			t.Errorf("unexpected Idempotency-Key %q", got)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(ExchangeTokenResponse{
 			GrantToken:   "new-jwt-456",
@@ -90,8 +93,9 @@ func TestTokensRefresh(t *testing.T) {
 
 	client := NewClient("test-key", WithBaseURL(server.URL))
 	result, err := client.Tokens.Refresh(context.Background(), RefreshTokenParams{
-		RefreshToken: "old-refresh-abc",
-		AgentID:      "agent-1",
+		RefreshToken:   "old-refresh-abc",
+		AgentID:        "agent-1",
+		IdempotencyKey: "refresh-attempt-0000000000000001",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

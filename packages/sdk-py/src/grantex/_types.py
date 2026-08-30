@@ -78,6 +78,11 @@ class Agent:
     developer_id: str
     created_at: str
     updated_at: str
+    redirect_uris: tuple[str, ...] = ()
+    resource_servers: tuple[str, ...] = ()
+    public_jwk: dict[str, Any] | None = None
+    key_thumbprint: str | None = None
+    key_binding_configured: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Agent:
@@ -91,6 +96,11 @@ class Agent:
             developer_id=data["developerId"],
             created_at=data["createdAt"],
             updated_at=data["updatedAt"],
+            redirect_uris=tuple(data.get("redirectUris", [])),
+            resource_servers=tuple(data.get("resourceServers", [])),
+            public_jwk=data.get("publicJwk"),
+            key_thumbprint=data.get("keyThumbprint"),
+            key_binding_configured=bool(data.get("keyBindingConfigured", False)),
         )
 
 
@@ -118,6 +128,7 @@ class AuthorizeParams:
     code_challenge: str | None = None
     code_challenge_method: str | None = None
     audience: str | None = None
+    state: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {
@@ -127,6 +138,8 @@ class AuthorizeParams:
         }
         if self.audience is not None:
             body["audience"] = self.audience
+        if self.state is not None:
+            body["state"] = self.state
         if self.expires_in is not None:
             body["expiresIn"] = self.expires_in
         if self.redirect_uri is not None:
@@ -249,6 +262,7 @@ class VerifiedGrant:
     scopes: tuple[str, ...]
     issued_at: int
     expires_at: int
+    client_id: str | None = None
     parent_agent_did: str | None = None
     parent_grant_id: str | None = None
     delegation_depth: int | None = None
@@ -285,6 +299,7 @@ class ExchangeTokenParams:
     agent_id: str
     code_verifier: str | None = None
     credential_format: str | None = None  # 'jwt' | 'vc-jwt' | 'both'
+    redirect_uri: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {"code": self.code, "agentId": self.agent_id}
@@ -292,6 +307,8 @@ class ExchangeTokenParams:
             body["codeVerifier"] = self.code_verifier
         if self.credential_format is not None:
             body["credentialFormat"] = self.credential_format
+        if self.redirect_uri is not None:
+            body["redirectUri"] = self.redirect_uri
         return body
 
 
@@ -320,6 +337,7 @@ class ExchangeTokenResponse:
 class RefreshTokenParams:
     refresh_token: str
     agent_id: str
+    idempotency_key: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {"refreshToken": self.refresh_token, "agentId": self.agent_id}
@@ -456,6 +474,29 @@ class ListAuditResponse:
         )
 
 
+@dataclass(frozen=True)
+class AuditCheckpoint:
+    checkpoint_id: str
+    head_entry_id: str
+    head_hash: str
+    head_timestamp: str
+    entry_count: int
+    signed_checkpoint: str
+    witness_required: bool
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> AuditCheckpoint:
+        return cls(
+            checkpoint_id=data["checkpointId"],
+            head_entry_id=data["headEntryId"],
+            head_hash=data["headHash"],
+            head_timestamp=data["headTimestamp"],
+            entry_count=data["entryCount"],
+            signed_checkpoint=data["signedCheckpoint"],
+            witness_required=data["witnessRequired"],
+        )
+
+
 # ─── Verify ───────────────────────────────────────────────────────────────────
 
 
@@ -482,6 +523,7 @@ class GrantTokenPayload:
     iat: int
     exp: int
     jti: str
+    client_id: str | None = None
     grnt: str | None = None
     parent_agt: str | None = None
     parent_grnt: str | None = None

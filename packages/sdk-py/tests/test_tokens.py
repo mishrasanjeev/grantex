@@ -98,7 +98,11 @@ def test_refresh(client: Grantex) -> None:
     from grantex import RefreshTokenParams
 
     response = client.tokens.refresh(
-        RefreshTokenParams(refresh_token="rt_old", agent_id="ag_01")
+        RefreshTokenParams(
+            refresh_token="rt_old",
+            agent_id="ag_01",
+            idempotency_key="refresh-attempt-0000000000000001",
+        )
     )
 
     assert response.grant_token == "eyJ.new..."
@@ -108,6 +112,10 @@ def test_refresh(client: Grantex) -> None:
     body = json.loads(route.calls[0].request.content)
     assert body["refreshToken"] == "rt_old"
     assert body["agentId"] == "ag_01"
+    assert "idempotencyKey" not in body
+    assert route.calls[0].request.headers["Idempotency-Key"] == (
+        "refresh-attempt-0000000000000001"
+    )
 
 
 @respx.mock

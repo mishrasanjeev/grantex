@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { buildTestApp, authHeader, seedAuth, sqlMock, TEST_AGENT, TEST_DEVELOPER } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 import { decodeJwt } from 'jose';
+import { createHash } from 'node:crypto';
 
 let app: FastifyInstance;
 
@@ -17,6 +18,10 @@ const validRefreshRow = {
   used_at: null,
   rotated_to_token_id: null,
   replay_expires_at: null,
+  replay_request_hash: null,
+  replay_jti: null,
+  replay_issued_at: null,
+  replay_grant_token: null,
   agent_id: TEST_AGENT.id,
   principal_id: 'user_123',
   developer_id: TEST_DEVELOPER.id,
@@ -24,7 +29,19 @@ const validRefreshRow = {
   grant_status: 'active',
   grant_expires_at: new Date(Date.now() + 86400_000).toISOString(),
   agent_did: TEST_AGENT.did,
+  agent_key_thumbprint: null,
 };
+
+const IDEMPOTENCY_KEY = 'refresh-attempt-0000000000000001';
+const REPLAY_JTI = 'gtok_REPLAYED_IDENTITY';
+const REPLAY_ISSUED_AT = Math.floor(Date.now() / 1000) - 5;
+const REPLAY_GRANT_TOKEN = 'stored.jwt.returned.byte-for-byte';
+
+function replayHash(key: string): string {
+  return createHash('sha256')
+    .update(`grantex-refresh-replay:v2\0${TEST_DEVELOPER.id}\0${TEST_AGENT.id}\0ref_EXISTING\0${key}`)
+    .digest('hex');
+}
 
 describe('POST /v1/token/refresh', () => {
   it('refreshes a valid token and returns new grant token with same grantId', async () => {
@@ -41,7 +58,7 @@ describe('POST /v1/token/refresh', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/token/refresh',
-      headers: authHeader(),
+      headers: { ...authHeader(), 'idempotency-key': IDEMPOTENCY_KEY },
       payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
     });
 
@@ -70,6 +87,7 @@ describe('POST /v1/token/refresh', () => {
     expect(claims.sub).toBe('user_123');
     expect(claims['agt']).toBe(TEST_AGENT.did);
     expect(claims['dev']).toBe(TEST_DEVELOPER.id);
+    expect(claims['client_id']).toBe(TEST_AGENT.id);
     expect(claims['scp']).toEqual(['read', 'write']);
     expect(claims['grnt']).toBe('grnt_EXISTING');
   });
@@ -80,6 +98,7 @@ describe('POST /v1/token/refresh', () => {
       ...validRefreshRow,
       audience: 'https://resource.example',
       remaining_budget: '42.50',
+      budget_currency: 'USD',
       parent_grant_id: 'grnt_PARENT',
       parent_agent_did: 'did:grantex:ag_PARENT',
       delegation_depth: 2,
@@ -91,7 +110,7 @@ describe('POST /v1/token/refresh', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/v1/token/refresh',
-      headers: authHeader(),
+      headers: { ...authHeader(), 'idempotency-key': IDEMPOTENCY_KEY },
       payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
     });
 
@@ -99,6 +118,11 @@ describe('POST /v1/token/refresh', () => {
     const claims = decodeJwt(res.json<{ grantToken: string }>().grantToken);
     expect(claims.aud).toBe('https://resource.example');
     expect(claims['bdg']).toBe(42.5);
+    expect(claims['authorization_details']).toEqual([{
+      type: 'urn:grantex:params:oauth:authorization-details:budget',
+      amount: '42.50',
+      currency: 'USD',
+    }]);
     expect(claims['parentGrnt']).toBe('grnt_PARENT');
     expect(claims['parentAgt']).toBe('did:grantex:ag_PARENT');
     expect(claims['delegationDepth']).toBe(2);
@@ -132,6 +156,10 @@ describe('POST /v1/token/refresh', () => {
       used_at: new Date(Date.now() - 5_000).toISOString(),
       rotated_to_token_id: 'ref_ROTATED',
       replay_expires_at: new Date(Date.now() + 60_000).toISOString(),
+      replay_request_hash: replayHash(IDEMPOTENCY_KEY),
+      replay_jti: REPLAY_JTI,
+      replay_issued_at: REPLAY_ISSUED_AT,
+      replay_grant_token: REPLAY_GRANT_TOKEN,
     }]);
     // SELECT rotated child refresh token
     sqlMock.mockResolvedValueOnce([{
@@ -140,13 +168,10 @@ describe('POST /v1/token/refresh', () => {
       is_used: false,
       expires_at: new Date(Date.now() + 86400_000).toISOString(),
     }]);
-    // INSERT grant_tokens for the fresh replayed access JWT
-    sqlMock.mockResolvedValueOnce([]);
-
     const res = await app.inject({
       method: 'POST',
       url: '/v1/token/refresh',
-      headers: authHeader(),
+      headers: { ...authHeader(), 'idempotency-key': IDEMPOTENCY_KEY },
       payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
     });
 
@@ -162,13 +187,62 @@ describe('POST /v1/token/refresh', () => {
     expect(body.refreshToken).toBe('ref_ROTATED');
     expect(body.grantId).toBe('grnt_EXISTING');
     expect(body.scopes).toEqual(['read', 'write']);
-    const claims = decodeJwt(body.grantToken);
-    expect(claims['grnt']).toBe('grnt_EXISTING');
+    expect(body.grantToken).toBe(REPLAY_GRANT_TOKEN);
 
     const sqlText = sqlMock.mock.calls.map((call) => (call[0] as TemplateStringsArray).join(' ')).join('\n');
     expect(sqlText).toContain('FROM refresh_tokens');
     expect(sqlText).toContain('WHERE id = ');
     expect(sqlText).not.toContain('rotated_to_token_id =');
+    expect(sqlText).not.toContain('INSERT INTO grant_tokens');
+  });
+
+  it('leaves the old refresh token reusable when signing fails before rotation commits', async () => {
+    const crypto = await import('../src/lib/crypto.js');
+    const signer = vi.spyOn(crypto, 'signGrantToken').mockRejectedValueOnce(new Error('signer unavailable'));
+    try {
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([validRefreshRow]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/token/refresh',
+        headers: { ...authHeader(), 'idempotency-key': IDEMPOTENCY_KEY },
+        payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
+      });
+
+      expect(res.statusCode).toBe(500);
+      const sqlText = sqlMock.mock.calls
+        .map((call) => (call[0] as TemplateStringsArray).join(' '))
+        .join('\n');
+      expect(sqlText).not.toContain('UPDATE refresh_tokens');
+      expect(sqlText).not.toContain('INSERT INTO refresh_tokens');
+    } finally {
+      signer.mockRestore();
+    }
+  });
+
+  it('rejects replay recovery when the idempotency key does not match', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      ...validRefreshRow,
+      is_used: true,
+      rotated_to_token_id: 'ref_ROTATED',
+      replay_expires_at: new Date(Date.now() + 60_000).toISOString(),
+      replay_request_hash: replayHash(IDEMPOTENCY_KEY),
+      replay_jti: REPLAY_JTI,
+      replay_issued_at: REPLAY_ISSUED_AT,
+      replay_grant_token: REPLAY_GRANT_TOKEN,
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token/refresh',
+      headers: { ...authHeader(), 'idempotency-key': 'different-attempt-000000000000001' },
+      payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toBe('Refresh token already used');
   });
 
   it('rejects a used refresh token after the replay window expires', async () => {

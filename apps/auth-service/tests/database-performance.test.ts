@@ -77,6 +77,18 @@ describe('database performance migrations', () => {
     expect(sql).toMatch(/REFERENCES refresh_tokens\(id\)/);
   });
 
+  it('adds DAAP request binding and durable exact-response recovery fields', () => {
+    const sql = readFileSync(join(migrationsDir, '089_daap_security_hardening.sql'), 'utf8');
+
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS redirect_uris TEXT[]');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS resource_servers TEXT[]');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS public_jwk JSONB');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS agent_key_thumbprint TEXT');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS replay_request_hash TEXT');
+    expect(sql).toContain('ADD COLUMN IF NOT EXISTS replay_grant_token TEXT');
+    expect(sql).not.toContain('CREATE UNIQUE INDEX');
+  });
+
   it('holds the migration lock while every file runs and releases the connection', async () => {
     const migrationSql = Object.assign(vi.fn().mockResolvedValue([]), {
       unsafe: vi.fn().mockResolvedValue([]),

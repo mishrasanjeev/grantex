@@ -44,3 +44,20 @@ describe('GET /.well-known/jwks.json', () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe('GET /.well-known/oauth-authorization-server', () => {
+  it('publishes truthful metadata for the implementation-specific profile', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/.well-known/oauth-authorization-server',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<Record<string, unknown>>();
+    expect(body['jwks_uri']).toBe('https://grantex.dev/.well-known/jwks.json');
+    expect(body['code_challenge_methods_supported']).toEqual(['S256']);
+    expect(body['grantex_profile_status']).toBe('implementation-specific-extension');
+    expect(body).not.toHaveProperty('authorization_endpoint');
+    expect(body).not.toHaveProperty('dpop_signing_alg_values_supported');
+  });
+});

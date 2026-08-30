@@ -101,3 +101,24 @@ def test_get_by_id(client: Grantex) -> None:
     assert entry.entry_id == "audit_01HXYZ"
     assert entry.prev_hash is None
     assert entry.status == "success"
+
+
+@respx.mock
+def test_checkpoint(client: Grantex) -> None:
+    respx.post("https://api.grantex.dev/v1/audit/checkpoints").mock(
+        return_value=httpx.Response(201, json={
+            "checkpointId": "achk_01",
+            "headEntryId": "audit_01HXYZ",
+            "headHash": "abc123",
+            "headTimestamp": "2026-08-30T00:00:00Z",
+            "entryCount": 17,
+            "signedCheckpoint": "signed.jwt",
+            "witnessRequired": True,
+        })
+    )
+
+    checkpoint = client.audit.checkpoint()
+    assert checkpoint.checkpoint_id == "achk_01"
+    assert checkpoint.entry_count == 17
+    assert checkpoint.signed_checkpoint == "signed.jwt"
+    assert checkpoint.witness_required is True

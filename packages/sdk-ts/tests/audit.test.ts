@@ -91,6 +91,29 @@ describe('AuditClient', () => {
     expect(url).toMatch(/\/v1\/audit\/evt_01$/);
   });
 
+  it('checkpoint() POSTs to /v1/audit/checkpoints', async () => {
+    const checkpoint = {
+      checkpointId: 'achk_01',
+      headEntryId: 'evt_01',
+      headHash: 'abc123hash',
+      headTimestamp: '2026-08-30T00:00:00Z',
+      entryCount: 17,
+      signedCheckpoint: 'signed.jwt',
+      witnessRequired: true,
+    };
+    const mockFetch = makeFetch(201, checkpoint);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    const result = await grantex.audit.checkpoint();
+
+    expect(result.signedCheckpoint).toBe('signed.jwt');
+    expect(result.witnessRequired).toBe(true);
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/v1\/audit\/checkpoints$/);
+    expect(init.method).toBe('POST');
+  });
+
   it('list() with all-undefined params omits query string', async () => {
     const listResponse = { entries: [] };
     const mockFetch = makeFetch(200, listResponse);

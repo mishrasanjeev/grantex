@@ -53,6 +53,7 @@ MOCK_JWT_PAYLOAD: dict = {
     "exp": 9999999999,
     "jti": "tok_01HXYZ987xyz",
     "grnt": "grant_01HXYZ",
+    "client_id": "ag_01HXYZ123abc",
 }
 
 MOCK_AUTHORIZATION_REQUEST: dict = {

@@ -1,13 +1,13 @@
 # IETF Internet-Draft: Delegated Agent Authorization Protocol (DAAP)
 
 **Current Datatracker draft:** `draft-mishra-oauth-agent-grants-01`
-**Prepared source candidate:** `draft-mishra-oauth-agent-grants-02`
+**Security-reviewed working candidate:** `draft-mishra-oauth-agent-grants-02`
 **Target:** IETF OAuth Working Group (`oauth@ietf.org`)
 **Status:** Active individual Internet-Draft; not IETF-endorsed and not OAuth WG-adopted
 
 Authoritative record: <https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/>.
 
-The Datatracker still shows `-01` until `-02` is submitted and confirmed by email. The `-02` source in this directory is the next submission candidate.
+The Datatracker still shows `-01` until `-02` is submitted and confirmed by email. The `-02` source is not upload-ready until the renderer, idnits, reference, and implementation-report checks below pass.
 
 ---
 
@@ -15,8 +15,9 @@ The Datatracker still shows `-01` until `-02` is submitted and confirmed by emai
 
 | File | Purpose |
 |------|---------|
-| [`draft-mishra-oauth-agent-grants-02.md`](./draft-mishra-oauth-agent-grants-02.md) | Current submission candidate in kramdown-rfc2629 Markdown |
+| [`draft-mishra-oauth-agent-grants-02.md`](./draft-mishra-oauth-agent-grants-02.md) | Security-reviewed working source in kramdown-rfc2629 Markdown |
 | [`implementation-report.md`](./implementation-report.md) | Reference implementation status for reviewers |
+| [`extensions/README.md`](./extensions/README.md) | Candidate follow-on topics intentionally excluded from the core profile |
 | `draft-mishra-oauth-agent-grants-01.*` | Last published revision artifacts |
 | `draft-mishra-oauth-agent-grants-00.*` | Initial submitted revision artifacts |
 
@@ -26,15 +27,14 @@ Do not edit the published `-00` or `-01` artifacts when preparing the next submi
 
 ## What Changed in `-02`
 
-- Updated author organization and contact metadata to Orchestrum Technologies LLP / Sanjeev Kumar.
-- Clarified that DAAP is vendor-neutral and that Grantex is a reference implementation.
-- Replaced Grantex-specific normative examples with reserved example identifiers/domains.
-- Added a bounded refresh-token lost-response recovery rule: maximum 300 seconds, same already-rotated response, no grant-lifetime extension.
-- Added `/v1/token/refresh` to the required protocol surface.
-- Added OAuth Security BCP, PKCE, PAR, DPoP, mTLS, and Protected Resource Metadata alignment.
-- Added discussion venues and relationship text for adjacent OAuth agent/delegation drafts.
-- Expanded privacy and audit-log minimization guidance.
-- Refreshed the implementation report with current repository package versions.
+- Narrowed DAAP to an OAuth profile; Grantex `/v1/*` paths are now a non-normative mapping.
+- Requires authenticated Principal consent; developer credentials and policy `allow` decisions cannot substitute for it.
+- Requires PAR, exact redirects, state, PKCE S256, a resource indicator, and sender-constrained tokens.
+- Uses standard `scope`, `client_id`, `cnf`, and RFC 8693 `act` semantics instead of duplicate short claims.
+- Defines safety properties for bounded lost-response refresh recovery without standardizing a premature wire parameter.
+- Makes DID use optional and requires proof of possession before an agent key is trusted.
+- Moves audit, financial budgets, policy, events, and credential vaults to candidate extension work.
+- Rewrites the implementation report as a partial-conformance gap matrix.
 
 ---
 
@@ -82,8 +82,10 @@ idnits draft-mishra-oauth-agent-grants-02.txt
 
 Confirm:
 
+- `git diff --check` is clean.
 - `draft-mishra-oauth-agent-grants-02.xml` renders successfully.
 - `draft-mishra-oauth-agent-grants-02.txt` has no blocking idnits errors.
+- Every normative reference is used and current Internet-Draft references resolve.
 - Datatracker metadata shows intended status as Informational after submission.
 - The formal author email is `mishra.sanjeev@gmail.com`; `sanjeev@orchestrum.in` is prominently listed as the alternate author contact in the draft body.
 - The implementation report still matches current package versions.
@@ -122,20 +124,21 @@ Suggested subject:
 Suggested ask:
 
 ```text
-The -02 revision updates DAAP to be more explicitly vendor-neutral, adds
-refresh-token lost-response recovery, aligns the security baseline with current
-OAuth BCP work, and adds relationship text for identity chaining, transaction
-tokens, and agent-authorization drafts.
+The -02 revision narrows DAAP to a high-assurance OAuth profile. It now requires
+PAR, exact redirects, PKCE, resource and sender binding, and authenticated human
+consent; it uses RFC 8693 for delegation and moves product operations into
+separate candidate-extension work.
 
 Feedback requested:
 
-1. Should DAAP remain a single individual profile, or should parts of it be
-   split into narrower drafts?
-2. Which pieces overlap with current OAuth WG identity-chaining and transaction
-   token work?
-3. Are the proposed JWT claim names appropriate for IANA registration, or
-   should the draft use longer/descriptive names?
-4. Would the WG consider agenda time at IETF 127 for discussion?
+1. Is a strict profile for agent client instances useful, or are existing OAuth
+   deployment profiles sufficient?
+2. Should sender constraint be mandatory for all agent clients or only for
+   high-impact resources?
+3. Does the RFC 8693 delegation treatment overlap incorrectly with current
+   identity-chaining, transaction-token, or multi-agent work?
+4. Is bounded refresh lost-response recovery worth separate wire-level work?
+5. Would the WG consider agenda time at IETF 127 for this narrowed scope?
 ```
 
 ---
