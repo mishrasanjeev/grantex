@@ -19,7 +19,7 @@
     <author fullname="Sanjeev Kumar">
       <organization>Orchestrum Technologies LLP</organization>
       <address>
-        <email>sanjeev@orchestrum.in</email>
+        <email>mishra.sanjeev@gmail.com</email>
         <uri>https://grantex.dev</uri>
       </address>
     </author>
@@ -79,8 +79,8 @@
 <t>Discussion of this draft is requested on the IETF OAuth Working Group mailing list:</t>
 
 <t><list style="symbols">
-  <t>Author contact (primary): Sanjeev Kumar, <eref target="mailto:sanjeev@orchestrum.in">sanjeev@orchestrum.in</eref></t>
-  <t>Author contact (alternate): Sanjeev Kumar, <eref target="mailto:mishra.sanjeev@gmail.com">mishra.sanjeev@gmail.com</eref></t>
+  <t>Author contact (primary): Sanjeev Kumar, <eref target="mailto:mishra.sanjeev@gmail.com">mishra.sanjeev@gmail.com</eref></t>
+  <t>Author contact (alternate): Sanjeev Kumar, <eref target="mailto:sanjeev@orchestrum.in">sanjeev@orchestrum.in</eref></t>
   <t>Mailing list: <eref target="mailto:oauth@ietf.org">oauth@ietf.org</eref></t>
   <t>Archive: <eref target="https://mailarchive.ietf.org/arch/browse/oauth/">https://mailarchive.ietf.org/arch/browse/oauth/</eref></t>
   <t>Working group: <eref target="https://datatracker.ietf.org/wg/oauth/">https://datatracker.ietf.org/wg/oauth/</eref></t>

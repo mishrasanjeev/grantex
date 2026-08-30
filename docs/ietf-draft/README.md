@@ -85,7 +85,7 @@ Confirm:
 - `draft-mishra-oauth-agent-grants-02.xml` renders successfully.
 - `draft-mishra-oauth-agent-grants-02.txt` has no blocking idnits errors.
 - Datatracker metadata shows intended status as Informational after submission.
-- The formal author email is `sanjeev@orchestrum.in`; `mishra.sanjeev@gmail.com` is prominently listed as the alternate author contact in the draft body.
+- The formal author email is `mishra.sanjeev@gmail.com`; `sanjeev@orchestrum.in` is prominently listed as the alternate author contact in the draft body.
 - The implementation report still matches current package versions.
 
 ---
@@ -95,10 +95,10 @@ Confirm:
 1. Render `draft-mishra-oauth-agent-grants-02.xml`.
 2. Go to <https://datatracker.ietf.org/submit/>.
 3. Upload `draft-mishra-oauth-agent-grants-02.xml` or `.txt`.
-4. Confirm the submission from the email sent to the formal author address, `sanjeev@orchestrum.in`.
+4. Confirm the submission from the email sent to the formal author address, `mishra.sanjeev@gmail.com`.
 5. Verify that the Datatracker page shows revision `-02`.
 
-The rendered draft also identifies `mishra.sanjeev@gmail.com` as the alternate author contact. RFCXML permits one structured email address per author record, so the Orchestrum address remains the formal Datatracker contact and both addresses appear together in the draft's **Discussion Venues** section.
+The rendered draft also identifies `sanjeev@orchestrum.in` as the alternate author contact. RFCXML permits one structured email address per author record, so the Gmail address remains the formal Datatracker contact and both addresses appear together in the draft's **Discussion Venues** section.
 
 The draft will continue to appear at:
 `https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/`
