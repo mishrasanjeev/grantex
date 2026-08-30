@@ -248,11 +248,11 @@ Internet-Draft                    DAAP                       August 2026
    Discussion of this draft is requested on the IETF OAuth Working Group
    mailing list:
 
-   *  Author contact (primary): Sanjeev Kumar, sanjeev@orchestrum.in
-      (mailto:sanjeev@orchestrum.in)
+   *  Author contact (primary): Sanjeev Kumar, mishra.sanjeev@gmail.com
+      (mailto:mishra.sanjeev@gmail.com)
 
-   *  Author contact (alternate): Sanjeev Kumar,
-      mishra.sanjeev@gmail.com (mailto:mishra.sanjeev@gmail.com)
+   *  Author contact (alternate): Sanjeev Kumar, sanjeev@orchestrum.in
+      (mailto:sanjeev@orchestrum.in)
 
    *  Mailing list: oauth@ietf.org (mailto:oauth@ietf.org)
 
@@ -2592,7 +2592,7 @@ Author's Address
 
    Sanjeev Kumar
    Orchestrum Technologies LLP
-   Email: sanjeev@orchestrum.in
+   Email: mishra.sanjeev@gmail.com
    URI:   https://grantex.dev
 
 

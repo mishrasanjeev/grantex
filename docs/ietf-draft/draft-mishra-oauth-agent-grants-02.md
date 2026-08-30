@@ -22,7 +22,7 @@ pi: [toc, sortrefs, symrefs]
 author:
   - fullname: Sanjeev Kumar
     organization: Orchestrum Technologies LLP
-    email: sanjeev@orchestrum.in
+    email: mishra.sanjeev@gmail.com
     uri: https://grantex.dev
 
 normative:
@@ -120,8 +120,8 @@ DAAP addresses these requirements as a layered profile of OAuth 2.0 concepts, re
 
 Discussion of this draft is requested on the IETF OAuth Working Group mailing list:
 
-- Author contact (primary): Sanjeev Kumar, <sanjeev@orchestrum.in>
-- Author contact (alternate): Sanjeev Kumar, <mishra.sanjeev@gmail.com>
+- Author contact (primary): Sanjeev Kumar, <mishra.sanjeev@gmail.com>
+- Author contact (alternate): Sanjeev Kumar, <sanjeev@orchestrum.in>
 - Mailing list: <oauth@ietf.org>
 - Archive: <https://mailarchive.ietf.org/arch/browse/oauth/>
 - Working group: <https://datatracker.ietf.org/wg/oauth/>
