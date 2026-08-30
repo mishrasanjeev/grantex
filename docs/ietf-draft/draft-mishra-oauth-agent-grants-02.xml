@@ -79,6 +79,8 @@
 <t>Discussion of this draft is requested on the IETF OAuth Working Group mailing list:</t>
 
 <t><list style="symbols">
+  <t>Author contact (primary): Sanjeev Kumar, <eref target="mailto:sanjeev@orchestrum.in">sanjeev@orchestrum.in</eref></t>
+  <t>Author contact (alternate): Sanjeev Kumar, <eref target="mailto:mishra.sanjeev@gmail.com">mishra.sanjeev@gmail.com</eref></t>
   <t>Mailing list: <eref target="mailto:oauth@ietf.org">oauth@ietf.org</eref></t>
   <t>Archive: <eref target="https://mailarchive.ietf.org/arch/browse/oauth/">https://mailarchive.ietf.org/arch/browse/oauth/</eref></t>
   <t>Working group: <eref target="https://datatracker.ietf.org/wg/oauth/">https://datatracker.ietf.org/wg/oauth/</eref></t>
@@ -94,7 +96,7 @@
 <t>This revision makes the following changes:</t>
 
 <t><list style="symbols">
-  <t>Updates the author organization and primary contact address.</t>
+  <t>Updates the author organization and prominently identifies both the primary and alternate author contact addresses.</t>
   <t>Clarifies that DAAP is vendor-neutral and that Grantex is a reference implementation rather than a required authority, DID method, JSON-LD context, or policy path.</t>
   <t>Adds a bounded lost-response recovery rule for refresh token rotation. Authorization Servers <bcp14>MAY</bcp14> replay the immediately previous refresh token response for no more than 300 seconds and only while the Grant remains active.</t>
   <t>Adds explicit alignment with the OAuth 2.0 Security Best Current Practice, PKCE, Pushed Authorization Requests, DPoP, mutual TLS, and Protected Resource Metadata.</t>

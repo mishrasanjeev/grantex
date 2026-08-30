@@ -120,6 +120,8 @@ DAAP addresses these requirements as a layered profile of OAuth 2.0 concepts, re
 
 Discussion of this draft is requested on the IETF OAuth Working Group mailing list:
 
+- Author contact (primary): Sanjeev Kumar, <sanjeev@orchestrum.in>
+- Author contact (alternate): Sanjeev Kumar, <mishra.sanjeev@gmail.com>
 - Mailing list: <oauth@ietf.org>
 - Archive: <https://mailarchive.ietf.org/arch/browse/oauth/>
 - Working group: <https://datatracker.ietf.org/wg/oauth/>
@@ -132,7 +134,7 @@ This is an individual Internet-Draft. Publication as an Internet-Draft does not 
 
 This revision makes the following changes:
 
-- Updates the author organization and primary contact address.
+- Updates the author organization and prominently identifies both the primary and alternate author contact addresses.
 - Clarifies that DAAP is vendor-neutral and that Grantex is a reference implementation rather than a required authority, DID method, JSON-LD context, or policy path.
 - Adds a bounded lost-response recovery rule for refresh token rotation. Authorization Servers MAY replay the immediately previous refresh token response for no more than 300 seconds and only while the Grant remains active.
 - Adds explicit alignment with the OAuth 2.0 Security Best Current Practice, PKCE, Pushed Authorization Requests, DPoP, mutual TLS, and Protected Resource Metadata.
