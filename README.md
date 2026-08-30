@@ -1742,7 +1742,7 @@ Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRI
 | **OWASP** | Covers ASI-01, ASI-03, ASI-05, ASI-10 from the [Agentic Security Top 10](https://docs.grantex.dev/blog/owasp-agentic-top-10-compliance) (Dec 2025) |
 | **EU AI Act** | Technical control mapping only, not legal advice. Application is phased: transparency rules from Aug 2026, certain high-risk rules from Dec 2027, and product-integrated high-risk rules from Aug 2028 under the political agreement. See the [European Commission timeline](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai). |
 | **NIST AI RMF** | Govern 1.1, Map 5.1, Measure 2.5 — repository comment draft; no public submission receipt or endorsement |
-| **IETF** | Active individual Internet-Draft -01; not adopted or endorsed by the IETF ([draft-mishra-oauth-agent-grants-01](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
+| **IETF** | Active individual Internet-Draft; current Datatracker revision is -01, with a -02 submission candidate prepared in [`docs/ietf-draft/`](docs/ietf-draft/). Not adopted or endorsed by the IETF ([Datatracker](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
 | **AuthZEN** | Conformance mapped |
 | **SOC 2** | Readiness control mapping published; formal third-party attestation not published |
 | **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, open, Apache 2.0 |

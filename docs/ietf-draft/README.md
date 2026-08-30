@@ -1,16 +1,40 @@
 # IETF Internet-Draft: Delegated Agent Authorization Protocol (DAAP)
 
-**Draft name:** `draft-mishra-oauth-agent-grants-01`
-**Target:** IETF OAuth Working Group (oauth@ietf.org)
-**Status:** Active individual Internet-Draft — revision 01 (published March 2, 2026; expires September 3, 2026)
+**Current Datatracker draft:** `draft-mishra-oauth-agent-grants-01`
+**Prepared source candidate:** `draft-mishra-oauth-agent-grants-02`
+**Target:** IETF OAuth Working Group (`oauth@ietf.org`)
+**Status:** Active individual Internet-Draft; not IETF-endorsed and not OAuth WG-adopted
 
-Authoritative record: <https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/>. An individual Internet-Draft is not endorsed by the IETF and has no formal standards standing unless adopted and advanced through the IETF process.
+Authoritative record: <https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/>.
+
+The Datatracker still shows `-01` until `-02` is submitted and confirmed by email. The `-02` source in this directory is the next submission candidate.
 
 ---
 
-## Document
+## Document Sources
 
-The Internet-Draft is in [`draft-mishra-oauth-agent-grants-01.md`](./draft-mishra-oauth-agent-grants-01.md), written in [kramdown-rfc2629](https://github.com/cabo/kramdown-rfc) format — a Markdown superset that compiles to RFC XML (RFC 7991) and from there to canonical IETF text and HTML.
+| File | Purpose |
+|------|---------|
+| [`draft-mishra-oauth-agent-grants-02.md`](./draft-mishra-oauth-agent-grants-02.md) | Current submission candidate in kramdown-rfc2629 Markdown |
+| [`implementation-report.md`](./implementation-report.md) | Reference implementation status for reviewers |
+| `draft-mishra-oauth-agent-grants-01.*` | Last published revision artifacts |
+| `draft-mishra-oauth-agent-grants-00.*` | Initial submitted revision artifacts |
+
+Do not edit the published `-00` or `-01` artifacts when preparing the next submission. Keep each submitted revision immutable in git so reviewer diffs remain meaningful.
+
+---
+
+## What Changed in `-02`
+
+- Updated author organization and contact metadata to Orchestrum Technologies LLP / Sanjeev Kumar.
+- Clarified that DAAP is vendor-neutral and that Grantex is a reference implementation.
+- Replaced Grantex-specific normative examples with reserved example identifiers/domains.
+- Added a bounded refresh-token lost-response recovery rule: maximum 300 seconds, same already-rotated response, no grant-lifetime extension.
+- Added `/v1/token/refresh` to the required protocol surface.
+- Added OAuth Security BCP, PKCE, PAR, DPoP, mTLS, and Protected Resource Metadata alignment.
+- Added discussion venues and relationship text for adjacent OAuth agent/delegation drafts.
+- Expanded privacy and audit-log minimization guidance.
+- Refreshed the implementation report with current repository package versions.
 
 ---
 
@@ -26,90 +50,121 @@ pip install xml2rfc
 ### Build
 
 ```bash
-# Markdown → RFC XML
-kdrfc draft-mishra-oauth-agent-grants-01.md
+cd docs/ietf-draft
 
-# RFC XML → text (canonical IETF format)
-xml2rfc draft-mishra-oauth-agent-grants-01.xml --text
+# Markdown -> RFC XML
+kdrfc draft-mishra-oauth-agent-grants-02.md
 
-# RFC XML → HTML
-xml2rfc draft-mishra-oauth-agent-grants-01.xml --html
+# RFC XML -> text (canonical IETF format)
+xml2rfc draft-mishra-oauth-agent-grants-02.xml --text
 
-# RFC XML → PDF
-xml2rfc draft-mishra-oauth-agent-grants-01.xml --pdf
+# RFC XML -> HTML
+xml2rfc draft-mishra-oauth-agent-grants-02.xml --html
+
+# RFC XML -> PDF, optional
+xml2rfc draft-mishra-oauth-agent-grants-02.xml --pdf
 ```
 
-Output files: `draft-mishra-oauth-agent-grants-01.txt`, `.html`, `.pdf`.
+Output files: `draft-mishra-oauth-agent-grants-02.txt`, `.html`, and optionally `.pdf`.
 
-Alternatively, paste the XML into the [IETF Author Tools](https://author-tools.ietf.org/) web interface for a one-click render.
+If local Ruby/xml2rfc tooling is unavailable, paste the Markdown or XML into the [IETF Author Tools](https://author-tools.ietf.org/) renderer and use the generated XML/TXT artifacts.
+
+---
+
+## Pre-Submission Checklist
+
+Run these checks before uploading:
+
+```bash
+cd docs/ietf-draft
+idnits draft-mishra-oauth-agent-grants-02.txt
+```
+
+Confirm:
+
+- `draft-mishra-oauth-agent-grants-02.xml` renders successfully.
+- `draft-mishra-oauth-agent-grants-02.txt` has no blocking idnits errors.
+- Datatracker metadata shows intended status as Informational after submission.
+- Author email is correct and reachable for confirmation.
+- The implementation report still matches current package versions.
 
 ---
 
 ## Submitting to the IETF Datatracker
 
-1. Render the XML as above, or use `kdrfc` to produce the `.xml` file directly.
-2. Go to **https://datatracker.ietf.org/submit/**.
-3. Upload `draft-mishra-oauth-agent-grants-01.xml` (or `.txt`).
-4. The Datatracker will validate the document, assign a submission ID, and send a confirmation email to the address listed in the author block (`sanjeev@orchestrum.in`).
-5. Confirm the submission via the email link.
+1. Render `draft-mishra-oauth-agent-grants-02.xml`.
+2. Go to <https://datatracker.ietf.org/submit/>.
+3. Upload `draft-mishra-oauth-agent-grants-02.xml` or `.txt`.
+4. Confirm the submission from the email sent to `sanjeev@orchestrum.in`.
+5. Verify that the Datatracker page shows revision `-02`.
 
-The draft will appear at:
+The draft will continue to appear at:
 `https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/`
 
 ---
 
-## Announcing to the Working Group
+## Announcing to the OAuth Working Group
 
-Post to the OAuth WG mailing list after the Datatracker submission is confirmed:
+After Datatracker confirmation, post to the OAuth WG mailing list:
 
-- **List:** oauth@ietf.org
-- **Archive:** https://mailarchive.ietf.org/arch/browse/oauth/
-- **Subscribe:** https://www.ietf.org/mailman/listinfo/oauth
+- List: `oauth@ietf.org`
+- Archive: <https://mailarchive.ietf.org/arch/browse/oauth/>
+- Subscribe: <https://www.ietf.org/mailman/listinfo/oauth>
 
-Suggested subject line:
+Suggested subject:
+
+```text
+[oauth] Updated individual draft: draft-mishra-oauth-agent-grants-02 (DAAP)
 ```
-[oauth] New individual draft: draft-mishra-oauth-agent-grants-01 (Delegated Agent Authorization Protocol)
+
+Suggested ask:
+
+```text
+The -02 revision updates DAAP to be more explicitly vendor-neutral, adds
+refresh-token lost-response recovery, aligns the security baseline with current
+OAuth BCP work, and adds relationship text for identity chaining, transaction
+tokens, and agent-authorization drafts.
+
+Feedback requested:
+
+1. Should DAAP remain a single individual profile, or should parts of it be
+   split into narrower drafts?
+2. Which pieces overlap with current OAuth WG identity-chaining and transaction
+   token work?
+3. Are the proposed JWT claim names appropriate for IANA registration, or
+   should the draft use longer/descriptive names?
+4. Would the WG consider agenda time at IETF 127 for discussion?
 ```
 
 ---
 
-## Revision Process
+## Dates
 
-IETF Internet-Drafts expire after **6 months** from submission. To keep the draft alive:
+- `-01` expires: 2026-09-03
+- IETF 127: 2026-11-14 through 2026-11-20, San Francisco
+- BOF proposal cutoff: 2026-09-18
+- WG meeting request cutoff: 2026-10-02
+- IETF 127 Internet-Draft submission cutoff: 2026-11-02 23:59 UTC
 
-1. Incorporate working group feedback.
-2. Increment the version number (`-01`, `-02`, …).
-3. Re-submit to the Datatracker before the expiry date.
-
-The expiry date is shown on the Datatracker page for the draft.
+Submit `-02` before the `-01` expiry. The IETF 127 cutoff is later, but waiting for that date would allow this draft to expire first.
 
 ---
 
-## Path to Standards Track
+## Path Toward WG Adoption
 
 | Stage | Action |
 |-------|--------|
-| Individual I-D | Submit `draft-mishra-oauth-agent-grants-01` to Datatracker ← **current** |
-| WG adoption | Request adoption at an IETF meeting or on the mailing list after gathering support |
-| WG I-D | Rename to `draft-ietf-oauth-agent-grants-00` upon WG adoption |
-| WGLC | Working Group Last Call — two-week review period |
-| IESG review | Internet Engineering Steering Group review and approval |
-| RFC publication | Assigned an RFC number by the RFC Editor |
+| Individual I-D | Submit `draft-mishra-oauth-agent-grants-02` to Datatracker |
+| Mailing list review | Ask OAuth WG for technical feedback and overlap review |
+| Agenda time | Ask OAuth chairs whether DAAP should be discussed at IETF 127 |
+| Scope refinement | Split or profile the draft if the WG prefers narrower documents |
+| WG adoption | Request adoption only after support appears on-list |
+| WG I-D | Rename to `draft-ietf-oauth-agent-grants-00` if adopted |
+| WGLC | Working Group Last Call |
+| IESG review | IESG review and approval |
+| RFC publication | RFC Editor publication if approved |
 
 ---
-
-## Related RFCs
-
-| RFC | Title | Relationship |
-|-----|-------|--------------|
-| RFC 6749 | OAuth 2.0 | Foundation — DAAP extends the grant flow model |
-| RFC 7519 | JSON Web Token (JWT) | Grant Token format |
-| RFC 7517 | JSON Web Key (JWK) | JWKS endpoint for offline verification |
-| RFC 7518 | JSON Web Algorithms | RS256 algorithm specification |
-| RFC 7636 | PKCE | Planned for DAAP v1.1 |
-| RFC 8693 | Token Exchange | Related — DAAP delegation vs. general token exchange |
-| RFC 7662 | Token Introspection | Related — DAAP `/v1/tokens/verify` serves a similar role |
-| RFC 8725 | JWT Best Practices | Algorithm restriction guidance |
 
 ## Ownership
 
