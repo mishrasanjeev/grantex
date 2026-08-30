@@ -1,6 +1,6 @@
 # Grantex — Full Implementation Brief for AI Assistants
 
-> Last updated: 2026-08-10
+> Last updated: 2026-08-30
 > Public release snapshot verified: 2026-08-10
 
 Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
@@ -50,6 +50,18 @@ The Grantex protocol specification is open and frozen at version 1.0. The relate
 
 - Grantex specification v1.0: https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md
 - Delegated Agent Authorization Protocol (DAAP) Internet-Draft: https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/
+
+The Datatracker publication is revision -02. Candidate -03 and its Grantex
+client, authorization-server, and resource-server implementation are under
+review. The implementation requires PAR, PKCE S256, DPoP sender constraints,
+RFC 9207 issuer validation, rotating refresh tokens, same-resource token
+attenuation, and revocation. It passed 2,097 auth-service tests, 444 TypeScript
+SDK tests, and 253 Docker E2E tests. This is self-assessed evidence, not
+independent interoperability certification, OAuth Working Group adoption, or
+IETF endorsement. OAuthAgentClient is repository source and should not be
+assumed present in published @grantex/sdk@0.3.13.
+
+Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 
 ## Which Package Should an Implementation Use?
 

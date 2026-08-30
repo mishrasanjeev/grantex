@@ -16,6 +16,20 @@ Revision `-02` was posted on 2026-08-30. Revision `-03` is a repository candidat
 
 > **Submission hold:** Revision `-03` must not be uploaded before 2026-09-09. A final review is scheduled for 2026-09-06 through 2026-09-09, followed by a new explicit approval. No automated submission is authorized.
 
+## Implementation Snapshot
+
+| Role or artifact | Repository status |
+|---|---|
+| Authorization server | RFC 8414 metadata, PAR, authorization code plus PKCE, DPoP binding, refresh rotation, RFC 8693 attenuation, and RFC 7009 revocation implemented |
+| Resource server | DPoP authorization scheme, `ath`, audience, scope, sender-key, expiry, grant-state, and revocation checks implemented |
+| TypeScript client | Discovery, PAR, callback validation, token lifecycle, DPoP, and protected-resource helper implemented in repository source |
+| Evidence | 2,097 auth-service tests, 444 SDK tests, and 253 Docker E2E tests passed |
+| Independent interoperability | Not yet established; requires another implementation and cross-vendor testing |
+
+See the [OAuth Agent Grants implementation guide](/guides/oauth-agent-grants)
+for the hosted endpoint map, flow, operational requirements, and published-SDK
+boundary.
+
 ## Document
 
 The Internet-Draft source is written in [kramdown-rfc2629](https://github.com/cabo/kramdown-rfc) format, a Markdown superset that compiles to RFC XML and from there to canonical IETF text and HTML.

@@ -11,6 +11,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Spec Version](https://img.shields.io/badge/spec-v1.0--final-green)](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
 [![IETF Draft](https://img.shields.io/badge/IETF-draft--mishra--oauth--agent--grants-blue)](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
+[![OAuth Agent Grants](https://img.shields.io/badge/OAuth_agent_grants-self--tested-3fb950)](https://docs.grantex.dev/guides/oauth-agent-grants)
 [![CI](https://img.shields.io/github/actions/workflow/status/mishrasanjeev/grantex/ci.yml?branch=main&label=CI)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@grantex/sdk)](https://www.npmjs.com/package/@grantex/sdk)
 [![PyPI](https://img.shields.io/pypi/v/grantex)](https://pypi.org/project/grantex/)
@@ -43,6 +44,32 @@
 Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
 Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal. Use Grantex when an AI agent acts for a person or organization and a relying service must verify exactly what that agent may do.
+
+## OAuth Agent Grants Profile
+
+The hosted auth service and repository TypeScript client implement the three
+roles in candidate `draft-mishra-oauth-agent-grants-03`. The tested profile
+requires PAR, PKCE `S256`, DPoP sender constraints, RFC 9207 response issuer
+validation, five-minute access tokens, rotating refresh tokens with family
+replay revocation, same-resource RFC 8693 attenuation, and RFC 7009 revocation.
+
+| Discovery and endpoints | URL |
+|---|---|
+| Authorization-server metadata | `https://grantex.dev/.well-known/oauth-authorization-server` |
+| PAR / authorize / token / revoke | `https://grantex.dev/oauth/{par,authorize,token,revoke}` |
+| Implementation guide | [docs.grantex.dev/guides/oauth-agent-grants](https://docs.grantex.dev/guides/oauth-agent-grants) |
+| Evidence | [Implementation report](docs/ietf-draft/implementation-report.md) and [30 behavioral vectors](docs/ietf-draft/test-vectors/oauth-agent-grants-03.json) |
+
+Verification completed with 2,097 auth-service tests, 444 SDK tests, and 253
+tests across 21 sequential Docker E2E files. This is self-assessed evidence for
+the tested Grantex configuration, not independent interoperability
+certification, OAuth Working Group adoption, or IETF endorsement. The
+`OAuthAgentClient` API is currently repository source; verify a newer npm
+release before assuming it is present in published `@grantex/sdk@0.3.13`.
+
+Revision `-02` remains the current Datatracker publication. Candidate `-03`
+must not be uploaded before 2026-09-09 and requires a fresh explicit approval
+after the scheduled final review.
 
 ## Open Agentic Commerce Protocol (OACP) Authority
 

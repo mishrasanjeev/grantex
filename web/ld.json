@@ -242,7 +242,7 @@
           "name": "Is Grantex an IETF standard?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. The Grantex protocol specification is open and frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft for discussion, not an IETF-adopted or endorsed standard."
+            "text": "No. Revision -02 is an active individual Internet-Draft. Candidate -03 and its self-assessed Grantex client, authorization-server, and resource-server implementation are under review; this is not working-group adoption, independent certification, or IETF endorsement."
           }
         }
       ]
