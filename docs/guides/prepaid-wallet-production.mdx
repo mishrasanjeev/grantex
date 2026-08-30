@@ -1,0 +1,296 @@
+---
+title: "Prepaid Wallet Production Readiness"
+sidebarTitle: "Wallet Production Readiness"
+description: "External dependencies, deployment boundaries, routing, notification delivery, merchant recovery, and release checks for self-hosted Grantex prepaid wallets and x402 v2."
+---
+
+Use this checklist before enabling prepaid-wallet or x402 traffic in a
+self-hosted environment. Repository tests prove the Grantex authorization and
+`sandbox_ledger` paths; they do not provision a custody provider, merchant
+recovery store, notification channel, or regulatory approval for the operator.
+
+## Dependency matrix
+
+| Dependency | Required when | Current repository behavior | Operator action |
+| --- | --- | --- | --- |
+| PostgreSQL migration `091_agent_prepaid_wallets.sql` | Always | Startup applies ordered migrations automatically | Back up PostgreSQL, deploy the exact repository migration set, and verify startup completed before sending traffic |
+| Public HTTPS routing | The issuer or wallet resource uses a public host | DPoP tokens bind the exact `/v1/prepaid-wallets` audience | Route the exact public wallet and OAuth paths to the auth service; do not rewrite them to static HTML |
+| `@grantex/sdk@0.4.0` and `@grantex/x402@0.2.0` | Applications install managed-wallet clients from npm | Source contains the APIs; npm publication is separate from server deployment | Until both versions are registry-verified, use a pinned repository checkout rather than claiming npm availability |
+| External custody adapter | Real bank, card, on-chain, or provider-held funds | `external` wallets fail with `503 CUSTODY_ADAPTER_UNAVAILABLE` | Implement and independently test provider funding, reservation, settlement, reconciliation, duplicate-event handling, and recovery |
+| Principal notification bridge | A human must receive reload alerts outside the Grantex UI | Wallet reload events are emitted to the event bus; no built-in email/SMS/chat delivery is claimed | Consume SSE/WebSocket events and deliver through an approved channel, or separately extend and test webhook registration for wallet events |
+| Merchant idempotency store | A paid request has side effects | Grantex makes reservation and settlement retries idempotent | Atomically store the merchant's business result under the caller's HTTP `Idempotency-Key` |
+| Independent security, provider, and legal review | Real-money or regulated use | The repository makes no certification or stored-value claim | Complete threat review, penetration testing, provider approval, reconciliation sign-off, incident runbooks, and applicable legal/regulatory review |
+
+## Choose the custody mode honestly
+
+`sandbox_ledger` is complete local/off-chain accounting with PostgreSQL as the
+system of record. It is suitable for development, deterministic integration
+tests, and deployments that explicitly intend to operate an internal ledger.
+It is not a bank account, prepaid card, on-chain balance, proof of external
+funds, or a regulated stored-value product.
+
+`external` records provider identifiers but is intentionally unusable for
+funding, authorization, and settlement until provider-specific code verifies
+provider state. Do not turn arbitrary provider references into balance. A
+production adapter must, at minimum:
+
+- authenticate signed provider webhooks and reject stale or replayed events;
+- deduplicate funding and settlement references transactionally;
+- reconcile Grantex available/reserved amounts with provider state;
+- reserve and settle through provider-supported atomic or compensating flows;
+- persist provider transaction and evidence references without exposing
+  credentials to agents;
+- define timeout, partial failure, reversal, dispute, and restart recovery;
+- fail closed when provider state is unavailable or ambiguous.
+
+## Route the public resource
+
+Set `JWT_ISSUER` to the exact issuer URL used in tokens and
+`PUBLIC_BASE_URL` to the browser-reachable origin. In a normal reverse-proxy
+deployment, route the entire API origin to the auth service. If a static host
+and API share one domain, explicitly forward at least:
+
+```text
+/.well-known/oauth-authorization-server
+/.well-known/jwks.json
+/oauth/**
+/consent
+/v1/consent/**
+/v1/webauthn/**
+/v1/prepaid-wallets
+/v1/prepaid-wallets/**
+/v1/principal-sessions
+/v1/principal/prepaid-wallets
+/v1/principal/prepaid-wallets/**
+/v1/principal/prepaid-wallet-assignments/**
+/v1/principal/prepaid-wallet-agents/**
+/v1/principal/prepaid-wallet-reload-requests/**
+/v1/principal/prepaid-wallet-reservations/**
+/v1/x402/supported
+/v1/x402/verify
+/v1/x402/settle
+```
+
+The OAuth resource and access-token audience must be the same exact URL, for
+example `https://auth.example.com/v1/prepaid-wallets`. TLS is required outside
+loopback development. A static-host `404` at this path means the agent cannot
+list wallets, request reloads, or authorize a payment even if Cloud Run or the
+origin service itself is healthy.
+
+After deployment, unauthenticated probes should reach the auth service and fail
+with structured authentication errors, not HTML:
+
+```powershell
+$Base = 'https://auth.example.com'
+
+$List = Invoke-WebRequest "$Base/v1/prepaid-wallets" `
+  -Method Get -SkipHttpErrorCheck
+$Authorize = Invoke-WebRequest "$Base/v1/prepaid-wallets/authorizations" `
+  -Method Post -ContentType 'application/json' -Body '{}' -SkipHttpErrorCheck
+
+if ($List.StatusCode -ne 401 -or $List.Content -notmatch 'INVALID_TOKEN') {
+  throw 'The prepaid-wallet base route does not reach the auth service.'
+}
+if ($Authorize.StatusCode -ne 401 -or $Authorize.Content -notmatch 'INVALID_TOKEN') {
+  throw 'The prepaid-wallet wildcard route does not reach the auth service.'
+}
+```
+
+## Preserve the financial evidence store
+
+Migration `091_agent_prepaid_wallets.sql` creates wallet, assignment,
+reservation, reload, control, and append-only ledger structures. Treat
+PostgreSQL as durable financial evidence:
+
+- take and restore-test backups before and after migration;
+- run every auth-service instance against the same authoritative database;
+- monitor migration completion before marking a new instance ready;
+- retain ledger and audit records according to an approved policy;
+- never repair balances by deleting ledger or reservation rows;
+- reconcile `available_amount`, `reserved_amount`, ledger entries, and any
+  provider evidence before reopening a blocked wallet.
+
+Redis is required for the service and real-time event delivery, but PostgreSQL
+remains the wallet system of record.
+
+## Deliver reload notifications
+
+The service emits `wallet.low_balance`, `wallet.reload.requested`,
+`wallet.reload.approved`, `wallet.reload.rejected`, and `wallet.reloaded`
+events. Agents can request a reload but cannot approve or fund it.
+
+There is no built-in promise that a reload request reaches email, SMS, Slack,
+WhatsApp, or another human channel. The current public webhook-registration API
+accepts only its documented grant/token event allowlist. For wallet alerts,
+operate an authenticated SSE/WebSocket consumer and bridge events to the
+principal's approved channel, or implement a separately reviewed webhook
+extension. The bridge must deduplicate by event ID, retry durably, protect
+principal contact data, and expose delivery failures to operators.
+
+Do not auto-approve or auto-fund merely because a notification was delivered.
+The principal decision and funding calls remain separate authenticated actions.
+
+## Make merchant work recoverable
+
+For a side-effecting paid request, the resource server must use this order:
+
+1. Validate the x402 request and call `/v1/x402/verify`.
+2. Complete `/v1/x402/settle` successfully.
+3. Atomically create or retrieve the protected business result under the
+   caller's HTTP `Idempotency-Key`.
+4. Return the cached result on an identical retry.
+
+The SDK `idempotencyKey` recovers a Grantex reservation response lost before
+settlement. The HTTP `Idempotency-Key` recovers merchant work lost after
+settlement. They should contain the same durable logical operation ID, but one
+does not replace the other.
+
+## Registry availability
+
+Server deployment and npm publication are independent. A self-hosted server can
+run repository source while its application consumers still resolve older npm
+packages. Check the registry before deployment:
+
+```powershell
+npm view '@grantex/sdk' version
+npm view '@grantex/x402' version
+```
+
+Verified August 30, 2026: repository source is SDK `0.4.0` and x402 `0.2.0`,
+while the registry releases are SDK `0.3.13` and x402 `0.1.2`. Treat the
+registry as authoritative and pin exact versions. See [Release
+Status](/release-status) for the public artifact matrix.
+
+## Maintainer-only PowerShell publication
+
+Publishing is irreversible for an already consumed version. Run this only as
+an npm maintainer of the `@grantex` scope, from a reviewed and clean `main`.
+Direct publication requires npm publishing permission and either account 2FA or
+an appropriately restricted publishing credential.
+
+### 1. Verify repository and registry state
+
+```powershell
+Set-Location 'C:\path\to\grantex'
+git fetch origin
+
+if (git status --porcelain) {
+  throw 'Working tree must be clean before publishing.'
+}
+if ((git rev-parse HEAD) -ne (git rev-parse origin/main)) {
+  throw 'HEAD must exactly match origin/main.'
+}
+
+npm login --registry='https://registry.npmjs.org/'
+npm whoami
+npm owner ls '@grantex/sdk'
+npm owner ls '@grantex/x402'
+
+$SdkTarget = (Get-Content packages/sdk-ts/package.json | ConvertFrom-Json).version
+$X402Target = (Get-Content packages/x402/package.json | ConvertFrom-Json).version
+
+npm view '@grantex/sdk' version
+npm view '@grantex/x402' version
+
+$SdkExisting = npm view "@grantex/sdk@$SdkTarget" version 2>$null
+if ($LASTEXITCODE -eq 0) {
+  throw "@grantex/sdk@$SdkTarget already exists: $SdkExisting"
+}
+
+$X402Existing = npm view "@grantex/x402@$X402Target" version 2>$null
+if ($LASTEXITCODE -eq 0) {
+  throw "@grantex/x402@$X402Target already exists: $X402Existing"
+}
+```
+
+Stop if either target version already exists. npm will not let a version be
+overwritten, and changing tags is not a substitute for a new version.
+
+### 2. Build, test, audit, and inspect both packages
+
+```powershell
+npm ci --prefix packages/sdk-ts
+npm run typecheck --prefix packages/sdk-ts
+npm test --prefix packages/sdk-ts
+npm run build --prefix packages/sdk-ts
+npm audit --prefix packages/sdk-ts --omit=dev
+
+npm ci --prefix packages/x402
+npm run typecheck --prefix packages/x402
+npm test --prefix packages/x402
+npm run build --prefix packages/x402
+npm audit --prefix packages/x402 --omit=dev
+
+Push-Location packages/sdk-ts
+try { npm pack --dry-run } finally { Pop-Location }
+
+Push-Location packages/x402
+try { npm pack --dry-run } finally { Pop-Location }
+```
+
+Review the `npm pack --dry-run` file lists. Each package should contain its
+compiled `dist` output, `README.md`, package metadata, and no keys, credentials,
+environment files, test fixtures, or unrelated repository content.
+
+### 3. Publish in dependency order
+
+Publish the SDK first. Let npm prompt for the one-time code instead of placing
+an OTP in shell history.
+
+```powershell
+Push-Location packages/sdk-ts
+try { npm publish --access public --tag latest } finally { Pop-Location }
+
+npm view "@grantex/sdk@$SdkTarget" version dist.integrity dist.tarball --json
+
+Push-Location packages/x402
+try { npm publish --access public --tag latest } finally { Pop-Location }
+
+npm view "@grantex/x402@$X402Target" version dist.integrity dist.tarball --json
+```
+
+Do not continue to x402 if SDK publication or registry verification fails.
+
+### 4. Test the registry artifacts
+
+```powershell
+$Smoke = Join-Path $env:TEMP "grantex-npm-smoke-$([guid]::NewGuid())"
+New-Item -ItemType Directory -Path $Smoke | Out-Null
+npm init --yes --prefix $Smoke | Out-Null
+npm install --prefix $Smoke --save-exact `
+  "@grantex/sdk@$SdkTarget" "@grantex/x402@$X402Target"
+
+Push-Location $Smoke
+try {
+  node --input-type=module -e `
+    "import { PrepaidWalletAgentClient } from '@grantex/sdk'; import { createX402Agent } from '@grantex/x402'; if (!PrepaidWalletAgentClient || !createX402Agent) process.exit(1); console.log('registry smoke: pass')"
+} finally {
+  Pop-Location
+}
+```
+
+After registry smoke passes, tag the exact reviewed commit and update
+`release-status.json`, `web/release-status.json`, `COMPATIBILITY.md`, the root
+README, release documentation, and public website notices in one release PR.
+Do not describe the packages as published until the exact registry queries
+above succeed.
+
+For stronger future releases, configure npm trusted publishing from a dedicated
+GitHub Actions workflow with OIDC and provenance instead of maintaining a
+long-lived npm token. See npm's official [scoped public package
+publishing](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/)
+and [trusted publishing](https://docs.npmjs.com/trusted-publishers/)
+documentation before changing the release mechanism.
+
+## Go-live checklist
+
+- [ ] Exact repository commit and npm package versions are recorded.
+- [ ] Migration `091_agent_prepaid_wallets.sql` completed and backup restore was tested.
+- [ ] Public OAuth, wallet, principal, and x402 routes reach the auth service over TLS.
+- [ ] DPoP tokens use the exact public wallet audience.
+- [ ] `sandbox_ledger` or `external` custody behavior is described accurately to users.
+- [ ] External custody remains disabled unless the provider adapter and reconciliation runbook passed review.
+- [ ] Reload alerts have a monitored consumer and delivery-failure path.
+- [ ] Merchant handlers persist results by HTTP `Idempotency-Key` after settlement.
+- [ ] Wallet blocking, reservation release, reload approval, restart recovery, and provider outage drills passed.
+- [ ] Security, privacy, financial, and regulatory owners approved the intended production use.

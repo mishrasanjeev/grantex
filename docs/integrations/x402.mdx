@@ -18,6 +18,16 @@ new release is published. `sandbox_ledger` is a complete local ledger mode.
 funding and settlement.
 </Note>
 
+<Warning>
+Self-hosting the auth service does not create an external custody rail, reload
+notification channel, or merchant result store. Before production, complete
+the [Prepaid Wallet Production Readiness](/guides/prepaid-wallet-production)
+checklist. In particular, route the exact public `/v1/prepaid-wallets`
+audience to the auth service, keep `external` custody fail-closed until a real
+adapter is installed, bridge wallet events to the principal's chosen channel,
+and make merchant side effects idempotent under the HTTP `Idempotency-Key`.
+</Warning>
+
 ## Security model
 
 | Control | Enforcement point |

@@ -161,9 +161,15 @@ const authorization = await agentWallets.authorizePayment({
 });
 ```
 
-Amounts are atomic-unit integer strings. The 0.4.0 code is unreleased until a
-new npm package is published; the registry's current 0.3.13 package does not
-contain these classes.
+Amounts are atomic-unit integer strings. Managed prepaid-wallet APIs are
+available in `@grantex/sdk` 0.4.0 and later.
+
+Self-hosted wallet deployments must also provide correct public resource
+routing, migration `091`, durable notification delivery, merchant-side
+idempotency, and any external custody/provider integration. See [Prepaid Wallet
+Production
+Readiness](https://docs.grantex.dev/guides/prepaid-wallet-production);
+installing the SDK alone does not provide those dependencies.
 
 ## Commerce V1 / OACP
 

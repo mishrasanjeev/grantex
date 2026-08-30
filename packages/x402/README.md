@@ -3,16 +3,35 @@
 Official x402 v2 fetch integration for principal-controlled Grantex prepaid
 wallets, plus legacy standalone GDT authorization utilities.
 
-## Published package (legacy GDT surface)
+## Install
 
 ```bash
 npm install @grantex/x402 @grantex/sdk
 ```
 
-The registry package does not yet contain the managed prepaid-wallet APIs below.
-Those APIs are repository source in `@grantex/x402@0.2.0` and
-`@grantex/sdk@0.4.0`; use this monorepo checkout for development until both
-versions are published.
+Managed prepaid-wallet APIs require `@grantex/x402` 0.2.0 or later and
+`@grantex/sdk` 0.4.0 or later.
+
+## Production hosting dependencies
+
+Installing these packages does not provision a production payment system.
+Operators must route the exact public `/v1/prepaid-wallets` OAuth audience to
+the auth service over TLS, apply the repository's wallet database migration,
+and preserve PostgreSQL ledger evidence. `external` custody remains fail-closed
+until a provider adapter verifies funding, settlement, duplicate events,
+reconciliation, and recovery.
+
+Reload events require an operator-managed SSE/WebSocket bridge to email, SMS,
+or messaging when a principal must be notified outside Grantex. Side-effecting
+merchants must atomically cache their business result by the forwarded HTTP
+`Idempotency-Key`; Grantex reservation idempotency cannot recreate merchant
+work after a lost response. Complete independent security, provider, and
+applicable legal/regulatory review before real-money use.
+
+See the [production-readiness
+guide](https://docs.grantex.dev/guides/prepaid-wallet-production) for the full
+dependency matrix, route probes, go-live checklist, and PowerShell publication
+runbook.
 
 ## Managed prepaid flow
 

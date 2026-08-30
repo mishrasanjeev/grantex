@@ -141,7 +141,10 @@ helm install grantex deploy/helm/grantex/ \
 
 ## 5. Environment Variable Reference
 
-This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth-service/src/config.ts` and `.env.example` from the exact release you deploy for all feature-specific settings and validation rules.
+This table is a quick-start subset, not an exhaustive schema. Consult
+`apps/auth-service/src/config.ts` and `apps/auth-service/.env.example` from the
+exact release you deploy for all feature-specific settings and validation
+rules.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -163,7 +166,11 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 
 Migrations run **automatically on every startup**. The auth service reads all `*.sql` files from the `migrations/` directory and executes each one using idempotent DDL (`CREATE TABLE IF NOT EXISTS`, etc.).
 
-The repository currently contains ordered migrations through `063`, covering core authorization, webhooks, policy, enterprise identity, credentials, budgets, offline operation, trust registry, DPDP, commerce, and MCP certification-state integrity. Inspect the migration directory in the exact release you deploy rather than relying on a copied file count.
+The repository currently contains ordered migrations through `091`, including
+`091_agent_prepaid_wallets.sql` for wallet balances, assignments,
+reservations, reloads, controls, and append-only ledger evidence. Inspect the
+migration directory in the exact release you deploy rather than relying on a
+copied file count.
 
 To upgrade, just restart the service — new migration files are applied automatically.
 
@@ -208,6 +215,26 @@ Redis holds ephemeral token metadata and rate-limiting state. If Redis data is l
 - [ ] Health checks are wired into your load balancer
 - [ ] CPU and memory limits are set
 - [ ] Log forwarding is configured
+
+### Prepaid wallets and x402
+
+Prepaid-wallet hosting adds external dependencies that Docker, Helm, and the
+auth-service cannot provision automatically. Before enabling the feature:
+
+- route the exact public `/v1/prepaid-wallets` audience and wildcard path to
+  the auth service over TLS;
+- keep `external` custody disabled until a provider adapter verifies funding,
+  reservation, settlement, reconciliation, duplicate events, and recovery;
+- operate an SSE/WebSocket bridge if reload events must reach a human through
+  email, SMS, or messaging;
+- require merchants to persist side-effect results under HTTP
+  `Idempotency-Key` after successful settlement;
+- verify the exact SDK and x402 versions on npm rather than inferring
+  publication from repository manifests.
+
+Follow [Prepaid Wallet Production Readiness](/guides/prepaid-wallet-production)
+for the complete route list, dependency matrix, failure boundaries, deployment
+probes, and PowerShell package-release procedure.
 
 ## Ownership
 
