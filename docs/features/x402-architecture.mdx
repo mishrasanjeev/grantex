@@ -1,142 +1,120 @@
 ---
 title: "x402 Architecture"
 sidebarTitle: "x402 Architecture"
-description: "Architecture overview of Grantex x402 agent spend authorization — components, data flow, and security model."
+description: "Official x402 v2 payment messages backed by principal-controlled Grantex prepaid-wallet reservations."
 ---
 
-## Architecture Overview
-
-Grantex x402 adds an authorization layer to the x402 HTTP Payment Required protocol. Five components work together to ensure that every agent payment is authorized, scoped, and auditable.
-
-```
-┌───────────────┐     ┌────────────────┐     ┌─────────────────┐
-│   Principal   │────▶│   GDT Issuer   │────▶│   GDT (JWT)     │
-│   (Human)     │     │  issueGDT()    │     │  W3C VC 2.0     │
-└───────────────┘     └────────────────┘     └────────┬────────┘
-                                                       │
-                                                       ▼
-┌───────────────┐     ┌────────────────┐     ┌─────────────────┐
-│     Agent     │────▶│  x402 Adapter  │────▶│   x402 API      │
-│               │     │  fetch + GDT   │     │  + Middleware    │
-└───────────────┘     └────────────────┘     └────────┬────────┘
-                                                       │
-                      ┌────────────────┐              │
-                      │   Revocation   │◀─────────────┤
-                      │   Registry     │              │
-                      └────────────────┘     ┌────────▼────────┐
-                                              │   Audit Log     │
-                      ┌────────────────┐     │   (append-only) │
-                      │   Base L2      │     └─────────────────┘
-                      │   USDC Payment │
-                      └────────────────┘
-```
+Grantex uses x402 as the payment-message transport and the prepaid-wallet service
+as the authorization and accounting authority. Payment requirements alone do
+not prove that an AI agent has delegated authority or available principal-owned
+value; the server-issued reservation connects those facts.
 
 ## Components
 
-### GDT Issuer
+| Component | Responsibility |
+| --- | --- |
+| Principal | Funds wallets, sets policies, approves reloads, and blocks use |
+| OAuth authorization server | Issues DPoP-bound agent access tokens for the wallet resource |
+| Wallet policy service | Atomically evaluates assignments, limits, allowlists, and balance |
+| `@grantex/x402` client | Converts official `PAYMENT-REQUIRED` into a reservation-backed `PAYMENT-SIGNATURE` retry |
+| Resource server | Defines amount, asset, recipient, resource, scope, and timeout |
+| Facilitator endpoints | Verify and settle the exact signed authorization |
+| PostgreSQL | Serializes spend, stores reservations, and records the wallet ledger |
 
-The GDT Issuer creates signed W3C Verifiable Credentials that encode the delegation from a principal to an agent. Each GDT specifies:
+## Protocol flow
 
-- **Agent DID** — The identity of the delegated agent
-- **Scope** — What resources/actions the agent can access
-- **Spend Limit** — Maximum amount per time period
-- **Expiry** — When the delegation ends
-- **Delegation Chain** — Parent DIDs for sub-delegation
-
-The issuer uses the principal's Ed25519 private key to sign the credential, producing a compact JWT.
-
-### GDT Verifier
-
-The verifier is embedded in the `x402Middleware` and the `verifyGDT()` function. It performs six checks:
-
-1. **JWT Signature** — Ed25519 (EdDSA) verification using the issuer's public key (resolved from the DID)
-2. **Token Expiry** — Rejects tokens past their `exp` claim
-3. **Revocation Status** — Checks the revocation registry
-4. **Scope Match** — Ensures the requested resource is covered by granted scopes
-5. **Spend Limit** — Ensures the request amount doesn't exceed the authorized limit
-6. **VC Structure** — Validates the W3C VC 2.0 credential format
-
-### x402 Adapter
-
-The adapter wraps the native `fetch()` function to handle the x402 payment flow automatically:
-
-1. Sends the initial request with the `X-Grantex-GDT` header
-2. On `402 Payment Required`, extracts payment details
-3. Executes payment via the configured handler (Base L2 USDC transfer)
-4. Retries the request with both `X-Payment-Proof` and `X-Grantex-GDT` headers
-
-### Revocation Registry
-
-An in-memory registry of revoked token IDs. Tokens are identified by their `jti` (JWT ID) claim. Revocation is instant — a revoked token is rejected on the next verification.
-
-The `RevocationRegistry` interface supports pluggable backends:
-
-```typescript
-interface RevocationRegistry {
-  revoke(tokenId: string, reason?: string): Promise<void>;
-  isRevoked(tokenId: string): Promise<boolean>;
-  listRevoked(): Promise<RevokedEntry[]>;
-}
+```text
+Agent              Resource server       Grantex wallet/facilitator       Principal
+  | GET /resource         |                          |                         |
+  |---------------------->|                          |                         |
+  | 402 PAYMENT-REQUIRED  |                          |                         |
+  |<----------------------|                          |                         |
+  | DPoP authorize(amount, recipient, resource, scope, idempotency key)       |
+  |------------------------------------------------->|                         |
+  |                         lock wallet -> check policy -> reserve             |
+  | signed one-time authorization                    |                         |
+  |<-------------------------------------------------|                         |
+  | retry PAYMENT-SIGNATURE                          |                         |
+  |---------------------->| POST /v1/x402/verify     |                         |
+  |                       |------------------------->|                         |
+  |                       | valid                    |                         |
+  |                       |<-------------------------|                         |
+  |                       | POST /v1/x402/settle     |                         |
+  |                       |------------------------->|                         |
+  |                       | settled + transaction ID |                         |
+  | 200 PAYMENT-RESPONSE  |<-------------------------|                         |
+  |<----------------------|                          |                         |
 ```
 
-### Audit Log
+## Exact binding
 
-An append-only log that records every GDT lifecycle event:
+The authorization JWT and database reservation bind:
 
-- **Issuance** — When a GDT is created
-- **Verification** — When a GDT is successfully verified
-- **Rejection** — When verification fails (scope mismatch, spend exceeded, revoked)
-- **Payment** — When an x402 payment is processed
-- **Revocation** — When a token is revoked
+- authorization and reservation identifiers;
+- developer, principal, agent, grant, wallet, and assignment;
+- amount in atomic units, asset, and network;
+- recipient and exact resource URL;
+- delegated action scope;
+- canonical request hash and expiry.
 
----
+The authorization lifetime is at most 300 seconds. The accepted x402
+requirements must exactly equal the requirements supplied to the facilitator.
+The facilitator rejects malformed envelopes, unsupported versions/schemes,
+expired signatures, released reservations, and any binding mismatch.
+Verification is provisional. A resource server must settle successfully before
+starting irreversible protected work or returning the paid result; treating
+verification alone as payment would reintroduce a verify/use race.
+Remote resource URLs must use HTTPS so `PAYMENT-SIGNATURE` cannot disclose the
+one-time authorization over plaintext. HTTP is accepted only for explicit
+loopback development addresses.
 
-## Security Model
+## Idempotency and replay
 
-### Threat: Compromised Agent
+The agent supplies a high-entropy idempotency key when reserving. Its hash is
+unique across the developer, principal, and agent, not merely within one wallet.
+This is important for automatic wallet selection: a lost response can be
+retried, but the retry cannot select a different wallet or change its terms.
 
-A compromised agent cannot spend beyond the GDT's scope and limit. If detected, the principal revokes the GDT immediately. The audit log shows exactly what the agent accessed.
+Settlement is idempotent and returns the original transaction identifier.
+Calling authorization again with a key whose reservation settled returns
+`PAYMENT_ALREADY_SETTLED`. Verification accepts only a currently reserved
+authorization; a settled authorization cannot verify again and therefore
+cannot re-run protected work. Released and expired reservations cannot be
+revived.
 
-### Threat: Token Replay
+The fetch adapter accepts a caller-provided `idempotencyKey`. Callers should
+derive it from a durable logical order/request identifier and reuse it after a
+timeout or a lost wallet-authorization response. The generated default protects
+a single fetch flow, but cannot correlate two independently restarted caller
+invocations.
 
-Each GDT has a unique `jti` claim. The revocation registry prevents reuse after revocation. The spend limit provides a natural cap even without revocation.
+That option is deliberately not an HTTP header and cannot recover merchant work
+after settlement. A side-effecting merchant must also accept a normal
+`Idempotency-Key` request header, atomically persist its business result under
+that key, and return the cached result on a caller retry. Without that merchant
+record, a response lost after settlement fails closed with
+`PAYMENT_ALREADY_SETTLED`; Grantex does not replay protected work.
 
-### Threat: Scope Escalation
+## Blocking semantics
 
-The verifier performs strict scope matching. A `weather:read` token cannot be used for `finance:write`. Wildcard scopes (`weather:*`) are supported but must be explicitly granted.
+Applying an assignment, wallet, or all-wallet agent block happens in the same
+database transaction that releases affected outstanding reservations. New
+authorizations fail, old authorizations stop verifying, and reserved value
+returns to available value. Historical settlements remain immutable.
 
-### Threat: Token Tampering
+## Legacy GDT boundary
 
-Ed25519 signatures are verified against the issuer's public key (derived from the DID). Any modification to the JWT payload invalidates the signature.
+The package still includes standalone GDT issuance and verification for signed
+authorization context. That path is not the managed wallet protocol. A GDT is
+stateless unless the host supplies durable state, so its `spendLimit` claim must
+not be described as an atomically enforced cumulative balance. New prepaid x402
+integrations should use `PrepaidWalletAgentClient.x402Authorizer`.
 
----
+## External payment rails
 
-## HTTP Headers
-
-| Header | Direction | Purpose |
-|--------|-----------|---------|
-| `X-Grantex-GDT` | Request | Carries the GDT JWT |
-| `X-Payment-Required` | Response (402) | Indicates payment is needed |
-| `X-Payment-Amount` | Response (402) | Payment amount |
-| `X-Payment-Currency` | Response (402) | Payment currency (USDC/USDT) |
-| `X-Payment-Recipient` | Response (402) | Recipient wallet address |
-| `X-Payment-Chain` | Response (402) | Blockchain (e.g., "base") |
-| `X-Payment-Proof` | Request (retry) | Payment transaction proof |
-
----
-
-## DID Resolution
-
-GDTs use `did:key` identifiers for both principals and agents. The public key is embedded directly in the DID, enabling offline verification without network calls.
-
-```
-did:key:z6Mk<base58btc(0xed01 + public_key)>
-```
-
-- `z` — multibase prefix for base58btc
-- `6Mk` — start of Ed25519 multicodec-encoded keys
-- Supports offline resolution — no DID resolver network required
-
-## Ownership
-
-Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+`grantex:prepaid` identifies the repository's managed prepaid settlement
+scheme. It does not claim an on-chain transfer. A future external-custody adapter
+must define a standard x402 network/scheme pair appropriate to the rail, verify
+provider funding and settlement, reconcile provider and Grantex state, and fail
+closed when evidence is stale or unavailable. Repository source intentionally
+does not convert arbitrary provider references into balance.

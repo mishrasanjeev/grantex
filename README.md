@@ -45,6 +45,53 @@ Grantex is an open-source delegated authorization protocol and reference impleme
 
 Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal. Use Grantex when an AI agent acts for a person or organization and a relying service must verify exactly what that agent may do.
 
+## Agent Prepaid Wallets and x402 v2
+
+Repository source now includes principal-controlled prepaid wallets for AI
+agents. A principal can assign one or multiple wallets, set atomic-unit
+per-transaction and rolling cumulative limits, restrict recipients and action
+scopes, approve agent reload requests, and block one assignment, one wallet, or
+all wallets available to an agent. Authorizations reserve value atomically in
+PostgreSQL and are bound to the agent's DPoP OAuth identity.
+
+`@grantex/x402` uses official x402 v2 `PAYMENT-REQUIRED`,
+`PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` messages. The old simulated
+`X-Payment-Proof` path is not used. `sandbox_ledger` is implemented end to end;
+external custody records deliberately fail closed until a provider adapter can
+verify funding and settlement.
+
+```ts
+import { PrepaidWalletAgentClient } from '@grantex/sdk';
+import { createX402Agent } from '@grantex/x402';
+
+const walletAgent = new PrepaidWalletAgentClient({ oauthClient, accessToken });
+const x402 = createX402Agent({
+  authorizePayment: walletAgent.x402Authorizer,
+  // walletId is optional; omit it for policy-based wallet selection.
+});
+
+const logicalPaymentId = 'order_01JZ8Y6Q2M4N7P9T';
+const response = await x402.fetch('https://merchant.example/paid-resource', {
+  // The merchant uses this header to recover a response lost after settlement.
+  headers: { 'Idempotency-Key': logicalPaymentId },
+  // Grantex uses this option to recover a reservation response lost before settlement.
+  idempotencyKey: logicalPaymentId,
+});
+```
+
+For side-effecting resources, the merchant must durably cache the business result
+under `Idempotency-Key`. Grantex settlement is idempotent, but a settled payment
+authorization cannot be verified or execute protected work a second time.
+
+The OAuth grant must include `wallet:spend` and the exact merchant action scope
+advertised as `extra.grantexScope`; wallet assignment policy can restrict that
+human-approved authority but cannot add to it.
+
+This API is unreleased repository source until new SDK/x402 package versions
+are published. See the [x402 integration guide](docs/integrations/x402.mdx),
+[wallet lifecycle](docs/features/prepaid-wallets.mdx), and
+[architecture](docs/internal/agent-prepaid-wallet-architecture.md).
+
 ## OAuth Agent Grants Profile
 
 The hosted auth service and repository TypeScript client implement the three
@@ -1479,7 +1526,7 @@ The primary SDK versions below are registry-verified as of 2026-08-10. For integ
 | **A2A Bridge (Py)** | `grantex-a2a` | `pip install grantex-a2a` | Published package |
 | **Event Destinations** | `@grantex/destinations` | `npm install @grantex/destinations` | Published package |
 | **Terraform Provider** | `terraform-provider-grantex` | `terraform { required_providers { grantex = { source = "mishrasanjeev/grantex" } } }` | Source present; verify registry before pinning |
-| **x402 Payment Protocol** | `@grantex/x402` | `npm install @grantex/x402` | Published package |
+| **x402 Payment Protocol** | `@grantex/x402` | `npm install @grantex/x402` | Published legacy GDT release; managed prepaid x402 v2 is unreleased repository source |
 
 ### Community x402 services
 
@@ -1693,8 +1740,8 @@ Walk through all 7 steps of the protocol: register an agent, authorize, exchange
 | [`multi-agent-email-flow`](examples/multi-agent-email-flow) | Multi-agent email automation with delegation, enforcement, and cascade revocation | `npm start` |
 | [`audit-dashboard`](examples/audit-dashboard) | Audit trail querying, filtering, and hash chain integrity verification | `npm start` |
 | [`token-expiry-refresh`](examples/token-expiry-refresh) | Active-grant refresh rotation, 300-second lost-response recovery, and expired-grant re-authorization | `npm start` |
-| [`x402-agent-demo`](examples/x402-agent-demo) | AI agent using Grantex Delegation Token + x402 payments | `npm start` |
-| [`x402-weather-api`](examples/x402-weather-api) | Express server with x402 payment flow + GDT enforcement | `npm start` |
+| [`x402-agent-demo`](examples/x402-agent-demo) | Legacy standalone GDT authorization-context demo; not durable prepaid accounting | `npm start` |
+| [`x402-weather-api`](examples/x402-weather-api) | Official x402 v2 resource server using Grantex prepaid verify/settle | `npm start` |
 
 ---
 

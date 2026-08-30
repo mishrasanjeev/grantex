@@ -20,7 +20,14 @@ repository.
 | Python SDK | `grantex==0.3.14` | Published to PyPI | Python 3.9+ |
 | Go SDK | `github.com/mishrasanjeev/grantex-go@v0.1.10` | Published with known limitations | Go 1.26.1+ |
 | MCP Auth server | `@grantex/mcp-auth@2.0.2` | Published with known limitations | Node.js 18+; ESM |
-| OpenAPI contract | `0.3.12` | Repository API-contract version | Independent of SDK-only patches |
+| OpenAPI contract | `0.4.0` | Unreleased repository contract with prepaid wallets | Independent of public SDK versions |
+
+<Note>
+Repository source carries unreleased `@grantex/sdk@0.4.0` prepaid-wallet
+clients and `@grantex/x402@0.2.0` official x402 v2 support. The published SDK
+row above remains the public registry truth; do not assume those source versions
+are installable from npm until a release is separately verified.
+</Note>
 
 <Info>
   The SDK patch versions differ because each language package is released on its

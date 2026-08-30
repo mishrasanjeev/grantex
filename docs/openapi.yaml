@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Grantex Auth Service API
-  version: 0.3.12
+  version: 0.4.0
   description: |
     Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
@@ -102,6 +102,10 @@ tags:
     description: Public organization directory and DNS ownership verification
   - name: MCP Registry
     description: MCP server directory and certification applications
+  - name: Prepaid Wallets
+    description: Principal-controlled agent wallets, assignments, policy, reloads, and stop controls
+  - name: x402 Facilitator
+    description: Official x402 v2 support discovery, prepaid authorization verification, and settlement
 
 components:
   securitySchemes:
@@ -118,6 +122,16 @@ components:
       type: http
       scheme: bearer
       description: METRICS_API_KEY bearer token (required by default in production)
+    principalSessionAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived principal-session token
+    dpopAuth:
+      type: http
+      scheme: DPoP
+      bearerFormat: JWT
+      description: OAuth Agent Grants access token plus the DPoP proof header
     scimBearer:
       type: http
       scheme: bearer
@@ -134,6 +148,109 @@ components:
         statusCode:
           type: integer
       required: [error, code, statusCode]
+
+    PrepaidWallet:
+      type: object
+      required: [walletId, principalId, name, custodyMode, network, asset, decimals, availableAmount, reservedAmount, lowBalanceThreshold, status]
+      properties:
+        walletId: { type: string, pattern: '^pwal_' }
+        principalId: { type: string }
+        name: { type: string }
+        custodyMode: { type: string, enum: [sandbox_ledger, external] }
+        provider: { type: [string, 'null'] }
+        providerWalletId: { type: [string, 'null'] }
+        walletAddress: { type: [string, 'null'] }
+        network: { type: string, example: 'grantex:prepaid' }
+        asset: { type: string, example: USDC }
+        decimals: { type: integer, minimum: 0, maximum: 30 }
+        availableAmount: { type: string, pattern: '^\d+$', description: Integer atomic units }
+        reservedAmount: { type: string, pattern: '^\d+$', description: Integer atomic units }
+        lowBalanceThreshold: { type: string, pattern: '^\d+$' }
+        status: { type: string, enum: [active, blocked, closed] }
+        blockedAt: { type: [string, 'null'], format: date-time }
+        blockedReason: { type: [string, 'null'] }
+        metadata: { type: object, additionalProperties: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    AssignedPrepaidWallet:
+      type: object
+      description: Agent-visible wallet and assignment projection; custody-provider identifiers and metadata are omitted.
+      required: [walletId, name, network, asset, decimals, availableAmount, reservedAmount, lowBalanceThreshold, status, assignmentId, assignmentStatus, perTransactionLimit, cumulativeLimit, cumulativePeriodSeconds, allowedRecipients, allowedScopes, allWalletsBlocked]
+      properties:
+        walletId: { type: string, pattern: '^pwal_' }
+        name: { type: string }
+        network: { type: string, example: 'grantex:prepaid' }
+        asset: { type: string, example: USDC }
+        decimals: { type: integer, minimum: 0, maximum: 30 }
+        availableAmount: { type: string, pattern: '^\d+$' }
+        reservedAmount: { type: string, pattern: '^\d+$' }
+        lowBalanceThreshold: { type: string, pattern: '^\d+$' }
+        status: { type: string, enum: [active, blocked, closed] }
+        blockedAt: { type: [string, 'null'], format: date-time }
+        blockedReason: { type: [string, 'null'] }
+        assignmentId: { type: string, pattern: '^wasn_' }
+        assignmentStatus: { type: string, enum: [active, blocked, revoked] }
+        perTransactionLimit: { type: string, pattern: '^[1-9]\d*$' }
+        cumulativeLimit: { type: string, pattern: '^[1-9]\d*$' }
+        cumulativePeriodSeconds: { type: integer, minimum: 60, maximum: 2592000 }
+        allowedRecipients: { type: array, items: { type: string } }
+        allowedScopes: { type: array, items: { type: string } }
+        validFrom: { type: string, format: date-time }
+        validUntil: { type: [string, 'null'], format: date-time }
+        allWalletsBlocked: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    WalletAssignment:
+      type: object
+      required: [assignmentId, walletId, agentId, principalId, status, perTransactionLimit, cumulativeLimit, cumulativePeriodSeconds, allowedRecipients, allowedScopes]
+      properties:
+        assignmentId: { type: string, pattern: '^wasn_' }
+        walletId: { type: string }
+        agentId: { type: string }
+        principalId: { type: string }
+        status: { type: string, enum: [active, blocked, revoked] }
+        perTransactionLimit: { type: string, pattern: '^[1-9]\d*$' }
+        cumulativeLimit: { type: string, pattern: '^[1-9]\d*$' }
+        cumulativePeriodSeconds: { type: integer, minimum: 60, maximum: 2592000 }
+        allowedRecipients: { type: array, items: { type: string } }
+        allowedScopes: { type: array, items: { type: string } }
+        validFrom: { type: string, format: date-time }
+        validUntil: { type: [string, 'null'], format: date-time }
+
+    WalletAuthorization:
+      type: object
+      required: [authorization, reservationId, walletId, assignmentId, amount, asset, network, recipient, expiresAt, remainingAvailable, remainingCumulative]
+      properties:
+        authorization: { type: string, description: Short-lived one-time signed wallet authorization }
+        reservationId: { type: string, pattern: '^wres_' }
+        walletId: { type: string }
+        assignmentId: { type: string }
+        amount: { type: string, pattern: '^[1-9]\d*$' }
+        asset: { type: string }
+        network: { type: string }
+        recipient: { type: string }
+        expiresAt: { type: string, format: date-time }
+        remainingAvailable: { type: string, pattern: '^\d+$' }
+        remainingCumulative: { type: string, pattern: '^\d+$' }
+
+    WalletReloadRequest:
+      type: object
+      required: [reloadRequestId, walletId, amount, status, requestedBy, createdAt]
+      properties:
+        reloadRequestId: { type: string, pattern: '^wrr_' }
+        walletId: { type: string }
+        assignmentId: { type: [string, 'null'] }
+        agentId: { type: [string, 'null'] }
+        amount: { type: string, pattern: '^[1-9]\d*$' }
+        reason: { type: [string, 'null'] }
+        status: { type: string, enum: [pending, approved, rejected, cancelled, funded] }
+        requestedBy: { type: string, enum: [agent, principal] }
+        externalReference: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        fundedAt: { type: [string, 'null'], format: date-time }
 
     OAuthError:
       type: object
@@ -510,6 +627,347 @@ security:
   - bearerAuth: []
 
 paths:
+  /v1/principal/prepaid-wallets:
+    post:
+      operationId: createPrepaidWallet
+      tags: [Prepaid Wallets]
+      summary: Create a principal-owned prepaid wallet
+      description: Creates a zero-balance wallet. External custody requires provider and providerWalletId and remains unusable until an adapter is configured.
+      security: [{ principalSessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, custodyMode, network, asset]
+              properties:
+                name: { type: string }
+                custodyMode: { type: string, enum: [sandbox_ledger, external] }
+                provider: { type: string }
+                providerWalletId: { type: string }
+                walletAddress: { type: string }
+                network: { type: string, example: 'grantex:prepaid' }
+                asset: { type: string, example: USDC }
+                decimals: { type: integer, default: 6, minimum: 0, maximum: 30 }
+                lowBalanceThreshold: { type: string, pattern: '^\d+$' }
+                metadata: { type: object, additionalProperties: true }
+      responses:
+        '201':
+          description: Wallet created
+          content: { application/json: { schema: { $ref: '#/components/schemas/PrepaidWallet' } } }
+    get:
+      operationId: listPrincipalPrepaidWallets
+      tags: [Prepaid Wallets]
+      summary: List wallets owned by the principal
+      security: [{ principalSessionAuth: [] }]
+      responses:
+        '200':
+          description: Wallet list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [wallets]
+                properties:
+                  wallets: { type: array, items: { $ref: '#/components/schemas/PrepaidWallet' } }
+
+  /v1/principal/prepaid-wallets/{walletId}/assignments:
+    post:
+      operationId: assignPrepaidWallet
+      tags: [Prepaid Wallets]
+      summary: Assign a wallet and spend policy to an authorized agent
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: walletId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agentId, perTransactionLimit, cumulativeLimit, cumulativePeriodSeconds]
+              properties:
+                agentId: { type: string }
+                perTransactionLimit: { type: string, pattern: '^[1-9]\d*$' }
+                cumulativeLimit: { type: string, pattern: '^[1-9]\d*$' }
+                cumulativePeriodSeconds: { type: integer, minimum: 60, maximum: 2592000 }
+                allowedRecipients: { type: array, items: { type: string }, default: [] }
+                allowedScopes: { type: array, items: { type: string }, default: [] }
+                validUntil: { type: string, format: date-time }
+      responses:
+        '201':
+          description: Assignment created or restored with the supplied policy
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletAssignment' } } }
+
+  /v1/principal/prepaid-wallet-assignments/{assignmentId}:
+    patch:
+      operationId: setPrepaidWalletAssignmentStatus
+      tags: [Prepaid Wallets]
+      summary: Activate, block, or revoke one agent-wallet assignment
+      description: Blocking or revoking atomically releases this assignment's active reservations. Revocation is terminal.
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: assignmentId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, blocked, revoked] }
+                reason: { type: string, maxLength: 200 }
+      responses:
+        '200':
+          description: Updated assignment
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletAssignment' } } }
+
+  /v1/principal/prepaid-wallets/{walletId}/status:
+    patch:
+      operationId: setPrepaidWalletStatus
+      tags: [Prepaid Wallets]
+      summary: Activate, block, or close a wallet
+      description: Blocking or closing releases all active reservations on the wallet. Closed wallets cannot be reactivated.
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: walletId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [active, blocked, closed] }
+                reason: { type: string, maxLength: 200 }
+      responses:
+        '200':
+          description: Updated wallet
+          content: { application/json: { schema: { $ref: '#/components/schemas/PrepaidWallet' } } }
+
+  /v1/principal/prepaid-wallet-agents/{agentId}/block:
+    put:
+      operationId: setAgentAllWalletsBlocked
+      tags: [Prepaid Wallets]
+      summary: Stop or allow this agent across all wallets of the principal
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: agentId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [blocked]
+              properties:
+                blocked: { type: boolean }
+                reason: { type: string, maxLength: 200 }
+      responses:
+        '200': { description: Agent wallet control updated }
+
+  /v1/principal/prepaid-wallets/{walletId}/reloads:
+    post:
+      operationId: fundPrepaidWalletDirectly
+      tags: [Prepaid Wallets]
+      summary: Fund a sandbox wallet directly as the principal
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: walletId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, idempotencyKey]
+              properties:
+                amount: { type: string, pattern: '^[1-9]\d*$' }
+                idempotencyKey: { type: string, minLength: 16, description: Stable across retries of the same direct reload }
+                externalReference: { type: string }
+      responses:
+        '201':
+          description: Wallet funded
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletReloadRequest' } } }
+        '503': { description: External custody adapter unavailable }
+
+  /v1/principal/prepaid-wallet-reload-requests/{requestId}/decision:
+    post:
+      operationId: decidePrepaidWalletReload
+      tags: [Prepaid Wallets]
+      summary: Approve or reject an agent reload request
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: requestId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approved, rejected] }
+      responses:
+        '200':
+          description: Reload decision recorded
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletReloadRequest' } } }
+
+  /v1/principal/prepaid-wallet-reload-requests/{requestId}/fund:
+    post:
+      operationId: fundApprovedPrepaidWalletReload
+      tags: [Prepaid Wallets]
+      summary: Fund a previously approved reload request
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: requestId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                externalReference: { type: string, description: Provider funding reference; repeated calls must use the same value }
+      responses:
+        '200':
+          description: Approved reload funded, or the existing funded result returned on an identical retry
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletReloadRequest' } } }
+
+  /v1/principal/prepaid-wallets/{walletId}/activity:
+    get:
+      operationId: getPrepaidWalletActivity
+      tags: [Prepaid Wallets]
+      summary: Get wallet assignments, reservations, reloads, and ledger entries
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: walletId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Durable wallet activity }
+
+  /v1/principal/prepaid-wallet-reservations/{reservationId}/release:
+    post:
+      operationId: releasePrepaidWalletReservation
+      tags: [Prepaid Wallets]
+      summary: Release an active reservation back to available value
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: reservationId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties: { reason: { type: string, minLength: 1, maxLength: 200 } }
+      responses:
+        '200': { description: Reservation released }
+
+  /v1/prepaid-wallets:
+    get:
+      operationId: listAgentPrepaidWallets
+      tags: [Prepaid Wallets]
+      summary: List active wallet assignments visible to the DPoP agent
+      security: [{ dpopAuth: [] }]
+      responses:
+        '200':
+          description: Assigned wallets and policy, without provider or principal internals
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [wallets]
+                properties:
+                  wallets: { type: array, items: { $ref: '#/components/schemas/AssignedPrepaidWallet' } }
+
+  /v1/prepaid-wallets/authorizations:
+    post:
+      operationId: authorizePrepaidWalletPayment
+      tags: [Prepaid Wallets]
+      summary: Atomically reserve an eligible prepaid wallet payment
+      description: Requires wallet:spend, the exact requested payment scope, and a DPoP-bound access token whose audience is exactly /v1/prepaid-wallets.
+      security: [{ dpopAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, asset, network, recipient, resource, scope, maxTimeoutSeconds, idempotencyKey]
+              properties:
+                walletId: { type: string, description: Optional pin; omit for automatic eligible selection }
+                amount: { type: string, pattern: '^[1-9]\d*$' }
+                asset: { type: string }
+                network: { type: string }
+                recipient: { type: string }
+                resource: { type: string, format: uri, description: HTTPS required except for explicit loopback development hosts }
+                scope: { type: string }
+                maxTimeoutSeconds: { type: integer, minimum: 1, maximum: 300 }
+                idempotencyKey: { type: string, minLength: 16 }
+      responses:
+        '201':
+          description: Value reserved and authorization signed
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletAuthorization' } } }
+        '402': { description: Balance or spend limit exceeded }
+        '403': { description: Assignment, recipient, scope, asset, network, or block policy denied }
+        '409': { description: Idempotency conflict or prior authorization no longer usable }
+
+  /v1/prepaid-wallets/{walletId}/reload-requests:
+    post:
+      operationId: requestAgentPrepaidWalletReload
+      tags: [Prepaid Wallets]
+      summary: Ask the principal to reload a low-balance wallet
+      security: [{ dpopAuth: [] }]
+      parameters:
+        - { name: walletId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, idempotencyKey]
+              properties:
+                amount: { type: string, pattern: '^[1-9]\d*$' }
+                idempotencyKey: { type: string, minLength: 16, description: Stable across every retry of the same agent reload request, including after a terminal decision }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: Request created or the exact idempotent replay returned
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletReloadRequest' } } }
+        '409': { description: Threshold not reached, key terms conflict, or another pending request exists }
+
+  /v1/x402/supported:
+    get:
+      operationId: getSupportedX402Schemes
+      tags: [x402 Facilitator]
+      summary: Discover the supported official x402 version, scheme, and network
+      security: []
+      responses:
+        '200': { description: Supports x402Version 2, exact, grantex:prepaid }
+
+  /v1/x402/verify:
+    post:
+      operationId: verifyPrepaidX402Payment
+      tags: [x402 Facilitator]
+      summary: Verify an exact x402 v2 prepaid wallet authorization
+      security: []
+      responses:
+        '200': { description: x402 VerifyResponse; isValid is false for any invalid binding or inactive reservation }
+
+  /v1/x402/settle:
+    post:
+      operationId: settlePrepaidX402Payment
+      tags: [x402 Facilitator]
+      summary: Idempotently settle an exact x402 v2 prepaid wallet reservation
+      security: []
+      responses:
+        '200': { description: x402 SettleResponse; success is false when settlement cannot complete }
+
   # ── System ───────────────────────────────────────────────────────────
   /health:
     get:

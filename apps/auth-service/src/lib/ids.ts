@@ -53,3 +53,9 @@ export const newErasureRequestId = (): string =>
 export const newRegistryAgentId = (): string => `ragent_${ulid()}`;
 export const newAnomalyRuleId = (): string => `arule_${ulid()}`;
 export const newAnomalyChannelId = (): string => `achan_${ulid()}`;
+export const newPrepaidWalletId = (): string => `pwal_${ulid()}`;
+export const newWalletAssignmentId = (): string => `wasn_${ulid()}`;
+export const newWalletReservationId = (): string => `wres_${ulid()}`;
+export const newWalletReloadRequestId = (): string => `wrel_${ulid()}`;
+export const newWalletLedgerEntryId = (): string => `wled_${ulid()}`;
+export const newWalletTransactionId = (): string => `wtx_${ulid()}`;

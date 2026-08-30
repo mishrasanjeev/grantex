@@ -839,6 +839,36 @@
       align-items: start;
     }
     .feature-code-grid > * { min-width: 0; }
+    .wallet-flow-panel {
+      margin-bottom: 48px;
+      padding: 32px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .wallet-flow {
+      display: flex;
+      align-items: stretch;
+    }
+    .wallet-flow-step {
+      flex: 1;
+      min-width: 0;
+      padding: 0 12px;
+      text-align: center;
+    }
+    .wallet-flow-step.wide { flex: 1.2; }
+    .wallet-flow-step.compact { flex: 0.9; }
+    .wallet-flow-step.divided {
+      border-right: 1px dashed var(--border);
+      border-left: 1px dashed var(--border);
+    }
+    .wallet-flow-arrow {
+      display: flex;
+      flex-shrink: 0;
+      align-items: center;
+      padding: 0 4px;
+      font-size: 22px;
+    }
     .copy-btn {
       position: absolute;
       top: 12px;
@@ -1452,6 +1482,29 @@
       .footer-meta {
         justify-content: flex-start;
         text-align: left;
+      }
+      .wallet-flow-panel { padding: 24px 18px; }
+      .wallet-flow {
+        flex-direction: column;
+        gap: 0;
+      }
+      .wallet-flow-step,
+      .wallet-flow-step.wide,
+      .wallet-flow-step.compact {
+        width: 100%;
+        padding: 16px 0;
+      }
+      .wallet-flow-step:first-child { padding-top: 0; }
+      .wallet-flow-step:last-child { padding-bottom: 0; }
+      .wallet-flow-step.divided {
+        border-right: 0;
+        border-left: 0;
+      }
+      .wallet-flow-arrow {
+        justify-content: center;
+        height: 28px;
+        padding: 0;
+        transform: rotate(90deg);
       }
     }
   </style>
@@ -2533,65 +2586,70 @@ func main() {
 <!-- ── x402 Agent Spend Authorization ──────────────────────────────────────── -->
 <section id="x402" style="background: linear-gradient(180deg, rgba(99,102,241,0.04) 0%, transparent 60%);">
   <div class="container">
-    <div class="section-label">New — HTTP 402 Payments</div>
-    <h2 class="section-title">Agent Spend Authorization for x402</h2>
+    <div class="section-label">Principal-controlled agent payments</div>
+    <h2 class="section-title">Prepaid Wallets for x402 v2</h2>
     <p class="section-sub">
-      x402 supports HTTP 402 payment flows. Grantex can add signed agent and spend-policy claims
-      that the protected API must verify and enforce before acting.
+      Assign one or many prepaid wallets to an AI agent. Enforce transaction and rolling limits,
+      approve reloads, and stop one wallet or every wallet without loosening the x402 protocol.
     </p>
+    <div class="release-caveat" style="max-width:760px;margin:-24px 0 36px;">
+      <strong>Repository preview:</strong> these APIs are implemented and tested in source as
+      <code>@grantex/sdk@0.4.0</code> and <code>@grantex/x402@0.2.0</code>, but are not yet
+      published to npm. The current npm packages do not include this managed-wallet flow.
+    </div>
 
     <!-- ── Visual flow pipeline ───────────────────────────────────────── -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:32px 24px;margin-bottom:48px;overflow-x:auto;">
-      <div style="display:flex;align-items:stretch;gap:0;min-width:900px;">
+    <div class="wallet-flow-panel">
+      <div class="wallet-flow">
         <!-- Step 1: Principal -->
-        <div style="flex:1;text-align:center;padding:0 12px;">
+        <div class="wallet-flow-step">
           <div style="font-size:36px;margin-bottom:8px;">&#x1F464;</div>
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">Principal</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Issues delegation<br>scope + spend limit</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Funds wallets<br>sets policy + stop controls</div>
           <div style="margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
-            <div style="font-family:var(--mono);font-size:10px;color:#6366f1;">issueGDT()</div>
+            <div style="font-family:var(--mono);font-size:10px;color:#6366f1;">assign(wallet, policy)</div>
           </div>
         </div>
         <!-- Arrow -->
-        <div style="display:flex;align-items:center;padding:0 4px;color:#6366f1;font-size:22px;flex-shrink:0;">&#x2192;</div>
+        <div class="wallet-flow-arrow" style="color:#6366f1;">&#x2192;</div>
         <!-- Step 2: GDT Token -->
-        <div style="flex:1.2;text-align:center;padding:0 12px;border-left:1px dashed var(--border);border-right:1px dashed var(--border);">
+        <div class="wallet-flow-step wide divided">
           <div style="font-size:36px;margin-bottom:8px;">&#x1F4DC;</div>
-          <div style="font-size:13px;font-weight:700;color:#6366f1;margin-bottom:4px;">GDT Token</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.5;">W3C VC 2.0 &middot; Ed25519 signed<br>Scope + spend limit + expiry</div>
+          <div style="font-size:13px;font-weight:700;color:#6366f1;margin-bottom:4px;">Prepaid Assignment</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Durable balance &middot; DPoP agent<br>Recipient + scope + rolling cap</div>
           <div style="display:flex;gap:4px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
             <span style="font-size:10px;font-family:var(--mono);background:rgba(99,102,241,0.15);color:#6366f1;padding:2px 8px;border-radius:10px;">weather:read</span>
-            <span style="font-size:10px;font-family:var(--mono);background:rgba(16,185,129,0.15);color:#10b981;padding:2px 8px;border-radius:10px;">$10 USDC/24h</span>
+            <span style="font-size:10px;font-family:var(--mono);background:rgba(16,185,129,0.15);color:#10b981;padding:2px 8px;border-radius:10px;">25 USDC / 24h</span>
           </div>
         </div>
         <!-- Arrow -->
-        <div style="display:flex;align-items:center;padding:0 4px;color:#10b981;font-size:22px;flex-shrink:0;">&#x2192;</div>
+        <div class="wallet-flow-arrow" style="color:#10b981;">&#x2192;</div>
         <!-- Step 3: Agent + 402 -->
-        <div style="flex:1.2;text-align:center;padding:0 12px;">
+        <div class="wallet-flow-step wide">
           <div style="font-size:36px;margin-bottom:8px;">&#x1F916;</div>
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">AI Agent</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Sends request with GDT<br>Handles 402 &rarr; pay &rarr; retry</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Handles official x402 v2<br>402 &rarr; reserve &rarr; retry</div>
           <div style="margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
-            <div style="font-family:var(--mono);font-size:10px;color:#6366f1;">X-Grantex-GDT: eyJ...</div>
+            <div style="font-family:var(--mono);font-size:10px;color:#6366f1;">PAYMENT-SIGNATURE</div>
           </div>
         </div>
         <!-- Arrow -->
-        <div style="display:flex;align-items:center;padding:0 4px;color:#f59e0b;font-size:22px;flex-shrink:0;">&#x2192;</div>
+        <div class="wallet-flow-arrow" style="color:#f59e0b;">&#x2192;</div>
         <!-- Step 4: Base L2 Pay -->
-        <div style="flex:0.9;text-align:center;padding:0 12px;border-left:1px dashed var(--border);border-right:1px dashed var(--border);">
+        <div class="wallet-flow-step compact divided">
           <div style="font-size:36px;margin-bottom:8px;">&#x1F4B0;</div>
-          <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:4px;">Base L2 Pay</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.5;">USDC transfer<br>on-chain</div>
+          <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:4px;">Atomic Reserve</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Available to reserved<br>in PostgreSQL</div>
         </div>
         <!-- Arrow -->
-        <div style="display:flex;align-items:center;padding:0 4px;color:var(--accent);font-size:22px;flex-shrink:0;">&#x2192;</div>
+        <div class="wallet-flow-arrow" style="color:var(--accent);">&#x2192;</div>
         <!-- Step 5: API Verifies -->
-        <div style="flex:1;text-align:center;padding:0 12px;">
+        <div class="wallet-flow-step">
           <div style="font-size:36px;margin-bottom:8px;">&#x2705;</div>
-          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">API Verifies</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Checks GDT signature<br>scope + spend limit</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">API Settles</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Exact binding verified<br>one-time value settled</div>
           <div style="margin-top:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:6px 10px;">
-            <div style="font-family:var(--mono);font-size:10px;color:#10b981;">&#x2713; authorized &middot; $9.999 left</div>
+            <div style="font-family:var(--mono);font-size:10px;color:#10b981;">authorized &middot; auditable &middot; blockable</div>
           </div>
         </div>
       </div>
@@ -2604,51 +2662,47 @@ func main() {
         <div class="card" style="border-left:3px solid #ef4444;margin:0;">
           <span class="card-icon">&#x26A0;</span>
           <h3>The Gap in x402</h3>
-          <p>x402 payment evidence does not by itself establish agent-specific delegated authority. Without a separate policy check, a wallet or payment handler may accept requests broader than intended.</p>
+          <p>x402 payment requirements do not by themselves establish which agent may use which principal-owned value. A reusable wallet key also cannot express rolling policy or an emergency stop.</p>
         </div>
         <div class="card" style="border-left:3px solid #10b981;margin:0;">
           <span class="card-icon">&#x1F6E1;</span>
-          <h3>Grantex Adds Authorization Context</h3>
-          <p>A GDT (Grantex Delegation Token) is a W3C Verifiable Credential that carries signed claims for the approving principal, scope, amount limit, and expiry; the protected service must verify and enforce those claims.</p>
+          <h3>Grantex Reserves Before It Authorizes</h3>
+          <p>Every payment is DPoP-bound to an agent, evaluated against wallet and assignment policy, and reserved atomically before a short-lived one-time authorization is issued.</p>
         </div>
         <div class="card" style="border-left:3px solid #6366f1;margin:0;">
           <span class="card-icon">&#x1F50D;</span>
-          <h3>Configurable Audit Logging</h3>
-          <p>Configured issuance and verification events go to the selected audit logger. The default x402 logger and revocation registry are in memory; durable multi-process enforcement requires host-provided shared implementations.</p>
+          <h3>Reload and Stop Controls</h3>
+          <p>An agent may request a reload at the principal's threshold. Only the principal can approve and fund it, and can block one assignment, one wallet, or all of the agent's wallets.</p>
         </div>
       </div>
       <!-- Right: code -->
       <div>
-        <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:#6366f1;margin-bottom:10px;">Issue a delegation token</div>
+        <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:#6366f1;margin-bottom:10px;">Connect the agent wallet</div>
         <div class="code-block" style="border:1px solid var(--border);border-radius:var(--radius);margin-top:0;">
-          <pre><span class="kw">import</span> <span class="op">{</span> <span class="id">generateKeyPair</span><span class="op">,</span> <span class="id">issueGDT</span> <span class="op">}</span> <span class="kw">from</span> <span class="str">'@grantex/x402'</span><span class="op">;</span>
+          <pre><span class="kw">import</span> <span class="op">{</span> <span class="id">PrepaidWalletAgentClient</span> <span class="op">}</span> <span class="kw">from</span> <span class="str">'@grantex/sdk'</span><span class="op">;</span>
+<span class="kw">import</span> <span class="op">{</span> <span class="id">createX402Agent</span> <span class="op">}</span> <span class="kw">from</span> <span class="str">'@grantex/x402'</span><span class="op">;</span>
 
-<span class="kw">const</span> <span class="id">principal</span> <span class="op">=</span> <span class="fn">generateKeyPair</span><span class="op">();</span>
-<span class="kw">const</span> <span class="id">agent</span> <span class="op">=</span> <span class="fn">generateKeyPair</span><span class="op">();</span>
+<span class="kw">const</span> <span class="id">walletAgent</span> <span class="op">=</span> <span class="kw">new</span> <span class="fn">PrepaidWalletAgentClient</span><span class="op">({</span>
+  <span class="id">oauthClient</span><span class="op">,</span> <span class="id">accessToken</span>
+<span class="op">});</span>
 
-<span class="kw">const</span> <span class="id">gdt</span> <span class="op">=</span> <span class="kw">await</span> <span class="fn">issueGDT</span><span class="op">({</span>
-  <span class="id">agentDID</span><span class="op">:</span> <span class="id">agent</span><span class="op">.</span><span class="id">did</span><span class="op">,</span>
-  <span class="id">scope</span><span class="op">:</span> <span class="op">[</span><span class="str">'weather:read'</span><span class="op">],</span>
-  <span class="id">spendLimit</span><span class="op">:</span> <span class="op">{</span> <span class="id">amount</span><span class="op">:</span> <span class="str">10</span><span class="op">,</span> <span class="id">currency</span><span class="op">:</span> <span class="str">'USDC'</span><span class="op">,</span> <span class="id">period</span><span class="op">:</span> <span class="str">'24h'</span> <span class="op">},</span>
-  <span class="id">expiry</span><span class="op">:</span> <span class="str">'24h'</span><span class="op">,</span>
-  <span class="id">signingKey</span><span class="op">:</span> <span class="id">principal</span><span class="op">.</span><span class="id">privateKey</span><span class="op">,</span>
+<span class="kw">const</span> <span class="id">x402</span> <span class="op">=</span> <span class="fn">createX402Agent</span><span class="op">({</span>
+  <span class="id">authorizePayment</span><span class="op">:</span> <span class="id">walletAgent</span><span class="op">.</span><span class="id">x402Authorizer</span>
 <span class="op">});</span></pre>
         </div>
-        <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:#10b981;margin:20px 0 10px;">Protect your API</div>
+        <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:#10b981;margin:20px 0 10px;">Pay through x402 v2</div>
         <div class="code-block" style="border:1px solid var(--border);border-radius:var(--radius);margin-top:0;">
-          <pre><span class="kw">import</span> <span class="op">{</span> <span class="id">x402Middleware</span> <span class="op">}</span> <span class="kw">from</span> <span class="str">'@grantex/x402'</span><span class="op">;</span>
+          <pre><span class="kw">const</span> <span class="id">response</span> <span class="op">=</span> <span class="kw">await</span> <span class="id">x402</span><span class="op">.</span><span class="fn">fetch</span><span class="op">(</span>
+  <span class="str">'https://merchant.example/weather'</span>
+<span class="op">);</span>
 
-<span class="id">app</span><span class="op">.</span><span class="fn">use</span><span class="op">(</span><span class="str">'/api/weather'</span><span class="op">,</span> <span class="fn">x402Middleware</span><span class="op">({</span>
-  <span class="id">requiredScopes</span><span class="op">:</span> <span class="op">[</span><span class="str">'weather:read'</span><span class="op">],</span>
-  <span class="id">requiredAmount</span><span class="op">:</span> <span class="num">0.001</span><span class="op">,</span>
-  <span class="id">currency</span><span class="op">:</span> <span class="str">'USDC'</span><span class="op">,</span>
-<span class="op">}));</span>
+<span class="cm">// Official headers:</span>
+<span class="cm">// PAYMENT-REQUIRED</span>
+<span class="cm">// PAYMENT-SIGNATURE</span>
+<span class="cm">// PAYMENT-RESPONSE</span>
 
-<span class="cm">// req.gdt is populated:</span>
-<span class="cm">//   agentDID:       did:key:z6Mk...</span>
-<span class="cm">//   principalDID:   did:key:z6Mk...</span>
-<span class="cm">//   remainingLimit: 9.999</span>
-<span class="cm">//   scopes:         [weather:read]</span></pre>
+<span class="cm">// Grantex reserves and enforces policy</span>
+<span class="cm">// before the signed retry is created.</span></pre>
         </div>
       </div>
     </div>
@@ -2656,10 +2710,10 @@ func main() {
     <!-- ── Install + CTA ──────────────────────────────────────────────── -->
     <div style="margin-top:40px;">
       <div class="install-commands">
-        <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/x402', this)"
-                aria-label="Copy the x402 package install command">
-          <span class="install-label">npm</span>
-          <code>npm install @grantex/x402</code>
+        <button type="button" class="install-cmd" onclick="copyInstall('git clone https://github.com/mishrasanjeev/grantex.git', this)"
+                aria-label="Copy the Grantex source checkout command">
+          <span class="install-label">source</span>
+          <code>git clone https://github.com/mishrasanjeev/grantex.git</code>
           <span class="install-copy">Copy</span>
         </button>
       </div>
@@ -3056,7 +3110,7 @@ grantex agent install --dir /path/to/skills</pre>
         <div class="example-lang">TypeScript</div>
         <h3>x402 Payment Protocol</h3>
         <p>
-          AI agent uses a Grantex Delegation Token with x402 to fetch paid API
+          AI agent uses an assigned prepaid wallet and official x402 v2 to fetch a paid API
           data &mdash; automatic 402 &rarr; pay &rarr; retry flow.
         </p>
         <div class="example-packages">

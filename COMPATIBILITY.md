@@ -1,6 +1,6 @@
 # Grantex Compatibility Matrix
 
-Last updated: 2026-07-14
+Last updated: 2026-08-30
 Public release snapshot verified: 2026-08-10
 
 This repository uses package-specific versions; there is no monorepo-wide SDK or package release number. The protocol specification remains v1.0 Final, while repository metadata and package registries can move independently during a release.
@@ -13,7 +13,9 @@ This repository uses package-specific versions; there is no monorepo-wide SDK or
 | TypeScript SDK | @grantex/sdk 0.3.13 | Published to npm on 2026-07-11. |
 | Python SDK | grantex 0.3.14 | Published to PyPI on 2026-07-11. |
 | Go SDK | github.com/mishrasanjeev/grantex-go v0.1.10 | Published through the Go module proxy on 2026-07-11 (requires Go 1.26.1); see known limitations below. |
-| OpenAPI | 0.3.12 | API-contract version; independent of package-only SDK patches. |
+| TypeScript SDK source | @grantex/sdk 0.4.0 | Unreleased prepaid-wallet client source; public latest remains 0.3.13. |
+| x402 source | @grantex/x402 0.2.0 | Unreleased official x402 v2 prepaid-wallet integration. |
+| OpenAPI | 0.4.0 | Repository API contract including prepaid wallets; independent of the deployed/public snapshot. |
 | MCP Auth | @grantex/mcp-auth 2.0.2 | Independently versioned and published to npm; single-process evaluation limitations apply. |
 | Published snapshot | [release-status.json](release-status.json) | Machine-readable source for advertised versions and live registry checks. |
 
@@ -23,7 +25,7 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 
 | # | Directory | Published name | Version | Status |
 | ---: | --- | --- | ---: | --- |
-| 1 | `packages/sdk-ts` | @grantex/sdk | 0.3.13 | Primary SDK (TypeScript); published |
+| 1 | `packages/sdk-ts` | @grantex/sdk | 0.4.0 | Primary SDK (TypeScript); unreleased source, published latest is 0.3.13 |
 | 2 | `packages/sdk-py` | grantex | 0.3.14 | Primary SDK (Python); published |
 | 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.1.10 (Go 1.26.1) | Primary SDK (Go); published |
 | 4 | `packages/cli` | @grantex/cli | 0.3.0 | Tooling; published with bundled Agent Skills |
@@ -50,7 +52,7 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 | 25 | `packages/a2a` | @grantex/a2a | 0.1.3 | A2A bridge (TS) |
 | 26 | `packages/a2a-py` | grantex-a2a | 0.1.4 | A2A bridge (Python) |
 | 27 | `packages/mpp` | @grantex/mpp | 0.1.2 | MPP support |
-| 28 | `packages/x402` | @grantex/x402 | 0.1.2 | x402 support |
+| 28 | `packages/x402` | @grantex/x402 | 0.2.0 | Official x402 v2 prepaid-wallet source; unreleased |
 | 29 | `packages/terraform-provider-grantex` | terraform-provider-grantex | Go module (Go 1.25.0) | Terraform provider |
 
 ## Known Published-Package Limitations

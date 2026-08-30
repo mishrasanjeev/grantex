@@ -78,6 +78,7 @@
           {
             "group": "x402 Payment Protocol",
             "pages": [
+              "features/prepaid-wallets",
               "features/x402-architecture",
               "features/x402-gdt-spec"
             ]

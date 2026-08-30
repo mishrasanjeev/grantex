@@ -2,146 +2,14 @@
  * Tests covering all untested code paths identified in the coverage audit.
  * Organized by source file.
  */
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { issueGDT, parseExpiry } from '../src/gdt.js';
 import { verifyGDT, decodeGDT } from '../src/verify.js';
 import { generateKeyPair, importPrivateKey } from '../src/crypto.js';
-import { createX402Agent } from '../src/agent.js';
 import { x402Middleware } from '../src/middleware.js';
 import { InMemoryRevocationRegistry, setRevocationRegistry } from '../src/revocation.js';
 import { InMemoryAuditLog, setAuditLog } from '../src/audit.js';
 import { SignJWT } from 'jose';
-
-describe('Coverage gaps — agent.ts', () => {
-  beforeEach(() => {
-    setAuditLog(new InMemoryAuditLog());
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it('stub payment handler includes memo when present', async () => {
-    const mockFetch = vi.fn();
-    vi.stubGlobal('fetch', mockFetch);
-
-    // 402 with memo
-    mockFetch.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          amount: 0.001,
-          currency: 'USDC',
-          recipientAddress: '0xabc',
-          chain: 'base',
-          memo: 'weather-query-123',
-        }),
-        { status: 402, headers: { 'content-type': 'application/json' } },
-      ),
-    );
-    mockFetch.mockResolvedValueOnce(new Response('OK', { status: 200 }));
-
-    // Use default stub handler (no custom paymentHandler)
-    const agent = createX402Agent({ gdt: 'test' });
-    await agent.fetch('https://api.example.com/data');
-
-    // The retry should have a payment proof with memo embedded
-    const retryHeaders = mockFetch.mock.calls[1]![1]!.headers as Headers;
-    const proof = JSON.parse(Buffer.from(retryHeaders.get('X-Payment-Proof')!, 'base64url').toString());
-    expect(proof.memo).toBe('weather-query-123');
-  });
-
-  it('falls back to header parsing when JSON body parsing fails', async () => {
-    const mockFetch = vi.fn();
-    vi.stubGlobal('fetch', mockFetch);
-
-    // 402 with content-type json but malformed body
-    mockFetch.mockResolvedValueOnce(
-      new Response('not json{{{', {
-        status: 402,
-        headers: {
-          'content-type': 'application/json',
-          'X-Payment-Amount': '0.005',
-          'X-Payment-Currency': 'USDC',
-          'X-Payment-Recipient': '0xfallback',
-          'X-Payment-Chain': 'base',
-        },
-      }),
-    );
-    mockFetch.mockResolvedValueOnce(new Response('OK', { status: 200 }));
-
-    const paymentHandler = vi.fn().mockResolvedValue('proof');
-    const agent = createX402Agent({ gdt: 'test', paymentHandler });
-    await agent.fetch('https://api.example.com/data');
-
-    expect(paymentHandler).toHaveBeenCalledWith(
-      expect.objectContaining({ recipientAddress: '0xfallback', amount: 0.005 }),
-    );
-  });
-
-  it('throws when 402 response has no recipient header', async () => {
-    const mockFetch = vi.fn();
-    vi.stubGlobal('fetch', mockFetch);
-
-    mockFetch.mockResolvedValueOnce(
-      new Response(null, {
-        status: 402,
-        headers: { 'X-Payment-Amount': '0.001' },
-      }),
-    );
-
-    const agent = createX402Agent({ gdt: 'test' });
-    await expect(agent.fetch('https://api.example.com/data')).rejects.toThrow(
-      '402 response missing X-Payment-Recipient header',
-    );
-  });
-
-  it('handles payment handler throwing an error', async () => {
-    const mockFetch = vi.fn();
-    vi.stubGlobal('fetch', mockFetch);
-
-    mockFetch.mockResolvedValueOnce(
-      new Response(null, {
-        status: 402,
-        headers: {
-          'X-Payment-Amount': '0.001',
-          'X-Payment-Currency': 'USDC',
-          'X-Payment-Recipient': '0xrecipient',
-          'X-Payment-Chain': 'base',
-        },
-      }),
-    );
-
-    const agent = createX402Agent({
-      gdt: 'test',
-      paymentHandler: async () => { throw new Error('wallet locked'); },
-    });
-
-    await expect(agent.fetch('https://api.example.com/data')).rejects.toThrow('wallet locked');
-  });
-
-  it('preserves HTTP method on 402 retry', async () => {
-    const mockFetch = vi.fn();
-    vi.stubGlobal('fetch', mockFetch);
-
-    mockFetch.mockResolvedValueOnce(
-      new Response(null, {
-        status: 402,
-        headers: {
-          'X-Payment-Amount': '0.001',
-          'X-Payment-Currency': 'USDC',
-          'X-Payment-Recipient': '0xrecipient',
-          'X-Payment-Chain': 'base',
-        },
-      }),
-    );
-    mockFetch.mockResolvedValueOnce(new Response('OK', { status: 200 }));
-
-    const agent = createX402Agent({ gdt: 'test', paymentHandler: async () => 'proof' });
-    await agent.fetch('https://api.example.com/data', { method: 'POST' });
-
-    expect(mockFetch.mock.calls[1]![1]!.method).toBe('POST');
-  });
-});
 
 describe('Coverage gaps — verify.ts error messages', () => {
   let principal: ReturnType<typeof generateKeyPair>;

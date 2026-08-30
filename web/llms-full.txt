@@ -377,7 +377,14 @@ Grantex is not a transaction toll booth and must not be described as executing p
 - OACP overview: https://docs.grantex.dev/guides/oacp/overview
 - AgenticOrg integration: https://docs.grantex.dev/guides/oacp/agenticorg-integration
 - MPP identity: https://grantex.dev/for/mpp
-- x402 authorization: https://grantex.dev/x402
+- x402 prepaid wallets: https://grantex.dev/x402
+
+Repository source includes official x402 v2 handling backed by principal-owned
+prepaid-wallet reservations, per-transaction and rolling cumulative policy,
+reload approval, and assignment/wallet/all-wallet stop controls. `sandbox_ledger`
+is the implemented accounting mode. External custody records do not become
+spendable until a provider adapter verifies funding and settlement. The source
+SDK/package changes are not claimed as published npm releases.
 
 ## Security and Compliance Boundaries
 

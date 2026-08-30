@@ -11,7 +11,6 @@ import {
   setAuditLog,
   getAuditLog,
   x402Middleware,
-  createX402Agent,
 } from '../src/index.js';
 
 describe('Integration tests', () => {
@@ -170,56 +169,4 @@ describe('Integration tests', () => {
     });
   });
 
-  describe('x402 agent with real GDT', () => {
-    it('attaches GDT and handles 402 flow', async () => {
-      const principal = generateKeyPair();
-      const agent = generateKeyPair();
-
-      const token = await issueGDT({
-        agentDID: agent.did,
-        scope: ['weather:read'],
-        spendLimit: { amount: 10, currency: 'USDC', period: '24h' },
-        expiry: '24h',
-        signingKey: principal.privateKey,
-      });
-
-      const mockFetch = vi.fn();
-      vi.stubGlobal('fetch', mockFetch);
-
-      // First call → 402
-      mockFetch.mockResolvedValueOnce(
-        new Response(null, {
-          status: 402,
-          headers: {
-            'X-Payment-Amount': '0.001',
-            'X-Payment-Currency': 'USDC',
-            'X-Payment-Recipient': '0xRecipient',
-            'X-Payment-Chain': 'base',
-          },
-        }),
-      );
-      // Retry → 200
-      mockFetch.mockResolvedValueOnce(
-        new Response(JSON.stringify({ forecast: 'sunny' }), { status: 200 }),
-      );
-
-      const x402 = createX402Agent({
-        gdt: token,
-        paymentHandler: async () => 'proof123',
-      });
-
-      const res = await x402.fetch('https://api.example.com/weather');
-      expect(res.status).toBe(200);
-
-      // Verify GDT was attached on both calls
-      const firstHeaders = mockFetch.mock.calls[0]![1]!.headers as Headers;
-      expect(firstHeaders.get('X-Grantex-GDT')).toBe(token);
-
-      const retryHeaders = mockFetch.mock.calls[1]![1]!.headers as Headers;
-      expect(retryHeaders.get('X-Grantex-GDT')).toBe(token);
-      expect(retryHeaders.get('X-Payment-Proof')).toBe('proof123');
-
-      vi.unstubAllGlobals();
-    });
-  });
 });

@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { SignJWT } from 'jose';
-import { createX402Agent, HEADERS } from '../src/agent.js';
 import { generateKeyPair, importPrivateKey } from '../src/crypto.js';
 import { base58btcEncode, didToPublicKey, isValidDID } from '../src/did.js';
 import { issueGDT } from '../src/gdt.js';
@@ -8,15 +7,10 @@ import { verifyGDT } from '../src/verify.js';
 import { InMemoryAuditLog, setAuditLog } from '../src/audit.js';
 import { InMemoryRevocationRegistry, setRevocationRegistry } from '../src/revocation.js';
 
-const fetchMock = vi.fn();
-vi.stubGlobal('fetch', fetchMock);
-
 beforeEach(() => {
-  fetchMock.mockReset();
   setAuditLog(new InMemoryAuditLog());
   setRevocationRegistry(new InMemoryRevocationRegistry());
 });
-
 async function signedGDT(
   credentialSubject: Record<string, unknown>,
   expiry: boolean | number = true,
@@ -107,70 +101,5 @@ describe('GDT validation regressions', () => {
 
     expect(() => didToPublicKey(did)).toThrow('32-byte');
     expect(isValidDID(did)).toBe(false);
-  });
-});
-
-describe('x402 payment challenge regressions', () => {
-  it('does not pay malformed or unsupported challenges', async () => {
-    fetchMock.mockResolvedValueOnce(new Response(null, {
-      status: 402,
-      headers: {
-        [HEADERS.PAYMENT_AMOUNT]: '1junk',
-        [HEADERS.PAYMENT_CURRENCY]: 'USDC',
-        [HEADERS.PAYMENT_RECIPIENT]: '0xrecipient',
-      },
-    }));
-    const paymentHandler = vi.fn().mockResolvedValue('proof');
-
-    await expect(createX402Agent({ paymentHandler }).fetch('https://api.example.test'))
-      .rejects.toThrow('payment amount');
-    expect(paymentHandler).not.toHaveBeenCalled();
-  });
-
-  it('does not fall back to permissive headers after parsed JSON fails validation', async () => {
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
-      amount: 1,
-      currency: 'EUR',
-      recipientAddress: 'json-recipient',
-      chain: 'base',
-    }), {
-      status: 402,
-      headers: {
-        'content-type': 'application/json',
-        [HEADERS.PAYMENT_AMOUNT]: '1',
-        [HEADERS.PAYMENT_CURRENCY]: 'USDC',
-        [HEADERS.PAYMENT_RECIPIENT]: 'header-recipient',
-      },
-    }));
-    const paymentHandler = vi.fn().mockResolvedValue('proof');
-
-    await expect(createX402Agent({ paymentHandler }).fetch('https://api.example.test'))
-      .rejects.toThrow('unsupported payment currency');
-    expect(paymentHandler).not.toHaveBeenCalled();
-  });
-
-  it('requires a non-empty proof and records no successful payment for handler failure', async () => {
-    fetchMock.mockResolvedValueOnce(new Response(null, {
-      status: 402,
-      headers: {
-        [HEADERS.PAYMENT_AMOUNT]: '1',
-        [HEADERS.PAYMENT_CURRENCY]: 'USDC',
-        [HEADERS.PAYMENT_RECIPIENT]: '0xrecipient',
-      },
-    }));
-    const audit = new InMemoryAuditLog();
-    setAuditLog(audit);
-
-    await expect(createX402Agent({ paymentHandler: async () => '' }).fetch('https://api.example.test'))
-      .rejects.toThrow('payment proof');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(await audit.query({ eventType: 'payment' })).toHaveLength(0);
-  });
-
-  it('does not leak the SDK-only gdt option into the native fetch init', async () => {
-    fetchMock.mockResolvedValueOnce(new Response('ok', { status: 200 }));
-    await createX402Agent().fetch('https://api.example.test', { gdt: 'token' });
-
-    expect(fetchMock.mock.calls[0]![1]).not.toHaveProperty('gdt');
   });
 });

@@ -1,8 +1,8 @@
 /**
  * @grantex/x402 — Agent Spend Authorization for x402 Payment Flows
  *
- * Grantex Delegation Tokens (GDTs) for authorizing AI agent spending
- * via the x402 HTTP Payment Required protocol on Base L2.
+ * Official x402 v2 prepaid-wallet authorization plus legacy standalone GDT
+ * authorization-context utilities.
  *
  * @packageDocumentation
  */
@@ -18,7 +18,17 @@ export { generateKeyPair, derivePublicKey } from './crypto.js';
 export { publicKeyToDID, didToPublicKey, isValidDID } from './did.js';
 
 // x402 adapter
-export { createX402Agent, x402AgentFetch, HEADERS } from './agent.js';
+export {
+  createX402Agent,
+  x402AgentFetch,
+  HEADERS,
+  GRANTEX_PREPAID_NETWORK,
+  GRANTEX_PREPAID_SCHEME,
+} from './agent.js';
+export type {
+  PrepaidAuthorizationRequest,
+  PrepaidAuthorizationResponse,
+} from './agent.js';
 
 // Middleware
 export { x402Middleware } from './middleware.js';
