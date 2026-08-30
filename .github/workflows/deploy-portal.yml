@@ -83,6 +83,30 @@ jobs:
           check "/v1/identity" "\"@context\""
           check "/v1/x402" "\"@context\""
 
+          echo "--- GET $BASE/v1/prepaid-wallets"
+          prepaid_list_body=$(curl -sS -L --fail-with-body --max-time 20 \
+            "$BASE/v1/prepaid-wallets" || true)
+          if ! grep -q '"code":"INVALID_TOKEN"' <<<"$prepaid_list_body"; then
+            echo "FAIL: /v1/prepaid-wallets did not reach the auth-service"
+            echo "---- response head ----"
+            head -c 500 <<<"$prepaid_list_body"
+            exit 1
+          fi
+          echo "OK"
+
+          echo "--- POST $BASE/v1/prepaid-wallets/authorizations"
+          prepaid_authorize_body=$(curl -sS -L --fail-with-body --max-time 20 \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            "$BASE/v1/prepaid-wallets/authorizations" || true)
+          if ! grep -q '"code":"INVALID_TOKEN"' <<<"$prepaid_authorize_body"; then
+            echo "FAIL: /v1/prepaid-wallets/** did not reach the auth-service"
+            echo "---- response head ----"
+            head -c 500 <<<"$prepaid_authorize_body"
+            exit 1
+          fi
+          echo "OK"
+
           echo "--- POST $BASE/v1/webauthn/assert/options"
           webauthn_body=$(curl -sS -L --fail-with-body --max-time 20 \
             -H "Content-Type: application/json" \
