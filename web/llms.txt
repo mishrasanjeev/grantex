@@ -77,7 +77,7 @@ For MCP HTTP transport authorization, use an established MCP-compatible authoriz
 - [OACP Documentation](https://docs.grantex.dev/guides/oacp/overview): Canonical ownership and non-ownership boundaries.
 - [AgenticOrg Integration Boundary](https://docs.grantex.dev/guides/oacp/agenticorg-integration): Buyer and seller runtime responsibilities versus Grantex authority.
 - [MPP Agent Identity](https://grantex.dev/for/mpp): Verifiable agent passports and spending constraints for machine payments.
-- [x402 Agent Spend Authorization](https://grantex.dev/x402): Delegated authority for HTTP 402 payment flows.
+- [x402 Prepaid Wallets](https://grantex.dev/x402): Official x402 v2 backed by DPoP agent identity, atomic prepaid reservations, rolling limits, reload approval, and principal stop controls. Repository source is unreleased; external custody adapters remain fail-closed.
 
 ## Machine-Readable Sources
 

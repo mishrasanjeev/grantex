@@ -121,6 +121,50 @@ of the draft family is published as an active individual Internet-Draft;
 revision `-03` is the working candidate implemented here. Neither is an
 IETF-endorsed or independently certified standard.
 
+## Agent prepaid wallets (0.4.0 repository source)
+
+`PrepaidWalletAgentClient` uses an `OAuthAgentClient` and DPoP access token to
+list assigned wallets, reserve payments, and request threshold reloads.
+`PrincipalPrepaidWalletClient` uses a short-lived principal-session token to
+create and fund wallets, assign policy, approve reloads, inspect activity, and
+block an assignment, wallet, or all wallets for one agent.
+
+The access token must include `wallet:spend` and each action scope used in a
+payment (for example `weather:read`). Agent wallet listings intentionally omit
+custody-provider IDs, wallet addresses, principal IDs, and wallet metadata.
+
+```typescript
+import {
+  PrepaidWalletAgentClient,
+  PrincipalPrepaidWalletClient,
+} from '@grantex/sdk';
+
+const agentWallets = new PrepaidWalletAgentClient({
+  oauthClient,
+  accessToken,
+});
+
+const principalWallets = new PrincipalPrepaidWalletClient({
+  baseUrl: 'https://grantex.dev',
+  sessionToken,
+});
+
+const authorization = await agentWallets.authorizePayment({
+  amount: '1000',
+  asset: 'USDC',
+  network: 'grantex:prepaid',
+  recipient: 'merchant:weather-api',
+  resource: 'https://merchant.example/weather',
+  scope: 'weather:read',
+  maxTimeoutSeconds: 120,
+  idempotencyKey: crypto.randomUUID(),
+});
+```
+
+Amounts are atomic-unit integer strings. The 0.4.0 code is unreleased until a
+new npm package is published; the registry's current 0.3.13 package does not
+contain these classes.
+
 ## Commerce V1 / OACP
 
 The SDK includes a `commerce` resource for the Grantex Commerce V1 control

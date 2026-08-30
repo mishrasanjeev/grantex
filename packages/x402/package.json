@@ -1,7 +1,7 @@
 {
   "name": "@grantex/x402",
-  "version": "0.1.2",
-  "description": "Grantex Delegation Tokens for x402 payment flows — agent spend authorization with W3C Verifiable Credentials",
+  "version": "0.2.0",
+  "description": "Official x402 v2 integration backed by principal-controlled Grantex prepaid wallets",
   "author": {
     "name": "Sanjeev Kumar",
     "email": "sanjeev@orchestrum.in"
@@ -36,6 +36,8 @@
   "dependencies": {
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.0.1",
+    "@x402/core": "^2.24.0",
+    "@x402/fetch": "^2.24.0",
     "jose": "^6.2.3"
   },
   "peerDependencies": {

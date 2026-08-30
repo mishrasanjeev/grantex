@@ -3,6 +3,7 @@ import { getRedis } from '../redis/client.js';
 import { emitEvent } from './events.js';
 import { grantsRevokedTotal } from './metrics.js';
 import { revokeVCsByGrantIds } from './vc.js';
+import { releaseWalletReservationsForGrants } from './prepaid-wallet.js';
 
 export interface RevokeResult {
   revoked: boolean;
@@ -57,6 +58,11 @@ export async function revokeGrantCascade(
         AND developer_id = ${developerId}
       RETURNING id, expires_at
     `;
+    await releaseWalletReservationsForGrants(
+      tx,
+      developerId,
+      [grantId, ...descendantRows.map((row) => row['id'] as string)],
+    );
   });
 
   if (!grant) {

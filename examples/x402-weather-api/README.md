@@ -1,31 +1,47 @@
 # x402 Weather API Example
 
-Express server demonstrating x402 payment flow + GDT (Grantex Delegation Token) enforcement.
+An Express resource server that uses official x402 v2 messages and the Grantex
+prepaid-wallet facilitator. There is no fake payment proof and no client-supplied
+amount header.
 
 ## Run
 
+Start the Grantex Docker stack first, then run the example:
+
 ```bash
+docker compose up --build -d
+cd examples/x402-weather-api
 npm install
 npm start
 ```
 
-Server starts on `http://localhost:3402`. On startup, it generates demo keys and a sample GDT token.
-
-## Endpoints
-
-| Endpoint | Auth | Description |
-|----------|------|-------------|
-| `GET /health` | None | Health check |
-| `GET /api/weather/status` | None | Service status & pricing |
-| `GET /api/weather/forecast` | x402 + GDT | Weather forecast (costs 0.001 USDC) |
-| `GET /api/audit` | None | View audit log |
+The resource server listens on `http://localhost:3402` and uses
+`http://localhost:3001/v1/x402` as its facilitator. Override
+`PUBLIC_URL`, `GRANTEX_FACILITATOR_URL`, or `PORT` when needed.
 
 ## Flow
 
-1. Request without payment → `402 Payment Required`
-2. Request with payment but no GDT → `403 Forbidden`
-3. Request with payment + valid GDT → `200 OK` with weather data
+1. `GET /api/weather/forecast` returns HTTP 402 and a standard
+   `PAYMENT-REQUIRED` declaration.
+2. `@grantex/x402` asks the DPoP-authenticated wallet service to reserve the
+   declared atomic amount.
+3. The client retries with `PAYMENT-SIGNATURE`.
+4. This server submits the exact payload and requirements to `/v1/x402/verify`
+   and `/v1/x402/settle`.
+5. A successful response includes `PAYMENT-RESPONSE` and the weather data.
 
-## Ownership
+For a side-effecting resource, callers should additionally send a durable HTTP
+`Idempotency-Key`, and the resource server must atomically persist and replay the
+business result under that key. The Grantex SDK's similarly named option protects
+the wallet reservation before settlement; it does not replace merchant result
+idempotency. This weather example is read-only and keeps no durable result store.
 
-Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+The assigned wallet must allow network `grantex:prepaid`, asset `USDC`,
+recipient `merchant:weather-api`, and scope `weather:read`. It must have at least
+`1000` atomic units available under both transaction and cumulative limits.
+
+See [the integration guide](../../docs/integrations/x402.mdx) for principal and
+agent setup.
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev
+Kumar. Contact: mishra.sanjeev@gmail.com or sanjeev@orchestrum.in.

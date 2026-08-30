@@ -339,6 +339,8 @@ describe('DELETE /v1/agents/:id', () => {
   it('deletes agent and returns 204', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // SELECT existence check
+    sqlMock.mockResolvedValueOnce([]); // agent lifecycle advisory lock
+    sqlMock.mockResolvedValueOnce([]); // prepaid-wallet financial history check
     sqlMock.mockResolvedValueOnce([]); // DELETE budget_transactions
     sqlMock.mockResolvedValueOnce([]); // DELETE budget_allocations
     sqlMock.mockResolvedValueOnce([]); // DELETE refresh_tokens
@@ -357,6 +359,23 @@ describe('DELETE /v1/agents/:id', () => {
     expect(res.statusCode).toBe(204);
     expect(sqlMock.begin).toHaveBeenCalledTimes(1);
     expect(sqlMock.mock.calls.map((call) => String(call[0])).join('\n')).toContain('oauth_par_requests');
+  });
+
+  it('preserves prepaid-wallet evidence instead of failing a hard delete', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // SELECT existence check
+    sqlMock.mockResolvedValueOnce([]); // agent lifecycle advisory lock
+    sqlMock.mockResolvedValueOnce([{ '?column?': 1 }]); // financial history exists
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/v1/agents/${TEST_AGENT.id}`,
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'AGENT_HAS_FINANCIAL_HISTORY' });
+    expect(sqlMock.mock.calls.map((call) => String(call[0])).join('\n')).not.toContain('DELETE FROM agents');
   });
 
   it('returns 404 when agent not found', async () => {

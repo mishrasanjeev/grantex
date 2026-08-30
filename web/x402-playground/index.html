@@ -82,7 +82,8 @@ footer a:hover{text-decoration:underline}
 <div class="container">
 <header>
 <h1>Grantex &times; x402 Playground</h1>
-<p class="subtitle">Interactive demo of agent spend authorization for x402 payment flows</p>
+<p class="subtitle">Explore official x402 v2 prepaid-wallet flow and legacy standalone GDT verification</p>
+<p style="color:var(--amber);font-size:.82rem;margin-top:8px">Managed prepaid wallets are a tested repository preview and are not present in the current npm release.</p>
 </header>
 
 <div class="panels">
@@ -150,15 +151,15 @@ footer a:hover{text-decoration:underline}
 <!-- x402 Flow Simulation -->
 <div class="panel">
 <h2>x402 Flow Simulation <span class="badge">HTTP 402</span></h2>
-<p style="color:var(--text-dim);font-size:.85rem;margin-bottom:12px">Watch the full agent payment flow step by step.</p>
+<p style="color:var(--text-dim);font-size:.85rem;margin-bottom:12px">This visual simulation shows the managed prepaid flow. The GDT controls above are a separate legacy token demonstration and do not maintain wallet balance.</p>
 <button class="btn-primary" onclick="runSimulation()">Run Simulation</button>
 <div class="flow" id="flow-steps">
-<div class="flow-step" id="step-1"><div class="num">1</div><div class="desc">Agent sends GET request with GDT<small>X-Grantex-GDT: eyJ...</small></div></div>
-<div class="flow-step" id="step-2"><div class="num">2</div><div class="desc">API returns HTTP 402 Payment Required<small>X-Payment-Amount: 0.001, X-Payment-Currency: USDC</small></div></div>
-<div class="flow-step" id="step-3"><div class="num">3</div><div class="desc">Agent pays via Base L2 (USDC)<small>Simulating on-chain transfer...</small></div></div>
-<div class="flow-step" id="step-4"><div class="num">4</div><div class="desc">Agent retries with Payment Proof + GDT<small>X-Payment-Proof: base64url(...), X-Grantex-GDT: eyJ...</small></div></div>
-<div class="flow-step" id="step-5"><div class="num">5</div><div class="desc">API verifies GDT (signature, scope, limit)<small>verifyGDT() &rarr; valid, remainingLimit: $9.999</small></div></div>
-<div class="flow-step" id="step-6"><div class="num">6</div><div class="desc">API returns weather data<small>{ forecast: "Partly Cloudy, 68&deg;F" }</small></div></div>
+<div class="flow-step" id="step-1"><div class="num">1</div><div class="desc">Agent requests the protected resource<small>OAuth access is DPoP-bound to /v1/prepaid-wallets</small></div></div>
+<div class="flow-step" id="step-2"><div class="num">2</div><div class="desc">API returns official x402 v2 requirements<small>PAYMENT-REQUIRED: base64(JSON)</small></div></div>
+<div class="flow-step" id="step-3"><div class="num">3</div><div class="desc">Grantex checks policy and reserves value<small>Balance + transaction + rolling + recipient + scope</small></div></div>
+<div class="flow-step" id="step-4"><div class="num">4</div><div class="desc">Agent retries with one-time authorization<small>PAYMENT-SIGNATURE: base64(JSON)</small></div></div>
+<div class="flow-step" id="step-5"><div class="num">5</div><div class="desc">Resource server verifies and settles<small>Exact requirements and active reservation required</small></div></div>
+<div class="flow-step" id="step-6"><div class="num">6</div><div class="desc">API returns data and settlement result<small>PAYMENT-RESPONSE: base64(JSON)</small></div></div>
 </div>
 </div>
 
@@ -166,8 +167,8 @@ footer a:hover{text-decoration:underline}
 <div class="panel">
 <h2>Code Examples <span class="badge">TypeScript</span></h2>
 <div class="tabs">
-<button class="tab active" onclick="showTab(this,'tab-issue')">Issue GDT</button>
-<button class="tab" onclick="showTab(this,'tab-verify')">Verify GDT</button>
+<button class="tab active" onclick="showTab(this,'tab-issue')">Legacy GDT</button>
+<button class="tab" onclick="showTab(this,'tab-verify')">Legacy Verify</button>
 <button class="tab" onclick="showTab(this,'tab-agent')">x402 Agent</button>
 <button class="tab" onclick="showTab(this,'tab-middleware')">Middleware</button>
 </div>
@@ -197,17 +198,19 @@ if (result.valid) {
 } else {
   console.error('Rejected:', result.error);
 }</div></div>
-<div class="tab-content" id="tab-agent"><div class="output"><button class="copy-btn" onclick="copyEl(this)">copy</button>import { createX402Agent } from '@grantex/x402';
+<div class="tab-content" id="tab-agent"><div class="output"><button class="copy-btn" onclick="copyEl(this)">copy</button>import { PrepaidWalletAgentClient } from '@grantex/sdk';
+import { createX402Agent } from '@grantex/x402';
 
-const x402 = createX402Agent({
-  gdt: gdtToken,
-  paymentHandler: async (details) =&gt; {
-    // Sign USDC transfer on Base L2
-    return await payOnBase(details);
-  },
+const walletAgent = new PrepaidWalletAgentClient({
+  oauthClient,
+  accessToken,
 });
 
-// Automatic: 402 &rarr; pay &rarr; retry with GDT
+const x402 = createX402Agent({
+  authorizePayment: walletAgent.x402Authorizer,
+});
+
+// Automatic: PAYMENT-REQUIRED &rarr; reserve &rarr; PAYMENT-SIGNATURE
 const response = await x402.fetch(
   'https://api.weather.xyz/forecast'
 );</div></div>
@@ -234,7 +237,7 @@ app.get('/api/weather/forecast', (req, res) =&gt; {
 </div>
 
 <footer>
-<p><a href="https://github.com/mishrasanjeev/grantex">GitHub</a> &middot; <a href="https://grantex.dev">Docs</a> &middot; <a href="https://www.npmjs.com/package/@grantex/x402">npm</a></p>
+<p><a href="https://github.com/mishrasanjeev/grantex">GitHub</a> &middot; <a href="https://grantex.dev">Docs</a> &middot; <a href="https://www.npmjs.com/package/@grantex/x402">Published legacy package</a></p>
 <p style="margin-top:8px">&copy; 2026 Orchestrum Technologies LLP &mdash; Apache 2.0</p>
       <p class="ownership-notice">Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Contact: <a href="mailto:sanjeev@orchestrum.in">sanjeev@orchestrum.in</a> or <a href="mailto:mishra.sanjeev@gmail.com">mishra.sanjeev@gmail.com</a>.</p>
 

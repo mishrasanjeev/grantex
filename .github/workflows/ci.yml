@@ -216,7 +216,10 @@ jobs:
         run: npm ci && npm run typecheck && npm test
       - name: Test x402
         working-directory: packages/x402
-        run: npm ci && npm run typecheck && npm test
+        run: npm ci && npm run typecheck && npm test && npm run build
+      - name: Typecheck official x402 weather resource example
+        working-directory: examples/x402-weather-api
+        run: npm ci && npm run typecheck
 
   # ─── Python integration packages ─────────────────────────────────────────
 

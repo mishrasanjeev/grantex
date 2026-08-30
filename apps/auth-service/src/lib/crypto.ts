@@ -497,3 +497,114 @@ export async function verifyPrincipalSessionToken(
 
   return { principalId, developerId };
 }
+
+// ─── Prepaid-wallet payment authorizations ─────────────────────────────────
+
+const PREPAID_WALLET_AUDIENCE = 'urn:grantex:x402:prepaid-wallet';
+
+export interface WalletAuthorizationPayload {
+  authorizationId: string;
+  reservationId: string;
+  walletId: string;
+  assignmentId: string;
+  agentId: string;
+  principalId: string;
+  developerId: string;
+  grantId: string;
+  amount: string;
+  asset: string;
+  network: string;
+  recipient: string;
+  resource: string;
+  scope: string;
+  requestHash: string;
+  expiresAt: number;
+}
+
+export async function signWalletAuthorizationToken(
+  authorization: WalletAuthorizationPayload,
+): Promise<string> {
+  const { privateKey, kid } = getKeyPair();
+  return new SignJWT({
+    purpose: 'prepaid_wallet_payment',
+    reservation_id: authorization.reservationId,
+    wallet_id: authorization.walletId,
+    assignment_id: authorization.assignmentId,
+    agent_id: authorization.agentId,
+    principal_id: authorization.principalId,
+    developer_id: authorization.developerId,
+    grant_id: authorization.grantId,
+    amount: authorization.amount,
+    asset: authorization.asset,
+    network: authorization.network,
+    recipient: authorization.recipient,
+    resource: authorization.resource,
+    scope: authorization.scope,
+    request_hash: authorization.requestHash,
+  })
+    .setProtectedHeader({ alg: 'RS256', kid, typ: 'wallet-auth+jwt' })
+    .setIssuer(config.jwtIssuer)
+    .setAudience(PREPAID_WALLET_AUDIENCE)
+    .setSubject(authorization.agentId)
+    .setJti(authorization.authorizationId)
+    .setIssuedAt()
+    .setExpirationTime(authorization.expiresAt)
+    .sign(privateKey);
+}
+
+export async function verifyWalletAuthorizationToken(
+  token: string,
+): Promise<WalletAuthorizationPayload> {
+  const { publicKey } = getKeyPair();
+  const { payload, protectedHeader } = await jwtVerify(token, publicKey, {
+    issuer: config.jwtIssuer,
+    audience: PREPAID_WALLET_AUDIENCE,
+    algorithms: ['RS256'],
+  });
+
+  if (protectedHeader.typ !== 'wallet-auth+jwt'
+      || payload['purpose'] !== 'prepaid_wallet_payment') {
+    throw new Error('Invalid wallet authorization token type');
+  }
+
+  const claims = {
+    authorizationId: payload.jti,
+    reservationId: payload['reservation_id'],
+    walletId: payload['wallet_id'],
+    assignmentId: payload['assignment_id'],
+    agentId: payload['agent_id'],
+    principalId: payload['principal_id'],
+    developerId: payload['developer_id'],
+    grantId: payload['grant_id'],
+    amount: payload['amount'],
+    asset: payload['asset'],
+    network: payload['network'],
+    recipient: payload['recipient'],
+    resource: payload['resource'],
+    scope: payload['scope'],
+    requestHash: payload['request_hash'],
+  };
+  if (Object.values(claims).some((value) => typeof value !== 'string' || value.length === 0)
+      || typeof payload.exp !== 'number' || !Number.isSafeInteger(payload.exp)) {
+    throw new Error('Wallet authorization token is missing required claims');
+  }
+
+  return {
+    authorizationId: claims.authorizationId as string,
+    reservationId: claims.reservationId as string,
+    walletId: claims.walletId as string,
+    assignmentId: claims.assignmentId as string,
+    agentId: claims.agentId as string,
+    principalId: claims.principalId as string,
+    developerId: claims.developerId as string,
+    grantId: claims.grantId as string,
+    amount: claims.amount as string,
+    asset: claims.asset as string,
+    network: claims.network as string,
+    recipient: claims.recipient as string,
+    resource: claims.resource as string,
+    scope: claims.scope as string,
+    requestHash: claims.requestHash as string,
+    expiresAt: payload.exp,
+  };
+}

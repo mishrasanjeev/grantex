@@ -52,6 +52,7 @@ import { commerceProviderWebhookRoutes } from './routes/commerce-provider-webhoo
 import { metricsHookPlugin } from './plugins/metricsHook.js';
 import websocket from '@fastify/websocket';
 import { oauthRoutes } from './routes/oauth.js';
+import { prepaidWalletRoutes } from './routes/prepaid-wallets.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -197,6 +198,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(meRoutes);
   await app.register(adminRoutes);
   await app.register(principalRoutes);
+  await app.register(prepaidWalletRoutes);
   await app.register(vaultRoutes);
   await app.register(eventsRoutes);
   await app.register(budgetRoutes);

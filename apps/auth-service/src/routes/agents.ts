@@ -308,10 +308,22 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
     }
 
-    // Cascade delete as one transaction so an intermediate FK/DB failure
-    // cannot leave a half-deleted agent graph.
+    let hasFinancialHistory = false;
+    // Serialize deletion with wallet authorization and preserve append-only
+    // financial evidence. Agents with payment history must be suspended and
+    // their grants revoked instead of being hard-deleted.
     await sql.begin(async (_tx) => {
       const tx = _tx as unknown as TxSql;
+      await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`${developerId}:${agentId}`}, 13))`;
+      const walletHistory = await tx`
+        SELECT 1 FROM wallet_payment_reservations
+        WHERE agent_id = ${agentId} AND developer_id = ${developerId}
+        LIMIT 1
+      `;
+      if (walletHistory[0]) {
+        hasFinancialHistory = true;
+        return;
+      }
       const grantSubquery = tx`SELECT id FROM grants WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
       await tx`DELETE FROM budget_transactions WHERE grant_id IN (${grantSubquery})`;
       await tx`DELETE FROM budget_allocations WHERE grant_id IN (${grantSubquery})`;
@@ -322,6 +334,14 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       await tx`DELETE FROM oauth_par_requests WHERE client_id = ${agentId} AND developer_id = ${developerId}`;
       await tx`DELETE FROM agents WHERE id = ${agentId} AND developer_id = ${developerId}`;
     });
+
+    if (hasFinancialHistory) {
+      return reply.status(409).send({
+        message: 'Agents with prepaid-wallet history cannot be deleted; suspend the agent and revoke its grants to preserve financial evidence',
+        code: 'AGENT_HAS_FINANCIAL_HISTORY',
+        requestId: request.id,
+      });
+    }
 
     return reply.status(204).send();
   });

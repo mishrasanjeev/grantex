@@ -22,6 +22,24 @@ export {
   type OAuthAgentTokenResponse,
 } from './oauth-agent.js';
 
+// Agent prepaid wallets and x402 authorization bridge
+export {
+  PrepaidWalletAgentClient,
+  PrincipalPrepaidWalletClient,
+  type PrepaidCustodyMode,
+  type PrepaidWalletStatus,
+  type WalletAssignmentStatus,
+  type PrepaidWallet,
+  type AssignedPrepaidWallet,
+  type WalletAssignment,
+  type CreatePrepaidWalletParams,
+  type AssignPrepaidWalletParams,
+  type PrepaidAuthorizationRequest,
+  type PrepaidAuthorizationResponse,
+  type WalletReloadRequest,
+  type PrepaidWalletActivity,
+} from './prepaid-wallets.js';
+
 // Error classes
 export {
   GrantexError,

@@ -7,8 +7,9 @@
  */
 
 import { verifyGDT } from './verify.js';
-import { HEADERS } from './agent.js';
 import type { X402MiddlewareOptions, VerifyContext, VerifyResult } from './types.js';
+
+const GDT_HEADER = 'X-Grantex-GDT';
 
 /** Express-compatible request type (avoids hard dependency). */
 interface ExpressRequest {
@@ -81,8 +82,8 @@ export function x402Middleware(options: X402MiddlewareOptions = {}) {
     next: NextFunction,
   ): Promise<void> {
     const gdtToken =
-      req.get(HEADERS.GDT) ??
-      req.get(HEADERS.GDT.toLowerCase()) ??
+      req.get(GDT_HEADER) ??
+      req.get(GDT_HEADER.toLowerCase()) ??
       (typeof req.headers['x-grantex-gdt'] === 'string'
         ? req.headers['x-grantex-gdt']
         : undefined);

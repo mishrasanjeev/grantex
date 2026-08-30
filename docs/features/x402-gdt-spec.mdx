@@ -6,7 +6,15 @@ description: "Specification of the Grantex Delegation Token (GDT) — a W3C Veri
 
 ## Grantex Delegation Token (GDT)
 
-A **Grantex Delegation Token** is a W3C Verifiable Credential 2.0 that authorizes an AI agent to make payments on behalf of a human principal. It is encoded as a compact JWT signed with Ed25519 (EdDSA algorithm).
+A **Grantex Delegation Token** is a W3C Verifiable Credential 2.0 that carries signed authorization context for an AI agent acting on behalf of a human principal. It is encoded as a compact JWT signed with Ed25519 (EdDSA algorithm). A relying service decides whether and how to enforce that context.
+
+<Warning>
+This document specifies the legacy standalone authorization-context token. A
+GDT is not a prepaid balance, payment proof, or shared cumulative-spend counter.
+Use [Agent Prepaid Wallets](/features/prepaid-wallets) and the official x402 v2
+flow when spend must be atomically reserved, accumulated, reloaded, and blocked
+across callers.
+</Warning>
 
 ## Token Format
 

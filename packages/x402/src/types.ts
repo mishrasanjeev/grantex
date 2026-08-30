@@ -143,20 +143,7 @@ export interface X402PaymentDetails {
 }
 
 /** Configuration for the x402 agent fetch wrapper. */
-export interface X402AgentConfig {
-  /** Base L2 wallet private key for signing payment transactions. */
-  walletPrivateKey?: string;
-  /** GDT JWT to attach to all requests. */
-  gdt?: string;
-  /** Custom payment handler (replaces default stub). */
-  paymentHandler?: (details: X402PaymentDetails) => Promise<string>;
-}
-
-/** Options for a single x402Agent.fetch() call. */
-export interface X402FetchOptions extends RequestInit {
-  /** GDT JWT for this specific request (overrides config-level GDT). */
-  gdt?: string;
-}
+export type { X402AgentConfig, X402FetchOptions } from './agent.js';
 
 // ---------------------------------------------------------------------------
 // Middleware

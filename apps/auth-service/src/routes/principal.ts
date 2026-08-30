@@ -1,11 +1,11 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import {
   signPrincipalSessionToken,
-  verifyPrincipalSessionToken,
   parseExpiresIn,
 } from '../lib/crypto.js';
 import { revokeGrantCascade } from '../lib/revoke.js';
+import { requirePrincipalSession } from '../lib/principal-auth.js';
 
 const PERMISSIONS_CSP = [
   "default-src 'self'",
@@ -17,24 +17,6 @@ const PERMISSIONS_CSP = [
 ].join('; ');
 
 const MAX_SESSION_SECONDS = 86400; // 24h
-
-async function verifyPrincipalAuth(
-  request: FastifyRequest,
-  reply: FastifyReply,
-): Promise<{ principalId: string; developerId: string } | null> {
-  const auth = request.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) {
-    reply.status(401).send({ message: 'Missing session token', code: 'UNAUTHORIZED' });
-    return null;
-  }
-  const token = auth.slice(7);
-  try {
-    return await verifyPrincipalSessionToken(token);
-  } catch {
-    reply.status(401).send({ message: 'Invalid or expired session token', code: 'UNAUTHORIZED' });
-    return null;
-  }
-}
 
 export async function principalRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/principal-sessions — developer creates a session for an end-user
@@ -108,7 +90,7 @@ export async function principalRoutes(app: FastifyInstance): Promise<void> {
     '/v1/principal/grants',
     { config: { skipAuth: true } },
     async (request, reply) => {
-      const session = await verifyPrincipalAuth(request, reply);
+      const session = await requirePrincipalSession(request, reply);
       if (!session) return;
 
       const sql = getSql();
@@ -146,7 +128,7 @@ export async function principalRoutes(app: FastifyInstance): Promise<void> {
     '/v1/principal/audit',
     { config: { skipAuth: true } },
     async (request, reply) => {
-      const session = await verifyPrincipalAuth(request, reply);
+      const session = await requirePrincipalSession(request, reply);
       if (!session) return;
 
       const sql = getSql();
@@ -180,7 +162,7 @@ export async function principalRoutes(app: FastifyInstance): Promise<void> {
     '/v1/principal/grants/:id',
     { config: { skipAuth: true } },
     async (request, reply) => {
-      const session = await verifyPrincipalAuth(request, reply);
+      const session = await requirePrincipalSession(request, reply);
       if (!session) return;
 
       // Verify the grant belongs to this principal+developer
@@ -260,6 +242,20 @@ function permissionsPageHtml(): string {
 
     .btn-revoke { padding: 6px 14px; background: #fff; border: 1px solid #fca5a5; color: #dc2626; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; }
     .btn-revoke:hover { background: #fee2e2; }
+    .wallet-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 40px; }
+    .wallet-card { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; min-width: 0; }
+    .wallet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .wallet-name { font-weight: 650; color: #111827; overflow-wrap: anywhere; }
+    .wallet-balance { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 22px; color: #111827; margin: 14px 0 2px; }
+    .wallet-unit { font-size: 11px; color: #9ca3af; }
+    .wallet-policy { border-top: 1px solid #f3f4f6; margin-top: 14px; padding-top: 12px; font-size: 12px; color: #6b7280; }
+    .wallet-policy-row { display: flex; justify-content: space-between; gap: 10px; margin-top: 5px; }
+    .wallet-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .btn-control { border: 1px solid #d1d5db; background: white; color: #374151; border-radius: 6px; padding: 6px 9px; font-size: 11px; cursor: pointer; }
+    .btn-control:hover { background: #f9fafb; }
+    .btn-stop { border-color: #fca5a5; color: #b91c1c; }
+    .btn-approve { border-color: #86efac; color: #047857; }
+    .reload-row { background: #f9fafb; border-radius: 6px; padding: 9px; margin-top: 10px; font-size: 11px; color: #4b5563; }
 
     .audit-wrap { background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -304,6 +300,10 @@ function permissionsPageHtml(): string {
     <div class="section-sub">These agents are authorized to act on your behalf. You can revoke access at any time.</div>
     <div id="grant-list" class="grant-list"></div>
 
+    <div class="section-title">Agent prepaid wallets</div>
+    <div class="section-sub">Review atomic-unit balances, reload requests, and the policy assigned to each agent. Stop controls release outstanding reservations in the affected boundary.</div>
+    <div id="wallet-list" class="wallet-list"></div>
+
     <div class="section-title">Recent activity</div>
     <div class="section-sub" style="margin-bottom:12px">Actions taken by agents on your behalf.</div>
     <div class="audit-wrap">
@@ -347,11 +347,18 @@ function permissionsPageHtml(): string {
     Promise.all([
       apiFetch('/v1/principal/grants'),
       apiFetch('/v1/principal/audit'),
+      apiFetch('/v1/principal/prepaid-wallets'),
     ]).then(function(results) {
+      var wallets = results[2].wallets || [];
+      return Promise.all(wallets.map(function(wallet) {
+        return apiFetch('/v1/principal/prepaid-wallets/' + encodeURIComponent(wallet.walletId) + '/activity');
+      })).then(function(activity) { return { results: results, wallets: wallets, activity: activity }; });
+    }).then(function(data) {
       document.getElementById('loading').style.display = 'none';
       document.getElementById('main').style.display = '';
-      renderGrants(results[0].grants || []);
-      renderAudit(results[1].entries || []);
+      renderGrants(data.results[0].grants || []);
+      renderWallets(data.wallets, data.activity);
+      renderAudit(data.results[1].entries || []);
     }).catch(function(e) {
       document.getElementById('loading').style.display = 'none';
       if (e.message === 'SESSION_EXPIRED') {
@@ -363,6 +370,57 @@ function permissionsPageHtml(): string {
         err.style.display = 'block';
       }
     });
+  }
+
+  function renderWallets(wallets, activity) {
+    var el = document.getElementById('wallet-list');
+    if (!wallets.length) {
+      el.innerHTML = '<div class="empty">No prepaid wallets are assigned to this principal.</div>';
+      return;
+    }
+    el.innerHTML = wallets.map(function(wallet, index) {
+      var details = activity[index] || {};
+      var assignments = details.assignments || [];
+      var reloads = (details.reloadRequests || []).filter(function(item) {
+        return item.status === 'pending' || item.status === 'approved';
+      });
+      var assignmentHtml = assignments.map(function(item) {
+        var next = item.status === 'active' ? 'blocked' : 'active';
+        var action = item.status === 'active' ? 'Block assignment' : 'Unblock assignment';
+        var assignmentControl = item.status === 'revoked'
+          ? '<span class="badge b-blocked">revoked</span>'
+          : '<button class="btn-control ' + (item.status === 'active' ? 'btn-stop' : '') + '" onclick="setAssignment(' + jsString(item.assignmentId) + ',' + jsString(next) + ')">' + action + '</button>';
+        return '<div class="wallet-policy">'
+          + '<div class="wallet-policy-row"><span>Agent</span><span class="mono">' + esc(item.agentId) + '</span></div>'
+          + '<div class="wallet-policy-row"><span>Transaction cap</span><span class="mono">' + esc(item.perTransactionLimit) + '</span></div>'
+          + '<div class="wallet-policy-row"><span>Rolling cap</span><span class="mono">' + esc(item.cumulativeLimit) + ' / ' + esc(item.cumulativePeriodSeconds) + 's</span></div>'
+          + '<div class="wallet-actions">'
+          + assignmentControl
+          + '<button class="btn-control btn-stop" onclick="setAgentBlock(' + jsString(item.agentId) + ',true)">Stop all agent wallets</button>'
+          + '<button class="btn-control" onclick="setAgentBlock(' + jsString(item.agentId) + ',false)">Allow agent wallets</button>'
+          + '</div></div>';
+      }).join('');
+      var reloadHtml = reloads.map(function(item) {
+        var actions = item.status === 'pending'
+          ? '<button class="btn-control btn-approve" onclick="decideReload(' + jsString(item.reloadRequestId) + ',\'approved\')">Approve</button>'
+            + '<button class="btn-control btn-stop" onclick="decideReload(' + jsString(item.reloadRequestId) + ',\'rejected\')">Reject</button>'
+          : '<button class="btn-control btn-approve" onclick="fundReload(' + jsString(item.reloadRequestId) + ')">Fund approved reload</button>';
+        return '<div class="reload-row"><strong>Reload ' + esc(item.amount) + '</strong> &middot; ' + esc(item.status)
+          + '<div class="wallet-actions">' + actions + '</div></div>';
+      }).join('');
+      var nextWalletStatus = wallet.status === 'active' ? 'blocked' : 'active';
+      var walletControl = wallet.status === 'closed'
+        ? '<span class="badge b-blocked">closed</span>'
+        : '<button class="btn-control ' + (wallet.status === 'active' ? 'btn-stop' : '') + '" onclick="setWallet(' + jsString(wallet.walletId) + ',' + jsString(nextWalletStatus) + ')">'
+          + (wallet.status === 'active' ? 'Block wallet' : 'Unblock wallet') + '</button>';
+      return '<div class="wallet-card"><div class="wallet-head">'
+        + '<div><div class="wallet-name">' + esc(wallet.name) + '</div><div class="wallet-unit">' + esc(wallet.asset) + ' on ' + esc(wallet.network) + '</div></div>'
+        + '<span class="badge b-' + (wallet.status === 'active' ? 'active' : 'blocked') + '">' + esc(wallet.status) + '</span></div>'
+        + '<div class="wallet-balance">' + esc(wallet.availableAmount) + '</div>'
+        + '<div class="wallet-unit">atomic units available &middot; ' + esc(wallet.reservedAmount) + ' reserved</div>'
+        + '<div class="wallet-actions">' + walletControl + '</div>'
+        + assignmentHtml + reloadHtml + '</div>';
+    }).join('');
   }
 
   function renderGrants(grants) {
@@ -432,6 +490,58 @@ function permissionsPageHtml(): string {
       if (!res.ok && res.status !== 204) throw new Error(res.statusText);
       loadData();
     }).catch(function(e) { alert('Failed to revoke: ' + e.message); });
+  }
+
+  function walletMutation(path, method, body) {
+    return fetch(path, {
+      method: method,
+      headers: { Authorization: 'Bearer ' + sessionToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(function(res) {
+      if (res.status === 401) throw new Error('SESSION_EXPIRED');
+      return res.json().catch(function() { return {}; }).then(function(value) {
+        if (!res.ok) throw new Error(value.message || (res.status + ' ' + res.statusText));
+        return value;
+      });
+    }).then(loadData).catch(function(error) {
+      if (error.message === 'SESSION_EXPIRED') {
+        document.getElementById('main').style.display = 'none';
+        document.getElementById('expired').style.display = '';
+        return;
+      }
+      alert('Wallet action failed: ' + error.message);
+    });
+  }
+
+  function setWallet(walletId, status) {
+    return walletMutation('/v1/principal/prepaid-wallets/' + encodeURIComponent(walletId) + '/status', 'PATCH', {
+      status: status,
+      reason: status === 'blocked' ? 'Principal dashboard action' : undefined,
+    });
+  }
+
+  function setAssignment(assignmentId, status) {
+    return walletMutation('/v1/principal/prepaid-wallet-assignments/' + encodeURIComponent(assignmentId), 'PATCH', {
+      status: status,
+      reason: status === 'blocked' ? 'Principal dashboard action' : undefined,
+    });
+  }
+
+  function setAgentBlock(agentId, blocked) {
+    return walletMutation('/v1/principal/prepaid-wallet-agents/' + encodeURIComponent(agentId) + '/block', 'PUT', {
+      blocked: blocked,
+      reason: blocked ? 'Principal dashboard emergency stop' : undefined,
+    });
+  }
+
+  function decideReload(requestId, decision) {
+    return walletMutation('/v1/principal/prepaid-wallet-reload-requests/' + encodeURIComponent(requestId) + '/decision', 'POST', {
+      decision: decision,
+    });
+  }
+
+  function fundReload(requestId) {
+    return walletMutation('/v1/principal/prepaid-wallet-reload-requests/' + encodeURIComponent(requestId) + '/fund', 'POST', {});
   }
 
   function fmtTime(ts) {

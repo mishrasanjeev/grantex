@@ -1,0 +1,117 @@
+---
+title: "Agent Prepaid Wallets"
+description: "Principal-controlled prepaid balances, multi-wallet assignment, spend policy, reload approval, and emergency blocking for AI agents."
+---
+
+Agent prepaid wallets give a human principal a durable value and policy boundary
+for autonomous spending. A wallet can be assigned to multiple agents, and an
+agent can hold multiple wallet assignments. Each assignment has its own limits
+and allowlists.
+
+## Lifecycle
+
+1. A developer registers an agent for the `wallet:read`, `wallet:spend`, the
+   merchant action scope (for example `travel:book`), and optional
+   `wallet:reload:request` scopes.
+2. The principal authorizes those scopes through OAuth Agent Grants.
+3. The application creates a short-lived principal session.
+4. The principal creates and funds one or more wallets.
+5. The principal assigns wallets with transaction, rolling, recipient, scope,
+   and validity policy.
+6. The DPoP-authenticated agent reserves value before presenting a payment.
+7. The resource server verifies and settles the one-time authorization.
+8. The principal reviews activity, approves reloads, or blocks spending.
+
+## Wallet states
+
+| State | New authorizations | Existing reservations | Reload |
+| --- | --- | --- | --- |
+| `active` | Allowed by assignment policy | Verifiable and settleable | Allowed by workflow |
+| `blocked` | Denied | Released when the block is applied | Denied to the agent |
+| `closed` | Denied permanently | Released when the close is applied | Denied |
+
+Assignments independently use `active`, `blocked`, or `revoked`. Revocation is
+terminal. A principal can also set `allWalletsBlocked` for one agent, scoped to
+that principal and developer.
+
+## Balance accounting
+
+Balances are `NUMERIC(78,0)` atomic-unit integers:
+
+```text
+funding:       available += amount
+reservation:  available -= amount; reserved += amount
+settlement:   reserved  -= amount
+release:      reserved  -= amount; available += amount
+```
+
+Every transition and the resulting balance is recorded in the wallet ledger.
+The application role receives no update or delete permission on ledger rows.
+The database checks that available and reserved values never become negative.
+
+## Policy evaluation
+
+An authorization succeeds only if all of these remain true while the wallet row
+is locked:
+
+- wallet, assignment, grant, and OAuth access token are active;
+- the agent is not globally blocked by the principal;
+- assignment validity dates include the current time;
+- asset and network match the wallet;
+- recipient and scope are allowed;
+- the payment scope is present in the human-approved OAuth grant;
+- amount does not exceed the per-transaction cap;
+- reserved plus settled value in the rolling window, plus the new amount, does
+  not exceed the cumulative cap;
+- enough available value exists.
+
+Concurrent requests serialize on the wallet row. The database update also
+requires `available_amount >= amount`, so a race cannot overdraw the wallet even
+if callers arrive together.
+
+## Reload separation of duties
+
+An agent may ask for a reload only when available value reaches the configured
+low-balance threshold. It cannot approve or fund the request. The principal can:
+
+- approve, then fund;
+- reject;
+- leave the request pending;
+- fund directly without an agent request in sandbox mode.
+
+Only one pending request per agent and wallet exists. The agent persists an
+idempotency key before the first call and reuses it for the exact request. That
+replay returns the same record through pending, approval/rejection, and funding;
+changed terms or a second key while another request is pending conflict.
+
+Approval/rejection and funding are response-loss safe: repeating the same
+decision or funding call returns the existing result without crediting twice.
+A contradictory decision or external funding reference returns a conflict.
+
+Agent wallet listings expose policy and balances, but not custody-provider
+identifiers, wallet addresses, principal identifiers, or wallet metadata.
+
+## Custody boundary
+
+`sandbox_ledger` is the complete repository implementation. It is suitable for
+local development, deterministic integration tests, and off-chain prepaid
+accounting where the Grantex ledger is explicitly the system of record.
+
+`external` stores provider and provider-wallet references but does not claim
+custody integration. Funding and authorization fail with
+`CUSTODY_ADAPTER_UNAVAILABLE` until a provider adapter verifies provider events,
+handles duplicate webhooks, reconciles balances, and supplies settlement proof.
+This prevents a caller from manufacturing an external funding reference and
+turning it into spendable value.
+
+## API families
+
+Principal-session endpoints are under `/v1/principal/prepaid-wallets*` and cover
+wallets, assignments, direct reloads, reload decisions, activity, and release or
+block actions. DPoP agent endpoints are under `/v1/prepaid-wallets*` and cover
+listing, payment authorization, and reload requests. The official x402 v2
+facilitator endpoints are `/v1/x402/supported`, `/v1/x402/verify`, and
+`/v1/x402/settle`.
+
+See the [x402 integration guide](/integrations/x402) for code and failure
+handling.

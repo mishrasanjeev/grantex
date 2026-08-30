@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
 <title>Grantex x402 — Authorization for Agent Payment Flows</title>
-<meta name="description" content="Add verifiable authorization claims to configured x402 payment requests, with merchant-enforced scope and limits plus optional audit logging.">
+<meta name="description" content="Principal-controlled prepaid wallets for AI agents using official x402 v2, atomic reservations, rolling limits, reload approval, and immediate stop controls.">
 <link rel="canonical" href="https://grantex.dev/x402">
   <link rel="alternate" type="text/plain" href="/llms.txt" title="Grantex LLM index">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 
 <!-- OpenGraph -->
 <meta property="og:title" content="Grantex x402 — Authorization for Agent Payment Flows">
-<meta property="og:description" content="Add verifiable authorization claims to configured x402 payment requests, with merchant-enforced scope and limits plus optional audit logging.">
+<meta property="og:description" content="Principal-controlled prepaid wallets for AI agents using official x402 v2, atomic reservations, rolling limits, reload approval, and immediate stop controls.">
 <meta property="og:url" content="https://grantex.dev/x402">
 <meta property="og:image" content="https://grantex.dev/og-image.png">
   <meta property="og:image:width" content="1200">
@@ -26,12 +26,12 @@
 <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Grantex x402 — Authorization for Agent Payment Flows">
-<meta name="twitter:description" content="Add verifiable authorization claims to configured x402 payment requests, with merchant-enforced scope and limits plus optional audit logging.">
+<meta name="twitter:description" content="Principal-controlled prepaid wallets for AI agents using official x402 v2, atomic reservations, rolling limits, reload approval, and immediate stop controls.">
 <meta name="twitter:image" content="https://grantex.dev/og-image.png">
   <meta name="twitter:image:alt" content="Grantex authorization for x402 agent payments">
 
 <!-- JSON-LD -->
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://grantex.dev/x402#webpage","url":"https://grantex.dev/x402","name":"Grantex x402 — Authorization for Agent Payment Flows","description":"Add verifiable authorization claims to configured x402 payment requests, with merchant-enforced scope and limits plus optional audit logging.","isPartOf":{"@id":"https://grantex.dev/#website"},"about":{"@id":"https://grantex.dev/x402#reference-implementation"},"breadcrumb":{"@id":"https://grantex.dev/x402#breadcrumb"},"dateModified":"2026-07-12","inLanguage":"en"},{"@type":"SoftwareSourceCode","@id":"https://grantex.dev/x402#reference-implementation","name":"Grantex x402 integration","url":"https://grantex.dev/x402","description":"Add verifiable authorization claims to configured x402 payment requests, with merchant-enforced scope and limits plus optional audit logging.","codeRepository":"https://github.com/mishrasanjeev/grantex","license":"https://www.apache.org/licenses/LICENSE-2.0","programmingLanguage":"TypeScript","author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/x402#webpage"}},{"@type":"BreadcrumbList","@id":"https://grantex.dev/x402#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"Grantex x402 — Authorization for Agent Payment Flows","item":"https://grantex.dev/x402"}]}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://grantex.dev/x402#webpage","url":"https://grantex.dev/x402","name":"Grantex x402 — Principal-Controlled Agent Wallets","description":"Official x402 v2 backed by principal-controlled prepaid wallets, atomic reservations, rolling limits, reload approval, and stop controls.","isPartOf":{"@id":"https://grantex.dev/#website"},"about":{"@id":"https://grantex.dev/x402#reference-implementation"},"breadcrumb":{"@id":"https://grantex.dev/x402#breadcrumb"},"dateModified":"2026-08-30","inLanguage":"en"},{"@type":"SoftwareSourceCode","@id":"https://grantex.dev/x402#reference-implementation","name":"Grantex prepaid x402 v2 integration","url":"https://grantex.dev/x402","description":"Official x402 v2 backed by principal-controlled prepaid-wallet policy and atomic reservations.","codeRepository":"https://github.com/mishrasanjeev/grantex","license":"https://www.apache.org/licenses/LICENSE-2.0","programmingLanguage":"TypeScript","author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/x402#webpage"}},{"@type":"BreadcrumbList","@id":"https://grantex.dev/x402#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"Grantex x402","item":"https://grantex.dev/x402"}]}]}</script>
 
 <!-- Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
@@ -58,6 +58,7 @@ a:hover{text-decoration:underline}
 .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
 .btn-outline:hover{border-color:var(--indigo);text-decoration:none}
 .install-badge{margin-top:20px;display:inline-block;background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-family:var(--mono);font-size:.9rem;color:var(--emerald)}
+.preview-note{max-width:680px;margin:14px auto 0;color:var(--amber);font-size:.85rem}
 
 /* Section */
 section{padding:60px 0;border-top:1px solid var(--border)}
@@ -127,13 +128,14 @@ footer .links{display:flex;gap:24px;justify-content:center;margin-bottom:12px}
 <div class="hero">
 <div class="hero-badge">HTTP 402 + Grantex</div>
 <h1>Grantex &times; x402</h1>
-<p class="subtitle">Agent Spend Authorization for HTTP 402 Payment Flows</p>
-<p class="desc">This example applies Grantex authorization claims to an x402 flow using USDC on Base L2. A merchant integration can reject invalid or out-of-scope requests, but it does not replace payment validation or prevent wallet compromise.</p>
+<p class="subtitle">Principal-Controlled Prepaid Wallets for Official x402 v2</p>
+<p class="desc">Assign one or more wallets to an AI agent, reserve value before payment, enforce transaction and rolling limits, approve reloads, and stop spending at assignment, wallet, or agent level.</p>
 <div class="hero-actions">
 <a href="/x402-playground/" class="btn btn-primary">Try the Playground</a>
 <a href="https://github.com/mishrasanjeev/grantex" class="btn btn-outline">View on GitHub</a>
 </div>
-<div class="install-badge">npm install @grantex/x402</div>
+<div class="install-badge">Repository source: @grantex/x402 0.2.0 + @grantex/sdk 0.4.0</div>
+<p class="preview-note">Source preview, not an npm release. Current registry packages do not include the managed prepaid-wallet APIs shown here.</p>
 </div>
 </div>
 
@@ -141,15 +143,15 @@ footer .links{display:flex;gap:24px;justify-content:center;margin-bottom:12px}
 <section>
 <div class="container">
 <h2>The Gap in x402</h2>
-<p class="section-desc">x402 carries payment requirements; Grantex can add verifiable authorization context.</p>
+<p class="section-desc">x402 carries payment requirements; Grantex connects them to delegated identity, policy, and reserved prepaid value.</p>
 <div class="comparison">
 <div class="card">
 <h3><span class="icon-circle icon-red">!</span> Without Grantex</h3>
-<p>x402 proves a payment was made, but not that the paying agent was authorized. A compromised agent can drain a wallet by invoking x402-gated APIs with no scope, no limit, no audit trail, and no kill switch.</p>
+<p>x402 requirements do not identify which agent may use which principal-owned funds. A reusable wallet credential alone cannot enforce recipient scope, rolling spend, reload approval, or a principal stop control.</p>
 </div>
 <div class="card highlight">
 <h3><span class="icon-circle icon-green">&check;</span> With Grantex</h3>
-<p>A configured x402 request can carry a Grantex Delegation Token (GDT) with signed principal, scope, limit, expiry, and delegation claims. The merchant must verify and enforce those claims before serving the protected action.</p>
+<p>A DPoP-authenticated agent receives a short-lived, one-time authorization only after Grantex atomically reserves an eligible assigned wallet and enforces the principal's full policy.</p>
 </div>
 </div>
 </div>
@@ -159,12 +161,12 @@ footer .links{display:flex;gap:24px;justify-content:center;margin-bottom:12px}
 <section>
 <div class="container">
 <h2>How It Works</h2>
-<p class="section-desc">Four steps from delegation to data.</p>
+<p class="section-desc">Four steps from principal policy to settled value.</p>
 <div class="steps">
-<div class="step"><h3>Issue GDT</h3><p>Principal issues a scoped delegation token: weather:read, $10/day, 24h expiry.</p></div>
-<div class="step"><h3>Attach to Request</h3><p>Agent sends the request with X-Grantex-GDT header containing the signed JWT.</p></div>
-<div class="step"><h3>Pay + Verify</h3><p>API returns 402; the configured payment handler validates settlement and the merchant verifies the GDT before serving the protected response.</p></div>
-<div class="step"><h3>Audit Trail</h3><p>Integrated code can send selected authorization and payment events to the configured logger; the default logger is in-memory and not durable.</p></div>
+<div class="step"><h3>Assign Wallets</h3><p>The principal funds one or more wallets and assigns transaction, rolling, recipient, scope, and validity policy.</p></div>
+<div class="step"><h3>Reserve Value</h3><p>After PAYMENT-REQUIRED, the DPoP agent asks Grantex to select an eligible wallet and reserve the exact amount.</p></div>
+<div class="step"><h3>Verify + Settle</h3><p>The retry carries PAYMENT-SIGNATURE. The resource server verifies exact binding and settles the one-time reservation.</p></div>
+<div class="step"><h3>Reload or Stop</h3><p>The agent may request a threshold reload; the principal approves and funds it or blocks one wallet or every wallet.</p></div>
 </div>
 </div>
 </section>
@@ -175,80 +177,72 @@ footer .links{display:flex;gap:24px;justify-content:center;margin-bottom:12px}
 <h2>Developer Experience</h2>
 <p class="section-desc">Three APIs cover the entire flow.</p>
 <div class="code-tabs">
-<div class="code-tab active" onclick="switchCode(this,0)">Issue a GDT</div>
+<div class="code-tab active" onclick="switchCode(this,0)">Assign Policy</div>
 <div class="code-tab" onclick="switchCode(this,1)">Agent Fetch</div>
-<div class="code-tab" onclick="switchCode(this,2)">Protect API</div>
+<div class="code-tab" onclick="switchCode(this,2)">Emergency Stop</div>
 </div>
-<div class="code-panel active"><div class="code-block"><span class="kw">import</span> { <span class="fn">generateKeyPair</span>, <span class="fn">issueGDT</span> } <span class="kw">from</span> <span class="str">'@grantex/x402'</span>;
+<div class="code-panel active"><div class="code-block"><span class="kw">const</span> wallet = <span class="kw">await</span> principal.<span class="fn">create</span>({
+  name: <span class="str">'Weather float'</span>,
+  custodyMode: <span class="str">'sandbox_ledger'</span>,
+  network: <span class="str">'grantex:prepaid'</span>,
+  asset: <span class="str">'USDC'</span>, decimals: <span class="val-num">6</span>
+});
 
-<span class="kw">const</span> principal = <span class="fn">generateKeyPair</span>();
-<span class="kw">const</span> agent = <span class="fn">generateKeyPair</span>();
-
-<span class="kw">const</span> gdt = <span class="kw">await</span> <span class="fn">issueGDT</span>({
-  agentDID: agent.did,
-  scope: [<span class="str">'weather:read'</span>],
-  spendLimit: { amount: <span class="val-num">10</span>, currency: <span class="str">'USDC'</span>, period: <span class="str">'24h'</span> },
-  expiry: <span class="str">'24h'</span>,
-  signingKey: principal.privateKey,
+<span class="kw">await</span> principal.<span class="fn">assign</span>(wallet.walletId, {
+  agentId, perTransactionLimit: <span class="str">'5000000'</span>,
+  cumulativeLimit: <span class="str">'25000000'</span>,
+  cumulativePeriodSeconds: <span class="val-num">86400</span>,
+  allowedRecipients: [<span class="str">'merchant:weather-api'</span>],
+  allowedScopes: [<span class="str">'weather:read'</span>]
 });</div></div>
 <div class="code-panel"><div class="code-block"><span class="kw">import</span> { <span class="fn">createX402Agent</span> } <span class="kw">from</span> <span class="str">'@grantex/x402'</span>;
 
 <span class="kw">const</span> x402 = <span class="fn">createX402Agent</span>({
-  gdt: gdtToken,
-  paymentHandler: <span class="kw">async</span> (details) => {
-    <span class="cm">// Sign USDC transfer on Base L2</span>
-    <span class="kw">return await</span> <span class="fn">payOnBase</span>(details);
-  },
+  authorizePayment: walletAgent.x402Authorizer
 });
 
-<span class="cm">// Automatic: 402 -> pay -> retry with GDT</span>
-<span class="kw">const</span> res = <span class="kw">await</span> x402.<span class="fn">fetch</span>(<span class="str">'https://api.weather.xyz/forecast'</span>);</div></div>
-<div class="code-panel"><div class="code-block"><span class="kw">import</span> express <span class="kw">from</span> <span class="str">'express'</span>;
-<span class="kw">import</span> { <span class="fn">x402Middleware</span> } <span class="kw">from</span> <span class="str">'@grantex/x402'</span>;
+<span class="cm">// PAYMENT-REQUIRED -> reserve -> PAYMENT-SIGNATURE</span>
+<span class="kw">const</span> res = <span class="kw">await</span> x402.<span class="fn">fetch</span>(
+  <span class="str">'https://api.weather.xyz/forecast'</span>
+);</div></div>
+<div class="code-panel"><div class="code-block"><span class="cm">// Stop one agent/wallet assignment</span>
+<span class="kw">await</span> principal.<span class="fn">setAssignmentStatus</span>(
+  assignmentId, <span class="str">'blocked'</span>, <span class="str">'Trip ended'</span>
+);
 
-<span class="kw">const</span> app = <span class="fn">express</span>();
+<span class="cm">// Or stop this agent across every principal wallet</span>
+<span class="kw">await</span> principal.<span class="fn">setAgentBlocked</span>(
+  agentId, <span class="kw">true</span>, <span class="str">'Emergency stop'</span>
+);
 
-app.<span class="fn">use</span>(<span class="str">'/api/weather'</span>, <span class="fn">x402Middleware</span>({
-  requiredScopes: [<span class="str">'weather:read'</span>],
-  requiredAmount: <span class="num">0.001</span>,
-  currency: <span class="str">'USDC'</span>,
-}));
-
-app.<span class="fn">get</span>(<span class="str">'/api/weather/forecast'</span>, (req, res) => {
-  res.<span class="fn">json</span>({
-    forecast: <span class="str">'sunny'</span>,
-    authorizedBy: req.gdt.principalDID,
-  });
-});</div></div>
+<span class="cm">// Active reservations are released atomically.</span></div></div>
 </div>
 </section>
 
-<!-- GDT Token Structure -->
+<!-- Wallet authorization structure -->
 <section>
 <div class="container">
-<h2>GDT Token Structure</h2>
-<p class="section-desc">W3C Verifiable Credential 2.0 encoded as a JWT, signed with Ed25519.</p>
+<h2>One-Time Wallet Authorization</h2>
+<p class="section-desc">A server-signed JWT bound to a durable reservation and the exact x402 v2 requirements.</p>
 <div class="token-json">{
-  <span class="key">"iss"</span>: <span class="val-str">"did:key:z6Mk...principal..."</span>,
-  <span class="key">"sub"</span>: <span class="val-str">"did:key:z6Mk...agent..."</span>,
-  <span class="key">"vc"</span>: {
-    <span class="key">"@context"</span>: [<span class="val-str">"https://www.w3.org/ns/credentials/v2"</span>],
-    <span class="key">"type"</span>: [<span class="val-str">"VerifiableCredential"</span>, <span class="val-str">"GrantexDelegationToken"</span>],
-    <span class="key">"credentialSubject"</span>: {
-      <span class="key">"scope"</span>: [<span class="val-str">"weather:read"</span>],
-      <span class="key">"spendLimit"</span>: { <span class="key">"amount"</span>: <span class="val-num">10</span>, <span class="key">"currency"</span>: <span class="val-str">"USDC"</span>, <span class="key">"period"</span>: <span class="val-str">"24h"</span> },
-      <span class="key">"paymentChain"</span>: <span class="val-str">"base"</span>,
-      <span class="key">"delegationChain"</span>: [<span class="val-str">"did:key:...principal..."</span>]
-    }
-  },
-  <span class="key">"exp"</span>: <span class="val-num">1711123200</span>,
-  <span class="key">"jti"</span>: <span class="val-str">"550e8400-e29b-..."</span>
+  <span class="key">"reservationId"</span>: <span class="val-str">"wres_..."</span>,
+  <span class="key">"walletId"</span>: <span class="val-str">"pwal_..."</span>,
+  <span class="key">"assignmentId"</span>: <span class="val-str">"wasn_..."</span>,
+  <span class="key">"agentId"</span>: <span class="val-str">"agt_..."</span>,
+  <span class="key">"principalId"</span>: <span class="val-str">"principal_..."</span>,
+  <span class="key">"amount"</span>: <span class="val-str">"1000"</span>,
+  <span class="key">"asset"</span>: <span class="val-str">"USDC"</span>,
+  <span class="key">"network"</span>: <span class="val-str">"grantex:prepaid"</span>,
+  <span class="key">"recipient"</span>: <span class="val-str">"merchant:weather-api"</span>,
+  <span class="key">"scope"</span>: <span class="val-str">"weather:read"</span>,
+  <span class="key">"requestHash"</span>: <span class="val-str">"sha256:..."</span>,
+  <span class="key">"exp"</span>: <span class="val-num">... + at most 300 seconds</span>
 }</div>
 <div class="token-annotations">
-<div class="annotation"><strong>scope</strong><p>What APIs the agent can access: weather:read, news:*, etc.</p></div>
-<div class="annotation"><strong>spendLimit</strong><p>Maximum spend per period: $10 USDC per 24 hours.</p></div>
-<div class="annotation"><strong>delegationChain</strong><p>Full chain from organization to principal to agent.</p></div>
-<div class="annotation"><strong>paymentChain</strong><p>Target blockchain for payments: Base L2.</p></div>
+<div class="annotation"><strong>reservationId</strong><p>Links the signature to value already reserved in PostgreSQL.</p></div>
+<div class="annotation"><strong>amount + policy</strong><p>Integer atomic units checked against balance, transaction cap, and rolling cap.</p></div>
+<div class="annotation"><strong>identity</strong><p>Binds developer, principal, DPoP agent, OAuth grant, wallet, and assignment.</p></div>
+<div class="annotation"><strong>requestHash</strong><p>Prevents changes to recipient, resource, scope, asset, network, amount, or timeout.</p></div>
 </div>
 </div>
 </section>
@@ -258,12 +252,12 @@ app.<span class="fn">get</span>(<span class="str">'/api/weather/forecast'</span>
 <div class="container">
 <h2>Features</h2>
 <div class="features">
-<div class="feature"><h3>W3C VC 2.0</h3><p>Standards-compliant Verifiable Credentials for interoperability.</p></div>
-<div class="feature"><h3>Ed25519 Signatures</h3><p>Ed25519 signature verification can use cached keys; current revocation state still requires refreshed status material.</p></div>
-<div class="feature"><h3>Spend Limits</h3><p>Signed limit claims must be enforced transactionally by the merchant or payment handler; claims alone do not prevent wallet drain.</p></div>
-<div class="feature"><h3>Revocation Registry</h3><p>Verification checks token revocation. Use a shared registry when enforcement spans multiple processes or services.</p></div>
-<div class="feature"><h3>Pluggable Audit Trail</h3><p>Integrated issuance, verification, rejection, and payment paths can emit events to a configured logger; the default logger is in-memory.</p></div>
-<div class="feature"><h3>Base L2 Native</h3><p>The documented example targets USDC on Base L2. Other chains require a compatible payment handler and application-level testing.</p></div>
+<div class="feature"><h3>Official x402 v2</h3><p>Canonical PAYMENT-REQUIRED, PAYMENT-SIGNATURE, and PAYMENT-RESPONSE headers through the x402 Foundation packages.</p></div>
+<div class="feature"><h3>DPoP Agent Identity</h3><p>Wallet actions require an OAuth Agent Grants token bound to the agent's proof-of-possession key and wallet audience.</p></div>
+<div class="feature"><h3>Atomic Spend Limits</h3><p>Per-transaction and rolling cumulative limits count reserved and settled value while the wallet is locked.</p></div>
+<div class="feature"><h3>Multiple Wallets</h3><p>Pin one assigned wallet or let the service select an eligible wallet without allowing idempotent retries to drift.</p></div>
+<div class="feature"><h3>Human Reload Approval</h3><p>Agents request reloads only at the configured threshold; principals approve and fund in separate steps.</p></div>
+<div class="feature"><h3>Immediate Stop</h3><p>Block an assignment, one wallet, or every wallet for an agent and release affected outstanding reservations.</p></div>
 </div>
 </div>
 </section>
@@ -273,17 +267,15 @@ app.<span class="fn">get</span>(<span class="str">'/api/weather/forecast'</span>
 <div class="container">
 <h2>Architecture</h2>
 <div class="arch">
-Principal ──── issueGDT() ───── GDT (W3C VC 2.0 JWT)
- (Human)                              |
-                                       v
-  Agent ──── x402Agent.fetch() ──── x402 API
-                                   |        |
-                              402 Payment   GDT Verify
-                                   |        |
-                              Base L2 Pay   Audit Log
-                              (USDC)        (configured)
-                                   |
-                              Revocation Registry
+Principal ── fund + assign policy ── Prepaid wallets
+    |                                      |
+    | reload / block                       | reserve atomically
+    v                                      v
+DPoP Agent ── x402Agent.fetch() ── Resource Server
+                                      |
+                         PAYMENT-SIGNATURE verify + settle
+                                      |
+                         PostgreSQL reservation + ledger
 </div>
 </div>
 </section>
@@ -293,7 +285,7 @@ Principal ──── issueGDT() ───── GDT (W3C VC 2.0 JWT)
 <div class="container">
 <div class="links">
 <a href="https://github.com/mishrasanjeev/grantex">GitHub</a>
-<a href="https://www.npmjs.com/package/@grantex/x402">npm</a>
+<a href="https://www.npmjs.com/package/@grantex/x402">Published legacy package</a>
 <a href="https://grantex.dev">Documentation</a>
 <a href="/x402-playground/">Playground</a>
 </div>
