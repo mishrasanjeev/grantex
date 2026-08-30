@@ -1,177 +1,105 @@
 # DAAP Implementation Report
 
-**Draft:** `draft-mishra-oauth-agent-grants-01`
-**Date:** 2026-03-02
+**Draft:** `draft-mishra-oauth-agent-grants-02` submission candidate
+**Date:** 2026-08-30
 **Author:** Sanjeev Kumar, Orchestrum Technologies LLP (sanjeev@orchestrum.in; mishra.sanjeev@gmail.com)
 
-## Overview
+## Status
 
-This document reports on the conformance status of the Grantex reference implementation against the Delegated Agent Authorization Protocol (DAAP) as specified in `draft-mishra-oauth-agent-grants-01`. The report covers the authorization server, three SDK implementations, and the automated conformance test suite.
+This report describes the Grantex reference implementation of the Delegated Agent Authorization Protocol (DAAP). The current Datatracker publication remains `draft-mishra-oauth-agent-grants-01` until the `-02` candidate is submitted and accepted by the IETF Datatracker.
+
+Grantex is one implementation of DAAP. The draft is intended to remain vendor-neutral: no Grantex service, DID method, JSON-LD context, policy engine, or hosted deployment is required for another implementation to conform.
 
 ## Reference Authorization Server
 
 **Implementation:** Grantex Auth Service
-**Stack:** Fastify 5.x, PostgreSQL 16, Redis 7, Node.js 22
-**Deployment:** Google Cloud Run (production)
-**Test count:** ~362 automated tests
+**Stack:** Fastify 5.x, PostgreSQL 16, Redis 7, Node.js
+**Deployment model:** self-hosted or managed deployment
+**Production deployment:** Google Cloud Run for the hosted Grantex service
 
-### REQUIRED Endpoint Conformance
+### Required Endpoint Conformance
 
-| Endpoint | Method | Conformant | Notes |
-|----------|--------|------------|-------|
-| `/v1/agents` | POST | Yes | ULID-based agent IDs, DID generation |
-| `/v1/authorize` | POST | Yes | PKCE S256 supported |
-| `/v1/token` | POST | Yes | RS256 JWT, refresh token rotation |
-| `/v1/token/refresh` | POST | Yes | Active-grant single-use rotation with bounded lost-response recovery |
-| `/v1/tokens/verify` | POST | Yes | Online verification with revocation check |
-| `/v1/tokens/revoke` | POST | Yes | JTI-based revocation, 204 response |
-| `/v1/grants` | GET | Yes | Filtered by developer |
-| `/v1/grants/:id` | GET | Yes | |
-| `/v1/grants/:id` | DELETE | Yes | Cascade revocation implemented |
-| `/v1/grants/delegate` | POST | Yes | Depth limit enforced (default 3, max 10) |
-| `/v1/audit/log` | POST | Yes | SHA-256 hash chain |
-| `/v1/audit/entries` | GET | Yes | Paginated |
-| `/v1/audit/:id` | GET | Yes | |
-| `/.well-known/jwks.json` | GET | Yes | Key rotation supported |
-| `/health` | GET | Yes | |
+| Endpoint | Method | Status | Notes |
+|----------|--------|--------|-------|
+| `/v1/agents` | POST | Implemented | ULID-based agent IDs, DID generation |
+| `/v1/authorize` | POST | Implemented | Authorization-code-style flow, PKCE S256 support |
+| `/v1/token` | POST | Implemented | RS256 JWT grant token issuance |
+| `/v1/token/refresh` | POST | Implemented | Single-use rotation with 300-second lost-response recovery |
+| `/v1/tokens/verify` | POST | Implemented | Online verification with revocation checks |
+| `/v1/tokens/revoke` | POST | Implemented | JTI-based revocation |
+| `/v1/grants` | GET | Implemented | Developer/tenant filtered |
+| `/v1/grants/:id` | GET | Implemented | Single-grant lookup |
+| `/v1/grants/:id` | DELETE | Implemented | Cascade revocation |
+| `/v1/grants/delegate` | POST | Implemented | Scope attenuation and depth limits |
+| `/v1/audit/log` | POST | Implemented | SHA-256 hash-chain audit logging |
+| `/v1/audit/entries` | GET | Implemented | Paginated audit lookup |
+| `/v1/audit/:id` | GET | Implemented | Single audit-entry lookup |
+| `/.well-known/jwks.json` | GET | Implemented | JWKS publication and key rotation support |
+| `/health` | GET | Implemented | Health check |
 
-### OPTIONAL Extension Conformance
+### Optional Extension Conformance
 
-| Extension | Conformant | Details |
-|-----------|------------|---------|
-| Policy Engine | Yes | Built-in rules with priority ordering, deny-first evaluation |
-| Webhooks | Yes | Persistent `webhook_deliveries` table, exponential backoff retry |
-| Anomaly Detection | Yes | 5 types: rate_spike, high_failure_rate, new_principal, off_hours_activity, cascade_delegation |
-| SCIM 2.0 | Yes | Users CRUD, separate SCIM token auth |
-| SSO (OIDC) | Yes | Authorization Code + PKCE, state + nonce validation |
-| Budget Controls | Yes | Atomic debit (`WHERE remaining >= amount`), threshold events at 50%/80%/100% |
-| Event Streaming | Yes | SSE (`/v1/events/stream`) + WebSocket (`/v1/events/ws`), Redis pub/sub, 5 max connections |
-| Credential Vault | Yes | AES-256-GCM encryption, KMS key derivation |
-| External Policy Backends | Yes | OPA (Rego) + Cedar, 5s timeout, configurable fallback (deny/allow/builtin) |
-| Policy-as-Code | Yes | Bundle upload, git webhook sync |
-| Usage Metering | Yes | Redis counters, hourly PostgreSQL rollup |
-| Custom Domains | Yes | DNS TXT verification |
+| Extension | Status | Details |
+|-----------|--------|---------|
+| Policy Engine | Implemented | Built-in rules with priority ordering and deny-first evaluation |
+| Webhooks | Implemented | Persistent delivery rows with retry/backoff |
+| Anomaly Detection | Implemented | Runtime anomaly records and acknowledgement flow |
+| SCIM 2.0 | Implemented | Users CRUD with separate SCIM bearer-token auth |
+| SSO | Implemented | OIDC Authorization Code + PKCE, LDAP/LDAPS configuration with production LDAPS enforcement |
+| Budget Controls | Implemented | Atomic debit and threshold events |
+| Event Streaming | Implemented | SSE and WebSocket event delivery |
+| Credential Vault | Implemented | AES-256-GCM encryption and token-to-credential exchange |
+| External Policy Backends | Implemented | OPA and Cedar adapters with timeout/fallback behavior |
+| Policy-as-Code | Implemented | Bundle upload and git webhook sync |
+| Usage Metering | Implemented | Redis counters with PostgreSQL rollups |
+| Custom Domains | Implemented | DNS TXT verification |
 
-## SDK Conformance Matrix
+## SDK and Tooling Coverage
 
-### TypeScript SDK (`@grantex/sdk` v0.2.0)
+| Component | Package/module | Current repo version | Status |
+|-----------|----------------|----------------------|--------|
+| TypeScript SDK | `@grantex/sdk` | 0.3.13 | Maintained |
+| Python SDK | `grantex` | 0.3.14 | Maintained |
+| Go SDK | `github.com/mishrasanjeev/grantex-go` | repository module | Maintained |
+| Conformance suite | `@grantex/conformance` | 0.1.8 | Maintained |
+| TypeScript integrations | LangChain, Vercel AI, Express, MCP, A2A, gateway, destinations, adapters | package-specific | Maintained |
+| Python integrations | CrewAI, AutoGen, OpenAI Agents, Google ADK, FastAPI, A2A, Gemma, Strands | package-specific | Maintained |
 
-| Feature | Supported | Method |
-|---------|-----------|--------|
-| Agent CRUD | Yes | `agents.create/get/list/update/delete` |
-| Authorization flow | Yes | `authorize` |
-| Token exchange | Yes | `tokens.exchange` |
-| Token refresh | Yes | `tokens.refresh` |
-| Token verification (online) | Yes | `tokens.verify` |
-| Token verification (offline) | Yes | `tokens.verifyOffline` |
-| Token revocation | Yes | `tokens.revoke` |
-| Grant management | Yes | `grants.list/get/revoke/delegate` |
-| Audit logging | Yes | `audit.log/list/get` |
-| PKCE S256 | Yes | `generatePkceChallenge` |
-| Webhook HMAC verification | Yes | `webhooks.verify` |
-| Policy management | Yes | `policies.create/list/get/update/delete` |
-| Anomaly detection | Yes | `anomalies.list/detect/acknowledge` |
-| Compliance exports | Yes | `compliance.summary/exportGrants/exportAudit/evidencePack` |
-| Billing | Yes | `billing.subscription/checkout/portal` |
-| SCIM | Yes | `scim.createToken/listTokens/deleteToken` |
-| SSO | Yes | `sso.configure/get/remove/loginUrl/callback` |
-| Principal sessions | Yes | `principalSessions.create` |
-| Budget controls | Yes | `budgets.allocate/debit/balance/transactions` |
-| Event streaming | Yes | `events.stream/subscribe` |
-| Usage metering | Yes | `usage.current/history` |
-| Custom domains | Yes | `domains.create/list/verify/delete` |
+## Conformance Suite
 
-**Test count:** 106 tests (Vitest)
+The `@grantex/conformance` package validates selected DAAP behavior for compatible authorization servers. The maintained suite covers:
 
-### Python SDK (`grantex` v0.2.0)
+- Required endpoint availability and response-shape checks
+- PKCE S256 flow behavior
+- Grant token issuance and verification
+- Refresh token single-use rotation and 300-second lost-response recovery
+- Cascade revocation across delegated grants
+- Audit hash-chain validation
+- RS256 algorithm enforcement and rejection of unsafe JWT algorithms
+- Rate-limit behavior
+- Budget debit behavior
+- Event-stream connectivity
 
-| Feature | Supported | Method |
-|---------|-----------|--------|
-| Agent CRUD | Yes | `agents.create/get/list/update/delete` |
-| Authorization flow | Yes | `authorize` |
-| Token exchange | Yes | `tokens.exchange` |
-| Token refresh | Yes | `tokens.refresh` |
-| Token verification (online) | Yes | `tokens.verify` |
-| Token verification (offline) | Yes | `tokens.verify_offline` |
-| Token revocation | Yes | `tokens.revoke` |
-| Grant management | Yes | `grants.list/get/revoke/delegate` |
-| Audit logging | Yes | `audit.log/list/get` |
-| PKCE S256 | Yes | `generate_pkce_challenge` |
-| Webhook HMAC verification | Yes | `webhooks.verify` |
-| Policy management | Yes | `policies.create/list/get/update/delete` |
-| Anomaly detection | Yes | `anomalies.list/detect/acknowledge` |
-| Compliance exports | Yes | `compliance.summary/export_grants/export_audit/evidence_pack` |
-| Billing | Yes | `billing.subscription/checkout/portal` |
-| SCIM | Yes | `scim.create_token/list_tokens/delete_token` |
-| SSO | Yes | `sso.configure/get/remove/login_url/callback` |
-| Principal sessions | Yes | `principal_sessions.create` |
-| Budget controls | Yes | `budgets.allocate/debit/balance/transactions` |
-| Event streaming | Yes | `events.stream/subscribe` |
-| Usage metering | Yes | `usage.current/history` |
-| Custom domains | Yes | `domains.create/list/verify/delete` |
+### Local Verification Commands
 
-**Test count:** 105 tests (pytest)
-
-### Go SDK (`grantex-go` v0.1.2)
-
-| Feature | Supported | Method |
-|---------|-----------|--------|
-| Agent CRUD | Yes | `Agents().Create/Get/List/Update/Delete` |
-| Authorization flow | Yes | `Authorize` |
-| Token exchange | Yes | `Tokens().Exchange` |
-| Token verification (online) | Yes | `Tokens().Verify` |
-| Token verification (offline) | Yes | `Tokens().VerifyOffline` |
-| Token revocation | Yes | `Tokens().Revoke` |
-| Grant management | Yes | `Grants().List/Get/Revoke/Delegate` |
-| Audit logging | Yes | `Audit().Log/List/Get` |
-| PKCE S256 | Yes | `GeneratePKCEChallenge` |
-| Webhook HMAC verification | Yes | `Webhooks().Verify` |
-| Policy management | Yes | `Policies().Create/List/Get/Update/Delete` |
-| Anomaly detection | Yes | `Anomalies().List/Detect/Acknowledge` |
-| Compliance exports | Yes | `Compliance().Summary/ExportGrants/ExportAudit/EvidencePack` |
-| Billing | Yes | `Billing().Subscription/Checkout/Portal` |
-| SCIM | Yes | `SCIM().CreateToken/ListTokens/DeleteToken` |
-| SSO | Yes | `SSO().Configure/Get/Remove/LoginURL/Callback` |
-| Principal sessions | Yes | `PrincipalSessions().Create` |
-| Budget controls | Yes | `Budgets().Allocate/Debit/Balance/Transactions` |
-| Event streaming | Yes | `Events().Stream/Subscribe` |
-
-**Test count:** 106 tests
-
-## Conformance Test Suite
-
-The `@grantex/conformance` package (v0.1.4) provides an automated test suite that validates any DAAP-compliant authorization server. The suite covers:
-
-- All 14 REQUIRED endpoints
-- PKCE S256 flow
-- Cascade revocation (3-level delegation tree)
-- Hash chain verification
-- RS256 algorithm enforcement (rejects `none`, `HS256`)
-- Refresh token single-use rotation, capped by grant expiration
-- Rate limiting behavior
-- Budget atomic debit concurrency
-- Event streaming connectivity
-
-### Running the Suite
+Use these commands to verify the implementation from a clean checkout:
 
 ```bash
-npx @grantex/conformance --base-url https://your-server.com --api-key YOUR_KEY
+cd apps/auth-service && npm install && npm run typecheck && npm test
+cd packages/sdk-ts && npm install && npm run typecheck && npm test
+cd packages/conformance && npm install && npm run typecheck && npm test
+cd packages/sdk-py && python -m pip install -e .[dev] && python -m pytest
+cd packages/go-sdk && go test ./...
 ```
 
-## Integration Coverage
+For an already deployed DAAP-compatible authorization server:
 
-| Integration | Package | Version | Status |
-|-------------|---------|---------|--------|
-| LangChain | `@grantex/langchain` | 0.1.2 | Passing |
-| Vercel AI | `@grantex/vercel-ai` | 0.1.2 | Passing |
-| AutoGen | `@grantex/autogen` | 0.1.2 | Passing |
-| CrewAI | `grantex-crewai` | 0.1.2 | Passing |
-| OpenAI Agents | `grantex-openai-agents` | 0.1.1 | Passing |
-| Google ADK | `grantex-adk` | 0.1.1 | Passing |
-| Express.js | `@grantex/express` | 0.1.1 | Passing |
-| FastAPI | `grantex-fastapi` | 0.1.1 | Passing |
-| MCP Server | `@grantex/mcp` | 0.1.1 | Passing |
-| A2A Bridge (TS) | `@grantex/a2a` | 0.1.0 | Passing |
-| A2A Bridge (Py) | `grantex-a2a` | 0.1.0 | Passing |
-| Gateway | `@grantex/gateway` | 0.1.1 | Passing |
-| Terraform | `terraform-provider-grantex` | 0.1.0 | Passing |
+```bash
+npx @grantex/conformance --base-url https://server.example --api-key YOUR_KEY
+```
+
+## Notes for IETF Reviewers
+
+This report is implementation evidence, not a claim of IETF endorsement, working-group adoption, security certification, or legal compliance. A report applies only to the tested commit, package versions, deployment configuration, and runtime environment.
+
+The Grantex implementation intentionally includes implementation-specific paths, package names, and deployment choices. The DAAP draft should be evaluated as a vendor-neutral protocol profile; implementation-specific details are non-normative evidence that the protocol is implementable.

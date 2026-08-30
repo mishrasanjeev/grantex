@@ -98,7 +98,7 @@ The `@grantex/conformance` package provides automated validation of selected cor
 
 ### 4.5 IETF Submission
 
-The protocol is documented as active individual Internet-Draft `draft-mishra-oauth-agent-grants-01`. Individual drafts are not IETF-endorsed standards and require working-group adoption before entering the working-group standards process.
+The protocol is documented as active individual Internet-Draft `draft-mishra-oauth-agent-grants`. The current Datatracker revision is `-01`, and a `-02` submission candidate is maintained in `docs/ietf-draft/`. Individual drafts are not IETF-endorsed standards and require working-group adoption before entering the working-group standards process.
 
 ## 5. Recommendations
 
