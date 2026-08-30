@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Grantex } from '../src/client.js';
 import { GrantexApiError, GrantexAuthError, GrantexNetworkError } from '../src/errors.js';
+
+const packageVersion = (
+  JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
+).version;
 
 function makeFetch(status: number, body: unknown, headers?: Record<string, string>) {
   return vi.fn().mockResolvedValue({
@@ -310,7 +315,7 @@ describe('Grantex client', () => {
 
       const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
       const headers = init.headers as Record<string, string>;
-      expect(headers['User-Agent']).toBe('@grantex/sdk/0.3.13');
+      expect(headers['User-Agent']).toBe(`@grantex/sdk/${packageVersion}`);
     });
   });
 });
