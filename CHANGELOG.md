@@ -37,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Reconciled landing-page examples and product claims with the implemented APIs and supported verification workflows.
 
 ### Documentation
+- Added a self-hosted prepaid-wallet production-readiness guide covering public OAuth resource routing, migration `091`, external custody fail-closed behavior, reload notification delivery, merchant idempotency, regulatory boundaries, and a guarded PowerShell npm publication runbook.
 - Added dedicated Hermes, OpenClaw, and generic agent-CLI guides and made the support visible on the landing page, integration index, README, and machine-readable LLM guides.
 - Expanded the core OpenAPI description and aligned landing pages, SDK guides, compatibility data, deployment guidance, and release metadata.
 - Replaced unsupported certification, compliance, latency, cache, and automatic-audit claims with implementation-backed behavior.

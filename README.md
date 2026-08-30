@@ -90,7 +90,34 @@ human-approved authority but cannot add to it.
 This API is unreleased repository source until new SDK/x402 package versions
 are published. See the [x402 integration guide](docs/integrations/x402.mdx),
 [wallet lifecycle](docs/features/prepaid-wallets.mdx), and
-[architecture](docs/internal/agent-prepaid-wallet-architecture.md).
+[production-readiness guide](docs/guides/prepaid-wallet-production.mdx).
+
+### Self-hosted prepaid-wallet dependencies
+
+Running the auth-service does not provision every dependency needed for a
+real-money product. Self-hosting operators must explicitly provide and test:
+
+- PostgreSQL migration `091_agent_prepaid_wallets.sql`, backups, restore, and
+  reconciliation for the append-only wallet ledger;
+- HTTPS ingress for the exact OAuth audience, including
+  `/v1/prepaid-wallets` and `/v1/prepaid-wallets/**` (a static-host `404` breaks
+  agent wallet access even while the origin service is healthy);
+- a provider-specific custody, funding, settlement, webhook-deduplication, and
+  recovery adapter before using `external` wallets; without one, Grantex
+  deliberately returns `503 CUSTODY_ADAPTER_UNAVAILABLE`;
+- an SSE/WebSocket notification bridge for reload events when a principal must
+  be notified by email, SMS, Slack, WhatsApp, or another external channel; no
+  built-in wallet-email delivery is claimed;
+- a merchant-side durable result cache keyed by the HTTP `Idempotency-Key` for
+  side effects after settlement;
+- independent security, provider, reconciliation, incident-response, and
+  applicable legal/regulatory review.
+
+The server deployment and npm release are separate. Registry consumers do not
+receive the repository's `@grantex/sdk@0.4.0` and `@grantex/x402@0.2.0` APIs
+until both packages are published and registry-verified. The
+[production-readiness guide](docs/guides/prepaid-wallet-production.mdx) contains
+the full hosting checklist and a maintainer-only PowerShell publication runbook.
 
 ## OAuth Agent Grants Profile
 
