@@ -46,7 +46,7 @@ describe('GET /.well-known/jwks.json', () => {
 });
 
 describe('GET /.well-known/oauth-authorization-server', () => {
-  it('publishes truthful metadata for the implementation-specific profile', async () => {
+  it('publishes the complete standards endpoint and DPoP metadata', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/.well-known/oauth-authorization-server',
@@ -56,8 +56,18 @@ describe('GET /.well-known/oauth-authorization-server', () => {
     const body = res.json<Record<string, unknown>>();
     expect(body['jwks_uri']).toBe('https://grantex.dev/.well-known/jwks.json');
     expect(body['code_challenge_methods_supported']).toEqual(['S256']);
-    expect(body['grantex_profile_status']).toBe('implementation-specific-extension');
-    expect(body).not.toHaveProperty('authorization_endpoint');
-    expect(body).not.toHaveProperty('dpop_signing_alg_values_supported');
+    expect(body['authorization_endpoint']).toBe('https://grantex.dev/oauth/authorize');
+    expect(body['token_endpoint']).toBe('https://grantex.dev/oauth/token');
+    expect(body['revocation_endpoint']).toBe('https://grantex.dev/oauth/revoke');
+    expect(body['pushed_authorization_request_endpoint']).toBe('https://grantex.dev/oauth/par');
+    expect(body['require_pushed_authorization_requests']).toBe(true);
+    expect(body['authorization_response_iss_parameter_supported']).toBe(true);
+    expect(body['grant_types_supported']).toEqual(expect.arrayContaining([
+      'authorization_code',
+      'refresh_token',
+      'urn:ietf:params:oauth:grant-type:token-exchange',
+    ]));
+    expect(body['dpop_signing_alg_values_supported']).toEqual(expect.arrayContaining(['ES256', 'RS256']));
+    expect(body['token_endpoint_auth_methods_supported']).toEqual(['none']);
   });
 });

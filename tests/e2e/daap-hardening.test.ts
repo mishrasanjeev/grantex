@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Grantex } from '@grantex/sdk';
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:3001';
+const ISSUER = process.env.E2E_ISSUER ?? BASE_URL;
 
 function decodePayload(token: string): Record<string, unknown> {
   const payload = token.split('.')[1];
@@ -105,8 +106,11 @@ describe('E2E: DAAP security hardening', () => {
     const metadataResponse = await fetch(`${BASE_URL}/.well-known/oauth-authorization-server`);
     expect(metadataResponse.status).toBe(200);
     const metadata = await metadataResponse.json() as Record<string, unknown>;
-    expect(metadata['grantex_profile_status']).toBe('implementation-specific-extension');
-    expect(metadata).not.toHaveProperty('authorization_endpoint');
-    expect(metadata).not.toHaveProperty('dpop_signing_alg_values_supported');
+    expect(metadata['authorization_endpoint']).toBe(`${ISSUER}/oauth/authorize`);
+    expect(metadata['token_endpoint']).toBe(`${ISSUER}/oauth/token`);
+    expect(metadata['pushed_authorization_request_endpoint']).toBe(`${ISSUER}/oauth/par`);
+    expect(metadata['require_pushed_authorization_requests']).toBe(true);
+    expect(metadata['authorization_response_iss_parameter_supported']).toBe(true);
+    expect(metadata['dpop_signing_alg_values_supported']).toEqual(expect.arrayContaining(['ES256']));
   }, 120_000);
 });

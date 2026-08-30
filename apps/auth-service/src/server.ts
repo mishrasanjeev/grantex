@@ -51,6 +51,7 @@ import { commerceMerchantWebhookRoutes } from './routes/commerce-merchant-webhoo
 import { commerceProviderWebhookRoutes } from './routes/commerce-provider-webhooks.js';
 import { metricsHookPlugin } from './plugins/metricsHook.js';
 import websocket from '@fastify/websocket';
+import { oauthRoutes } from './routes/oauth.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -107,7 +108,7 @@ export async function buildApp(opts: AppOptions = {}) {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'DPoP', 'Idempotency-Key'],
     exposedHeaders: [
       'X-RateLimit-Limit',
       'X-RateLimit-Remaining',
@@ -175,6 +176,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(metricsRoutes);
   await app.register(commerceWellKnownRoutes);
   await app.register(commerceMcpRoutes);
+  await app.register(oauthRoutes);
 
   // Protected routes
   await app.register(agentsRoutes);

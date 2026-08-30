@@ -1,7 +1,9 @@
 import { getSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
 import {
+  verifyOAuthAccessToken,
   verifyGrantToken,
+  type VerifiedOAuthAccessTokenClaims,
   type VerifiedGrantTokenClaims,
 } from './crypto.js';
 
@@ -18,9 +20,16 @@ export type ActiveGrantTokenCheckResult =
         | 'not_found';
     };
 
+export type ActiveOAuthAccessTokenCheckResult =
+  | { ok: true; claims: VerifiedOAuthAccessTokenClaims; grantId: string }
+  | {
+      ok: false;
+      reason: 'invalid' | 'revoked' | 'expired' | 'not_found';
+    };
+
 export async function checkActiveGrantToken(
   token: string,
-  options: { expectedDeveloperId?: string } = {},
+  options: { expectedDeveloperId?: string; expectedProtocol?: string } = {},
 ): Promise<ActiveGrantTokenCheckResult> {
   let claims: VerifiedGrantTokenClaims;
   try {
@@ -62,6 +71,7 @@ export async function checkActiveGrantToken(
     JOIN grants g ON g.id = gt.grant_id
     WHERE gt.jti = ${claims.jti}
       AND (${options.expectedDeveloperId ?? null}::text IS NULL OR g.developer_id = ${options.expectedDeveloperId ?? null})
+      AND (${options.expectedProtocol ?? null}::text IS NULL OR g.protocol = ${options.expectedProtocol ?? null})
   `;
 
   const row = rows[0];
@@ -78,4 +88,44 @@ export async function checkActiveGrantToken(
   }
 
   return { ok: true, claims };
+}
+
+export async function checkActiveOAuthAccessToken(
+  token: string,
+  expectedProtocol: string,
+): Promise<ActiveOAuthAccessTokenCheckResult> {
+  let claims: VerifiedOAuthAccessTokenClaims;
+  try {
+    claims = await verifyOAuthAccessToken(token);
+  } catch {
+    return { ok: false, reason: 'invalid' };
+  }
+
+  const sql = getSql();
+  const rows = await sql`
+    SELECT gt.is_revoked, gt.expires_at, g.id AS grant_id, g.status AS grant_status
+    FROM grant_tokens gt
+    JOIN grants g ON g.id = gt.grant_id
+    WHERE gt.jti = ${claims.jti}
+      AND g.protocol = ${expectedProtocol}
+  `;
+  const row = rows[0];
+  if (!row) return { ok: false, reason: 'not_found' };
+
+  const grantId = row['grant_id'] as string;
+  const redis = getRedis();
+  const [tokenRevocationResult, grantRevocationResult] = await Promise.allSettled([
+    redis.get(`revoked:tok:${claims.jti}`),
+    redis.get(`revoked:grant:${grantId}`),
+  ]);
+  if ((tokenRevocationResult.status === 'fulfilled' && tokenRevocationResult.value)
+      || (grantRevocationResult.status === 'fulfilled' && grantRevocationResult.value)
+      || row['is_revoked'] === true
+      || row['grant_status'] !== 'active') {
+    return { ok: false, reason: 'revoked' };
+  }
+  if (new Date(row['expires_at'] as string) <= new Date()) {
+    return { ok: false, reason: 'expired' };
+  }
+  return { ok: true, claims, grantId };
 }

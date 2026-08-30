@@ -93,6 +93,35 @@ describe('POST /v1/agents', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('rejects duplicate OAuth scope tokens', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/agents',
+      headers: authHeader(),
+      payload: { name: 'Agent', scopes: ['read', 'read'] },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns 409 when an Agent Key belongs to another instance', async () => {
+    seedAuth();
+    sqlMock.mockRejectedValueOnce(Object.assign(new Error('duplicate key'), {
+      code: '23505',
+      constraint_name: 'idx_agents_key_thumbprint_unique',
+    }));
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/agents',
+      headers: authHeader(),
+      payload: { name: 'Duplicate Key Agent', scopes: ['read'], publicJwk },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'AGENT_KEY_CONFLICT' });
+  });
+
   it('registers exact redirect, resource, and public-key constraints', async () => {
     seedAuth();
     const keyedAgent = {
@@ -316,6 +345,7 @@ describe('DELETE /v1/agents/:id', () => {
     sqlMock.mockResolvedValueOnce([]); // DELETE grant_tokens
     sqlMock.mockResolvedValueOnce([]); // DELETE grants
     sqlMock.mockResolvedValueOnce([]); // DELETE auth_requests
+    sqlMock.mockResolvedValueOnce([]); // DELETE oauth_par_requests
     sqlMock.mockResolvedValueOnce([]); // DELETE agents
 
     const res = await app.inject({
@@ -326,6 +356,7 @@ describe('DELETE /v1/agents/:id', () => {
 
     expect(res.statusCode).toBe(204);
     expect(sqlMock.begin).toHaveBeenCalledTimes(1);
+    expect(sqlMock.mock.calls.map((call) => String(call[0])).join('\n')).toContain('oauth_par_requests');
   });
 
   it('returns 404 when agent not found', async () => {

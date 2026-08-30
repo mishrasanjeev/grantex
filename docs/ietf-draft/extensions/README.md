@@ -1,6 +1,6 @@
 # Candidate DAAP Extensions
 
-The `draft-mishra-oauth-agent-grants-02` working candidate deliberately keeps
+The `draft-mishra-oauth-agent-grants-03` working candidate deliberately keeps
 these subjects outside its interoperable OAuth core. This directory records
 possible follow-on work; none of these items is an Internet-Draft, an IETF
 submission, or a Working Group commitment.

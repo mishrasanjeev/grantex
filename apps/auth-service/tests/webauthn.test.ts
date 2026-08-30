@@ -324,6 +324,45 @@ describe('POST /v1/webauthn/assert/options', () => {
     expect(res.json().message).toContain('No FIDO credentials');
   });
 
+  it('requires a principal selection when PAR did not include a login hint', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      principal_id: '',
+      developer_id: 'dev_TEST',
+      fido_required: true,
+      mode: 'live',
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webauthn/assert/options',
+      payload: { authRequestId: 'areq_test' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('principalId is required');
+  });
+
+  it('binds the first interactive principal selection before passkey lookup', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      principal_id: '',
+      developer_id: 'dev_TEST',
+      fido_required: true,
+      mode: 'live',
+    }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'areq_test' }]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webauthn/assert/options',
+      payload: { authRequestId: 'areq_test', principalId: 'user_123' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('No FIDO credentials');
+    expect(sqlMock.mock.calls.map((call) => String(call[0])).join('\n')).toContain('SET principal_id =');
+  });
+
   it('returns assertion options when FIDO is required and credentials exist', async () => {
     // Auth request lookup
     sqlMock.mockResolvedValueOnce([{

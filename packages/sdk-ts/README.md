@@ -72,6 +72,55 @@ const grantex = new Grantex({
 | `jwksUri` | `string` | `${baseUrl}/.well-known/jwks.json` | URL from which the verifier retrieves signing keys |
 | `timeout` | `number` | `30000` | Request timeout in milliseconds |
 
+## OAuth Agent Profile Client
+
+`OAuthAgentClient` implements the client role in the prepared
+`draft-mishra-oauth-agent-grants-03` profile. It discovers and validates RFC
+8414 metadata, creates an ES256 DPoP key by default, uses PAR and PKCE S256,
+validates `state` and the RFC 9207 `iss` response parameter, rotates refresh
+tokens, performs same-resource RFC 8693 attenuation, and creates DPoP proofs
+for protected-resource requests.
+
+```typescript
+import { OAuthAgentClient } from '@grantex/sdk';
+
+const client = await OAuthAgentClient.create({
+  issuer: 'https://grantex.dev',
+  clientId: 'ag_01J...',
+  redirectUri: 'https://agent.example/callback',
+  resource: 'https://api.example/resource',
+});
+
+const pending = await client.beginAuthorization({
+  scopes: ['grantex.resource.read'],
+  principalHint: 'principal@example.com',
+});
+
+// Redirect the Principal to pending.authorizationUrl. In the callback:
+const tokens = await client.completeAuthorization(callbackUrl);
+
+const response = await client.fetch(
+  'https://api.example/resource',
+  tokens.access_token,
+);
+
+const narrower = await client.attenuate(tokens.access_token, [
+  'grantex.resource.read',
+]);
+const rotated = await client.refresh(tokens.refresh_token!);
+await client.revoke(rotated.refresh_token!, 'refresh_token');
+```
+
+Persist the generated key securely if an instance must survive process
+restarts. Supply the matching `privateKey` and `publicJwk` to `create`; both are
+required together. `principalHint` is optional account-discovery input and is
+not proof of the Principal's identity; live approval still requires the
+authorization server's passkey authentication. Plain HTTP endpoints are rejected unless
+`allowInsecureLoopback` is enabled for local loopback testing. Revision `-02`
+of the draft family is published as an active individual Internet-Draft;
+revision `-03` is the working candidate implemented here. Neither is an
+IETF-endorsed or independently certified standard.
+
 ## Commerce V1 / OACP
 
 The SDK includes a `commerce` resource for the Grantex Commerce V1 control

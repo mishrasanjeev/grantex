@@ -15,6 +15,8 @@
       { "source": "/v1/identity", "destination": "/contexts/identity-v1.json" },
       { "source": "/v1/x402", "destination": "/contexts/x402-v1.json" },
       { "source": "/consent", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
+      { "source": "/.well-known/oauth-authorization-server", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
+      { "source": "/oauth/**", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
       { "source": "/v1/consent/**", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
       { "source": "/v1/webauthn/**", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },
       { "source": "/.well-known/jwks.json", "run": { "serviceId": "grantex-auth", "region": "us-central1" } },

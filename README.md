@@ -1742,7 +1742,7 @@ Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRI
 | **OWASP** | Covers ASI-01, ASI-03, ASI-05, ASI-10 from the [Agentic Security Top 10](https://docs.grantex.dev/blog/owasp-agentic-top-10-compliance) (Dec 2025) |
 | **EU AI Act** | Technical control mapping only, not legal advice. Application is phased: transparency rules from Aug 2026, certain high-risk rules from Dec 2027, and product-integrated high-risk rules from Aug 2028 under the political agreement. See the [European Commission timeline](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai). |
 | **NIST AI RMF** | Govern 1.1, Map 5.1, Measure 2.5 — repository comment draft; no public submission receipt or endorsement |
-| **IETF** | Active individual Internet-Draft; current Datatracker revision is -01, with a -02 submission candidate prepared in [`docs/ietf-draft/`](docs/ietf-draft/). Not adopted or endorsed by the IETF ([Datatracker](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
+| **IETF** | Active individual Internet-Draft; revision -02 is published. Revision -03 and its self-assessed client/authorization-server/resource-server implementation are under review in [`docs/ietf-draft/`](docs/ietf-draft/), with no upload before 2026-09-09. This is not independent certification, adoption, or IETF endorsement ([Datatracker](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
 | **AuthZEN** | Conformance mapped |
 | **SOC 2** | Readiness control mapping published; formal third-party attestation not published |
 | **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, open, Apache 2.0 |
@@ -1774,7 +1774,7 @@ OAuth 2.0 was designed for "user grants app permission to access their data." Ag
 MCP connects clients to tools and resources and defines optional OAuth-based authorization for HTTP transports. Grantex adds agent-specific delegated authority at the tool or service boundary: which agent may perform which action for which principal. The two layers are complementary.
 
 **Who owns the standard?**  
-The v1.0 protocol specification is open (Apache 2.0). Grantex is owned by Orchestrum Technologies LLP, and Sanjeev Kumar is listed as inventor and owner. Orchestrum Technologies LLP maintains the reference implementation. An active -01 document is published as an individual IETF Internet-Draft; that publication is not working-group adoption or IETF endorsement.
+The v1.0 protocol specification is open (Apache 2.0). Grantex is owned by Orchestrum Technologies LLP, and Sanjeev Kumar is listed as inventor and owner. Orchestrum Technologies LLP maintains the reference implementation. Revision -02 is published as an active individual IETF Internet-Draft, and revision -03 is under review; neither publication nor repository implementation is working-group adoption, independent certification, or IETF endorsement.
 
 **Can I self-host?**  
 Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the complete guide or the [self-hosting docs](https://docs.grantex.dev/guides/self-hosting).

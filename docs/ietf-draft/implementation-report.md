@@ -1,6 +1,6 @@
 # DAAP Implementation Report
 
-**Draft:** `draft-mishra-oauth-agent-grants-02` working candidate
+**Draft:** `draft-mishra-oauth-agent-grants-03` working candidate
 
 **Date:** 2026-08-30
 
@@ -10,92 +10,161 @@
 
 ## Status
 
-Grantex is an implementation-specific authorization system informed by the
-DAAP work. It is not currently conformant with the OAuth profile proposed by
-the `-02` working candidate. This report distinguishes implemented controls
-from missing interoperability work so that code evidence is not mistaken for
-IETF endorsement, OAuth Working Group adoption, or complete conformance.
+The repository now contains role-specific implementations of the `-03`
+profile for an OAuth client, authorization server, and resource server. The
+standard endpoints are separate from the older Grantex `/v1/*` JSON API; the
+legacy API remains supported but is not represented as standard OAuth.
+
+This is a source-level, self-assessed conformance statement for the tested
+configuration. It is not IETF endorsement, OAuth Working Group adoption, an
+independent security certification, or interoperability evidence from a
+second implementation. The hosted service must not claim this revision is
+deployed until the corresponding commit and Firebase rewrites are released
+and production E2E is green.
 
 The current Datatracker publication remains
-`draft-mishra-oauth-agent-grants-01` until a revised document is submitted and
-confirmed. The `-02` source must render and pass the repository's review gates
-before upload.
+`draft-mishra-oauth-agent-grants-02`. Revision `-03` is intentionally held
+from submission while review continues from 2026-09-06 through 2026-09-09.
+It must not be uploaded before 2026-09-09 or without a new explicit approval
+after the final review.
+
+## Conforming Roles
+
+| Role | Implementation | Scope of claim |
+|:-----|:---------------|:---------------|
+| Client | `OAuthAgentClient` in `packages/sdk-ts/src/oauth-agent.ts` | Metadata and issuer validation, PAR, PKCE S256, one-time state, RFC 9207 response validation, DPoP token requests and resource presentation, refresh, attenuation, and revocation. |
+| Authorization server | `apps/auth-service/src/routes/oauth.ts` | RFC 8414 metadata, PAR, authorization-code exchange, RFC 9068 JWT access tokens, DPoP, same-instance RFC 8693 attenuation, refresh rotation/family reuse response, and RFC 7009 revocation for public clients. |
+| Resource server | `ALL /oauth/resource` in the auth service | RFC 9068 signature/issuer/audience/lifetime checks, online token and grant status, DPoP method/URI/freshness/replay/`ath`/key checks, and an exact scope authorization decision. |
+
+The authorization and revocation endpoints advertise `none` client
+authentication because the implemented profile registrations are public
+clients. DPoP proves possession of the registered instance key; the
+implementation does not describe DPoP as confidential-client authentication.
 
 ## Core Profile Matrix
 
-| Profile requirement | Status | Evidence and remaining work |
-|:--------------------|:-------|:----------------------------|
-| Standard OAuth authorization endpoint | Missing | Grantex uses an authenticated JSON `POST /v1/authorize`, not the browser-facing OAuth endpoint defined by RFC 6749. |
-| Pushed Authorization Requests | Missing | No RFC 9126 PAR endpoint or request URI lifecycle is implemented. |
-| Exact registered redirect URI | Partial | Profile-aware agents can register exact redirects and Grantex enforces equality in its custom authorize and token routes. Legacy agents can omit this metadata. |
-| `state` binding | Partial | The custom authorization request accepts and returns state with redirect responses. A standard client-side OAuth callback flow is not implemented. |
-| PKCE S256 | Partial | The custom flow verifies S256. Standard OAuth endpoint integration remains missing. |
-| Independently authenticated Principal consent | Partial | Live approval and denial require a verified WebAuthn assertion. Passkey enrollment is still developer-session initiated and is not yet anchored to an independent IdP or Principal account ceremony. |
-| Policy cannot replace live consent | Implemented | A live policy `allow` records policy evaluation but no longer emits an authorization code. Sandbox auto-approval remains isolated behavior. |
-| Registered resource indicator | Partial | Profile-aware agents register allowed HTTPS resource servers and the custom flow enforces exact audience matching. RFC 8707 request processing at a standard endpoint is missing. |
-| Standard OAuth token endpoint | Missing | Grantex uses JSON `POST /v1/token`, not the form-encoded OAuth token endpoint. |
-| RFC 9068 JWT access-token profile | Partial | Tokens carry `iss`, `sub`, `aud` when requested, `exp`, `iat`, `jti`, `client_id`, and standard `scope`; they retain private Grantex claims for compatibility and are issued through a non-standard token endpoint. |
-| Sender-constrained access token | Partial | A registered key thumbprint is emitted as `cnf.jkt`. Grantex does not yet verify a DPoP proof during enrollment, token issuance, or protected-resource access. |
-| Resolvable agent identity | Partial | Keyed agents receive a public `did:web` document containing their public JWK. Legacy agents retain non-resolvable `did:grantex` identifiers. Key possession is not yet proven. |
-| RFC 8693 Token Exchange delegation | Missing | Grantex has a custom delegation endpoint with scope attenuation, audience inheritance, `act`, key binding, and depth limits; it is not an RFC 8693 token endpoint. |
-| Refresh rotation | Implemented on custom API | Refresh tokens rotate atomically and cannot outlive the grant. |
-| Lost-response refresh recovery | Implemented on custom API | The same authenticated developer, agent, old refresh token, and `Idempotency-Key` can retrieve the exact stored token response for at most 300 seconds while the child remains unused. A different key or expired window fails. |
-| RFC 8414 metadata | Partial | `/.well-known/oauth-authorization-server` truthfully publishes `issuer`, `jwks_uri`, S256, and namespaced Grantex extension endpoints. It deliberately does not advertise missing standard endpoints or DPoP support. |
+| Profile requirement | Status | Repository evidence |
+|:--------------------|:-------|:--------------------|
+| RFC 8414 metadata | Implemented | `GET /.well-known/oauth-authorization-server` publishes all required endpoints, grant/response types, S256, RFC 9207 support, DPoP algorithms, and accurate `none` authentication methods. |
+| Standard authorization endpoint | Implemented | `GET /oauth/authorize` accepts only an issued PAR `request_uri`, enforces client binding, consumes it atomically, and redirects with `code`, `state`, and `iss`. |
+| RFC 9126 PAR | Implemented | `POST /oauth/par` validates exact registered redirect, scopes, one resource, state, PKCE, an optional account-discovery hint, typed optional RFC 9396 details, and DPoP key binding; request URIs expire after 90 seconds. The hint is not an undeclared interoperability requirement. |
+| DPoP code binding | Implemented | PAR accepts a DPoP proof, a previously possession-verified `dpop_jkt`, or both; both must match when present. A public-key upload alone is not proof of possession. Code exchange requires a fresh proof from the same current registered key. |
+| Exact registered redirect and resource | Implemented | Registration and PAR use exact set membership; resources are absolute and fragment-free. Production registration is HTTPS-only. |
+| State and RFC 9207 issuer checks | Implemented | The SDK stores issuer-specific one-time state and rejects an unknown, consumed, or wrong-issuer callback before token exchange. |
+| PKCE S256 | Implemented | The client creates a fresh verifier per request; PAR requires S256; token exchange validates exact redirect and verifier. |
+| Principal consent | Implemented with deployment condition | Live approval and denial require a WebAuthn assertion bound to the principal and authorization request. When PAR omits an account hint, the consent page binds the first interactive principal selection before creating its passkey challenge. Operators remain responsible for trustworthy passkey enrollment and principal identity proofing; sandbox auto-approval is isolated and not a live conformance deployment. |
+| Consent disclosure | Implemented | The consent view shows the agent, responsible developer, exact scopes and descriptions, resource, access/refresh/grant lifetimes, and integrity-protected structured authorization details. |
+| Policy cannot replace live consent | Implemented | Policy may deny, but an `allow` decision never emits a live authorization code without principal verification. |
+| Standard OAuth token endpoint | Implemented | Form-encoded `POST /oauth/token` supports authorization code, refresh token, and RFC 8693 Token Exchange grants. |
+| RFC 9068 JWT access tokens | Implemented | Standard tokens use `typ=at+jwt` and carry `iss`, `sub`, one `aud`, `exp`, `iat`, `jti`, `client_id`, space-delimited `scope`, and `cnf.jkt`; private compatibility claims are not required by the profile client or resource route. |
+| Interoperable claim vocabulary | Implemented | Profile access tokens omit the legacy short claims `scp`, `agt`, `dev`, and `grnt`. Authorization, resource validation, and attenuation use the standard `scope`, `client_id`, `aud`, `cnf`, `act`, and `authorization_details` members. |
+| Non-cacheable token responses | Implemented | Success and error responses from `/oauth/token` carry `Cache-Control: no-store` and `Pragma: no-cache`. |
+| High-entropy protocol secrets | Implemented | PAR request handles, authorization codes, and profile refresh tokens contain 256 bits from `crypto.randomBytes`; identifiers such as grant IDs and JWT `jti` values remain non-secret identifiers. |
+| End-to-end DPoP | Implemented | ES256/384/512, RS256, and EdDSA public proofs are validated for signature, `typ`, method, target URI, freshness, unique `jti`, optional/required `ath`, and registered/token key equality. Redis replay protection fails closed. |
+| Bearer downgrade prevention | Implemented | `/oauth/resource` rejects bearer presentation of a DPoP-bound token and requires the DPoP scheme plus proof. |
+| RFC 8693 attenuation | Implemented | Token Exchange accepts only a standard active subject token from the same `client_id`, key, and resource; scope must be an exact subset; actor tokens are rejected; output preserves principal, audience, sender constraint, existing `act`, and structured authorization details. |
+| Refresh rotation and sender binding | Implemented | Rotation is atomic, preserves resource/scope/key/grant lifetime and structured authorization details, checks the currently registered key, and returns a new family member. Reuse revokes the active grant and family. |
+| RFC 7009 revocation | Implemented | `POST /oauth/revoke` authenticates the public client with its DPoP key, hides token validity, revokes access-token status, and invalidates an entire refresh family. |
+| Key isolation and rotation | Implemented | A partial unique database index prevents two Agent Client Instances at this issuer from sharing an Agent Key. New issuance and refresh require the current registered key. Existing access tokens retain their original `cnf.jkt` and remain verifiable until expiry or revocation. |
+| Resource-server authorization | Implemented | The protected route checks protocol origin, token status, audience, DPoP binding, and the exact `grantex.resource.read` scope before returning an authorized result. |
 
-## Operational Extension Matrix
+## Legacy and Extension Boundaries
 
-These features are not DAAP core conformance requirements.
+The following paths remain product APIs and are deliberately isolated from the
+standard profile:
 
-| Extension | Status | Security boundary |
-|:----------|:-------|:------------------|
-| Audit hash chain | Implemented | Append-only API and per-developer SHA-256 chain. This alone is not operator-independent evidence. |
-| Signed audit checkpoint | Implemented | The authorization server signs the current chain head. `witnessRequired: true` makes clear that an external timestamp, transparency log, or countersignature is still needed. |
-| Financial budget | Implemented | Atomic debit is authoritative. Refreshed tokens include structured amount and ISO-style currency authorization details; the legacy numeric `bdg` claim remains private and advisory. |
-| Policy engine | Implemented | Built-in, OPA, and Cedar paths exist. Policy cannot bypass live Principal verification. |
-| Event delivery | Implemented | Webhooks, SSE, and WebSocket facilities are Grantex APIs, not protocol requirements. |
-| Credential vault | Implemented | Encrypted storage and token-to-credential exchange are implementation-specific. |
-| Enterprise integrations | Implemented | SCIM, SSO, domains, usage, and related controls are product features outside the draft. |
+| Product operation | Legacy path | Boundary |
+|:------------------|:------------|:---------|
+| JSON authorization | `POST /v1/authorize` | Cannot issue a standard-profile code. |
+| JSON token exchange | `POST /v1/token` | Cannot consume a standard-profile code. |
+| Proprietary refresh recovery | `POST /v1/token/refresh` | Cannot rotate a standard-profile refresh family. The 300-second `Idempotency-Key` recovery behavior is not DAAP conformance. |
+| Cross-agent delegation | `POST /v1/grants/delegate` | Cannot use a standard-profile grant as its parent. Cross-instance delegation remains outside core `-03`. |
+| Product token verification | `POST /v1/tokens/verify` | Grantex API, not RFC 7662. |
+| Product grant revocation | `DELETE /v1/grants/{id}` | Authenticated administrative grant control in addition to RFC 7009. |
 
-## Maintained Client Coverage
+Audit chains, signed checkpoints, budgets, policies, event delivery, the
+credential vault, SCIM, SSO, Commerce, and other enterprise integrations are
+implementation extensions and are not used as evidence of DAAP conformance.
 
-| Component | Repository version | Hardened API coverage |
-|:----------|:-------------------|:----------------------|
-| TypeScript SDK (`@grantex/sdk`) | 0.3.13 | Agent security metadata, redirect URI exchange binding, refresh idempotency, signed audit checkpoints |
-| Python SDK (`grantex`) | 0.3.14 | Same custom API features |
-| Go SDK | repository module | Same custom API features |
-| Conformance package (`@grantex/conformance`) | 0.1.8 | Grantex API regression suite, including exact refresh recovery; not an OAuth/DAAP certification suite |
+## Test Evidence
 
-## Verification Commands
+The repository contains both focused cryptographic tests and a database-backed
+wire-protocol E2E:
 
-```bash
-cd apps/auth-service && npm run typecheck && npm test
-cd packages/sdk-ts && npm run typecheck && npm test
-cd packages/conformance && npm run typecheck && npm test
-cd packages/sdk-py && python -m pip install -e .[dev] && python -m pytest
-cd packages/go-sdk && go test ./...
+- `apps/auth-service/tests/oauth-profile.test.ts` uses real ES256 DPoP proofs
+  to test proof validation, replay rejection, PAR key binding, bearer
+  downgrade rejection, protocol isolation, and protected-resource decisions.
+- `packages/sdk-ts/tests/oauth-agent.test.ts` tests metadata validation, PAR,
+  one-time state, RFC 9207 issuer rejection, token exchange proof construction,
+  `ath`-bound resource requests, redirect binding, cross-origin token-leak
+  prevention, duplicate callback rejection, RFC 8414 path-issuer discovery,
+  token-response validation, and public/private key-pair validation.
+- `tests/e2e/oauth-agent-profile.test.ts` runs against Docker Postgres, Redis,
+  and the built auth-service image. It covers PAR, sandbox authorization,
+  RFC 9207, code exchange, DPoP resource use, RFC 8693 attenuation, rotation,
+  access and refresh revocation, family replay response, retired-key rejection,
+  authorization-details preservation, duplicate Agent Key rejection, PAR
+  single use, bearer and scope-escalation rejection, standard-only profile
+  claims, and clean deletion of profile state.
+
+Verified on 2026-08-30:
+
+```text
+Auth service: 164 test files passed, 1 skipped; 2,097 tests passed, 2 skipped
+TypeScript SDK: 30 test files passed; 444 tests passed; build and typecheck passed
+Docker E2E: 21 files; 253 tests passed; 0 failed
+OAuth Docker flow: all protocol stages, negative cases, key uniqueness, and cleanup passed
+Fresh Docker database: all 90 migrations applied; Postgres and Redis healthy
+IETF Author Tools: 0 errors, 0 flaws, 1 Unicode warning, 1 heuristic comment
 ```
 
-The database-backed integration tests must also apply migration
-`089_daap_security_hardening.sql`. Deployment verification must confirm that
-the migration lands before the new application revision receives traffic.
+The Docker files were executed sequentially, matching the workflow's isolated
+steps and avoiding self-induced concurrency against per-IP authentication
+limits. The test did not disable or weaken a production rate limit.
 
-## Work Required for a Conformance Claim
+The Markdown was converted with `kramdown-rfc2629` 1.7.43. Text and HTML were
+rendered with `xml2rfc` 3.33.0 from the official image digest
+`sha256:de208fee97d109a9a0764782e31f7898594f55c0521bf124b30da169f32bf9b9`.
+IETF Author Tools validation reported no errors or flaws. The remaining Unicode
+warning is the correctly encoded surname `Würtele` in an informative-reference
+author list, and the heuristic comment is non-blocking; both must be rechecked
+after the final review edits.
 
-1. Implement standard OAuth authorization, PAR, and token endpoints.
-2. Bind live Principal enrollment and authentication to an independent account
-   or identity-provider ceremony.
-3. Require profile metadata for conforming agent registrations and retire the
-   legacy path from that conformance mode.
-4. Validate DPoP proofs or mutual-TLS sender binding end to end, including at
-   protected resources.
-5. Emit and validate the complete RFC 9068 claim set without relying on private
-   aliases.
-6. Implement delegation through RFC 8693 Token Exchange.
-7. Build a separate standards conformance suite instead of re-labeling the
-   current Grantex product API suite.
+## Deployment Conditions
+
+A deployment claim is valid only when all of the following are true:
+
+1. The deployed revision includes migration
+   `090_oauth_daap_profile.sql` and the `/oauth/*` Firebase rewrites.
+   Before migration, operators must confirm that existing non-null Agent Key
+   thumbprints are unique; the migration deliberately fails rather than retain
+   ambiguous cross-instance key ownership.
+2. Issuer, PAR, authorization, token, revocation, and resource URLs use HTTPS
+   with certificate validation. HTTP is accepted only by the non-production
+   loopback Docker harness.
+3. Redis replay protection is available; the service fails closed when it is
+   not.
+4. Live principal passkeys are enrolled under a trustworthy identity and
+   account-recovery process. A developer API key alone is never approval.
+5. Production E2E passes against the advertised issuer and deployed resource.
+
+## Remaining Evidence Gaps
+
+These do not negate the implemented role behavior, but they block a broad or
+independent interoperability claim:
+
+1. No second independent implementation has completed an interop event.
+2. No external OAuth certification suite currently identifies DAAP as a
+   registered profile.
+3. The repository includes an initial vendor-neutral behavioral corpus under
+   `docs/ietf-draft/test-vectors/`, but no independent implementation has yet
+   reported results against it.
+4. This source snapshot is not a hosted deployment until it is reviewed,
+   released, and re-tested in production.
 
 ## Reviewer Note
 
-This report applies only to the tested source revision and configuration. It
-is not a security certification, legal opinion, standards approval, or claim
-that the hosted Grantex deployment has enabled every optional control.
+This report applies only to the source revision that contains it and to the
+tested configuration above. It is not a security certification, legal opinion,
+standards approval, or claim that an undeployed hosted service has enabled the
+new endpoints.

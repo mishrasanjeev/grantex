@@ -1,0 +1,2932 @@
+<!DOCTYPE html>
+<html lang="en" class="Internet-Draft">
+<head>
+<meta charset="utf-8">
+<meta content="Common,Latin" name="scripts">
+<meta content="initial-scale=1.0" name="viewport">
+<title>OAuth Profile for Delegated AI Agent Authorization</title>
+<meta content="Sanjeev Kumar" name="author">
+<meta content="
+       AI agents increasingly invoke protected APIs on behalf of human users. This
+document defines an OAuth profile for binding an agent client instance,
+obtaining an authenticated user's consent, issuing resource-bound and
+sender-constrained access tokens, attenuating authority through OAuth Token
+Exchange, and rotating refresh tokens safely. The profile uses existing OAuth
+and JOSE mechanisms and defines no new JWT claims, OAuth parameters, or OAuth
+endpoints. Implementation-specific lost-response recovery is described only as
+security guidance and is not part of interoperable conformance. Operational
+facilities such as policy engines, audit stores, budgets, event streams, and
+credential vaults are outside the interoperable core. Grantex contains a
+self-assessed reference implementation of the three conformance roles and is
+not required for conformance.
+    " name="description">
+<meta content="xml2rfc 3.33.0" name="generator">
+<meta content="AI agents" name="keyword">
+<meta content="authorization" name="keyword">
+<meta content="OAuth" name="keyword">
+<meta content="delegation" name="keyword">
+<meta content="sender-constrained tokens" name="keyword">
+<meta content="draft-mishra-oauth-agent-grants-03" name="ietf.draft">
+<!-- Generator version information:
+  xml2rfc 3.33.0
+    Python 3.14.5
+    ConfigArgParse 1.7.5
+    google-i18n-address 3.1.1
+    intervaltree 3.2.1
+    Jinja2 3.1.6
+    lxml 6.1.1
+    natsort 8.4.0
+    platformdirs 4.10.0
+    pycountry 26.2.16
+    PyYAML 6.0.3
+    requests 2.34.2
+    wcwidth 0.7.0
+-->
+<link href="draft-mishra-oauth-agent-grants-03.xml" rel="alternate" type="application/rfc+xml">
+<link href="#copyright" rel="license">
+<style type="text/css">/*
+
+  NOTE: Changes at the bottom of this file overrides some earlier settings.
+
+  Once the style has stabilized and has been adopted as an official RFC style,
+  this can be consolidated so that style settings occur only in one place, but
+  for now the contents of this file consists first of the initial CSS work as
+  provided to the RFC Formatter (xml2rfc) work, followed by itemized and
+  commented changes found necessary during the development of the v3
+  formatters.
+
+*/
+
+/* fonts */
+@import url('https://static.ietf.org/fonts/noto-sans/import.css'); /* Sans-serif */
+@import url('https://static.ietf.org/fonts/noto-serif/import.css'); /* Serif (print) */
+@import url('https://static.ietf.org/fonts/roboto-mono/import.css'); /* Monospace */
+
+:root {
+  --font-sans: 'Noto Sans', Arial, Helvetica, sans-serif;
+  --font-serif: 'Noto Serif', 'Times', 'Times New Roman', serif;
+  --font-mono: 'Roboto Mono', Courier, 'Courier New', monospace;
+}
+
+@viewport {
+  zoom: 1.0;
+}
+@-ms-viewport {
+  width: extend-to-zoom;
+  zoom: 1.0;
+}
+/* general and mobile first */
+html {
+}
+body {
+  max-width: 90%;
+  margin: 1.5em auto;
+  color: #222;
+  background-color: #fff;
+  font-size: 14px;
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  scroll-behavior: smooth;
+  overflow-wrap: break-word;
+}
+.ears {
+  display: none;
+}
+
+/* headings */
+#title, h1, h2, h3, h4, h5, h6 {
+  margin: 1em 0 0.5em;
+  font-weight: bold;
+  line-height: 1.3;
+}
+#title {
+  clear: both;
+  border-bottom: 1px solid #ddd;
+  margin: 0 0 0.5em 0;
+  padding: 1em 0 0.5em;
+}
+.author {
+  padding-bottom: 4px;
+}
+h1 {
+  font-size: 26px;
+  margin: 1em 0;
+}
+h2 {
+  font-size: 22px;
+  margin-top: -20px;  /* provide offset for in-page anchors */
+  padding-top: 33px;
+}
+h3 {
+  font-size: 18px;
+  margin-top: -36px;  /* provide offset for in-page anchors */
+  padding-top: 42px;
+}
+h4 {
+  font-size: 16px;
+  margin-top: -36px;  /* provide offset for in-page anchors */
+  padding-top: 42px;
+}
+h5, h6 {
+  font-size: 14px;
+}
+#n-copyright-notice {
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 1em;
+  margin-bottom: 1em;
+}
+/* general structure */
+p {
+  padding: 0;
+  margin: 0 0 1em 0;
+  text-align: left;
+}
+div, span {
+  position: relative;
+}
+div {
+  margin: 0;
+}
+.alignRight.art-text {
+  background-color: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 3px;
+  padding: 1em 1em 0;
+  margin-bottom: 1.5em;
+}
+.alignRight.art-text pre {
+  padding: 0;
+}
+.alignRight {
+  margin: 1em 0;
+}
+.alignRight > *:first-child {
+  border: none;
+  margin: 0;
+  float: right;
+  clear: both;
+}
+.alignRight > *:nth-child(2) {
+  clear: both;
+  display: block;
+  border: none;
+}
+svg {
+  display: block;
+}
+@media print {
+  svg {
+    max-height: 850px;
+    max-width: 660px;
+  }
+}
+svg[font-family~="serif" i], svg [font-family~="serif" i] {
+  font-family: var(--font-serif);
+}
+svg[font-family~="sans-serif" i], svg [font-family~="sans-serif" i] {
+  font-family: var(--font-sans);
+}
+svg[font-family~="monospace" i], svg [font-family~="monospace" i] {
+  font-family: var(--font-mono);
+}
+.alignCenter.art-text {
+  background-color: #f9f9f9;
+  border: 1px solid #eee;
+  border-radius: 3px;
+  padding: 1em 1em 0;
+  margin-bottom: 1.5em;
+}
+.alignCenter.art-text pre {
+  padding: 0;
+}
+.alignCenter {
+  margin: 1em 0;
+}
+.alignCenter > *:first-child {
+  display: table;
+  border: none;
+  margin: 0 auto;
+}
+
+/* lists */
+ol, ul {
+  padding: 0;
+  margin: 0 0 1em 2em;
+}
+ol ol, ul ul, ol ul, ul ol {
+  margin-left: 1em;
+}
+li {
+  margin: 0 0 0.25em 0;
+}
+.ulCompact li {
+  margin: 0;
+}
+ul.empty, .ulEmpty {
+  list-style-type: none;
+}
+ul.empty li, .ulEmpty li {
+  margin-top: 0.5em;
+}
+ul.ulBare, li.ulBare {
+  margin-left: 0em !important;
+}
+ul.compact, .ulCompact,
+ol.compact, .olCompact {
+  line-height: 100%;
+  margin: 0 0 0 2em;
+}
+
+/* definition lists */
+dl {
+}
+dl > dt {
+  float: left;
+  margin-right: 1em;
+}
+/*
+dl.nohang > dt {
+  float: none;
+}
+*/
+dl > dd {
+  margin-bottom: .8em;
+  min-height: 1.3em;
+}
+dl.compact > dd, .dlCompact > dd {
+  margin-bottom: 0em;
+}
+dl > dd > dl {
+  margin-top: 0.5em;
+  margin-bottom: 0em;
+}
+
+/* links */
+a {
+  text-decoration: none;
+}
+a[href] {
+  color: #22e; /* Arlen: WCAG 2019 */
+}
+a[href]:hover {
+  background-color: #f2f2f2;
+}
+figcaption a[href],
+a[href].selfRef {
+  color: #222;
+}
+/* XXX probably not this:
+a.selfRef:hover {
+  background-color: transparent;
+  cursor: default;
+} */
+
+/* Figures */
+tt, code, pre {
+  background-color: #f9f9f9;
+  font-family: var(--font-mono);
+}
+pre {
+  border: 1px solid #eee;
+  margin: 0;
+  padding: 1em;
+}
+img {
+  max-width: 100%;
+}
+figure {
+  margin: 0;
+}
+figure blockquote {
+  margin: 0.8em 0.4em 0.4em;
+}
+figcaption {
+  font-style: italic;
+  margin: 0 0 1em 0;
+}
+@media screen {
+  pre {
+    overflow-x: auto;
+    max-width: 100%;
+    max-width: calc(100% - 22px);
+  }
+}
+
+/* aside, blockquote */
+aside, blockquote {
+  margin-left: 0;
+  padding: 1.2em 2em;
+}
+blockquote {
+  background-color: #f9f9f9;
+  color: #111; /* Arlen: WCAG 2019 */
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  margin: 1em 0;
+}
+blockquote > *:last-child {
+  margin-bottom: 0;
+}
+cite {
+  display: block;
+  text-align: right;
+  font-style: italic;
+}
+.xref {
+  overflow-wrap: normal;
+}
+
+/* tables */
+table {
+  width: 100%;
+  margin: 0 0 1em;
+  border-collapse: collapse;
+  border: 1px solid #eee;
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.5em 0.75em;
+}
+th {
+  text-align: left;
+  background-color: #e9e9e9;
+}
+tr:nth-child(2n+1) > td {
+  background-color: #f5f5f5;
+}
+table caption {
+  font-style: italic;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+}
+table p {
+  /* XXX to avoid bottom margin on table row signifiers. If paragraphs should
+     be allowed within tables more generally, it would be far better to select on a class. */
+  margin: 0;
+}
+
+/* pilcrow */
+a.pilcrow {
+  color: #666; /* Arlen: AHDJ 2019 */
+  text-decoration: none;
+  visibility: hidden;
+  user-select: none;
+  -ms-user-select: none;
+  -o-user-select:none;
+  -moz-user-select: none;
+  -khtml-user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+@media screen {
+  aside:hover > a.pilcrow,
+  p:hover > a.pilcrow,
+  blockquote:hover > a.pilcrow,
+  div:hover > a.pilcrow,
+  li:hover > a.pilcrow,
+  pre:hover > a.pilcrow {
+    visibility: visible;
+  }
+  a.pilcrow:hover {
+    background-color: transparent;
+  }
+}
+
+/* misc */
+hr {
+  border: 0;
+  border-top: 1px solid #eee;
+}
+.bcp14 {
+  font-variant: small-caps;
+}
+
+.role {
+  font-variant: all-small-caps;
+}
+
+/* info block */
+#identifiers {
+  margin: 0;
+  font-size: 0.9em;
+}
+#identifiers dt {
+  width: 3em;
+  clear: left;
+}
+#identifiers dd {
+  float: left;
+  margin-bottom: 0;
+}
+/* Fix PDF info block run off issue */
+@media print {
+  #identifiers dd {
+    max-width: 100%;
+  }
+}
+#identifiers .authors .author {
+  display: inline-block;
+  margin-right: 1.5em;
+}
+#identifiers .authors .org {
+  font-style: italic;
+}
+
+/* The prepared/rendered info at the very bottom of the page */
+.docInfo {
+  color: #666; /* Arlen: WCAG 2019 */
+  font-size: 0.9em;
+  font-style: italic;
+  margin-top: 2em;
+}
+.docInfo .prepared {
+  float: left;
+}
+.docInfo .prepared {
+  float: right;
+}
+
+/* table of contents */
+#toc  {
+  padding: 0.75em 0 2em 0;
+  margin-bottom: 1em;
+}
+nav.toc ul {
+  margin: 0 0.5em 0 0;
+  padding: 0;
+  list-style: none;
+}
+nav.toc li {
+  line-height: 1.3em;
+  margin: 0.75em 0;
+  padding-left: 1.2em;
+  text-indent: -1.2em;
+}
+/* references */
+.references dt {
+  text-align: right;
+  font-weight: bold;
+  min-width: 7em;
+}
+.references dd {
+  margin-left: 8em;
+  overflow: auto;
+}
+
+.refInstance {
+  margin-bottom: 1.25em;
+}
+
+.refSubseries {
+  margin-bottom: 1.25em;
+}
+
+.references .ascii {
+  margin-bottom: 0.25em;
+}
+
+/* index */
+.index ul {
+  margin: 0 0 0 1em;
+  padding: 0;
+  list-style: none;
+}
+.index ul ul {
+  margin: 0;
+}
+.index li {
+  margin: 0;
+  text-indent: -2em;
+  padding-left: 2em;
+  padding-bottom: 5px;
+}
+.indexIndex {
+  margin: 0.5em 0 1em;
+}
+.index a {
+  font-weight: 700;
+}
+/* make the index two-column on all but the smallest screens */
+@media (min-width: 600px) {
+  .index ul {
+    -moz-column-count: 2;
+    -moz-column-gap: 20px;
+  }
+  .index ul ul {
+    -moz-column-count: 1;
+    -moz-column-gap: 0;
+  }
+}
+
+/* authors */
+address.vcard {
+  font-style: normal;
+  margin: 1em 0;
+}
+
+address.vcard .nameRole {
+  font-weight: 700;
+  margin-left: 0;
+}
+address.vcard .label {
+  font-family: var(--font-sans);
+  margin: 0.5em 0;
+}
+address.vcard .type {
+  display: none;
+}
+.alternative-contact {
+  margin: 1.5em 0 1em;
+}
+hr.addr {
+  border-top: 1px dashed;
+  margin: 0;
+  color: #ddd;
+  max-width: calc(100% - 16px);
+}
+
+/* temporary notes */
+.rfcEditorRemove::before {
+  position: absolute;
+  top: 0.2em;
+  right: 0.2em;
+  padding: 0.2em;
+  content: "The RFC Editor will remove this note";
+  color: #9e2a00; /* Arlen: WCAG 2019 */
+  background-color: #ffd; /* Arlen: WCAG 2019 */
+}
+.rfcEditorRemove {
+  position: relative;
+  padding-top: 1.8em;
+  background-color: #ffd; /* Arlen: WCAG 2019 */
+  border-radius: 3px;
+}
+.cref {
+  background-color: #ffd; /* Arlen: WCAG 2019 */
+  padding: 2px 4px;
+}
+.crefSource {
+  font-style: italic;
+}
+/* alternative layout for smaller screens */
+@media screen and (max-width: 1023px) {
+  body {
+    padding-top: 2em;
+  }
+  #title {
+    padding: 1em 0;
+  }
+  h1 {
+    font-size: 24px;
+  }
+  h2 {
+    font-size: 20px;
+    margin-top: -18px;  /* provide offset for in-page anchors */
+    padding-top: 38px;
+  }
+  #identifiers dd {
+    max-width: 60%;
+  }
+  #toc {
+    position: fixed;
+    z-index: 2;
+    top: 0;
+    right: 0;
+    padding: 0;
+    margin: 0;
+    background-color: inherit;
+    border-bottom: 1px solid #ccc;
+  }
+  #toc h2 {
+    margin: -1px 0 0 0;
+    padding: 4px 0 4px 6px;
+    padding-right: 1em;
+    min-width: 190px;
+    font-size: 1.1em;
+    text-align: right;
+    background-color: #444;
+    color: white;
+    cursor: pointer;
+  }
+  #toc h2::before { /* css hamburger */
+    float: right;
+    position: relative;
+    width: 1em;
+    height: 1px;
+    left: -164px;
+    margin: 6px 0 0 0;
+    background: white none repeat scroll 0 0;
+    box-shadow: 0 4px 0 0 white, 0 8px 0 0 white;
+    content: "";
+  }
+  #toc nav {
+    display: none;
+    padding: 0.5em 1em 1em;
+    overflow: auto;
+    height: calc(100vh - 48px);
+    border-left: 1px solid #ddd;
+  }
+}
+
+/* alternative layout for wide screens */
+@media screen and (min-width: 1024px) {
+  body {
+    max-width: 724px;
+    margin: 42px auto;
+    padding-left: 1.5em;
+    padding-right: 29em;
+  }
+  #toc {
+    position: fixed;
+    top: 42px;
+    right: 42px;
+    width: 25%;
+    margin: 0;
+    padding: 0 1em;
+    z-index: 1;
+  }
+  #toc h2 {
+    border-top: none;
+    border-bottom: 1px solid #ddd;
+    font-size: 1em;
+    font-weight: normal;
+    margin: 0;
+    padding: 0.25em 1em 1em 0;
+  }
+  #toc nav {
+    display: block;
+    height: calc(90vh - 84px);
+    bottom: 0;
+    padding: 0.5em 0 0;
+    overflow: auto;
+  }
+  img { /* future proofing */
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* pagination */
+@media print {
+  body {
+    width: 100%;
+  }
+  p {
+    orphans: 3;
+    widows: 3;
+  }
+  #n-copyright-notice {
+    border-bottom: none;
+  }
+  #toc, #n-introduction {
+    page-break-before: always;
+  }
+  #toc {
+    border-top: none;
+    padding-top: 0;
+  }
+  figure, pre {
+    page-break-inside: avoid;
+  }
+  figure {
+    overflow: scroll;
+  }
+  .breakable pre {
+    break-inside: auto;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+  }
+  h2+*, h3+*, h4+*, h5+*, h6+* {
+    page-break-before: avoid;
+  }
+  pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 10pt;
+  }
+  table {
+    border: 1px solid #ddd;
+  }
+  td {
+    border-top: 1px solid #ddd;
+  }
+}
+
+/* This is commented out here, as the string-set: doesn't
+   pass W3C validation currently */
+/*
+.ears thead .left {
+  string-set: ears-top-left content();
+}
+
+.ears thead .center {
+  string-set: ears-top-center content();
+}
+
+.ears thead .right {
+  string-set: ears-top-right content();
+}
+
+.ears tfoot .left {
+  string-set: ears-bottom-left content();
+}
+
+.ears tfoot .center {
+  string-set: ears-bottom-center content();
+}
+
+.ears tfoot .right {
+  string-set: ears-bottom-right content();
+}
+*/
+
+@page :first {
+  padding-top: 0;
+  @top-left {
+    content: normal;
+    border: none;
+  }
+  @top-center {
+    content: normal;
+    border: none;
+  }
+  @top-right {
+    content: normal;
+    border: none;
+  }
+}
+
+@page {
+  size: A4;
+  margin-bottom: 45mm;
+  padding-top: 20px;
+  /* The following is commented out here, but set appropriately by in code, as
+     the content depends on the document */
+  /*
+  @top-left {
+    content: 'Internet-Draft';
+    vertical-align: bottom;
+    border-bottom: solid 1px #ccc;
+  }
+  @top-left {
+    content: string(ears-top-left);
+    vertical-align: bottom;
+    border-bottom: solid 1px #ccc;
+  }
+  @top-center {
+    content: string(ears-top-center);
+    vertical-align: bottom;
+    border-bottom: solid 1px #ccc;
+  }
+  @top-right {
+    content: string(ears-top-right);
+    vertical-align: bottom;
+    border-bottom: solid 1px #ccc;
+  }
+  @bottom-left {
+    content: string(ears-bottom-left);
+    vertical-align: top;
+    border-top: solid 1px #ccc;
+  }
+  @bottom-center {
+    content: string(ears-bottom-center);
+    vertical-align: top;
+    border-top: solid 1px #ccc;
+  }
+  @bottom-right {
+      content: '[Page ' counter(page) ']';
+      vertical-align: top;
+      border-top: solid 1px #ccc;
+  }
+  */
+
+}
+
+/* Changes introduced to fix issues found during implementation */
+/* Make sure links are clickable even if overlapped by following H* */
+a {
+  z-index: 2;
+}
+/* Separate body from document info even without intervening H1 */
+section {
+  clear: both;
+}
+
+
+/* Top align author divs, to avoid names without organization dropping level with org names */
+.author {
+  vertical-align: top;
+}
+
+/* Leave room in document info to show Internet-Draft on one line */
+#identifiers dt {
+  width: 8em;
+}
+
+/* Don't waste quite as much whitespace between label and value in doc info */
+#identifiers dd {
+  margin-left: 1em;
+}
+
+/* Give floating toc a background color (needed when it's a div inside section */
+#toc {
+  background-color: white;
+}
+
+/* Make the collapsed ToC header render white on gray also when it's a link */
+@media screen and (max-width: 1023px) {
+  #toc h2 a,
+  #toc h2 a:link,
+  #toc h2 a:focus,
+  #toc h2 a:hover,
+  #toc a.toplink,
+  #toc a.toplink:hover {
+    color: white;
+    background-color: #444;
+    text-decoration: none;
+  }
+}
+
+/* Give the bottom of the ToC some whitespace */
+@media screen and (min-width: 1024px) {
+  #toc {
+    padding: 0 0 1em 1em;
+  }
+}
+
+/* Style section numbers with more space between number and title */
+.section-number {
+  padding-right: 0.5em;
+}
+
+/* prevent monospace from becoming overly large */
+tt, code, pre {
+  font-size: 95%;
+}
+
+/* Fix the height/width aspect for ascii art*/
+.sourcecode pre,
+.art-text pre {
+  line-height: 1.12;
+}
+
+
+/* Add styling for a link in the ToC that points to the top of the document */
+a.toplink {
+  float: right;
+  margin-right: 0.5em;
+}
+
+/* Fix the dl styling to match the RFC 7992 attributes */
+dl > dt,
+dl.dlParallel > dt {
+  float: left;
+  margin-right: 1em;
+}
+dl.dlNewline > dt {
+  float: none;
+}
+
+/* Provide styling for table cell text alignment */
+table td.text-left,
+table th.text-left {
+  text-align: left;
+}
+table td.text-center,
+table th.text-center {
+  text-align: center;
+}
+table td.text-right,
+table th.text-right {
+  text-align: right;
+}
+
+/* Make the alternative author contact information look less like just another
+   author, and group it closer with the primary author contact information */
+.alternative-contact {
+  margin: 0.5em 0 0.25em 0;
+}
+address .non-ascii {
+  margin: 0 0 0 2em;
+}
+
+/* With it being possible to set tables with alignment
+  left, center, and right, { width: 100%; } does not make sense */
+table {
+  width: auto;
+}
+
+/* Avoid reference text that sits in a block with very wide left margin,
+   because of a long floating dt label.*/
+.references dd {
+  overflow: visible;
+}
+
+/* Control caption placement */
+caption {
+  caption-side: bottom;
+}
+
+/* Limit the width of the author address vcard, so names in right-to-left
+   script don't end up on the other side of the page. */
+
+address.vcard {
+  max-width: 30em;
+  margin-right: auto;
+}
+
+/* For address alignment dependent on LTR or RTL scripts */
+address div.left {
+  text-align: left;
+}
+address div.right {
+  text-align: right;
+}
+
+/* Provide table alignment support.  We can't use the alignX classes above
+   since they do unwanted things with caption and other styling. */
+table.right {
+ margin-left: auto;
+ margin-right: 0;
+}
+table.center {
+ margin-left: auto;
+ margin-right: auto;
+}
+table.left {
+ margin-left: 0;
+ margin-right: auto;
+}
+
+/* Give the table caption label the same styling as the figcaption */
+caption a[href] {
+  color: #222;
+}
+
+@media print {
+  .toplink {
+    display: none;
+  }
+
+  /* avoid overwriting the top border line with the ToC header */
+  #toc {
+    padding-top: 1px;
+  }
+
+  /* Avoid page breaks inside dl and author address entries */
+  .vcard {
+    page-break-inside: avoid;
+  }
+
+}
+/* Tweak the bcp14 keyword presentation */
+.bcp14 {
+  font-variant: small-caps;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+/* Tweak the invisible space above H* in order not to overlay links in text above */
+ h2 {
+  margin-top: -18px;  /* provide offset for in-page anchors */
+  padding-top: 31px;
+ }
+ h3 {
+  margin-top: -18px;  /* provide offset for in-page anchors */
+  padding-top: 24px;
+ }
+ h4 {
+  margin-top: -18px;  /* provide offset for in-page anchors */
+  padding-top: 24px;
+ }
+/* Float artwork pilcrow to the right */
+@media screen {
+  .artwork a.pilcrow {
+    display: block;
+    line-height: 0.7;
+    margin-top: 0.15em;
+  }
+}
+/* Make pilcrows on dd visible */
+@media screen {
+  dd:hover > a.pilcrow {
+    visibility: visible;
+  }
+}
+/* Make the placement of figcaption match that of a table's caption
+   by removing the figure's added bottom margin */
+.alignLeft.art-text,
+.alignCenter.art-text,
+.alignRight.art-text {
+   margin-bottom: 0;
+}
+.alignLeft,
+.alignCenter,
+.alignRight {
+  margin: 1em 0 0 0;
+}
+/* In print, the pilcrow won't show on hover, so prevent it from taking up space,
+   possibly even requiring a new line */
+@media print {
+  a.pilcrow {
+    display: none;
+  }
+}
+/* Styling for the external metadata */
+div#external-metadata {
+  background-color: #eee;
+  padding: 0.5em;
+  margin-bottom: 0.5em;
+  display: none;
+}
+div#internal-metadata {
+  padding: 0.5em;                       /* to match the external-metadata padding */
+}
+/* Styling for title RFC Number */
+h1#rfcnum {
+  clear: both;
+  margin: 0 0 -1em;
+  padding: 1em 0 0 0;
+}
+/* Make .olPercent look the same as <ol><li> */
+dl.olPercent > dd {
+  margin-bottom: 0.25em;
+  min-height: initial;
+}
+/* Give aside some styling to set it apart */
+aside {
+  border-left: 1px solid #ddd;
+  margin: 1em 0 1em 2em;
+  padding: 0.2em 2em;
+}
+aside > dl,
+aside > ol,
+aside > ul,
+aside > table,
+aside > p {
+  margin-bottom: 0.5em;
+}
+/* Additional page break settings */
+@media print {
+  figcaption, table caption {
+    page-break-before: avoid;
+  }
+}
+/* Font size adjustments for print */
+@media print {
+  body  { font-size: 10pt;      line-height: normal; max-width: 96%; }
+  h1    { font-size: 1.72em;    padding-top: 1.5em; } /* 1*1.2*1.2*1.2 */
+  h2    { font-size: 1.44em;    padding-top: 1.5em; } /* 1*1.2*1.2 */
+  h3    { font-size: 1.2em;     padding-top: 1.5em; } /* 1*1.2 */
+  h4    { font-size: 1em;       padding-top: 1.5em; }
+  h5, h6 { font-size: 1em;      margin: initial; padding: 0.5em 0 0.3em; }
+}
+/* Sourcecode margin in print, when there's no pilcrow */
+@media print {
+  .artwork,
+  .artwork > pre,
+  .sourcecode {
+    margin-bottom: 1em;
+  }
+}
+/* Avoid narrow tables forcing too narrow table captions, which may render badly */
+table {
+  min-width: 20em;
+}
+/* ol type a */
+ol.type-a { list-style-type: lower-alpha; }
+ol.type-A { list-style-type: upper-alpha; }
+ol.type-i { list-style-type: lower-roman; }
+ol.type-I { list-style-type: upper-roman; }
+/* Apply the print table and row borders in general, on request from the RPC,
+and increase the contrast between border and odd row background slightly */
+table {
+  border: 1px solid #ddd;
+}
+td {
+  border-top: 1px solid #ddd;
+}
+tr {
+  break-inside: avoid;
+}
+tr:nth-child(2n+1) > td {
+  background-color: #f8f8f8;
+}
+/* Use style rules to govern display of the TOC. */
+@media screen and (max-width: 1023px) {
+  #toc nav { display: none; }
+  #toc.active nav { display: block; }
+}
+/* Add support for keepWithNext */
+.keepWithNext {
+  break-after: avoid-page;
+  break-after: avoid-page;
+}
+/* Add support for keepWithPrevious */
+.keepWithPrevious {
+  break-before: avoid-page;
+}
+/* Change the approach to avoiding breaks inside artwork etc. */
+figure, pre, table, .artwork, .sourcecode  {
+  break-before: auto;
+  break-after: auto;
+}
+/* Avoid breaks between <dt> and <dd> */
+dl {
+  break-before: auto;
+  break-inside: auto;
+}
+dt {
+  break-before: auto;
+  break-after: avoid-page;
+}
+dd {
+  break-before: avoid-page;
+  break-after: auto;
+  orphans: 3;
+  widows: 3
+}
+span.break, dd.break {
+  margin-bottom: 0;
+  min-height: 0;
+  break-before: auto;
+  break-inside: auto;
+  break-after: auto;
+}
+/* Undo break-before ToC */
+@media print {
+  #toc {
+    break-before: auto;
+  }
+}
+/* Text in compact lists should not get extra bottom margin space,
+   since that would makes the list not compact */
+ul.compact p, .ulCompact p,
+ol.compact p, .olCompact p {
+ margin: 0;
+}
+/* But the list as a whole needs the extra space at the end */
+section ul.compact,
+section .ulCompact,
+section ol.compact,
+section .olCompact {
+  margin-bottom: 1em;                    /* same as p not within ul.compact etc. */
+}
+/* The tt and code background above interferes with for instance table cell
+   backgrounds.  Changed to something a bit more selective. */
+tt, code {
+  background-color: transparent;
+}
+p tt, p code, li tt, li code, dt tt, dt code {
+  background-color: #f8f8f8;
+}
+/* Tweak the pre margin -- 0px doesn't come out well */
+pre {
+   margin-top: 0.5px;
+}
+/* Tweak the compact list text */
+ul.compact, .ulCompact,
+ol.compact, .olCompact,
+dl.compact, .dlCompact {
+  line-height: normal;
+}
+/* Don't add top margin for nested lists */
+li > ul, li > ol, li > dl,
+dd > ul, dd > ol, dd > dl,
+dl > dd > dl {
+  margin-top: initial;
+}
+/* Elements that should not be rendered on the same line as a <dt> */
+/* This should match the element list in writer.text.TextWriter.render_dl() */
+dd > div.artwork:first-child,
+dd > aside:first-child,
+dd > blockquote:first-child,
+dd > figure:first-child,
+dd > ol:first-child,
+dd > div.sourcecode:first-child,
+dd > table:first-child,
+dd > ul:first-child {
+  clear: left;
+}
+/* fix for weird browser behaviour when <dd/> is empty */
+dt+dd:empty::before{
+  content: "\00a0";
+}
+/* Make paragraph spacing inside <li> smaller than in body text, to fit better within the list */
+li > p {
+  margin-bottom: 0.5em
+}
+/* Don't let p margin spill out from inside list items */
+li > p:last-of-type:only-child {
+  margin-bottom: 0;
+}
+</style>
+<link href="rfc-local.css" rel="stylesheet" type="text/css">
+<script type="application/javascript">async function addMetadata(){try{const e=document.styleSheets[0].cssRules;for(let t=0;t<e.length;t++)if(/#identifiers/.exec(e[t].selectorText)){const a=e[t].cssText.replace("#identifiers","#external-updates");document.styleSheets[0].insertRule(a,document.styleSheets[0].cssRules.length)}}catch(e){console.log(e)}const e=document.getElementById("external-metadata");if(e)try{var t,a="",o=function(e){const t=document.getElementsByTagName("meta");for(let a=0;a<t.length;a++)if(t[a].getAttribute("name")===e)return t[a].getAttribute("content");return""}("rfc.number");if(o){t="https://www.rfc-editor.org/rfc/rfc"+o+".json";try{const e=await fetch(t);a=await e.json()}catch(e){t=document.URL.indexOf("html")>=0?document.URL.replace(/html$/,"json"):document.URL+".json";const o=await fetch(t);a=await o.json()}}if(!a)return;e.style.display="block";const s="",d="https://datatracker.ietf.org/doc",n="https://datatracker.ietf.org/ipr/search",c="https://www.rfc-editor.org/info",l=a.doc_id.toLowerCase(),i=a.doc_id.slice(0,3).toLowerCase(),f=a.doc_id.slice(3).replace(/^0+/,""),u={status:"Status",obsoletes:"Obsoletes",obsoleted_by:"Obsoleted By",updates:"Updates",updated_by:"Updated By",see_also:"See Also",errata_url:"Errata"};let h="<dl style='overflow:hidden' id='external-updates'>";["status","obsoletes","obsoleted_by","updates","updated_by","see_also","errata_url"].forEach(e=>{if("status"==e){a[e]=a[e].toLowerCase();var t=a[e].split(" "),o=t.length,w="",p=1;for(let e=0;e<o;e++)p<o?w=w+r(t[e])+" ":w+=r(t[e]),p++;a[e]=w}else if("obsoletes"==e||"obsoleted_by"==e||"updates"==e||"updated_by"==e){var g,m="",b=1;g=a[e].length;for(let t=0;t<g;t++)a[e][t]&&(a[e][t]=String(a[e][t]).toLowerCase(),m=b<g?m+"<a href='"+s+"/rfc/".concat(a[e][t])+"'>"+a[e][t].slice(3)+"</a>, ":m+"<a href='"+s+"/rfc/".concat(a[e][t])+"'>"+a[e][t].slice(3)+"</a>",b++);a[e]=m}else if("see_also"==e){var y,L="",C=1;y=a[e].length;for(let t=0;t<y;t++)if(a[e][t]){a[e][t]=String(a[e][t]);var _=a[e][t].slice(0,3),v=a[e][t].slice(3).replace(/^0+/,"");L=C<y?"RFC"!=_?L+"<a href='"+s+"/info/"+_.toLowerCase().concat(v.toLowerCase())+"'>"+_+" "+v+"</a>, ":L+"<a href='"+s+"/info/"+_.toLowerCase().concat(v.toLowerCase())+"'>"+v+"</a>, ":"RFC"!=_?L+"<a href='"+s+"/info/"+_.toLowerCase().concat(v.toLowerCase())+"'>"+_+" "+v+"</a>":L+"<a href='"+s+"/info/"+_.toLowerCase().concat(v.toLowerCase())+"'>"+v+"</a>",C++}a[e]=L}else if("errata_url"==e){var R="";R=a[e]?R+"<a href='"+a[e]+"'>Errata exist</a> | <a href='"+d+"/"+l+"'>Datatracker</a>| <a href='"+n+"/?"+i+"="+f+"&submit="+i+"'>IPR</a> | <a href='"+c+"/"+l+"'>Info page</a>":"<a href='"+d+"/"+l+"'>Datatracker</a> | <a href='"+n+"/?"+i+"="+f+"&submit="+i+"'>IPR</a> | <a href='"+c+"/"+l+"'>Info page</a>",a[e]=R}""!=a[e]?"Errata"==u[e]?h+=`<dt>More info:</dt><dd>${a[e]}</dd>`:h+=`<dt>${u[e]}:</dt><dd>${a[e]}</dd>`:"Errata"==u[e]&&(h+=`<dt>More info:</dt><dd>${a[e]}</dd>`)}),h+="</dl>",e.innerHTML=h}catch(e){console.log(e)}else console.log("Could not locate metadata <div> element");function r(e){return e.charAt(0).toUpperCase()+e.slice(1)}}window.removeEventListener("load",addMetadata),window.addEventListener("load",addMetadata);</script>
+</head>
+<body class="xml2rfc">
+<table class="ears">
+<thead><tr>
+<td class="left">Internet-Draft</td>
+<td class="center">DAAP</td>
+<td class="right">August 2026</td>
+</tr></thead>
+<tfoot><tr>
+<td class="left">Kumar</td>
+<td class="center">Expires 3 March 2027</td>
+<td class="right">[Page]</td>
+</tr></tfoot>
+</table>
+<div id="external-metadata" class="document-information"></div>
+<div id="internal-metadata" class="document-information">
+<dl id="identifiers">
+<dt class="label-workgroup">Workgroup:</dt>
+<dd class="workgroup">Web Authorization Protocol</dd>
+<dt class="label-internet-draft">Internet-Draft:</dt>
+<dd class="internet-draft">draft-mishra-oauth-agent-grants-03</dd>
+<dt class="label-published">Published:</dt>
+<dd class="published">
+<time datetime="2026-08-30" class="published">30 August 2026</time>
+    </dd>
+<dt class="label-intended-status">Intended Status:</dt>
+<dd class="intended-status">Informational</dd>
+<dt class="label-expires">Expires:</dt>
+<dd class="expires"><time datetime="2027-03-03">3 March 2027</time></dd>
+<dt class="label-authors">Author:</dt>
+<dd class="authors">
+<div class="author">
+      <div class="author-name">S. Kumar</div>
+<div class="org">Orchestrum Technologies LLP</div>
+</div>
+</dd>
+</dl>
+</div>
+<h1 id="title">OAuth Profile for Delegated AI Agent Authorization</h1>
+<section id="section-abstract">
+      <h2 id="abstract"><a href="#abstract" class="selfRef">Abstract</a></h2>
+<p id="section-abstract-1">AI agents increasingly invoke protected APIs on behalf of human users. This
+document defines an OAuth profile for binding an agent client instance,
+obtaining an authenticated user's consent, issuing resource-bound and
+sender-constrained access tokens, attenuating authority through OAuth Token
+Exchange, and rotating refresh tokens safely. The profile uses existing OAuth
+and JOSE mechanisms and defines no new JWT claims, OAuth parameters, or OAuth
+endpoints. Implementation-specific lost-response recovery is described only as
+security guidance and is not part of interoperable conformance. Operational
+facilities such as policy engines, audit stores, budgets, event streams, and
+credential vaults are outside the interoperable core. Grantex contains a
+self-assessed reference implementation of the three conformance roles and is
+not required for conformance.<a href="#section-abstract-1" class="pilcrow">¶</a></p>
+</section>
+<div id="status-of-memo">
+<section id="section-boilerplate.1">
+        <h2 id="name-status-of-this-memo">
+<a href="#name-status-of-this-memo" class="section-name selfRef">Status of This Memo</a>
+        </h2>
+<p id="section-boilerplate.1-1">
+        This Internet-Draft is submitted in full conformance with the
+        provisions of BCP 78 and BCP 79.<a href="#section-boilerplate.1-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-2">
+        Internet-Drafts are working documents of the Internet Engineering Task
+        Force (IETF). Note that other groups may also distribute working
+        documents as Internet-Drafts. The list of current Internet-Drafts is
+        at <span><a href="https://datatracker.ietf.org/drafts/current/">https://datatracker.ietf.org/drafts/current/</a></span>.<a href="#section-boilerplate.1-2" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-3">
+        Internet-Drafts are draft documents valid for a maximum of six months
+        and may be updated, replaced, or obsoleted by other documents at any
+        time. It is inappropriate to use Internet-Drafts as reference
+        material or to cite them other than as "work in progress."<a href="#section-boilerplate.1-3" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.1-4">
+        This Internet-Draft will expire on 3 March 2027.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="copyright">
+<section id="section-boilerplate.2">
+        <h2 id="name-copyright-notice">
+<a href="#name-copyright-notice" class="section-name selfRef">Copyright Notice</a>
+        </h2>
+<p id="section-boilerplate.2-1">
+            Copyright (c) 2026 IETF Trust and the persons identified as the
+            document authors. All rights reserved.<a href="#section-boilerplate.2-1" class="pilcrow">¶</a></p>
+<p id="section-boilerplate.2-2">
+            This document is subject to BCP 78 and the IETF Trust's Legal
+            Provisions Relating to IETF Documents
+            (<span><a href="https://trustee.ietf.org/license-info">https://trustee.ietf.org/license-info</a></span>) in effect on the date of
+            publication of this document. Please review these documents
+            carefully, as they describe your rights and restrictions with
+            respect to this document. Code Components extracted from this
+            document must include Revised BSD License text as described in
+            Section 4.e of the Trust Legal Provisions and are provided without
+            warranty as described in the Revised BSD License.<a href="#section-boilerplate.2-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="toc">
+<section id="section-toc.1">
+        <a href="#" onclick="scroll(0,0)" class="toplink">▲</a><h2 id="name-table-of-contents">
+<a href="#name-table-of-contents" class="section-name selfRef">Table of Contents</a>
+        </h2>
+<nav class="toc"><ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1">
+            <p id="section-toc.1-1.1.1"><a href="#section-1" class="auto internal xref">1</a>.  <a href="#name-introduction" class="internal xref">Introduction</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.1">
+                <p id="section-toc.1-1.1.2.1.1" class="keepWithNext"><a href="#section-1.1" class="auto internal xref">1.1</a>.  <a href="#name-scope" class="internal xref">Scope</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.2">
+                <p id="section-toc.1-1.1.2.2.1" class="keepWithNext"><a href="#section-1.2" class="auto internal xref">1.2</a>.  <a href="#name-applicability" class="internal xref">Applicability</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.3">
+                <p id="section-toc.1-1.1.2.3.1" class="keepWithNext"><a href="#section-1.3" class="auto internal xref">1.3</a>.  <a href="#name-discussion-venues" class="internal xref">Discussion Venues</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.4">
+                <p id="section-toc.1-1.1.2.4.1"><a href="#section-1.4" class="auto internal xref">1.4</a>.  <a href="#name-changes-since-02" class="internal xref">Changes Since -02</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.5">
+                <p id="section-toc.1-1.1.2.5.1"><a href="#section-1.5" class="auto internal xref">1.5</a>.  <a href="#name-requirements-language" class="internal xref">Requirements Language</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.1.2.6">
+                <p id="section-toc.1-1.1.2.6.1"><a href="#section-1.6" class="auto internal xref">1.6</a>.  <a href="#name-terminology" class="internal xref">Terminology</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.2">
+            <p id="section-toc.1-1.2.1"><a href="#section-2" class="auto internal xref">2</a>.  <a href="#name-conformance" class="internal xref">Conformance</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.3">
+            <p id="section-toc.1-1.3.1"><a href="#section-3" class="auto internal xref">3</a>.  <a href="#name-security-model" class="internal xref">Security Model</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.4">
+            <p id="section-toc.1-1.4.1"><a href="#section-4" class="auto internal xref">4</a>.  <a href="#name-protocol-overview" class="internal xref">Protocol Overview</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.5">
+            <p id="section-toc.1-1.5.1"><a href="#section-5" class="auto internal xref">5</a>.  <a href="#name-authorization-server-metada" class="internal xref">Authorization Server Metadata</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.6">
+            <p id="section-toc.1-1.6.1"><a href="#section-6" class="auto internal xref">6</a>.  <a href="#name-agent-client-registration" class="internal xref">Agent Client Registration</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7">
+            <p id="section-toc.1-1.7.1"><a href="#section-7" class="auto internal xref">7</a>.  <a href="#name-authorization" class="internal xref">Authorization</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7.2.1">
+                <p id="section-toc.1-1.7.2.1.1"><a href="#section-7.1" class="auto internal xref">7.1</a>.  <a href="#name-pushed-authorization-reques" class="internal xref">Pushed Authorization Request</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7.2.2">
+                <p id="section-toc.1-1.7.2.2.1"><a href="#section-7.2" class="auto internal xref">7.2</a>.  <a href="#name-principal-interaction" class="internal xref">Principal Interaction</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.7.2.3">
+                <p id="section-toc.1-1.7.2.3.1"><a href="#section-7.3" class="auto internal xref">7.3</a>.  <a href="#name-authorization-response-and-" class="internal xref">Authorization Response and Code Exchange</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8">
+            <p id="section-toc.1-1.8.1"><a href="#section-8" class="auto internal xref">8</a>.  <a href="#name-access-tokens" class="internal xref">Access Tokens</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.1">
+                <p id="section-toc.1-1.8.2.1.1"><a href="#section-8.1" class="auto internal xref">8.1</a>.  <a href="#name-claims-and-sender-constrain" class="internal xref">Claims and Sender Constraint</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.8.2.2">
+                <p id="section-toc.1-1.8.2.2.1"><a href="#section-8.2" class="auto internal xref">8.2</a>.  <a href="#name-validation" class="internal xref">Validation</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.9">
+            <p id="section-toc.1-1.9.1"><a href="#section-9" class="auto internal xref">9</a>.  <a href="#name-same-instance-token-attenua" class="internal xref">Same-Instance Token Attenuation</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.10">
+            <p id="section-toc.1-1.10.1"><a href="#section-10" class="auto internal xref">10</a>. <a href="#name-refresh-tokens" class="internal xref">Refresh Tokens</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.10.2.1">
+                <p id="section-toc.1-1.10.2.1.1"><a href="#section-10.1" class="auto internal xref">10.1</a>.  <a href="#name-implementation-specific-los" class="internal xref">Implementation-Specific Lost-Response Recovery</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.11">
+            <p id="section-toc.1-1.11.1"><a href="#section-11" class="auto internal xref">11</a>. <a href="#name-revocation" class="internal xref">Revocation</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.12">
+            <p id="section-toc.1-1.12.1"><a href="#section-12" class="auto internal xref">12</a>. <a href="#name-operational-extensions" class="internal xref">Operational Extensions</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13">
+            <p id="section-toc.1-1.13.1"><a href="#section-13" class="auto internal xref">13</a>. <a href="#name-security-considerations" class="internal xref">Security Considerations</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13.2.1">
+                <p id="section-toc.1-1.13.2.1.1"><a href="#section-13.1" class="auto internal xref">13.1</a>.  <a href="#name-consent-substitution" class="internal xref">Consent Substitution</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13.2.2">
+                <p id="section-toc.1-1.13.2.2.1"><a href="#section-13.2" class="auto internal xref">13.2</a>.  <a href="#name-redirect-issuer-and-request" class="internal xref">Redirect, Issuer, and Request Integrity</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13.2.3">
+                <p id="section-toc.1-1.13.2.3.1"><a href="#section-13.3" class="auto internal xref">13.3</a>.  <a href="#name-audience-and-sender-binding" class="internal xref">Audience and Sender Binding</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13.2.4">
+                <p id="section-toc.1-1.13.2.4.1"><a href="#section-13.4" class="auto internal xref">13.4</a>.  <a href="#name-agent-key-enrollment" class="internal xref">Agent-Key Enrollment</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13.2.5">
+                <p id="section-toc.1-1.13.2.5.1"><a href="#section-13.5" class="auto internal xref">13.5</a>.  <a href="#name-delegation" class="internal xref">Delegation</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13.2.6">
+                <p id="section-toc.1-1.13.2.6.1"><a href="#section-13.6" class="auto internal xref">13.6</a>.  <a href="#name-refresh-reuse" class="internal xref">Refresh Reuse</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.13.2.7">
+                <p id="section-toc.1-1.13.2.7.1"><a href="#section-13.7" class="auto internal xref">13.7</a>.  <a href="#name-logging" class="internal xref">Logging</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.14">
+            <p id="section-toc.1-1.14.1"><a href="#section-14" class="auto internal xref">14</a>. <a href="#name-privacy-considerations" class="internal xref">Privacy Considerations</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.15">
+            <p id="section-toc.1-1.15.1"><a href="#section-15" class="auto internal xref">15</a>. <a href="#name-iana-considerations" class="internal xref">IANA Considerations</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.16">
+            <p id="section-toc.1-1.16.1"><a href="#section-16" class="auto internal xref">16</a>. <a href="#name-relationship-to-other-work" class="internal xref">Relationship to Other Work</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.17">
+            <p id="section-toc.1-1.17.1"><a href="#section-17" class="auto internal xref">17</a>. <a href="#name-implementation-status" class="internal xref">Implementation Status</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.18">
+            <p id="section-toc.1-1.18.1"><a href="#section-18" class="auto internal xref">18</a>. <a href="#name-acknowledgements" class="internal xref">Acknowledgements</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.19">
+            <p id="section-toc.1-1.19.1"><a href="#section-19" class="auto internal xref">19</a>. <a href="#name-references" class="internal xref">References</a></p>
+<ul class="compact toc ulBare ulEmpty">
+<li class="compact toc ulBare ulEmpty" id="section-toc.1-1.19.2.1">
+                <p id="section-toc.1-1.19.2.1.1"><a href="#section-19.1" class="auto internal xref">19.1</a>.  <a href="#name-normative-references" class="internal xref">Normative References</a></p>
+</li>
+              <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.19.2.2">
+                <p id="section-toc.1-1.19.2.2.1"><a href="#section-19.2" class="auto internal xref">19.2</a>.  <a href="#name-informative-references" class="internal xref">Informative References</a></p>
+</li>
+            </ul>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.20">
+            <p id="section-toc.1-1.20.1"><a href="#appendix-A" class="auto internal xref">Appendix A</a>.  <a href="#name-non-normative-grantex-mappi" class="internal xref">Non-Normative Grantex Mapping</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.21">
+            <p id="section-toc.1-1.21.1"><a href="#appendix-B" class="auto internal xref">Appendix B</a>.  <a href="#name-candidate-extension-documen" class="internal xref">Candidate Extension Documents</a></p>
+</li>
+          <li class="compact toc ulBare ulEmpty" id="section-toc.1-1.22">
+            <p id="section-toc.1-1.22.1"><a href="#appendix-C" class="auto internal xref"></a><a href="#name-authors-address" class="internal xref">Author's Address</a></p>
+</li>
+        </ul>
+</nav>
+</section>
+</div>
+<div id="introduction">
+<section id="section-1">
+      <h2 id="name-introduction">
+<a href="#section-1" class="section-number selfRef">1. </a><a href="#name-introduction" class="section-name selfRef">Introduction</a>
+      </h2>
+<p id="section-1-1">OAuth deployments already support software acting for users. AI agent
+deployments add operational pressure because agent instances can be created
+dynamically, can call high-impact APIs, and can delegate work to other agent
+instances. These characteristics do not justify replacing OAuth. They do
+justify a strict profile that removes unsafe choices and makes the acting
+client, user, resource, authorization-server issuer, and sender key explicit.<a href="#section-1-1" class="pilcrow">¶</a></p>
+<p id="section-1-2">This document profiles OAuth 2.0 <span>[<a href="#RFC6749" class="cite xref">RFC6749</a>]</span> and the OAuth 2.0 Security Best
+Current Practice <span>[<a href="#RFC9700" class="cite xref">RFC9700</a>]</span>. It uses pushed authorization requests (PAR)
+<span>[<a href="#RFC9126" class="cite xref">RFC9126</a>]</span>, Proof Key for Code Exchange (PKCE) <span>[<a href="#RFC7636" class="cite xref">RFC7636</a>]</span>, authorization
+server issuer identification <span>[<a href="#RFC9207" class="cite xref">RFC9207</a>]</span>, resource indicators <span>[<a href="#RFC8707" class="cite xref">RFC8707</a>]</span>, JWT
+access tokens <span>[<a href="#RFC9068" class="cite xref">RFC9068</a>]</span>, Demonstrating Proof of Possession (DPoP) <span>[<a href="#RFC9449" class="cite xref">RFC9449</a>]</span>,
+and OAuth Token Exchange <span>[<a href="#RFC8693" class="cite xref">RFC8693</a>]</span>. Mutual TLS <span>[<a href="#RFC8705" class="cite xref">RFC8705</a>]</span> is an optional
+sender-constraining alternative.<a href="#section-1-2" class="pilcrow">¶</a></p>
+<p id="section-1-3">The term "DAAP" is a convenient name for this profile. It is not a new
+authorization framework, a new credential format, or a claim that an AI agent
+is a legal person.<a href="#section-1-3" class="pilcrow">¶</a></p>
+<div id="scope">
+<section id="section-1.1">
+        <h3 id="name-scope">
+<a href="#section-1.1" class="section-number selfRef">1.1. </a><a href="#name-scope" class="section-name selfRef">Scope</a>
+        </h3>
+<p id="section-1.1-1">This document specifies:<a href="#section-1.1-1" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-1.1-2">
+<li id="section-1.1-2.1">
+            <p id="section-1.1-2.1.1">conformance requirements for OAuth clients, authorization servers, and
+resource servers;<a href="#section-1.1-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-1.1-2.2">
+            <p id="section-1.1-2.2.1">discovery and security metadata for an agent's OAuth client registration;<a href="#section-1.1-2.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-1.1-2.3">
+            <p id="section-1.1-2.3.1">an authorization-code flow with authenticated human consent;<a href="#section-1.1-2.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-1.1-2.4">
+            <p id="section-1.1-2.4.1">resource-bound, sender-constrained JWT access tokens;<a href="#section-1.1-2.4.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-1.1-2.5">
+            <p id="section-1.1-2.5.1">same-instance, same-resource scope attenuation using OAuth Token Exchange;<a href="#section-1.1-2.5.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-1.1-2.6">
+            <p id="section-1.1-2.6.1">requirements for refresh tokens when they are issued; and<a href="#section-1.1-2.6.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-1.1-2.7">
+            <p id="section-1.1-2.7.1">token and refresh-family revocation.<a href="#section-1.1-2.7.1" class="pilcrow">¶</a></p>
+</li>
+        </ol>
+<p id="section-1.1-3">This document does not standardize cross-resource authorization mapping,
+cross-instance agent delegation, agent orchestration, model selection, DIDs,
+policy languages, payments, budget ledgers, audit storage APIs, event delivery,
+credential vaults, SCIM, SSO configuration, or vendor deployment endpoints.
+Those features can be useful, but they require separate specifications and
+security analysis.<a href="#section-1.1-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="applicability">
+<section id="section-1.2">
+        <h3 id="name-applicability">
+<a href="#section-1.2" class="section-number selfRef">1.2. </a><a href="#name-applicability" class="section-name selfRef">Applicability</a>
+        </h3>
+<p id="section-1.2-1">This profile is intended for OAuth deployments in which a human Principal
+authorizes an agent client instance to access one protected resource and the
+deployment needs strong request integrity, sender constraint, and explicit
+delegation boundaries.<a href="#section-1.2-1" class="pilcrow">¶</a></p>
+<p id="section-1.2-2">This profile is not an agent workload identity protocol and is not a substitute
+for client-credentials, workload federation, or cross-domain identity chaining
+when no human resource owner participates. It also does not make a model,
+prompt, agent name, or developer assertion into an OAuth security principal.<a href="#section-1.2-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="discussion-venues">
+<section id="section-1.3">
+        <h3 id="name-discussion-venues">
+<a href="#section-1.3" class="section-number selfRef">1.3. </a><a href="#name-discussion-venues" class="section-name selfRef">Discussion Venues</a>
+        </h3>
+<p id="section-1.3-1">Discussion of this document is intended for the OAuth Working Group mailing
+list at <code>oauth@ietf.org</code>. The archive is at
+<code>https://mailarchive.ietf.org/arch/browse/oauth/</code>.<a href="#section-1.3-1" class="pilcrow">¶</a></p>
+<p id="section-1.3-2">Author contact:<a href="#section-1.3-2" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-1.3-3.1">
+            <p id="section-1.3-3.1.1">Primary: <code>mishra.sanjeev@gmail.com</code><a href="#section-1.3-3.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.3-3.2">
+            <p id="section-1.3-3.2.1">Alternate: <code>sanjeev@orchestrum.in</code><a href="#section-1.3-3.2.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-1.3-4">Source and issue tracking are maintained at
+<code>https://github.com/mishrasanjeev/grantex/tree/main/docs/ietf-draft</code>.<a href="#section-1.3-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="changes-since-02">
+<section id="section-1.4">
+        <h3 id="name-changes-since-02">
+<a href="#section-1.4" class="section-number selfRef">1.4. </a><a href="#name-changes-since-02" class="section-name selfRef">Changes Since -02</a>
+        </h3>
+<p id="section-1.4-1">Revision -03:<a href="#section-1.4-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-1.4-2.1">
+            <p id="section-1.4-2.1.1">defines explicit client, authorization-server, and resource-server
+conformance roles;<a href="#section-1.4-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.4-2.2">
+            <p id="section-1.4-2.2.1">defines the authorization-server metadata required for interoperable
+discovery;<a href="#section-1.4-2.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.4-2.3">
+            <p id="section-1.4-2.3.1">makes DPoP mandatory to implement and binds authorization codes to the DPoP
+key used in PAR;<a href="#section-1.4-2.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.4-2.4">
+            <p id="section-1.4-2.4.1">requires authorization-response issuer validation to prevent mix-up;<a href="#section-1.4-2.4.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.4-2.5">
+            <p id="section-1.4-2.5.1">defines an issuer-, client-, and sender-key-bound authorization context
+without treating a key thumbprint as stable agent identity;<a href="#section-1.4-2.5.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.4-2.6">
+            <p id="section-1.4-2.6.1">replaces ambiguous delegation language with same-instance, same-resource
+Token Exchange and exact scope-set containment;<a href="#section-1.4-2.6.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.4-2.7">
+            <p id="section-1.4-2.7.1">requires an RFC 7009 revocation endpoint and refresh-family invalidation;<a href="#section-1.4-2.7.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.4-2.8">
+            <p id="section-1.4-2.8.1">uses the precise <code>cnf.jkt</code> and <code>cnf."x5t#S256"</code> confirmation members;<a href="#section-1.4-2.8.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.4-2.9">
+            <p id="section-1.4-2.9.1">changes consent wording to display effective lifetimes and constraints that
+are actually represented in the authorization request;<a href="#section-1.4-2.9.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.4-2.10">
+            <p id="section-1.4-2.10.1">moves lost-response refresh recovery outside interoperable conformance and
+adds storage, entropy, expiry, crash, and reauthorization guidance;<a href="#section-1.4-2.10.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.4-2.11">
+            <p id="section-1.4-2.11.1">expands current OAuth agent-work comparisons and privacy guidance; and<a href="#section-1.4-2.11.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.4-2.12">
+            <p id="section-1.4-2.12.1">removes the duplicate manually authored address section.<a href="#section-1.4-2.12.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+</section>
+</div>
+<div id="requirements-language">
+<section id="section-1.5">
+        <h3 id="name-requirements-language">
+<a href="#section-1.5" class="section-number selfRef">1.5. </a><a href="#name-requirements-language" class="section-name selfRef">Requirements Language</a>
+        </h3>
+<p id="section-1.5-1">The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+"OPTIONAL" in this document are to be interpreted as described in BCP 14
+<span>[<a href="#RFC2119" class="cite xref">RFC2119</a>]</span> <span>[<a href="#RFC8174" class="cite xref">RFC8174</a>]</span> when, and only when, they appear in all capitals, as
+shown here.<a href="#section-1.5-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="terminology">
+<section id="section-1.6">
+        <h3 id="name-terminology">
+<a href="#section-1.6" class="section-number selfRef">1.6. </a><a href="#name-terminology" class="section-name selfRef">Terminology</a>
+        </h3>
+<p id="section-1.6-1">This document uses the OAuth roles defined by <span>[<a href="#RFC6749" class="cite xref">RFC6749</a>]</span> and the following
+terms:<a href="#section-1.6-1" class="pilcrow">¶</a></p>
+<span class="break"></span><dl class="dlParallel" id="section-1.6-2">
+          <dt id="section-1.6-2.1">Agent:</dt>
+          <dd style="margin-left: 1.5em" id="section-1.6-2.2">
+            <p id="section-1.6-2.2.1">Software that plans or performs actions. An Agent is not itself an OAuth
+role.<a href="#section-1.6-2.2.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-1.6-2.3">Agent Client Instance:</dt>
+          <dd style="margin-left: 1.5em" id="section-1.6-2.4">
+            <p id="section-1.6-2.4.1">An OAuth client instance that executes agent software. Within this profile,
+authorization is bound to the tuple of authorization-server issuer, OAuth
+<code>client_id</code>, and sender-key thumbprint. This tuple is an authorization and
+presentation-binding context, not a stable semantic identity or provenance
+assertion. It changes when the sender key rotates. The <code>client_id</code>
+identifies a registration, not a human or legal identity.<a href="#section-1.6-2.4.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-1.6-2.5">Principal:</dt>
+          <dd style="margin-left: 1.5em" id="section-1.6-2.6">
+            <p id="section-1.6-2.6.1">The human resource owner whose authority is delegated. A deployment can use
+a non-human resource owner only when its trust and authorization model is
+defined outside this profile.<a href="#section-1.6-2.6.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-1.6-2.7">Agent Key:</dt>
+          <dd style="margin-left: 1.5em" id="section-1.6-2.8">
+            <p id="section-1.6-2.8.1">An asymmetric key controlled by one Agent Client Instance and used for DPoP
+or mutual-TLS sender constraint. Distinct instances do not share an Agent Key.<a href="#section-1.6-2.8.1" class="pilcrow">¶</a></p>
+</dd>
+          <dd class="break"></dd>
+<dt id="section-1.6-2.9">Attenuated Token:</dt>
+          <dd style="margin-left: 1.5em" id="section-1.6-2.10">
+            <p id="section-1.6-2.10.1">An access token issued by OAuth Token Exchange whose authority is derived
+from another token and attenuated in scope or lifetime without changing the
+protected resource or Agent Client Instance.<a href="#section-1.6-2.10.1" class="pilcrow">¶</a></p>
+</dd>
+        <dd class="break"></dd>
+</dl>
+</section>
+</div>
+</section>
+</div>
+<div id="conformance">
+<section id="section-2">
+      <h2 id="name-conformance">
+<a href="#section-2" class="section-number selfRef">2. </a><a href="#name-conformance" class="section-name selfRef">Conformance</a>
+      </h2>
+<p id="section-2-1">Conformance applies separately to clients, authorization servers, and resource
+servers. A deployment claiming conformance MUST identify the conforming roles
+and MUST NOT describe a vendor-specific endpoint as a standard OAuth endpoint.<a href="#section-2-1" class="pilcrow">¶</a></p>
+<p id="section-2-2">DPoP is the mandatory-to-implement sender-constraining mechanism. Conforming
+clients, authorization servers, and resource servers MUST implement the DPoP
+requirements in this profile. A deployment MAY additionally negotiate mutual
+TLS for a client and its tokens when all participating roles support it. Mutual
+TLS support does not remove the requirement to implement DPoP.<a href="#section-2-2" class="pilcrow">¶</a></p>
+<p id="section-2-3">A conforming client:<a href="#section-2-3" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-2-4.1">
+          <p id="section-2-4.1.1">uses the authorization-code flow, PAR, PKCE S256, <code>state</code>, and exactly one
+resource indicator;<a href="#section-2-4.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-2-4.2">
+          <p id="section-2-4.2.1">binds a DPoP key during PAR and proves possession at the token endpoint;<a href="#section-2-4.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-2-4.3">
+          <p id="section-2-4.3.1">verifies <code>state</code> and the authorization-response issuer; and<a href="#section-2-4.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-2-4.4">
+          <p id="section-2-4.4.1">presents DPoP-bound tokens and proofs as required by <span>[<a href="#RFC9449" class="cite xref">RFC9449</a>]</span>, except
+when mutual TLS has been explicitly negotiated for the client and token.<a href="#section-2-4.4.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+<p id="section-2-5">A conforming authorization server:<a href="#section-2-5" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-2-6.1">
+          <p id="section-2-6.1.1">publishes the metadata in <a href="#authorization-server-metadata" class="auto internal xref">Section 5</a>;<a href="#section-2-6.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-2-6.2">
+          <p id="section-2-6.2.1">enforces the authorization and token requirements in this profile;<a href="#section-2-6.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-2-6.3">
+          <p id="section-2-6.3.1">supports RFC 9068 JWT access tokens bound using DPoP;<a href="#section-2-6.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-2-6.4">
+          <p id="section-2-6.4.1">supports same-instance, same-resource attenuation through RFC 8693 Token
+Exchange;<a href="#section-2-6.4.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-2-6.5">
+          <p id="section-2-6.5.1">supports RFC 7009 revocation; and<a href="#section-2-6.5.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-2-6.6">
+          <p id="section-2-6.6.1">applies the refresh requirements in this profile whenever it issues refresh
+tokens.<a href="#section-2-6.6.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+<p id="section-2-7">A conforming resource server:<a href="#section-2-7" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-2-8.1">
+          <p id="section-2-8.1.1">validates RFC 9068 access tokens, audience, scope, issuer, and lifetime;<a href="#section-2-8.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-2-8.2">
+          <p id="section-2-8.2.1">validates the DPoP proof and its binding for every DPoP-bound request, or
+validates the certificate binding for a negotiated mTLS-bound request; and<a href="#section-2-8.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-2-8.3">
+          <p id="section-2-8.3.1">makes an authorization decision after, not merely as a consequence of,
+cryptographic validation.<a href="#section-2-8.3.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+</section>
+</div>
+<div id="security-model">
+<section id="section-3">
+      <h2 id="name-security-model">
+<a href="#section-3" class="section-number selfRef">3. </a><a href="#name-security-model" class="section-name selfRef">Security Model</a>
+      </h2>
+<p id="section-3-1">The authorization server is trusted to authenticate the Principal, display an
+accurate authorization request, enforce registered client metadata, issue
+tokens, and process revocation. A resource server is trusted to validate tokens
+and enforce scopes for its own resource identifier.<a href="#section-3-1" class="pilcrow">¶</a></p>
+<p id="section-3-2">An Agent Client Instance is not trusted merely because a developer registered
+it or supplied an API key. Developer authentication and Principal
+authentication are separate security events. A developer credential MUST NOT
+be accepted as proof that the Principal approved a live authorization request.<a href="#section-3-2" class="pilcrow">¶</a></p>
+<p id="section-3-3">Authorization-server and protected-resource endpoints used by this profile
+MUST use HTTPS with certificate validation as required by <span>[<a href="#RFC9700" class="cite xref">RFC9700</a>]</span>. The
+loopback redirect exception for native applications does not permit an
+insecure authorization, token, PAR, revocation, or resource endpoint.<a href="#section-3-3" class="pilcrow">¶</a></p>
+<p id="section-3-4">For a live authorization, the authorization server MUST authenticate the
+Principal using a method appropriate to the risk of the requested authority.
+Phishing-resistant authentication is RECOMMENDED for high-impact scopes.
+Sandbox deployments MAY use test principals and simulated consent when they
+are clearly isolated from production resources and credentials.<a href="#section-3-4" class="pilcrow">¶</a></p>
+<p id="section-3-5">An automated policy decision MAY deny, narrow, or require escalation of a
+request. It MUST NOT replace the Principal's authenticated approval unless a
+separate, explicitly authorized non-human resource-owner model applies.<a href="#section-3-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="protocol-overview">
+<section id="section-4">
+      <h2 id="name-protocol-overview">
+<a href="#section-4" class="section-number selfRef">4. </a><a href="#name-protocol-overview" class="section-name selfRef">Protocol Overview</a>
+      </h2>
+<p id="section-4-1">A conforming authorization proceeds as follows:<a href="#section-4-1" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-4-2">
+<li id="section-4-2.1">
+          <p id="section-4-2.1.1">The client validates the authorization server's RFC 8414 metadata and
+maintains issuer-specific registration, redirect, and key state.<a href="#section-4-2.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="section-4-2.2">
+          <p id="section-4-2.2.1">The client creates a fresh <code>state</code>, PKCE verifier, and PAR request for one
+resource, binding the authorization code to its DPoP key.<a href="#section-4-2.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="section-4-2.3">
+          <p id="section-4-2.3.1">The authorization server authenticates the Principal, displays the exact
+effective authorization, and records approval or denial for that request.<a href="#section-4-2.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="section-4-2.4">
+          <p id="section-4-2.4.1">The client validates <code>iss</code> and <code>state</code> in the authorization response and
+exchanges the code using the PKCE verifier and matching DPoP key.<a href="#section-4-2.4.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="section-4-2.5">
+          <p id="section-4-2.5.1">The client presents the resource-bound access token with a valid DPoP proof
+on each protected request, unless mTLS was explicitly negotiated.<a href="#section-4-2.5.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="section-4-2.6">
+          <p id="section-4-2.6.1">The same Agent Client Instance may use Token Exchange to obtain a narrower
+token for the same resource without changing the sender key.<a href="#section-4-2.6.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="section-4-2.7">
+          <p id="section-4-2.7.1">If a refresh token was issued, the client rotates it using the same sender
+binding. Loss of a response is handled by reauthorization unless the client
+and server share a proprietary recovery mechanism satisfying the guidance
+in this document.<a href="#section-4-2.7.1" class="pilcrow">¶</a></p>
+</li>
+      </ol>
+</section>
+</div>
+<div id="authorization-server-metadata">
+<section id="section-5">
+      <h2 id="name-authorization-server-metada">
+<a href="#section-5" class="section-number selfRef">5. </a><a href="#name-authorization-server-metada" class="section-name selfRef">Authorization Server Metadata</a>
+      </h2>
+<p id="section-5-1">The authorization server MUST publish metadata as defined by <span>[<a href="#RFC8414" class="cite xref">RFC8414</a>]</span>. At a
+minimum, the metadata MUST include:<a href="#section-5-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-5-2.1">
+          <p id="section-5-2.1.1"><code>issuer</code>, <code>authorization_endpoint</code>, <code>token_endpoint</code>, and <code>jwks_uri</code>;<a href="#section-5-2.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-5-2.2">
+          <p id="section-5-2.2.1"><code>revocation_endpoint</code>;<a href="#section-5-2.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-5-2.3">
+          <p id="section-5-2.3.1"><code>pushed_authorization_request_endpoint</code> and
+<code>require_pushed_authorization_requests</code> set to <code>true</code>;<a href="#section-5-2.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-5-2.4">
+          <p id="section-5-2.4.1"><code>response_types_supported</code> containing <code>code</code>;<a href="#section-5-2.4.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-5-2.5">
+          <p id="section-5-2.5.1"><code>grant_types_supported</code> containing <code>authorization_code</code>,
+<code>urn:ietf:params:oauth:grant-type:token-exchange</code>, and <code>refresh_token</code> when
+refresh tokens are issued;<a href="#section-5-2.5.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-5-2.6">
+          <p id="section-5-2.6.1"><code>code_challenge_methods_supported</code> containing <code>S256</code>;<a href="#section-5-2.6.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-5-2.7">
+          <p id="section-5-2.7.1"><code>authorization_response_iss_parameter_supported</code> set to <code>true</code>;<a href="#section-5-2.7.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-5-2.8">
+          <p id="section-5-2.8.1">a non-empty <code>dpop_signing_alg_values_supported</code> containing only asymmetric
+algorithms accepted by the authorization server; and<a href="#section-5-2.8.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-5-2.9">
+          <p id="section-5-2.9.1"><code>token_endpoint_auth_methods_supported</code> accurately describing supported
+client authentication methods; and<a href="#section-5-2.9.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-5-2.10">
+          <p id="section-5-2.10.1"><code>revocation_endpoint_auth_methods_supported</code> accurately describing the
+revocation endpoint's supported client authentication methods.<a href="#section-5-2.10.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+<p id="section-5-3">An authorization server that supports mutual TLS MUST also publish
+<code>mtls_endpoint_aliases</code> and MUST set
+<code>tls_client_certificate_bound_access_tokens</code> to <code>true</code> as defined by
+<span>[<a href="#RFC8705" class="cite xref">RFC8705</a>]</span>.<a href="#section-5-3" class="pilcrow">¶</a></p>
+<p id="section-5-4">Metadata values and endpoint origins MUST be validated as required by
+<span>[<a href="#RFC8414" class="cite xref">RFC8414</a>]</span>. A JWKS document alone is not authorization-server metadata and
+MUST NOT be described as conformance with <span>[<a href="#RFC8414" class="cite xref">RFC8414</a>]</span>.<a href="#section-5-4" class="pilcrow">¶</a></p>
+<p id="section-5-5">This metadata set advertises the standard capabilities required by the
+profile. It is not a DAAP conformance indicator. This document defines no new
+profile identifier; a deployment's conformance claim is conveyed out of band
+and identifies the conforming roles as required by <a href="#conformance" class="auto internal xref">Section 2</a>.<a href="#section-5-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="agent-client-registration">
+<section id="section-6">
+      <h2 id="name-agent-client-registration">
+<a href="#section-6" class="section-number selfRef">6. </a><a href="#name-agent-client-registration" class="section-name selfRef">Agent Client Registration</a>
+      </h2>
+<p id="section-6-1">An Agent Client Instance uses an OAuth client registration. Registration can
+be provisioned administratively or by a standards-based dynamic registration
+mechanism; the registration wire protocol is outside this document.<a href="#section-6-1" class="pilcrow">¶</a></p>
+<p id="section-6-2">The registration MUST bind:<a href="#section-6-2" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-6-3.1">
+          <p id="section-6-3.1.1">one or more exact redirect URIs for authorization-code clients;<a href="#section-6-3.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-6-3.2">
+          <p id="section-6-3.2.1">the resources the client is permitted to request, represented as absolute
+URIs;<a href="#section-6-3.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-6-3.3">
+          <p id="section-6-3.3.1">the exact, case-sensitive scopes the client is permitted to request; and<a href="#section-6-3.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-6-3.4">
+          <p id="section-6-3.4.1">one or more separately identified Agent Keys.<a href="#section-6-3.4.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+<p id="section-6-4">The authorization server MUST reject redirect URIs containing fragments and
+MUST apply the redirect URI rules from <span>[<a href="#RFC9700" class="cite xref">RFC9700</a>]</span>. Production web redirect
+URIs MUST use HTTPS, except for loopback redirects explicitly permitted for
+native applications.<a href="#section-6-4" class="pilcrow">¶</a></p>
+<p id="section-6-5">Each Agent Key MUST be asymmetric and MUST be controlled by one Agent Client
+Instance. The registration MUST NOT contain private key parameters. Before
+treating a key as controlled by an Agent Client Instance, the authorization
+server MUST verify possession through DPoP <span>[<a href="#RFC9449" class="cite xref">RFC9449</a>]</span>, mutual TLS <span>[<a href="#RFC8705" class="cite xref">RFC8705</a>]</span>,
+or another protocol that proves possession of the corresponding private key.<a href="#section-6-5" class="pilcrow">¶</a></p>
+<p id="section-6-6">If one OAuth registration authorizes multiple runtime instances, each instance
+MUST use a distinct Agent Key, and the authorization server MUST maintain the
+binding between the registration and each authorized key. Tokens identify the
+authorization context and bind the presenting key through the sender-key
+confirmation member in combination with <code>iss</code> and <code>client_id</code>; those values do
+not attest stable agent identity.<a href="#section-6-6" class="pilcrow">¶</a></p>
+<p id="section-6-7">Key rotation MUST either preserve validation of the old key for the remaining
+lifetime of already-issued tokens or revoke those tokens. The authorization
+server MUST reject future issuance and refresh using a retired key.<a href="#section-6-7" class="pilcrow">¶</a></p>
+<p id="section-6-8">The Agent Key is binding material, not a durable identifier for an agent task,
+model, runtime, or installation. A deployment requiring stable or attested
+agent instance identity SHOULD compose this profile with a specification that
+defines that identity and its evidence rather than deriving identity from a
+key thumbprint.<a href="#section-6-8" class="pilcrow">¶</a></p>
+<p id="section-6-9">A DPoP proof establishes possession of a key; it does not by itself
+authenticate a confidential OAuth client. Confidential clients MUST also use
+their registered token-endpoint authentication method. Public clients remain
+public clients and MUST NOT be described as confidential merely because they
+use DPoP.<a href="#section-6-9" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="authorization">
+<section id="section-7">
+      <h2 id="name-authorization">
+<a href="#section-7" class="section-number selfRef">7. </a><a href="#name-authorization" class="section-name selfRef">Authorization</a>
+      </h2>
+<div id="pushed-authorization-request">
+<section id="section-7.1">
+        <h3 id="name-pushed-authorization-reques">
+<a href="#section-7.1" class="section-number selfRef">7.1. </a><a href="#name-pushed-authorization-reques" class="section-name selfRef">Pushed Authorization Request</a>
+        </h3>
+<p id="section-7.1-1">Clients conforming to this profile MUST use PAR <span>[<a href="#RFC9126" class="cite xref">RFC9126</a>]</span>. The pushed request
+MUST contain, at minimum:<a href="#section-7.1-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-7.1-2.1">
+            <p id="section-7.1-2.1.1"><code>client_id</code>;<a href="#section-7.1-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.1-2.2">
+            <p id="section-7.1-2.2.1"><code>response_type=code</code>;<a href="#section-7.1-2.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.1-2.3">
+            <p id="section-7.1-2.3.1">an exact registered <code>redirect_uri</code>;<a href="#section-7.1-2.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.1-2.4">
+            <p id="section-7.1-2.4.1"><code>scope</code>;<a href="#section-7.1-2.4.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.1-2.5">
+            <p id="section-7.1-2.5.1">a <code>state</code> value containing at least 128 bits of unpredictable entropy and
+bound to the initiating user-agent session;<a href="#section-7.1-2.5.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.1-2.6">
+            <p id="section-7.1-2.6.1"><code>code_challenge</code> and <code>code_challenge_method=S256</code>; and<a href="#section-7.1-2.6.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.1-2.7">
+            <p id="section-7.1-2.7.1">exactly one <code>resource</code> value identifying the target resource server.<a href="#section-7.1-2.7.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-7.1-3">The <code>resource</code> value MUST be an absolute URI without a fragment as defined by
+<span>[<a href="#RFC8707" class="cite xref">RFC8707</a>]</span>. The authorization server MUST reject an unregistered redirect URI,
+a resource outside the client's registration, or any scope outside the
+client's registered scope set. It MUST NOT apply prefix, wildcard, or substring
+matching to a redirect URI.<a href="#section-7.1-3" class="pilcrow">¶</a></p>
+<p id="section-7.1-4">For DPoP, the PAR request MUST bind the authorization code to the Agent Key
+using either the <code>dpop_jkt</code> parameter or a DPoP proof in the <code>DPoP</code> header as
+defined by Section 10.1 of <span>[<a href="#RFC9449" class="cite xref">RFC9449</a>]</span>. A conforming authorization server MUST
+support both mechanisms. If both are present, their key thumbprints MUST match.
+The key MUST also match a key authorized for that Agent Client Instance.<a href="#section-7.1-4" class="pilcrow">¶</a></p>
+<p id="section-7.1-5">The client then sends the returned <code>request_uri</code> to the authorization endpoint
+as defined by <span>[<a href="#RFC9126" class="cite xref">RFC9126</a>]</span>. The authorization endpoint MUST reject a request URI
+that is expired, already consumed where single use is enforced, issued to a
+different client, or not recognized exactly as issued.<a href="#section-7.1-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="principal-interaction">
+<section id="section-7.2">
+        <h3 id="name-principal-interaction">
+<a href="#section-7.2" class="section-number selfRef">7.2. </a><a href="#name-principal-interaction" class="section-name selfRef">Principal Interaction</a>
+        </h3>
+<p id="section-7.2-1">The authorization server MUST authenticate the Principal independently of the
+developer or Agent Client Instance. The consent view MUST show, in language the
+Principal can understand:<a href="#section-7.2-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-7.2-2.1">
+            <p id="section-7.2-2.1.1">the Agent Client Instance and responsible developer;<a href="#section-7.2-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.2-2.2">
+            <p id="section-7.2-2.2.1">the target resource;<a href="#section-7.2-2.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.2-2.3">
+            <p id="section-7.2-2.3.1">the requested scopes and their consequences;<a href="#section-7.2-2.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.2-2.4">
+            <p id="section-7.2-2.4.1">the effective access-token, refresh-token, and grant lifetimes determined by
+authorization-server policy; and<a href="#section-7.2-2.4.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-7.2-2.5">
+            <p id="section-7.2-2.5.1">material delegation or transaction constraints actually represented by the
+request.<a href="#section-7.2-2.5.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-7.2-3">If structured constraints are requested, they SHOULD use
+<code>authorization_details</code> as defined by <span>[<a href="#RFC9396" class="cite xref">RFC9396</a>]</span>. This profile defines no new
+authorization-details type. An authorization server MUST NOT display a
+constraint as approved unless it was integrity-protected in the PAR request or
+was a narrowing imposed by the authorization server and clearly disclosed.<a href="#section-7.2-3" class="pilcrow">¶</a></p>
+<p id="section-7.2-4">Approval and denial MUST both be bound to the authenticated Principal and the
+specific authorization request. The authorization server MUST prevent login
+CSRF, consent CSRF, clickjacking, and reuse of approval artifacts.<a href="#section-7.2-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="authorization-response-and-code-exchange">
+<section id="section-7.3">
+        <h3 id="name-authorization-response-and-">
+<a href="#section-7.3" class="section-number selfRef">7.3. </a><a href="#name-authorization-response-and-" class="section-name selfRef">Authorization Response and Code Exchange</a>
+        </h3>
+<p id="section-7.3-1">The authorization response MUST contain the <code>iss</code> parameter defined by
+<span>[<a href="#RFC9207" class="cite xref">RFC9207</a>]</span>. The client MUST store the expected issuer with the initiating
+session and MUST reject the response unless <code>iss</code> exactly matches it. The
+client MUST also verify that <code>state</code> exactly matches the stored value and has
+not already been consumed.<a href="#section-7.3-1" class="pilcrow">¶</a></p>
+<p id="section-7.3-2">The client exchanges the authorization code at the OAuth token endpoint using
+<code>grant_type=authorization_code</code>, the code, the same <code>redirect_uri</code>, and the
+PKCE <code>code_verifier</code>.<a href="#section-7.3-2" class="pilcrow">¶</a></p>
+<p id="section-7.3-3">For DPoP, the token request MUST carry a valid DPoP proof. The authorization
+server MUST reject the request unless the proof key matches the key bound at
+PAR and the key authorized for the Agent Client Instance.<a href="#section-7.3-3" class="pilcrow">¶</a></p>
+<p id="section-7.3-4">The authorization server MUST:<a href="#section-7.3-4" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-7.3-5">
+<li id="section-7.3-5.1">
+            <p id="section-7.3-5.1.1">authenticate or otherwise identify the client as required for its client
+type;<a href="#section-7.3-5.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-7.3-5.2">
+            <p id="section-7.3-5.2.1">require exact <code>redirect_uri</code> equality with the authorization request;<a href="#section-7.3-5.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-7.3-5.3">
+            <p id="section-7.3-5.3.1">validate the S256 verifier;<a href="#section-7.3-5.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-7.3-5.4">
+            <p id="section-7.3-5.4.1">bind the code to the client, Principal, issuer, resource, approved scopes,
+and sender key; and<a href="#section-7.3-5.4.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-7.3-5.5">
+            <p id="section-7.3-5.5.1">consume the code atomically with successful token issuance.<a href="#section-7.3-5.5.1" class="pilcrow">¶</a></p>
+</li>
+        </ol>
+<p id="section-7.3-6">An error while signing or storing tokens MUST leave the authorization code
+usable for a later retry or MUST produce an unambiguous terminal error. It MUST
+NOT create a partially committed grant.<a href="#section-7.3-6" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="access-tokens">
+<section id="section-8">
+      <h2 id="name-access-tokens">
+<a href="#section-8" class="section-number selfRef">8. </a><a href="#name-access-tokens" class="section-name selfRef">Access Tokens</a>
+      </h2>
+<p id="section-8-1">Authorization servers conforming to this profile issue JWT access tokens
+<span>[<a href="#RFC7519" class="cite xref">RFC7519</a>]</span> as profiled by <span>[<a href="#RFC9068" class="cite xref">RFC9068</a>]</span>. The JWK Set requirements of <span>[<a href="#RFC7517" class="cite xref">RFC7517</a>]</span>,
+the JOSE requirements of <span>[<a href="#RFC7518" class="cite xref">RFC7518</a>]</span>, and JWT validation guidance in
+<span>[<a href="#RFC8725" class="cite xref">RFC8725</a>]</span> apply.<a href="#section-8-1" class="pilcrow">¶</a></p>
+<div id="claims-and-sender-constraint">
+<section id="section-8.1">
+        <h3 id="name-claims-and-sender-constrain">
+<a href="#section-8.1" class="section-number selfRef">8.1. </a><a href="#name-claims-and-sender-constrain" class="section-name selfRef">Claims and Sender Constraint</a>
+        </h3>
+<p id="section-8.1-1">The token MUST use a <code>typ</code> value of <code>at+jwt</code> and contain the claims required by
+<span>[<a href="#RFC9068" class="cite xref">RFC9068</a>]</span>, including <code>iss</code>, <code>sub</code>, <code>aud</code>, <code>exp</code>, <code>iat</code>, <code>jti</code>, and
+<code>client_id</code>. Granted scopes MUST use the standard space-delimited <code>scope</code>
+claim.<a href="#section-8.1-1" class="pilcrow">¶</a></p>
+<p id="section-8.1-2">The <code>aud</code> claim MUST contain exactly one audience value, identifying the single
+resource requested during authorization. A token with no audience, a different
+audience, or more than one audience value MUST be rejected by the resource
+server.<a href="#section-8.1-2" class="pilcrow">¶</a></p>
+<p id="section-8.1-3">The token MUST be sender-constrained:<a href="#section-8.1-3" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-8.1-4.1">
+            <p id="section-8.1-4.1.1">a DPoP-bound token carries the JWK SHA-256 thumbprint in <code>cnf.jkt</code> as defined
+by <span>[<a href="#RFC9449" class="cite xref">RFC9449</a>]</span>; or<a href="#section-8.1-4.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-8.1-4.2">
+            <p id="section-8.1-4.2.1">an mTLS-bound token carries the certificate SHA-256 thumbprint in
+<code>cnf."x5t#S256"</code> as defined by <span>[<a href="#RFC8705" class="cite xref">RFC8705</a>]</span>.<a href="#section-8.1-4.2.1" class="pilcrow">¶</a></p>
+</li>
+        </ul>
+<p id="section-8.1-5">An authorization server MUST NOT emit <code>cnf</code> solely because a public key was
+uploaded. It MUST first establish proof of possession. The resource server MUST
+verify the DPoP proof or mutual-TLS binding on every protected request.<a href="#section-8.1-5" class="pilcrow">¶</a></p>
+<p id="section-8.1-6">A DPoP-bound access token MUST be presented using the <code>DPoP</code> authentication
+scheme together with a DPoP proof, as defined by <span>[<a href="#RFC9449" class="cite xref">RFC9449</a>]</span>. A bearer
+presentation of a DPoP-bound token MUST be rejected.<a href="#section-8.1-6" class="pilcrow">¶</a></p>
+<p id="section-8.1-7">A token response containing a DPoP-bound access token MUST use the <code>DPoP</code>
+          <code>token_type</code> value defined by <span>[<a href="#RFC9449" class="cite xref">RFC9449</a>]</span>. An mTLS-bound access-token response
+uses the <code>Bearer</code> token type while binding the token to the certificate as
+defined by <span>[<a href="#RFC8705" class="cite xref">RFC8705</a>]</span>.<a href="#section-8.1-7" class="pilcrow">¶</a></p>
+<p id="section-8.1-8">This profile defines no short aliases for <code>scope</code>, <code>client_id</code>, <code>act</code>, or
+<code>authorization_details</code>. Private implementation claims MAY be used only under
+collision-resistant names and MUST NOT be required for interoperability.<a href="#section-8.1-8" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="validation">
+<section id="section-8.2">
+        <h3 id="name-validation">
+<a href="#section-8.2" class="section-number selfRef">8.2. </a><a href="#name-validation" class="section-name selfRef">Validation</a>
+        </h3>
+<p id="section-8.2-1">A resource server MUST validate at least:<a href="#section-8.2-1" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-8.2-2">
+<li id="section-8.2-2.1">
+            <p id="section-8.2-2.1.1"><code>typ</code>, an explicitly allowed signature algorithm, and a valid signature;<a href="#section-8.2-2.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-8.2-2.2">
+            <p id="section-8.2-2.2.1"><code>iss</code> against the configured authorization server;<a href="#section-8.2-2.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-8.2-2.3">
+            <p id="section-8.2-2.3.1"><code>aud</code> against the resource server's identifier;<a href="#section-8.2-2.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-8.2-2.4">
+            <p id="section-8.2-2.4.1"><code>exp</code>, <code>iat</code>, and any applicable not-before constraint;<a href="#section-8.2-2.4.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-8.2-2.5">
+            <p id="section-8.2-2.5.1">the required values in <code>scope</code> using exact, case-sensitive comparison;<a href="#section-8.2-2.5.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-8.2-2.6">
+            <p id="section-8.2-2.6.1">the sender constraint represented by <code>cnf</code>; and<a href="#section-8.2-2.6.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-8.2-2.7">
+            <p id="section-8.2-2.7.1">revocation or token status when the deployment's risk model requires online
+state.<a href="#section-8.2-2.7.1" class="pilcrow">¶</a></p>
+</li>
+        </ol>
+<p id="section-8.2-3">For DPoP, validation MUST include the requirements of <span>[<a href="#RFC9449" class="cite xref">RFC9449</a>]</span>, including
+the HTTP method and target URI, proof freshness and replay detection, the
+access-token hash, and equality between the proof key and <code>cnf.jkt</code>.<a href="#section-8.2-3" class="pilcrow">¶</a></p>
+<p id="section-8.2-4">The resource server MUST NOT treat signature verification alone as sufficient
+authorization.<a href="#section-8.2-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="same-instance-token-attenuation">
+<section id="section-9">
+      <h2 id="name-same-instance-token-attenua">
+<a href="#section-9" class="section-number selfRef">9. </a><a href="#name-same-instance-token-attenua" class="section-name selfRef">Same-Instance Token Attenuation</a>
+      </h2>
+<p id="section-9-1">Token attenuation uses OAuth Token Exchange <span>[<a href="#RFC8693" class="cite xref">RFC8693</a>]</span> at the standard OAuth
+token endpoint. The request MUST include:<a href="#section-9-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-9-2.1">
+          <p id="section-9-2.1.1"><code>grant_type=urn:ietf:params:oauth:grant-type:token-exchange</code>;<a href="#section-9-2.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-9-2.2">
+          <p id="section-9-2.2.1"><code>subject_token</code>;<a href="#section-9-2.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-9-2.3">
+          <p id="section-9-2.3.1"><code>subject_token_type=urn:ietf:params:oauth:token-type:access_token</code>;<a href="#section-9-2.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-9-2.4">
+          <p id="section-9-2.4.1"><code>requested_token_type=urn:ietf:params:oauth:token-type:access_token</code>;<a href="#section-9-2.4.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-9-2.5">
+          <p id="section-9-2.5.1"><code>scope</code>; and<a href="#section-9-2.5.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-9-2.6">
+          <p id="section-9-2.6.1">exactly one <code>resource</code> value.<a href="#section-9-2.6.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+<p id="section-9-3">The authorization server MUST authenticate the requesting client and validate
+the subject token before exchange. The subject token's <code>client_id</code> MUST equal
+the authenticated client's <code>client_id</code>, and its sender constraint MUST match
+the requesting Agent Client Instance. For DPoP, the request MUST carry a valid
+DPoP proof whose key thumbprint equals the subject token's <code>cnf.jkt</code>. For
+mutual TLS, the request certificate thumbprint MUST equal the subject token's
+<code>cnf."x5t#S256"</code> value.<a href="#section-9-3" class="pilcrow">¶</a></p>
+<p id="section-9-4">This profile does not define transfer to a different Agent Client Instance.
+An <code>actor_token</code> or <code>actor_token_type</code> indicates a different delegation model
+and MUST NOT be accepted under this profile unless another explicitly
+negotiated profile defines the actor validation and recipient sender binding.<a href="#section-9-4" class="pilcrow">¶</a></p>
+<p id="section-9-5">OAuth scopes are opaque, case-sensitive strings. The requested scope set MUST
+be an exact set-theoretic subset of the scope set in the subject token. The
+requested <code>resource</code> value MUST exactly equal the subject token's sole audience
+value.<a href="#section-9-5" class="pilcrow">¶</a></p>
+<p id="section-9-6">The Token Exchange response MUST identify the issued token type as
+<code>urn:ietf:params:oauth:token-type:access_token</code>. The attenuated token:<a href="#section-9-6" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-9-7.1">
+          <p id="section-9-7.1.1">MUST NOT expire later than the subject token;<a href="#section-9-7.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-9-7.2">
+          <p id="section-9-7.2.1">MUST preserve the subject token's sender constraint exactly;<a href="#section-9-7.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-9-7.3">
+          <p id="section-9-7.3.1">MUST use the requested scope set;<a href="#section-9-7.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-9-7.4">
+          <p id="section-9-7.4.1">MUST preserve the Principal as <code>sub</code> and the resource as its sole audience;
+and<a href="#section-9-7.4.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-9-7.5">
+          <p id="section-9-7.5.1">MUST preserve any existing RFC 8693 <code>act</code> claim without adding a new actor.<a href="#section-9-7.5.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+<p id="section-9-8">The authorization server SHOULD bound repeated exchanges and token lifetimes.
+OAuth Token Exchange does not by itself revoke the subject token or create
+revocation linkage between input and output tokens. A deployment MUST NOT
+claim cascade revocation unless it implements and tests such linkage as an
+extension.<a href="#section-9-8" class="pilcrow">¶</a></p>
+<p id="section-9-9">Cross-instance, cross-resource, and cross-domain delegation are outside this
+profile. They should be evaluated against the related work described later in
+this document rather than implemented as private <code>act</code> chain semantics.<a href="#section-9-9" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="refresh-tokens">
+<section id="section-10">
+      <h2 id="name-refresh-tokens">
+<a href="#section-10" class="section-number selfRef">10. </a><a href="#name-refresh-tokens" class="section-name selfRef">Refresh Tokens</a>
+      </h2>
+<p id="section-10-1">Refresh-token handling MUST follow <span>[<a href="#RFC9700" class="cite xref">RFC9700</a>]</span>. This profile requires both
+rotation and sender constraint whenever an Agent Client Instance is issued a
+refresh token.<a href="#section-10-1" class="pilcrow">¶</a></p>
+<p id="section-10-2">On a successful refresh, the authorization server MUST invalidate the
+presented refresh token and return a new refresh token atomically. The new
+access token MUST NOT expand the original resource, scope, delegation, sender
+binding, or grant lifetime. A DPoP proof or mutual-TLS certificate used during
+refresh MUST match the sender binding of the refresh-token family.<a href="#section-10-2" class="pilcrow">¶</a></p>
+<p id="section-10-3">Reuse of an invalidated refresh token outside an explicitly recognized
+request-bound recovery attempt MUST fail with <code>invalid_grant</code> and SHOULD revoke
+the active refresh-token family or trigger another risk-appropriate incident
+response.<a href="#section-10-3" class="pilcrow">¶</a></p>
+<div id="implementation-specific-lost-response-recovery">
+<section id="section-10.1">
+        <h3 id="name-implementation-specific-los">
+<a href="#section-10.1" class="section-number selfRef">10.1. </a><a href="#name-implementation-specific-los" class="section-name selfRef">Implementation-Specific Lost-Response Recovery</a>
+        </h3>
+<p id="section-10.1-1">This subsection is implementation guidance. It defines no OAuth parameter,
+header, or conformance requirement, and two independent implementations cannot
+assume interoperability based on it.<a href="#section-10.1-1" class="pilcrow">¶</a></p>
+<p id="section-10.1-2">Network failure can occur after the authorization server commits rotation but
+before the client receives the response. A proprietary recovery mechanism can
+avoid unnecessary reauthorization, but it needs to avoid becoming a replay
+grace period. A secure design has all of the following properties:<a href="#section-10.1-2" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="section-10.1-3">
+<li id="section-10.1-3.1">
+            <p id="section-10.1-3.1.1">Before its first attempt, the client generates a recovery key with at least
+128 bits of entropy from a cryptographically secure random source and
+persists it with the old refresh token until the response is durable.<a href="#section-10.1-3.1.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-10.1-3.2">
+            <p id="section-10.1-3.2.1">Every transport retry of that same logical refresh operation uses the same
+recovery key. A new logical refresh operation uses a new key.<a href="#section-10.1-3.2.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-10.1-3.3">
+            <p id="section-10.1-3.3.1">The authorization server binds recovery state to the authenticated client,
+Agent Client Instance, old refresh-token digest, sender key, and recovery-key
+digest.<a href="#section-10.1-3.3.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-10.1-3.4">
+            <p id="section-10.1-3.4.1">Any stored access token, rotated refresh token, or serialized token response
+is encrypted at rest, excluded from logs, and deleted when the recovery
+window expires.<a href="#section-10.1-3.4.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-10.1-3.5">
+            <p id="section-10.1-3.5.1">Recovery returns the exact committed response; it does not mint a new token,
+extend a lifetime, or rotate again.<a href="#section-10.1-3.5.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-10.1-3.6">
+            <p id="section-10.1-3.6.1">Recovery is permitted only while the rotated child refresh token is active
+and unused, and only for the same authenticated and sender-bound request.<a href="#section-10.1-3.6.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-10.1-3.7">
+            <p id="section-10.1-3.7.1">The recovery window is short and bounded; no more than 300 seconds is
+recommended.<a href="#section-10.1-3.7.1" class="pilcrow">¶</a></p>
+</li>
+          <li id="section-10.1-3.8">
+            <p id="section-10.1-3.8.1">A different or missing recovery key, an expired recovery window, or an
+already-used child token fails as refresh-token reuse. After the window, the
+client discards the old token and initiates a new authorization flow rather
+than retrying indefinitely.<a href="#section-10.1-3.8.1" class="pilcrow">¶</a></p>
+</li>
+        </ol>
+<p id="section-10.1-4">A server crash before transaction commit leaves the old token unused and the
+client can retry normally. A crash after commit requires the rotated token and
+recovery state to have been committed in the same durable transaction.
+Implementations should test both crash boundaries, concurrent retries, expiry,
+child-token use, family revocation, and deletion of stored responses.<a href="#section-10.1-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="revocation">
+<section id="section-11">
+      <h2 id="name-revocation">
+<a href="#section-11" class="section-number selfRef">11. </a><a href="#name-revocation" class="section-name selfRef">Revocation</a>
+      </h2>
+<p id="section-11-1">The authorization server MUST expose the OAuth token revocation endpoint
+defined by <span>[<a href="#RFC7009" class="cite xref">RFC7009</a>]</span>. The endpoint MUST authenticate confidential clients as
+required by their registration. DPoP or mTLS sender constraint does not replace
+that client authentication. The authorization server MUST verify that the
+requesting client, Principal, or administrator is authorized to revoke the
+presented token or its grant.<a href="#section-11-1" class="pilcrow">¶</a></p>
+<p id="section-11-2">Revoking a refresh token MUST invalidate its entire refresh-token family and
+prevent further token issuance from that family. The authorization server MUST
+also provide an authenticated mechanism for the Principal or an authorized
+administrator to revoke the underlying authorization grant.<a href="#section-11-2" class="pilcrow">¶</a></p>
+<p id="section-11-3">For an access token, the authorization server MUST either make revocation
+state available to the resource server or limit the token lifetime so that the
+residual authorization window is appropriate to the protected resource's risk.
+The consent view displays that effective lifetime as required earlier in this
+document.<a href="#section-11-3" class="pilcrow">¶</a></p>
+<p id="section-11-4">Revocation of a subject token does not automatically revoke tokens previously
+created by Token Exchange. A deployment claiming that behavior MUST maintain
+and enforce explicit input-to-output linkage.<a href="#section-11-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="operational-extensions">
+<section id="section-12">
+      <h2 id="name-operational-extensions">
+<a href="#section-12" class="section-number selfRef">12. </a><a href="#name-operational-extensions" class="section-name selfRef">Operational Extensions</a>
+      </h2>
+<p id="section-12-1">The following topics are intentionally outside core conformance:<a href="#section-12-1" class="pilcrow">¶</a></p>
+<ul class="normal">
+<li class="normal" id="section-12-2.1">
+          <p id="section-12-2.1.1">decentralized identifiers and globally resolvable agent documents;<a href="#section-12-2.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-12-2.2">
+          <p id="section-12-2.2.1">tamper-evident audit storage and external witnessing;<a href="#section-12-2.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-12-2.3">
+          <p id="section-12-2.3.1">policy decision points and policy languages;<a href="#section-12-2.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-12-2.4">
+          <p id="section-12-2.4.1">financial budgets and atomic debit ledgers;<a href="#section-12-2.4.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-12-2.5">
+          <p id="section-12-2.5.1">event streams and webhooks;<a href="#section-12-2.5.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-12-2.6">
+          <p id="section-12-2.6.1">credential vaults;<a href="#section-12-2.6.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-12-2.7">
+          <p id="section-12-2.7.1">anomaly detection; and<a href="#section-12-2.7.1" class="pilcrow">¶</a></p>
+</li>
+        <li class="normal" id="section-12-2.8">
+          <p id="section-12-2.8.1">enterprise provisioning and SSO configuration.<a href="#section-12-2.8.1" class="pilcrow">¶</a></p>
+</li>
+      </ul>
+<p id="section-12-3">An implementation MUST NOT claim that an operator-signed hash chain is
+operator-independent evidence. Such a claim requires publication to or
+countersignature by an independent witness. If JSON records are hashed across
+implementations, canonicalization should use the JSON Canonicalization Scheme
+<span>[<a href="#RFC8785" class="cite xref">RFC8785</a>]</span> and SHA-256 should be specified using <span>[<a href="#RFC6234" class="cite xref">RFC6234</a>]</span>.<a href="#section-12-3" class="pilcrow">¶</a></p>
+<p id="section-12-4">Financial constraints should use structured authorization details
+<span>[<a href="#RFC9396" class="cite xref">RFC9396</a>]</span>, including an unambiguous amount representation and currency,
+rather than a bare numeric JWT claim.<a href="#section-12-4" class="pilcrow">¶</a></p>
+<p id="section-12-5">Potential extension documents are listed in the source repository. Their
+presence does not imply IETF submission, adoption, or interoperability.<a href="#section-12-5" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="security-considerations">
+<section id="section-13">
+      <h2 id="name-security-considerations">
+<a href="#section-13" class="section-number selfRef">13. </a><a href="#name-security-considerations" class="section-name selfRef">Security Considerations</a>
+      </h2>
+<p id="section-13-1">The OAuth threat model and mitigations in <span>[<a href="#RFC9700" class="cite xref">RFC9700</a>]</span> apply. Implementers should
+also track the active OAuth Security BCP update
+<span>[<a href="#I-D.ietf-oauth-security-topics-update" class="cite xref">I-D.ietf-oauth-security-topics-update</a>]</span>. This section calls out
+agent-specific consequences.<a href="#section-13-1" class="pilcrow">¶</a></p>
+<div id="consent-substitution">
+<section id="section-13.1">
+        <h3 id="name-consent-substitution">
+<a href="#section-13.1" class="section-number selfRef">13.1. </a><a href="#name-consent-substitution" class="section-name selfRef">Consent Substitution</a>
+        </h3>
+<p id="section-13.1-1">A developer API key, policy-engine decision, or agent assertion is not the
+Principal's consent. Conflating these identities lets the party requesting
+authority approve its own request. Live consent therefore requires independent
+Principal authentication and request-bound approval.<a href="#section-13.1-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="redirect-issuer-and-request-integrity">
+<section id="section-13.2">
+        <h3 id="name-redirect-issuer-and-request">
+<a href="#section-13.2" class="section-number selfRef">13.2. </a><a href="#name-redirect-issuer-and-request" class="section-name selfRef">Redirect, Issuer, and Request Integrity</a>
+        </h3>
+<p id="section-13.2-1">Exact redirect matching, PAR, PKCE S256, <code>state</code>, issuer identification, and
+DPoP code binding address different attacks and are not substitutes for one
+another. Clients MUST keep <code>state</code>, the PKCE verifier, the expected issuer, and
+the PAR request association confidential until the flow completes.<a href="#section-13.2-1" class="pilcrow">¶</a></p>
+<p id="section-13.2-2">A client that interacts with multiple authorization servers MUST maintain
+separate validated metadata, client registration, redirect state, and Agent
+Keys for each issuer. It MUST NOT accept endpoints from one issuer as metadata
+for another issuer. These requirements also reduce mix-up, audience-injection,
+and cross-provider account-linking risks.<a href="#section-13.2-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="audience-and-sender-binding">
+<section id="section-13.3">
+        <h3 id="name-audience-and-sender-binding">
+<a href="#section-13.3" class="section-number selfRef">13.3. </a><a href="#name-audience-and-sender-binding" class="section-name selfRef">Audience and Sender Binding</a>
+        </h3>
+<p id="section-13.3-1">Bearer tokens are especially hazardous for autonomous software because agents
+may pass data through tools, logs, prompts, and subprocesses. Resource binding
+limits where a token can be used; sender constraint limits who can use it.
+This profile requires both.<a href="#section-13.3-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="agent-key-enrollment">
+<section id="section-13.4">
+        <h3 id="name-agent-key-enrollment">
+<a href="#section-13.4" class="section-number selfRef">13.4. </a><a href="#name-agent-key-enrollment" class="section-name selfRef">Agent-Key Enrollment</a>
+        </h3>
+<p id="section-13.4-1">Accepting an uploaded public key without proof of possession enables an
+attacker to register somebody else's key or create unusable identities.
+Authorization servers MUST verify possession and MUST define secure key
+rotation and recovery procedures.<a href="#section-13.4-1" class="pilcrow">¶</a></p>
+<p id="section-13.4-2">Distinct Agent Client Instances MUST NOT share an Agent Key. Key reuse across
+authorization-server issuers can enable correlation and can increase the
+impact of a compromised client assertion or signing environment.<a href="#section-13.4-2" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="delegation">
+<section id="section-13.5">
+        <h3 id="name-delegation">
+<a href="#section-13.5" class="section-number selfRef">13.5. </a><a href="#name-delegation" class="section-name selfRef">Delegation</a>
+        </h3>
+<p id="section-13.5-1">Even same-instance Token Exchange can create unexpectedly long-lived or
+difficult-to-revoke token graphs. Exact scope containment, same-resource
+enforcement, bounded lifetime, unchanged sender constraint, and exchange-rate
+limits SHOULD be enforced together.<a href="#section-13.5-1" class="pilcrow">¶</a></p>
+<p id="section-13.5-2">Cross-instance delegation requires a secure method for the subject-token
+holder to authorize the recipient and for the issued token to be bound to the
+recipient's key. Plain client-supplied actor text provides neither property.
+This profile therefore does not define that operation.<a href="#section-13.5-2" class="pilcrow">¶</a></p>
+<p id="section-13.5-3">The subject token remains valid after RFC 8693 Token Exchange unless another
+mechanism revokes it. Resource servers and authorization servers MUST NOT
+infer one-time use or cascade revocation from the exchange itself.<a href="#section-13.5-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="refresh-reuse">
+<section id="section-13.6">
+        <h3 id="name-refresh-reuse">
+<a href="#section-13.6" class="section-number selfRef">13.6. </a><a href="#name-refresh-reuse" class="section-name selfRef">Refresh Reuse</a>
+        </h3>
+<p id="section-13.6-1">Recovery must not become a replay grace period. Only the same authenticated and
+request-bound retry can receive a previously committed response. Any other
+reuse can indicate token theft and SHOULD trigger family revocation or another
+risk-appropriate incident response.<a href="#section-13.6-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="logging">
+<section id="section-13.7">
+        <h3 id="name-logging">
+<a href="#section-13.7" class="section-number selfRef">13.7. </a><a href="#name-logging" class="section-name selfRef">Logging</a>
+        </h3>
+<p id="section-13.7-1">Authorization servers and resource servers MUST NOT log authorization codes,
+refresh tokens, access tokens, DPoP private keys, PKCE verifiers, recovery keys,
+stored recovery responses, client assertions, or upstream credentials.
+Security logs SHOULD record enough non-secret context to investigate consent,
+delegation, refresh reuse, and revocation events.<a href="#section-13.7-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+</section>
+</div>
+<div id="privacy-considerations">
+<section id="section-14">
+      <h2 id="name-privacy-considerations">
+<a href="#section-14" class="section-number selfRef">14. </a><a href="#name-privacy-considerations" class="section-name selfRef">Privacy Considerations</a>
+      </h2>
+<p id="section-14-1">Agent authorization data can reveal a Principal's services, activities,
+relationships, and intended actions. Implementations SHOULD minimize token
+claims and consent records, use pairwise subject identifiers where appropriate,
+and avoid placing personal data in globally resolvable agent documents.<a href="#section-14-1" class="pilcrow">¶</a></p>
+<p id="section-14-2">Resource indicators and fine-grained scopes can themselves be sensitive. They
+SHOULD be disclosed only to parties that require them. Audit retention and
+export MUST have a defined purpose, access policy, retention period, and
+deletion process.<a href="#section-14-2" class="pilcrow">¶</a></p>
+<p id="section-14-3">Stable <code>client_id</code> values and sender-key thumbprints can correlate an Agent
+Client Instance across resource servers and authorization servers. Deployments
+SHOULD use issuer-specific registrations and Agent Keys and SHOULD expose the
+sender-key confirmation member only to the resource server for which the token
+was issued.<a href="#section-14-3" class="pilcrow">¶</a></p>
+<p id="section-14-4">Delegation chains reveal relationships among services and actors. A resource
+server should receive only the chain information needed for its authorization
+decision.<a href="#section-14-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="iana-considerations">
+<section id="section-15">
+      <h2 id="name-iana-considerations">
+<a href="#section-15" class="section-number selfRef">15. </a><a href="#name-iana-considerations" class="section-name selfRef">IANA Considerations</a>
+      </h2>
+<p id="section-15-1">This document requests no IANA actions. It uses claims, parameters, endpoints,
+and confirmation methods defined by existing OAuth and JOSE specifications.
+The lost-response recovery guidance deliberately defines no wire-level key or
+header. Any future interoperable recovery key or agent-specific authorization
+detail will require a separate specification and appropriate registry review.<a href="#section-15-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="relationship-to-other-work">
+<section id="section-16">
+      <h2 id="name-relationship-to-other-work">
+<a href="#section-16" class="section-number selfRef">16. </a><a href="#name-relationship-to-other-work" class="section-name selfRef">Relationship to Other Work</a>
+      </h2>
+<p id="section-16-1">The Agent Authorization Profile (AAP) for OAuth 2.0
+<span>[<a href="#I-D.aap-oauth-profile" class="cite xref">I-D.aap-oauth-profile</a>]</span> defines structured agent, task, capability, context,
+and oversight claims, primarily for agent-to-API authorization. This document
+does not define those claims; it focuses on authenticated human authorization,
+standard RFC 9068 claims, PAR, issuer and resource binding, and a
+mandatory-to-implement sender constraint.<a href="#section-16-1" class="pilcrow">¶</a></p>
+<p id="section-16-2">OAuth 2.0 Client Instance Assertion
+<span>[<a href="#I-D.mcguinness-oauth-client-instance-assertion" class="cite xref">I-D.mcguinness-oauth-client-instance-assertion</a>]</span> and the OAuth 2.0 AI Agent
+Instance Profile <span>[<a href="#I-D.mcguinness-oauth-ai-agent-instance" class="cite xref">I-D.mcguinness-oauth-ai-agent-instance</a>]</span> define attested
+client-instance identity and how agent identity or provenance can surface in
+tokens. This profile does not duplicate those claims. Its issuer, <code>client_id</code>,
+and sender-key tuple is only an authorization and proof-of-possession context.
+Deployments needing stable agent instance identity should compose with that
+work.<a href="#section-16-2" class="pilcrow">¶</a></p>
+<p id="section-16-3">PACT <span>[<a href="#I-D.valverde-oauth-pact" class="cite xref">I-D.valverde-oauth-pact</a>]</span> profiles privacy-preserving agent consent
+using OAuth 2.1, CIBA, structured capabilities, and risk-graduated consent.
+This document instead profiles the browser authorization-code flow and defines
+no agent capability vocabulary.<a href="#section-16-3" class="pilcrow">¶</a></p>
+<p id="section-16-4">Attenuating Authorization Tokens for Agentic Delegation Chains
+<span>[<a href="#I-D.niyikiza-oauth-attenuating-agent-tokens" class="cite xref">I-D.niyikiza-oauth-attenuating-agent-tokens</a>]</span> explores richer capability and
+delegation attenuation. This profile deliberately limits core delegation to
+exact OAuth scope-set containment and the same resource.<a href="#section-16-4" class="pilcrow">¶</a></p>
+<p id="section-16-5">OAuth 2.0 Delegated Authorization
+<span>[<a href="#I-D.li-oauth-delegated-authorization" class="cite xref">I-D.li-oauth-delegated-authorization</a>]</span> defines cryptographically linked,
+client-issued delegation tokens that avoid contacting the authorization
+server for every hop. This profile defines only authorization-server-mediated,
+same-instance attenuation and does not define client-issued access tokens.<a href="#section-16-5" class="pilcrow">¶</a></p>
+<p id="section-16-6">The OAuth Actor Profile for Delegation
+<span>[<a href="#I-D.mcguinness-oauth-actor-profile" class="cite xref">I-D.mcguinness-oauth-actor-profile</a>]</span> and Cryptographically Verifiable Actor
+Chains <span>[<a href="#I-D.mw-oauth-actor-chain" class="cite xref">I-D.mw-oauth-actor-chain</a>]</span> explore richer actor representation,
+disclosure, and proof. This profile preserves an existing RFC 8693 <code>act</code> claim
+but does not extend the chain or define an actor-chain proof format.<a href="#section-16-6" class="pilcrow">¶</a></p>
+<p id="section-16-7">OAuth Identity and Authorization Chaining Across Domains
+<span>[<a href="#I-D.ietf-oauth-identity-chaining" class="cite xref">I-D.ietf-oauth-identity-chaining</a>]</span> addresses identity and authorization
+continuity across trust domains. Implementations should use that work for
+cross-domain chains rather than defining private equivalents.<a href="#section-16-7" class="pilcrow">¶</a></p>
+<p id="section-16-8">OAuth Transaction Tokens <span>[<a href="#I-D.ietf-oauth-transaction-tokens" class="cite xref">I-D.ietf-oauth-transaction-tokens</a>]</span> and Transaction
+Tokens for Agents <span>[<a href="#I-D.araut-oauth-transaction-tokens-for-agents" class="cite xref">I-D.araut-oauth-transaction-tokens-for-agents</a>]</span> address
+short-lived, purpose-bound context for service call chains. They may complement
+this profile after initial authorization; this document does not redefine
+transaction tokens.<a href="#section-16-8" class="pilcrow">¶</a></p>
+<p id="section-16-9">The agent authorization use-cases draft
+<span>[<a href="#I-D.chen-oauth-agent-authz-use-cases" class="cite xref">I-D.chen-oauth-agent-authz-use-cases</a>]</span> surveys emerging scenarios and gaps.
+The multi-agent collaboration draft
+<span>[<a href="#I-D.song-oauth-ai-agent-collaborate-authz" class="cite xref">I-D.song-oauth-ai-agent-collaborate-authz</a>]</span> explores group authorization.
+This profile focuses more narrowly on a high-assurance OAuth authorization and
+same-resource delegation baseline and does not claim to supersede either work.<a href="#section-16-9" class="pilcrow">¶</a></p>
+<p id="section-16-10">OAuth Refresh Token and Authorization Expiration
+<span>[<a href="#I-D.ietf-oauth-refresh-token-expiration" class="cite xref">I-D.ietf-oauth-refresh-token-expiration</a>]</span> defines related expiration metadata
+and semantics. Implementations should align effective lifetime displays and
+refresh behavior with that work as it progresses.<a href="#section-16-10" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="implementation-status">
+<section id="section-17">
+      <h2 id="name-implementation-status">
+<a href="#section-17" class="section-number selfRef">17. </a><a href="#name-implementation-status" class="section-name selfRef">Implementation Status</a>
+      </h2>
+<p id="section-17-1">This section follows the intent of <span>[<a href="#RFC7942" class="cite xref">RFC7942</a>]</span> and is expected to be removed
+before publication as an RFC.<a href="#section-17-1" class="pilcrow">¶</a></p>
+<p id="section-17-2">As of 2026-08-30, the Grantex source repository contains role-specific client,
+authorization-server, and resource-server implementations of this revision.
+The TypeScript <code>OAuthAgentClient</code> performs metadata and issuer validation, PAR,
+PKCE S256, one-time state handling, DPoP, refresh rotation, same-resource scope
+attenuation, revocation, and protected-resource requests. The authorization
+server exposes standard <code>/oauth/par</code>, <code>/oauth/authorize</code>, <code>/oauth/token</code>, and
+<code>/oauth/revoke</code> endpoints. The example resource server is exposed at
+<code>/oauth/resource</code> and validates the access-token and DPoP requirements in this
+profile.<a href="#section-17-2" class="pilcrow">¶</a></p>
+<p id="section-17-3">The implementation has same-repository unit and Docker integration tests.
+It is a self-assessed implementation statement, not evidence of interoperability
+with an independent implementation, an external certification, IETF
+endorsement, or OAuth Working Group adoption. A production deployment also
+depends on trustworthy Principal passkey enrollment and account recovery; a
+developer credential alone is not Principal approval.<a href="#section-17-3" class="pilcrow">¶</a></p>
+<p id="section-17-4">The older Grantex <code>/v1/*</code> JSON API remains available as a separate legacy
+protocol. It is intentionally isolated from the standard-profile authorization
+codes, grants, refresh tokens, and token exchanges and is not claimed as a
+conformant OAuth surface. The repository implementation report identifies the
+tested revision and the remaining independent-evidence gaps.<a href="#section-17-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="acknowledgements">
+<section id="section-18">
+      <h2 id="name-acknowledgements">
+<a href="#section-18" class="section-number selfRef">18. </a><a href="#name-acknowledgements" class="section-name selfRef">Acknowledgements</a>
+      </h2>
+<p id="section-18-1">The author thanks reviewers in the OAuth community whose published work on
+OAuth security, identity chaining, transaction tokens, and agent authorization
+helped narrow this document.<a href="#section-18-1" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="sec-combined-references">
+<section id="section-19">
+      <h2 id="name-references">
+<a href="#section-19" class="section-number selfRef">19. </a><a href="#name-references" class="section-name selfRef">References</a>
+      </h2>
+<div id="sec-normative-references">
+<section id="section-19.1">
+        <h3 id="name-normative-references">
+<a href="#section-19.1" class="section-number selfRef">19.1. </a><a href="#name-normative-references" class="section-name selfRef">Normative References</a>
+        </h3>
+<dl class="references">
+<dt id="RFC2119">[RFC2119]</dt>
+        <dd>
+<span class="refAuthor">Bradner, S.</span>, <span class="refTitle">"Key words for use in RFCs to Indicate Requirement Levels"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 2119</span>, <span class="seriesInfo">DOI 10.17487/RFC2119</span>, <time datetime="1997-03" class="refDate">March 1997</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc2119">https://www.rfc-editor.org/rfc/rfc2119</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC6749">[RFC6749]</dt>
+        <dd>
+<span class="refAuthor">Hardt, D., Ed.</span>, <span class="refTitle">"The OAuth 2.0 Authorization Framework"</span>, <span class="seriesInfo">RFC 6749</span>, <span class="seriesInfo">DOI 10.17487/RFC6749</span>, <time datetime="2012-10" class="refDate">October 2012</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc6749">https://www.rfc-editor.org/rfc/rfc6749</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC7009">[RFC7009]</dt>
+        <dd>
+<span class="refAuthor">Lodderstedt, T., Ed.</span>, <span class="refAuthor">Dronia, S.</span>, and <span class="refAuthor">M. Scurtescu</span>, <span class="refTitle">"OAuth 2.0 Token Revocation"</span>, <span class="seriesInfo">RFC 7009</span>, <span class="seriesInfo">DOI 10.17487/RFC7009</span>, <time datetime="2013-08" class="refDate">August 2013</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc7009">https://www.rfc-editor.org/rfc/rfc7009</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC7517">[RFC7517]</dt>
+        <dd>
+<span class="refAuthor">Jones, M.</span>, <span class="refTitle">"JSON Web Key (JWK)"</span>, <span class="seriesInfo">RFC 7517</span>, <span class="seriesInfo">DOI 10.17487/RFC7517</span>, <time datetime="2015-05" class="refDate">May 2015</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc7517">https://www.rfc-editor.org/rfc/rfc7517</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC7518">[RFC7518]</dt>
+        <dd>
+<span class="refAuthor">Jones, M.</span>, <span class="refTitle">"JSON Web Algorithms (JWA)"</span>, <span class="seriesInfo">RFC 7518</span>, <span class="seriesInfo">DOI 10.17487/RFC7518</span>, <time datetime="2015-05" class="refDate">May 2015</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc7518">https://www.rfc-editor.org/rfc/rfc7518</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC7519">[RFC7519]</dt>
+        <dd>
+<span class="refAuthor">Jones, M.</span>, <span class="refAuthor">Bradley, J.</span>, and <span class="refAuthor">N. Sakimura</span>, <span class="refTitle">"JSON Web Token (JWT)"</span>, <span class="seriesInfo">RFC 7519</span>, <span class="seriesInfo">DOI 10.17487/RFC7519</span>, <time datetime="2015-05" class="refDate">May 2015</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc7519">https://www.rfc-editor.org/rfc/rfc7519</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC7636">[RFC7636]</dt>
+        <dd>
+<span class="refAuthor">Sakimura, N., Ed.</span>, <span class="refAuthor">Bradley, J.</span>, and <span class="refAuthor">N. Agarwal</span>, <span class="refTitle">"Proof Key for Code Exchange by OAuth Public Clients"</span>, <span class="seriesInfo">RFC 7636</span>, <span class="seriesInfo">DOI 10.17487/RFC7636</span>, <time datetime="2015-09" class="refDate">September 2015</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc7636">https://www.rfc-editor.org/rfc/rfc7636</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8174">[RFC8174]</dt>
+        <dd>
+<span class="refAuthor">Leiba, B.</span>, <span class="refTitle">"Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words"</span>, <span class="seriesInfo">BCP 14</span>, <span class="seriesInfo">RFC 8174</span>, <span class="seriesInfo">DOI 10.17487/RFC8174</span>, <time datetime="2017-05" class="refDate">May 2017</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8174">https://www.rfc-editor.org/rfc/rfc8174</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8414">[RFC8414]</dt>
+        <dd>
+<span class="refAuthor">Jones, M.</span>, <span class="refAuthor">Sakimura, N.</span>, and <span class="refAuthor">J. Bradley</span>, <span class="refTitle">"OAuth 2.0 Authorization Server Metadata"</span>, <span class="seriesInfo">RFC 8414</span>, <span class="seriesInfo">DOI 10.17487/RFC8414</span>, <time datetime="2018-06" class="refDate">June 2018</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8414">https://www.rfc-editor.org/rfc/rfc8414</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8693">[RFC8693]</dt>
+        <dd>
+<span class="refAuthor">Jones, M.</span>, <span class="refAuthor">Nadalin, A.</span>, <span class="refAuthor">Campbell, B., Ed.</span>, <span class="refAuthor">Bradley, J.</span>, and <span class="refAuthor">C. Mortimore</span>, <span class="refTitle">"OAuth 2.0 Token Exchange"</span>, <span class="seriesInfo">RFC 8693</span>, <span class="seriesInfo">DOI 10.17487/RFC8693</span>, <time datetime="2020-01" class="refDate">January 2020</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8693">https://www.rfc-editor.org/rfc/rfc8693</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8705">[RFC8705]</dt>
+        <dd>
+<span class="refAuthor">Campbell, B.</span>, <span class="refAuthor">Bradley, J.</span>, <span class="refAuthor">Sakimura, N.</span>, and <span class="refAuthor">T. Lodderstedt</span>, <span class="refTitle">"OAuth 2.0 Mutual-TLS Client Authentication and Certificate-Bound Access Tokens"</span>, <span class="seriesInfo">RFC 8705</span>, <span class="seriesInfo">DOI 10.17487/RFC8705</span>, <time datetime="2020-02" class="refDate">February 2020</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8705">https://www.rfc-editor.org/rfc/rfc8705</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8707">[RFC8707]</dt>
+        <dd>
+<span class="refAuthor">Campbell, B.</span>, <span class="refAuthor">Bradley, J.</span>, and <span class="refAuthor">H. Tschofenig</span>, <span class="refTitle">"Resource Indicators for OAuth 2.0"</span>, <span class="seriesInfo">RFC 8707</span>, <span class="seriesInfo">DOI 10.17487/RFC8707</span>, <time datetime="2020-02" class="refDate">February 2020</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8707">https://www.rfc-editor.org/rfc/rfc8707</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8725">[RFC8725]</dt>
+        <dd>
+<span class="refAuthor">Sheffer, Y.</span>, <span class="refAuthor">Hardt, D.</span>, and <span class="refAuthor">M. Jones</span>, <span class="refTitle">"JSON Web Token Best Current Practices"</span>, <span class="seriesInfo">BCP 225</span>, <span class="seriesInfo">RFC 8725</span>, <span class="seriesInfo">DOI 10.17487/RFC8725</span>, <time datetime="2020-02" class="refDate">February 2020</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8725">https://www.rfc-editor.org/rfc/rfc8725</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9068">[RFC9068]</dt>
+        <dd>
+<span class="refAuthor">Bertocci, V.</span>, <span class="refTitle">"JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens"</span>, <span class="seriesInfo">RFC 9068</span>, <span class="seriesInfo">DOI 10.17487/RFC9068</span>, <time datetime="2021-10" class="refDate">October 2021</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc9068">https://www.rfc-editor.org/rfc/rfc9068</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9126">[RFC9126]</dt>
+        <dd>
+<span class="refAuthor">Lodderstedt, T.</span>, <span class="refAuthor">Campbell, B.</span>, <span class="refAuthor">Sakimura, N.</span>, <span class="refAuthor">Tonge, D.</span>, and <span class="refAuthor">F. Skokan</span>, <span class="refTitle">"OAuth 2.0 Pushed Authorization Requests"</span>, <span class="seriesInfo">RFC 9126</span>, <span class="seriesInfo">DOI 10.17487/RFC9126</span>, <time datetime="2021-09" class="refDate">September 2021</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc9126">https://www.rfc-editor.org/rfc/rfc9126</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9207">[RFC9207]</dt>
+        <dd>
+<span class="refAuthor">Meyer zu Selhausen, K.</span> and <span class="refAuthor">D. Fett</span>, <span class="refTitle">"OAuth 2.0 Authorization Server Issuer Identification"</span>, <span class="seriesInfo">RFC 9207</span>, <span class="seriesInfo">DOI 10.17487/RFC9207</span>, <time datetime="2022-03" class="refDate">March 2022</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc9207">https://www.rfc-editor.org/rfc/rfc9207</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9396">[RFC9396]</dt>
+        <dd>
+<span class="refAuthor">Lodderstedt, T.</span>, <span class="refAuthor">Richer, J.</span>, and <span class="refAuthor">B. Campbell</span>, <span class="refTitle">"OAuth 2.0 Rich Authorization Requests"</span>, <span class="seriesInfo">RFC 9396</span>, <span class="seriesInfo">DOI 10.17487/RFC9396</span>, <time datetime="2023-05" class="refDate">May 2023</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc9396">https://www.rfc-editor.org/rfc/rfc9396</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9449">[RFC9449]</dt>
+        <dd>
+<span class="refAuthor">Fett, D.</span>, <span class="refAuthor">Campbell, B.</span>, <span class="refAuthor">Bradley, J.</span>, <span class="refAuthor">Lodderstedt, T.</span>, <span class="refAuthor">Jones, M.</span>, and <span class="refAuthor">D. Waite</span>, <span class="refTitle">"OAuth 2.0 Demonstrating Proof of Possession (DPoP)"</span>, <span class="seriesInfo">RFC 9449</span>, <span class="seriesInfo">DOI 10.17487/RFC9449</span>, <time datetime="2023-09" class="refDate">September 2023</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc9449">https://www.rfc-editor.org/rfc/rfc9449</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC9700">[RFC9700]</dt>
+      <dd>
+<span class="refAuthor">Lodderstedt, T.</span>, <span class="refAuthor">Bradley, J.</span>, <span class="refAuthor">Labunets, A.</span>, and <span class="refAuthor">D. Fett</span>, <span class="refTitle">"Best Current Practice for OAuth 2.0 Security"</span>, <span class="seriesInfo">BCP 240</span>, <span class="seriesInfo">RFC 9700</span>, <span class="seriesInfo">DOI 10.17487/RFC9700</span>, <time datetime="2025-01" class="refDate">January 2025</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc9700">https://www.rfc-editor.org/rfc/rfc9700</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+</dl>
+</section>
+</div>
+<div id="sec-informative-references">
+<section id="section-19.2">
+        <h3 id="name-informative-references">
+<a href="#section-19.2" class="section-number selfRef">19.2. </a><a href="#name-informative-references" class="section-name selfRef">Informative References</a>
+        </h3>
+<dl class="references">
+<dt id="I-D.aap-oauth-profile">[I-D.aap-oauth-profile]</dt>
+        <dd>
+<span class="refAuthor">cruz, A.</span>, <span class="refTitle">"Agent Authorization Profile (AAP) for OAuth 2.0"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-aap-oauth-profile-01</span>, <time datetime="2026-02-07" class="refDate">7 February 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-aap-oauth-profile-01">https://datatracker.ietf.org/doc/html/draft-aap-oauth-profile-01</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.araut-oauth-transaction-tokens-for-agents">[I-D.araut-oauth-transaction-tokens-for-agents]</dt>
+        <dd>
+<span class="refAuthor">Raut, A.</span>, <span class="refTitle">"Transaction Tokens For Agents"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-araut-oauth-transaction-tokens-for-agents-02</span>, <time datetime="2026-05-21" class="refDate">21 May 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-araut-oauth-transaction-tokens-for-agents-02">https://datatracker.ietf.org/doc/html/draft-araut-oauth-transaction-tokens-for-agents-02</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.chen-oauth-agent-authz-use-cases">[I-D.chen-oauth-agent-authz-use-cases]</dt>
+        <dd>
+<span class="refAuthor">Chen, M.</span>, <span class="refAuthor">Chen, J.</span>, <span class="refAuthor">Yao, J.</span>, <span class="refAuthor">Jiang, Y.</span>, and <span class="refAuthor">P. C. Liu</span>, <span class="refTitle">"Agent Authorization use cases and gap analysis"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-chen-oauth-agent-authz-use-cases-03</span>, <time datetime="2026-08-25" class="refDate">25 August 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-chen-oauth-agent-authz-use-cases-03">https://datatracker.ietf.org/doc/html/draft-chen-oauth-agent-authz-use-cases-03</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.ietf-oauth-identity-chaining">[I-D.ietf-oauth-identity-chaining]</dt>
+        <dd>
+<span class="refAuthor">Schwenkschuster, A.</span>, <span class="refAuthor">Kasselman, P.</span>, <span class="refAuthor">Burgin, K.</span>, <span class="refAuthor">Jenkins, M. J.</span>, <span class="refAuthor">Campbell, B.</span>, and <span class="refAuthor">A. Parecki</span>, <span class="refTitle">"OAuth Identity and Authorization Chaining Across Domains"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-ietf-oauth-identity-chaining-17</span>, <time datetime="2026-07-19" class="refDate">19 July 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17">https://datatracker.ietf.org/doc/html/draft-ietf-oauth-identity-chaining-17</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.ietf-oauth-refresh-token-expiration">[I-D.ietf-oauth-refresh-token-expiration]</dt>
+        <dd>
+<span class="refAuthor">Watson, N.</span>, <span class="refTitle">"OAuth 2.0 Refresh Token and Authorization Expiration"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-ietf-oauth-refresh-token-expiration-03</span>, <time datetime="2026-07-06" class="refDate">6 July 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-refresh-token-expiration-03">https://datatracker.ietf.org/doc/html/draft-ietf-oauth-refresh-token-expiration-03</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.ietf-oauth-security-topics-update">[I-D.ietf-oauth-security-topics-update]</dt>
+        <dd>
+<span class="refAuthor">Würtele, T.</span>, <span class="refAuthor">Hosseyni, P.</span>, <span class="refAuthor">Luo, K.</span>, and <span class="refAuthor">A. Fung</span>, <span class="refTitle">"Updates to OAuth 2.0 Security Best Current Practice"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-ietf-oauth-security-topics-update-03</span>, <time datetime="2026-07-05" class="refDate">5 July 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics-update-03">https://datatracker.ietf.org/doc/html/draft-ietf-oauth-security-topics-update-03</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.ietf-oauth-transaction-tokens">[I-D.ietf-oauth-transaction-tokens]</dt>
+        <dd>
+<span class="refAuthor">Tulshibagwale, A.</span>, <span class="refAuthor">Fletcher, G.</span>, and <span class="refAuthor">P. Kasselman</span>, <span class="refTitle">"Transaction Tokens"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-ietf-oauth-transaction-tokens-11</span>, <time datetime="2026-07-30" class="refDate">30 July 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11">https://datatracker.ietf.org/doc/html/draft-ietf-oauth-transaction-tokens-11</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.li-oauth-delegated-authorization">[I-D.li-oauth-delegated-authorization]</dt>
+        <dd>
+<span class="refAuthor">Ruochen, L.</span>, <span class="refAuthor">Wang, W.</span>, <span class="refAuthor">Liu, P. C.</span>, and <span class="refAuthor">T. Li</span>, <span class="refTitle">"OAuth 2.0 Delegated Authorization"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-li-oauth-delegated-authorization-03</span>, <time datetime="2026-07-24" class="refDate">24 July 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-li-oauth-delegated-authorization-03">https://datatracker.ietf.org/doc/html/draft-li-oauth-delegated-authorization-03</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.mcguinness-oauth-actor-profile">[I-D.mcguinness-oauth-actor-profile]</dt>
+        <dd>
+<span class="refAuthor">McGuinness, K.</span>, <span class="refTitle">"OAuth Actor Profile for Delegation"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-mcguinness-oauth-actor-profile-00</span>, <time datetime="2026-04-30" class="refDate">30 April 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-mcguinness-oauth-actor-profile-00">https://datatracker.ietf.org/doc/html/draft-mcguinness-oauth-actor-profile-00</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.mcguinness-oauth-ai-agent-instance">[I-D.mcguinness-oauth-ai-agent-instance]</dt>
+        <dd>
+<span class="refAuthor">McGuinness, K.</span>, <span class="refTitle">"OAuth 2.0 AI Agent Instance Profile"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-mcguinness-oauth-ai-agent-instance-00</span>, <time datetime="2026-07-04" class="refDate">4 July 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-mcguinness-oauth-ai-agent-instance-00">https://datatracker.ietf.org/doc/html/draft-mcguinness-oauth-ai-agent-instance-00</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.mcguinness-oauth-client-instance-assertion">[I-D.mcguinness-oauth-client-instance-assertion]</dt>
+        <dd>
+<span class="refAuthor">McGuinness, K.</span>, <span class="refTitle">"OAuth 2.0 Client Instance Assertion"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-mcguinness-oauth-client-instance-assertion-01</span>, <time datetime="2026-06-24" class="refDate">24 June 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-mcguinness-oauth-client-instance-assertion-01">https://datatracker.ietf.org/doc/html/draft-mcguinness-oauth-client-instance-assertion-01</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.mw-oauth-actor-chain">[I-D.mw-oauth-actor-chain]</dt>
+        <dd>
+<span class="refAuthor">Prasad, A.</span>, <span class="refAuthor">Krishnan, R.</span>, <span class="refAuthor">Lopez, D.</span>, and <span class="refAuthor">S. Addepalli</span>, <span class="refTitle">"Cryptographically Verifiable Actor Chains for OAuth 2.0 Token Exchange"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-mw-oauth-actor-chain-01</span>, <time datetime="2026-06-15" class="refDate">15 June 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-mw-oauth-actor-chain-01">https://datatracker.ietf.org/doc/html/draft-mw-oauth-actor-chain-01</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.niyikiza-oauth-attenuating-agent-tokens">[I-D.niyikiza-oauth-attenuating-agent-tokens]</dt>
+        <dd>
+<span class="refAuthor">Aimable, N.</span>, <span class="refTitle">"Attenuating Authorization Tokens for Agentic Delegation Chains"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-niyikiza-oauth-attenuating-agent-tokens-01</span>, <time datetime="2026-06-15" class="refDate">15 June 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-niyikiza-oauth-attenuating-agent-tokens-01">https://datatracker.ietf.org/doc/html/draft-niyikiza-oauth-attenuating-agent-tokens-01</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.song-oauth-ai-agent-collaborate-authz">[I-D.song-oauth-ai-agent-collaborate-authz]</dt>
+        <dd>
+<span class="refAuthor">Song, Y.</span>, <span class="refAuthor">Lun, L.</span>, <span class="refAuthor">Jiang, Y.</span>, and <span class="refAuthor">F. Liu</span>, <span class="refTitle">"OAuth2.0 Extension for Multi-AI Agent Collaboration"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-song-oauth-ai-agent-collaborate-authz-02</span>, <time datetime="2026-06-30" class="refDate">30 June 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-song-oauth-ai-agent-collaborate-authz-02">https://datatracker.ietf.org/doc/html/draft-song-oauth-ai-agent-collaborate-authz-02</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="I-D.valverde-oauth-pact">[I-D.valverde-oauth-pact]</dt>
+        <dd>
+<span class="refAuthor">Valverde, G.</span>, <span class="refTitle">"PACT: Private Agent Consent and Trust Profile for OAuth 2.1 and CIBA"</span>, <span class="refContent">Work in Progress</span>, <span class="seriesInfo">Internet-Draft, draft-valverde-oauth-pact-00</span>, <time datetime="2026-04-18" class="refDate">18 April 2026</time>, <span>&lt;<a href="https://datatracker.ietf.org/doc/html/draft-valverde-oauth-pact-00">https://datatracker.ietf.org/doc/html/draft-valverde-oauth-pact-00</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC6234">[RFC6234]</dt>
+        <dd>
+<span class="refAuthor">Eastlake 3rd, D.</span> and <span class="refAuthor">T. Hansen</span>, <span class="refTitle">"US Secure Hash Algorithms (SHA and SHA-based HMAC and HKDF)"</span>, <span class="seriesInfo">RFC 6234</span>, <span class="seriesInfo">DOI 10.17487/RFC6234</span>, <time datetime="2011-05" class="refDate">May 2011</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc6234">https://www.rfc-editor.org/rfc/rfc6234</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC7942">[RFC7942]</dt>
+        <dd>
+<span class="refAuthor">Sheffer, Y.</span> and <span class="refAuthor">A. Farrel</span>, <span class="refTitle">"Improving Awareness of Running Code: The Implementation Status Section"</span>, <span class="seriesInfo">BCP 205</span>, <span class="seriesInfo">RFC 7942</span>, <span class="seriesInfo">DOI 10.17487/RFC7942</span>, <time datetime="2016-07" class="refDate">July 2016</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc7942">https://www.rfc-editor.org/rfc/rfc7942</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+<dt id="RFC8785">[RFC8785]</dt>
+      <dd>
+<span class="refAuthor">Rundgren, A.</span>, <span class="refAuthor">Jordan, B.</span>, and <span class="refAuthor">S. Erdtman</span>, <span class="refTitle">"JSON Canonicalization Scheme (JCS)"</span>, <span class="seriesInfo">RFC 8785</span>, <span class="seriesInfo">DOI 10.17487/RFC8785</span>, <time datetime="2020-06" class="refDate">June 2020</time>, <span>&lt;<a href="https://www.rfc-editor.org/rfc/rfc8785">https://www.rfc-editor.org/rfc/rfc8785</a>&gt;</span>. </dd>
+<dd class="break"></dd>
+</dl>
+</section>
+</div>
+</section>
+</div>
+<div id="non-normative-grantex-mapping">
+<section id="appendix-A">
+      <h2 id="name-non-normative-grantex-mappi">
+<a href="#appendix-A" class="section-number selfRef">Appendix A. </a><a href="#name-non-normative-grantex-mappi" class="section-name selfRef">Non-Normative Grantex Mapping</a>
+      </h2>
+<p id="appendix-A-1">This appendix is informative. It helps reviewers locate the profile operations
+in the Grantex source implementation; the normative protocol requirements are
+defined by the body of this document and its referenced specifications.<a href="#appendix-A-1" class="pilcrow">¶</a></p>
+<table class="center" id="table-1">
+        <caption><a href="#table-1" class="selfRef">Table 1</a></caption>
+<thead>
+          <tr>
+            <th class="text-left" rowspan="1" colspan="1">Profile operation</th>
+            <th class="text-left" rowspan="1" colspan="1">Grantex standard-profile path</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">Administrative agent registration</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>POST /v1/agents</code>
+</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">Pushed Authorization Request</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>POST /oauth/par</code>
+</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">Authorization request</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>GET /oauth/authorize</code>
+</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">Principal consent decision</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>POST /v1/consent/{id}/approve</code> or <code>/deny</code>
+</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">Authorization-code exchange</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>POST /oauth/token</code>
+</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">Refresh rotation</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>POST /oauth/token</code>
+</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">Same-resource scope attenuation</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>POST /oauth/token</code> using RFC 8693 Token Exchange</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">Token revocation</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>POST /oauth/revoke</code>
+</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">Example protected resource</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>ALL /oauth/resource</code>
+</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">Authorization-server metadata</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>GET /.well-known/oauth-authorization-server</code>
+</td>
+          </tr>
+          <tr>
+            <td class="text-left" rowspan="1" colspan="1">Signing keys</td>
+            <td class="text-left" rowspan="1" colspan="1">
+              <code>GET /.well-known/jwks.json</code>
+</td>
+          </tr>
+        </tbody>
+      </table>
+<p id="appendix-A-3">Agent registration is an administrative provisioning operation, not a new
+OAuth protocol endpoint. The implementation requires exact registered redirect
+URIs, resources, and sender-key material before a client can use the profile.
+The separate <code>/v1/authorize</code>, <code>/v1/token</code>, <code>/v1/token/refresh</code>,
+<code>/v1/grants/delegate</code>, and grant-deletion APIs implement the legacy Grantex
+protocol and are outside the conformance claim.<a href="#appendix-A-3" class="pilcrow">¶</a></p>
+<p id="appendix-A-4">The implementation transports its refresh recovery key in an
+<code>Idempotency-Key</code> HTTP request header. That header use is implementation
+specific, is not required for DAAP conformance, and must not be interpreted as
+an IETF-defined use of that header.<a href="#appendix-A-4" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="candidate-extension-documents">
+<section id="appendix-B">
+      <h2 id="name-candidate-extension-documen">
+<a href="#appendix-B" class="section-number selfRef">Appendix B. </a><a href="#name-candidate-extension-documen" class="section-name selfRef">Candidate Extension Documents</a>
+      </h2>
+<p id="appendix-B-1">The following subjects should be developed independently if there is community
+interest:<a href="#appendix-B-1" class="pilcrow">¶</a></p>
+<ol start="1" type="1" class="normal type-1" id="appendix-B-2">
+<li id="appendix-B-2.1">
+          <p id="appendix-B-2.1.1">an interoperable refresh lost-response recovery mechanism;<a href="#appendix-B-2.1.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="appendix-B-2.2">
+          <p id="appendix-B-2.2.1">externally witnessed agent audit checkpoints;<a href="#appendix-B-2.2.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="appendix-B-2.3">
+          <p id="appendix-B-2.3.1">financial authorization details and atomic budget settlement;<a href="#appendix-B-2.3.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="appendix-B-2.4">
+          <p id="appendix-B-2.4.1">cross-instance or cross-resource agent delegation and cascade revocation
+profiles; and<a href="#appendix-B-2.4.1" class="pilcrow">¶</a></p>
+</li>
+        <li id="appendix-B-2.5">
+          <p id="appendix-B-2.5.1">operational event, policy, and credential-handling interfaces.<a href="#appendix-B-2.5.1" class="pilcrow">¶</a></p>
+</li>
+      </ol>
+<p id="appendix-B-3">Separating these topics keeps security assumptions, registries, and consensus
+boundaries reviewable.<a href="#appendix-B-3" class="pilcrow">¶</a></p>
+</section>
+</div>
+<div id="authors-addresses">
+<section id="appendix-C">
+      <h2 id="name-authors-address">
+<a href="#name-authors-address" class="section-name selfRef">Author's Address</a>
+      </h2>
+<address class="vcard">
+        <div dir="auto" class="left"><span class="fn nameRole">Sanjeev Kumar</span></div>
+<div dir="auto" class="left"><span class="org">Orchestrum Technologies LLP</span></div>
+<div dir="auto" class="left"><span class="country-name">India</span></div>
+<div class="email">
+<span>Email:</span>
+<a href="mailto:mishra.sanjeev@gmail.com" class="email">mishra.sanjeev@gmail.com</a>
+</div>
+<div class="url">
+<span>URI:</span>
+<a href="https://grantex.dev" class="url">https://grantex.dev</a>
+</div>
+</address>
+</section>
+</div>
+<script>const toc = document.getElementById("toc");
+toc.querySelector("h2").addEventListener("click", e => {
+  toc.classList.toggle("active");
+});
+toc.querySelector("nav").addEventListener("click", e => {
+  toc.classList.remove("active");
+});
+</script>
+</body>
+</html>

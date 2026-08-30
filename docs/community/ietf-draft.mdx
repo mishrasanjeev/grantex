@@ -1,57 +1,64 @@
 ---
 title: "IETF Internet-Draft"
 sidebarTitle: "IETF Draft"
-description: "Delegated Agent Authorization Protocol (DAAP) — active individual Internet-Draft with a revision 02 submission candidate prepared in the repository."
+description: "Delegated Agent Authorization Protocol (DAAP) — active individual Internet-Draft with revision 02 published and revision 03 under review."
 ---
 
-**Current Datatracker draft:** `draft-mishra-oauth-agent-grants-01`
-**Prepared source candidate:** `draft-mishra-oauth-agent-grants-02`
+**Current Datatracker draft:** `draft-mishra-oauth-agent-grants-02`
+**Prepared source candidate:** `draft-mishra-oauth-agent-grants-03`
 **Target:** IETF OAuth Working Group (`oauth@ietf.org`)
 **Status:** Active individual Internet-Draft; not IETF-endorsed and not OAuth WG-adopted
 **Author contacts:** [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com) (primary) and [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) (alternate)
 
 The authoritative record is the [IETF Datatracker](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/). An individual Internet-Draft is not endorsed by the IETF and has no formal standards standing unless the working group adopts it and the standards process advances it.
 
-The Datatracker will continue to show `-01` until the `-02` candidate is submitted and confirmed through the IETF submission flow.
+Revision `-02` was posted on 2026-08-30. Revision `-03` is a repository candidate and will not appear on the Datatracker until it is uploaded and confirmed through the IETF submission flow. The source repository now contains self-assessed client, authorization-server, and resource-server implementations of the candidate profile, with unit and Docker E2E evidence. This is not independent certification or IETF endorsement.
+
+> **Submission hold:** Revision `-03` must not be uploaded before 2026-09-09. A final review is scheduled for 2026-09-06 through 2026-09-09, followed by a new explicit approval. No automated submission is authorized.
 
 ## Document
 
 The Internet-Draft source is written in [kramdown-rfc2629](https://github.com/cabo/kramdown-rfc) format, a Markdown superset that compiles to RFC XML and from there to canonical IETF text and HTML.
 
-The prepared revision source is at [`docs/ietf-draft/draft-mishra-oauth-agent-grants-02.md`](https://github.com/mishrasanjeev/grantex/blob/main/docs/ietf-draft/draft-mishra-oauth-agent-grants-02.md). The implementation report is at [`docs/ietf-draft/implementation-report.md`](https://github.com/mishrasanjeev/grantex/blob/main/docs/ietf-draft/implementation-report.md).
+The prepared revision source is at [`docs/ietf-draft/draft-mishra-oauth-agent-grants-03.md`](https://github.com/mishrasanjeev/grantex/blob/main/docs/ietf-draft/draft-mishra-oauth-agent-grants-03.md). The implementation report is at [`docs/ietf-draft/implementation-report.md`](https://github.com/mishrasanjeev/grantex/blob/main/docs/ietf-draft/implementation-report.md).
 
-## Revision 02 Focus
+## Revision 03 Focus
 
-- Vendor-neutral DAAP wording, with Grantex described as a reference implementation.
-- Reserved example identifiers and domains instead of Grantex-specific normative examples.
-- Bounded refresh-token lost-response recovery: maximum 300 seconds, same already-rotated response, no extension of the rotation chain or grant lifetime.
-- Explicit `/v1/token/refresh` protocol surface.
-- Alignment with OAuth Security BCP, PKCE, PAR, DPoP, mTLS, and Protected Resource Metadata.
-- Relationship text for OAuth identity chaining, transaction tokens, agent authorization use cases, and multi-agent collaboration drafts.
-- Expanded privacy, audit-log minimization, and cross-domain correlation guidance.
+- Explicit conformance roles and RFC 8414 authorization-server metadata.
+- DPoP as mandatory to implement, including authorization-code binding through PAR.
+- RFC 9207 authorization-response issuer validation for mix-up defense.
+- Exact, same-instance and same-resource scope attenuation through RFC 8693 Token Exchange.
+- RFC 7009 revocation with refresh-family invalidation.
+- Precise `cnf.jkt` and `cnf."x5t#S256"` sender-confirmation members.
+- Lost-response refresh recovery clearly marked as non-interoperable implementation guidance.
+- Direct comparison with current OAuth agent authorization, attenuation, identity-chaining, and transaction-token work.
 
 ## Rendering Locally
 
 ```bash
 cd docs/ietf-draft
-kdrfc draft-mishra-oauth-agent-grants-02.md
-xml2rfc draft-mishra-oauth-agent-grants-02.xml --text
-xml2rfc draft-mishra-oauth-agent-grants-02.xml --html
+kdrfc draft-mishra-oauth-agent-grants-03.md
+xml2rfc draft-mishra-oauth-agent-grants-03.xml --text
+xml2rfc draft-mishra-oauth-agent-grants-03.xml --html
 ```
 
 If local tooling is unavailable, use the [IETF Author Tools](https://author-tools.ietf.org/) renderer.
 
 ## Submitting to the Datatracker
 
-1. Render `draft-mishra-oauth-agent-grants-02.xml`.
+The following procedure is intentionally inactive until the submission hold
+has ended, the final artifacts have passed review, and a new explicit approval
+has been recorded.
+
+1. Set the draft date to the actual upload date and render `draft-mishra-oauth-agent-grants-03.xml`.
 2. Go to [datatracker.ietf.org/submit](https://datatracker.ietf.org/submit/).
-3. Upload `draft-mishra-oauth-agent-grants-02.xml` or `.txt`.
+3. Upload `draft-mishra-oauth-agent-grants-03.xml` or `.txt`.
 4. Confirm via the email link sent to the author address.
-5. Verify that the Datatracker page shows revision `-02`.
+5. Verify that the Datatracker page shows revision `-03`.
 
 ## Working Group Follow-Up
 
-After the Datatracker accepts `-02`, announce it on the OAuth WG mailing list:
+After the Datatracker accepts `-03`, announce it on the OAuth WG mailing list:
 
 - List: `oauth@ietf.org`
 - Archive: [mailarchive.ietf.org/arch/browse/oauth](https://mailarchive.ietf.org/arch/browse/oauth/)
@@ -60,12 +67,13 @@ The main ask should be technical review of scope and overlap:
 
 - Should DAAP remain a single profile or be split into smaller OAuth drafts?
 - Which parts should align with identity chaining and transaction-token work?
-- Are the proposed JWT claim names appropriate for IANA registration?
+- Is DPoP mandatory to implement the right sender-constraint baseline?
+- Is same-resource, exact-scope attenuation narrow enough for a first profile?
 - Should the OAuth WG discuss DAAP at IETF 127?
 
 ## Dates
 
-- `-01` expiry: 2026-09-03
+- `-02` expiry: 2027-03-03
 - IETF 127: 2026-11-14 through 2026-11-20, San Francisco
 - BOF proposal cutoff: 2026-09-18
 - WG meeting request cutoff: 2026-10-02
@@ -75,7 +83,7 @@ The main ask should be technical review of scope and overlap:
 
 | Stage | Action |
 |-------|--------|
-| Individual I-D | Submit the `-02` candidate to Datatracker |
+| Individual I-D | Submit the `-03` candidate to Datatracker |
 | Mailing list review | Request OAuth WG feedback |
 | Agenda time | Ask OAuth chairs whether DAAP should be discussed at IETF 127 |
 | Scope refinement | Split or narrow the draft if the WG prefers |
@@ -95,6 +103,10 @@ The main ask should be technical review of scope and overlap:
 | OAuth Transaction Tokens | Complementary call-chain context propagation |
 | OAuth Rich Authorization Requests | Possible future encoding profile for DAAP authorization details |
 | DPoP and mTLS | Sender-constraining mechanisms for high-stakes DAAP use |
+| OAuth Client Instance Assertion and AI Agent Instance Profile | Stable, attested agent-instance identity that DAAP deliberately does not derive from a sender key |
+| PACT | Complementary CIBA-based privacy and consent profile with structured capabilities |
+| OAuth Delegated Authorization | Cross-instance, client-issued delegation-chain work; DAAP limits core RFC 8693 use to same-instance attenuation |
+| OAuth Actor Profile and Actor Chains | Richer actor disclosure and cryptographic chain proofs beyond DAAP's RFC 8693 baseline |
 
 ## Ownership
 

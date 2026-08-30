@@ -116,6 +116,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           WHERE ar.code = ${code}
             AND ar.agent_id = ${agentId}
             AND ar.developer_id = ${developerId}
+            AND ar.protocol = 'grantex-v1'
             AND a.status = 'active'
           FOR UPDATE OF ar, a
         `;
@@ -395,6 +396,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           LEFT JOIN budget_allocations ba ON ba.grant_id = g.id
           WHERE rt.id = ${refreshToken}
             AND g.developer_id = ${developerId}
+            AND g.protocol = 'grantex-v1'
             AND a.status = 'active'
           FOR UPDATE OF rt, g, a
         `;

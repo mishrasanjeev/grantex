@@ -54,6 +54,7 @@ describe('GET /consent', () => {
     expect(res.body).toContain('/v1/webauthn/assert/verify');
     expect(res.body).toContain('navigator.credentials.get');
     expect(res.body).toContain('PRINCIPAL_VERIFICATION_REQUIRED');
+    expect(res.body).toContain('Principal identifier');
   });
 });
 
