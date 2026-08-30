@@ -152,7 +152,7 @@
     <h2>Choose the correct Grantex path</h2>
     <div class="steps">
       <div class="step"><div class="step-content"><h3>Management tools: <code>@grantex/mcp</code></h3><p>Expose Grantex agent, grant, token, budget, and audit-management operations to a host-configured MCP client.</p></div></div>
-      <div class="step"><div class="step-content"><h3>Production tool enforcement: primary SDK or JWKS</h3><p>Use <code>@grantex/sdk@0.3.13</code> or direct JWKS validation at the MCP tool boundary and require the exact agent scope.</p></div></div>
+      <div class="step"><div class="step-content"><h3>Production tool enforcement: primary SDK or JWKS</h3><p>Use <code>@grantex/sdk@0.4.1</code> or direct JWKS validation at the MCP tool boundary and require the exact agent scope.</p></div></div>
       <div class="step"><div class="step-content"><h3>MCP Auth 2.0.2: evaluation only</h3><p><code>@grantex/mcp-auth@2.0.2</code> has process-local code storage, metadata-only consent, incomplete code handoff, and no live revocation lookup. Do not use it as the production path today.</p></div></div>
       <div class="step"><div class="step-content"><h3>Current MCP authorization</h3><p>For HTTP transports, use an established authorization server and maintained MCP SDK that implement the current protected-resource discovery and token validation requirements.</p></div></div>
       <div class="step"><div class="step-content"><h3>Audit tool execution separately</h3><p>Record the agent, principal, grant, tool, outcome, and timestamp at the execution boundary; a valid token is not an execution record.</p></div></div>

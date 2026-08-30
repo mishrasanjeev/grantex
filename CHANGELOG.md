@@ -7,9 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Added
-- Added unreleased TypeScript SDK 0.4.0 prepaid-wallet clients and auth-service APIs for principal-owned multi-wallet assignment, per-transaction and rolling cumulative spend limits, recipient/scope allowlists, threshold reload requests with separate principal approval/funding, reservation release, activity views, and assignment/wallet/all-wallet agent stop controls.
+- Added TypeScript SDK 0.4.0 prepaid-wallet clients and auth-service APIs for principal-owned multi-wallet assignment, per-transaction and rolling cumulative spend limits, recipient/scope allowlists, threshold reload requests with separate principal approval/funding, reservation release, activity views, and assignment/wallet/all-wallet agent stop controls.
 - Added durable atomic-unit wallet balances, reservations, reload requests, and append-only ledger entries with serialized concurrent spend enforcement and agent/principal-wide idempotency.
-- Added unreleased `@grantex/x402` 0.2.0 integration with official x402 v2 headers and Foundation client packages, backed by DPoP wallet reservations and idempotent facilitator verification/settlement.
+- Added `@grantex/x402` 0.2.0 integration with official x402 v2 headers and Foundation client packages, backed by DPoP wallet reservations and idempotent facilitator verification/settlement.
 - Added profile-aware agent registration metadata, resolvable keyed agent DID documents, standard OAuth `scope` and `client_id` token claims, resource and redirect binding, signed audit checkpoints, and maintained SDK coverage for those custom API features.
 - Published `@grantex/cli` 0.3.0 on 2026-08-10 with one-command Agent Skills installation for Hermes, OpenClaw, portable `.agents/skills` workspaces, and custom skill roots.
 - Added the `use-grantex-cli` and `integrate-grantex` skills for safe JSON-first operations and service-boundary implementation guidance.
@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Commerce, SCIM Bearer data-plane, admin, and other custom-auth routes remain outside these plan buckets.
 
 ### Changed
+- Published `@grantex/sdk@0.4.0`, corrective `@grantex/sdk@0.4.1`, and `@grantex/x402@0.2.0` to npm on 2026-08-30; registry-smoke-tested the prepaid-wallet exports, corrected SDK runtime identifier, x402 exports, and `grantex-x402` CLI.
 - Replaced the x402 client's simulated custom payment-proof flow with official x402 v2 `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` handling. The standalone GDT APIs remain available but are now documented as authorization context rather than durable cumulative spend enforcement.
 - Published TypeScript SDK 0.3.13, Python SDK 0.3.14, and Go SDK v0.1.10 on 2026-07-11; synchronized the public release snapshot across the landing page, README, compatibility matrix, and SDK documentation.
 

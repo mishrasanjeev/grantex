@@ -17,7 +17,7 @@ This guide covers the two permission paths implemented by Grantex:
 
 <Note>
   **Implementation snapshot, updated July 12, 2026:** these examples target
-  `@grantex/langchain@0.1.7`, `@grantex/sdk@0.3.13`, and the repository's
+  `@grantex/langchain@0.1.7`, `@grantex/sdk@0.4.1`, and the repository's
   resolved `@langchain/core@1.2.2`. The adapter declares
   `@langchain/core >=0.3.0`, but that range is not a promise of compatibility
   with every future LangChain package or agent runtime.
@@ -62,7 +62,7 @@ Grantex supplies authorization wrappers and an optional audit callback. Neither 
 Add the integration to an existing LangChain application with exact versions:
 
 ```bash
-npm install --save-exact @grantex/langchain@0.1.7 @grantex/sdk@0.3.13 @langchain/core@1.2.2
+npm install --save-exact @grantex/langchain@0.1.7 @grantex/sdk@0.4.1 @langchain/core@1.2.2
 ```
 
 Node.js 18 or later is required. Pin your model-provider and higher-level `langchain` packages separately for the agent runtime you use.
@@ -181,7 +181,7 @@ Unknown connectors and tools are denied in the default strict mode. This hierarc
 
 ## Use the pre-built manifests that exist
 
-`@grantex/sdk@0.3.13` exports 53 manifests. Salesforce, HubSpot, Jira, and Stripe are included:
+`@grantex/sdk@0.4.1` exports 53 manifests. Salesforce, HubSpot, Jira, and Stripe are included:
 
 ```typescript
 import {

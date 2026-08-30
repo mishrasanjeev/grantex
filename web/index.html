@@ -131,7 +131,7 @@
           "height": 630,
           "caption": "Grantex AI agent authorization"
         },
-        "dateModified": "2026-08-10",
+        "dateModified": "2026-08-30",
         "inLanguage": "en"
       },
       {
@@ -245,7 +245,7 @@
             "name": "Which Grantex SDK should I install?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Use @grantex/sdk@0.3.13 for TypeScript, grantex==0.3.14 for Python, and github.com/mishrasanjeev/grantex-go@v0.1.10 for Go. Review release status before upgrading because packages are independently versioned and Go v0.1.10 has documented workarounds."
+              "text": "Use @grantex/sdk@0.4.1 for TypeScript, grantex==0.3.14 for Python, and github.com/mishrasanjeev/grantex-go@v0.1.10 for Go. Review release status before upgrading because packages are independently versioned and Go v0.1.10 has documented workarounds."
             }
           },
           {
@@ -1632,7 +1632,7 @@
         <div class="section-label">Published releases</div>
         <h2 class="section-title">Current public releases</h2>
         <p class="release-intro">
-          Verified against npm, PyPI, and the Go module proxy on 10 August 2026.
+          Release snapshot verified against npm, PyPI, and the Go module proxy on 30 August 2026.
           Grantex packages are independently versioned.
         </p>
       </div>
@@ -1651,11 +1651,11 @@
         <strong class="release-version">0.3.0</strong>
         <span class="release-meta">npm &middot; published 10 Aug 2026 &middot; Agent Skills</span>
       </a>
-      <a class="release-card" href="https://www.npmjs.com/package/@grantex/sdk/v/0.3.13">
+      <a class="release-card" href="https://www.npmjs.com/package/@grantex/sdk/v/0.4.1">
         <span class="release-language">TypeScript SDK</span>
         <span class="release-name">@grantex/sdk</span>
-        <strong class="release-version">0.3.13</strong>
-        <span class="release-meta">npm &middot; published 11 Jul 2026</span>
+        <strong class="release-version">0.4.1</strong>
+        <span class="release-meta">npm &middot; published 30 Aug 2026 &middot; prepaid wallets</span>
       </a>
       <a class="release-card" href="https://pypi.org/project/grantex/0.3.14/">
         <span class="release-language">Python SDK</span>
@@ -1784,7 +1784,7 @@
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Which Grantex SDK should I install?</summary>
-        <p>Use <code>@grantex/sdk@0.3.13</code> for TypeScript, <code>grantex==0.3.14</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.1.10</code> for Go. Review <a href="https://docs.grantex.dev/release-status">release status</a> before upgrading because packages are independently versioned and Go v0.1.10 has documented workarounds.</p>
+        <p>Use <code>@grantex/sdk@0.4.1</code> for TypeScript, <code>grantex==0.3.14</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.1.10</code> for Go. Review <a href="https://docs.grantex.dev/release-status">release status</a> before upgrading because packages are independently versioned and Go v0.1.10 has documented workarounds.</p>
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Does local Grantex token verification check current revocation?</summary>
@@ -2251,10 +2251,10 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
     </p>
 
     <div class="install-commands">
-      <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/sdk@0.3.13', this)"
+      <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/sdk@0.4.1', this)"
               aria-label="Copy the TypeScript SDK install command">
         <span class="install-label">npm</span>
-        <code>npm install @grantex/sdk@0.3.13</code>
+        <code>npm install @grantex/sdk@0.4.1</code>
         <span class="install-copy">Copy</span>
       </button>
       <button type="button" class="install-cmd" onclick="copyInstall('python -m pip install grantex==0.3.14', this)"
@@ -2294,7 +2294,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="code-block">
           <button type="button" class="copy-btn" aria-label="Copy the Node.js quickstart"
                   onclick="copyCode('code-node', this, 'node_quickstart_copy')">Copy</button>
-          <pre id="code-node"><span class="cm">// npm install @grantex/sdk@0.3.13</span>
+          <pre id="code-node"><span class="cm">// npm install @grantex/sdk@0.4.1</span>
 <span class="kw">import</span> <span class="op">{ </span><span class="id">Grantex</span><span class="op">,</span> <span class="id">verifyGrantToken</span><span class="op"> }</span> <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
 
 <span class="kw">const</span> <span class="id">grantex</span> <span class="op">=</span> <span class="kw">new</span> <span class="fn">Grantex</span><span class="op">({</span> <span class="id">apiKey</span><span class="op">:</span> <span class="str">'YOUR_API_KEY'</span> <span class="op">});</span>
@@ -2593,9 +2593,9 @@ func main() {
       approve reloads, and stop one wallet or every wallet without loosening the x402 protocol.
     </p>
     <div class="release-caveat" style="max-width:760px;margin:-24px 0 36px;">
-      <strong>Repository preview:</strong> these APIs are implemented and tested in source as
-      <code>@grantex/sdk@0.4.0</code> and <code>@grantex/x402@0.2.0</code>, but are not yet
-      published to npm. The current npm packages do not include this managed-wallet flow.
+      <strong>Registry releases:</strong> install <code>@grantex/sdk@0.4.1</code> and
+      <code>@grantex/x402@0.2.0</code> for the managed-wallet flow. External custody remains
+      fail-closed until a self-hosting operator installs and verifies a provider adapter.
     </div>
 
     <!-- ── Visual flow pipeline ───────────────────────────────────────── -->

@@ -271,7 +271,7 @@ export async function validateSeoAeo(options = {}) {
     failures.push('web/llms.txt must follow the llms.txt link-index structure');
   }
   const llmsFull = await fs.readFile(path.join(webRoot, 'llms-full.txt'), 'utf8');
-  for (const value of ['@grantex/sdk@0.3.13', 'grantex==0.3.14', 'grantex-go@v0.1.10', '@grantex/mcp-auth@2.0.2']) {
+  for (const value of ['@grantex/sdk@0.4.1', '@grantex/x402@0.2.0', 'grantex==0.3.14', 'grantex-go@v0.1.10', '@grantex/mcp-auth@2.0.2']) {
     if (!llmsFull.includes(value)) failures.push('web/llms-full.txt is missing current implementation selector ' + value);
   }
   const llmsUpdatedAt = llmsFull.match(/Last updated:\s+(\d{4}-\d{2}-\d{2})/)?.[1];

@@ -121,7 +121,7 @@ of the draft family is published as an active individual Internet-Draft;
 revision `-03` is the working candidate implemented here. Neither is an
 IETF-endorsed or independently certified standard.
 
-## Agent prepaid wallets (0.4.0 repository source)
+## Agent prepaid wallets (SDK 0.4+)
 
 `PrepaidWalletAgentClient` uses an `OAuthAgentClient` and DPoP access token to
 list assigned wallets, reserve payments, and request threshold reloads.

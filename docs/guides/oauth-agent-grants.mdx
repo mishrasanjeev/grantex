@@ -67,15 +67,13 @@ requirement, and RFC 9207 issuer-response support before starting a flow.
 
 ## TypeScript client
 
-Repository source includes `OAuthAgentClient`, which handles discovery, PAR,
+`@grantex/sdk@0.4.1` includes `OAuthAgentClient`, which handles discovery, PAR,
 state and issuer validation, PKCE, DPoP proofs, refresh, attenuation,
 revocation, and protected-resource requests.
 
 <Note>
-`OAuthAgentClient` is present in repository source after the conformance
-implementation commit. Do not assume it is present in the currently published
-`@grantex/sdk@0.3.13` package. Check [Release Status](/release-status) for the
-registry version before importing it from npm.
+Pin `@grantex/sdk@0.4.1` for the registry-verified implementation and check
+[Release Status](/release-status) before upgrading.
 </Note>
 
 ```typescript
