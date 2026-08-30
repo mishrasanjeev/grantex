@@ -11,7 +11,11 @@ export function validateRedirectUris(value: unknown): string[] {
 export function validateResourceServers(value: unknown): string[] {
   return validateUriList(value, 'resourceServers', (uri) => {
     const parsed = validateOutboundUrl(uri, {
-      allowedProtocols: ['https:'],
+      // The Docker workstation has no TLS terminator. Production remains
+      // HTTPS-only; development may register its loopback HTTP resource so
+      // the complete sender-constrained flow can be exercised locally.
+      allowedProtocols: process.env.NODE_ENV === 'production' ? ['https:'] : ['https:', 'http:'],
+      allowInsecureHttp: process.env.NODE_ENV !== 'production',
       allowPrivateHosts: process.env.NODE_ENV !== 'production',
     });
     if (parsed.hash) throw new Error('resource URI must not contain a fragment');

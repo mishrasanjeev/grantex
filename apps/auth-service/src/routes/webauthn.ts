@@ -164,13 +164,19 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // POST /v1/webauthn/assert/options — generate assertion options (PUBLIC, used from consent page)
-  app.post<{ Body: { authRequestId: string } }>(
+  app.post<{ Body: { authRequestId: string; principalId?: string } }>(
     '/v1/webauthn/assert/options',
     { config: { skipAuth: true } },
     async (request, reply) => {
-      const { authRequestId } = request.body;
+      const { authRequestId, principalId: requestedPrincipalId } = request.body;
       if (!authRequestId) {
         return reply.status(400).send({ message: 'authRequestId is required', code: 'BAD_REQUEST', requestId: request.id });
+      }
+      if (requestedPrincipalId !== undefined
+          && (typeof requestedPrincipalId !== 'string'
+            || requestedPrincipalId.trim().length === 0
+            || requestedPrincipalId.length > 256)) {
+        return reply.status(400).send({ message: 'principalId must contain 1 to 256 characters', code: 'BAD_REQUEST', requestId: request.id });
       }
 
       const sql = getSql();
@@ -191,8 +197,28 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({ message: 'Passkey verification is not required for this request', code: 'BAD_REQUEST', requestId: request.id });
       }
 
-      const principalId = ar['principal_id'] as string;
+      let principalId = ar['principal_id'] as string;
       const developerId = ar['developer_id'] as string;
+      if (principalId.length === 0) {
+        if (requestedPrincipalId === undefined) {
+          return reply.status(400).send({ message: 'principalId is required for this authorization request', code: 'BAD_REQUEST', requestId: request.id });
+        }
+        principalId = requestedPrincipalId.trim();
+        const boundRows = await sql`
+          UPDATE auth_requests
+          SET principal_id = ${principalId}
+          WHERE id = ${authRequestId}
+            AND principal_id = ''
+            AND status = 'pending'
+            AND expires_at > NOW()
+          RETURNING id
+        `;
+        if (!boundRows[0]) {
+          return reply.status(409).send({ message: 'Principal selection has already been bound; restart verification', code: 'CONFLICT', requestId: request.id });
+        }
+      } else if (requestedPrincipalId !== undefined && requestedPrincipalId.trim() !== principalId) {
+        return reply.status(400).send({ message: 'principalId does not match this authorization request', code: 'BAD_REQUEST', requestId: request.id });
+      }
 
       // Fetch credentials
       const credRows = await sql`

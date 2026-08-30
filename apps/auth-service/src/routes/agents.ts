@@ -30,6 +30,7 @@ interface UpdateAgentBody {
 }
 
 const VALID_AGENT_STATUSES = new Set(['active', 'suspended']);
+const OAUTH_SCOPE_TOKEN = /^[\x21\x23-\x5B\x5D-\x7E]+$/;
 
 export async function agentsRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/agents
@@ -53,7 +54,9 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ message: 'description must be a string', code: 'BAD_REQUEST', requestId: request.id });
     }
 
-    if (!Array.isArray(scopes) || scopes.some(s => typeof s !== 'string' || s.length > 256 || s.length === 0)) {
+    if (!Array.isArray(scopes) || scopes.some(s => typeof s !== 'string'
+        || s.length > 256 || s.length === 0 || !OAUTH_SCOPE_TOKEN.test(s))
+        || new Set(scopes).size !== scopes.length) {
       return reply.status(400).send({ message: 'Invalid scope format', code: 'BAD_REQUEST', requestId: request.id });
     }
     if (scopes.length > 100) {
@@ -92,41 +95,53 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
 
     // The plan check and insert must be one serialized operation. Otherwise
     // parallel requests can each observe space and exceed the agent quota.
-    await sql.begin(async (_tx) => {
-      const tx = _tx as unknown as TxSql;
-      await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 2))`;
+    try {
+      await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 2))`;
 
-      const subRows = await tx<{ plan: string }[]>`
-        SELECT plan FROM subscriptions WHERE developer_id = ${developerId}
-      `;
-      const planName = subRows[0]?.plan ?? 'free';
-      const plan = isPlanName(planName) ? planName : 'free';
-      const agentLimit = PLAN_LIMITS[plan].agents;
+        const subRows = await tx<{ plan: string }[]>`
+          SELECT plan FROM subscriptions WHERE developer_id = ${developerId}
+        `;
+        const planName = subRows[0]?.plan ?? 'free';
+        const plan = isPlanName(planName) ? planName : 'free';
+        const agentLimit = PLAN_LIMITS[plan].agents;
 
-      const countRows = await tx<{ count: string }[]>`
-        SELECT COUNT(*) AS count FROM agents WHERE developer_id = ${developerId}
-      `;
-      const agentCount = parseInt(countRows[0]?.count ?? '0', 10);
-      if (agentCount >= agentLimit) {
-        limitExceeded = { plan, limit: agentLimit };
-        return;
+        const countRows = await tx<{ count: string }[]>`
+          SELECT COUNT(*) AS count FROM agents WHERE developer_id = ${developerId}
+        `;
+        const agentCount = parseInt(countRows[0]?.count ?? '0', 10);
+        if (agentCount >= agentLimit) {
+          limitExceeded = { plan, limit: agentLimit };
+          return;
+        }
+
+        const rows = await tx`
+          INSERT INTO agents (
+            id, did, developer_id, name, description, scopes,
+            redirect_uris, resource_servers, public_jwk, key_thumbprint
+          )
+          VALUES (
+            ${id}, ${did}, ${developerId}, ${name.trim()}, ${description}, ${scopes},
+            ${redirectUris}, ${resourceServers}, ${publicJwk ? tx.json(publicJwk) : null}, ${keyThumbprint}
+          )
+          RETURNING id, did, developer_id, name, description, scopes, status,
+                    redirect_uris, resource_servers, public_jwk, key_thumbprint,
+                    key_verified_thumbprint, key_verified_at,
+                    created_at, updated_at
+        `;
+        createdRow = rows[0];
+      });
+    } catch (error) {
+      if (isAgentKeyConflict(error)) {
+        return reply.status(409).send({
+          message: 'publicJwk is already registered to another Agent Client Instance',
+          code: 'AGENT_KEY_CONFLICT',
+          requestId: request.id,
+        });
       }
-
-      const rows = await tx`
-        INSERT INTO agents (
-          id, did, developer_id, name, description, scopes,
-          redirect_uris, resource_servers, public_jwk, key_thumbprint
-        )
-        VALUES (
-          ${id}, ${did}, ${developerId}, ${name.trim()}, ${description}, ${scopes},
-          ${redirectUris}, ${resourceServers}, ${publicJwk ? tx.json(publicJwk) : null}, ${keyThumbprint}
-        )
-        RETURNING id, did, developer_id, name, description, scopes, status,
-                  redirect_uris, resource_servers, public_jwk, key_thumbprint,
-                  created_at, updated_at
-      `;
-      createdRow = rows[0];
-    });
+      throw error;
+    }
 
     if (limitExceeded) {
       return reply.status(402).send({
@@ -147,6 +162,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     const rows = await sql`
       SELECT id, did, developer_id, name, description, scopes, status,
              redirect_uris, resource_servers, public_jwk, key_thumbprint,
+             key_verified_thumbprint, key_verified_at,
              created_at, updated_at
       FROM agents
       WHERE developer_id = ${request.developer.id}
@@ -161,6 +177,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     const rows = await sql`
       SELECT id, did, developer_id, name, description, scopes, status,
              redirect_uris, resource_servers, public_jwk, key_thumbprint,
+             key_verified_thumbprint, key_verified_at,
              created_at, updated_at
       FROM agents
       WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
@@ -196,7 +213,9 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (scopes !== undefined) {
-      if (!Array.isArray(scopes) || scopes.some(s => typeof s !== 'string' || s.length > 256 || s.length === 0)) {
+      if (!Array.isArray(scopes) || scopes.some(s => typeof s !== 'string'
+          || s.length > 256 || s.length === 0 || !OAUTH_SCOPE_TOKEN.test(s))
+          || new Set(scopes).size !== scopes.length) {
         return reply.status(400).send({ message: 'Invalid scope format', code: 'BAD_REQUEST', requestId: request.id });
       }
       if (scopes.length > 100) {
@@ -229,9 +248,11 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       : null;
 
     // Use COALESCE so unset fields keep their current values — single SQL call, no fragments
-    const rows = await sql`
-      UPDATE agents
-      SET
+    let rows;
+    try {
+      rows = await sql`
+        UPDATE agents
+        SET
         did         = COALESCE(${keyedDid}, did),
         name        = COALESCE(${name?.trim() ?? null}, name),
         description = COALESCE(${description ?? null}, description),
@@ -241,12 +262,31 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
         resource_servers = COALESCE(${validatedResourceServers ?? null}, resource_servers),
         public_jwk = COALESCE(${validatedPublicJwk ? sql.json(validatedPublicJwk) : null}, public_jwk),
         key_thumbprint = COALESCE(${keyThumbprint ?? null}, key_thumbprint),
+        key_verified_thumbprint = CASE
+          WHEN ${keyThumbprint ?? null}::text IS NULL THEN key_verified_thumbprint
+          ELSE NULL
+        END,
+        key_verified_at = CASE
+          WHEN ${keyThumbprint ?? null}::text IS NULL THEN key_verified_at
+          ELSE NULL
+        END,
         updated_at  = NOW()
-      WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
-      RETURNING id, did, developer_id, name, description, scopes, status,
-                redirect_uris, resource_servers, public_jwk, key_thumbprint,
-                created_at, updated_at
-    `;
+        WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
+        RETURNING id, did, developer_id, name, description, scopes, status,
+                  redirect_uris, resource_servers, public_jwk, key_thumbprint,
+                  key_verified_thumbprint, key_verified_at,
+                  created_at, updated_at
+      `;
+    } catch (error) {
+      if (isAgentKeyConflict(error)) {
+        return reply.status(409).send({
+          message: 'publicJwk is already registered to another Agent Client Instance',
+          code: 'AGENT_KEY_CONFLICT',
+          requestId: request.id,
+        });
+      }
+      throw error;
+    }
     const agent = rows[0];
     if (!agent) {
       return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
@@ -279,6 +319,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       await tx`DELETE FROM grant_tokens WHERE grant_id IN (${grantSubquery})`;
       await tx`DELETE FROM grants WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
       await tx`DELETE FROM auth_requests WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
+      await tx`DELETE FROM oauth_par_requests WHERE client_id = ${agentId} AND developer_id = ${developerId}`;
       await tx`DELETE FROM agents WHERE id = ${agentId} AND developer_id = ${developerId}`;
     });
 
@@ -299,8 +340,19 @@ function toAgentResponse(row: Record<string, unknown>) {
     publicJwk: row['public_jwk'] ?? null,
     keyThumbprint: row['key_thumbprint'] ?? null,
     keyBindingConfigured: typeof row['key_thumbprint'] === 'string' && row['key_thumbprint'].length > 0,
+    keyPossessionVerified: row['key_verified_thumbprint'] === row['key_thumbprint']
+      && row['key_verified_at'] !== null
+      && row['key_verified_at'] !== undefined,
     status: row['status'],
     createdAt: row['created_at'],
     updatedAt: row['updated_at'],
   };
+}
+
+function isAgentKeyConflict(error: unknown): boolean {
+  return Boolean(error && typeof error === 'object'
+    && 'code' in error
+    && 'constraint_name' in error
+    && (error as { code?: unknown }).code === '23505'
+    && (error as { constraint_name?: unknown }).constraint_name === 'idx_agents_key_thumbprint_unique');
 }

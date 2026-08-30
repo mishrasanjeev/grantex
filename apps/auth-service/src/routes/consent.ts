@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
-import { ulid } from 'ulid';
 import { describeScope } from '../lib/scopes.js';
+import { config } from '../config.js';
+import { newAuthorizationCode } from '../lib/ids.js';
 
 const CONSENT_CSP = [
   "default-src 'self'",
@@ -35,6 +36,13 @@ const CONSENT_HTML = `<!DOCTYPE html>
   .scope-list li:last-child { border-bottom: none; }
   .scope-list li::before { content: "✓"; color: #22c55e; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
   .expiry { font-size: 13px; color: #888; margin-bottom: 24px; text-align: center; }
+  .request-meta { margin: 0 0 20px; padding: 12px 0; border-top: 1px solid #eee; border-bottom: 1px solid #eee; }
+  .request-meta div { margin: 5px 0; color: #555; font-size: 13px; overflow-wrap: anywhere; }
+  .request-meta strong { color: #222; }
+  .request-meta pre { margin-top: 5px; white-space: pre-wrap; font: 12px/1.4 monospace; color: #333; }
+  .principal-login { margin-bottom: 20px; }
+  .principal-login label { display: block; margin-bottom: 7px; color: #333; font-size: 13px; font-weight: 600; }
+  .principal-login input { width: 100%; padding: 11px 12px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; }
   .expiry.expired { color: #ef4444; }
   .actions { display: flex; gap: 12px; }
   .btn { flex: 1; padding: 12px; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; border: none; transition: opacity 0.15s; }
@@ -161,7 +169,14 @@ const CONSENT_HTML = `<!DOCTYPE html>
 
     showStatus('Passkey required', 'Follow your browser prompt to verify this approval.');
 
-    const optionsRes = await postJson('/v1/webauthn/assert/options', { authRequestId: reqId });
+    const optionsPayload = { authRequestId: reqId };
+    if (data.principalSelectionRequired) {
+      const principalInput = document.getElementById('principal-id');
+      const principalId = principalInput ? principalInput.value.trim() : '';
+      if (!principalId) throw new Error('Enter your principal identifier before passkey verification.');
+      optionsPayload.principalId = principalId;
+    }
+    const optionsRes = await postJson('/v1/webauthn/assert/options', optionsPayload);
     if (!optionsRes.ok) {
       throw new Error(await responseMessage(optionsRes, 'Could not start passkey verification.'));
     }
@@ -203,6 +218,7 @@ const CONSENT_HTML = `<!DOCTYPE html>
       const url = new URL(body.redirectUri);
       url.searchParams.set('code', body.code);
       if (body.state) url.searchParams.set('state', body.state);
+      if (body.iss) url.searchParams.set('iss', body.iss);
       location.href = url.toString();
     } else {
       el.innerHTML =
@@ -232,6 +248,7 @@ const CONSENT_HTML = `<!DOCTYPE html>
       const url = new URL(body.redirectUri);
       url.searchParams.set('error', 'access_denied');
       if (body.state) url.searchParams.set('state', body.state);
+      if (body.iss) url.searchParams.set('iss', body.iss);
       location.href = url.toString();
     } else {
       el.innerHTML =
@@ -271,6 +288,21 @@ const CONSENT_HTML = `<!DOCTYPE html>
     '</div>' +
     '<div class="scopes-label">Requested permissions</div>' +
     '<ul class="scope-list">' + scopeItems + '</ul>' +
+    (data.targetResource ?
+      '<div class="request-meta">' +
+        '<div><strong>Responsible developer:</strong> ' + esc(data.developerName) + '</div>' +
+        '<div><strong>Target resource:</strong> ' + esc(data.targetResource) + '</div>' +
+        '<div><strong>Access token:</strong> ' + esc(data.accessTokenLifetime) + '</div>' +
+        '<div><strong>Refresh authorization:</strong> ' + esc(data.refreshTokenLifetime) + '</div>' +
+        '<div><strong>Grant lifetime:</strong> ' + esc(data.grantLifetime) + '</div>' +
+        (data.authorizationDetails ?
+          '<div><strong>Structured constraints:</strong><pre>' + esc(JSON.stringify(data.authorizationDetails, null, 2)) + '</pre></div>' : '') +
+      '</div>' : '') +
+    (data.principalSelectionRequired ?
+      '<div class="principal-login">' +
+        '<label for="principal-id">Principal identifier</label>' +
+        '<input id="principal-id" name="principal-id" type="text" autocomplete="username webauthn" maxlength="256" required>' +
+      '</div>' : '') +
     '<div class="expiry' + (expiry.expired ? ' expired' : '') + '">' + expiry.text + '</div>' +
     '<div class="actions">' +
       '<button class="btn btn-deny" id="btn-deny">Deny</button>' +
@@ -332,10 +364,17 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         agent_did: string;
         fido_required: boolean;
         mode: string;
+        audience: string | null;
+        expires_in: string;
+        protocol: string;
+        developer_name: string;
+        authorization_details: unknown;
+        principal_id: string;
       }[]>`
-        SELECT ar.id, ar.scopes, ar.expires_at, ar.status, ar.redirect_uri, ar.state,
+        SELECT ar.id, ar.scopes, ar.expires_at, ar.status, ar.redirect_uri, ar.state, ar.principal_id,
+               ar.audience, ar.expires_in, ar.protocol, ar.authorization_details,
                a.name AS agent_name, a.description AS agent_description, a.did AS agent_did,
-               d.fido_required, d.mode
+               d.fido_required, d.mode, d.name AS developer_name
         FROM auth_requests ar
         JOIN agents a ON a.id = ar.agent_id
         JOIN developers d ON d.id = ar.developer_id
@@ -362,6 +401,20 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         expiresAt: row.expires_at,
         status: row.status,
         fidoRequired: row.mode === 'live' || Boolean(row.fido_required),
+        principalSelectionRequired: row.protocol === 'oauth-agent-grants-03'
+          && row.mode === 'live'
+          && typeof row.principal_id === 'string'
+          && row.principal_id.length === 0,
+        ...(row.audience ? {
+          targetResource: row.audience,
+          developerName: row.developer_name,
+          accessTokenLifetime: row.protocol === 'oauth-agent-grants-03' ? '5 minutes' : row.expires_in,
+          refreshTokenLifetime: row.protocol === 'oauth-agent-grants-03' ? 'up to 24 hours, rotated on every use' : 'up to the grant lifetime',
+          grantLifetime: row.expires_in,
+        } : {}),
+        ...(Array.isArray(row.authorization_details)
+          ? { authorizationDetails: row.authorization_details }
+          : {}),
       });
     },
   );
@@ -373,9 +426,9 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
     { config: { skipAuth: true } },
     async (request, reply) => {
       const sql = getSql();
-      const code = ulid();
+      const code = newAuthorizationCode();
 
-      const rows = await sql<{ id: string; code: string; redirect_uri: string | null; state: string | null }[]>`
+      const rows = await sql<{ id: string; code: string; redirect_uri: string | null; state: string | null; protocol: string }[]>`
         UPDATE auth_requests
         SET status = 'approved', code = ${code}
         WHERE id = ${request.params.id}
@@ -386,7 +439,7 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
             WHERE d.id = auth_requests.developer_id
               AND (d.mode = 'sandbox' OR auth_requests.fido_verified = TRUE)
           )
-        RETURNING id, code, redirect_uri, state
+        RETURNING id, code, redirect_uri, state, protocol
       `;
 
       const row = rows[0];
@@ -410,9 +463,10 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(410).send({ message: 'Auth request expired or already processed', code: 'GONE', requestId: request.id });
       }
 
-      const result: { code: string; redirectUri?: string; state?: string } = { code: row.code };
+      const result: { code: string; redirectUri?: string; state?: string; iss?: string } = { code: row.code };
       if (row.redirect_uri) result.redirectUri = row.redirect_uri;
       if (row.state) result.state = row.state;
+      if (row.protocol === 'oauth-agent-grants-03') result.iss = config.jwtIssuer.replace(/\/$/, '');
       return reply.send(result);
     },
   );
@@ -425,7 +479,7 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const sql = getSql();
 
-      const rows = await sql<{ id: string; redirect_uri: string | null; state: string | null }[]>`
+      const rows = await sql<{ id: string; redirect_uri: string | null; state: string | null; protocol: string }[]>`
         UPDATE auth_requests
         SET status = 'denied'
         WHERE id = ${request.params.id}
@@ -435,7 +489,7 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
             WHERE d.id = auth_requests.developer_id
               AND (d.mode = 'sandbox' OR auth_requests.fido_verified = TRUE)
           )
-        RETURNING id, redirect_uri, state
+        RETURNING id, redirect_uri, state, protocol
       `;
 
       const row = rows[0];
@@ -458,9 +512,10 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ message: 'Auth request not found or already processed', code: 'NOT_FOUND', requestId: request.id });
       }
 
-      const result: { redirectUri?: string; state?: string } = {};
+      const result: { redirectUri?: string; state?: string; iss?: string } = {};
       if (row.redirect_uri) result.redirectUri = row.redirect_uri;
       if (row.state) result.state = row.state;
+      if (row.protocol === 'oauth-agent-grants-03') result.iss = config.jwtIssuer.replace(/\/$/, '');
       return reply.send(result);
     },
   );

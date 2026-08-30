@@ -147,6 +147,7 @@
               "guides/webhooks",
               "guides/self-hosting",
               "guides/security-hardening",
+              "guides/oauth-agent-grants",
               "guides/operations",
               "guides/security-best-practices",
               "guides/token-verification",

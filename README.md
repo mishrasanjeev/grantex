@@ -11,6 +11,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Spec Version](https://img.shields.io/badge/spec-v1.0--final-green)](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
 [![IETF Draft](https://img.shields.io/badge/IETF-draft--mishra--oauth--agent--grants-blue)](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
+[![OAuth Agent Grants](https://img.shields.io/badge/OAuth_agent_grants-self--tested-3fb950)](https://docs.grantex.dev/guides/oauth-agent-grants)
 [![CI](https://img.shields.io/github/actions/workflow/status/mishrasanjeev/grantex/ci.yml?branch=main&label=CI)](https://github.com/mishrasanjeev/grantex/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@grantex/sdk)](https://www.npmjs.com/package/@grantex/sdk)
 [![PyPI](https://img.shields.io/pypi/v/grantex)](https://pypi.org/project/grantex/)
@@ -43,6 +44,32 @@
 Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
 Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal. Use Grantex when an AI agent acts for a person or organization and a relying service must verify exactly what that agent may do.
+
+## OAuth Agent Grants Profile
+
+The hosted auth service and repository TypeScript client implement the three
+roles in candidate `draft-mishra-oauth-agent-grants-03`. The tested profile
+requires PAR, PKCE `S256`, DPoP sender constraints, RFC 9207 response issuer
+validation, five-minute access tokens, rotating refresh tokens with family
+replay revocation, same-resource RFC 8693 attenuation, and RFC 7009 revocation.
+
+| Discovery and endpoints | URL |
+|---|---|
+| Authorization-server metadata | `https://grantex.dev/.well-known/oauth-authorization-server` |
+| PAR / authorize / token / revoke | `https://grantex.dev/oauth/{par,authorize,token,revoke}` |
+| Implementation guide | [docs.grantex.dev/guides/oauth-agent-grants](https://docs.grantex.dev/guides/oauth-agent-grants) |
+| Evidence | [Implementation report](docs/ietf-draft/implementation-report.md) and [30 behavioral vectors](docs/ietf-draft/test-vectors/oauth-agent-grants-03.json) |
+
+Verification completed with 2,097 auth-service tests, 444 SDK tests, and 253
+tests across 21 sequential Docker E2E files. This is self-assessed evidence for
+the tested Grantex configuration, not independent interoperability
+certification, OAuth Working Group adoption, or IETF endorsement. The
+`OAuthAgentClient` API is currently repository source; verify a newer npm
+release before assuming it is present in published `@grantex/sdk@0.3.13`.
+
+Revision `-02` remains the current Datatracker publication. Candidate `-03`
+must not be uploaded before 2026-09-09 and requires a fresh explicit approval
+after the scheduled final review.
 
 ## Open Agentic Commerce Protocol (OACP) Authority
 
@@ -1742,7 +1769,7 @@ Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRI
 | **OWASP** | Covers ASI-01, ASI-03, ASI-05, ASI-10 from the [Agentic Security Top 10](https://docs.grantex.dev/blog/owasp-agentic-top-10-compliance) (Dec 2025) |
 | **EU AI Act** | Technical control mapping only, not legal advice. Application is phased: transparency rules from Aug 2026, certain high-risk rules from Dec 2027, and product-integrated high-risk rules from Aug 2028 under the political agreement. See the [European Commission timeline](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai). |
 | **NIST AI RMF** | Govern 1.1, Map 5.1, Measure 2.5 — repository comment draft; no public submission receipt or endorsement |
-| **IETF** | Active individual Internet-Draft; current Datatracker revision is -01, with a -02 submission candidate prepared in [`docs/ietf-draft/`](docs/ietf-draft/). Not adopted or endorsed by the IETF ([Datatracker](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
+| **IETF** | Active individual Internet-Draft; revision -02 is published. Revision -03 and its self-assessed client/authorization-server/resource-server implementation are under review in [`docs/ietf-draft/`](docs/ietf-draft/), with no upload before 2026-09-09. This is not independent certification, adoption, or IETF endorsement ([Datatracker](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
 | **AuthZEN** | Conformance mapped |
 | **SOC 2** | Readiness control mapping published; formal third-party attestation not published |
 | **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, open, Apache 2.0 |
@@ -1774,7 +1801,7 @@ OAuth 2.0 was designed for "user grants app permission to access their data." Ag
 MCP connects clients to tools and resources and defines optional OAuth-based authorization for HTTP transports. Grantex adds agent-specific delegated authority at the tool or service boundary: which agent may perform which action for which principal. The two layers are complementary.
 
 **Who owns the standard?**  
-The v1.0 protocol specification is open (Apache 2.0). Grantex is owned by Orchestrum Technologies LLP, and Sanjeev Kumar is listed as inventor and owner. Orchestrum Technologies LLP maintains the reference implementation. An active -01 document is published as an individual IETF Internet-Draft; that publication is not working-group adoption or IETF endorsement.
+The v1.0 protocol specification is open (Apache 2.0). Grantex is owned by Orchestrum Technologies LLP, and Sanjeev Kumar is listed as inventor and owner. Orchestrum Technologies LLP maintains the reference implementation. Revision -02 is published as an active individual IETF Internet-Draft, and revision -03 is under review; neither publication nor repository implementation is working-group adoption, independent certification, or IETF endorsement.
 
 **Can I self-host?**  
 Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the complete guide or the [self-hosting docs](https://docs.grantex.dev/guides/self-hosting).

@@ -1,10 +1,17 @@
+import { randomBytes } from 'node:crypto';
 import { ulid } from 'ulid';
+
+const newOpaqueSecret = (): string => randomBytes(32).toString('base64url');
 
 export const newAgentId = (): string => `ag_${ulid()}`;
 export const newGrantId = (): string => `grnt_${ulid()}`;
 export const newTokenId = (): string => `tok_${ulid()}`;
 export const newRefreshTokenId = (): string => `ref_${ulid()}`;
 export const newAuthRequestId = (): string => `areq_${ulid()}`;
+export const newAuthorizationCode = (): string => newOpaqueSecret();
+export const newOAuthRefreshTokenId = (): string => `ref_${newOpaqueSecret()}`;
+export const newParRequestUri = (): string =>
+  `urn:ietf:params:oauth:request_uri:${newOpaqueSecret()}`;
 export const newAuditEntryId = (): string => `alog_${ulid()}`;
 export const newDeveloperId = (): string => `dev_${ulid()}`;
 export const newWebhookId = (): string => `wh_${ulid()}`;

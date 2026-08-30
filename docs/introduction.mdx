@@ -18,6 +18,12 @@ Grantex is an open-source delegated authorization protocol and reference impleme
 
 Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal.
 
+The hosted authorization service and repository TypeScript client implement a
+tested [OAuth agent-grants profile](/guides/oauth-agent-grants) using PAR,
+PKCE `S256`, DPoP sender constraints, RFC 9207 issuer validation, rotating
+refresh tokens, token exchange, and revocation. This is self-assessed
+implementation evidence, not independent certification or IETF endorsement.
+
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner:
 Sanjeev Kumar. See [Ownership](/ownership) for the canonical ownership and
 contact notice.

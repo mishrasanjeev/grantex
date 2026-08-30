@@ -58,6 +58,34 @@ export interface VerifiedGrantTokenClaims {
   authorizationDetails?: Array<Record<string, unknown>>;
 }
 
+export interface OAuthAccessTokenPayload {
+  sub: string;
+  clientId: string;
+  scopes: string[];
+  jti: string;
+  aud: string;
+  exp: number;
+  iat?: number;
+  cnf: { jkt: string };
+  act?: Record<string, unknown>;
+  authorizationDetails?: Array<Record<string, unknown>>;
+}
+
+export interface VerifiedOAuthAccessTokenClaims {
+  sub: string;
+  clientId: string;
+  scopes: string[];
+  scope: string;
+  jti: string;
+  iat: number;
+  exp: number;
+  aud: string;
+  iss: string;
+  cnf: { jkt: string };
+  act?: Record<string, unknown>;
+  authorizationDetails?: Array<Record<string, unknown>>;
+}
+
 let _keyPair: KeyPair | null = null;
 
 function buildKid(): string {
@@ -129,7 +157,7 @@ export async function signGrantToken(
     ...(payload.delegationDepth !== undefined ? { delegationDepth: payload.delegationDepth } : {}),
     ...(payload.bdg !== undefined ? { bdg: payload.bdg } : {}),
   })
-    .setProtectedHeader({ alg: 'RS256', kid })
+    .setProtectedHeader({ alg: 'RS256', kid, typ: 'at+jwt' })
     .setIssuer(config.jwtIssuer)
     .setSubject(payload.sub)
     .setJti(payload.jti)
@@ -141,6 +169,87 @@ export async function signGrantToken(
   }
 
   return builder.sign(privateKey);
+}
+
+export async function signOAuthAccessToken(
+  payload: OAuthAccessTokenPayload,
+): Promise<string> {
+  const { privateKey, kid } = getKeyPair();
+  const builder = new SignJWT({
+    client_id: payload.clientId,
+    scope: payload.scopes.join(' '),
+    cnf: payload.cnf,
+    ...(payload.act !== undefined ? { act: payload.act } : {}),
+    ...(payload.authorizationDetails !== undefined
+      ? { authorization_details: payload.authorizationDetails }
+      : {}),
+  })
+    .setProtectedHeader({ alg: 'RS256', kid, typ: 'at+jwt' })
+    .setIssuer(config.jwtIssuer)
+    .setSubject(payload.sub)
+    .setAudience(payload.aud)
+    .setJti(payload.jti)
+    .setIssuedAt(payload.iat)
+    .setExpirationTime(payload.exp);
+
+  return builder.sign(privateKey);
+}
+
+export async function verifyOAuthAccessToken(
+  token: string,
+): Promise<VerifiedOAuthAccessTokenClaims> {
+  const { publicKey } = getKeyPair();
+  const { payload, protectedHeader } = await jwtVerify(token, publicKey, {
+    issuer: config.jwtIssuer,
+    algorithms: ['RS256'],
+  });
+  if (protectedHeader.typ !== 'at+jwt') {
+    throw new Error('OAuth access token typ must be at+jwt');
+  }
+
+  const clientId = payload['client_id'];
+  const scope = payload['scope'];
+  const cnf = payload['cnf'];
+  const scopes = typeof scope === 'string' ? scope.split(' ') : [];
+  if (!payload.sub || typeof clientId !== 'string' || clientId.length === 0
+      || typeof scope !== 'string' || scopes.length === 0
+      || scopes.some((value) => value.length === 0)
+      || new Set(scopes).size !== scopes.length
+      || typeof payload.jti !== 'string'
+      || typeof payload.iat !== 'number'
+      || typeof payload.exp !== 'number'
+      || typeof payload.iss !== 'string'
+      || typeof payload.aud !== 'string'
+      || !cnf || typeof cnf !== 'object' || Array.isArray(cnf)
+      || typeof (cnf as Record<string, unknown>)['jkt'] !== 'string') {
+    throw new Error('Missing or invalid OAuth access token claims');
+  }
+
+  const act = payload['act'];
+  if (act !== undefined && (!act || typeof act !== 'object' || Array.isArray(act))) {
+    throw new Error('OAuth access token act claim is invalid');
+  }
+  const authorizationDetails = payload['authorization_details'];
+  if (authorizationDetails !== undefined && !Array.isArray(authorizationDetails)) {
+    throw new Error('OAuth access token authorization_details claim is invalid');
+  }
+
+  return {
+    sub: payload.sub,
+    clientId,
+    scopes,
+    scope,
+    jti: payload.jti,
+    iat: payload.iat,
+    exp: payload.exp,
+    aud: payload.aud,
+    iss: payload.iss,
+    cnf: cnf as { jkt: string },
+    ...(act !== undefined ? { act: act as Record<string, unknown> } : {}),
+    ...(authorizationDetails !== undefined
+      ? { authorizationDetails: authorizationDetails as Array<Record<string, unknown>> }
+      : {}),
+  };
 }
 
 export async function signAuditCheckpoint(payload: {

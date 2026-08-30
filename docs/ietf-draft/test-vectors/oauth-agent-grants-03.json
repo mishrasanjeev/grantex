@@ -1,0 +1,273 @@
+{
+  "profile": "draft-mishra-oauth-agent-grants-03",
+  "schema_version": 1,
+  "generated": "2026-08-30",
+  "disclaimer": "Behavioral vectors only; not independent certification or IETF endorsement.",
+  "placeholders": {
+    "<issuer>": "Validated authorization-server issuer",
+    "<client-id>": "Public Agent Client registration identifier",
+    "<redirect-uri>": "Exact registered redirect URI",
+    "<resource>": "Exact registered resource URI",
+    "<principal>": "Principal identifier or login hint",
+    "<key-a>": "First registered asymmetric Agent Key",
+    "<key-b>": "Different registered asymmetric Agent Key"
+  },
+  "vectors": [
+    {
+      "id": "metadata.valid.required-fields",
+      "role": "client",
+      "requirement": "RFC 8414 discovery and profile capability validation",
+      "operation": "GET <issuer>/.well-known/oauth-authorization-server",
+      "outcome": "pass",
+      "expect": {
+        "status": 200,
+        "issuer": "<issuer>",
+        "require_pushed_authorization_requests": true,
+        "authorization_response_iss_parameter_supported": true,
+        "code_challenge_methods_supported_contains": "S256",
+        "dpop_signing_alg_values_supported_contains": "ES256"
+      }
+    },
+    {
+      "id": "metadata.reject.issuer-mismatch",
+      "role": "client",
+      "requirement": "Metadata issuer must exactly match the configured issuer",
+      "operation": "Validate metadata whose issuer is https://attacker.example",
+      "outcome": "reject",
+      "expect": { "client_error": "issuer_mismatch" }
+    },
+    {
+      "id": "registration.reject.shared-agent-key",
+      "role": "authorization_server",
+      "requirement": "Distinct Agent Client Instances do not share an Agent Key",
+      "operation": "Register key-a to a second Agent Client Instance at the same issuer",
+      "outcome": "reject",
+      "expect": { "registration_rejected": true }
+    },
+    {
+      "id": "par.valid.dpop-and-jkt",
+      "role": "authorization_server",
+      "requirement": "PAR accepts matching DPoP proof and dpop_jkt bindings",
+      "operation": "POST pushed_authorization_request_endpoint with exact registration values, DPoP key-a, and dpop_jkt key-a",
+      "outcome": "pass",
+      "expect": { "status": 201, "request_uri_single_use": true, "expires_in_maximum": 90 }
+    },
+    {
+      "id": "par.valid.without-login-hint",
+      "role": "authorization_server",
+      "requirement": "The profile does not require an undeclared principal-hint parameter",
+      "operation": "POST a valid PAR request without login_hint",
+      "outcome": "pass",
+      "expect": { "status": 201, "principal_authenticated_during_authorization": true }
+    },
+    {
+      "id": "par.valid.jkt-after-possession",
+      "role": "authorization_server",
+      "requirement": "dpop_jkt is accepted after possession of the registered key was established",
+      "operation": "POST PAR with dpop_jkt key-a and no DPoP header after a successful proof-of-possession operation",
+      "outcome": "pass",
+      "expect": { "status": 201 }
+    },
+    {
+      "id": "par.reject.unproved-jkt",
+      "role": "authorization_server",
+      "requirement": "An uploaded public key is not proof of possession",
+      "operation": "POST PAR with dpop_jkt key-a before possession was established",
+      "outcome": "reject",
+      "expect": { "status": 400, "error": "invalid_dpop_proof" }
+    },
+    {
+      "id": "par.reject.binding-mismatch",
+      "role": "authorization_server",
+      "requirement": "DPoP proof and dpop_jkt must identify the same registered key",
+      "operation": "POST PAR with DPoP key-a and dpop_jkt key-b",
+      "outcome": "reject",
+      "expect": { "status": 400, "error": "invalid_dpop_proof" }
+    },
+    {
+      "id": "par.reject.redirect-mismatch",
+      "role": "authorization_server",
+      "requirement": "Redirect URI matching is exact",
+      "operation": "POST PAR with <redirect-uri>/extra",
+      "outcome": "reject",
+      "expect": { "status": 400, "error": "invalid_request" }
+    },
+    {
+      "id": "par.reject.multiple-resource",
+      "role": "authorization_server",
+      "requirement": "Exactly one registered resource is allowed",
+      "operation": "POST PAR with two resource parameters",
+      "outcome": "reject",
+      "expect": { "status": 400, "error": "invalid_request" }
+    },
+    {
+      "id": "authorize.reject.request-uri-reuse",
+      "role": "authorization_server",
+      "requirement": "A consumed PAR request URI is not reusable",
+      "operation": "Use the same request_uri in two authorization requests",
+      "outcome": "reject",
+      "expect": { "second_status": 400, "error": "invalid_request_uri" }
+    },
+    {
+      "id": "authorization-response.valid.issuer-state",
+      "role": "client",
+      "requirement": "The response issuer and one-time state match the initiating session",
+      "operation": "Validate callback with expected iss and unused state",
+      "outcome": "pass",
+      "expect": { "code_exchange_attempted": true }
+    },
+    {
+      "id": "authorization-response.reject.wrong-issuer",
+      "role": "client",
+      "requirement": "RFC 9207 issuer mismatch is terminal",
+      "operation": "Validate callback with iss https://attacker.example",
+      "outcome": "reject",
+      "expect": { "client_error": "issuer_mismatch", "state_consumed": true }
+    },
+    {
+      "id": "authorization-response.reject.duplicate-state",
+      "role": "client",
+      "requirement": "Security-sensitive authorization-response parameters occur once",
+      "operation": "Validate callback containing two state parameters",
+      "outcome": "reject",
+      "expect": { "client_error": "duplicate_parameter", "code_exchange_attempted": false }
+    },
+    {
+      "id": "token.reject.pkce-mismatch",
+      "role": "authorization_server",
+      "requirement": "Authorization codes are bound to PKCE S256",
+      "operation": "Exchange a valid code using a different code_verifier",
+      "outcome": "reject",
+      "expect": { "status": 400, "error": "invalid_grant", "code_remains_unissued": true }
+    },
+    {
+      "id": "token.reject.dpop-key-mismatch",
+      "role": "authorization_server",
+      "requirement": "The token proof key matches the PAR binding and current registered key",
+      "operation": "Exchange a key-a-bound code using DPoP key-b",
+      "outcome": "reject",
+      "expect": { "status": 400, "error": "invalid_dpop_proof" }
+    },
+    {
+      "id": "token.valid.standard-claims",
+      "role": "authorization_server",
+      "requirement": "RFC 9068 and profile claims do not depend on private short aliases",
+      "operation": "Inspect a successfully issued DPoP-bound JWT access token",
+      "outcome": "pass",
+      "expect": {
+        "required_claims": ["iss", "sub", "aud", "exp", "iat", "jti", "client_id", "scope", "cnf"],
+        "sole_audience": "<resource>",
+        "forbidden_private_short_claims": ["scp", "agt", "dev", "grnt"]
+      }
+    },
+    {
+      "id": "token.valid.non-cacheable-response",
+      "role": "authorization_server",
+      "requirement": "Token endpoint responses are not cached",
+      "operation": "Inspect success and error responses from the token endpoint",
+      "outcome": "pass",
+      "expect": { "cache_control": "no-store", "pragma": "no-cache" }
+    },
+    {
+      "id": "resource.reject.bearer",
+      "role": "resource_server",
+      "requirement": "A DPoP-bound token is not a bearer token",
+      "operation": "Present a valid DPoP-bound access token with Authorization: Bearer",
+      "outcome": "reject",
+      "expect": { "status": 401, "error": "invalid_token" }
+    },
+    {
+      "id": "resource.reject.dpop-replay",
+      "role": "resource_server",
+      "requirement": "DPoP proof jti replay is detected",
+      "operation": "Repeat an otherwise valid protected request with the same DPoP proof",
+      "outcome": "reject",
+      "expect": { "second_status": 401, "error": "invalid_dpop_proof" }
+    },
+    {
+      "id": "resource.reject.ath-mismatch",
+      "role": "resource_server",
+      "requirement": "The DPoP ath binds the presented access token",
+      "operation": "Present token-a with a DPoP proof containing the hash of token-b",
+      "outcome": "reject",
+      "expect": { "status": 401, "error": "invalid_dpop_proof" }
+    },
+    {
+      "id": "exchange.valid.exact-subset",
+      "role": "authorization_server",
+      "requirement": "RFC 8693 attenuation permits an exact scope-set subset for the same resource and sender",
+      "operation": "Exchange a two-scope token for one of those exact scopes using the same client, key, and resource",
+      "outcome": "pass",
+      "expect": {
+        "status": 200,
+        "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+        "token_type": "DPoP",
+        "expiration_not_later_than_subject": true
+      }
+    },
+    {
+      "id": "exchange.reject.scope-string-prefix",
+      "role": "authorization_server",
+      "requirement": "Scope comparison is case-sensitive set containment, not string prefix matching",
+      "operation": "Exchange scope payments.read.all from a subject containing only payments.read",
+      "outcome": "reject",
+      "expect": { "status": 400, "error": "invalid_scope" }
+    },
+    {
+      "id": "exchange.reject.resource-change",
+      "role": "authorization_server",
+      "requirement": "Attenuation cannot change the sole audience",
+      "operation": "Exchange a valid subject token for an unregistered different resource",
+      "outcome": "reject",
+      "expect": { "status": 400, "error": "invalid_target" }
+    },
+    {
+      "id": "exchange.reject.actor-token",
+      "role": "authorization_server",
+      "requirement": "Cross-instance actor tokens are outside the core profile",
+      "operation": "Submit actor_token or actor_token_type",
+      "outcome": "reject",
+      "expect": { "status": 400, "error": "invalid_request" }
+    },
+    {
+      "id": "refresh.valid.atomic-rotation",
+      "role": "authorization_server",
+      "requirement": "A successful refresh atomically replaces the refresh token",
+      "operation": "Refresh a current key-a-bound family member",
+      "outcome": "pass",
+      "expect": { "status": 200, "new_refresh_token": true, "old_refresh_token_invalid": true }
+    },
+    {
+      "id": "refresh.reject.family-reuse",
+      "role": "authorization_server",
+      "requirement": "Reuse revokes the active refresh family",
+      "operation": "Use the parent refresh token after a successful rotation",
+      "outcome": "reject",
+      "expect": { "status": 400, "error": "invalid_grant", "family_revoked": true }
+    },
+    {
+      "id": "refresh.reject.retired-key",
+      "role": "authorization_server",
+      "requirement": "Future refresh with a retired Agent Key is rejected",
+      "operation": "Rotate registration from key-a to key-b, then refresh using key-a",
+      "outcome": "reject",
+      "expect": { "status": 400, "error": "invalid_dpop_proof" }
+    },
+    {
+      "id": "constraints.valid.preserved",
+      "role": "authorization_server",
+      "requirement": "Structured authorization constraints are not lost during refresh or attenuation",
+      "operation": "Authorize with typed authorization_details, then refresh and attenuate",
+      "outcome": "pass",
+      "expect": { "authorization_details_equal_in_initial_refresh_and_exchange_tokens": true }
+    },
+    {
+      "id": "revocation.valid.refresh-family",
+      "role": "authorization_server",
+      "requirement": "Revoking a refresh token invalidates its family",
+      "operation": "Revoke a current refresh token, then attempt refresh",
+      "outcome": "pass",
+      "expect": { "revocation_status": 200, "refresh_status": 400, "refresh_error": "invalid_grant" }
+    }
+  ]
+}

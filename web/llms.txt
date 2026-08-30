@@ -93,4 +93,5 @@ For MCP HTTP transport authorization, use an established MCP-compatible authoriz
 
 - [State of AI Agent Security 2026](https://grantex.dev/report/state-of-agent-security-2026): Dated editorial sample and security recommendations; read its methodology and evidence boundaries.
 - [Blog](https://docs.grantex.dev/blog/introducing-grantex): Product, protocol, security, framework, and OACP articles.
-- [IETF Internet-Draft](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/): Individual Delegated Agent Authorization Protocol (DAAP) submission for discussion.
+- [OAuth Agent Grants Profile](https://docs.grantex.dev/guides/oauth-agent-grants): Self-assessed client, authorization-server, and resource-server implementation using PAR, PKCE, DPoP, rotating refresh tokens, token exchange, and revocation. Repository SDK source is ahead of the published npm package.
+- [IETF Internet-Draft](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/): Revision -02 is the active individual draft; candidate -03 is under review and is not working-group adoption or IETF endorsement.

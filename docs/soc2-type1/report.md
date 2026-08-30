@@ -173,7 +173,7 @@ The organization demonstrates a commitment to integrity and ethical values.
 | Control | Description | Evidence |
 |---------|-------------|----------|
 | CC3.1.1 Protocol specification | The protocol's security objectives are formally documented in `SPEC.md §14 Security Considerations`, including algorithm restrictions, replay prevention, CSRF protection, and audit log integrity requirements. | `SPEC.md §14` |
-| CC3.1.2 IETF Internet-Draft | The protocol has been submitted as individual Internet-Draft `draft-mishra-oauth-agent-grants`; the current Datatracker revision is `-01`, and a `-02` submission candidate is maintained in the repository. Internet-Draft publication is external review exposure, not IETF endorsement or working-group adoption. | `docs/ietf-draft/draft-mishra-oauth-agent-grants-02.md` |
+| CC3.1.2 IETF Internet-Draft | The protocol has been submitted as individual Internet-Draft `draft-mishra-oauth-agent-grants`; revision `-02` is published and a `-03` candidate is maintained in the repository. Internet-Draft publication is external review exposure, not IETF endorsement or working-group adoption. | `docs/ietf-draft/draft-mishra-oauth-agent-grants-03.md` |
 
 #### CC3.2 — COSO Principle 7: Identifies and Analyzes Risk
 

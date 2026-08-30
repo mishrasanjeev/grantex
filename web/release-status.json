@@ -26,6 +26,31 @@
     "mcpTransportAuthorization": "For MCP HTTP transport authorization, use an established MCP-compatible authorization server and maintained MCP SDK that implement the current MCP authorization specification.",
     "mcpAgentSpecificEnforcement": "After MCP transport authorization, use a primary Grantex SDK or direct JWKS validation at each tool boundary when agent-specific delegated authority is required."
   },
+  "sourceProfiles": [
+    {
+      "id": "oauth-agent-grants-03",
+      "label": "OAuth Agent Grants Profile",
+      "publishedDraftRevision": "02",
+      "repositoryCandidateRevision": "03",
+      "implementationStatus": "self-assessed-source-conformant",
+      "reviewedAt": "2026-08-30",
+      "hostedMetadataUrl": "https://grantex.dev/.well-known/oauth-authorization-server",
+      "documentationUrl": "https://docs.grantex.dev/guides/oauth-agent-grants",
+      "implementationReportUrl": "https://github.com/mishrasanjeev/grantex/blob/main/docs/ietf-draft/implementation-report.md",
+      "sdkAvailability": "repository-source; verify a post-0.3.13 npm release before importing OAuthAgentClient",
+      "evidence": {
+        "authServiceTestsPassed": 2097,
+        "typescriptSdkTestsPassed": 444,
+        "dockerE2eTestsPassed": 253,
+        "dockerE2eFilesPassed": 21
+      },
+      "limitations": [
+        "No independent cross-vendor interoperability evidence yet",
+        "No OAuth Working Group adoption, IETF endorsement, or certification",
+        "Candidate revision 03 must not be submitted before 2026-09-09 and requires new explicit approval"
+      ]
+    }
+  ],
   "artifacts": [
     {
       "id": "cli",

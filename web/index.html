@@ -285,7 +285,7 @@
             "name": "Is Grantex an IETF standard?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "No. The Grantex protocol specification is open and frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft for discussion, not an IETF-adopted or endorsed standard."
+              "text": "No. Revision -02 is an active individual Internet-Draft. Candidate -03 and its self-assessed Grantex client, authorization-server, and resource-server implementation are under review; this is not working-group adoption, independent certification, or IETF endorsement."
             }
           }
         ]
@@ -1499,7 +1499,10 @@
   <div class="container">
     <h1>Delegated Authorization for AI Agents</h1>
     <p>
-      Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records. Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal.
+      Grantex gives AI agents verifiable identity and scoped, time-limited,
+      revocable authority, with service-side verification and audit records.
+      Its tested OAuth Agent Grants profile adds PAR, PKCE, DPoP, rotating
+      refresh tokens, token exchange, and revocation.
     </p>
     <p class="hero-owner">
       Owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar.
@@ -1552,7 +1555,12 @@
       </a>
     </div>
     <div class="badge-row">
-      <span class="badge"><span class="dot"></span> IETF I-D</span>
+      <a class="badge" href="https://docs.grantex.dev/guides/oauth-agent-grants">
+        <span class="dot"></span> OAuth profile tested
+      </a>
+      <a class="badge" href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/">
+        <span class="dot"></span> IETF I-D -02
+      </a>
       <span class="badge"><span class="dot"></span> SOC 2 readiness mapping</span>
       <span class="badge"><span class="dot"></span> Apache 2.0</span>
       <a class="badge" href="https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md"
@@ -1743,7 +1751,7 @@
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Is Grantex an IETF standard?</summary>
-        <p>No. The Grantex protocol specification is open and frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft for discussion, not an IETF-adopted or endorsed standard.</p>
+        <p>No. Revision -02 is an active individual Internet-Draft. Candidate -03 and its self-assessed Grantex client, authorization-server, and resource-server implementation are under review; this is not working-group adoption, independent certification, or IETF endorsement.</p>
       </details>
     </div>
     <nav class="answer-topics" aria-label="Grantex implementation and comparison guides">
@@ -3142,12 +3150,12 @@ grantex agent install --dir /path/to/skills</pre>
         <div class="trust-label">Open Standard</div>
         <h3>IETF Internet-Draft</h3>
         <p>
-          The Grantex wire protocol is documented as an individual IETF
-          Internet-Draft built on the OAuth 2.0 framework. The current
-          Datatracker revision is <code style="font-family:var(--mono)">-01</code>,
-          with a <code style="font-family:var(--mono)">-02</code> submission
-          candidate prepared in the repository. It is not an IETF-adopted or
-          endorsed standard.
+          The current Datatracker revision is
+          <code style="font-family:var(--mono)">-02</code>. Candidate
+          <code style="font-family:var(--mono)">-03</code> and a self-assessed
+          client, authorization-server, and resource-server implementation are
+          under review. This is not independent interoperability certification,
+          OAuth Working Group adoption, or IETF endorsement.
         </p>
         <div class="auditor">
           <a href="https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/"

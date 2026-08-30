@@ -1,0 +1,133 @@
+---
+title: "OAuth Agent Grants Profile"
+sidebarTitle: "OAuth Agent Grants"
+description: "Implement the Grantex OAuth agent-grants profile with PAR, PKCE, DPoP, consent, rotating refresh tokens, token exchange, and revocation."
+keywords: ["OAuth agent authorization", "DPoP", "PAR", "PKCE", "AI agent grants"]
+---
+
+Grantex implements the client, authorization-server, and resource-server roles
+defined by the repository candidate `draft-mishra-oauth-agent-grants-03`. The
+profile uses established OAuth extensions to bind a public Agent Client
+Instance, its authorization code, and its tokens to one asymmetric Agent Key.
+
+<Warning>
+This is a self-assessed implementation statement for the tested Grantex
+configuration. It is not independent interoperability certification, OAuth
+Working Group adoption, or IETF endorsement. The current Datatracker revision
+is `-02`; candidate `-03` remains under review and must not be uploaded before
+September 9, 2026.
+</Warning>
+
+## Hosted endpoints
+
+| Capability | Endpoint |
+|---|---|
+| Authorization-server metadata | `https://grantex.dev/.well-known/oauth-authorization-server` |
+| Pushed Authorization Requests | `https://grantex.dev/oauth/par` |
+| Authorization | `https://grantex.dev/oauth/authorize` |
+| Token and token exchange | `https://grantex.dev/oauth/token` |
+| Revocation | `https://grantex.dev/oauth/revoke` |
+| Profile resource example | `https://grantex.dev/oauth/resource` |
+
+The metadata document is the discovery source of truth. Clients must validate
+its `issuer`, advertised endpoints, PKCE method, DPoP algorithms, PAR
+requirement, and RFC 9207 issuer-response support before starting a flow.
+
+## Security profile
+
+- PAR is required and request URIs expire after 90 seconds.
+- Authorization uses the code flow with PKCE `S256` and RFC 9207 `iss`.
+- DPoP proofs bind PAR, code exchange, refresh, token exchange, revocation, and
+  protected-resource requests to the registered Agent Key.
+- Access tokens expire after five minutes and carry standard `client_id`,
+  `scope`, `aud`, and `cnf.jkt` claims.
+- Refresh tokens rotate on every use. Reuse revokes the complete token family.
+- RFC 8693 token exchange only permits exact-scope attenuation for the same
+  client instance, sender key, and resource.
+- RFC 7009 revocation does not reveal whether the presented token existed.
+- A registered Agent Key cannot be shared by another Agent Client Instance.
+
+## Authorization flow
+
+1. Register an agent with an exact redirect URI, resource URI, scope set, and
+   public Agent Key through `POST /v1/agents`.
+2. Discover and validate the authorization-server metadata.
+3. Generate a high-entropy `state`, PKCE verifier and challenge, and a DPoP
+   proof from the registered private key.
+4. Push the complete request to `/oauth/par`.
+5. Open `/oauth/authorize` with only `client_id` and the returned `request_uri`.
+6. In live mode, the principal selects an account and verifies the decision
+   with a registered passkey. Sandbox auto-approval remains isolated from live
+   conformance deployments.
+7. Validate the callback URI, exact `state`, and exact response `iss` before
+   exchanging the code.
+8. Exchange the code with the PKCE verifier and a fresh DPoP proof.
+9. Present the access token using `Authorization: DPoP <token>` and a proof
+   containing the matching `ath` claim.
+
+## TypeScript client
+
+Repository source includes `OAuthAgentClient`, which handles discovery, PAR,
+state and issuer validation, PKCE, DPoP proofs, refresh, attenuation,
+revocation, and protected-resource requests.
+
+<Note>
+`OAuthAgentClient` is present in repository source after the conformance
+implementation commit. Do not assume it is present in the currently published
+`@grantex/sdk@0.3.13` package. Check [Release Status](/release-status) for the
+registry version before importing it from npm.
+</Note>
+
+```typescript
+import { OAuthAgentClient } from '@grantex/sdk';
+
+const client = await OAuthAgentClient.create({
+  issuer: 'https://grantex.dev',
+  clientId: process.env.GRANTEX_AGENT_ID!,
+  redirectUri: 'https://client.example/callback',
+  resource: 'https://grantex.dev/oauth/resource',
+  privateKey,
+  publicJwk,
+});
+
+const pending = await client.beginAuthorization({
+  scopes: ['grantex.resource.read'],
+});
+
+// Redirect the principal to pending.authorizationUrl. On return:
+const tokens = await client.completeAuthorization(callbackUrl);
+const response = await client.fetch(
+  'https://grantex.dev/oauth/resource',
+  tokens.access_token,
+);
+```
+
+Keep the Agent Key in an OS keychain, HSM, KMS, or equivalent non-exportable
+credential store. Never persist it in browser storage, source control, logs, or
+analytics payloads.
+
+## Live deployment requirements
+
+- Terminate external traffic with HTTPS and configure the exact public issuer.
+- Keep PostgreSQL and Redis highly available; replay and revocation checks fail
+  closed when required state is unavailable.
+- Enroll and identity-proof live principal passkeys before authorization.
+- Register exact redirect and resource URIs; wildcards are not accepted.
+- Monitor authorization, refresh-family replay, revocation, and migration
+  failures without logging tokens or DPoP proofs.
+- Check existing Agent Key registrations before applying the uniqueness
+  migration to a database created by an older release.
+
+## Evidence and limits
+
+The implementation was verified with 2,097 auth-service tests, 444 TypeScript
+SDK tests, and 253 tests across 21 sequential Docker E2E files. The fresh
+Docker run applied all 90 migrations and finished with no E2E residue or
+error-level server logs. Production dependency audits for the auth service and
+SDK reported zero vulnerabilities at the time of review.
+
+See the [implementation report](https://github.com/mishrasanjeev/grantex/blob/main/docs/ietf-draft/implementation-report.md),
+[test vectors](https://github.com/mishrasanjeev/grantex/blob/main/docs/ietf-draft/test-vectors/oauth-agent-grants-03.json),
+and [IETF draft status](/community/ietf-draft). Independent implementations and
+cross-vendor interoperability testing are still required before making an
+external interoperability claim.

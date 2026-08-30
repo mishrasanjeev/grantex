@@ -10,6 +10,18 @@ export { verifyWebhookSignature, verifyWebhook, type VerifyWebhookOptions } from
 // PKCE helper
 export { generatePkce, type PkceChallenge } from './pkce.js';
 
+// OAuth agent-grants profile client (PAR + PKCE + RFC 9207 + DPoP)
+export {
+  OAuthAgentClient,
+  generateOAuthAgentKey,
+  type OAuthAuthorizationServerMetadata,
+  type OAuthAgentClientOptions,
+  type OAuthAgentKeyPair,
+  type BeginAgentAuthorizationOptions,
+  type PendingAgentAuthorization,
+  type OAuthAgentTokenResponse,
+} from './oauth-agent.js';
+
 // Error classes
 export {
   GrantexError,

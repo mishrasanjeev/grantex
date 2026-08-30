@@ -178,6 +178,7 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
         FROM grants
         WHERE id = ${parentGrnt}
           AND developer_id = ${developerId}
+          AND protocol = 'grantex-v1'
           AND status = 'active'
           AND expires_at > NOW()
         FOR UPDATE

@@ -56,6 +56,8 @@ tags:
     description: End-user consent UI and approval flow
   - name: Tokens
     description: Token exchange, verification, and revocation
+  - name: OAuth Agent Grants
+    description: Standards profile using PAR, PKCE, DPoP, token rotation, attenuation, and revocation
   - name: Grants
     description: Grant management, verification, and delegation
   - name: Audit
@@ -132,6 +134,34 @@ components:
         statusCode:
           type: integer
       required: [error, code, statusCode]
+
+    OAuthError:
+      type: object
+      properties:
+        error:
+          type: string
+        error_description:
+          type: string
+      required: [error, error_description]
+
+    OAuthTokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          const: DPoP
+        expires_in:
+          type: integer
+          minimum: 1
+        refresh_token:
+          type: string
+        scope:
+          type: string
+        issued_token_type:
+          type: string
+      required: [access_token, token_type, expires_in, scope]
 
     Developer:
       type: object
@@ -533,6 +563,280 @@ paths:
                     type: array
                     items:
                       type: object
+
+  # ── OAuth Agent Grants ─────────────────────────────────────────────
+  /.well-known/oauth-authorization-server:
+    get:
+      operationId: getOAuthAuthorizationServerMetadata
+      tags: [OAuth Agent Grants]
+      summary: Discover the OAuth agent-grants authorization server
+      security: []
+      servers:
+        - url: https://grantex.dev
+          description: Hosted profile issuer
+      responses:
+        "200":
+          description: RFC 8414 metadata with profile capabilities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issuer:
+                    type: string
+                    format: uri
+                  authorization_endpoint:
+                    type: string
+                    format: uri
+                  token_endpoint:
+                    type: string
+                    format: uri
+                  jwks_uri:
+                    type: string
+                    format: uri
+                  revocation_endpoint:
+                    type: string
+                    format: uri
+                  pushed_authorization_request_endpoint:
+                    type: string
+                    format: uri
+                  require_pushed_authorization_requests:
+                    type: boolean
+                    const: true
+                  authorization_response_iss_parameter_supported:
+                    type: boolean
+                    const: true
+                  code_challenge_methods_supported:
+                    type: array
+                    items:
+                      type: string
+                  dpop_signing_alg_values_supported:
+                    type: array
+                    items:
+                      type: string
+                required:
+                  - issuer
+                  - authorization_endpoint
+                  - token_endpoint
+                  - jwks_uri
+                  - revocation_endpoint
+                  - pushed_authorization_request_endpoint
+                  - require_pushed_authorization_requests
+                  - authorization_response_iss_parameter_supported
+
+  /oauth/par:
+    post:
+      operationId: pushOAuthAgentAuthorizationRequest
+      tags: [OAuth Agent Grants]
+      summary: Push an Agent Client authorization request
+      description: Requires a registered Agent Key binding through DPoP or a previously possession-verified `dpop_jkt`.
+      security: []
+      servers:
+        - url: https://grantex.dev
+          description: Hosted profile issuer
+      parameters:
+        - in: header
+          name: DPoP
+          required: false
+          schema:
+            type: string
+          description: Fresh DPoP proof for this endpoint. Required unless the matching `dpop_jkt` has a prior possession-verification record.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                client_id: { type: string }
+                response_type: { type: string, const: code }
+                redirect_uri: { type: string, format: uri }
+                scope: { type: string }
+                state: { type: string, minLength: 22 }
+                code_challenge: { type: string }
+                code_challenge_method: { type: string, const: S256 }
+                resource: { type: string, format: uri }
+                dpop_jkt: { type: string }
+                login_hint: { type: string, maxLength: 256 }
+                authorization_details: { type: string, description: JSON-encoded RFC 9396 details }
+              required: [client_id, response_type, redirect_uri, scope, state, code_challenge, code_challenge_method, resource]
+      responses:
+        "201":
+          description: Pushed request accepted for 90 seconds
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request_uri: { type: string }
+                  expires_in: { type: integer, const: 90 }
+                required: [request_uri, expires_in]
+        "400":
+          description: Invalid request, target, scope, or DPoP proof
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+
+  /oauth/authorize:
+    get:
+      operationId: authorizeOAuthAgentRequest
+      tags: [OAuth Agent Grants]
+      summary: Start authorization from a pushed request
+      security: []
+      servers:
+        - url: https://grantex.dev
+          description: Hosted profile issuer
+      parameters:
+        - in: query
+          name: client_id
+          required: true
+          schema: { type: string }
+        - in: query
+          name: request_uri
+          required: true
+          schema: { type: string }
+      responses:
+        "303":
+          description: Redirect to consent or the exact registered callback with `code`, `state`, and `iss`
+        "400":
+          description: Unknown, expired, consumed, or mismatched pushed request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+
+  /oauth/token:
+    post:
+      operationId: exchangeOAuthAgentToken
+      tags: [OAuth Agent Grants]
+      summary: Exchange a code, rotate a refresh token, or attenuate an access token
+      security: []
+      servers:
+        - url: https://grantex.dev
+          description: Hosted profile issuer
+      parameters:
+        - in: header
+          name: DPoP
+          required: true
+          schema: { type: string }
+          description: Fresh proof from the Agent Key bound to the authorization or token family
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                grant_type: { type: string }
+                client_id: { type: string }
+                code: { type: string }
+                redirect_uri: { type: string, format: uri }
+                code_verifier: { type: string }
+                refresh_token: { type: string }
+                subject_token: { type: string }
+                subject_token_type: { type: string }
+                requested_token_type: { type: string }
+                scope: { type: string }
+                resource: { type: string, format: uri }
+              required: [grant_type, client_id]
+      responses:
+        "200":
+          description: DPoP-bound token response; cache storage is prohibited
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+            Pragma:
+              schema: { type: string, const: no-cache }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthTokenResponse"
+        "400":
+          description: Invalid grant, proof, scope, target, or grant type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+
+  /oauth/revoke:
+    post:
+      operationId: revokeOAuthAgentToken
+      tags: [OAuth Agent Grants]
+      summary: Revoke an access token or refresh-token family
+      security: []
+      servers:
+        - url: https://grantex.dev
+          description: Hosted profile issuer
+      parameters:
+        - in: header
+          name: DPoP
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                client_id: { type: string }
+                token: { type: string }
+                token_type_hint: { type: string, enum: [access_token, refresh_token] }
+              required: [client_id, token]
+      responses:
+        "200":
+          description: Revocation processed without revealing whether the token existed
+        "400":
+          description: Invalid DPoP proof or request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+
+  /oauth/resource:
+    get:
+      operationId: getOAuthAgentProfileResource
+      tags: [OAuth Agent Grants]
+      summary: Exercise the profile protected-resource checks
+      security: []
+      servers:
+        - url: https://grantex.dev
+          description: Hosted profile resource
+      parameters:
+        - in: header
+          name: Authorization
+          required: true
+          schema: { type: string, pattern: '^DPoP .+$' }
+        - in: header
+          name: DPoP
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Token, audience, scope, active grant, and sender key verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subject: { type: string }
+                  client_id: { type: string }
+                  scope: { type: string }
+                  authorized: { type: boolean, const: true }
+                required: [subject, client_id, scope, authorized]
+        "401":
+          description: Invalid token or DPoP proof
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+        "403":
+          description: Required resource scope is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
 
   # ── Authentication ───────────────────────────────────────────────────
   /v1/signup:
