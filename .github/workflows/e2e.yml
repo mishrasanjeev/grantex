@@ -21,12 +21,16 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             packages/sdk-ts/package-lock.json
+            packages/x402/package-lock.json
 
       - name: Install and build SDK
         run: cd packages/sdk-ts && npm ci && npm run build
 
       - name: Install root dependencies
         run: npm ci
+
+      - name: Install x402 dependencies
+        run: cd packages/x402 && npm ci
 
       - name: Core auth flow
         env:
