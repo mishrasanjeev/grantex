@@ -93,7 +93,7 @@ exact distributed artifacts and provenance before relying on a legal opinion.
 | Examples | Eleven TypeScript examples and the x402 weather example typechecked; Next.js starter built |
 | Docker E2E | Fresh Postgres/Redis; all 93 migrations; 23 files and 255 tests passed |
 | Crash boundary | `npm run test:e2e:refresh-restart` proved encrypted refresh recovery after container restart |
-| npm supply chain | 36 lockfiles and 4,093 resolved entries; every npm audit clean |
+| npm supply chain | 36 lockfiles and 3,965 resolved entries; every npm audit clean |
 | Python supply chain | 14 install surfaces; vulnerability and reviewed-license policy clean |
 | Go supply chain | All three modules passed tests, `govulncheck`, and license checks |
 | Documentation | 346/346 navigation targets resolved; public-doc integrity and SEO/AEO gates passed |
@@ -107,6 +107,10 @@ exact distributed artifacts and provenance before relying on a legal opinion.
   information with the actual binary bundle.
 - `caniuse-lite` includes CC-BY-4.0 browser compatibility data. Preserve its
   attribution when redistributing the data.
+- `json-schema@0.4.0` is transitive in the Vercel AI example. Its registry
+  metadata and shipped license permit `AFL-2.1 OR BSD-3-Clause`; Grantex selects
+  BSD-3-Clause and preserves the notice. GitHub's dependency metadata reports a
+  stricter conjunction, so CI uses a package-specific purl exception.
 - Apache-2.0 for Grantex does not override dependency terms. The scanner's
   allowlist is a reviewed build policy, not a declaration that every possible
   use satisfies every license condition.

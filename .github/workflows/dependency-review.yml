@@ -41,4 +41,9 @@ jobs:
             CC0-1.0,
             CC-BY-4.0,
             MIT-0
+          # GitHub normalizes json-schema@0.4.0's declared
+          # "AFL-2.1 OR BSD-3-Clause" choice as a stricter conjunction that
+          # also mentions AFL-3.0. The shipped LICENSE permits BSD-3-Clause;
+          # keep this exception exact and documented in THIRD_PARTY_NOTICES.md.
+          allow-dependencies-licenses: pkg:npm/json-schema@0.4.0
           comment-summary-in-pr: always

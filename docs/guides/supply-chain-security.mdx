@@ -52,7 +52,12 @@ dependency's license. The current npm graph includes:
 
 - optional Sharp/libvips platform binaries under `LGPL-3.0-or-later` in the
   Next.js example; and
-- `caniuse-lite` browser compatibility data under `CC-BY-4.0`.
+- `caniuse-lite` browser compatibility data under `CC-BY-4.0`; and
+- transitive `json-schema@0.4.0` in the Vercel AI example, whose package
+  metadata and shipped license permit the project to select BSD-3-Clause.
+  GitHub's dependency graph currently reports a stricter license conjunction,
+  so Dependency Review carries an exact purl exception rather than allowing an
+  additional license globally.
 
 See [`THIRD_PARTY_NOTICES.md`](https://github.com/mishrasanjeev/grantex/blob/main/THIRD_PARTY_NOTICES.md)
 before distributing a binary, image, appliance, or offline dependency bundle.
