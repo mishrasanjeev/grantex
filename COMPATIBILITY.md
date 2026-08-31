@@ -11,8 +11,8 @@ This repository uses package-specific versions; there is no monorepo-wide SDK or
 | --- | --- | --- |
 | Repository changelog | v0.3.12 | Latest top-level release entry in `CHANGELOG.md`. |
 | TypeScript SDK | @grantex/sdk 0.5.1 release candidate (0.5.0 published) | Adds bounded refresh recovery to the layered wallet and OAuth clients; registry publication is pending. |
-| Python SDK | grantex 0.4.1 release candidate (0.4.0 published) | Adds bounded refresh recovery to the wallet clients; registry publication is pending. |
-| Go SDK | github.com/mishrasanjeev/grantex-go v0.2.1 release candidate (v0.2.0 published) | Adds bounded, race-safe refresh recovery; tag and Go-proxy verification are pending; Go 1.26.1 is required. |
+| Python SDK | grantex 0.4.1 published | Adds bounded refresh recovery to the wallet clients; PyPI and clean-install verified. |
+| Go SDK | github.com/mishrasanjeev/grantex-go v0.2.1 published | Adds bounded, race-safe refresh recovery; tag and public Go-proxy install verified; Go 1.26.1 is required. |
 | x402 | @grantex/x402 0.3.0 published | Official x402 v2, semantic policy context, structured exact-approval challenge, and approved retry; npm and fresh-install verified; external custody remains operator-supplied. |
 | OpenAPI | 0.5.0 | Repository API contract including layered prepaid-wallet governance; independent of the deployed/public snapshot. |
 | MCP Auth | @grantex/mcp-auth 2.0.2 | Independently versioned and published to npm; single-process evaluation limitations apply. |
@@ -25,8 +25,8 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 | # | Directory | Published name | Version | Status |
 | ---: | --- | --- | ---: | --- |
 | 1 | `packages/sdk-ts` | @grantex/sdk | 0.5.1 | Primary SDK (TypeScript); source release candidate |
-| 2 | `packages/sdk-py` | grantex | 0.4.1 | Primary SDK (Python); source release candidate |
-| 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.2.1 (Go 1.26.1) | Primary SDK (Go); source release candidate |
+| 2 | `packages/sdk-py` | grantex | 0.4.1 | Primary SDK (Python); published and registry verified |
+| 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.2.1 (Go 1.26.1) | Primary SDK (Go); tag and public proxy verified |
 | 4 | `packages/cli` | @grantex/cli | 0.3.0 | Tooling; published with bundled Agent Skills |
 | 5 | `packages/mcp-auth` | @grantex/mcp-auth | 2.0.2 | Independently versioned |
 | 6 | `packages/mcp` | @grantex/mcp | 0.1.10 | Adapter |
@@ -77,8 +77,8 @@ Install the verified public releases needed by your application:
 ```bash
 npm install @grantex/sdk@0.5.0
 npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0
-pip install grantex==0.4.0
-go get github.com/mishrasanjeev/grantex-go@v0.2.0
+pip install grantex==0.4.1
+go get github.com/mishrasanjeev/grantex-go@v0.2.1
 npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.0
 ```
 

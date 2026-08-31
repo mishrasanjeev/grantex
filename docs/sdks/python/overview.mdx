@@ -6,12 +6,11 @@ description: "Install and configure the Grantex Python SDK for delegated authori
 
 ## Installation
 
-Published release: **`grantex==0.4.0`**. Source candidate `0.4.1` adds the
-audited refresh-recovery and retry behavior described below; do not install it
-until [Release Status](/release-status) records PyPI verification.
+Published release: **`grantex==0.4.1`**. PyPI metadata, distribution contents,
+and a clean public-index install were verified before this page was updated.
 
 ```bash
-python -m pip install grantex==0.4.0
+python -m pip install grantex==0.4.1
 ```
 
 The unpinned `python -m pip install grantex` command follows PyPI's current
@@ -27,10 +26,11 @@ release. Keep the exact version above in reproducible builds. See
 All dependencies are installed automatically with the SDK.
 
 <Note>
-  Version `0.4.0` adds `WalletSpendPoliciesClient`,
+  Version `0.4.1` adds bounded refresh lost-response recovery and audited retry
+  behavior to the `WalletSpendPoliciesClient`,
   `PrincipalPrepaidWalletClient`, `AgentPrepaidWalletClient`, and
-  `generate_dpop_key` for layered policy, exact approvals, reload governance,
-  and ES256 DPoP agent wallet calls. See [Agent Wallet
+  `generate_dpop_key` capabilities introduced in `0.4.0` for layered policy,
+  exact approvals, reload governance, and ES256 DPoP agent wallet calls. See [Agent Wallet
   Governance](/guides/agent-wallet-governance).
 </Note>
 

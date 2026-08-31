@@ -202,7 +202,7 @@
           "name": "Which Grantex SDK should I install?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Use the registry-verified @grantex/sdk@0.5.0 for TypeScript, grantex==0.4.0 for Python, and github.com/mishrasanjeev/grantex-go@v0.2.0 for Go. Newer source candidates are listed in release status and should not be installed until their registry verification is complete."
+            "text": "Use the registry-verified @grantex/sdk@0.5.0 for TypeScript, grantex==0.4.1 for Python, and github.com/mishrasanjeev/grantex-go@v0.2.1 for Go. TypeScript 0.5.1 remains a source candidate until npm and clean-install verification complete; see release status"
           }
         },
         {

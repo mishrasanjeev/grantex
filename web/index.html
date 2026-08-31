@@ -245,7 +245,7 @@
             "name": "Which Grantex SDK should I install?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Use the registry-verified @grantex/sdk@0.5.0 for TypeScript, grantex==0.4.0 for Python, and github.com/mishrasanjeev/grantex-go@v0.2.0 for Go. Newer source candidates are listed in release status and should not be installed until their registry verification is complete."
+              "text": "Use the registry-verified @grantex/sdk@0.5.0 for TypeScript, grantex==0.4.1 for Python, and github.com/mishrasanjeev/grantex-go@v0.2.1 for Go. TypeScript 0.5.1 remains a source candidate until npm and clean-install verification complete; see release status"
             }
           },
           {
@@ -1633,12 +1633,10 @@
         <h2 class="section-title">Primary SDK release state</h2>
         <p class="release-intro">
           Release snapshot verified on 1 September 2026. TypeScript 0.5.0,
-          Python 0.4.0, Go v0.2.0, and x402 0.3.0 are registry-verified.
-          Patch release candidates <code>@grantex/sdk@0.5.1</code>,
-          <code>grantex==0.4.1</code>, and
-          <code>github.com/mishrasanjeev/grantex-go@v0.2.1</code> remain
-          source-only until publication checks finish. External custody remains
-          operator-supplied.
+          Python 0.4.1, Go v0.2.1, and x402 0.3.0 are registry-verified.
+          Patch release candidate <code>@grantex/sdk@0.5.1</code> remains
+          source-only until npm publication and clean-install checks finish.
+          External custody remains operator-supplied.
         </p>
       </div>
       <div class="release-links" aria-label="Release resources">
@@ -1668,16 +1666,16 @@
         <strong class="release-version">0.3.0</strong>
         <span class="release-meta">npm &middot; published; external custody is operator-supplied</span>
       </a>
-      <a class="release-card" href="https://pypi.org/project/grantex/0.4.0/">
+      <a class="release-card" href="https://pypi.org/project/grantex/0.4.1/">
         <span class="release-language">Python SDK</span>
         <span class="release-name">grantex</span>
-        <strong class="release-version">0.4.0</strong>
+        <strong class="release-version">0.4.1</strong>
         <span class="release-meta">PyPI &middot; current published release</span>
       </a>
-      <a class="release-card" href="https://pkg.go.dev/github.com/mishrasanjeev/grantex-go@v0.2.0">
+      <a class="release-card" href="https://pkg.go.dev/github.com/mishrasanjeev/grantex-go@v0.2.1">
         <span class="release-language">Go SDK</span>
         <span class="release-name">github.com/mishrasanjeev/grantex-go</span>
-        <strong class="release-version">v0.2.0</strong>
+        <strong class="release-version">v0.2.1</strong>
         <span class="release-meta">Go module &middot; current proxy-verified release</span>
       </a>
       <a class="release-card" href="https://www.npmjs.com/package/@grantex/mcp-auth/v/2.0.2">
@@ -1790,7 +1788,7 @@
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Which Grantex SDK should I install?</summary>
-        <p>Use the registry-verified <code>@grantex/sdk@0.5.0</code> for TypeScript, <code>grantex==0.4.0</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.2.0</code> for Go. Newer source candidates are listed in <a href="https://docs.grantex.dev/release-status">release status</a> and should not be installed until their registry verification is complete.</p>
+        <p>Use the registry-verified <code>@grantex/sdk@0.5.0</code> for TypeScript, <code>grantex==0.4.1</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.2.1</code> for Go. TypeScript <code>0.5.1</code> remains a source candidate until npm and clean-install verification complete; see <a href="https://docs.grantex.dev/release-status">release status</a>.</p>
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Does local Grantex token verification check current revocation?</summary>
@@ -2263,16 +2261,16 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <code>npm install @grantex/sdk@0.5.0</code>
         <span class="install-copy">Copy</span>
       </button>
-      <button type="button" class="install-cmd" onclick="copyInstall('python -m pip install grantex==0.4.0', this)"
+      <button type="button" class="install-cmd" onclick="copyInstall('python -m pip install grantex==0.4.1', this)"
               aria-label="Copy the Python SDK install command">
         <span class="install-label">PyPI</span>
-        <code>python -m pip install grantex==0.4.0</code>
+        <code>python -m pip install grantex==0.4.1</code>
         <span class="install-copy">Copy</span>
       </button>
-      <button type="button" class="install-cmd" onclick="copyInstall('go get github.com/mishrasanjeev/grantex-go@v0.2.0', this)"
-              aria-label="Copy the Go SDK version 0.1.10 install command">
+      <button type="button" class="install-cmd" onclick="copyInstall('go get github.com/mishrasanjeev/grantex-go@v0.2.1', this)"
+              aria-label="Copy the Go SDK version 0.2.1 install command">
         <span class="install-label">Go</span>
-        <code>go get github.com/mishrasanjeev/grantex-go@v0.2.0</code>
+        <code>go get github.com/mishrasanjeev/grantex-go@v0.2.1</code>
         <span class="install-copy">Copy</span>
       </button>
       <button type="button" class="install-cmd" onclick="copyInstall('npm install -g @grantex/cli@0.3.0', this)"
@@ -2335,7 +2333,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="code-block">
           <button type="button" class="copy-btn" aria-label="Copy the Python quickstart"
                   onclick="copyCode('code-python', this, 'python_quickstart_copy')">Copy</button>
-          <pre id="code-python"><span class="cm"># python -m pip install grantex==0.4.0</span>
+          <pre id="code-python"><span class="cm"># python -m pip install grantex==0.4.1</span>
 <span class="kw">from</span> <span class="id">grantex</span> <span class="kw">import</span> <span class="id">AuthorizeParams</span><span class="op">,</span> <span class="id">ExchangeTokenParams</span><span class="op">,</span> <span class="id">Grantex</span>
 
 <span class="id">client</span> <span class="op">=</span> <span class="fn">Grantex</span><span class="op">(</span><span class="id">api_key</span><span class="op">=</span><span class="str">"YOUR_API_KEY"</span><span class="op">)</span>
@@ -2366,7 +2364,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="code-block">
           <button type="button" class="copy-btn" aria-label="Copy the Go quickstart"
                   onclick="copyCode('code-go', this, 'go_quickstart_copy')">Copy</button>
-          <pre id="code-go">// go get github.com/mishrasanjeev/grantex-go@v0.2.0
+          <pre id="code-go">// go get github.com/mishrasanjeev/grantex-go@v0.2.1
 package main
 
 import (
