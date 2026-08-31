@@ -287,7 +287,7 @@ above succeed.
 
 ## Python and Go publication
 
-Python `0.4.0` must pass source import, Ruff, strict Mypy, Pytest, distribution
+Python `0.4.1` passed source import, Ruff, strict Mypy, Pytest, distribution
 build, and Twine metadata checks before upload:
 
 ```powershell
@@ -307,8 +307,12 @@ if ($PyPI.info.version -ne '0.4.1') { throw 'PyPI verification failed.' }
 The Go module path is a separate repository,
 `github.com/mishrasanjeev/grantex-go`. Publishing requires copying the reviewed
 `packages/go-sdk` tree to that repository, rerunning `go test ./...`, committing
-the exact source, and pushing annotated tag `v0.2.0`. A tag in the Grantex
+the exact source, and pushing annotated tag `v0.2.1`. A tag in the Grantex
 monorepo does not publish that module.
+
+Python `0.4.1` and Go `v0.2.1` were published on 1 September 2026 and verified
+from clean public-registry consumers. The steps remain here as the release
+runbook; they are not instructions to overwrite those immutable versions.
 
 The guarded [Publish primary
 SDKs](https://github.com/mishrasanjeev/grantex/actions/workflows/publish-primary-sdks.yml)

@@ -145,3 +145,17 @@ Cloud Run and Firebase workflow conclusions from JSON, run production E2E and
 MPP E2E, then publish SDK candidates through the trusted-publishing workflow.
 Only after clean registry installs should candidate labels be changed to
 published labels in a follow-up reviewed commit.
+
+## Execution Status
+
+- Remediation commit `e05ffb502b665669846d292e7eaa8e831db45517` is on `main`.
+  Main CI, CodeQL, security scanning, Cloud Run deployment, Firebase deployment,
+  the full production E2E suite, and MPP production E2E all completed
+  successfully against that revision.
+- Python `grantex==0.4.1` is published on PyPI and verified from a clean public
+  index install. Go `v0.2.1` is tagged in the standalone repository, visible
+  through `proxy.golang.org`, and verified from a clean consumer module.
+- TypeScript `@grantex/sdk@0.5.1` remains a source release candidate until npm
+  accepts the exact CI-built tarball and a clean consumer install passes. The
+  repository deliberately retains candidate wording until that external gate
+  is complete.

@@ -105,9 +105,11 @@ complete responsibility matrix, policy composition, exact approval protocol,
 and honest residual gap list.
 
 The managed clients are implemented in `@grantex/sdk@0.5.1`,
-`@grantex/x402@0.3.0`, Python `grantex==0.4.1`, and Go `v0.2.1`. All four are
-registry-verified published releases. External custody, principal notification
-delivery, and merchant result idempotency remain operator responsibilities.
+`@grantex/x402@0.3.0`, Python `grantex==0.4.1`, and Go `v0.2.1`. x402,
+Python, and Go are registry-verified published releases; TypeScript `0.5.1`
+remains a source release candidate until npm publication and clean-install
+verification complete. External custody, principal notification delivery, and
+merchant result idempotency remain operator responsibilities.
 See the [x402 integration
 guide](docs/integrations/x402.mdx), [wallet
 lifecycle](docs/features/prepaid-wallets.mdx), and [production-readiness
@@ -223,8 +225,8 @@ Current public releases and prepared patch candidates, verified 2026-09-01:
 | --- | ---: | ---: | --- |
 | TypeScript SDK | `@grantex/sdk` `0.5.0` | `0.5.1` | `npm install @grantex/sdk@0.5.0` |
 | x402 Payment Protocol | `@grantex/x402` `0.3.0` | - | `npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0` |
-| Python SDK | `grantex` `0.4.0` | `0.4.1` | `python -m pip install grantex==0.4.0` |
-| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.2.0` (Go 1.26.1+) | `v0.2.1` | `go get github.com/mishrasanjeev/grantex-go@v0.2.0` |
+| Python SDK | `grantex` `0.4.1` | - | `python -m pip install grantex==0.4.1` |
+| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.2.1` (Go 1.26.1+) | - | `go get github.com/mishrasanjeev/grantex-go@v0.2.1` |
 | MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | - | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.0` |
 
 > **Known published-package limits:** MCP Auth `2.0.2` keeps authorization codes
@@ -290,8 +292,8 @@ if (!auth.code) {
 ```
 
 ```bash
-python -m pip install grantex==0.4.0               # Python SDK
-go get github.com/mishrasanjeev/grantex-go@v0.2.0 # Go SDK (Go 1.26.1+)
+python -m pip install grantex==0.4.1               # Python SDK
+go get github.com/mishrasanjeev/grantex-go@v0.2.1 # Go SDK (Go 1.26.1+)
 npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.0 # MCP endpoint evaluation
 npm install -g @grantex/cli@0.3.0                   # Optional CLI tooling
 ```
@@ -1583,8 +1585,8 @@ check its registry page and compatibility notes before choosing a version.
 | **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | Published package |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | Published package |
 | **TypeScript SDK** | `@grantex/sdk` (`0.5.0`) | `npm install @grantex/sdk@0.5.0` | Published; source candidate `0.5.1` pending npm verification |
-| **Python SDK** | `grantex` (`0.4.0`) | `python -m pip install grantex==0.4.0` | Published; source candidate `0.4.1` pending PyPI verification |
-| **Go SDK** | `grantex-go` (`v0.2.0`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.2.0` | Published; source candidate `v0.2.1` pending tag and Go-proxy verification |
+| **Python SDK** | `grantex` (`0.4.1`) | `python -m pip install grantex==0.4.1` | Registry-verified published package |
+| **Go SDK** | `grantex-go` (`v0.2.1`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.2.1` | Tag and public Go-proxy verified |
 | **CLI** | `@grantex/cli` (`0.3.0`) | `npm install -g @grantex/cli@0.3.0` | Registry-verified published package |
 | **Hermes Agent** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target hermes` | Published in 0.3.0; no dedicated SDK needed |
 | **OpenClaw** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target openclaw` | Published in 0.3.0; no dedicated SDK needed |

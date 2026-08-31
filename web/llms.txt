@@ -8,7 +8,7 @@ Use Grantex when an AI agent acts for a person or organization and a service mus
 
 Ownership: Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: sanjeev@orchestrum.in or mishra.sanjeev@gmail.com.
 
-Release snapshot verified: 2026-09-01. Packages are independently versioned. TypeScript @grantex/sdk 0.5.1, Python grantex 0.4.1, and Go v0.2.1 are source release candidates; x402 0.3.0 remains published. The protocol specification is frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft, not an IETF-adopted or endorsed standard.
+Release snapshot verified: 2026-09-01. Packages are independently versioned. Python grantex 0.4.1, Go v0.2.1, and x402 0.3.0 are published and registry verified. TypeScript @grantex/sdk 0.5.1 remains a source release candidate; published 0.5.0 is the current npm baseline. The protocol specification is frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft, not an IETF-adopted or endorsed standard.
 
 ## Start Here
 
@@ -23,8 +23,8 @@ Release snapshot verified: 2026-09-01. Packages are independently versioned. Typ
 ## Choose an Implementation
 
 - [TypeScript SDK](https://docs.grantex.dev/sdks/typescript/overview): `npm install @grantex/sdk@0.5.1` after publication for Node.js 18+ ESM applications.
-- [Python SDK](https://docs.grantex.dev/sdks/python/overview): `python -m pip install grantex==0.4.1` after publication for Python 3.9+ applications.
-- [Go SDK](https://docs.grantex.dev/sdks/go/overview): `go get github.com/mishrasanjeev/grantex-go@v0.2.1` after tag publication for Go 1.26.1+.
+- [Python SDK](https://docs.grantex.dev/sdks/python/overview): `python -m pip install grantex==0.4.1` for Python 3.9+ applications; PyPI and clean-install verified.
+- [Go SDK](https://docs.grantex.dev/sdks/go/overview): `go get github.com/mishrasanjeev/grantex-go@v0.2.1` for Go 1.26.1+; tag, public proxy, and clean-install verified.
 - [MCP Authorization Server](https://docs.grantex.dev/features/mcp-auth-server): `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.4.1`; version 2.0.2 is single-process evaluation software, not the recommended production enforcement path.
 - [CLI](https://docs.grantex.dev/integrations/cli): Install `@grantex/cli@0.3.0` to manage agents, grants, tokens, audit records, manifests, and portable Agent Skills from a terminal.
 - [Agent CLIs and Skills](https://docs.grantex.dev/integrations/agent-cli): Published `@grantex/cli@0.3.0` bundles portable Grantex skills for Hermes, OpenClaw, or any shell-capable agent; no agent-specific SDK is required.
