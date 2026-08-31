@@ -104,8 +104,8 @@ See [Agent Wallet Governance](docs/guides/agent-wallet-governance.mdx) for the
 complete responsibility matrix, policy composition, exact approval protocol,
 and honest residual gap list.
 
-The managed clients are implemented in `@grantex/sdk@0.5.0`,
-`@grantex/x402@0.3.0`, Python `grantex==0.4.0`, and Go `v0.2.0`. All four are
+The managed clients are implemented in `@grantex/sdk@0.5.1`,
+`@grantex/x402@0.3.0`, Python `grantex==0.4.1`, and Go `v0.2.1`. All four are
 registry-verified published releases. External custody, principal notification
 delivery, and merchant result idempotency remain operator responsibilities.
 See the [x402 integration
@@ -138,8 +138,25 @@ real-money product. Self-hosting operators must explicitly provide and test:
 The server deployment and each SDK release are separate. Registry consumers
 should verify an exact version before installing it rather than inferring
 availability from repository manifests. The
-[production-readiness guide](docs/guides/prepaid-wallet-production.mdx) contains
-the full hosting checklist and a maintainer-only PowerShell publication runbook.
+  [production-readiness guide](docs/guides/prepaid-wallet-production.mdx) contains
+  the full hosting checklist and a maintainer-only PowerShell publication runbook.
+
+### Supply-chain and license controls
+
+The security workflow audits every tracked npm lockfile, every tracked Python
+project and requirements surface, and all three Go modules. Dependabot coverage
+is checked against the repository manifests, external GitHub Actions and
+container images are pinned to immutable digests, and unreviewed npm license
+identifiers fail CI. Run `npm run audit:supply-chain` and
+`npm run audit:python` locally before a release.
+
+Apache-2.0 covers Grantex source, not third-party dependencies. See
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the current
+Sharp/libvips LGPL and caniuse-lite CC-BY distribution notes, and the
+[supply-chain security guide](docs/guides/supply-chain-security.mdx) for the
+operator checklist. This inventory is an engineering control, not a legal
+non-infringement opinion; distributors must review the exact artifacts they
+ship.
 
 ## OAuth Agent Grants Profile
 
@@ -147,7 +164,9 @@ The hosted auth service and repository TypeScript client implement the three
 roles in candidate `draft-mishra-oauth-agent-grants-03`. The tested profile
 requires PAR, PKCE `S256`, DPoP sender constraints, RFC 9207 response issuer
 validation, five-minute access tokens, rotating refresh tokens with family
-replay revocation, same-resource RFC 8693 attenuation, and RFC 7009 revocation.
+replay revocation, 300-second exact-request recovery when a refresh response is
+lost, AES-256-GCM encrypted recovery state with expiry cleanup, same-resource
+RFC 8693 attenuation, and RFC 7009 revocation.
 
 | Discovery and endpoints | URL |
 |---|---|
@@ -156,12 +175,13 @@ replay revocation, same-resource RFC 8693 attenuation, and RFC 7009 revocation.
 | Implementation guide | [docs.grantex.dev/guides/oauth-agent-grants](https://docs.grantex.dev/guides/oauth-agent-grants) |
 | Evidence | [Implementation report](docs/ietf-draft/implementation-report.md) and [30 behavioral vectors](docs/ietf-draft/test-vectors/oauth-agent-grants-03.json) |
 
-Verification completed with 2,097 auth-service tests, 444 SDK tests, and 253
-tests across 21 sequential Docker E2E files. This is self-assessed evidence for
+Verification completed with 2,138 auth-service tests, 456 TypeScript SDK tests,
+and 255 tests across 23 sequential Docker E2E files. This is self-assessed evidence for
 the tested Grantex configuration, not independent interoperability
 certification, OAuth Working Group adoption, or IETF endorsement. The
-`OAuthAgentClient` is published in `@grantex/sdk@0.5.0` and was verified from a
-clean registry install.
+updated `OAuthAgentClient` is prepared in the `@grantex/sdk@0.5.1` source
+release candidate; continue using registry release `0.5.0` until publication
+and clean-install verification complete.
 
 Revision `-02` remains the current Datatracker publication. Candidate `-03`
 must not be uploaded before 2026-09-09 and requires a fresh explicit approval
@@ -197,15 +217,15 @@ Start with the [OACP runtime launch closure PRD](docs/guides/oacp/runtime-launch
 
 Grantex components are independently versioned. The protocol specification remains **v1.0 Final**; SDK, MCP package, and roadmap milestone versions are separate release lines and do not represent a monorepo-wide version.
 
-Current public releases, verified 2026-08-31:
+Current public releases and prepared patch candidates, verified 2026-09-01:
 
-| Component | Public version | Reproducible install |
-| --- | ---: | --- |
-| TypeScript SDK | `@grantex/sdk` `0.5.0` | `npm install @grantex/sdk@0.5.0` |
-| x402 Payment Protocol | `@grantex/x402` `0.3.0` | `npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0` |
-| Python SDK | `grantex` `0.4.0` | `python -m pip install grantex==0.4.0` |
-| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.2.0` (Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.2.0` |
-| MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.0` |
+| Component | Published version | Prepared candidate | Reproducible install |
+| --- | ---: | ---: | --- |
+| TypeScript SDK | `@grantex/sdk` `0.5.0` | `0.5.1` | `npm install @grantex/sdk@0.5.0` |
+| x402 Payment Protocol | `@grantex/x402` `0.3.0` | - | `npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0` |
+| Python SDK | `grantex` `0.4.0` | `0.4.1` | `python -m pip install grantex==0.4.0` |
+| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.2.0` (Go 1.26.1+) | `v0.2.1` | `go get github.com/mishrasanjeev/grantex-go@v0.2.0` |
+| MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | - | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.0` |
 
 > **Known published-package limits:** MCP Auth `2.0.2` keeps authorization codes
 > in process memory, does not render consent,
@@ -1538,7 +1558,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 ## Integrations
 
-This table is a source-and-registry status snapshot as of 2026-08-31. For
+This table is a source-and-registry status snapshot as of 2026-09-01. For
 integration packages, "Published package" identifies a public package surface;
 check its registry page and compatibility notes before choosing a version.
 
@@ -1562,9 +1582,9 @@ check its registry page and compatibility notes before choosing a version.
 | **Strands Agents SDK (Python)** | `grantex-strands` | `pip install grantex-strands` | Published package |
 | **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | Published package |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | Published package |
-| **TypeScript SDK** | `@grantex/sdk` (`0.5.0`) | `npm install @grantex/sdk@0.5.0` | Registry-verified wallet-governance release |
-| **Python SDK** | `grantex` (`0.4.0`) | `python -m pip install grantex==0.4.0` | Registry-verified wallet-governance release |
-| **Go SDK** | `grantex-go` (`v0.2.0`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.2.0` | Proxy-verified wallet-governance release |
+| **TypeScript SDK** | `@grantex/sdk` (`0.5.0`) | `npm install @grantex/sdk@0.5.0` | Published; source candidate `0.5.1` pending npm verification |
+| **Python SDK** | `grantex` (`0.4.0`) | `python -m pip install grantex==0.4.0` | Published; source candidate `0.4.1` pending PyPI verification |
+| **Go SDK** | `grantex-go` (`v0.2.0`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.2.0` | Published; source candidate `v0.2.1` pending tag and Go-proxy verification |
 | **CLI** | `@grantex/cli` (`0.3.0`) | `npm install -g @grantex/cli@0.3.0` | Registry-verified published package |
 | **Hermes Agent** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target hermes` | Published in 0.3.0; no dedicated SDK needed |
 | **OpenClaw** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target openclaw` | Published in 0.3.0; no dedicated SDK needed |
@@ -1795,7 +1815,7 @@ Walk through all 7 steps of the protocol: register an agent, authorize, exchange
 | [`multi-agent-email-flow`](examples/multi-agent-email-flow) | Multi-agent email automation with delegation, enforcement, and cascade revocation | `npm start` |
 | [`audit-dashboard`](examples/audit-dashboard) | Audit trail querying, filtering, and hash chain integrity verification | `npm start` |
 | [`token-expiry-refresh`](examples/token-expiry-refresh) | Active-grant refresh rotation, 300-second lost-response recovery, and expired-grant re-authorization | `npm start` |
-| [`x402-agent-demo`](examples/x402-agent-demo) | Legacy standalone GDT authorization-context demo; not durable prepaid accounting | `npm start` |
+| [`x402-agent-demo`](examples/x402-agent-demo) | DPoP-bound agent uses an assigned prepaid wallet through official x402 v2 with durable idempotency | `npm start` |
 | [`x402-weather-api`](examples/x402-weather-api) | Official x402 v2 resource server using Grantex prepaid verify/settle | `npm start` |
 
 ---
@@ -1913,6 +1933,9 @@ Yes. The reference implementation is fully open-source. Docker Compose deploy in
 ## License
 
 Protocol specification and SDKs: [Apache 2.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
+
+Third-party packages retain their own licenses. Review
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) before redistribution.
 
 Product ownership: Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
 

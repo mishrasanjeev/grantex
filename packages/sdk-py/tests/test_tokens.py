@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 import respx
 import httpx
+from unittest.mock import Mock
 
 from grantex import Grantex
 
@@ -116,6 +117,31 @@ def test_refresh(client: Grantex) -> None:
     assert route.calls[0].request.headers["Idempotency-Key"] == (
         "refresh-attempt-0000000000000001"
     )
+
+
+def test_refresh_reuses_automatic_key_after_lost_response(client: Grantex) -> None:
+    payload = {
+        "grantToken": "eyJ.new...",
+        "expiresAt": "2026-03-01T00:00:00Z",
+        "scopes": ["calendar:read"],
+        "refreshToken": "rt_new",
+        "grantId": "grnt_01HXYZ",
+    }
+    post = Mock(side_effect=[RuntimeError("connection closed after commit"), payload])
+    client.tokens._http.post = post
+
+    from grantex import RefreshTokenParams
+
+    params = RefreshTokenParams(refresh_token="rt_old", agent_id="ag_01")
+    with pytest.raises(RuntimeError, match="connection closed"):
+        client.tokens.refresh(params)
+    response = client.tokens.refresh(params)
+
+    assert response.refresh_token == "rt_new"
+    first_key = post.call_args_list[0].kwargs["headers"]["Idempotency-Key"]
+    second_key = post.call_args_list[1].kwargs["headers"]["Idempotency-Key"]
+    assert len(first_key) >= 16
+    assert second_key == first_key
 
 
 @respx.mock

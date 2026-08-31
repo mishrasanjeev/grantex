@@ -624,8 +624,10 @@ grace period. A secure design has all of the following properties:
 4. Any stored access token, rotated refresh token, or serialized token response
    is encrypted at rest, excluded from logs, and deleted when the recovery
    window expires.
-5. Recovery returns the exact committed response; it does not mint a new token,
-   extend a lifetime, or rotate again.
+5. Recovery returns the exact committed token values and response parameters,
+   except that relative lifetime fields such as `expires_in` are recalculated
+   from the committed absolute expiration. It does not mint a new token, extend
+   a lifetime, or rotate again.
 6. Recovery is permitted only while the rotated child refresh token is active
    and unused, and only for the same authenticated and sender-bound request.
 7. The recovery window is short and bounded; no more than 300 seconds is

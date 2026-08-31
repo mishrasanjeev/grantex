@@ -3,6 +3,7 @@ import { buildTestApp, authHeader, seedAuth, sqlMock, TEST_AGENT, TEST_DEVELOPER
 import type { FastifyInstance } from 'fastify';
 import { decodeJwt } from 'jose';
 import { createHash } from 'node:crypto';
+import { sealRefreshReplayToken } from '../src/lib/refresh-replay.js';
 
 let app: FastifyInstance;
 
@@ -81,6 +82,11 @@ describe('POST /v1/token/refresh', () => {
       (call[0] as TemplateStringsArray).join(' ').includes('replay_expires_at = LEAST')
     );
     expect(consumeCall).toContain(300);
+    const encryptedReplay = consumeCall?.find(
+      (value) => typeof value === 'string' && value.startsWith('enc:v1:'),
+    );
+    expect(encryptedReplay).toEqual(expect.stringMatching(/^enc:v1:/));
+    expect(consumeCall).not.toContain(body.grantToken);
 
     // Verify JWT claims
     const claims = decodeJwt(body.grantToken);
@@ -159,7 +165,7 @@ describe('POST /v1/token/refresh', () => {
       replay_request_hash: replayHash(IDEMPOTENCY_KEY),
       replay_jti: REPLAY_JTI,
       replay_issued_at: REPLAY_ISSUED_AT,
-      replay_grant_token: REPLAY_GRANT_TOKEN,
+      replay_grant_token: sealRefreshReplayToken(REPLAY_GRANT_TOKEN),
     }]);
     // SELECT rotated child refresh token
     sqlMock.mockResolvedValueOnce([{
@@ -231,13 +237,39 @@ describe('POST /v1/token/refresh', () => {
       replay_request_hash: replayHash(IDEMPOTENCY_KEY),
       replay_jti: REPLAY_JTI,
       replay_issued_at: REPLAY_ISSUED_AT,
-      replay_grant_token: REPLAY_GRANT_TOKEN,
+      replay_grant_token: sealRefreshReplayToken(REPLAY_GRANT_TOKEN),
     }]);
 
     const res = await app.inject({
       method: 'POST',
       url: '/v1/token/refresh',
       headers: { ...authHeader(), 'idempotency-key': 'different-attempt-000000000000001' },
+      payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toBe('Refresh token already used');
+    expect(sqlMock.mock.calls.map((call) => String(call[0])).join('\n'))
+      .toContain('replay_grant_token = NULL');
+  });
+
+  it('never accepts a legacy plaintext replay response', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      ...validRefreshRow,
+      is_used: true,
+      rotated_to_token_id: 'ref_ROTATED',
+      replay_expires_at: new Date(Date.now() + 60_000).toISOString(),
+      replay_request_hash: replayHash(IDEMPOTENCY_KEY),
+      replay_jti: REPLAY_JTI,
+      replay_issued_at: REPLAY_ISSUED_AT,
+      replay_grant_token: REPLAY_GRANT_TOKEN,
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token/refresh',
+      headers: { ...authHeader(), 'idempotency-key': IDEMPOTENCY_KEY },
       payload: { refreshToken: 'ref_EXISTING', agentId: TEST_AGENT.id },
     });
 

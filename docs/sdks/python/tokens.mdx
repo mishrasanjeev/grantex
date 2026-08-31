@@ -70,15 +70,19 @@ with Grantex(api_key="gx_live_...") as client:
 
 Refresh a grant token using a refresh token while the underlying grant remains active. Returns a new grant token and a new refresh token. The `grant_id` and `expires_at` stay the same.
 
-Refresh tokens are single-use and rotated on every refresh per SPEC §7.4. Refresh does not extend the grant lifetime; after `expires_at`, the caller must re-authorize. If the HTTP response is lost after the server commits the rotation, retry the same previous refresh token immediately. During a five-minute (300-second) replay-recovery window, Grantex returns the already-rotated refresh token instead of rotating again while the grant remains active. After that window, or once the rotated child token has been used, the previous refresh token is rejected.
+Refresh tokens are single-use and rotated on every refresh per SPEC §7.4. Refresh does not extend the grant lifetime; after `expires_at`, the caller must re-authorize. If the HTTP response is lost after commit, retry the same previous refresh token with the same idempotency key. During a five-minute window, Grantex returns the already-rotated refresh token instead of rotating again while the grant remains active. After that window, or once the rotated child token has been used, the previous token is rejected.
 
 ```python
+from uuid import uuid4
 from grantex import Grantex, RefreshTokenParams
 
 with Grantex(api_key="gx_live_...") as client:
+    # Persist this with the old token until the response is durable.
+    refresh_attempt_id = str(uuid4())
     new_token = client.tokens.refresh(RefreshTokenParams(
         refresh_token="rt_01HXYZ...",
         agent_id="agt_abc123",
+        idempotency_key=refresh_attempt_id,
     ))
 
     print(f"New grant token: {new_token.grant_token}")
@@ -93,13 +97,14 @@ with Grantex(api_key="gx_live_...") as client:
 |-----------------|-------|----------|------------------------------------------------------------|
 | `refresh_token` | `str` | Yes      | The refresh token from a previous `exchange()` or `refresh()` response. |
 | `agent_id`      | `str` | Yes      | The agent ID associated with the grant.                    |
+| `idempotency_key` | `str` | No | Stable 16-256 character identifier for this logical refresh. The SDK retains an omitted key for five minutes in-process; persist an explicit key for restart/failover recovery. |
 
 ### Response
 
 Returns an `ExchangeTokenResponse` — same shape as `exchange()`. See above for field descriptions.
 
 <Warning>
-Each refresh token can only be used once. Always store and use the new `refresh_token` from the response. The previous token is accepted only for lost-response recovery during the five-minute window while the grant remains active; after the window, after the rotated child token is used, or after grant expiration, reuse is rejected with a `400` error.
+Each refresh token can only be used once. Always store the new `refresh_token`. Retry a lost response with the same old token and `idempotency_key`; a new SDK process cannot reconstruct an omitted key. After five minutes, after the rotated child token is used, or after grant expiration, reuse is rejected.
 </Warning>
 
 ## Verify

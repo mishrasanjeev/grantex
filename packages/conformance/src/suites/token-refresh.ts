@@ -52,7 +52,7 @@ export const tokenRefreshSuite: SuiteDefinition = {
 
     results.push(
       await test(
-        'POST /v1/token/refresh replays the exact committed response only for the same idempotency key',
+        'POST /v1/token/refresh replays the exact committed token values only for the same idempotency key',
         '§7.4',
         async () => {
           const flow = await ctx.flow.executeFullFlow({
@@ -86,7 +86,7 @@ export const tokenRefreshSuite: SuiteDefinition = {
           if (recovered.body.grantToken !== first.body.grantToken
               || recovered.body.refreshToken !== first.body.refreshToken
               || recovered.body.grantId !== first.body.grantId) {
-            throw new Error('Recovery did not return the exact committed refresh response');
+            throw new Error('Recovery did not return the exact committed refresh token values');
           }
 
           const mismatched = await ctx.http.post('/v1/token/refresh', {

@@ -8,7 +8,7 @@ import type {
   RegistrationResponseJSON,
   AuthenticationResponseJSON,
   AuthenticatorTransportFuture,
-} from '@simplewebauthn/types';
+} from '@simplewebauthn/server';
 import { config } from '../config.js';
 
 export interface StoredCredential {

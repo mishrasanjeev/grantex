@@ -1,11 +1,12 @@
 import { GrantexApiError, GrantexAuthError, GrantexNetworkError } from './errors.js';
 import type { RateLimit } from './types.js';
 
-const SDK_VERSION = '0.5.0';
+const SDK_VERSION = '0.5.1';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 500;
 const RETRY_MAX_DELAY_MS = 10_000;
+const RETRY_AFTER_MAX_DELAY_MS = 120_000;
 const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 
 function parseRateLimitHeaders(headers: Headers): RateLimit | undefined {
@@ -189,7 +190,7 @@ export class HttpClient {
   #retryDelay(attempt: number, retryAfterMs?: number): number {
     // If a Retry-After header was parsed, use it
     if (retryAfterMs !== undefined) {
-      return Math.min(retryAfterMs, RETRY_MAX_DELAY_MS);
+      return Math.min(Math.max(0, retryAfterMs), RETRY_AFTER_MAX_DELAY_MS);
     }
     // Exponential backoff with jitter
     const exponential = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);

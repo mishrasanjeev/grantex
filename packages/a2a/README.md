@@ -29,7 +29,11 @@ const task = await client.sendTask({
 });
 ```
 
-The client checks token expiry and the optional scope before sending. The receiving agent must still verify the signature and claims.
+The client decodes token expiry and the optional scope only as an unverified
+preflight before sending. That preflight is not an authorization decision and
+can be forged. The receiving agent must verify the signature, issuer,
+expiration, audience, and required scopes with `createA2AAuthMiddleware` before
+executing any task.
 
 ## Verify incoming requests
 

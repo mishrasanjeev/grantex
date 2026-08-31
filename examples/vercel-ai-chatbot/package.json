@@ -3,10 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "typecheck": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --skipLibCheck src/index.ts",
     "start": "npx tsx src/index.ts"
   },
   "dependencies": {
-    "@grantex/sdk": "^0.3.11",
+    "@grantex/sdk": "^0.5.0",
     "@grantex/vercel-ai": "^0.1.6",
     "ai": "^6.0.0",
     "@ai-sdk/openai": "^3.0.0",

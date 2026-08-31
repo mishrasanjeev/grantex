@@ -666,8 +666,10 @@ digest.</t>
   <t>Any stored access token, rotated refresh token, or serialized token response
 is encrypted at rest, excluded from logs, and deleted when the recovery
 window expires.</t>
-  <t>Recovery returns the exact committed response; it does not mint a new token,
-extend a lifetime, or rotate again.</t>
+  <t>Recovery returns the exact committed token values and response parameters,
+except that relative lifetime fields such as <tt>expires_in</tt> are recalculated
+from the committed absolute expiration. It does not mint a new token, extend a
+lifetime, or rotate again.</t>
   <t>Recovery is permitted only while the rotated child refresh token is active
 and unused, and only for the same authenticated and sender-bound request.</t>
   <t>The recovery window is short and bounded; no more than 300 seconds is

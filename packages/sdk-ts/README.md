@@ -107,9 +107,20 @@ const response = await client.fetch(
 const narrower = await client.attenuate(tokens.access_token, [
   'grantex.resource.read',
 ]);
-const rotated = await client.refresh(tokens.refresh_token!);
+const refreshAttempt = crypto.randomUUID();
+const rotated = await client.refresh(tokens.refresh_token!, {
+  idempotencyKey: refreshAttempt,
+});
 await client.revoke(rotated.refresh_token!, 'refresh_token');
 ```
+
+Persist the idempotency key with the old refresh token when lost-response
+recovery must survive a caller restart. Repeating both within 300 seconds uses
+a fresh DPoP proof and returns the exact committed token values with a
+recalculated, non-extended `expires_in`. A
+different key or DPoP identity is treated as refresh-token reuse and revokes
+the token family. When no key is supplied, the client generates and retains one
+for the old refresh token for five minutes in the current process.
 
 Persist the generated key securely if an instance must survive process
 restarts. Supply the matching `privateKey` and `publicJwk` to `create`; both are
@@ -467,7 +478,7 @@ console.log(token.refreshToken); // for token refresh
 | `expiresAt` | `string` | Underlying grant expiry (ISO 8601) |
 | `refreshToken` | `string` | Refresh token for rotating credentials while the grant remains active |
 
-Refresh tokens are single-use and rotate on every accepted refresh. If a refresh response is lost after the server commits rotation, retry the same previous refresh token immediately; Grantex can return the already-rotated token pair for five minutes (300 seconds) while the grant remains active. Refresh does not extend `expiresAt`; after the grant expires, re-authorize.
+Refresh tokens are single-use and rotate on every accepted refresh. If a response is lost after commit, retry the same previous refresh token and idempotency key. The SDK retains an omitted key for five minutes in the current process; persist an explicit `idempotencyKey` with the old token when recovery must survive restart or failover. Grantex returns the already-rotated pair without extending `expiresAt`; after grant expiry, re-authorize.
 
 ---
 

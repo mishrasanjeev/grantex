@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestHTTPClientGet(t *testing.T) {
@@ -17,7 +18,7 @@ func TestHTTPClientGet(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer test-key" {
 			t.Errorf("expected Bearer test-key, got %s", r.Header.Get("Authorization"))
 		}
-		if r.Header.Get("User-Agent") != "grantex-go/0.2.0" {
+		if r.Header.Get("User-Agent") != "grantex-go/0.2.1" {
 			t.Errorf("unexpected User-Agent: %s", r.Header.Get("User-Agent"))
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -356,6 +357,19 @@ func TestHTTPClientRateLimitOn429(t *testing.T) {
 	}
 	if apiErr.RateLimit.Remaining != 0 {
 		t.Errorf("expected Remaining 0, got %d", apiErr.RateLimit.Remaining)
+	}
+}
+
+func TestHTTPClientRetryAfterUsesServerWindowWithBoundedCeiling(t *testing.T) {
+	h := &httpClient{}
+	delay := h.retryDelay(0, &APIError{RateLimit: &RateLimit{RetryAfter: 42}})
+	if delay != 42*time.Second {
+		t.Fatalf("expected 42s Retry-After delay, got %s", delay)
+	}
+
+	delay = h.retryDelay(0, &APIError{RateLimit: &RateLimit{RetryAfter: 600}})
+	if delay != 2*time.Minute {
+		t.Fatalf("expected Retry-After ceiling of 2m, got %s", delay)
 	}
 }
 

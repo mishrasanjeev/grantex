@@ -8,6 +8,79 @@ on:
     - cron: '0 2 * * 1'   # Weekly full scan Mondays 02:00 UTC
 
 jobs:
+  node-supply-chain:
+    name: Node Dependency & License Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Audit every npm lockfile and enforce dependency/license policy
+        run: node scripts/check-supply-chain.mjs --audit-npm
+
+  python-supply-chain:
+    name: Python Dependency & License Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check pip-audit==2.10.1
+      - name: Audit every tracked Python dependency and license surface
+        run: python scripts/audit-python-dependencies.py
+
+  go-supply-chain:
+    name: Go Vulnerability & License Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: '1.26.x'
+          cache-dependency-path: |
+            packages/go-sdk/go.sum
+            packages/terraform-provider-grantex/go.sum
+            examples/quickstart-go/go.sum
+      - name: Install pinned Go audit tools
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+          go install github.com/google/go-licenses/v2@v2.0.1
+      - name: Audit every Go module
+        shell: bash
+        run: |
+          set -euo pipefail
+          for module in packages/go-sdk packages/terraform-provider-grantex examples/quickstart-go; do
+            echo "Auditing $module"
+            (cd "$module" && govulncheck ./...)
+          done
+      - name: Enforce Go dependency licenses
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd packages/go-sdk && go-licenses check ./... --include_tests \
+            --ignore github.com/mishrasanjeev/grantex-go)
+          (cd packages/terraform-provider-grantex && go-licenses check ./... --include_tests \
+            --ignore github.com/mishrasanjeev/terraform-provider-grantex)
+          (cd examples/quickstart-go && go-licenses check ./... --include_tests \
+            --ignore github.com/mishrasanjeev/grantex/examples/quickstart-go \
+            --ignore github.com/mishrasanjeev/grantex-go)
+
   zap-baseline:
     name: OWASP ZAP Baseline Scan
     runs-on: ubuntu-latest
@@ -16,7 +89,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -30,7 +103,7 @@ jobs:
           --health-retries 20
 
       redis:
-        image: redis:7-alpine
+        image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
         ports:
           - 6379:6379
         options: >-
@@ -40,12 +113,12 @@ jobs:
           --health-retries 20
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 20
           cache: npm
@@ -97,7 +170,7 @@ jobs:
           exit 1
 
       - name: OWASP ZAP Baseline Scan
-        uses: zaproxy/action-baseline@v0.15.0
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
         with:
           target: 'http://localhost:3001'
           rules_file_name: '.zap/rules.tsv'
@@ -106,7 +179,7 @@ jobs:
 
       - name: Upload auth service log
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: auth-service-log
           path: auth.log
@@ -127,12 +200,12 @@ jobs:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: OWASP ZAP Full Scan
-        uses: zaproxy/action-full-scan@v0.13.0
+        uses: zaproxy/action-full-scan@3c58388149901b9a03b7718852c5ba889646c27c # v0.13.0
         with:
           target: 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app'
           rules_file_name: '.zap/rules.tsv'

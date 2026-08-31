@@ -2270,8 +2270,10 @@ is encrypted at rest, excluded from logs, and deleted when the recovery
 window expires.<a href="#section-10.1-3.4.1" class="pilcrow">¶</a></p>
 </li>
           <li id="section-10.1-3.5">
-            <p id="section-10.1-3.5.1">Recovery returns the exact committed response; it does not mint a new token,
-extend a lifetime, or rotate again.<a href="#section-10.1-3.5.1" class="pilcrow">¶</a></p>
+            <p id="section-10.1-3.5.1">Recovery returns the exact committed token values and response parameters,
+except that relative lifetime fields such as <code>expires_in</code> are recalculated
+from the committed absolute expiration. It does not mint a new token, extend a
+lifetime, or rotate again.<a href="#section-10.1-3.5.1" class="pilcrow">¶</a></p>
 </li>
           <li id="section-10.1-3.6">
             <p id="section-10.1-3.6.1">Recovery is permitted only while the rotated child refresh token is active

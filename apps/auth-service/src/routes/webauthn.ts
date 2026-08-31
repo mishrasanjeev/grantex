@@ -4,7 +4,7 @@ import { newWebAuthnCredentialId, newWebAuthnChallengeId } from '../lib/ids.js';
 import { generateRegOptions, verifyRegResponse, generateAuthOptions, verifyAuthResponse } from '../lib/webauthn.js';
 import { emitEvent } from '../lib/events.js';
 import { isoBase64URL } from '@simplewebauthn/server/helpers';
-import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/types';
+import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
 
 export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/webauthn/register/options — generate registration options (protected)

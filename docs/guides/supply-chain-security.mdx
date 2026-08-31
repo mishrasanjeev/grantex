@@ -1,0 +1,111 @@
+---
+title: "Supply Chain and License Security"
+sidebarTitle: "Supply Chain Security"
+description: "Audit Grantex npm, Python, Go, container, GitHub Action, and third-party license dependencies before deploying or redistributing it."
+keywords: ["software supply chain", "npm audit", "pip-audit", "govulncheck", "license compliance", "SBOM"]
+---
+
+Grantex treats source dependencies, build tooling, workflow actions, container
+images, and redistribution licenses as production security inputs. The controls
+below run on pull requests, on `main`, and in the scheduled security workflow.
+
+## Enforced repository controls
+
+| Surface | Enforcement |
+|---|---|
+| npm | Every tracked `package.json` directory has a Dependabot entry. Every tracked lockfile is checked with `npm audit --package-lock-only`, including development tooling. |
+| Python | Every tracked `pyproject.toml` and requirements file is resolved and scanned with pinned `pip-audit==2.10.1`. Pip dry-run reports classify each isolated transitive graph; copyleft, source-available, and unknown license results fail CI without installing untrusted packages. |
+| Go | Every Go module is scanned with pinned `govulncheck@v1.7.0` and `go-licenses@v2.0.1`, in addition to `go test ./...`. The repository's own Apache-2.0 modules are excluded only from third-party classification. |
+| GitHub Actions | Every external action is pinned to a 40-character commit SHA. The SLSA generic reusable workflow is pinned to canonical release tag `v2.1.0` because `slsa-verifier` requires the release tag in the builder identity; the verified tag resolves to commit `f7dd8c54c2067bafc12ca7a55595d5ee9b75204a`. Dependabot remains responsible for proposing reviewed updates. |
+| Containers | Dockerfile base images, Compose services, CI service containers, and the fixed OpenTelemetry collector image are pinned by digest. Dependabot covers both Dockerfiles. |
+| Licenses | Every resolved npm package license must match the reviewed SPDX allowlist. Unknown or unreviewed identifiers fail CI. LGPL and CC-BY dependencies must remain documented in `THIRD_PARTY_NOTICES.md`. |
+
+Run the same checks from the repository root:
+
+```powershell PowerShell
+npm ci --ignore-scripts
+npm run audit:supply-chain
+python -m pip install pip-audit==2.10.1
+npm run audit:python
+
+Push-Location packages/terraform-provider-grantex
+govulncheck ./...
+go-licenses check ./... --include_tests --ignore github.com/mishrasanjeev/terraform-provider-grantex
+go test ./...
+Pop-Location
+```
+
+The Node audit covers all tracked lockfiles rather than only the root package.
+The Python audit covers all tracked install surfaces rather than only the SDK.
+The Go security workflow repeats the scan for the Go SDK, Terraform provider,
+and Go quickstart.
+
+Tagged releases also run the critical preflight before artifact creation and
+attach SLSA generic provenance to the GitHub Release. The generator compiles
+from the pinned release source in the isolated reusable workflow; release
+creation fails if preflight or provenance generation fails.
+
+## Reviewed third-party notices
+
+The repository itself is Apache-2.0, but that license does not replace a
+dependency's license. The current npm graph includes:
+
+- optional Sharp/libvips platform binaries under `LGPL-3.0-or-later` in the
+  Next.js example; and
+- `caniuse-lite` browser compatibility data under `CC-BY-4.0`; and
+- transitive `json-schema@0.4.0` in the Vercel AI example, whose package
+  metadata and shipped license permit the project to select BSD-3-Clause.
+  GitHub's dependency graph currently reports a stricter license conjunction,
+  so Dependency Review carries an exact purl exception rather than allowing an
+  additional license globally.
+
+See [`THIRD_PARTY_NOTICES.md`](https://github.com/mishrasanjeev/grantex/blob/main/THIRD_PARTY_NOTICES.md)
+before distributing a binary, image, appliance, or offline dependency bundle.
+That notice describes the engineering inventory and the specific packages that
+need attention. It is not legal advice and does not replace review of the exact
+artifact being shipped.
+
+## Monitored upstream deprecation
+
+`@google-cloud/bigquery` currently reaches deprecated `node-domexception@1.0.0`
+through `teeny-request`, `node-fetch`, and `fetch-blob`. The package has no
+known advisory in the audited graph and uses the MIT license. The latest
+available BigQuery/teeny-request dependency path still includes it. Grantex
+therefore keeps the upstream dependency visible and monitored instead of
+overriding or deleting a transitive runtime module. Remove this note and the
+dependency when Google publishes a supported path without it.
+
+The same current OpenTelemetry GCP detector path reaches deprecated
+`glob@10.5.0` through `gcp-metadata`, `gaxios`, and `rimraf`. The resolved graph
+has no npm advisory, and overriding a transitive filesystem utility without an
+upstream compatibility guarantee would add risk. Keep it monitored and remove
+the exception when the detector's maintained path no longer installs it.
+
+The Go SDK imports `cryptobyte` through JWX, which requires
+`golang.org/x/crypto`. Govulncheck reports GO-2026-5932 against the module's
+unmaintained `openpgp` package, but Grantex does not import that package and the
+scan reports zero reachable or imported-package vulnerabilities. The advisory
+has no fixed module release. Keep this path visible until JWX can remove the
+module dependency; do not add an `openpgp` import.
+
+## Operator responsibilities
+
+Repository scans cannot see every component in a downstream deployment. A
+self-hosting operator must also:
+
+1. Scan the final application image and operating-system packages after every
+   build, then sign and attest the image used in production.
+2. Keep the pinned image digests current through reviewed dependency changes;
+   never switch them back to mutable tags merely to receive automatic updates.
+3. Produce an SBOM for the final artifact and retain it with the build
+   provenance, vulnerability report, and deployment record.
+4. Review licenses for private plugins, custody/provider SDKs, agent-runtime
+   packages, base images, and infrastructure modules added outside this repo.
+5. Treat an audit snapshot as time-bound evidence, not a guarantee that a new
+   advisory or license issue will not appear later.
+
+<Warning>
+No automated scanner can prove non-infringement or complete legal compliance.
+Use qualified counsel for a distribution, acquisition, patent, trademark, or
+open-source compliance opinion.
+</Warning>

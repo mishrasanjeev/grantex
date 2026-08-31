@@ -77,6 +77,17 @@ export interface OAuthAgentTokenResponse {
   refresh_token?: string;
   scope: string;
   issued_token_type?: string;
+  refresh_replay?: boolean;
+}
+
+export interface OAuthAgentRefreshOptions {
+  /**
+   * Stable 16-256 character key used to recover a committed refresh response.
+   * Persist this with the old refresh token when recovery must survive a
+   * caller restart. The client reuses an automatically generated key for five
+   * minutes while this instance remains alive.
+   */
+  idempotencyKey?: string;
 }
 
 interface PendingState {
@@ -97,6 +108,7 @@ export class OAuthAgentClient {
   readonly #privateKey: CryptoKey;
   readonly #allowInsecureLoopback: boolean;
   readonly #pending = new Map<string, PendingState>();
+  readonly #refreshRetryKeys = new Map<string, { key: string; expiresAt: number }>();
 
   private constructor(options: {
     metadata: OAuthAuthorizationServerMetadata;
@@ -244,12 +256,23 @@ export class OAuthAgentClient {
     }));
   }
 
-  refresh(refreshToken: string): Promise<OAuthAgentTokenResponse> {
+  refresh(
+    refreshToken: string,
+    options: OAuthAgentRefreshOptions = {},
+  ): Promise<OAuthAgentTokenResponse> {
+    const now = Date.now();
+    const cached = this.#refreshRetryKeys.get(refreshToken);
+    const idempotencyKey = options.idempotencyKey
+      ?? (cached && cached.expiresAt > now ? cached.key : randomUUID());
+    if (idempotencyKey.length < 16 || idempotencyKey.length > 256) {
+      throw new Error('OAuth refresh idempotencyKey must contain 16 to 256 characters');
+    }
+    this.#refreshRetryKeys.set(refreshToken, { key: idempotencyKey, expiresAt: now + 300_000 });
     return this.tokenRequest(new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
       client_id: this.clientId,
-    }));
+    }), { idempotencyKey });
   }
 
   attenuate(accessToken: string, scopes: string[]): Promise<OAuthAgentTokenResponse> {
@@ -311,7 +334,10 @@ export class OAuthAgentClient {
       .sign(this.#privateKey);
   }
 
-  async tokenRequest(params: URLSearchParams): Promise<OAuthAgentTokenResponse> {
+  async tokenRequest(
+    params: URLSearchParams,
+    options: { idempotencyKey?: string } = {},
+  ): Promise<OAuthAgentTokenResponse> {
     const proof = await this.createDpopProof('POST', this.metadata.token_endpoint);
     const response = await fetch(this.metadata.token_endpoint, {
       method: 'POST',
@@ -319,6 +345,7 @@ export class OAuthAgentClient {
         'Content-Type': 'application/x-www-form-urlencoded',
         Accept: 'application/json',
         DPoP: proof,
+        ...(options.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}),
       },
       body: params,
     });
@@ -437,7 +464,8 @@ function validateTokenResponse(value: OAuthAgentTokenResponse): OAuthAgentTokenR
       || (value.refresh_token !== undefined
         && (typeof value.refresh_token !== 'string' || value.refresh_token.length === 0))
       || (value.issued_token_type !== undefined
-        && value.issued_token_type !== ACCESS_TOKEN_TYPE)) {
+        && value.issued_token_type !== ACCESS_TOKEN_TYPE)
+      || (value.refresh_replay !== undefined && typeof value.refresh_replay !== 'boolean')) {
     throw new Error('Authorization server returned an invalid DPoP token response');
   }
   return value;

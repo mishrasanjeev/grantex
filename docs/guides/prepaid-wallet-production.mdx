@@ -15,7 +15,7 @@ recovery store, notification channel, or regulatory approval for the operator.
 | --- | --- | --- | --- |
 | PostgreSQL migrations `091_agent_prepaid_wallets.sql` and `092_layered_wallet_spend_controls.sql` | Always | Startup applies ordered migrations automatically | Back up PostgreSQL, deploy the exact repository migration set, and verify startup completed before sending traffic |
 | Public HTTPS routing | The issuer or wallet resource uses a public host | DPoP tokens bind the exact `/v1/prepaid-wallets` audience | Route the exact public wallet and OAuth paths to the auth service; do not rewrite them to static HTML |
-| `@grantex/sdk@0.5.0` and `@grantex/x402@0.3.0` | Applications install managed-wallet clients from npm | Both exact versions are published and clean-install verified; npm publication remains separate from server deployment | Pin the exact published versions, then complete the server, custody, notification, and merchant dependencies below |
+| `@grantex/sdk@0.5.1` and `@grantex/x402@0.3.0` | Applications install managed-wallet clients from npm | x402 `0.3.0` is published; SDK `0.5.1` is a source release candidate pending clean registry verification | Continue using published SDK `0.5.0` until `0.5.1` is verified, then pin the exact versions and complete the dependencies below |
 | External custody adapter | Real bank, card, on-chain, or provider-held funds | `external` wallets fail with `503 CUSTODY_ADAPTER_UNAVAILABLE` | Implement and independently test provider funding, reservation, settlement, reconciliation, duplicate-event handling, and recovery |
 | Principal notification bridge | A human must receive reload alerts outside the Grantex UI | Wallet reload events are emitted to the event bus; no built-in email/SMS/chat delivery is claimed | Consume SSE/WebSocket events and deliver through an approved channel, or separately extend and test webhook registration for wallet events |
 | Merchant idempotency store | A paid request has side effects | Grantex makes reservation and settlement retries idempotent | Atomically store the merchant's business result under the caller's HTTP `Idempotency-Key` |
@@ -300,8 +300,8 @@ python -m build packages/sdk-py
 python -m twine check packages/sdk-py/dist/*
 python -m twine upload packages/sdk-py/dist/*
 
-$PyPI = Invoke-RestMethod 'https://pypi.org/pypi/grantex/0.4.0/json'
-if ($PyPI.info.version -ne '0.4.0') { throw 'PyPI verification failed.' }
+$PyPI = Invoke-RestMethod 'https://pypi.org/pypi/grantex/0.4.1/json'
+if ($PyPI.info.version -ne '0.4.1') { throw 'PyPI verification failed.' }
 ```
 
 The Go module path is a separate repository,
@@ -335,10 +335,10 @@ After publication, verify from empty temporary projects rather than importing
 the monorepo checkout:
 
 ```powershell
-npm view '@grantex/sdk@0.5.0' version dist.integrity --json
+npm view '@grantex/sdk@0.5.1' version dist.integrity --json
 npm view '@grantex/x402@0.3.0' version dist.integrity --json
-python -m pip download --no-deps --dest $env:TEMP 'grantex==0.4.0'
-go list -m -json 'github.com/mishrasanjeev/grantex-go@v0.2.0'
+python -m pip download --no-deps --dest $env:TEMP 'grantex==0.4.1'
+go list -m -json 'github.com/mishrasanjeev/grantex-go@v0.2.1'
 ```
 
 The workflow uses npm trusted publishing with OIDC and provenance instead of a

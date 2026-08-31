@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const sdkVersion = "0.2.0"
+const sdkVersion = "0.2.1"
 
 func parseRateLimitHeaders(header http.Header) *RateLimit {
 	limitStr := header.Get("X-RateLimit-Limit")
@@ -51,9 +51,10 @@ func parseRateLimitHeaders(header http.Header) *RateLimit {
 }
 
 const (
-	defaultMaxRetries = 3
-	retryBaseDelay    = 500 * time.Millisecond
-	retryMaxDelay     = 10 * time.Second
+	defaultMaxRetries  = 3
+	retryBaseDelay     = 500 * time.Millisecond
+	retryMaxDelay      = 10 * time.Second
+	retryAfterMaxDelay = 2 * time.Minute
 )
 
 type httpClient struct {
@@ -163,8 +164,8 @@ func (h *httpClient) retryDelay(attempt int, lastErr error) time.Duration {
 	var apiErr *APIError
 	if errors.As(lastErr, &apiErr) && apiErr.RateLimit != nil && apiErr.RateLimit.RetryAfter > 0 {
 		d := time.Duration(apiErr.RateLimit.RetryAfter) * time.Second
-		if d > retryMaxDelay {
-			d = retryMaxDelay
+		if d > retryAfterMaxDelay {
+			d = retryAfterMaxDelay
 		}
 		return d
 	}

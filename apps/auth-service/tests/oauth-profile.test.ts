@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import {
   calculateJwkThumbprint,
@@ -11,6 +11,7 @@ import {
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { accessTokenHash, verifyDpopProof } from '../src/lib/dpop.js';
 import { signOAuthAccessToken } from '../src/lib/crypto.js';
+import { sealRefreshReplayToken } from '../src/lib/refresh-replay.js';
 import { buildTestApp, mockRedis, sqlMock } from './helpers.js';
 
 interface DpopKey {
@@ -54,6 +55,43 @@ async function dpopProof(options: {
 
 function form(values: Record<string, string>): string {
   return new URLSearchParams(values).toString();
+}
+
+function oauthRefreshRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'ref_oauth_parent',
+    is_used: false,
+    refresh_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+    used_at: null,
+    rotated_to_token_id: null,
+    replay_expires_at: null,
+    replay_request_hash: null,
+    replay_jti: null,
+    replay_issued_at: null,
+    replay_grant_token: null,
+    family_id: 'ref_oauth_parent',
+    grant_id: 'grnt_oauth_refresh',
+    agent_id: 'ag_oauth',
+    principal_id: 'principal_123',
+    developer_id: 'dev_oauth',
+    scopes: ['grantex.resource.read'],
+    status: 'active',
+    grant_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+    audience: 'https://grantex.dev/oauth/resource',
+    agent_key_thumbprint: dpopKey.thumbprint,
+    protocol: 'oauth-agent-grants-03',
+    authorization_details: null,
+    agent_did: 'did:grantex:ag_oauth',
+    agent_status: 'active',
+    current_key_thumbprint: dpopKey.thumbprint,
+    ...overrides,
+  };
+}
+
+function oauthRefreshReplayHash(refreshToken: string, idempotencyKey: string): string {
+  return createHash('sha256')
+    .update(`grantex-oauth-refresh-replay:v1\0ag_oauth\0${refreshToken}\0${dpopKey.thumbprint}\0${idempotencyKey}`)
+    .digest('hex');
 }
 
 beforeAll(async () => {
@@ -130,6 +168,137 @@ describe('OAuth agent-grants profile routes', () => {
     expect(res.statusCode).toBe(400);
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.headers['pragma']).toBe('no-cache');
+  });
+
+  it('recovers the exact OAuth refresh response for the same retry identity', async () => {
+    const refreshToken = 'ref_oauth_parent';
+    const idempotencyKey = 'oauth-refresh-attempt-00000001';
+    sqlMock
+      .mockResolvedValueOnce([oauthRefreshRow()])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: refreshToken }])
+      .mockResolvedValueOnce([]);
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'idempotency-key': idempotencyKey,
+        dpop: await dpopProof({ method: 'POST', uri: 'https://grantex.dev/oauth/token' }),
+      },
+      payload: form({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: 'ag_oauth' }),
+    });
+    expect(first.statusCode).toBe(200);
+    const firstBody = first.json<{ access_token: string; refresh_token: string }>();
+    const initialRotation = sqlMock.mock.calls.find((call) =>
+      String(call[0]).includes('replay_grant_token =')
+    );
+    expect(initialRotation?.some(
+      (value) => typeof value === 'string' && value.startsWith('enc:v1:'),
+    )).toBe(true);
+    expect(initialRotation).not.toContain(firstBody.access_token);
+
+    const replayIssuedAt = Math.floor(Date.now() / 1000);
+    sqlMock
+      .mockResolvedValueOnce([oauthRefreshRow({
+        is_used: true,
+        rotated_to_token_id: firstBody.refresh_token,
+        replay_expires_at: new Date(Date.now() + 60_000).toISOString(),
+        replay_request_hash: oauthRefreshReplayHash(refreshToken, idempotencyKey),
+        replay_jti: 'tok_oauth_replay',
+        replay_issued_at: replayIssuedAt,
+        replay_grant_token: sealRefreshReplayToken(firstBody.access_token),
+      })])
+      .mockResolvedValueOnce([{
+        id: firstBody.refresh_token,
+        grant_id: 'grnt_oauth_refresh',
+        is_used: false,
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+      }]);
+
+    const replay = await app.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'idempotency-key': idempotencyKey,
+        dpop: await dpopProof({ method: 'POST', uri: 'https://grantex.dev/oauth/token' }),
+      },
+      payload: form({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: 'ag_oauth' }),
+    });
+
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toMatchObject({
+      access_token: firstBody.access_token,
+      refresh_token: firstBody.refresh_token,
+      refresh_replay: true,
+    });
+  });
+
+  it('revokes the OAuth token family when a used refresh token has a different retry key', async () => {
+    const refreshToken = 'ref_oauth_parent';
+    sqlMock
+      .mockResolvedValueOnce([oauthRefreshRow({
+        is_used: true,
+        rotated_to_token_id: 'ref_oauth_child',
+        replay_expires_at: new Date(Date.now() + 60_000).toISOString(),
+        replay_request_hash: oauthRefreshReplayHash(refreshToken, 'original-refresh-attempt-0001'),
+        replay_jti: 'tok_oauth_replay',
+        replay_issued_at: Math.floor(Date.now() / 1000),
+        replay_grant_token: sealRefreshReplayToken('committed-access-token'),
+      })])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'idempotency-key': 'different-refresh-attempt-0001',
+        dpop: await dpopProof({ method: 'POST', uri: 'https://grantex.dev/oauth/token' }),
+      },
+      payload: form({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: 'ag_oauth' }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'invalid_grant' });
+    expect(sqlMock.mock.calls.map((call) => String(call[0])).join('\n'))
+      .toContain("UPDATE grants SET status = 'revoked'");
+  });
+
+  it('revokes the OAuth token family instead of accepting plaintext replay state', async () => {
+    const refreshToken = 'ref_oauth_parent';
+    const idempotencyKey = 'oauth-refresh-attempt-00000001';
+    sqlMock
+      .mockResolvedValueOnce([oauthRefreshRow({
+        is_used: true,
+        rotated_to_token_id: 'ref_oauth_child',
+        replay_expires_at: new Date(Date.now() + 60_000).toISOString(),
+        replay_request_hash: oauthRefreshReplayHash(refreshToken, idempotencyKey),
+        replay_jti: 'tok_oauth_replay',
+        replay_issued_at: Math.floor(Date.now() / 1000),
+        replay_grant_token: 'legacy-plaintext-access-token',
+      })])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'idempotency-key': idempotencyKey,
+        dpop: await dpopProof({ method: 'POST', uri: 'https://grantex.dev/oauth/token' }),
+      },
+      payload: form({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: 'ag_oauth' }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'invalid_grant' });
+    expect(sqlMock.mock.calls.map((call) => String(call[0])).join('\n'))
+      .toContain('replay_grant_token = NULL');
   });
 
   it('rejects malformed OAuth scope spacing instead of normalizing it', async () => {

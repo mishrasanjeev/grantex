@@ -37,6 +37,11 @@ const status = await client.getTask({ id: task.id });
 await client.cancelTask({ id: task.id });
 ```
 
+The TypeScript client's synchronous token parsing is an unverified convenience
+check only. It must never be used as the remote authorization boundary. The A2A
+server must run the JWKS-backed middleware below before accepting or executing
+the JSON-RPC request.
+
 ## Server Middleware — Validating Incoming Tokens
 
 Validate Grantex grant tokens on incoming A2A requests:
@@ -50,7 +55,7 @@ const authMiddleware = createA2AAuthMiddleware({
 });
 
 // In your A2A handler:
-const grant = authMiddleware(request);
+const grant = await authMiddleware(request);
 console.log(grant.principalId, grant.scopes);
 ```
 
@@ -86,6 +91,10 @@ if (isTokenExpired(payload)) {
   // Token needs refresh
 }
 ```
+
+Decoded payloads are untrusted display/debug data until separately verified.
+Do not make an authorization, routing, billing, or audit-attribution decision
+from `decodeJwtPayload()` output.
 
 ## Ownership
 

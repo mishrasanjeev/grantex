@@ -44,13 +44,15 @@ Exchange a refresh token for a new grant token while the underlying grant remain
 tokenResp, err := client.Tokens.Refresh(ctx, grantex.RefreshTokenParams{
     RefreshToken: "current-refresh-token",
     AgentID:      "agent-id",
+    // Persist this with the old token until the response is durable.
+    IdempotencyKey: refreshAttemptID,
 })
 // tokenResp.RefreshToken is a NEW refresh token — store it
 // tokenResp.ExpiresAt is the same grant expiration
 ```
 
 <Warning>
-Always store and use the newest `RefreshToken`. If the HTTP response is lost after the server commits the rotation, retry the same previous refresh token immediately; during a five-minute (300-second) replay-recovery window, Grantex returns the already-rotated refresh token instead of rotating again while the grant remains active. After that window, once the rotated child token has been used, or after grant expiration, the previous refresh token is rejected.
+Always store and use the newest `RefreshToken`. Retry a lost response with the same previous token and `IdempotencyKey`. The SDK retains an omitted key for five minutes in the current process, but a restarted caller must restore an explicit persisted key. After the window, once the rotated child token has been used, or after grant expiration, the previous refresh token is rejected.
 </Warning>
 
 ### Parameters
@@ -59,6 +61,7 @@ Always store and use the newest `RefreshToken`. If the HTTP response is lost aft
 |-----------|------|----------|-------------|
 | `RefreshToken` | `string` | Yes | Current refresh token |
 | `AgentID` | `string` | Yes | Agent ID |
+| `IdempotencyKey` | `string` | No | Stable 16-256 character logical-refresh identifier. Generated and cached in-process when omitted; persist it for restart/failover recovery. |
 
 ### Response
 

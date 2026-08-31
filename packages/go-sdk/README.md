@@ -5,13 +5,13 @@ Official Go SDK for the [Grantex](https://grantex.dev) delegated authorization p
 ## Installation
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.2.0
+go get github.com/mishrasanjeev/grantex-go@v0.2.1
 ```
 
 Requires Go 1.26.1 or newer, matching the module's `go.mod` directive.
 
-Version `v0.2.0` includes corrected Agent and Audit API contracts plus developer,
-principal, and ES256 DPoP agent clients for layered prepaid-wallet governance.
+Version `v0.2.1` adds bounded refresh lost-response recovery to the corrected
+Agent/Audit contracts and layered prepaid-wallet governance clients from `v0.2.0`.
 
 ## Quick Start
 

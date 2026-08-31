@@ -144,9 +144,20 @@ describe('OAuth agent-grants profile E2E', () => {
     await expect(client.refresh(afterAccessRevocation.refresh_token!)).rejects.toThrow('invalid_grant');
 
     const { tokens: replayFamily } = await authorization(client);
-    const replayChild = await client.refresh(replayFamily.refresh_token!);
-    await expect(client.refresh(replayFamily.refresh_token!)).rejects.toThrow('invalid_grant');
-    expect((await client.fetch(RESOURCE, replayChild.access_token)).status).toBe(401);
+    const recoveryKey = 'oauth-profile-recovery-attempt-0001';
+    const replayChild = await client.refresh(replayFamily.refresh_token!, { idempotencyKey: recoveryKey });
+    const recovered = await client.refresh(replayFamily.refresh_token!, { idempotencyKey: recoveryKey });
+    expect(recovered).toEqual({ ...replayChild, refresh_replay: true });
+    expect((await client.fetch(RESOURCE, replayChild.access_token)).status).toBe(200);
+
+    const { tokens: replayMisuseFamily } = await authorization(client);
+    const replayMisuseChild = await client.refresh(replayMisuseFamily.refresh_token!, {
+      idempotencyKey: 'oauth-profile-recovery-attempt-0002',
+    });
+    await expect(client.refresh(replayMisuseFamily.refresh_token!, {
+      idempotencyKey: 'oauth-profile-changed-attempt-0003',
+    })).rejects.toThrow('invalid_grant');
+    expect((await client.fetch(RESOURCE, replayMisuseChild.access_token)).status).toBe(401);
 
     const { tokens: keyRotationFamily } = await authorization(client);
     const replacementKey = await generateOAuthAgentKey();
