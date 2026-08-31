@@ -7,7 +7,7 @@
 # ─── Core SDK ────────────────────────────────────────────────────────────────
 grantex==0.4.1                    # Python SDK (httpx, PyJWT, cryptography)
 PyJWT>=2.13.0                     # JWT verification fixes
-idna>=3.15                        # IDNA validation fixes
+idna>=3.19                        # IDNA validation fixes
 cryptography>=48.0.1              # RSA/Ed25519 key operations
 
 # ─── Framework Integrations (install as needed) ─────────────────────────────
@@ -22,7 +22,7 @@ grantex-strands>=0.1.1            # Strands Agents SDK integration
 # ─── SDK Runtime Dependencies (installed automatically with grantex) ────────
 # httpx>=0.27.0                   # HTTP client (async + sync)
 # PyJWT>=2.13.0                   # JWT decoding
-# idna>=3.15                      # IDNA validation
+# idna>=3.19                      # IDNA validation
 # cryptography>=48.0.1            # RSA/Ed25519 key operations
 
 # ─── FastAPI Integration Dependencies ────────────────────────────────────────
